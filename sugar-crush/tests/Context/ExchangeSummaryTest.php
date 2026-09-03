@@ -333,6 +333,245 @@ final class ExchangeSummaryTest extends TestCase
         );
     }
 
+    // =====================================================================
+    // E23 (backlog §12.2) — what the key collapse DOES at the consumers.
+    // Measured first at 1500ad32b (P4.S5): the collapse is real, the step
+    // text's "one is lost" is not. These tests pin that measurement: every
+    // assertion below is an exact observed output of the unmodified pipeline,
+    // so they document behaviour rather than change it.
+    // =====================================================================
+
+    /** The duplicated-text history the E23 measurements ran on: pairs 1 and 3
+     *  byte-identical, pair 2 between them, a two-pair preserved tail. */
+    private function e23History(): array
+    {
+        return [
+            ['role' => 'user', 'content' => 'run the test suite'],
+            ['role' => 'assistant', 'content' => 'All 42 tests passed.'],
+            ['role' => 'user', 'content' => 'add a route'],
+            ['role' => 'assistant', 'content' => 'Created config/routes entry.'],
+            ['role' => 'user', 'content' => 'run the test suite'],
+            ['role' => 'assistant', 'content' => 'All 42 tests passed.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ];
+    }
+
+    /**
+     * REACHABILITY — the collapse the finding is about really happens on the
+     * offered set: a history asking twice and answered identically twice
+     * presents both exchanges to the summariser, under ONE key.
+     */
+    public function testTwoByteIdenticalExchangesAreOfferedSeparatelyUnderOneSharedKey(): void
+    {
+        $offered = $this->compactor(2)->exchangesToSummarize($this->e23History());
+
+        $this->assertCount(3, $offered, 'five pairs, two preserved, three offered — duplicates included twice');
+        $shared = ContextCompactor::exchangeKey('run the test suite', 'All 42 tests passed.');
+        $this->assertSame($shared, $offered[0]['key']);
+        $this->assertSame($shared, $offered[2]['key'], 'the duplicate collapses onto the same key');
+        $this->assertNotSame($shared, $offered[1]['key'], 'and only onto its own identical twin');
+        $this->assertSame('run the test suite', $offered[2]['user']);
+        $this->assertSame('All 42 tests passed.', $offered[2]['assistant']);
+    }
+
+    /**
+     * THE CONSUMER, non-adjacent duplicates — nothing is lost. `compact()`
+     * summarises per PAIR, never per key, so both collapsed exchanges still
+     * emit their own summary line, and the preserved tail survives verbatim.
+     * The map below is exactly what Chat's positional parser hands back after
+     * discarding the model's redundant second paraphrase of the byte-identical
+     * exchange (Chat.php, parseExchangeSummaries — measured, out of scope to
+     * test here); either way the exchange itself is still represented.
+     */
+    public function testCollapsedDuplicatesEachStillGetTheirOwnSummaryLine(): void
+    {
+        $history = $this->e23History();
+        $shared = ContextCompactor::exchangeKey('run the test suite', 'All 42 tests passed.');
+        $other = ContextCompactor::exchangeKey('add a route', 'Created config/routes entry.');
+
+        $compacted = $this->compactor(2)
+            ->withExchangeSummaries([
+                $shared => 'First paraphrase of the test run.',
+                $other => 'Explained routing.',
+            ])
+            ->compact($history);
+
+        $this->assertSame([
+            ['role' => 'assistant', 'content' => '[summary] First paraphrase of the test run.'],
+            ['role' => 'assistant', 'content' => '[summary] Explained routing.'],
+            ['role' => 'assistant', 'content' => '[summary] First paraphrase of the test run.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ], $compacted, 'both duplicates keep a row of their own; the shared key changes the text, not the count');
+    }
+
+    /**
+     * Polarity of the test above: the SAME duplicated history with no model
+     * summaries at all still emits one heuristic line per duplicate pair —
+     * three summary rows either way. A collapse can therefore never be the
+     * reason an exchange is missing from a compaction.
+     */
+    public function testCollapsedDuplicatesEachStillGetTheirOwnHeuristicLine(): void
+    {
+        $compacted = $this->compactor(2)->compact($this->e23History());
+
+        $this->assertSame([
+            ['role' => 'assistant', 'content' => '[summary] run the test suite → All 42 tests passed.'],
+            ['role' => 'assistant', 'content' => '[summary] add a route → Created config/routes entry.'],
+            ['role' => 'assistant', 'content' => '[summary] run the test suite → All 42 tests passed.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ], $compacted);
+    }
+
+    /**
+     * The adjacent case — where one line DOES go away, and by design: two
+     * consecutive identical pairs fold into stage 3's `[2x]` line. The fold
+     * keys on identical rendered text, not on the exchange key, so the
+     * polarity test is the same history with no summaries: byte-identical
+     * fold either way. The count rides along in the text; nothing is
+     * silently dropped.
+     */
+    public function testAdjacentDuplicatesFoldIntoOneCountedLineWithOrWithoutSummaries(): void
+    {
+        $pair = [
+            ['role' => 'user', 'content' => 'run the test suite'],
+            ['role' => 'assistant', 'content' => 'All 42 tests passed.'],
+        ];
+        $adjacent = [...$pair, ...$pair,
+            ['role' => 'user', 'content' => 'tail one'], ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'], ['role' => 'assistant', 'content' => 't2'],
+        ];
+        $shared = ContextCompactor::exchangeKey('run the test suite', 'All 42 tests passed.');
+
+        $withSummaries = $this->compactor(2)
+            ->withExchangeSummaries([$shared => 'First paraphrase of the test run.'])
+            ->compact($adjacent);
+        $this->assertSame([
+            ['role' => 'assistant', 'content' => '[2x] [summary] First paraphrase of the test run.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ], $withSummaries, 'one line, but it SAYS 2x — stage 3 counting is its documented purpose');
+
+        $heuristic = $this->compactor(2)->compact($adjacent);
+        $this->assertSame([
+            ['role' => 'assistant', 'content' => '[2x] [summary] run the test suite → All 42 tests passed.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ], $heuristic, 'the identical fold runs with no summary map at all — it is text identity, not the key');
+    }
+
+    /**
+     * Pathological case — same text, different turns: one duplicate carries a
+     * `_Request cancelled._ rider, the only record that its turn was aborted.
+     * Riders are emitted per pair and are not keyed, so the shared summary
+     * collapses the TEXT while the cancellation record survives beside it.
+     */
+    public function testAKeyCollapseNeverEatsTheRiderThatRecordsAnAbortedTurn(): void
+    {
+        $history = [
+            ['role' => 'user', 'content' => 'run the test suite'],
+            ['role' => 'system', 'content' => '_Request cancelled._'],
+            ['role' => 'assistant', 'content' => 'All 42 tests passed.'],
+            ['role' => 'user', 'content' => 'add a route'],
+            ['role' => 'assistant', 'content' => 'Created config/routes entry.'],
+            ['role' => 'user', 'content' => 'run the test suite'],
+            ['role' => 'assistant', 'content' => 'All 42 tests passed.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ];
+        $compactor = $this->compactor(2);
+
+        $offered = $compactor->exchangesToSummarize($history);
+        $this->assertCount(3, $offered);
+        $this->assertSame(
+            $offered[0]['key'],
+            $offered[2]['key'],
+            'the rider does not enter the key — the pairs still collapse',
+        );
+
+        $compacted = $compactor
+            ->withExchangeSummaries([
+                $offered[0]['key'] => 'Ran tests.',
+                $offered[1]['key'] => 'Routing done.',
+            ])
+            ->compact($history);
+
+        $this->assertSame([
+            ['role' => 'assistant', 'content' => '[summary] Ran tests.'],
+            ['role' => 'system', 'content' => '[summary] _Request cancelled._'],
+            ['role' => 'assistant', 'content' => '[summary] Routing done.'],
+            ['role' => 'assistant', 'content' => '[summary] Ran tests.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ], $compacted, 'the aborted turn keeps its own cancellation record inside the collapse');
+    }
+
+    /**
+     * The scenario the finding names: byte-identical text over DIFFERENT tool
+     * payloads. The pairs do collide onto one key — the hash never saw the
+     * payload. It cannot lose anything the key controls, because the payload
+     * is not in the summary's input (the model is shown exactly the hashed
+     * texts) and does not survive the condensed region at all, duplicates or
+     * not: every row below is role+content only, and both exchanges are still
+     * individually represented.
+     */
+    public function testDivergentToolPayloadsCollapseWithoutLosingWhatTheKeyControls(): void
+    {
+        $plain = ['role' => 'user', 'content' => 'run the test suite'];
+        $answer = ['role' => 'assistant', 'content' => 'All 42 tests passed.'];
+        $history = [
+            $plain, [...$answer, 'tool_calls' => [['name' => 'bash', 'arguments' => ['cmd' => 'npm test']]]],
+            ['role' => 'user', 'content' => 'add a route'],
+            ['role' => 'assistant', 'content' => 'Created config/routes entry.'],
+            $plain, [...$answer, 'tool_calls' => [['name' => 'bash', 'arguments' => ['cmd' => 'pytest']]]],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ];
+        $compactor = $this->compactor(2);
+
+        $offered = $compactor->exchangesToSummarize($history);
+        $this->assertCount(3, $offered);
+        $this->assertSame($offered[0]['key'], $offered[2]['key'], 'tool payloads are not in the key');
+        $this->assertSame('All 42 tests passed.', $offered[0]['assistant'], 'and not in the model\'s input either');
+
+        $compacted = $compactor
+            ->withExchangeSummaries([$offered[0]['key'] => 'Ran something.'])
+            ->compact($history);
+
+        $this->assertSame([
+            ['role' => 'assistant', 'content' => '[summary] Ran something.'],
+            ['role' => 'assistant', 'content' => '[summary] add a route → Created config/routes entry.'],
+            ['role' => 'assistant', 'content' => '[summary] Ran something.'],
+            ['role' => 'user', 'content' => 'tail one'],
+            ['role' => 'assistant', 'content' => 't1'],
+            ['role' => 'user', 'content' => 'tail two'],
+            ['role' => 'assistant', 'content' => 't2'],
+        ], $compacted);
+        $this->assertSame(
+            [],
+            array_filter($compacted, static fn(array $row): bool => isset($row['tool_calls'])),
+            'no condensed row carries a tool_calls field — payload loss predates and outlives the key',
+        );
+    }
+
     /**
      * The refactor that extracted stages 0/1/4/5 must not have changed what
      * `compact()` does. Same input, same output as the pre-refactor pipeline
