@@ -6,8 +6,10 @@ namespace SugarCraft\Charts\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\BarChart\BarChart;
+use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Sparkline\Sparkline;
 use SugarCraft\Core\Util\Color;
 
@@ -33,6 +35,40 @@ final class ShortAliasesTest extends TestCase
         $this->assertSame($long, $short);
     }
 
+    public function testLineChartLineStyleAlias(): void
+    {
+        $long  = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->axes()
+            ->withLineStyle(Graph::LINE_ROUNDED)->view();
+        $short = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->axes()
+            ->lineStyle(Graph::LINE_ROUNDED)->view();
+        $this->assertSame($long, $short);
+    }
+
+    public function testLineChartMarkLinesAlias(): void
+    {
+        $marks = [MarkLine::at(2.5, 'mid')];
+        $long  = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->withMarkLines($marks)->view();
+        $short = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->markLines($marks)->view();
+        $this->assertSame($long, $short);
+        $this->assertStringContainsString(
+            '╌',
+            $short,
+            'alias must reach the mark-line render path, not a silent no-op',
+        );
+    }
+
+    public function testLineChartUnicodeConnectorsAlias(): void
+    {
+        $long  = LineChart::new([1, 5, 5, 1])->size(7, 4)->withUnicodeConnectors()->view();
+        $short = LineChart::new([1, 5, 5, 1])->size(7, 4)->unicodeConnectors()->view();
+        $this->assertSame($long, $short);
+        $this->assertStringContainsString(
+            '╱',
+            $short,
+            'alias must reach the Unicode connector path, not a silent no-op',
+        );
+    }
+
     public function testSparklineAliases(): void
     {
         $long  = Sparkline::new([1.0, 2.0, 3.0])->withWidth(10)->withMin(0.0)->withMax(5.0)->view();
@@ -45,6 +81,18 @@ final class ShortAliasesTest extends TestCase
         $long  = BarChart::new([['a', 1.0], ['b', 2.0]])->withSize(20, 5)->withShowLabels(true)->withShowAxis(true)->view();
         $short = BarChart::new([['a', 1.0], ['b', 2.0]])->size(20, 5)->showLabels(true)->showAxis(true)->view();
         $this->assertSame($long, $short);
+    }
+
+    public function testBarChartFractionalAlias(): void
+    {
+        $long  = BarChart::new([['a', 0.7], ['b', 0.4]])->size(20, 5)->withFractionalHeights()->view();
+        $short = BarChart::new([['a', 0.7], ['b', 0.4]])->size(20, 5)->fractional()->view();
+        $this->assertSame($long, $short);
+        $this->assertNotSame(
+            BarChart::new([['a', 0.7], ['b', 0.4]])->size(20, 5)->view(),
+            $long,
+            'alias must reach the fractional-cap render path, not a silent no-op',
+        );
     }
 
     public function testHeatmapAliases(): void

@@ -43,6 +43,19 @@ final class Graph
     ];
 
     /**
+     * Rounded-corner preset — straight runs stay thin, corners arc over.
+     * Matches the box-drawing style sugar-dash defaults to org-wide, so
+     * chart frames can shed the sharp `┌┐└┘` look without hand-rolling a
+     * runeset at every call site.
+     */
+    public const LINE_ROUNDED = [
+        'h'  => '─', 'v' => '│',
+        'tl' => '╭', 'tr' => '╮', 'bl' => '╰', 'br' => '╯',
+        'cross' => '┼', 'tee_up' => '┴', 'tee_down' => '┬',
+        'tee_left' => '┤', 'tee_right' => '├',
+    ];
+
+    /**
      * Draw a horizontal line at row `$y` from column `$x0` to `$x1`
      * (inclusive). `$rune` defaults to the thin horizontal `─`.
      */
@@ -67,9 +80,10 @@ final class Graph
      * Draw an X/Y axis frame anchored at the bottom-left corner
      * (`$xOrigin, $yOrigin`). The X axis runs `$xLen` cells to the
      * right; the Y axis runs `$yLen` cells up. The intersection cell
-     * uses the bottom-left corner glyph (`└`).
+     * uses the bottom-left corner glyph of `$runes` (`└` thin, `╰`
+     * rounded).
      *
-     * @param array<string,string> $runes  one of LINE_THIN / THICK / DOUBLE
+     * @param array<string,string> $runes  one of LINE_THIN / THICK / DOUBLE / ROUNDED
      */
     public static function drawXYAxis(
         Canvas $c,

@@ -100,8 +100,36 @@ final class RenderBarTest extends TestCase
     public function testRenderSegmentedContainsBlockCharacters(): void
     {
         $result = RenderBar::renderSegmented(0.75, 10);
-        // Should contain block characters from the set
-        $this->assertMatchesRegularExpression('/^[▕▎▍▌▋▊▉█]+$/', $result);
+        // Should contain block characters from the left-flush ramp set
+        $this->assertMatchesRegularExpression('/^[░▏▎▍▌▋▊▉█]+$/', $result);
+    }
+
+    public function testRenderSegmentedOneEighthUsesLeftFlushBlock(): void
+    {
+        // At width 8, percentage 1/8 lands exactly on ramp index 1:
+        // fullBlocks = floor(0.125 * 8 * 8) = 8, blockIndex = floor(8 / 8) = 1.
+        // BL-2: that cell must be ▏ (U+258F, left-flush eighths) because bars
+        // grow left→right — the old U+2595 (right-flush) read as a glitch.
+        $result = RenderBar::renderSegmented(0.125, 8);
+        $this->assertSame(str_repeat('▏', 8), $result);
+        $this->assertSame(0x258F, mb_ord(mb_substr($result, 0, 1)));
+    }
+
+    public function testRenderSegmentedRampFollowsLookupTable(): void
+    {
+        // Lookup-driven pin: an independent copy of the intended 9-entry ramp
+        // (shade ░ + left-flush eighths + full █) drives every expectation, so
+        // any glyph swap or reorder in the table shows up as a mismatch.
+        // At width 8 the percentage k/8 selects index k exactly
+        // (fullBlocks = k * 8, no float drift — k/8 is a binary fraction).
+        $ramp = ['░', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+        for ($k = 0; $k <= 8; $k++) {
+            $this->assertSame(
+                str_repeat($ramp[$k], 8),
+                RenderBar::renderSegmented($k / 8, 8),
+                "Ramp index {$k} should render all '{$ramp[$k]}'"
+            );
+        }
     }
 
     public function testRenderSegmentedWithColor(): void

@@ -14,10 +14,12 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * A bubble chart component.
  *
- * Displays data points as circles where:
+ * Displays data points as size-binned Unicode glyphs where:
  * - X position represents one dimension
  * - Y position represents another dimension
- * - Size represents a third dimension
+ * - Size selects the shape: a single dot, a five-cell plus, or a 5x5
+ *   rounded box of quadrant arcs over a dot fill — never true circles,
+ *   and never ASCII (see plotBubble's dispatch)
  * - Color can represent a category
  *
  * Mirrors bubble chart patterns adapted to PHP with
@@ -44,13 +46,17 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     private float $maxSize = 10;
 
     /**
-     * Circle drawing characters (partial arcs).
+     * Bubble glyph table: quadrant arcs for the box corners plus the full
+     * dot everywhere else — approximations of round shapes, never true
+     * circles. Renamed from the old circle-named identifier in v5 D5 per
+     * the R3 Set-3 ruling: the table drives shape-family glyphs, never
+     * true circles.
      */
-    private const CIRCLE_CHARS = [
+    private const ROUNDED_BOX_GLYPHS = [
         'top-left' => '◜',
         'top-right' => '◝',
         'bottom-left' => '◟',
-        'bottom-right' => '◠',
+        'bottom-right' => '◞',
         'full' => '●',
     ];
 
@@ -365,7 +371,9 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 
         $color = $point->color ?? $this->color;
 
-        // Draw filled circle using ASCII characters
+        // Draw the size-binned glyph cluster (mapSize bins 1..3). The shapes are
+        // a plus and a solid box built from Unicode arcs/dots — never true
+        // circles, and never ASCII.
         if ($size <= 1) {
             // Single cell
             if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
@@ -376,35 +384,47 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
                 }
             }
         } elseif ($size === 2) {
-            // 3x3 bubble
-            $this->drawBubbleOnGrid($grid, $x, $y, 1, $color, $chartWidth, $chartHeight);
+            // r=1: five-cell plus within a 3x3 extent — the disk test drops the
+            // diagonals, so this cluster carries no corner arcs.
+            $this->drawShapeCluster($grid, $x, $y, 1, $color, $chartWidth, $chartHeight);
         } else {
-            // 5x5 bubble
-            $this->drawBubbleOnGrid($grid, $x, $y, 2, $color, $chartWidth, $chartHeight);
+            // r=2: solid 5x5 box with ROUNDED_BOX_GLYPHS quadrant arcs at the corners.
+            $this->drawShapeCluster($grid, $x, $y, 2, $color, $chartWidth, $chartHeight);
         }
     }
 
     /**
-     * Draw a bubble on the grid.
+     * Draw a size-binned shape cluster on the grid.
+     *
+     * r >= 2 fills the whole (2r+1)-cell box so the ROUNDED_BOX_GLYPHS quadrant
+     * arcs land on the diagonal extremes — a pure disk never admits
+     * |dx|=|dy|=r, leaving those glyphs unreachable (chart_plan.md S1
+     * amendment). The full box is trivially 4-fold symmetric and 4-connected.
+     * r == 1 keeps the disk test: its diagonals fall outside dx²+dy²≤1, so it
+     * renders the legacy 5-cell plus with no corner arcs, per the r >= 2
+     * contract clause.
      *
      * @param array<array<string>> $grid
      */
-    private function drawBubbleOnGrid(array &$grid, int $cx, int $cy, int $radius, ?Color $color, int $chartWidth, int $chartHeight): void
+    private function drawShapeCluster(array &$grid, int $cx, int $cy, int $radius, ?Color $color, int $chartWidth, int $chartHeight): void
     {
         for ($dy = -$radius; $dy <= $radius; $dy++) {
             for ($dx = -$radius; $dx <= $radius; $dx++) {
-                if ($dx * $dx + $dy * $dy <= $radius * $radius) {
-                    $x = $cx + $dx;
-                    $y = $cy + $dy;
+                $inSmallDisk = $dx * $dx + $dy * $dy <= $radius * $radius;
+                if ($radius < 2 && !$inSmallDisk) {
+                    continue;
+                }
 
-                    if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
-                        // Determine which circle character to use based on position
-                        $char = $this->getCircleChar($dx, $dy, $radius);
-                        if ($color !== null) {
-                            $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
-                        } else {
-                            $grid[$y][$x] = $char;
-                        }
+                $x = $cx + $dx;
+                $y = $cy + $dy;
+
+                if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
+                    // Determine which shape glyph to use based on position
+                    $char = $this->glyphAtOffset($dx, $dy, $radius);
+                    if ($color !== null) {
+                        $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+                    } else {
+                        $grid[$y][$x] = $char;
                     }
                 }
             }
@@ -412,31 +432,29 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Get circle character for position.
+     * Resolve the cluster glyph sitting at a (dx, dy) grid offset.
+     *
+     * Resolved through ROUNDED_BOX_GLYPHS so the table (not per-branch
+     * literals) drives render: quadrant arcs at the diagonal extremes, the
+     * full glyph everywhere else — cardinals, interior fill, and the r == 1
+     * plus.
      */
-    private function getCircleChar(int $dx, int $dy, int $radius): string
+    private function glyphAtOffset(int $dx, int $dy, int $radius): string
     {
-        $isEdge = abs($dx) === $radius || abs($dy) === $radius;
-
-        if (!$isEdge) {
-            return '●';
-        }
-
-        // Edge characters
         if ($dx === -$radius && $dy === -$radius) {
-            return '◜';
+            return self::ROUNDED_BOX_GLYPHS['top-left'];
         }
         if ($dx === $radius && $dy === -$radius) {
-            return '◝';
+            return self::ROUNDED_BOX_GLYPHS['top-right'];
         }
         if ($dx === -$radius && $dy === $radius) {
-            return '◟';
+            return self::ROUNDED_BOX_GLYPHS['bottom-left'];
         }
         if ($dx === $radius && $dy === $radius) {
-            return '◠';
+            return self::ROUNDED_BOX_GLYPHS['bottom-right'];
         }
 
-        return '●';
+        return self::ROUNDED_BOX_GLYPHS['full'];
     }
 
     /**
@@ -458,12 +476,25 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Map size value to pixel radius.
+     * Map a raw size value to a glyph bin: 1 = single cell, 2 = r=1 plus,
+     * 3 = r=2 rounded box — the largest band (raw 7..10 at the default
+     * 1..10 size range).
+     *
+     * The ladder is capped at 3 because plotBubble dispatches only three
+     * shapes: the former bin 4 fell in the same r=2 arm as bin 3 and
+     * rendered byte-identical, so the fourth rung was dead weight.
+     *
+     * A degenerate size range (withSizeRange(x, x)) collapses the span to
+     * zero; PHP 8 makes that division fatal, so the contract pins ratio to 1
+     * and every point bins to the largest glyph instead of crashing render().
      */
     private function mapSize(float $size): int
     {
-        $ratio = ($size - $this->minSize) / ($this->maxSize - $this->minSize);
-        return max(1, intval(1 + $ratio * 3));
+        $ratio = $this->maxSize === $this->minSize
+            ? 1.0
+            : ($size - $this->minSize) / ($this->maxSize - $this->minSize);
+
+        return max(1, min(3, intval(1 + $ratio * 3)));
     }
 
     /**

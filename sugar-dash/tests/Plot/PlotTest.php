@@ -109,7 +109,6 @@ final class PlotTest extends TestCase
     public function testMarkerConstants(): void
     {
         $this->assertSame('braille', Plot::MARKER_BRAILLE);
-        $this->assertSame('dot', Plot::MARKER_DOT);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -122,15 +121,6 @@ final class PlotTest extends TestCase
         $rendered = $plot->render();
 
         // Default marker is braille
-        $this->assertNotSame('', $rendered);
-    }
-
-    public function testWithMarkerChangesPlot(): void
-    {
-        $plot = Plot::new([10, 20, 30], 40, 12)
-            ->withMarker(Plot::MARKER_DOT);
-
-        $rendered = $plot->render();
         $this->assertNotSame('', $rendered);
     }
 
@@ -283,14 +273,6 @@ final class PlotTest extends TestCase
     {
         $original = Plot::new();
         $updated = $original->withMode(Plot::MODE_SCATTER);
-
-        $this->assertNotSame($original, $updated);
-    }
-
-    public function testWithMarkerReturnsNewInstance(): void
-    {
-        $original = Plot::new();
-        $updated = $original->withMarker(Plot::MARKER_DOT);
 
         $this->assertNotSame($original, $updated);
     }

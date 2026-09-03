@@ -210,6 +210,10 @@ final class Heatmap
     public function palette(array $stops): self   { return $this->withPalette($stops); }
     public function legend(bool $on = true): self { return $this->withLegend($on); }
     public function cellStyle(?Style $style): self { return $this->withCellStyle($style); }
+    /** Short-form alias for {@see withColorProfile()}. */
+    public function colorProfile(ColorProfile $p): self { return $this->withColorProfile($p); }
+    /** Short-form alias for {@see withAutoValueRange()}. */
+    public function autoValueRange(bool $on = true): self { return $this->withAutoValueRange($on); }
 
     public function view(): string
     {

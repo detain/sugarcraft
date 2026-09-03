@@ -418,7 +418,15 @@ final class DescriptorSinkScanner
         $paths = [];
         foreach ($walk as $entry) {
             if ($entry instanceof \SplFileInfo && $entry->isFile() && $entry->getExtension() === 'php') {
-                $paths[] = $entry->getPathname();
+                // Slash-normalised. The census keys these paths into roster
+                // rows spelled with slashes (`candy-core/src/...`), and on
+                // Windows RecursiveDirectoryIterator canonicalises every
+                // separator to a backslash -- which turned every scanned site
+                // into a phantom unrostered key there. On POSIX, where
+                // DIRECTORY_SEPARATOR IS '/', this is the identity; and PHP's
+                // file functions accept slashes natively, so the normalised
+                // form stays readable via file_get_contents() below.
+                $paths[] = str_replace(\DIRECTORY_SEPARATOR, '/', $entry->getPathname());
             }
         }
         // Sorted so the census's output is a function of the tree and not of

@@ -373,8 +373,11 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'CORRECT. Error-path cleanup after ptsname_r() failed.',
         ],
 
-        // candy-pty/SizeIoctl. Both are the `int $fd` parameter of a static
-        // helper that takes the FFI handle alongside it.
+        // candy-pty/SizeIoctl. The ioctl pair are the `int $fd` parameters of
+        // static helpers that take the FFI handle alongside; the dup/close
+        // pair lives inside the Darwin stty(1) read fallback that one of
+        // those ioctls falls back to (run 33796495350's arm64 ABI defect),
+        // where close releases exactly what dup returned, in the same scope.
         'candy-pty/src/SizeIoctl.php::->ioctl($fd)' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. setSizeViaLibc()\'s `int $fd` parameter (TIOCSWINSZ).',
@@ -382,6 +385,20 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         'candy-pty/src/SizeIoctl.php::->ioctl($fd) #2' => [
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. getSizeViaLibc()\'s `int $fd` parameter (TIOCGWINSZ).',
+        ],
+        'candy-pty/src/SizeIoctl.php::->dup($fd)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. sttyGetSize()\'s `int $fd` parameter -- the same number the ioctl above '
+            . 'was just attempted with. The dup exists because the stty(1) child addresses the '
+            . 'terminal through /dev/fd/N after exec(), and an FD_CLOEXEC-marked fd (candy-pty\'s '
+            . 'own pty master is one on both platforms) is gone from the child\'s table by then; '
+            . 'dup(2) clears the close-on-exec flag on the new descriptor.',
+        ],
+        'candy-pty/src/SizeIoctl.php::->close($dup)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. The return value of the `dup($fd)` line above, released in a `finally` so '
+            . 'the alias cannot outlive one stty round-trip. Local to sttyGetSize(), guarded by '
+            . 'its own `$dup < 0` check, and never a cast of a PHP stream.',
         ],
 
         // candy-wish -- a library no scoping of this census had ever looked
@@ -1331,8 +1348,13 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 'scanTree() no longer reports what is in a file it was pointed at, so the '
                     . 'emptiness asserted in the calling test says nothing about the tree',
             );
+            // Expected in the SAME spelling scanTree() emits: it normalises
+            // separators to slashes so its output keys the slash-spelled
+            // ROSTER on Windows too, while $dir carries whatever
+            // sys_get_temp_dir() produced. str_replace is the identity on
+            // POSIX, where DIRECTORY_SEPARATOR is already '/'.
             self::assertSame(
-                [$dir . '/fixture.php'],
+                [str_replace(\DIRECTORY_SEPARATOR, '/', $dir . '/fixture.php')],
                 array_values(array_unique(array_column($hits, 'file'))),
                 'scanTree() reported hits that did not come from the file it was given',
             );

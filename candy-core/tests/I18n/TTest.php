@@ -210,11 +210,129 @@ final class TTest extends TestCase
         }
     }
 
+    public function testCharsetExtractsUtf8Suffix(): void
+    {
+        $this->withLocaleEnv(['LC_ALL' => 'fr_FR.UTF-8'], function (): void {
+            $this->assertSame('UTF-8', T::charset());
+        });
+    }
+
+    public function testCharsetReturnsNullWhenNoEncodingSuffix(): void
+    {
+        $this->withLocaleEnv(['LC_ALL' => 'en_US'], function (): void {
+            $this->assertNull(T::charset());
+        });
+    }
+
+    public function testCharsetIgnoresPosixSentinelsAcrossWholeChain(): void
+    {
+        $this->withLocaleEnv(['LC_ALL' => 'C', 'LC_MESSAGES' => 'POSIX', 'LANG' => ''], function (): void {
+            $this->assertNull(T::charset());
+        });
+    }
+
+    public function testCharsetFallsThroughChainPastInvalidSentinel(): void
+    {
+        // LC_ALL='C' fails detect()'s screen, so LC_MESSAGES decides.
+        $this->withLocaleEnv(['LC_ALL' => 'C', 'LC_MESSAGES' => 'en_GB.UTF-8'], function (): void {
+            $this->assertSame('UTF-8', T::charset());
+        });
+    }
+
+    public function testCharsetPrecedenceLcAllBeatsLcMessagesBeatsLang(): void
+    {
+        $this->withLocaleEnv(
+            ['LC_ALL' => 'fr_FR.UTF-8', 'LC_MESSAGES' => 'es_ES.UTF-8', 'LANG' => 'de_DE.ISO-8859-1'],
+            function (): void {
+                $this->assertSame('UTF-8', T::charset());
+            }
+        );
+        $this->withLocaleEnv(
+            ['LC_ALL' => null, 'LC_MESSAGES' => 'es_ES.UTF-8', 'LANG' => 'de_DE.ISO-8859-1'],
+            function (): void {
+                $this->assertSame('UTF-8', T::charset());
+            }
+        );
+    }
+
+    public function testCharsetUppercasesAndPassesThroughEncodingNames(): void
+    {
+        $this->withLocaleEnv(['LC_ALL' => 'en_US.utf-8'], function (): void {
+            $this->assertSame('UTF-8', T::charset());
+        });
+        $this->withLocaleEnv(['LC_ALL' => 'en_US.iso-8859-1'], function (): void {
+            $this->assertSame('ISO-8859-1', T::charset());
+        });
+    }
+
+    public function testCharsetFallsBackToGetenvWhenServerVarsAbsent(): void
+    {
+        // $_SERVER misses must defer to getenv() exactly like detect().
+        $this->withLocaleEnv(
+            ['LC_ALL' => null, 'LC_MESSAGES' => null, 'LANG' => null],
+            function (): void {
+                $this->assertSame('UTF-8', T::charset());
+            },
+            ['LANG' => 'pt_BR.UTF-8']
+        );
+    }
+
     public function testCoreLangHelperWorksOutOfTheBox(): void
     {
         // Lang::t() handles its own registration of the candy-core lang dir.
         $msg = Lang::t('color.invalid_hex', ['hex' => '#zz']);
         $this->assertSame('invalid hex color: #zz', $msg);
+    }
+
+    /**
+     * Pin the LC_ALL/LC_MESSAGES/LANG environment for the probe, then
+     * restore $_SERVER and getenv() to their exact prior state.
+     *
+     * @param array<string, string|null> $server $_SERVER values; null unsets
+     * @param callable                   $probe  assertion closure to run
+     * @param array<string, string|null> $env    getenv() values; null deletes
+     */
+    private function withLocaleEnv(array $server, callable $probe, array $env = []): void
+    {
+        $vars = ['LC_ALL', 'LC_MESSAGES', 'LANG'];
+        $origServer = [];
+        $origEnv = [];
+        foreach ($vars as $var) {
+            $origServer[$var] = $_SERVER[$var] ?? null;
+            $origEnv[$var] = getenv($var);
+        }
+        try {
+            foreach ($vars as $var) {
+                if (array_key_exists($var, $server)) {
+                    if ($server[$var] === null) {
+                        unset($_SERVER[$var]);
+                    } else {
+                        $_SERVER[$var] = $server[$var];
+                    }
+                }
+                if (array_key_exists($var, $env)) {
+                    if ($env[$var] === null) {
+                        putenv($var);
+                    } else {
+                        putenv($var . '=' . $env[$var]);
+                    }
+                }
+            }
+            $probe();
+        } finally {
+            foreach ($vars as $var) {
+                if ($origServer[$var] === null) {
+                    unset($_SERVER[$var]);
+                } else {
+                    $_SERVER[$var] = $origServer[$var];
+                }
+                if ($origEnv[$var] === false) {
+                    putenv($var);
+                } else {
+                    putenv($var . '=' . $origEnv[$var]);
+                }
+            }
+        }
     }
 
     /**

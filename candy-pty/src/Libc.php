@@ -154,6 +154,14 @@ int   ptsname_r(int fd, char *buf, unsigned long buflen);
 int   dup(int fd);
 int   close(int fd);
 int   open(const char *path, int flags);
+/* ioctl is variadic in <sys/ioctl.h>; this fixed-arg form is what every
+   call site uses. On arm64 DARWIN a winsize pointer does NOT survive the
+   variadic frame in either direction — measured for TIOCSWINSZ (PR #475)
+   and TIOCGWINSZ (CI run 33796495350: rc=-1 on a posix_isatty-accepted
+   slave fd). All size ioctls therefore go through SizeIoctl, which owns
+   the Darwin stty(1) fallbacks; do not call this declaration with a
+   struct pointer from new sites. Integer/pointer-free third args
+   (TIOCSCTTY passing null as 0) are unaffected on every lane. */
 int   ioctl(int fd, unsigned long request, void *arg);
 
 /* fcntl is varargs in <fcntl.h> on Linux/macOS, but the int-arg form

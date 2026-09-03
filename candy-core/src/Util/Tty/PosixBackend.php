@@ -322,6 +322,14 @@ final class PosixBackend implements Backend
     private const STANDARD_DESCRIPTORS = ['STDIN' => 0, 'STDOUT' => 1, 'STDERR' => 2];
 
     /**
+     * Cap on the symlink chain {@see resolveDescriptorLink()} will follow
+     * for one descriptor-table entry. Real tables are one hop (procfs, fdesc)
+     * or two through a test fixture; anything longer is a cycle or a hostile
+     * table, and no descriptor is worth walking forever on a SIGWINCH path.
+     */
+    private const MAX_LINK_HOPS = 8;
+
+    /**
      * The GENUINE file descriptor behind a PHP stream, or null.
      *
      * ## What this replaces, and why it is not a constructor change
@@ -360,7 +368,32 @@ final class PosixBackend implements Backend
      *     answers 1 for `STDERR`. Arm 1 is what makes the answer canonical,
      *     and the guard pins it by handing arm 2 an empty directory.
      *  2. The descriptor table (`/proc/self/fd` on Linux, `/dev/fd` on
-     *     Darwin and FreeBSD), matched on `st_dev` + `st_ino`.
+     *     Darwin and FreeBSD), matched on `st_dev` + `st_ino`. On Darwin the
+     *     fdesc stat of an entry is not always the TARGET's stat: MEASURED on
+     *     CI (macos-14, PHP 8.3), a regular file under `/private/var/folders`
+     *     matched NO `/dev/fd` entry directly, while a pty slave (character
+     *     device) matched. So the walk has a second pass, run only when the
+     *     first found nothing: follow each entry's `readlink()` chain to the
+     *     path it names and match that stat instead. WHAT THAT COSTS ON
+     *     LINUX, PRECISELY: the direct pass answers first for every stream
+     *     that HAS a descriptor, but "only when the first found nothing" is
+     *     not "never" -- a stream with no descriptor at all (`php://memory`
+     *     and friends, whose `fstat` reports dev+ino 0/0) and a stream whose
+     *     target was unlinked DO take the second pass there too: one bounded
+     *     scandir/readlink walk over the table's numeric entries, every
+     *     target matching nothing, and the same `null` the first pass would
+     *     have returned. Bounded cost, unchanged outcome. Pipe and socket
+     *     targets -- whose fdesc names carry no path PHP could stat -- are
+     *     skipped there exactly as the direct pass skips them. AND WHAT PASS
+     *     2 HAS NOT SINCE PROVEN ON DARWIN: it was written for the macos-14
+     *     miss above, but MEASURED on CI (macos-15-arm64, PHP 8.3.33, run
+     *     33796495350, job 100785492531) a regular-file stream still resolves
+     *     to null through BOTH passes there. No guard relies on it recovering
+     *     regular files on Darwin -- the fixtures pin the character-device
+     *     path and skip what those hosts cannot offer -- and it is kept
+     *     because it cannot change a Linux answer, costs only the bounded
+     *     walk above, and remains the only route the macos-14 evidence leaves
+     *     for an fdesc whose readlink names a statable path.
      *
      * Arm 1 answering first is also what keeps the cost out of the hot path:
      * `size()` runs on every SIGWINCH, and `$this->stream` defaults to
@@ -470,11 +503,100 @@ final class PosixBackend implements Backend
         }
 
         if ($candidates === []) {
+            $candidates = self::descriptorMatchesViaLinks($directory, $target);
+        }
+
+        if ($candidates === []) {
             return null;
         }
         sort($candidates);
 
         return $candidates[0];
+    }
+
+    /**
+     * Pass 2 of {@see descriptorForStream()}: match table entries through
+     * their `readlink()` TARGETS rather than through the entries themselves.
+     *
+     * WHY THIS EXISTS: Darwin's fdesc publishes each `/dev/fd` entry as a
+     * link whose NAME is the opened file's path, but its `stat()` reports the
+     * fdesc vnode's own identity for at least some file kinds -- MEASURED on
+     * CI (macos-14, PHP 8.3), a regular file under `/private/var/folders`
+     * matched nothing in pass 1 while a pty slave (character device) passed
+     * through fine. `readlink()` is served by the same table and reports the
+     * path PHP can actually stat, so the second walk follows it. Linux
+     * reaches this whenever pass 1 found nothing, and real Linux calls DO
+     * arrive: a stream with no descriptor (`php://memory` and friends, whose
+     * `fstat` reports dev+ino 0/0) and a stream whose target was unlinked
+     * walk every numeric entry here and return the same `null` they would
+     * have returned without this pass -- bounded cost, unchanged outcome.
+     * For a target that does match, the entry and the target `stat()`
+     * identically on procfs (links are resolved by the direct stat already),
+     * so the answer can only go from `null` to a match, never change one.
+     * On Darwin, regular-file recovery through this pass is UNPROVEN:
+     * MEASURED on CI (macos-15-arm64, PHP 8.3.33, run 33796495350, job
+     * 100785492531), both passes left a live regular-file stream unresolved,
+     * which is why the Darwin fixtures assert the character-device path only.
+     *
+     * @param  array<int|string, int> $target the fstat() of the stream
+     * @return list<int>            matching descriptor numbers, unsorted
+     */
+    private static function descriptorMatchesViaLinks(string $directory, array $target): array
+    {
+        $matches = [];
+
+        foreach ((array) @scandir($directory) as $entry) {
+            if (!\ctype_digit((string) $entry)) {
+                continue;
+            }
+
+            $path = self::resolveDescriptorLink($directory . '/' . $entry);
+            if ($path === null) {
+                continue;
+            }
+
+            // Same per-entry eviction as the direct pass: the chain walks
+            // real paths, and the process may well have stat'd them moments
+            // ago under a different descriptor.
+            clearstatcache(true, $path);
+
+            $stat = @stat($path);
+            if (\is_array($stat) && $stat['dev'] === $target['dev'] && $stat['ino'] === $target['ino']) {
+                $matches[] = (int) $entry;
+            }
+        }
+
+        return $matches;
+    }
+
+    /**
+     * The path a descriptor-table entry names, or null.
+     *
+     * Follows the symlink chain hop by hop -- fixture tables point at the
+     * live table, so one hop is not always the whole way -- and gives up on
+     * entries that are not links (pass 1 already saw them), on namespaced
+     * targets with no path PHP can stat (`pipe:[123]`, `socket:[456]`), and
+     * on chains that do not terminate within {@see MAX_LINK_HOPS}.
+     */
+    private static function resolveDescriptorLink(string $path): ?string
+    {
+        for ($hop = 0; $hop < self::MAX_LINK_HOPS; $hop++) {
+            $link = @readlink($path);
+
+            if (!\is_string($link) || $link === '') {
+                // Hop 0: not a link, so the direct pass already statted it.
+                // Later hops: the chain has ended at a real path.
+                return $hop === 0 ? null : $path;
+            }
+
+            if (str_contains($link, '[')) {
+                return null;
+            }
+
+            $path = $link[0] === '/' ? $link : \dirname($path) . '/' . $link;
+        }
+
+        return null;
     }
 
     /**

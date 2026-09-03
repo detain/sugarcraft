@@ -343,8 +343,8 @@ final class CsiHandlerImpl implements CsiHandler
 
     public function tbc(int $mode = 0): void
     {
-        // No-op — tab clear is out of scope for the renderer path.
-        $mode; // unused - reserved for future tab clear handling
+        // No-op — tab clear is out of scope for the renderer path; $mode
+        // is part of the CsiHandler contract, reserved for a future impl.
     }
 
     public function cbt(int $count = 1): void

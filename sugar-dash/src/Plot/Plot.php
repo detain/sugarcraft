@@ -28,13 +28,11 @@ use SugarCraft\Dash\Plot\Braille\BrailleMatrix;
 final class Plot implements Sizer, Drawable
 {
     public const MARKER_BRAILLE = 'braille';
-    public const MARKER_DOT = 'dot';
 
     public const MODE_LINE = 'line';
     public const MODE_SCATTER = 'scatter';
 
     private string $mode = self::MODE_LINE;
-    private string $marker = self::MARKER_BRAILLE;
     private bool $showAxes = true;
     private int $horizontalScale = 1;
 
@@ -60,19 +58,12 @@ final class Plot implements Sizer, Drawable
         return new self($data, $width, $height);
     }
 
-    // ─── Mode & Marker ────────────────────────────────────────────
+    // ─── Mode ─────────────────────────────────────────────────────
 
     public function withMode(string $mode): self
     {
         $clone = clone $this;
         $clone->mode = $mode;
-        return $clone;
-    }
-
-    public function withMarker(string $marker): self
-    {
-        $clone = clone $this;
-        $clone->marker = $marker;
         return $clone;
     }
 
