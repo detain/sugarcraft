@@ -1603,11 +1603,11 @@ exits 1, and so does the same form for `->dispatchSkill(`; both callees therefor
 caller anywhere in `src/` or `bin/`. The genuinely live path, walked hop by hop, is
 `bin/sugarcrush:423 → Bootstrap::app → Bootstrap.php:1887 chat() → workflowEngine: at :1058 (built
 :1183) → Chat.php:7725 /workflow run → workflowRun():7820 → engine->run() at :7844 inside the Fiber
-at :7842 → WorkflowEngine::run():348 → foreach :875 → :1042/:1152/:1252/:1294/:1397` (F6b re-measured 2026-09-03 at tip 0fdfd9033 by content-grep over the file: run() now :368, the stages foreach now :895, the five `systemPrompt()` sites now :1063/:1174/:1275/:1318/:1422 — the numbers above are the 2026-08-31 write-time positions, kept as history), with all four
+at :7842 → WorkflowEngine::run():348 → foreach :875 → :1042/:1152/:1252/:1294/:1397` (F6b re-measured 2026-09-03 at tip 0fdfd9033 by content-grep over the file: run() now :368, the stages foreach now :895, the five `systemPrompt()` sites now :1063/:1174/:1275/:1318/:1422; F6c re-measured 2026-09-03 at tip bcf419855 for the hops F6b left standing: `Bootstrap.php:1887` now :1888 (the `self::chat()` CALL inside `app()`, itself :1876), `Chat.php:7725` now :7777 (`'run' => $this->workflowRun(...)`), `workflowRun()` now :7872, `engine->run()` now :7896 inside the `\Fiber` at now :7894, and the `render()`-not-memoised comment below now :1459-1461 — while `bin/sugarcrush:423`, the `workflowEngine:` site :1058 and its builder :1183 re-measured UNCHANGED — the numbers above are the 2026-08-31 write-time positions, kept as history), with all four
 stage types dispatching at :885/:897/:909/:921 (now :905/:917/:929/:941). The step agent's own diff had already corrected this
 and the correction was right; the BRIEF was left standing, which is exactly the asymmetry §1.4
 check 14 exists to catch — nothing downstream is asked to falsify a brief. **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
-not memoised there (`Bootstrap.php:1458-1460`), so the git shell-out happens once per
+not memoised there (`Bootstrap.php:1458-1460`, F6c: now :1459-1461), so the git shell-out happens once per
 `systemPrompt()` call — MEASURED with a logging `git` shim on `PATH`, **five** subprocesses when the
 diff is emitted (branch, status, log, `diff --cached`, `diff`) and **three** when it is suppressed.
 `capture()` itself runs zero.

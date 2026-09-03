@@ -41,12 +41,12 @@ final class ProviderRequestResponseTest extends TestCase
      * {@see \SugarCraft\Crush\Providers\ProviderInterface::completeStream()}.
      *
      * Three families: Bedrock (terminal metadata event's inputTokens +
-     * outputTokens, BedrockProvider.php:364-367) and Vertex (disjoint
+     * outputTokens, BedrockProvider.php:500-503) and Vertex (disjoint
      * message_start input_tokens + message_delta output_tokens buckets,
      * VertexProvider.php:1116-1144) carry usage the implementation MUST read:
      * their tests assertSame() this total, and a provider that stops reading
      * the wire reds. Sglang/Custom/OpenAI currently hardcode tokensUsed: 0
-     * (SglangProvider.php:1152, CustomProvider.php:389, OpenAIProvider.php:257).
+     * (SglangProvider.php:1271, CustomProvider.php:488, OpenAIProvider.php:357).
      * Their fixtures lay the wire's cumulative total on EVERY chunk (10/20/30)
      * — a deliberately E24-hostile shape, not the real wire (the real
      * OpenAI-compatible stream is usage:null-per-chunk, captured live in
@@ -498,7 +498,7 @@ final class ProviderRequestResponseTest extends TestCase
             . 'contract fixture. EchoProvider is exempted WITH A NAMED REASON: it is a test '
             . 'double with no usage concept — it echoes a blockquote in PHP and its '
             . 'completeStream() yields CompleteResponse objects carrying no tokensUsed/costUsd '
-            . 'at all (EchoProvider.php:18-23, 84-91), mirroring the P1.S7 precedent for '
+             . 'at all (EchoProvider.php:109-124, 84-91), mirroring the P1.S7 precedent for '
             . 'exempting a stub. A NEW provider must add a STREAMED_USAGE_CONTRACT entry AND a '
             . 'per-provider contract test.',
         );
@@ -534,7 +534,7 @@ final class ProviderRequestResponseTest extends TestCase
 
         $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
 
-        // parseChunk hardcodes tokensUsed: 0 (SglangProvider.php:1152), so the sum
+        // parseChunk hardcodes tokensUsed: 0 (SglangProvider.php:1271), so the sum
         // is 0 — allowed under the contract as "nothing reported"
         // (ProviderInterface.php:53-54). A compliant terminal-once emission
         // (ProviderInterface.php:49-52) yields 30 — also allowed. Naive
@@ -571,7 +571,7 @@ final class ProviderRequestResponseTest extends TestCase
 
         $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
 
-        // parseChunk hardcodes tokensUsed: 0 (CustomProvider.php:389), so the sum
+        // parseChunk hardcodes tokensUsed: 0 (CustomProvider.php:488), so the sum
         // is 0 — allowed under the contract as "nothing reported"
         // (ProviderInterface.php:53-54). A compliant terminal-once emission
         // (ProviderInterface.php:49-52) yields 30 — also allowed. Naive
@@ -632,7 +632,7 @@ final class ProviderRequestResponseTest extends TestCase
             $sum += $method->invoke($provider, $chunk)->tokensUsed;
         }
 
-        // parseChunk hardcodes tokensUsed: 0 (OpenAIProvider.php:257), so the sum
+        // parseChunk hardcodes tokensUsed: 0 (OpenAIProvider.php:357), so the sum
         // is 0 — allowed under the contract as "nothing reported"
         // (ProviderInterface.php:53-54). A compliant terminal-once emission
         // (ProviderInterface.php:49-52) yields 30 — also allowed. Naive
@@ -652,7 +652,7 @@ final class ProviderRequestResponseTest extends TestCase
         // yields them (the BedrockProviderTest.php:562-568 shape): text arrives
         // as contentBlockDelta events, and usage lands once, on the terminal
         // metadata event — every earlier event genuinely has none to report
-        // (BedrockProvider.php:364-367).
+        // (BedrockProvider.php:500-503).
         $events = [
             ['contentBlockDelta' => ['delta' => ['text' => 'Hel']]],
             ['contentBlockDelta' => ['delta' => ['text' => 'lo']]],
