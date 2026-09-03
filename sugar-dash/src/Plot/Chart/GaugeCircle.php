@@ -109,7 +109,9 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
                 } elseif ($this->arcColor !== null) {
                     $grid[$y][$x] = '○';
                 } else {
-                    $grid[$y][$x] = '●';
+                    // Uncolored mode keeps the colored path's shape contract:
+                    // same $isFilled predicate, ○ for the remainder (C8a ring bug).
+                    $grid[$y][$x] = $isFilled ? '●' : '○';
                 }
             }
         }

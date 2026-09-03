@@ -370,4 +370,38 @@ final class GaugeCircleTest extends TestCase
 
         $this->assertStringContainsString('0%', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Uncolored (null arcColor) ring honors ratio — C8a ring-bug fix
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testUncoloredRingHonorsRatio(): void
+    {
+        // Bare ctor, arcColor null, needle/ticks/label off — isolate the arc.
+        $mid = (new GaugeCircle(0.3, 6, false, false, false))->render();
+        $this->assertStringContainsString('●', $mid, 'filled sweep must remain');
+        $this->assertStringContainsString('○', $mid, 'uncolored remainder was unreachable (full-ring bug)');
+
+        $zero = (new GaugeCircle(0.0, 6, false, false, false))->render();
+        $this->assertStringContainsString('○', $zero, 'ratio 0 → ring is remainder ○');
+
+        $full = (new GaugeCircle(1.0, 6, false, false, false))->render();
+        $this->assertStringContainsString('●', $full, 'ratio 1 → filled');
+        $this->assertStringNotContainsString('○', $full, 'ratio 1 → no remainder');
+    }
+
+    public function testUncoloredShapeMatchesColoredShape(): void
+    {
+        // Same $isFilled predicate governs ●/○ in both modes (color only gates ANSI).
+        $uncolored = (new GaugeCircle(0.3, 6, false, false, false))->render();
+        $colored = (new GaugeCircle(0.3, 6, false, false, false, Color::ansi(9)))->render();
+        $strip = static fn(string $s): string => (string) preg_replace('/\x1b\[[0-9;]*m/', '', $s);
+
+        $this->assertSame($strip($uncolored), $strip($colored), 'grid shape must be color-agnostic');
+        $this->assertStringContainsString('○', $colored, 'colored path behavior unchanged');
+
+        $low = substr_count((new GaugeCircle(0.25, 6, false, false, false))->render(), '●');
+        $high = substr_count((new GaugeCircle(0.75, 6, false, false, false))->render(), '●');
+        $this->assertGreaterThan($low, $high, '● count grows with ratio');
+    }
 }
