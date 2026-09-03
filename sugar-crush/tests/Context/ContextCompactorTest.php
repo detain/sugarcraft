@@ -1867,7 +1867,7 @@ final class IntraExchangeTurnBackend implements Backend, ReportsContextWindow
         return $this->seen[$index] ?? null;
     }
 
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
         $this->seen[] = $history;
 
@@ -1876,7 +1876,7 @@ final class IntraExchangeTurnBackend implements Backend, ReportsContextWindow
 
     public function completeAsync(
         array $history,
-        callable $onToken = null,
+        ?callable $onToken = null,
         ?CancellationToken $cancellation = null,
         ?callable $onEvent = null,
     ): PromiseInterface {
@@ -1892,7 +1892,7 @@ final class IntraExchangeTurnBackend implements Backend, ReportsContextWindow
  */
 final class IntraExchangeSummariser implements Backend
 {
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
         $lines = [];
         for ($i = 1; $i <= 12; $i++) {
@@ -1904,7 +1904,7 @@ final class IntraExchangeSummariser implements Backend
 
     public function completeAsync(
         array $history,
-        callable $onToken = null,
+        ?callable $onToken = null,
         ?CancellationToken $cancellation = null,
         ?callable $onEvent = null,
     ): PromiseInterface {

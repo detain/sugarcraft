@@ -226,6 +226,22 @@ final class ContextCompactor
 
         $threshold = (int) ($tokenLimit * $this->config->foregroundBlockingThreshold / 100);
         $total = $this->countTokens($messages);
+
+        // HONEST SCOPE, measured at ddd0a5c83 (review cycle 3): this early
+        // return is redundant for every input today, not merely under-tested.
+        // countTokens() is the sum of the per-message counts, so a history whose
+        // TOTAL sits under the blocking threshold cannot contain a single message
+        // that reaches it — every $own is at most that total and so below the
+        // >= threshold test below, $oversized stays empty, and its `=== []`
+        // branch answers the very same unchanged $messages. Deleting this guard
+        // left the whole file green (OK (76 tests, 221 assertions)); because no
+        // input distinguishes it from that later branch, no honest test can pin
+        // it here rather than there. It stays as deliberate defence-in-depth
+        // (§1.10): it is the cheapest exit for the overwhelmingly common
+        // under-tier wire, and it states the whole-history contract before the
+        // per-message split instead of leaving it an emergent property of that
+        // split. A future reader should not take it for independently
+        // load-bearing logic.
         if ($total < $threshold) {
             return $messages;
         }
@@ -296,6 +312,22 @@ final class ContextCompactor
     private function truncateMessageHead(array $message, int $charBudget): array
     {
         $content = (string) ($message['content'] ?? '');
+
+        // HONEST SCOPE, measured at ddd0a5c83 (review cycle 3): like the
+        // under-tier short-circuit in truncateOversizedExchange(), this
+        // return-unchanged is redundant for every input this method is reached
+        // with, not merely untested. Its sole caller is that method, which
+        // reaches here only for a message whose own token count already met the
+        // blocking threshold — a content string of well over three hundred
+        // thousand characters — while $charBudget is a share of the space left
+        // UNDER that threshold, so mb_strlen($content) <= $charBudget never
+        // holds. Deleting this guard left the whole file green (OK (76 tests,
+        // 221 assertions)); no input reaches the branch, so no honest test can
+        // pin it. It stays as deliberate defence-in-depth (§1.10): should a
+        // future caller pass a not-actually-oversized message, this keeps the
+        // method from rewriting content that already fits its budget — the
+        // guarantee the doc-block above states. Not independently load-bearing
+        // logic today.
         if (mb_strlen($content) <= $charBudget) {
             return $message;
         }
