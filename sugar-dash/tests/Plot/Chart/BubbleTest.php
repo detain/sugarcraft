@@ -11,6 +11,7 @@ use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 
 final class BubbleTest extends TestCase
 {
@@ -577,5 +578,29 @@ final class BubbleTest extends TestCase
                 }
             }
         }
+    }
+
+    public function testMapSizeLadderCapsTopBinSoSevenThroughTenShareTheBox(): void
+    {
+        // v4/Q1 collapse: plotBubble dispatches three shapes, and the former
+        // bin 4 (raw 10 at the default 1..10 range) landed in the same r=2 arm
+        // as bin 3 (raw 7..9) — byte-identical output. The ladder is capped at
+        // 3 so the dead rung is gone; this pin fails if a fourth distinct bin
+        // ever reappears without the dispatch gaining a matching arm.
+        $mapSize = new ReflectionMethod(Bubble::class, 'mapSize');
+        $bubble = Bubble::new([]);
+
+        $bins = [];
+        for ($raw = 1; $raw <= 10; $raw++) {
+            $bins[$raw] = $mapSize->invoke($bubble, (float) $raw);
+        }
+
+        $this->assertSame([1, 1, 1, 2, 2, 2, 3, 3, 3, 3], array_values($bins));
+        // Equivalence pin: the collapsed top band keeps old bin3 ≡ bin4 on one
+        // shape — raw 7 and raw 10 must never disagree.
+        $this->assertSame($bins[7], $bins[10]);
+        // Out-of-range sizes saturate into an existing rung, never invent one.
+        $this->assertSame(1, $mapSize->invoke($bubble, 0.0));
+        $this->assertSame(3, $mapSize->invoke($bubble, 20.0));
     }
 }

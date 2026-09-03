@@ -14,10 +14,12 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * A bubble chart component.
  *
- * Displays data points as circles where:
+ * Displays data points as size-binned Unicode glyphs where:
  * - X position represents one dimension
  * - Y position represents another dimension
- * - Size represents a third dimension
+ * - Size selects the shape: a single dot, a five-cell plus, or a 5x5
+ *   rounded box of quadrant arcs over a dot fill — never true circles,
+ *   and never ASCII (see plotBubble's dispatch)
  * - Color can represent a category
  *
  * Mirrors bubble chart patterns adapted to PHP with
@@ -44,7 +46,9 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     private float $maxSize = 10;
 
     /**
-     * Circle drawing characters (partial arcs).
+     * Bubble glyph table: quadrant arcs for the box corners plus the full
+     * dot everywhere else — approximations of round shapes, never true
+     * circles (the CIRCLE_CHARS identifier stays per the v4 Q1 ruling).
      */
     private const CIRCLE_CHARS = [
         'top-left' => '◜',
@@ -365,7 +369,7 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 
         $color = $point->color ?? $this->color;
 
-        // Draw the size-binned glyph cluster (mapSize bins 1..4). The shapes are
+        // Draw the size-binned glyph cluster (mapSize bins 1..3). The shapes are
         // a plus and a solid box built from Unicode arcs/dots — never true
         // circles, and never ASCII.
         if ($size <= 1) {
@@ -412,7 +416,7 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
                 $y = $cy + $dy;
 
                 if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
-                    // Determine which circle character to use based on position
+                    // Determine which shape character to use based on position
                     $char = $this->getCircleChar($dx, $dy, $radius);
                     if ($color !== null) {
                         $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
@@ -469,7 +473,12 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 
     /**
      * Map a raw size value to a glyph bin: 1 = single cell, 2 = r=1 plus,
-     * 3-4 = r=2 solid box.
+     * 3 = r=2 rounded box — the largest band (raw 7..10 at the default
+     * 1..10 size range).
+     *
+     * The ladder is capped at 3 because plotBubble dispatches only three
+     * shapes: the former bin 4 fell in the same r=2 arm as bin 3 and
+     * rendered byte-identical, so the fourth rung was dead weight.
      *
      * A degenerate size range (withSizeRange(x, x)) collapses the span to
      * zero; PHP 8 makes that division fatal, so the contract pins ratio to 1
@@ -481,7 +490,7 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
             ? 1.0
             : ($size - $this->minSize) / ($this->maxSize - $this->minSize);
 
-        return max(1, intval(1 + $ratio * 3));
+        return max(1, min(3, intval(1 + $ratio * 3)));
     }
 
     /**
