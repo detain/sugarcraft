@@ -9,6 +9,8 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Attachment;
+use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ReportsContextWindow;
@@ -19,6 +21,7 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolCall;
 use SugarCraft\Crush\ToolResult;
+use SugarCraft\Crush\Usage;
 
 final class ContextCompactorTest extends TestCase
 {
@@ -1588,6 +1591,92 @@ final class ContextCompactorTest extends TestCase
             $next->history[1]->toWire(),
             'and the wire the NEXT turn builds from this history still carries the tool_calls this history was built with',
         );
+    }
+
+    /**
+     * THE FIELD-PRESERVING COPY ITSELF, driven through the real path (review
+     * cycle 5, finding 2). Every metadata assertion above falls on history[1],
+     * an UNCHANGED message the splice hands back verbatim — none of them ever
+     * executes {@see Chat::messageWithContent()}, the one branch a TRUNCATED
+     * entry takes. Measured: reducing its eleven-field copy to
+     * `new Message($message->role, $content, time(), $message->attachments)` —
+     * dropping toolCalls, toolResults, pendingToolCallId, reasoning, imageBytes,
+     * imageProtocol and usage, and re-stamping createdAt with the CLOCK —
+     * survived all 78 step tests, the 282 five-file set AND tests/Integration
+     * (756) green (mutant M7, review cycle 5). The docblock calls the field list
+     * a MAINTENANCE CONTRACT; this test is the pin that makes breaking it red.
+     * createdAt is asserted as a KNOWN ANSWER (1,234,567,890), not merely
+     * non-null, because `time()` is also non-null — and the re-stamp is the
+     * exact clock the earlier F2 fix existed to remove: a determinism claim the
+     * file already makes (no time() in the rescue) needs a number to prove it.
+     */
+    public function testTheRescueCopyOfATruncatedMessageCarriesEveryFieldUnchanged(): void
+    {
+        $first = Message::user('question number 3');
+        $attachment = new Attachment('/tmp/data.csv', AttachmentType::File);
+        $toolCall = new ToolCall('bash', ['command' => 'ls'], 'tc1');
+        $toolResult = new ToolResult('bash', 'listing', null, 'tc1');
+        $usage = Usage::new(1234, 0.5, 1000, 234, 50, 12);
+        $rich = new Message(
+            Role::Assistant,
+            'GIANT ' . str_repeat('z', 800_000),
+            1_234_567_890,
+            attachments: [$attachment],
+            toolCalls: [$toolCall],
+            toolResults: [$toolResult],
+            pendingToolCallId: 'tc1',
+            reasoning: 'I thought hard',
+            imageBytes: 'PNM-bytes',
+            imageProtocol: 'image/png',
+            usage: $usage,
+        );
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(history: [$first, $rich], backend: $backend);
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: an oversized metadata-bearing assistant turn reaches the rescue');
+        $cmd();
+
+        $copy = $backend->historyAt(0)[1];
+
+        // Positive controls first: this MUST be the messageWithContent() branch.
+        // An assertion set on a message the splice returned verbatim would pin
+        // nothing — that is exactly how M7 hid behind the assertions above.
+        $this->assertNotSame($rich, $copy, 'the truncated giant is a copy, not the original object');
+        $this->assertStringContainsString(
+            'characters truncated to fit the context window',
+            $copy->content,
+            'and the copy really carries the truncation — the copy path executed',
+        );
+        $this->assertStringStartsWith('GIANT zzz', $copy->content, 'the head is intact, only the tail was dropped');
+        $this->assertNotSame($rich->content, $copy->content, 'content is the ONE field the copy changes');
+
+        // Every other field survives, object-identical where it is an object,
+        // against a KNOWN ANSWER where the clock could have touched it.
+        $this->assertSame(Role::Assistant, $copy->role, 'role survives');
+        $this->assertSame(
+            1_234_567_890,
+            $copy->createdAt,
+            'createdAt survives BIT-EXACT — a known answer, because time() would also be non-null, and the re-stamp is the clock defect the splice replaced',
+        );
+        $this->assertSame([$attachment], $copy->attachments, 'attachments survive, same objects');
+        $this->assertSame([$toolCall], $copy->toolCalls, 'toolCalls survive, same objects');
+        $this->assertSame([$toolResult], $copy->toolResults, 'toolResults survive, same objects');
+        $this->assertSame('tc1', $copy->pendingToolCallId, 'pendingToolCallId survives');
+        $this->assertSame('I thought hard', $copy->reasoning, 'reasoning survives (M7 dropped it)');
+        $this->assertSame('PNM-bytes', $copy->imageBytes, 'imageBytes survives (M7 dropped it)');
+        $this->assertSame('image/png', $copy->imageProtocol, 'imageProtocol survives (M7 dropped it)');
+        $this->assertSame($usage, $copy->usage, 'usage survives as the same object (M7 dropped it)');
+        $this->assertSame(1234, $copy->usage?->totalTokens, 'and the figure inside it is the provider-counted one, not a recomputed guess');
+
+        // The wire rebuilt from the copy is structurally the wire the original
+        // produced — the metadata is not merely stored on the object, it rides
+        // the NEXT request too.
+        $wire = $copy->toWire();
+        $this->assertArrayHasKey('tool_calls', $wire, 'a truncated assistant still sends its tool_calls on every subsequent turn');
+        $this->assertArrayHasKey('attachments', $wire, 'and its attachments');
     }
 
     /**
