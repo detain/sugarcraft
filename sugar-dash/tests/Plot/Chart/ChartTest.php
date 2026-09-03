@@ -793,20 +793,19 @@ final class ChartTest extends TestCase
         $this->assertNotSame($diffBuffer, $freshBuffer, 'sanity: distinct instances');
 
         // Full-grid parity: stored diff-state buffer == codepoint grid of
-        // the fresh full render (rows clipped to the chart area 40x10 by
-        // design — labels row sits outside the diff geometry).
-        $this->assertSame($this->codepointGrid($freshFrame, 40, 10), self::readableGrid($diffBuffer, 40, 10));
-        $this->assertSame(self::readableGrid($freshBuffer, 40, 10), self::readableGrid($diffBuffer, 40, 10));
+        // the fresh full render. Since D1 the diff height covers the full
+        // 40x11 emitted frame (10 chart rows + labels row), so the label
+        // row is inside the diff geometry.
+        $this->assertSame($this->codepointGrid($freshFrame, 40, 11), self::readableGrid($diffBuffer, 40, 11));
+        $this->assertSame(self::readableGrid($freshBuffer, 40, 11), self::readableGrid($diffBuffer, 40, 11));
 
-        // Exact ground truth on the CJK label row (direct rebuild at full
-        // frame height): 8-space gutter, 日本/東京 pair, space after.
-        $rebuilt = new \ReflectionMethod(Chart::class, 'bufferFromOutput');
-        $rebuilt->setAccessible(true);
-        /** @var Buffer $labelBuffer */
-        $labelBuffer = $rebuilt->invoke($chart, $freshFrame, 40, 11);
-        $this->assertSameRune('東', $labelBuffer, 8, 10);
-        $this->assertSameRune('京', $labelBuffer, 9, 10);
-        $this->assertSameRune(' ', $labelBuffer, 10, 10);
+        // Exact ground truth on the CJK label row: 8-space gutter,
+        // 日本/東京 pair, space after — pinned directly on the stored
+        // buffer (D1 replaced the old direct-rebuild-at-40x11 workaround,
+        // which only existed because the label row was clipped away).
+        $this->assertSameRune('東', $diffBuffer, 8, 10);
+        $this->assertSameRune('京', $diffBuffer, 9, 10);
+        $this->assertSameRune(' ', $diffBuffer, 10, 10);
     }
 
     /**
@@ -921,16 +920,16 @@ final class ChartTest extends TestCase
 
         // Parity: stored diff-state grid == codepoint grid of the DISPLAY
         // runes of the fresh render, width-clipped to 40 exactly as the cell
-        // loop does (runes past the last buffer column are status quo, clip
-        // redesign parked); chart area is 40x10 — the x-axis + labels rows
-        // sit outside the diff height.
+        // loop does (runes past the last buffer column are status quo); since
+        // D1 the rows cover the full 12-row frame — chart area 40x10 plus the
+        // x-axis and labels rows inside the diff geometry.
         $stripped = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $freshFrame);
         $expected = array_map(
             static fn (array $r): array => array_slice($r, 0, 40),
-            $this->codepointGrid($stripped, 40, 10)
+            $this->codepointGrid($stripped, 40, 12)
         );
-        $this->assertSame($expected, self::readableGrid($diffBuffer, 40, 10));
-        $this->assertSame(self::readableGrid($freshBuffer, 40, 10), self::readableGrid($diffBuffer, 40, 10));
+        $this->assertSame($expected, self::readableGrid($diffBuffer, 40, 12));
+        $this->assertSame(self::readableGrid($freshBuffer, 40, 12), self::readableGrid($diffBuffer, 40, 12));
     }
 
     /**
@@ -1011,5 +1010,38 @@ final class ChartTest extends TestCase
         /** @var Buffer $plainBuffer */
         $plainBuffer = $method->invoke(new Chart(), $plain, 40, 11);
         $this->assertSame($this->codepointGrid($plain, 40, 11), self::readableGrid($plainBuffer, 40, 11));
+    }
+
+    /**
+     * D1 regression (reconE proof as a repo test): a label-only mutation on a
+     * reused chart must emit a NON-empty delta carrying the new runes. Before
+     * D1 the diff buffer was clipped to the chart area, so the labels row never
+     * entered it — the 日本→東京 mutation below (values identical → every chart
+     * row identical) diffed to 0 BYTES, and a delta-tracking terminal kept
+     * painting the stale label forever.
+     */
+    public function testLabelOnlyMutationEmitsDeltaRepaintingNewRunes(): void
+    {
+        $chart = $this->plainBarChart([
+            new ChartDataPoint('日本', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+        $firstFrame = $chart->render();
+        $this->assertStringContainsString('日本', $firstFrame, 'precondition: CJK label painted on first frame');
+
+        // Mutate the SAME instance with IDENTICAL values — only the label text
+        // changes, and it lands exclusively on the labels row.
+        $points = new \ReflectionProperty(Chart::class, 'dataPoints');
+        $points->setAccessible(true);
+        $points->setValue($chart, [
+            new ChartDataPoint('東京', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+
+        $delta = $chart->render();
+        $this->assertNotSame('', $delta, 'label-only mutation must not diff to zero bytes');
+        $this->assertStringContainsString('東', $delta, 'delta must repaint the new label');
+        $this->assertStringContainsString('京', $delta, 'delta must repaint the new label');
+        $this->assertLessThan(strlen($firstFrame), strlen($delta), 'same-size re-render stays a delta, not a full frame');
     }
 }

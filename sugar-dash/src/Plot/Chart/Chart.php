@@ -184,10 +184,27 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
             $output = $this->renderLineChart($chartWidth, $chartHeight, $minValue, $maxValue, $gridLines);
         }
 
+        // Diff-state rows cover the FULL emitted frame, not just the chart
+        // area: renderBarChart appends the x-axis row (showGrid) and the labels
+        // row (showLabels); renderLineChart only the labels row (its border grid
+        // lives inside the chart area). Storing only $chartHeight rows clipped
+        // those rows out of the buffer, so an axis/label-only mutation diffed to
+        // ZERO bytes and a delta-tracking terminal kept painting stale labels.
+        // The height is structural, not count(explode($output)): the renderers
+        // trim() their frames, so an emitted-line count can vary between frames
+        // of identical parameters (all-blank top rows vanish), and Buffer::diff()
+        // throws on dimension mismatch — the readonly flags make this expression
+        // constant for an instance. Resize detection stays keyed on the chart
+        // area ($chartWidth/$chartHeight above); the width clip is untouched
+        // (parked separately).
+        $diffHeight = $chartHeight
+            + ($this->type === ChartType::Bar && $this->showGrid ? 1 : 0)
+            + ($this->showLabels ? 1 : 0);
+
         // First frame or resize: emit full output and store as previousFrame.
         if ($this->renderContext === null) {
             $this->renderContext = new ChartRenderContext(
-                previousFrame: $this->bufferFromOutput($output, $chartWidth, $chartHeight),
+                previousFrame: $this->bufferFromOutput($output, $chartWidth, $diffHeight),
                 prevWidth: $chartWidth,
                 prevHeight: $chartHeight
             );
@@ -195,7 +212,7 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($output, $chartWidth, $chartHeight);
+        $currentFrame = $this->bufferFromOutput($output, $chartWidth, $diffHeight);
         $ops = $currentFrame->diff($this->renderContext->previousFrame);
         $this->renderContext = new ChartRenderContext(
             previousFrame: $currentFrame,
@@ -789,8 +806,11 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      * first-frame bytes and every golden are unaffected by the strip.
      *
      * @param string $output Multi-line string from render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
+     * @param int    $width  Buffer width in cells (clip status quo)
+     * @param int    $height Rows to store — callers pass the full emitted-frame
+     *                       height (chart area + x-axis + labels) so the axis
+     *                       and label rows participate in the diff; rows past
+     *                       the end of $output store as blanks.
      */
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
