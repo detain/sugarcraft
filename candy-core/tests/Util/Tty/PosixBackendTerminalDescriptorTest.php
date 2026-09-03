@@ -6,7 +6,9 @@ namespace SugarCraft\Core\Tests\Util\Tty;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Libc;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\SizeIoctl;
 
 /**
@@ -96,46 +98,72 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
         $this->requireTerminalDevice();
         $this->requireLibcDescriptors();
 
-        $fd = PosixBackend::openDeviceDescriptor(self::TERMINAL_DEVICE);
-        self::assertNotNull($fd, self::TERMINAL_DEVICE . ' is openable but the helper answered null');
-
-        $handle = fopen(self::TERMINAL_DEVICE, 'r+b');
-        self::assertIsResource($handle, self::TERMINAL_DEVICE . ' is openable but fopen() failed');
-        $resourceId = (int) $handle;
+        // THE DEVICE: /dev/ptmx on Linux, a freshly allocated slave path on
+        // Darwin. WHY THEY DIFFER: opening /dev/ptmx hands back the pty
+        // MASTER, and MEASURED on CI (macos-14, PHP 8.3) a BSD master is a tty
+        // to isatty() — the assertion below passes — but REJECTS TIOCGWINSZ,
+        // so the SizeIoctl::query() at the end of this test threw for a reason
+        // that has nothing to do with the resource-id defect this test pins.
+        // (candy-pty's SizeIoctl records the same split empirically: the GET
+        // works on macOS against the slave, and its SET is broken there by the
+        // variadic-ioctl ABI.) The SLAVE is the real terminal on every POSIX
+        // host, and Linux's master accepts the ioctl, so Linux keeps the
+        // simpler spelling and only Darwin allocates.
+        $device = self::TERMINAL_DEVICE;
+        $pair   = null;
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $pair   = (new PosixPtySystem())->open();
+            $device = $pair->slave()->path();
+        }
 
         try {
-            // The arrangement. If these ever stop holding, the assertion
-            // below proves nothing and must be read as inconclusive, not as
-            // a pass.
-            self::assertNotSame(
-                $resourceId,
-                $fd,
-                'the resource id and the descriptor coincide here, so this fixture proves nothing',
-            );
-            self::assertFalse(
-                posix_isatty($resourceId),
-                'descriptor ' . $resourceId . ' (the resource id) is itself a tty here, '
-                    . 'so this fixture cannot tell the two readings apart',
-            );
+            $fd = PosixBackend::openDeviceDescriptor($device);
+            self::assertNotNull($fd, $device . ' is openable but the helper answered null');
 
-            // The claim.
-            self::assertTrue(
-                posix_isatty($fd),
-                'openDeviceDescriptor() answered ' . $fd . ', which is not a terminal descriptor; '
-                    . 'a stream resource id for this device would be ' . $resourceId,
-            );
+            $handle = fopen($device, 'r+b');
+            self::assertIsResource($handle, $device . ' is openable but fopen() failed');
+            $resourceId = (int) $handle;
 
-            // And the consequence that the production arm actually depends
-            // on: the number is one SizeIoctl::query() will accept. This is
-            // the positive component — an assertion that the helper "does not
-            // return a resource id" would also pass against a helper that
-            // returned null forever.
-            $size = SizeIoctl::query($fd);
-            self::assertArrayHasKey('rows', $size);
-            self::assertArrayHasKey('cols', $size);
+            try {
+                // The arrangement. If these ever stop holding, the assertion
+                // below proves nothing and must be read as inconclusive, not as
+                // a pass.
+                self::assertNotSame(
+                    $resourceId,
+                    $fd,
+                    'the resource id and the descriptor coincide here, so this fixture proves nothing',
+                );
+                self::assertFalse(
+                    posix_isatty($resourceId),
+                    'descriptor ' . $resourceId . ' (the resource id) is itself a tty here, '
+                        . 'so this fixture cannot tell the two readings apart',
+                );
+
+                // The claim.
+                self::assertTrue(
+                    posix_isatty($fd),
+                    'openDeviceDescriptor() answered ' . $fd . ', which is not a terminal descriptor; '
+                        . 'a stream resource id for this device would be ' . $resourceId,
+                );
+
+                // And the consequence that the production arm actually depends
+                // on: the number is one SizeIoctl::query() will accept. This is
+                // the positive component — an assertion that the helper "does not
+                // return a resource id" would also pass against a helper that
+                // returned null forever.
+                $size = SizeIoctl::query($fd);
+                self::assertArrayHasKey('rows', $size);
+                self::assertArrayHasKey('cols', $size);
+            } finally {
+                fclose($handle);
+                PosixBackend::closeDeviceDescriptor($fd);
+            }
         } finally {
-            fclose($handle);
-            PosixBackend::closeDeviceDescriptor($fd);
+            // Closing the master would hang up the slave; it is held for
+            // exactly as long as the device above needs it to be a terminal.
+            if ($pair instanceof PtyPair) {
+                $pair->master()->close();
+            }
         }
     }
 

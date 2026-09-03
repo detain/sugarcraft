@@ -327,8 +327,25 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         // WARM. The cache now describes the FIRST file.
         clearstatcache();
         $warm = stat($fixture . '/' . $descriptor);
-        self::assertIsArray($warm);
-        self::assertSame($firstStat['ino'], $warm['ino'], 'the fixture entry does not reach the first handle');
+
+        // This whole arrangement needs a stat THROUGH the table entry to
+        // reach the file behind it -- and that pass-through is a property of
+        // the OS's table, not of the resolver. MEASURED on CI (macos-14,
+        // PHP 8.3): Darwin's fdesc synthesises its own identity for entries
+        // over regular files (character devices pass through, which is why
+        // the pty tests in this file are green there), so on that host the
+        // stale entry this fixture warms cannot be created at all, and the
+        // resolver's own walk -- which is guarded through pass 2 by the live
+        // temp-file assertions in testAStreamWithNoDescriptorAndADeadHandle
+        // BothAnswerNull -- never consults the fixture table. Skip with a
+        // reason rather than red a fixture the kernel cannot offer.
+        if (!\is_array($warm) || $warm['ino'] !== $firstStat['ino']) {
+            self::markTestSkipped(
+                'this host does not pass a stat() through the descriptor-table entry to the file '
+                    . 'behind it (Darwin fdesc synthesises the entry identity for regular files), '
+                    . 'so the stale-cache state this fixture warms cannot arise here',
+            );
+        }
 
         // THE REUSE. fclose() and fopen() stat no path, so the cache entry
         // above survives them -- which is precisely the production hazard:
@@ -601,14 +618,27 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         return $this->openHandle($this->tempPath(), 'r+');
     }
 
-    /** A temp file this test owns, deleted in tearDown by exact path. */
+    /**
+     * A temp file this test owns, deleted in tearDown by exact path.
+     *
+     * Returned CANONICAL, because the fixture compares it against what the
+     * kernel says a descriptor names: `readlink()` of a Darwin fdesc entry
+     * reports the resolved path (`/private/var/folders/...`), while
+     * tempnam() spells the same file through the `/var` symlink
+     * (`/var/folders/...`), and the reuse test's first discriminator would
+     * then fail on spelling rather than on the defect it hunts. On Linux
+     * realpath() is the identity here, so nothing existing changes.
+     */
     private function tempPath(): string
     {
         $path = tempnam(sys_get_temp_dir(), 'sc_core_r54a_fd_');
         self::assertIsString($path);
         $this->artifacts[] = $path;
 
-        return $path;
+        $canonical = realpath($path);
+        self::assertIsString($canonical, 'realpath() could not resolve ' . $path);
+
+        return $canonical;
     }
 
     /**

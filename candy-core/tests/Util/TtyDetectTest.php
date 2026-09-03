@@ -199,8 +199,11 @@ final class TtyDetectTest extends TestCase
      * There is no portable userland call for this — which is precisely why
      * the production code does not try to derive one and asks
      * `stream_isatty()` about the stream instead. A test may be less
-     * portable than the code it tests, so this walks `/proc/self/fd` and
-     * matches on device + inode.
+     * portable than the code it tests, so this walks whatever descriptor
+     * table the host publishes — `/proc/self/fd` on Linux, `/dev/fd` on
+     * Darwin and FreeBSD — and matches on device + inode. The walk that
+     * named only `/proc/self/fd` returned null on macOS, and the guard read
+     * as "could not locate the descriptor behind the terminal handle".
      *
      * ## WHAT THIS DOC-BLOCK USED TO SAY, AND WHY IT CHANGED
      *
@@ -238,17 +241,32 @@ final class TtyDetectTest extends TestCase
             return null;
         }
 
+        // The tables this host publishes. Linux has `/proc/self/fd` and a
+        // `/dev/fd` SYMLINK to it; Darwin and FreeBSD have `/dev/fd` and no
+        // `/proc`. KEYED BY DESCRIPTOR NUMBER, not appended: on Linux the same
+        // entry is reached through both names, and a list would count it twice
+        // and trip the uniqueness guard below for a reason that is pure path
+        // aliasing, not the descriptor ambiguity the guard means to catch.
+        /** @var array<int,true> $matches */
         $matches = [];
-        foreach ((array) @scandir('/proc/self/fd') as $entry) {
-            if (!\is_string($entry) || !ctype_digit($entry)) {
+
+        foreach (['/proc/self/fd', '/dev/fd'] as $directory) {
+            if (!is_dir($directory)) {
                 continue;
             }
-            $candidate = @stat('/proc/self/fd/' . $entry);
-            if ($candidate === false) {
-                continue;
-            }
-            if ($candidate['dev'] === $target['dev'] && $candidate['ino'] === $target['ino']) {
-                $matches[] = (int) $entry;
+
+            foreach ((array) @scandir($directory) as $entry) {
+                if (!\is_string($entry) || !ctype_digit($entry)) {
+                    continue;
+                }
+
+                $candidate = $this->statOfDescriptorEntry($directory, (int) $entry);
+                if ($candidate === false) {
+                    continue;
+                }
+                if ($candidate['dev'] === $target['dev'] && $candidate['ino'] === $target['ino']) {
+                    $matches[(int) $entry] = true;
+                }
             }
         }
 
@@ -256,16 +274,57 @@ final class TtyDetectTest extends TestCase
             return null;
         }
 
-        if (\count($matches) > 1) {
+        ksort($matches);
+        $descriptors = array_keys($matches);
+
+        if (\count($descriptors) > 1) {
             self::fail(
                 'device+inode does not identify a single descriptor here: fds '
-                    . implode(', ', $matches) . ' all match this handle, so the descriptor '
+                    . implode(', ', $descriptors) . ' all match this handle, so the descriptor '
                     . 'behind it is ambiguous and any answer would be a guess. The fixture '
                     . 'must hold one handle on a device whose inode is not shared, or '
                     . 'identify the descriptor some other way.',
             );
         }
 
-        return $matches[0];
+        return $descriptors[0];
+    }
+
+    /**
+     * The stat behind one descriptor-table entry, mirroring -- independently,
+     * NOT by calling production code -- the two ways {@see
+     * \SugarCraft\Core\Util\Tty\PosixBackend::descriptorForStream()} reaches
+     * an entry: `stat()` of the entry itself, and, for the platforms where
+     * that does not report the target's identity (Darwin's fdesc over regular
+     * files), `stat()` of the entry's `readlink()` target.
+     *
+     * Deliberately a separate implementation: a guard that resolves the
+     * descriptor THROUGH the method whose resolution it is checking would be
+     * circular -- if the production walk were wrong, so would the answer it
+     * hands the comparison.
+     *
+     * @return array<string, mixed>|false
+     */
+    private function statOfDescriptorEntry(string $directory, int $entry)
+    {
+        $direct = @stat($directory . '/' . $entry);
+        if (\is_array($direct)) {
+            // On Darwin an fdesc entry for a regular file reports the fdesc
+            // vnode, not the target, so a direct hit here could in principle be
+            // the wrong identity. Character devices (the ptmx this fixture
+            // opens) do pass through, and the uniqueness guard catches any
+            // residual ambiguity, so the direct stat is preferred when it
+            // matches.
+            return $direct;
+        }
+
+        $link = @readlink($directory . '/' . $entry);
+        if (!\is_string($link) || $link === '' || str_contains($link, '[')) {
+            return false;
+        }
+
+        $viaLink = @stat($link);
+
+        return \is_array($viaLink) ? $viaLink : false;
     }
 }

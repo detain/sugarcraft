@@ -1331,8 +1331,13 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 'scanTree() no longer reports what is in a file it was pointed at, so the '
                     . 'emptiness asserted in the calling test says nothing about the tree',
             );
+            // Expected in the SAME spelling scanTree() emits: it normalises
+            // separators to slashes so its output keys the slash-spelled
+            // ROSTER on Windows too, while $dir carries whatever
+            // sys_get_temp_dir() produced. str_replace is the identity on
+            // POSIX, where DIRECTORY_SEPARATOR is already '/'.
             self::assertSame(
-                [$dir . '/fixture.php'],
+                [str_replace(\DIRECTORY_SEPARATOR, '/', $dir . '/fixture.php')],
                 array_values(array_unique(array_column($hits, 'file'))),
                 'scanTree() reported hits that did not come from the file it was given',
             );
