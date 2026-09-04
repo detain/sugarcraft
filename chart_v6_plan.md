@@ -37,7 +37,7 @@ Protocol: chart_prompt.md v3 machinery, UNCHANGED. Ledger: chart_worklog.md (app
 | F1 | dash Chart.php+ChartTest.php | ✅ COMMITTED 2026-09-04 (ledger holds sha) | R1 (fix/doc/park), R5 | — |
 | F2 | dash gaugeCircle.php+goldens×2+generate-all.php[+GaugeCircleTest.php] | PENDING | R2 (fix/fix-min/park) | — |
 | F3 | candy-buffer Buffer.php (comments only) | PENDING | R3 (doc/void/hook/import) | — |
-| F4 | dash Plot.php+PlotTest.php | PENDING | R4 (delete/leave/wire), R6 | — |
+| F4 | dash Plot.php+PlotTest.php | ✅ COMMITTED 2026-09-04 (ledger holds sha) | R4 (delete/leave/wire), R6 | — |
 
 ## Rulings
 Rulings received 2026-09-03T23:35Z via orchestrator question set — ALL steps cleared for build.

@@ -106,11 +106,6 @@ final class PlotTest extends TestCase
         $this->assertSame('scatter', Plot::MODE_SCATTER);
     }
 
-    public function testMarkerConstants(): void
-    {
-        $this->assertSame('braille', Plot::MARKER_BRAILLE);
-    }
-
     // ═══════════════════════════════════════════════════════════════
     // Marker
     // ═══════════════════════════════════════════════════════════════

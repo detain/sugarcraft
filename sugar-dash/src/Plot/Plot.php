@@ -21,14 +21,10 @@ use SugarCraft\Dash\Plot\Braille\BrailleMatrix;
  * - LineChart: connected points with lines
  * - ScatterPlot: unconnected points only
  *
- * Default uses MarkerBraille for smooth curves.
- *
  * Mirrors termui widgets/plot.go
  */
 final class Plot implements Sizer, Drawable
 {
-    public const MARKER_BRAILLE = 'braille';
-
     public const MODE_LINE = 'line';
     public const MODE_SCATTER = 'scatter';
 
