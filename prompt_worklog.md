@@ -253,6 +253,66 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P5.S1 — PromptSection interface + ordered assembler behind buildSystemPrompt · 2026-09-04 · 8e910daad
+
+**Status: MERGED — step 31 of 63; Phase 5 opened.** §5 collision re-check CLEARED 2026-09-04 by the
+supervisor verbatim: "nothing else running go ahead and contineu" — Phases 5–11 GO (no crush-lane round
+in flight). Supervisor scheduled three follow-up steps the same day: **F7** Gemini tools shaper
+(function calling), **F8** workflow-path write-signal build-out (WorkflowEngine/AgentResult + worker IPC
+carrier), **F9** widen status-line cache readout beyond Anthropic-shape (degraded input+cacheRead rate,
+gap disclosed — resolves NOTE-1).
+
+**What landed (branch prompt/P5.S1: `a04ce83e2` impl · `6b6b46a12` fix-1 · `de9a4db69` fix-2 ·
+`d1b464b41` fix-3 · sync-merge `9da929ad6`; 4 files +627/−68):**
+- NEW `src/Context/PromptSection.php` (79): fence()/stability()/byteBudget()/render() contract.
+- NEW `src/Context/Stability.php` (61): Static | PerSession | PerTurn enum.
+- NEW `tests/Context/PromptSectionTest.php` (280, 12 tests) — incl. unit pin of the doubled
+  skill-separator hazard (contributions carry their own leading "\n\n"; naive implode DOUBLES).
+- `src/Runtime.php` (275 changed): `buildSystemPrompt(App):string` stays PRIVATE, one-App-param, now a
+  one-line delegate over `systemPromptSections()` — an ordered PromptSection list; <env> renders LAST
+  ("Volatile content LAST" :2514); memoisation stays per-Runtime.
+- **GOLDEN BYTE-IDENTICAL — the acceptance test**: system 32ea749d84938811ac9331419cae7380, agent
+  ef0326dd38535aaa2f1d715919bff26e; fixture diff b402a3916..branch = 0 bytes; RuntimeTest.php
+  byte-untouched (its 133 tests are the behaviour proof); `tests/RuntimeTest.php` untouched on branch.
+
+**Agent history (CONFABULATION-LAW disclosure — every claim below disk-verified):** first lead ran
+review cycles 1–3 producing the three fix commits (fix-3 docblock-only). Its cycle-4 reviewer DIED
+mid-run leaving review-4/ with no findings.md. Continuation attempt-1 (task_bru7k8l8fr0g) died at
+30-min no-output having drifted into EnvironmentBlock refCap tests (P5.S3 scope) and written NOTHING;
+its transient "10658 tests / glob 440-vs-441" anomaly was contention artifact from an orphan
+concurrent run — superseded (gate measured 10659 with every census class green). Attempt-2
+(ses_f94f3fb08ffeNrzqxHG2OoKnLx) spawned the fresh review-4b read-only reviewer: verdict **CLEAN**
+("no code/test findings block shipping"; Runtime.php:777–780 stale docblock independently re-derived —
+behaviourally-inert MINOR allowed to stand; Agents/Agent.php:543–545 carries the same stale claim,
+report-only OUT-OF-SCOPE, NOT edited; three named-mutation experiments prove the tests bite). No
+fix-4 (clean = loop break). review-3b 7-shape differential HEAD-vs-master renderer: BYTE-IDENTICAL.
+review-3b .orig mutation backups audited byte-identical to worktree files (restored correctly).
+
+**Figures (quiet box; prediction written BEFORE the run):** gate at synced tip 9da929ad6 (cwd
+prompt-step worktree root, serial, </dev/null, probe 0): Tests 10659 / Assertions 165211 / Errors 0 /
+Failures 2 / Skipped 1 / 420.5s. The 2 reds (CompactModelSummaryTest + MouseModalGuardTest
+"command palette") are NOT diff-attributable: **bare-master 3e7ad767a base-control on this same box
+reproduces the EXACT same 2 in full suite (10645/164995/2) AND in targeted 2-file solo (43/278/2)** —
+the pair has been environment-red on this box since before the branch. Clean-arm corroboration: lead
+probe-0 run at d1b464b41 = 10659/165230/0 fail/1 skip (prediction exact; −19 gap here = the two reds'
+truncation 17+2). cmp.py gate-vs-base: all movers positive except the contaminated two (PromptSectionTest
++32a/+12t; GlobFigureDrift +64; StderrEmitterCensus +32; EnvRosterDrift +18; BinSugarcrushWiring +12a/+2t;
+roster +2; tree-wide +1 …). Nine-file census at head 176/31559 (+98 vs base 31461, all positive). Roster
+derivation auto-enumerated testFiles 440→441; roster file 17/1103. Identity: 12/12 commits
+b402a3916..9da929ad6 literal `Joe Huss <detain@interserver.net>` (author+committer byte-scan of INCOMING
+objects). Path gate from worktree root: "scanned 58 libs, no sibling path-repos", EXIT=0.
+**Master moved under the branch mid-cycle** (b402a3916 → 3e7ad767a via the user's own pulls —
+sugar-dash/candy-buffer/chart-v6; `git diff b402a3916..3e7ad767a -- sugar-crush/` EMPTY so every figure
+provably stands; branch synced by merge 9da929ad6, `git diff d1b464b41 9da929ad6 -- sugar-crush/` = 0 B).
+Final merge `8e910daad` (diff prompt/P5.S1..master -- sugar-crush/ = 0 bytes; porcelain 0). §1.12
+teardown complete: both worktrees removed, branch deleted, stash 9 untouched.
+
+**Next:** P5.S2 (brief /home/sites/prompt_kit/briefs/P5.S2-step-brief.md + figures addendum). P5.S3
+folds BOTH carried fence-escape vectors (diff-body </env> forgery; branch-name raw interpolation) +
+EnvironmentBlock.php:288 ref-cap 359-vs-255 reality into ONE diff via a single shared escape mechanism
+across all four fences; goldens LEGITIMATELY MOVE there (and P5.S4–S6 regenerate them deliberately).
+
+
 ### F6c — residual citation sweep + transcriptSignature REPLACE third control · 2026-09-03 · de1048ccf
 
 **Status: MERGED.** Base `bcf419855` (F6b merge) + sync `372534352` (user pull, disjoint); branch `prompt/F6c`; synced tip `295b95e40`. Gap-filler (not one of the 63 steps), last of the F6b-reported residuals.

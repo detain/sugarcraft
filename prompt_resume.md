@@ -12,15 +12,14 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: PHASES 0-4 CLOSED (30 of 63). ALL GAP-FILLERS MERGED: F6b (citation sweep)
-  `bcf419855`, F6c (residual cites + transcriptSignature REPLACE third control) `de1048ccf` =
-  master tip. CLEAN STATE, nothing in flight (the post-merge belt is corroboration only - the
-  merge-base=synced-tip + rev-list-zero argument proves the gate figure describes master).
-  **STOP AT THE PHASE 5 BOUNDARY per user instruction.** A NEW SESSION starts here: first the
-  supervisor section-5 collision re-check BEFORE P5.S1 (see Next step), then drive Phases 5-11
-  to completion per the standing recipes (section 6). Phase-5 step texts: prompt_plan.md ~L1872
-  (re-derive fresh). Travel ledger + TWO awaiting-user items + NOTE-1 ride in section 8.
-
+**Current state: PHASE 5 OPEN - P5.S1 MERGED (31 of 63), master `8e910daad`, clean tree.**
+  §5 collision re-check CLEARED 2026-09-04 verbatim: "nothing else running go ahead and
+  contineu" - Phases 5-11 GO. The two awaiting-user items + NOTE-1 were ANSWERED the same
+  day and SCHEDULED as follow-up steps F7 (Gemini tool-shaper) / F8 (workflow-path
+  write-signal build-out) / F9 (widen cache readout to OpenAI-shape). Next: P5.S2 (brief
+  ready; READ its figures addendum - the TUI-pair box-noise disclosure lives there). Phase 5
+  is almost fully serial S1->S6; goldens REGENERATE legitimately at P5.S4-S6. Section 8
+  carries the current state; the travel ledger + F7/F8/F9 queue ride below.
 ---
 
 ## 0. STANDING ORDER — run to completion
@@ -171,6 +170,14 @@ its six record-side findings were fixed and merged as `58150a432`. Ten things a 
      every turn dispatched; the +23/turn honest growth is disclosed, asserted as never-above-first-reading. The
      95% tier constant untouched; goldens unmoved. Residual recorded in the docblock: a drafted (not sent) giant
      can still rescue ~108,113 estimated tokens into a 100,000 window — draft-aware bound is a follow-up.
+
+ 12. **PromptSection is LIVE since P5.S1 (`8e910daad`).** `Runtime::buildSystemPrompt()` is
+     a one-line delegate over an ordered `PromptSection` list (`fence()/stability()/byteBudget()/
+     render()`; `Stability`: Static|PerSession|PerTurn). The env/memory/repo-map snapshots still
+     render through their legacy private methods WRAPPED as sections - P5.S2 migrates them.
+     Goldens byte-identical across the move; the assembler owns the inter-layer "\n\n"
+     separators while skill contributions keep their own leading "\n\n" (naive implode DOUBLES -
+     pinned at unit level).
 
 ## 4. How to resume
 
@@ -521,133 +528,92 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            4 - CLOSED (5 of 5). P4.S1 f2204a7c4 (Usage real buckets), P4.S3 23a36254b + fix8 a834207d4
-                  (status-line cache readout), P4.S2 80db1b27d (providers populate the buckets, per-provider
-                  cache-field evidence, nothing invented), P4.S4 1500ad32b (E18 oversized-exchange truncation),
-                  P4.S5 142cef6ce (E23 exchangeKey audit - CLOSED AS MEASURED: collapse real, loss false,
-                  six mutation-isolated pins, src comment-only).
-
-Next step:        NEW-SESSION ENTRY POINT. (1) GENUINE STOP-AND-ASK - supervisor section-5
-                  collision re-check BEFORE opening Phase 5 (PromptSection architecture, plan
-                  header ~L1872 re-derive on fresh read; Phase 5/6 add most of the ~11 new src
-                  files + rewrite Runtime.php assembly + P5.S4/S5/S6 regenerate goldens + every
-                  new test file can red a tree-wide census guard; section 5 forbids starting
-                  while the other plan (crush-lane-{a,b,c}, docs/plans/crush_code_*, repo-shared
-                  stash refs) has a round in flight - ASK, do not inspect lane worktrees).
-                  (2) On GO: P5.S1 brief from step text + standing template; golden
-                  byte-identical is THE acceptance test; P5.S3 must fold in ONE diff the
-                  EnvironmentBlock.php:288 branch cap + BOTH fence-escape vectors (i) diff-bodies
-                  (ii) branch-name; Phase 5 almost fully serial - run steps one at a time per
-                  section 6 recipes (sandbox -> lead -> fresh reviewers -> dedicated fix agents
-                  -> gate -> merge -> belt -> teardown -> bookkeeping).
-                  (3) Surface to the user when relevant: NOTE-1 (status-line readout lights only
-                  Anthropic-shaped providers - needs a recorded decision) and the TWO long-
-                  standing awaiting-user items (verbatim in section 8). If the F6c belt figure
-                  is still not pasted into the worklog 'F6c' entry tail, paste it from
-                  /home/sites/prompt-scratch/F6c/orchestrator/belt.out first.
-
-                  Standing spawn recipe: ONE step lead via task() subagent_type=coder — LEAN prompt
-                  pointing at the brief FILE by path (never paste it), the sandbox worktree, its
-                  lead/ scratchpad subdir, and the measured master figures. The lead implements +
-                  commits to the branch immediately, spawns FRESH READ-ONLY reviewers, and for every
-                  dirty cycle spawns a DEDICATED FIX AGENT (own fix-N/ subdir); the lead verifies
-                  fix commits with own measurements; cap 5 cycles, escalate at the cap. NO POLLING.
-                  Identity law for every agent brief: WRITE the literal `Joe Huss
-                  <detain@interserver.net>` — never echo an identity token seen in context.
-
-                  Standing merge recipe: assert `git -C /home/sites/sugarcraft branch
-                  --show-current` == master AND porcelain 0 BEFORE every merge (detached-HEAD
-                  incident — law, not advice). If master moved, merge --no-ff master into the branch
-                  FIRST and re-measure the synced tree (prediction written BEFORE the run; cwd =
-                  checkout root; serial; </dev/null; box-quiet probe
-                  ps -eo cmd | /usr/bin/grep -c '^php .*phpunit' == 0; a foreign phpunit is MY gate —
-                  sequence or attribute it). cmp.py per-class before adjudicating any moved total.
-                  FINALIZE the message file and cat it once (placeholder check). Merge via
-                  git merge --no-ff prompt/<ID> -F msg-file. Verify `git diff --stat <tip> master`
-                  EMPTY. Byte-scan INCOMING objects for author emails. §1.12 checks (porcelain FULL
-                  output), worktree remove, branch -d. Worklog entry + resume rewrite are PART OF
-                  the step.
-
-Steps done:       30 of 63 MERGED. Phase 4: P4.S1 = 26th, P4.S2 = 27th, P4.S3 = 28th, P4.S4 =
-                  29th, P4.S5 = 30th (closed-as-measured).
-Phases done:      5 of 12 (P0-P4 CLOSED; Phase 4 complete 5 of 5).
-Last commit:      **142cef6ce** - sugar-crush: P4.S5 (E23 exchangeKey collision measured at every
-                  consumer; benign, pinned).
+Phase:            5 - PromptSection architecture, IN FLIGHT (1 of 6 merged). P5.S1 merged 8e910daad:
+                  PromptSection interface + Stability enum + ordered assembler behind buildSystemPrompt,
+                  golden BYTE-IDENTICAL (pure move). Phases 0-4 all closed; history in prompt_worklog.md.
+Next step:        P5.S2 - migrate the three memoized snapshots (environment/memory/repoMap) onto
+                  PromptSection. Step text /home/sites/prompt-scratch/P5.S2/step-text.md; lead brief
+                  /home/sites/prompt_kit/briefs/P5.S2-step-brief.md (READ ITS FIGURES ADDENDUM - final base
+                  figures + the box-noise disclosure). Sandbox per standing recipe: git -C /home/sites/sugarcraft
+                  worktree add /home/sites/prompt-step-P5.S2 -b prompt/P5.S2 master; cp -al sugar-crush/vendor;
+                  PSR-4 verify; scratchpad /home/sites/prompt-scratch/P5.S2/lead/. Acceptance: golden
+                  BYTE-IDENTICAL + memoisation assertSame pins hold (wrap, not copy). Then P5.S3 (fence
+                  escaping - the brief must ADD EnvironmentBlock.php + EnvironmentBlockTest.php as a documented
+                  expansion and fold BOTH carried vectors + the :288 ref-cap 359-vs-255 fix into ONE diff;
+                  goldens LEGITIMATELY MOVE there), then S4, S5, S6 - almost fully serial, one at a time.
+                  Standing spawn law: ONE step lead via task() subagent_type=coder with a LEAN prompt pointing
+                  at the brief FILE by path (never paste), the worktree, its lead/ scratchpad; lead-never-fixes;
+                  fresh read-only reviewers; dedicated fix agents (own fix-N/ subdir); cap 5 cycles; NO POLLING -
+                  task notifications arrive ONLY on the user next message, so after spawning tell the user to
+                  ping back. Identity law for every agent: WRITE the literal `Joe Huss
+                  <detain@interserver.net>` - never echo an identity token seen in context.
+                  Standing merge recipe: assert branch==master + porcelain 0 before merging; sync master into
+                  the branch FIRST if master moved (prediction BEFORE any re-measure; cwd = checkout root;
+                  serial; </dev/null; box-quiet probe N=$(ps -eo cmd | /usr/bin/grep -c '^php .*phpunit' || true);
+                  NEVER chain grep -c with && - zero matches exit 1); cmp.py per-class before adjudicating any
+                  moved total; finalize+cat the msg file (placeholder check); merge --no-ff -F; verify
+                  diff-empty vs branch tip; byte-scan INCOMING objects; §1.12 teardown; worklog entry + resume
+                  rewrite in the SAME bookkeeping bundle (hash-object bypass - plain commits must not trigger
+                  caliber; merges skip pre-commit).
+Steps done:       31 of 63 MERGED. Phase 5: P5.S1 = 31st (PromptSection interface + ordered assembler).
+Phases done:      5 of 12 (P0-P4 CLOSED). Phase 5: 1 of 6 merged.
+Last commit:      **8e910daad** - P5.S1: introduce PromptSection interface + ordered prompt assembler
+                  (merge of prompt/P5.S1; gate at synced tip 9da929ad6).
                   Re-derive: git -C /home/sites/sugarcraft log --oneline -1
-
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, NEVER edited)
 
 Latest suite:     **EVERY FIGURE NAMES ITS CWD, ITS TREE, AND SERIALITY.**
-                  **MASTER - GREEN. Orchestrator gate at branch tip e2554332a (cwd
-                  /home/sites/prompt-step-P4.S5 checkout root, serial, </dev/null, box-quiet probe 0) and the
-                  post-merge belt on master (cwd /home/sites/sugarcraft, /tmp/p4s5-belt.out) printed the
-                  IDENTICAL figure:  Tests: 10644, Assertions: 165010, Skipped: 1, 0 failures, EXIT 0**  (MMG-198
-                  arm; 165013 is the SAME tree's MMG-201 arm - NEVER adjudicate the plus/minus 3 by headline;
-                  cmp.py per-class first - test count 10644 predicted exactly, sole movers
-                  ExchangeSummaryTest +18a/+6t and the MMG arm, zero remainder).
-                  `git diff --stat e2554332a master -- sugar-crush/` EMPTY.
-                  Nine-file census at this tree: 176 / 31461 (cwd sugar-crush/, serial, </dev/null; the old
-                  31460 was the 6584b1fa4-era reading - provenance recorded in the worklog).
-                  Roster derivation UNMOVED (67/83/181/440/0); roster file 17/1101.
-                  Goldens UNMOVED: system 32ea749d84938811ac9331419cae7380, agent
-                  ef0326dd38535aaa2f1d715919bff26e - unmoved since 405252a41.
-                  **CI/local assertion counts are NOT comparable.** TEST counts agree exactly.
-                  Path-repo gates: RUN THEM FROM THE REPO ROOT (misread happened twice).
-                  php-cs-fixer is NOT installed on this box; the style gate cannot run locally.
-
-In-flight batch:  NONE. F6b merged `bcf419855`, F6c merged `de1048ccf` (ledgers + proofs in the
-                  merge messages and the two newest worklog entries). Post-Phase-4 gap-filler
-                  queue is EMPTY; what remains outside the 63 steps rides in the travel ledger
-                  below (incl. transcriptSignature PREPEND/DROP controls still without known-
-                  positive plants, NOTE-1, and the residual-cite families F6c did not target).
-
-Live worktrees:   ONLY /home/sites/sugarcraft (master `de1048ccf`). The F6b and F6c worktrees
-                  were removed after §1.12 porcelain-FULL checks and their branches deleted
-                  (both merges complete). crush-lane-{a,b,c} + repo-shared stash refs belong to
-                  the OTHER plan - never touch.
-
-Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on every rewrite
-                  until the user answers, and do not decide either yourself.
-
-                  **(1) GEMINI FUNCTION CALLING IS NOT BUILT.** P1.audit-fix-3 built the
-                  :generateContent arm, so Gemini now gets a request it would accept and
-                  streams properly — but `setTools()` is vendored and Gemini supports tool
-                  calling, and no shaper was written. So `supportsFunctionCalling()` honestly
-                  reports FALSE for Gemini and the body carries no `tools` key, with that
-                  absence PINNED by testAGeminiBodyCarriesNoToolsKeyEvenWhenToolsAreOffered.
-                  NOT a regression — every Google model already reported false — but
-                  sugar-crush is an agent app, so **a model that cannot call tools cannot drive
-                  a turn.** It is the one thing between "Gemini works" and "Gemini is usable
-                  here".
-                  DECIDE: schedule a follow-up step building the Gemini tools shaper (setTools
-                  + functionDeclarations + parsing functionCall parts back into the tool-call
-                  shape Runtime expects), or record in §18 that Gemini is deliberately a
-                  non-tool-calling model in this provider.
-
-                  **(2) WIRE THE WRITE SIGNAL ON THE WORKFLOW PATH — P3.S6's escalation.**
-                  The per-step seam P3.S5 left open on the Agent assembler IS REAL and IS LIVE,
-                                     in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
-                   which `:1105` and `:875` re-render once per stage and `:1275`/`:1318` — the pair
-                   inside `executeVerificationStage()` (declared :1222), re-derived at `cf41aacd6` —
-                   render twice in one verification stage. Cite a call site by FUNCTION NAME PLUS
-                   LINE: this sentence said `:1252`/`:1294`, which was true when P3.S6 wrote it and
-                   rotted by the +23/+24 the F5 wiring added above them. MEASURED with a logging git
-                   shim: one render
-                  = 5 git subprocesses (3 suppressed), a K-stage workflow = 5*K (10 at K=2, 25
-                  at K=5), one ProcessExecutor dispatch = 10 because it renders TWICE — and in
-                  every case the stages see ONE DISTINCT PROMPT, the two git-diff sections
-                  re-sent unchanged per stage.
-                  Wiring it is a BUILD-IT-OUT across `Workflows/WorkflowEngine.php` +
-                  `Agents/AgentResult.php` + the worker IPC frame, because the carrier does not
-                  exist: `AgentResult::__construct` is 8 params with NO tool-call field
-                  (VERIFIED) and the worker's `complete` frame carries only
-                  output/tokensUsed/costUsd. The §18 row is ALREADY LANDED recording this as
-                  escalated, NOT waived, and an exact-list reflection assertion over that
-                  constructor REDS THE DAY A TOOL-CALL FIELD IS ADDED.
-                  DECIDE: schedule the build-it-out as its own step, or leave the cost standing
-                  with the measurement pinned.
-
-Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
+                  **MASTER at 8e910daad - the only failures on this box are environmental.**
+                  Gate at synced tip 9da929ad6 (cwd /home/sites/prompt-step-P5.S1 root, serial, </dev/null,
+                  box-quiet probe 0, prediction written BEFORE): Tests 10659 / Assertions 165211 / Errors 0 /
+                  Failures 2 / Skipped 1 / 420.5s. The 2 reds (Chat\CompactModelSummaryTest
+                  testWithASummarizerCompactReturnsACmdAndRewritesNothingYet + MouseModalGuardTest
+                  "command palette") are NOT diff-attributable: bare-master 3e7ad767a base-control on THIS box
+                  reproduces the EXACT same 2 in full suite (10645/164995/2) AND targeted 2-file solo (43/278/2)
+                  - identical failure set, neither file in the diff. Clean-arm corroboration: lead probe-0 run
+                  at d1b464b41 = 10659/165230/0 fail/1 skip (prediction hit exactly); the -19 assertion gap
+                  here = exactly the two red classes truncation (17+2). cmp.py gate-vs-base: all movers POSITIVE
+                  except the contaminated two (PromptSectionTest +32a/+12t; GlobFigureDrift +64;
+                  StderrEmitterCensus +32; EnvRosterDrift +18; BinSugarcrushWiring +12a/+2t). Nine-file census
+                  at head 176/31559 (+98, all positive). Roster derivation auto-enumerated testFiles 440->441;
+                  roster file 17/1103. Goldens UNMOVED: system 32ea749d84938811ac9331419cae7380, agent
+                  ef0326dd38535aaa2f1d715919bff26e. Review 4b CLEAN (three named-mutation experiments prove
+                  tests bite); review-3b 7-shape differential BYTE-IDENTICAL vs master renderer.
+                  **BOX LAW REVISED: the TUI pair goes environment-red even on bare master since the
+                  user 2026-09-03/04 pulls - do not chase it in step gates; prove not-diff-attributable via a
+                  base-control run. Cli stdin-pin tests also flip under contention.** CI/local assertion counts
+                  NOT comparable. Path gate from the REPO ROOT. php-cs-fixer NOT installed locally.
+                  Retro-review track: none active (F7/F8/F9 are scheduled follow-ups in Open follow-ups,
+                  unstaffed).
+In-flight batch:  NONE (write at spawn, clear at batch close). P5.S1 CLOSED at 8e910daad; P5.S2 not yet spawned.
+Live worktrees:   ONLY /home/sites/sugarcraft (master 8e910daad). prompt/P5.S1, /home/sites/prompt-step-P5.S1 and
+                  the base-control /home/sites/prompt-base-P5S1 were all removed post-merge (§1.12 porcelain-FULL).
+                  crush-lane-{a,b,c} + 9 repo-shared stash refs belong to the OTHER plan - NEVER touch.
+Blocked on:       nothing.
+Awaiting user decision:  NOTHING - resolved 2026-09-04. The two long-standing items and NOTE-1 were ANSWERED by the
+                  supervisor (verbatim: "nothing else running go ahead and contineu"; "for the questions.. add
+                  the tool-sharper foloowup step for gemini function calling, add the write-signal buildout";
+                  "schedule a small step widen detection .."). They ride below as SCHEDULED steps F7/F8/F9.
+                  Dormant-code escalations (§1.10) remain the only thing that may re-enter this field -
+                  verbatim, never agent-resolved.
+Open follow-ups:  
+                  SCHEDULED FOLLOW-UPS (supervisor decisions 2026-09-04 - run BETWEEN plan steps, never inside):
+                  - **F7 Gemini tools shaper**: setTools + functionDeclarations + parse functionCall parts into
+                    the Runtime tool-call shape; unpin supportsFunctionCalling()=false and the no-tools-key
+                    test when it lands.
+                  - **F8 workflow-path write-signal build-out**: Workflows/WorkflowEngine.php +
+                    Agents/AgentResult.php + the worker IPC frame - the carrier does not exist
+                    (AgentResult::__construct has NO tool-call field; the exact-list reflection assertion REDS
+                    when one is added - update it honestly). Five production-reachable re-render call sites;
+                    one render = 5 git subprocesses; the two git-diff sections re-sent unchanged per stage.
+                  - **F9 widen status-line cache readout beyond Anthropic-shape**: when cacheCreation is
+                    structurally absent (OpenAI-shape protocols), show a degraded hit-rate from input+cacheRead
+                    with the gap disclosed (resolves NOTE-1; pairs with the widen-CompleteResponse travel item).
+                  - **P5.S1 report-only residuals**: Agents/Agent.php:543-545 docblock repeats the stale "env
+                    render is buildSystemPrompt last statement" claim (post-refactor it lives in
+                    systemPromptSections :2523); fold into P5.S2 or a later doc pass. PromptSectionTest.php:40
+                    is 122 chars (cosmetic). plan step-text "18 reflection sites" measures 30 - future step
+                    texts must re-derive counts, never inherit them.
                   - A review's findings are written to a FILE the moment they are received
                     (`<scratchpad>/<STEP_ID>/<role>/findings-cycle-<n>.md`), never only
                     summarised. EIGHT of P3.S4-fix-1's ten cycle-3 findings were LOST to a
@@ -837,34 +803,11 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                   reds), deliberately NOT fixed, per the standing functionality-before-hardening
                   rule: the FIX is deferred, the FINDING is recorded as a step.
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-03 (P4.S4 merged; Batch 3 cleared by the supervisor answer "Go — Batch 3 now", 2026-09-02). Phase 3 ran serial S1->S6 and is
-                  done. The src/ file-count census is RESOLVED — it never applied to this plan
-                  (§5) — so Phases 5/6/10 are NOT serialised by it.
-                  Still live before Phase 5/6: EngineBackend.php held by a lane and also edited
-                  by merged P3.S5 (wanted by P7.S3); Chat.php + ContextCompactor.php for
-                  P4.S4/P4.S5 and P8; Bash.php behaviour vs P9.S3 description; AgentDefinition
-                  C7 for P7.S5; tests/Support/ wholesale — now wanted by THREE queued
-                  follow-ups.
-                  src/Providers/VertexProvider.php is a hot file — P1.audit-fix-2 and both
-                  legacy-arm follow-ups all want it. Serialise them.
-                  **src/Runtime.php and src/Agents/Agent.php are FREE** — no branch holds them.
-
-                  **Also still open, from earlier entries:** P1.audit-fix-2 (RR2 F1/F3/F4/F7);
-                  RR1 F2/F6; RR3 F5 (the golden pins a DOUBLED separator before every skill body
-                  and this ships to the model — Skill.php:109 already returns "\n\n" and
-                  Runtime.php prepends another; src/Runtime.php is now FREE, re-measure the line
-                  number); the VertexProvider legacy arm's two defects (`role` where the
-                  instances envelope spells it `author`; `defaultPredictor()`'s non-rawPredict
-                  branch never calls `setParameters()`, so temperature/maxOutputTokens are
-                  DISCARDED for every legacy Google model — PINNED by
-                  testTheLegacyPredictCallSiteStillDropsItsParameters so whoever repairs it reds
-                  that test BY DESIGN; publishers/mistralai, meta, ai21 still unrouted);
-                  AuditHook.php:103-105's putenv/sys_get_temp_dir measurement, true WARM and
-                  false on a COLD interpreter (the SEAM argument is unaffected, the reason given
-                  is false); the four compressed Phase-2 worklog entries (heading levels fixed in
-                  2dda88b89, but P2.S4's deletion experiments are UNRECOVERABLE and its guards
-                  UNPROVEN until re-run); doc edits + progress.json (dormant machinery — wire it
-                  or build it out, NEVER delete).
+Sequencing gate:  CLEARED 2026-09-04 - supervisor (the user) verbatim: "nothing else running go ahead and
+                  contineu". Phases 5-11 GO; no crush-lane round in flight at clear time. Phase-5 collision
+                  analysis at entry: none of the lane-named holds (EngineBackend, Chat, ContextCompactor, Bash,
+                  AgentDefinition, tests/Support) appear in any Phase-5 declared file list. If a lane round
+                  appears mid-flight, STOP-AND-ASK again (§5).
 ```
 
 **Phase 4 status (updated 2026-09-03, Batch 3 in flight).** P4.S1/S2/S3/S4 are MERGED — their
