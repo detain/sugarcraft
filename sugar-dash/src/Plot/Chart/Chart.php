@@ -38,6 +38,11 @@ final readonly class ChartDataPoint
  * Tracks the previous frame and dimensions to enable efficient
  * delta emission (only changed cells are sent). The context must
  * be passed back to render() on subsequent calls with the same Chart.
+ *
+ * Since F1 the $prevWidth/$prevHeight keys mirror the ACTUAL previousFrame
+ * buffer dimensions (the diff geometry: diffWidth() x emitted-frame height),
+ * not the chart-area size — that is what render()'s full-frame gate
+ * compares, so keeping the keys consistent with the gate is the invariant.
  */
 final class ChartRenderContext
 {
@@ -152,13 +157,8 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         $chartWidth = $this->getChartWidth();
         $chartHeight = $this->getChartHeight();
 
-        // Detect window resize — reset diff state so we emit a full frame.
-        if ($this->renderContext !== null &&
-            ($this->renderContext->prevWidth !== null &&
-             ($this->renderContext->prevWidth !== $chartWidth ||
-              $this->renderContext->prevHeight !== $chartHeight))) {
-            $this->renderContext = null;
-        }
+        // (Resize detection moved below, where the diff-buffer geometry is
+        // known — the gate must compare ACTUAL buffer dimensions, F1.)
 
         if ($chartWidth <= 0 || $chartHeight <= 0 || empty($this->dataPoints)) {
             return '';
@@ -194,30 +194,55 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         // trim() their frames, so an emitted-line count can vary between frames
         // of identical parameters (all-blank top rows vanish), and Buffer::diff()
         // throws on dimension mismatch — the readonly flags make this expression
-        // constant for an instance. Resize detection stays keyed on the chart
-        // area ($chartWidth/$chartHeight above); the width clip is untouched
-        // (parked separately).
+        // constant for an instance. Resize detection is keyed on the ACTUAL
+        // diff-buffer dimensions — see the gate below (F1 moved it here because
+        // $diffWidth now tracks the data count too, which the chart-area keys
+        // never carried).
         $diffHeight = $chartHeight
             + ($this->type === ChartType::Bar && $this->showGrid ? 1 : 0)
             + ($this->showLabels ? 1 : 0);
 
+        // F1 COLUMN parity (the column twin of the D1 row clip above): frames
+        // paint past $chartWidth — a colored 40-wide, 2-point bar row is 50
+        // cells — so the diff buffer spans the full emitted row extent
+        // (diffWidth()). Clipping it at $chartWidth froze every column beyond
+        // the chart width at the first-frame paint: a mutation landing only
+        // out there diffed to ZERO bytes while a fresh full frame carried the
+        // glyphs, exactly the stale-cell class D1 closed for rows.
+        $diffWidth = $this->diffWidth($chartWidth);
+
+        // Detect resize / diff-geometry change — reset diff state so the next
+        // render emits a full frame. The gate MUST compare the actual stored
+        // buffer dimensions: $diffWidth depends on the data count, so a
+        // dataCount change resizes the diff buffer even when the chart area is
+        // untouched — and Buffer::diff() throws on ANY dimension mismatch
+        // (candy-buffer Buffer.php:416-422). A chart-area resize always moves
+        // $diffHeight (chartHeight enters it additively), so it trips this
+        // gate as well; prevWidth/prevHeight mirror these same buffer dims.
+        if ($this->renderContext !== null &&
+            ($this->renderContext->previousFrame === null ||
+             $this->renderContext->previousFrame->width() !== $diffWidth ||
+             $this->renderContext->previousFrame->height() !== $diffHeight)) {
+            $this->renderContext = null;
+        }
+
         // First frame or resize: emit full output and store as previousFrame.
         if ($this->renderContext === null) {
             $this->renderContext = new ChartRenderContext(
-                previousFrame: $this->bufferFromOutput($output, $chartWidth, $diffHeight),
-                prevWidth: $chartWidth,
-                prevHeight: $chartHeight
+                previousFrame: $this->bufferFromOutput($output, $diffWidth, $diffHeight),
+                prevWidth: $diffWidth,
+                prevHeight: $diffHeight
             );
             return $output;
         }
 
         // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($output, $chartWidth, $diffHeight);
+        $currentFrame = $this->bufferFromOutput($output, $diffWidth, $diffHeight);
         $ops = $currentFrame->diff($this->renderContext->previousFrame);
         $this->renderContext = new ChartRenderContext(
             previousFrame: $currentFrame,
-            prevWidth: $chartWidth,
-            prevHeight: $chartHeight
+            prevWidth: $diffWidth,
+            prevHeight: $diffHeight
         );
 
         $encoder = new DiffEncoder();
@@ -471,6 +496,37 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     private function getChartHeight(): int
     {
         return $this->height ?? $this->heightConstraint;
+    }
+
+    /**
+     * Width of the diff-state buffer: the full emitted row extent, not just
+     * the chart area (F1 column parity; render() gates on it).
+     *
+     * Colored/bar frames paint past $chartWidth: the y-label gutter is
+     * str_pad(label, 8) + ' ' (9 cells), each bar occupies
+     * max(1, floor($chartWidth / n) - 1) fill cells plus one separator
+     * space, and the trailing grid dash adds another — so the bar run alone
+     * spans at most n * (max(1, floor($chartWidth / n) - 1) + 1) columns
+     * (the default 40-wide, 2-point chart emits 50-cell rows). The +10
+     * gutter covers the 9-cell label gutter plus the dash and matches what
+     * getInnerSize() already advertises for a full emitted frame
+     * (width + 10).
+     *
+     * RESIDUAL (documented, out of scope): y-labels formatted wider than 8
+     * chars (|value| ≳ 1e10) push rows past this bound; bufferFromOutput
+     * clips them there — a regime where the rendered frame already
+     * misaligns visually (pre-existing).
+     */
+    private function diffWidth(int $chartWidth): int
+    {
+        $dataCount = count($this->dataPoints);
+        if ($dataCount === 0) {
+            return $chartWidth + 10; // no bars: gutter+dash only
+        }
+
+        $barColumns = $dataCount * (max(1, intdiv($chartWidth, $dataCount) - 1) + 1);
+
+        return max($chartWidth, $barColumns) + 10;
     }
 
     /**
@@ -806,7 +862,11 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      * first-frame bytes and every golden are unaffected by the strip.
      *
      * @param string $output Multi-line string from render()
-     * @param int    $width  Buffer width in cells (clip status quo)
+     * @param int    $width  Buffer width in cells — callers pass diffWidth(),
+     *                       the full emitted row-extent bound, so painted
+     *                       columns beyond the chart area are stored (F1);
+     *                       rows longer than $width (oversized-y-label
+     *                       residual) clip here, shorter rows pad with blanks.
      * @param int    $height Rows to store — callers pass the full emitted-frame
      *                       height (chart area + x-axis + labels) so the axis
      *                       and label rows participate in the diff; rows past

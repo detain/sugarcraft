@@ -117,7 +117,26 @@ final class Buffer implements \JsonSerializable
 
             // Printable character
             $rune = $ch;
-            $runeWidth = 1; // TODO: actual wide-char width from wcwidth if needed for CJK
+            // Width is deliberately pinned to 1: this loop iterates BYTES, so
+            // a multibyte rune already lands one byte per cell — consulting a
+            // width table here without first tokenizing UTF-8 would relabel
+            // the parse, not fix it. fromString() is a test-support factory by
+            // contract (see its docblock; repo-wide callers are the
+            // candy-buffer and sugar-veil test suites only, zero production
+            // call sites). Real display-width handling exists upstream of
+            // here: SugarCraft\Core\Util\Width (candy-core — UAX isWide
+            // table, ANSI-aware) is the canonical primitive, deliberately NOT
+            // imported: candy-buffer is dependency-pure (runtime require:
+            // php only) and pulling candy-core in would drag ext-intl,
+            // ReactPHP and candy-pty (ext-ffi) onto every consumer of this
+            // lib — a dependency-drag, not a cycle (candy-core does not
+            // require candy-buffer). Wide characters are already correct
+            // where cells are actually constructed: Cell carries width 1/2
+            // with width-0 continuation cells, and diff() honours them —
+            // continuation skip at lines 458-461, REP merge guarded by
+            // width===1 at line 552. A full UTF-8 tokenizer for this
+            // byte-wise factory remains a separate future candidate.
+            $runeWidth = 1;
             $runs[] = [$rune, $currentStyle, $runeWidth];
             $idx++;
         }

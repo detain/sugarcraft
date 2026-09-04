@@ -65,7 +65,7 @@ $components = [
     ['NProgress', 'new', 'NProgress::new(0.7)', 'Nano progress bar'],
     ['Gauge', 'new', 'Gauge::new(75)', 'Gauge meter'],
     ['GaugeChart', 'new', 'GaugeChart::new([["label" => "CPU", "value" => 80.0], ["label" => "Memory", "value" => 60.0], ["label" => "Disk", "value" => 45.0]])', 'Gauge chart'],
-    ['GaugeCircle', 'new', 'GaugeCircle::new(80)', 'Circular gauge'],
+    ['GaugeCircle', 'new', 'GaugeCircle::new(0.8)', 'Circular gauge'],
     ['Meter', 'new', 'Meter::new(75)', 'Meter display'],
     ['Toast', 'new', 'Toast::new("Operation completed!")', 'Toast notification'],
     ['Alert', 'new', 'Alert::new("Warning: This action cannot be undone.")', 'Alert message'],

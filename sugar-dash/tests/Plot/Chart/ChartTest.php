@@ -794,10 +794,12 @@ final class ChartTest extends TestCase
 
         // Full-grid parity: stored diff-state buffer == codepoint grid of
         // the fresh full render. Since D1 the diff height covers the full
-        // 40x11 emitted frame (10 chart rows + labels row), so the label
-        // row is inside the diff geometry.
-        $this->assertSame($this->codepointGrid($freshFrame, 40, 11), self::readableGrid($diffBuffer, 40, 11));
-        $this->assertSame(self::readableGrid($freshBuffer, 40, 11), self::readableGrid($diffBuffer, 40, 11));
+        // emitted frame (10 chart rows + labels row); since F1 the diff
+        // width spans the full emitted row extent — 50 cells (diffWidth
+        // past the 40-wide chart area), so the label tail at cols 40-47
+        // is inside the diff geometry.
+        $this->assertSame($this->codepointGrid($freshFrame, 50, 11), self::readableGrid($diffBuffer, 50, 11));
+        $this->assertSame(self::readableGrid($freshBuffer, 50, 11), self::readableGrid($diffBuffer, 50, 11));
 
         // Exact ground truth on the CJK label row: 8-space gutter,
         // 日本/東京 pair, space after — pinned directly on the stored
@@ -919,17 +921,18 @@ final class ChartTest extends TestCase
         $this->assertStringContainsString("\x1b[38;2;", $freshFrame, 'colored stdout frame must keep SGR bytes');
 
         // Parity: stored diff-state grid == codepoint grid of the DISPLAY
-        // runes of the fresh render, width-clipped to 40 exactly as the cell
-        // loop does (runes past the last buffer column are status quo); since
-        // D1 the rows cover the full 12-row frame — chart area 40x10 plus the
-        // x-axis and labels rows inside the diff geometry.
+        // runes of the fresh render, spanning the full emitted row extent —
+        // 50 cells, F1 (diffWidth for this 40-wide, 2-point chart): bar
+        // rows paint to col 49, the x-axis row to col 47, and all of it is
+        // stored; since D1 the rows cover the full 12-row frame — chart
+        // area 40x10 plus the x-axis and labels rows inside the diff geometry.
         $stripped = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $freshFrame);
         $expected = array_map(
-            static fn (array $r): array => array_slice($r, 0, 40),
-            $this->codepointGrid($stripped, 40, 12)
+            static fn (array $r): array => array_slice($r, 0, 50),
+            $this->codepointGrid($stripped, 50, 12)
         );
-        $this->assertSame($expected, self::readableGrid($diffBuffer, 40, 12));
-        $this->assertSame(self::readableGrid($freshBuffer, 40, 12), self::readableGrid($diffBuffer, 40, 12));
+        $this->assertSame($expected, self::readableGrid($diffBuffer, 50, 12));
+        $this->assertSame(self::readableGrid($freshBuffer, 50, 12), self::readableGrid($diffBuffer, 50, 12));
     }
 
     /**
@@ -950,25 +953,28 @@ final class ChartTest extends TestCase
 
         $rebuilt = new \ReflectionMethod(Chart::class, 'bufferFromOutput');
         $rebuilt->setAccessible(true);
-        // Full emitted height 12 = 10 chart rows + x-axis + labels row.
+        // Full emitted height 12 = 10 chart rows + x-axis + labels row;
+        // width 50 = diffWidth for this 40-wide, 2-point chart (F1).
         /** @var Buffer $buffer */
-        $buffer = $rebuilt->invoke($chart, $frame, 40, 12);
+        $buffer = $rebuilt->invoke($chart, $frame, 50, 12);
 
         // Bar area: gutter is str_pad(yLabel, 8).' ' (9 cells), bar 1 fills
         // the bottom rows, bar 2 (value 10 = max) fills every row.
         $this->assertSameRune('█', $buffer, 9, 9);
         $this->assertSameRune('█', $buffer, 29, 0);
-        // X-axis row: 8 spaces then the grid '─' run.
+        // X-axis row: 8 spaces then the grid '─' run — pinned at its LAST
+        // painted cell (col 47 = 8+40-1), which sat outside the pre-F1 clip.
         $this->assertSameRune('─', $buffer, 8, 10);
-        $this->assertSameRune('─', $buffer, 39, 10);
+        $this->assertSameRune('─', $buffer, 47, 10);
         // Labels row: labelColor wrapper stripped, label starts at col 8.
         $this->assertSameRune('日', $buffer, 8, 11);
         $this->assertSameRune('本', $buffer, 9, 11);
 
-        // Escape census: not one cell may hold an ESC fragment.
+        // Escape census: not one cell may hold an ESC fragment — across the
+        // FULL 50-column diff width (F1), where the SGR wrappers live.
         $escapes = [];
         for ($row = 0; $row < 12; $row++) {
-            for ($col = 0; $col < 40; $col++) {
+            for ($col = 0; $col < 50; $col++) {
                 if ($buffer->cellAt($col, $row)->rune === "\x1b") {
                     $escapes[] = sprintf('(%d,%d)', $col, $row);
                 }
@@ -1001,15 +1007,16 @@ final class ChartTest extends TestCase
         $this->assertSameRune('3', $buffer, 1, 2);
 
         // The no-color plain frame (zero SGR by construction) also rebuilds
-        // identically to its raw codepoint grid — display path == stored path.
+        // identically to its raw codepoint grid — display path == stored path,
+        // at the full 50-column diff width (F1: label tail cols 40-47 stored).
         $plain = $this->plainBarChart([
             new ChartDataPoint('日本', 5),
             new ChartDataPoint('B', 10),
         ])->render();
         $this->assertStringNotContainsString("\x1b", $plain, 'precondition: plainBarChart emits zero SGR');
         /** @var Buffer $plainBuffer */
-        $plainBuffer = $method->invoke(new Chart(), $plain, 40, 11);
-        $this->assertSame($this->codepointGrid($plain, 40, 11), self::readableGrid($plainBuffer, 40, 11));
+        $plainBuffer = $method->invoke(new Chart(), $plain, 50, 11);
+        $this->assertSame($this->codepointGrid($plain, 50, 11), self::readableGrid($plainBuffer, 50, 11));
     }
 
     /**
@@ -1043,5 +1050,115 @@ final class ChartTest extends TestCase
         $this->assertStringContainsString('東', $delta, 'delta must repaint the new label');
         $this->assertStringContainsString('京', $delta, 'delta must repaint the new label');
         $this->assertLessThan(strlen($firstFrame), strlen($delta), 'same-size re-render stays a delta, not a full frame');
+    }
+
+    /**
+     * F1 regression (column twin of the D1 row-clip pin above): a mutation
+     * landing EXCLUSIVELY past the chart width must still emit a non-empty
+     * delta. Before F1 the diff buffer was clipped at $chartWidth (40), so
+     * the label tail painted at cols 40-46 never entered it — the mutation
+     * below (values identical → every stored col < 40 identical) diffed to
+     * ZERO bytes while a fresh full render painted the new runes: the old
+     * strlen=0 blindness.
+     */
+    public function testBeyondChartWidthMutationEmitsNonEmptyDelta(): void
+    {
+        $chart = Chart::new([
+            new ChartDataPoint('A', 5),
+            new ChartDataPoint('BBBBBBBBBBBB', 10), // 12 Bs: cols 28-39, inside the old clip
+        ]);
+        $firstFrame = $chart->render();
+        $this->assertStringContainsString('BBBBBBBBBBBB', $firstFrame, 'precondition: first-frame label ends at col 39');
+
+        // Identical values; the second label gains 7 C runes landing exactly
+        // at cols 40-46 — the zone the pre-F1 40-clip never stored.
+        $points = new \ReflectionProperty(Chart::class, 'dataPoints');
+        $points->setAccessible(true);
+        $points->setValue($chart, [
+            new ChartDataPoint('A', 5),
+            new ChartDataPoint('BBBBBBBBBBBBCCCCCCC', 10),
+        ]);
+
+        $delta = $chart->render();
+        $this->assertNotSame('', $delta, 'beyond-chartWidth mutation must not diff to zero bytes');
+        $this->assertStringContainsString('C', $delta, 'delta must repaint the new tail runes');
+        $this->assertLessThan(strlen($firstFrame), strlen($delta), 'same-size re-render stays a delta, not a full frame');
+
+        // The stored diff-state buffer physically holds the painted tail:
+        // labels row (index 11) cols 40-46 carry the Cs, col 47 pads blank.
+        $stored = new \ReflectionProperty(Chart::class, 'renderContext');
+        $stored->setAccessible(true);
+        /** @var Buffer $buffer */
+        $buffer = $stored->getValue($chart)->previousFrame;
+        $this->assertSameRune('C', $buffer, 40, 11);
+        $this->assertSameRune('C', $buffer, 46, 11);
+        $this->assertSameRune(' ', $buffer, 47, 11);
+    }
+
+    /**
+     * F1 gate pin: a dataCount change resizes the diff buffer (diffWidth()
+     * tracks the bar run: 30 points → 70 cols, 31 → 72), so the next render
+     * must fall back to a FULL frame. Diffing across mismatched dimensions
+     * throws InvalidArgumentException from Buffer::diff (candy-buffer
+     * Buffer.php:416-422); the pre-F1 gate compared chart-area keys, which
+     * a dataCount change never moves, and silently emitted a stale delta.
+     */
+    public function testDataCountChangeFallsBackToFullFrameNotDiffThrow(): void
+    {
+        $points31 = [];
+        for ($i = 0; $i < 31; $i++) {
+            $points31[] = new ChartDataPoint('p' . $i, (float) ($i % 10));
+        }
+        $points30 = array_slice($points31, 0, 30);
+
+        $chart = Chart::new($points30);
+        $firstFrame = $chart->render();
+        $this->assertNotSame('', $firstFrame, 'precondition: first render emits a full frame');
+
+        // Mutate the SAME instance: chart area untouched, but diffWidth
+        // moves 70 → 72 with the extra data point.
+        $points = new \ReflectionProperty(Chart::class, 'dataPoints');
+        $points->setAccessible(true);
+        $points->setValue($chart, $points31);
+
+        $second = $chart->render(); // must not throw — gate forces the full frame
+        $this->assertSame(
+            Chart::new($points31)->render(),
+            $second,
+            'dataCount change must emit the full frame (gate fallback), not a stale delta'
+        );
+        $this->assertGreaterThan(strlen($firstFrame), strlen($second), 'full frame grows with the extra point');
+    }
+
+    /**
+     * F1 coercion: diffWidth() per the R1 formula
+     * max(chartWidth, n·(max(1, floor(chartWidth/n)-1)+1)) + 10 — exact
+     * emitted-extent cases, slack cases, the chart-width floor, and the
+     * empty-data early exit (never a division by zero).
+     */
+    public function testDiffWidthFormulaCoercion(): void
+    {
+        $method = new \ReflectionMethod(Chart::class, 'diffWidth');
+        $method->setAccessible(true);
+
+        $widthFor = static function (int $count, int $chartWidth) use ($method): int {
+            $points = [];
+            for ($i = 0; $i < $count; $i++) {
+                $points[] = new ChartDataPoint('p' . $i, 1.0);
+            }
+            /** @var int $dw */
+            $dw = $method->invoke(new Chart($points), $chartWidth);
+            return $dw;
+        };
+
+        $this->assertSame(50, $widthFor(0, 40), 'empty data: chartWidth+10, no division by zero');
+        $this->assertSame(50, $widthFor(1, 40), 'n=1: E=40 exact');
+        $this->assertSame(50, $widthFor(2, 40), 'n=2 (probe default): rows 50, E=40 exact');
+        $this->assertSame(50, $widthFor(7, 40), 'n=7: E=35 slack, chartWidth floor + 10');
+        $this->assertSame(70, $widthFor(30, 40), 'n=30: E=60 dominates, exact');
+        $this->assertSame(72, $widthFor(31, 40), 'n=31: E=62 dominates, exact');
+        $this->assertSame(110, $widthFor(2, 100), 'cw=100 n=2: E=100 exact');
+        $this->assertSame(130, $widthFor(60, 40), 'n>cw: per-bar floor keeps 1-cell bars, E=120');
+        $this->assertGreaterThanOrEqual(50, $widthFor(2, 40), 'invariant: diffWidth >= chartWidth + 10');
     }
 }
