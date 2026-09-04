@@ -69,6 +69,32 @@ final class SglangProviderRequestBuildingTest extends TestCase
         );
     }
 
+    /**
+     * Same mock harness as {@see providerForModel()} with the constructor's
+     * config-kwargs arm exposed - the Q3 seam where deployment-wide
+     * `templateKwargs` lands from ProviderFactory.
+     *
+     * @param array<string, mixed> $configKwargs
+     */
+    private function providerWithConfigKwargs(array $configKwargs, string $model = 'MiniMax-M2.7'): SglangProvider
+    {
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, [], '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}'),
+        ]));
+        $stack->push(Middleware::history($this->history));
+
+        return new SglangProvider(
+            'https://api.example.com',
+            $model,
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+            null,
+            null,
+            $configKwargs,
+        );
+    }
+
     /** @return array<string, mixed> */
     private function sentBody(): array
     {
@@ -212,6 +238,67 @@ final class SglangProviderRequestBuildingTest extends TestCase
         ));
 
         $this->assertArrayNotHasKey('chat_template_kwargs', $this->sentBody());
+    }
+
+    // -------------------------------------------------------------------------
+    // Q3: deployment-wide `templateKwargs` config reaches the SAME wire field,
+    // merged UNDER the per-request DTO. Empty-config + empty-DTO key-absence
+    // is already pinned by the two tests above (both are today's wire); what
+    // follows pins only the new merge behaviour.
+    // -------------------------------------------------------------------------
+
+    public function testConfiguredTemplateKwargsAreEmittedUnderChatTemplateKwargs(): void
+    {
+        // No per-request kwargs involved: config alone lands on the wire.
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => true, 'preserve_thinking' => false]);
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertSame(
+            ['enable_thinking' => true, 'preserve_thinking' => false],
+            $this->sentBody()['chat_template_kwargs'],
+        );
+    }
+
+    public function testPerRequestTemplateKwargsOverrideConfigPerKey(): void
+    {
+        // PRECEDENCE pinned both ways in ONE body: the DTO wins for the key it
+        // carries (enable_thinking flips false -> true) while the config-only
+        // key survives (preserve_thinking). A whole-body override would make a
+        // single per-call tweak silently drop the deployment's other template
+        // settings, which no caller asked for.
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => false, 'preserve_thinking' => true]);
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+            extraTemplateKwargs: ['enable_thinking' => true],
+        ));
+
+        $this->assertSame(
+            ['enable_thinking' => true, 'preserve_thinking' => true],
+            $this->sentBody()['chat_template_kwargs'],
+        );
+    }
+
+    public function testAnEmptyDtoKwargsListCarriesNoKeysAndCannotVetoConfiguredOnes(): void
+    {
+        // SENTINEL semantics: [] on the DTO means "this request names nothing"
+        // - the same unset convention the optional-knob filter applies to
+        // every other field - NOT "clear the config". Only a key the DTO
+        // actually carries can override that key's config value.
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => true]);
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+            extraTemplateKwargs: [],
+        ));
+
+        $this->assertSame(
+            ['enable_thinking' => true],
+            $this->sentBody()['chat_template_kwargs'],
+        );
     }
 
     // -------------------------------------------------------------------------

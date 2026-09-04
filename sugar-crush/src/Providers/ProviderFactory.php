@@ -87,7 +87,7 @@ final readonly class ProviderFactory
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
-            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort'],
+            'optional' => ['apiKey', 'toolCallParser', 'reasoningEffort', 'templateKwargs'],
         ],
         'bedrock' => [
             'required' => ['region'],
@@ -719,6 +719,10 @@ final readonly class ProviderFactory
                 (string) $config['model'],
             ),
             reasoningEffort: self::configuredReasoningEffort($config['reasoningEffort'] ?? null),
+            // Shape-checked at this parse seam (associative array of string
+            // keys); values ride to the server untouched, where the Jinja
+            // template is the authority on them.
+            extraTemplateKwargs: self::configuredTemplateKwargs($config['templateKwargs'] ?? null),
         );
     }
 
@@ -773,6 +777,62 @@ final readonly class ProviderFactory
             'reasoningEffort must be a level name or a number, got %s',
             get_debug_type($value),
         ));
+    }
+
+    /**
+     * Normalises the optional `templateKwargs` config value - the
+     * deployment-wide `chat_template_kwargs` object, shaped exactly like the
+     * per-request DTO's `$extraTemplateKwargs` so the two merge per key at the
+     * wire ({@see SglangProvider::mergedTemplateKwargs()}).
+     *
+     * The SAME three rules as {@see configuredReasoningEffort()}, and for the
+     * SAME reasons:
+     *
+     *  - null and `''` are both "absent". `''` is not a shape an operator
+     *    types - it is what {@see resolveEnvVars()} yields for a `${...}`
+     *    placeholder whose variable is unset, i.e. the key being ABSENT
+     *    rather than misspelled;
+     *  - the SHAPE is refused here, at config-parse time: an associative
+     *    array of string keys. A JSON list (`["enable_thinking"]`) decodes to
+     *    an int-keyed array, so `get_debug_type` alone would misreport it as
+     *    a plain `array` - the integer-key branch names the offending offset
+     *    instead;
+     *  - the VALUES are passed through UNCHECKED, unlike the effort level
+     *    names. Template kwargs are an open, server-side vocabulary (the
+     *    deployed Jinja template answers bad values with its own 400);
+     *    copying a validation set for it here would only drift.
+     *
+     * Env expansion needs nothing new: {@see resolveEnvVars()} already
+     * RECURSES into array values before validation, so `${VAR}` placeholders
+     * inside kwarg STRINGS resolve through the existing mechanism - the same
+     * "choose a config key, get env support for free" property every other
+     * key here enjoys.
+     *
+     * @return array<string, mixed>
+     */
+    private static function configuredTemplateKwargs(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (!is_array($value)) {
+            throw new \InvalidArgumentException(sprintf(
+                'templateKwargs must be an associative array, got %s',
+                get_debug_type($value),
+            ));
+        }
+
+        foreach ($value as $key => $unused) {
+            if (!is_string($key)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'templateKwargs must be an associative array, got an integer key at offset %d',
+                    $key,
+                ));
+            }
+        }
+
+        return $value;
     }
 
     /**

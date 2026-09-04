@@ -5,7 +5,8 @@
       "baseUrl": "https://skynet2.interserver.net/v1",
       "model": "Qwen/Qwen3.8-Flash-Next",
       "apiKey": null,
-      "reasoningEffort": "xhigh"
+      "reasoningEffort": "xhigh",
+      "templateKwargs": {}
     }
   },
   "defaultProvider": "dev-sglang"

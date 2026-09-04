@@ -357,6 +357,25 @@ final readonly class SglangProvider implements ProviderInterface
          * rather than on the first completion.
          */
         private string|float|null $reasoningEffort = null,
+        /**
+         * Deployment-wide `chat_template_kwargs`, from the `sglang` provider
+         * block's optional `templateKwargs` key
+         * ({@see ProviderFactory::createSglang()}).
+         *
+         * Merged UNDER the per-request DTO's `$extraTemplateKwargs`, per key,
+         * at send time - see {@see mergedTemplateKwargs()} for the precedence
+         * and why null/empty mean "carry nothing" rather than "clear". The
+         * shape (associative array of string keys) is enforced at the config
+         * parse seam ({@see ProviderFactory::configuredTemplateKwargs()});
+         * values are template-side business and travel untouched.
+         *
+         * `[]` (the default) reproduces the pre-config wire exactly: the
+         * merged array is empty and the existing empty-knob filter still
+         * drops `chat_template_kwargs` from the body.
+         *
+         * @param array<string, mixed> $extraTemplateKwargs
+         */
+        private array $extraTemplateKwargs = [],
     ) {
         if ($this->reasoningEffort !== null) {
             self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
@@ -369,6 +388,7 @@ final readonly class SglangProvider implements ProviderInterface
         ?string $apiKey = null,
         ?ToolCallParserInterface $toolCallParser = null,
         string|float|null $reasoningEffort = null,
+        array $extraTemplateKwargs = [],
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -391,7 +411,7 @@ final readonly class SglangProvider implements ProviderInterface
             'headers' => $headers,
         ]);
 
-        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser, $reasoningEffort);
+        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser, $reasoningEffort, $extraTemplateKwargs);
     }
 
     /**
@@ -785,7 +805,9 @@ final readonly class SglangProvider implements ProviderInterface
             'min_p' => $request->minP,
             'repetition_penalty' => $request->repetitionPenalty,
             'stop' => $request->stop,
-            'chat_template_kwargs' => $request->extraTemplateKwargs,
+            // Config kwargs merged UNDER the DTO's per key - see the merge
+            // method for the precedence and its sentinel semantics.
+            'chat_template_kwargs' => $this->mergedTemplateKwargs($request),
             // Top-level, NOT under chat_template_kwargs. Those two are
             // different mechanisms and the difference matters here:
             // `chat_template_kwargs` feeds a server-side Jinja chat template,
@@ -844,6 +866,32 @@ final readonly class SglangProvider implements ProviderInterface
         }
 
         return $params;
+    }
+
+    /**
+     * Merges the deployment-wide config kwargs
+     * ({@see ProviderFactory::createSglang()}) with the per-request DTO's
+     * `$extraTemplateKwargs` into the single `chat_template_kwargs` value
+     * {@see buildParams()} emits.
+     *
+     * PRECEDENCE: per-request > config, applied PER KEY. array_merge's
+     * right-hand side overwrites exactly the string keys it carries, so a
+     * request flipping `enable_thinking` cannot silently drop a deployment's
+     * `preserve_thinking` - a whole-body override would make every per-call
+     * template tweak destructive of the others, which no caller asked for.
+     *
+     * SENTINELS: null AND [] on the DTO both mean "this request names no
+     * keys", the same unset convention the optional-knob filter applies to
+     * every other field. Consequently the merge is empty - and the existing
+     * `$value !== []` filter keeps `chat_template_kwargs` off the wire
+     * entirely - exactly when BOTH sides are empty: an unwired config plus an
+     * unwired request still reproduces today's byte-identical body.
+     *
+     * @return array<string, mixed>
+     */
+    private function mergedTemplateKwargs(CompleteRequest $request): array
+    {
+        return array_merge($this->extraTemplateKwargs, $request->extraTemplateKwargs ?? []);
     }
 
     /**

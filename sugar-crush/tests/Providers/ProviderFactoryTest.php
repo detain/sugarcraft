@@ -788,11 +788,14 @@ final class ProviderFactoryTest extends TestCase
         $config = $this->factory->defaultConfig('dev-sglang');
 
         $this->assertSame('Qwen/Qwen3.8-Flash-Next', $config['model']);
-        // The DISCRIMINATOR. `model` alone cannot prove this came from the
-        // project file, because the built-in 'sglang' schema now names the same
-        // id (and named the same MiniMax id before, so this assertion never
-        // distinguished the two sources). `baseUrl` does: the built-in schema
-        // says http://localhost:30000 and only the project config says skynet2.
+        // The DISCRIMINATOR, kept belt-and-braces. Post-Q1 the two sources
+        // name DIFFERENT models (built-in schema = SglangProvider::DEFAULT_MODEL,
+        // a DeepSeek id; project config = the Qwen id asserted above), so the
+        // model assertion alone now distinguishes them - which is the opposite
+        // of the pre-Q1 situation this comment used to describe. `baseUrl`
+        // keeps the proof independent of any future model-default flip: the
+        // built-in schema says http://localhost:30000 and only the project
+        // config says skynet2.
         $this->assertSame('https://skynet2.interserver.net/v1', $config['baseUrl']);
         $this->assertNotSame('http://localhost:30000', $config['baseUrl']);
     }
@@ -1372,6 +1375,125 @@ final class ProviderFactoryTest extends TestCase
         ]);
 
         $this->assertSame(1.0, $this->sglangPropertyOf($provider, 'reasoningEffort'));
+    }
+
+    // -------------------------------------------------------------------------
+    // The optional `templateKwargs` provider-block key (Q3).
+    //
+    // Deployment-wide `chat_template_kwargs` - the same value surface the
+    // per-request DTO carries, set once in config. SHAPE is validated here at
+    // parse time (associative array of string keys) while VALUES pass through
+    // unchecked: what a server-side Jinja template accepts is the server's
+    // business (pydantic answers with a 400), not a closed enum the way the
+    // effort levels are. resolveEnvVars() already recurses into array values,
+    // so `${VAR}` placeholders inside kwargs STRINGS ride the existing
+    // expansion - the test below pins that rather than a new mechanism.
+    // -------------------------------------------------------------------------
+
+    public function testConfiguredTemplateKwargsReachTheProvider(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'templateKwargs' => ['enable_thinking' => true, 'preserve_thinking' => false],
+        ]);
+
+        $this->assertSame(
+            ['enable_thinking' => true, 'preserve_thinking' => false],
+            $this->sglangPropertyOf($provider, 'extraTemplateKwargs'),
+        );
+    }
+
+    public function testAnEmptyTemplateKwargsObjectIsAcceptedAsNone(): void
+    {
+        // The committed config.dev.json carries `"templateKwargs": {}` as a
+        // discoverability placeholder; accepting it as exactly what absent
+        // means is what keeps that placeholder behavior-neutral.
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'templateKwargs' => [],
+        ]);
+
+        $this->assertSame([], $this->sglangPropertyOf($provider, 'extraTemplateKwargs'));
+    }
+
+    public function testAbsentTemplateKwargsLeaveTheProviderWithNone(): void
+    {
+        $provider = $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+        ]);
+
+        $this->assertSame([], $this->sglangPropertyOf($provider, 'extraTemplateKwargs'));
+    }
+
+    public function testEnvPlaceholdersInsideTemplateKwargsValuesResolveThroughTheExistingExpansion(): void
+    {
+        putenv('SUGARCRUSH_TEST_KWARG_STYLE=concise');
+
+        try {
+            $provider = $this->factory->create([
+                'type' => 'sglang',
+                'baseUrl' => 'http://localhost:30000',
+                'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+                'templateKwargs' => ['style' => '${SUGARCRUSH_TEST_KWARG_STYLE}'],
+            ]);
+
+            $this->assertSame(
+                ['style' => 'concise'],
+                $this->sglangPropertyOf($provider, 'extraTemplateKwargs'),
+            );
+        } finally {
+            putenv('SUGARCRUSH_TEST_KWARG_STYLE');
+        }
+    }
+
+    public function testANonArrayStringConfiguredTemplateKwargsIsRejected(): void
+    {
+        // Rejected at BUILD time from the config-parse seam, naming the key
+        // and the expected shape - the configuredReasoningEffort polarity.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('templateKwargs must be an associative array, got string');
+
+        $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'templateKwargs' => 'enable_thinking',
+        ]);
+    }
+
+    public function testAScalarNumberConfiguredTemplateKwargsIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('templateKwargs must be an associative array, got int');
+
+        $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'templateKwargs' => 7,
+        ]);
+    }
+
+    public function testAnIntegerKeyedListConfiguredTemplateKwargsIsRejected(): void
+    {
+        // `["enable_thinking"]` decodes to an int-keyed PHP list. It is not a
+        // map of template parameters, and `get_debug_type` would say `array`
+        // for it, so the message names the offending key instead.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('templateKwargs must be an associative array, got an integer key at offset 0');
+
+        $this->factory->create([
+            'type' => 'sglang',
+            'baseUrl' => 'http://localhost:30000',
+            'model' => 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            'templateKwargs' => ['enable_thinking'],
+        ]);
     }
 
     /**
