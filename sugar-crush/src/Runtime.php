@@ -9,6 +9,7 @@ use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\PromptSection;
 use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Context\Stability;
@@ -2470,7 +2471,15 @@ final class Runtime
                 $sections[] = $this->section(
                     '<project-instructions>',
                     Stability::PerSession,
-                    "<project-instructions>\n" . $doc . "\n</project-instructions>",
+                    // P5.S3: an instruction document is CONTENT — AGENTS.md
+                    // travels with a cloned repository as surely as a commit
+                    // subject does. Escape it before wrapping so a checked-in
+                    // `</env>` cannot eject the prompt out of a later fence;
+                    // the roster-wide rationale is in PromptFence, and this
+                    // site carries the fourth production fence, which is
+                    // constructed inline and therefore reaches the authority
+                    // here rather than through any block's render().
+                    "<project-instructions>\n" . PromptFence::escape($doc) . "\n</project-instructions>",
                 );
             }
         }
