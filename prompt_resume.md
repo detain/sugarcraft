@@ -12,14 +12,14 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: PHASES 0-4 CLOSED (30 of 63) AND the F6b gap-filler citation sweep is MERGED
-  (merge commit `bcf419855` = master tip). One gap-filler remains: **F6c** (residual citation sweep +
-  the transcriptSignature REPLACE third control) - brief `prompt_kit/briefs/F6c-step-brief.md`,
-  sandbox `/home/sites/prompt-step-F6c` @ `bcf419855`, lead running (3-cycle cap). After F6c merges
-  + belt: FINAL handoff staging (worklog + resume #8) and **STOP AT THE PHASE 5 BOUNDARY** per user
-  instruction - the supervisor section-5 collision re-check is required before P5.S1. Phase-5
-  pre-read + step texts live in prompt_plan.md ~L1872; travel ledger + TWO awaiting-user items +
-  NOTE-1 ride in section 8 below.
+**Current state: PHASES 0-4 CLOSED (30 of 63). ALL GAP-FILLERS MERGED: F6b (citation sweep)
+  `bcf419855`, F6c (residual cites + transcriptSignature REPLACE third control) `de1048ccf` =
+  master tip. CLEAN STATE, nothing in flight (the post-merge belt is corroboration only - the
+  merge-base=synced-tip + rev-list-zero argument proves the gate figure describes master).
+  **STOP AT THE PHASE 5 BOUNDARY per user instruction.** A NEW SESSION starts here: first the
+  supervisor section-5 collision re-check BEFORE P5.S1 (see Next step), then drive Phases 5-11
+  to completion per the standing recipes (section 6). Phase-5 step texts: prompt_plan.md ~L1872
+  (re-derive fresh). Travel ledger + TWO awaiting-user items + NOTE-1 ride in section 8.
 
 ---
 
@@ -178,10 +178,9 @@ its six record-side findings were fixed and merged as `58150a432`. Ten things a 
 was measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
 re-measuring a suite this file already gives you the answer to.**
 
-**IN FLIGHT: F6c lead (gap-filler sweep).** F6b merged at `bcf419855` (gate 10644/165013/1/0,
-cmp sole mover MMG arm; sugar-crush diff vs branch tip EMPTY; worktree+branch torn down).
-F6c: branch `prompt/F6c` over `bcf419855`, targets = PRR residual emit cites + plan L1604-1605
-Bootstrap/Chat cites + transcriptSignature REPLACE third control; cap 3 fresh reviewers.
+**IN FLIGHT: NOTHING.** Phase 4 is fully closed including both gap-fillers. Every worktree of
+mine is removed; every branch merged or deleted. Master `de1048ccf`, porcelain clean. The next
+action belongs to a fresh session at the Phase 5 boundary (supervisor check first).
 
 ### Verified this session — do NOT redo unless the sha moved
 
@@ -192,6 +191,7 @@ Bootstrap/Chat cites + transcriptSignature REPLACE third control; cap 3 fresh re
 | P4.S4 scope + cycle record | merged 3 files +1848/−7 (`src/Context/ContextCompactor.php`, `src/Chat.php`, `tests/Context/ContextCompactorTest.php`); the declared `tests/CompactorTest.php` proved UNRELATED (different class) — reported not edited; lead cycles 1-5 (dedicated fixers; one fixer death ladder-handled), orchestrator cycle-6 fixer closed 3 MAJORs (alignment pin, 11-field copy pin, comment-only headroom narrowing — 2938/2938 token-identity proven), cycle-7 fresh reviewer NO FINDINGS incl revert-experiment; identity 8/8 literal, 0 EMAIL bytes | `1500ad32b` |
 | P4.S5 scope + outcome | CLOSED AS MEASURED (outcome b): E23 collapse REAL+reachable (text-only sha256 key `src/Context/ContextCompactor.php:96-99`; both twins offered `:625`; one shared summary lookup `:1200`; tool_calls payloads key-blind) but LOSS measured FALSE - `summarizeExchanges` emits one row per PAIR, each twin keeps its line; the only collapse-attributable effect is the `Chat::parseExchangeSummaries` isset-guard dropping a second paraphrase of byte-identical text (benign by content identity); the `[2x]` fold is stage-3 documented design and fires with no map. 2 files +251/-2, src COMMENT-ONLY (elementwise token identity, lead + reviewer); 6 pins in the PRE-EXISTING ExchangeSummaryTest 16/36->22/54, each mutation-isolated; lead 2/5 cycles with dedicated fixer + cycle-2 fresh reviewer PASS; identity 2/2 literal, 0 EMAIL bytes; merge commit amended once for the message fill (parents preserved) | `142cef6ce` |
 | F6b gap-filler MERGED | merge commit bcf419855: 5 commits 98aeffbb6..3bea55552, 4 files +10/-10 comment/string-only, line counts preserved; gate cwd F6b worktree root serial </dev/null probe 0 = Tests 10644 / Assertions 165013 (MMG-201 arm; 165010 at 198) / 1 skip / 0 fail / EXIT 0, prediction exact, cmp.py sole mover MouseModalGuardTest 198->201 (+3, dTests 0) - zero unexplained; sugar-crush diff 3bea55552 vs master EMPTY (tree-wide diff = the 3 bookkeeping record files only, read by no test); identity 20/20 literal + 0 EMAIL bytes; C1 5 / C2 2 / C3 NO FINDINGS, cap-3 held; belt figure appended in worklog-6 entry | `bcf419855` |
+| F6c gap-filler MERGED | merge commit de1048ccf: 5 commits e39b0adc1..4620c5156 + sync 295b95e40, 3 files +83/-9 - PRR 6 cites (incl disclosed :501 STRING change), plan :1606/:1610 rule-42 in-line, StatusLineSegmentTest +74 = transcriptSignature same-count-REPLACE third control (22/4113->23/4117); proofs: PRR 751 LOC + 3113 tokens elementwise, plan 3626 unchanged, goldens byte-identical, path-gate 0; gate at 295b95e40 (cwd F6c worktree root, serial, </dev/null, probe 0) = Tests 10645 / Assertions 165017 (MMG-201 arm; 165014 at 198) / 1 skip / 0 fail / EXIT 0 - prediction exact; cmp.py sole mover StatusLineSegmentTest +4a/+1t, no MMG flip, zero unexplained; ancestry note: user re-merge pulled the sync tip into master history - merge-base = 295b95e40 and rev-list master ^branch = 0, so the merge tree == gate tree and the figure provably describes master (belt = corroboration); review C1 3minor/3nit -> fix-1, lead-caught fix-1 regression -> fix-2, C2 1minor -> fix-3, C3 CLEAN, cap-3 held; brief claims measured FALSE (GlobFigureDriftTest is the strlen() settings-glob generator, NOT a line counter; no guard polices File.php:NNN cites); 9 repo-shared stash entries (other plan) observed, NOT dropped; worktree + branch torn down after merge | `de1048ccf` |
 | cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, porcelain empty | every commit |
 | commit identity | `Joe Huss` / `detain@interserver.net` — 24/24 objects author+committer clean across the whole P4.S2 window AFTER the metadata repair; 8 gmail commits remain in P3.audit-fix-2 history (un-rewritable, recorded). NEW ROOT CAUSE of the recurring `[EMAIL]` defect: agents SEE the sanitized token in injected context and ECHO it — briefs must command the literal address; orchestrator object-byte-scans incoming commits before every merge | `80db1b27d` |
 | (SUPERSEDED by P4.S4) **MASTER full suite** at the P4.S2-era tree, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10615, Assertions: 164754, Skipped: 1`**, 0 failures (EXIT 0) — MMG-198 arm; 164757 at the 201 arm | synced `47f7b477a` / replay `c8f01cdbe` (orchestrator gate) |
@@ -527,19 +527,24 @@ Phase:            4 - CLOSED (5 of 5). P4.S1 f2204a7c4 (Usage real buckets), P4.
                   P4.S5 142cef6ce (E23 exchangeKey audit - CLOSED AS MEASURED: collapse real, loss false,
                   six mutation-isolated pins, src comment-only).
 
-Next step:        (1) F6c lead finishes (or escalates at cap 3): orchestrator verifies by own
-                  measurement, runs the merge-gate full suite at the branch tip (prediction:
-                  10644 tests EXACT; assertions 165010-or-165013 + whatever target-3 adds - the
-                  lead states its focused deltas; cmp.py vs
-                  /home/sites/prompt-scratch/F6b/orchestrator/gate2-junit.xml), merges per the
-                  standing recipe below, belts, tears down.
-                  (2) BOOKKEEPING #8 + REPORT TO USER, then STOP: per user instruction the next
-                  session drives Phase 5 - supervisor section-5 collision re-check before P5.S1
-                  (Phase 5 adds ~11 new src files, rewrites Runtime.php assembly, regenerates
-                  goldens at P5.S4/S5/S6; other plan = crush-lane-{a,b,c} + docs/plans/crush_code_*
-                  must be free of rounds in flight).
-                  (3) Remaining queued after Phase 5 starts: NOTE-1 decision (Anthropic-only
-                  readout) rides to the user; travel ledger in section 8 unchanged otherwise.
+Next step:        NEW-SESSION ENTRY POINT. (1) GENUINE STOP-AND-ASK - supervisor section-5
+                  collision re-check BEFORE opening Phase 5 (PromptSection architecture, plan
+                  header ~L1872 re-derive on fresh read; Phase 5/6 add most of the ~11 new src
+                  files + rewrite Runtime.php assembly + P5.S4/S5/S6 regenerate goldens + every
+                  new test file can red a tree-wide census guard; section 5 forbids starting
+                  while the other plan (crush-lane-{a,b,c}, docs/plans/crush_code_*, repo-shared
+                  stash refs) has a round in flight - ASK, do not inspect lane worktrees).
+                  (2) On GO: P5.S1 brief from step text + standing template; golden
+                  byte-identical is THE acceptance test; P5.S3 must fold in ONE diff the
+                  EnvironmentBlock.php:288 branch cap + BOTH fence-escape vectors (i) diff-bodies
+                  (ii) branch-name; Phase 5 almost fully serial - run steps one at a time per
+                  section 6 recipes (sandbox -> lead -> fresh reviewers -> dedicated fix agents
+                  -> gate -> merge -> belt -> teardown -> bookkeeping).
+                  (3) Surface to the user when relevant: NOTE-1 (status-line readout lights only
+                  Anthropic-shaped providers - needs a recorded decision) and the TWO long-
+                  standing awaiting-user items (verbatim in section 8). If the F6c belt figure
+                  is still not pasted into the worklog 'F6c' entry tail, paste it from
+                  /home/sites/prompt-scratch/F6c/orchestrator/belt.out first.
 
                   Standing spawn recipe: ONE step lead via task() subagent_type=coder — LEAN prompt
                   pointing at the brief FILE by path (never paste it), the sandbox worktree, its
@@ -590,18 +595,16 @@ Latest suite:     **EVERY FIGURE NAMES ITS CWD, ITS TREE, AND SERIALITY.**
                   Path-repo gates: RUN THEM FROM THE REPO ROOT (misread happened twice).
                   php-cs-fixer is NOT installed on this box; the style gate cannot run locally.
 
-In-flight batch:  F6b gap-filler MERGED `bcf419855` (cycle ledger + proofs in the merge message
-                  and the worklog-6 entry; that entry's NEXT-SESSION RECIPE was executed in full
-                  on 2026-09-03). F6c gap-filler NOW RUNNING: lead session on
-                  `/home/sites/prompt-step-F6c` (branch `prompt/F6c` @ `bcf419855`), brief
-                  `prompt_kit/briefs/F6c-step-brief.md` (three targets; comment/string-only for 1
-                  and 2, test-only third control; cap 3; lead-never-fixes).
+In-flight batch:  NONE. F6b merged `bcf419855`, F6c merged `de1048ccf` (ledgers + proofs in the
+                  merge messages and the two newest worklog entries). Post-Phase-4 gap-filler
+                  queue is EMPTY; what remains outside the 63 steps rides in the travel ledger
+                  below (incl. transcriptSignature PREPEND/DROP controls still without known-
+                  positive plants, NOTE-1, and the residual-cite families F6c did not target).
 
-Live worktrees:   /home/sites/sugarcraft (master `bcf419855`) and /home/sites/prompt-step-F6c
-                  (branch prompt/F6c - gap-filler in flight). After F6c closes: run section-1.12
-                  porcelain-FULL, worktree remove, branch -d - then NOTHING of mine is live and
-                  the session ends at the Phase 5 boundary. crush-lane-{a,b,c} belong to the
-                  OTHER plan - never touch.
+Live worktrees:   ONLY /home/sites/sugarcraft (master `de1048ccf`). The F6b and F6c worktrees
+                  were removed after §1.12 porcelain-FULL checks and their branches deleted
+                  (both merges complete). crush-lane-{a,b,c} + repo-shared stash refs belong to
+                  the OTHER plan - never touch.
 
 Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on every rewrite
                   until the user answers, and do not decide either yourself.
