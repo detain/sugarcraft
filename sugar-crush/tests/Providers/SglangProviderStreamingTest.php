@@ -474,7 +474,13 @@ final class SglangProviderStreamingTest extends TestCase
 
         $this->assertSame(['include_usage' => true], $captured['json']['stream_options'], 'the request arm that produced this capture is the one the provider now sends');
         $this->assertCount(11, $chunks, 'ten captured deltas plus ONE terminal usage chunk - [DONE] inert as ever');
-        $this->assertSame("\n\nOK", implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)), 'the captured reply assembles unchanged');
+        // §Q9 / §13 cat.8 — this is the LIVE capture (fixture sha 4df01cc2…), so its
+        // bytes are never reconstructed; only the assertion is amended to the
+        // provider's Qwen cosmetic channel. E-21 measured the wire: with thinking ON
+        // the first content delta carries a literal "\n\n" prefix, which §Q9 now trims
+        // (leading whitespace run of the first content delta, Qwen family + thinking on).
+        // The captured reply therefore assembles to "OK", not the raw "\n\nOK".
+        $this->assertSame('OK', implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)), 'the captured reply assembles with the E-21 leading-newline run trimmed (§Q9)');
 
         $final = $chunks[10];
         $this->assertSame('', $final->content, 'the usage chunk bills, it does not repeat text');
@@ -546,5 +552,188 @@ final class SglangProviderStreamingTest extends TestCase
         $this->assertSame('', $usage->content);
         $this->assertSame(72, $usage->tokensUsed, 'the §Q6 usage terminal still closes the stream');
         $this->assertFalse($usage->truncated, 'the flag belongs to the flush frame only');
+    }
+
+    // -------------------------------------------------------------------------
+    // §Q9 (qwen.md; E-21/E-25/E-26) — cosmetic correctness of the Qwen content
+    // channel. (a) the leading whitespace run is trimmed from the FIRST content
+    // delta of a turn when the family is Qwen AND thinking is on; every later
+    // delta (incl. the E-26 stray newlines that ride between parallel call
+    // groups) flows through untouched. (b) a whitespace-only content arriving on
+    // a `finish_reason: "tool_calls"` chunk is thinking noise, not an answer, so
+    // nothing is emitted. Both rules are family-scoped to Qwen: the DeepSeek
+    // wire must be byte-for-byte what it was. SYNTHETIC frames (the point is the
+    // provider's trim/keep decisions, which a single clean capture cannot show).
+    // -------------------------------------------------------------------------
+
+    /** Wire frames for one completeStream() turn. */
+    private function sseStream(string ...$dataFrames): string
+    {
+        return implode('', array_map(
+            static fn (string $f): string => 'data: ' . $f . "\n",
+            $dataFrames,
+        )) . "data: [DONE]\n";
+    }
+
+    public function testLeadingWhitespaceTrimmedFromFirstContentDeltaForQwenThinkingOn(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $sse = $this->sseStream(
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"\n\nHello"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"content":" world"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"\n!"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{},"finish_reason":"stop"}]}',
+        );
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('go')],
+        )));
+
+        $this->assertSame('Hello', $chunks[0]->content, 'E-21: the first content delta\'s leading "\\n\\n" run is trimmed for Qwen thinking-on');
+        $this->assertSame("\n!", $chunks[2]->content, 'a LATER content delta keeps its own leading newline — only the FIRST delta is trimmed');
+        $this->assertSame('Hello world' . "\n!", implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)), 'the turn assembles with only the E-21 prefix removed');
+    }
+
+    public function testLeadingWhitespacePreservedForDeepSeekFamilyStream(): void
+    {
+        $model = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+        $sse = $this->sseStream(
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"\n\nHello"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"content":" world"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{},"finish_reason":"stop"}]}',
+        );
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('go')],
+        )));
+
+        $this->assertSame("\n\nHello", $chunks[0]->content, 'a DeepSeek leading-newline run survives: §Q9 is family-scoped to Qwen');
+        $this->assertSame("\n\nHello world", implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)), 'the DeepSeek assembly is byte-for-byte what the wire sent');
+    }
+
+    public function testLeadingWhitespacePreservedForQwenThinkingOffStream(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $sse = $this->sseStream(
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"\n\nHello"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{},"finish_reason":"stop"}]}',
+        );
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('go')],
+            extraTemplateKwargs: ['enable_thinking' => false],
+        )));
+
+        $this->assertSame("\n\nHello", $chunks[0]->content, 'with enable_thinking:false the prefix does not occur on the wire, so §Q9 does not trim — the gate is family AND kwargs (E-22), not family alone');
+    }
+
+    public function testWhitespaceOnlyContentDroppedAlongsideToolCallFinishStream(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $sse = $this->sseStream(
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"Done","tool_calls":[{"index":0,"id":"call_f","type":"function","function":{"name":"f","arguments":"{}"}}]},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"   "},"finish_reason":"tool_calls"}]}',
+        );
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('go')],
+        )));
+
+        $this->assertSame('Done', $chunks[0]->content, 'the first real content delta is untouched');
+        $assembled = $chunks[array_key_last($chunks)];
+        $this->assertNotNull($assembled->toolCalls, 'the finish_reason=tool_calls frame assembles the buffered call');
+        $this->assertSame('', $assembled->content, 'a whitespace-only content on a tool_calls finish emits NOTHING — arrived LATER so (a) never ran, this is purely (b)');
+    }
+
+    public function testParallelCallGroupNewlinesFlowThroughUntouched(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        // E-26 order: reasoning → content → tool_calls → finish. The first
+        // content delta carries the E-21 prefix; the stray "\n\n" riding between
+        // the two parallel call groups is a LATER content delta and must survive.
+        $sse = $this->sseStream(
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"\n\nI\'ll"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"content":" call"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"content":"\n\n"},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","type":"function","function":{"name":"x","arguments":"{}"}}]},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{"tool_calls":[{"index":1,"id":"b","type":"function","function":{"name":"y","arguments":"{}"}}]},"finish_reason":null}]}',
+            '{"model":"' . $model . '","choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+        );
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('go')],
+        )));
+
+        $this->assertSame("I'll call\n\n", implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)), 'the E-21 prefix is gone from the FIRST delta while the E-26 inter-group "\\n\\n" keeps flowing');
+    }
+
+    public function testBatchLeadingWhitespaceTrimmedForQwenThinkingOn(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $body = json_encode(['model' => $model, 'choices' => [['message' => ['content' => "\n\nAnswer"], 'finish_reason' => 'stop']]]);
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], (string) $body));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $result = $provider->complete(new CompleteRequest(model: $model, messages: [new UserMessage('go')]));
+
+        $this->assertSame('Answer', $result->content, 'E-21 batch half: the non-stream content\'s leading run is trimmed for Qwen thinking-on');
+    }
+
+    public function testBatchWhitespaceOnlyContentDroppedAlongsideToolCallsThinkingOff(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $body = json_encode([
+            'model' => $model,
+            'choices' => [[
+                'message' => ['content' => "  \n", 'tool_calls' => [['id' => 'c', 'type' => 'function', 'function' => ['name' => 'f', 'arguments' => '{}']]]],
+                'finish_reason' => 'tool_calls',
+            ]],
+        ]);
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], (string) $body));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $result = $provider->complete(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('go')],
+            extraTemplateKwargs: ['enable_thinking' => false],
+        ));
+
+        $this->assertNotNull($result->toolCalls, 'the batch tool_calls document still parses');
+        $this->assertSame('', $result->content, 'whitespace-only content on a tool_calls finish emits NOTHING; thinking-off proves (b) is independent of the (a) trim');
+    }
+
+    public function testBatchContentPreservedForDeepSeekFamily(): void
+    {
+        $model = 'deepseek-ai/DeepSeek-V4-Flash-0731';
+        $body = json_encode(['model' => $model, 'choices' => [['message' => ['content' => "\n\nAnswer"], 'finish_reason' => 'stop']]]);
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], (string) $body));
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', $model, null, $httpClient);
+
+        $result = $provider->complete(new CompleteRequest(model: $model, messages: [new UserMessage('go')]));
+
+        $this->assertSame("\n\nAnswer", $result->content, 'DeepSeek batch content is byte-for-byte the wire value — §Q9 never touches it');
     }
 }

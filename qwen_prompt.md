@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next plan — START/RESUME PROMPT
-Current: Q8/reviewing @ 4cad0ed12 — builder+finish shipped uncommitted (errorBodyMessage: clean error.message surfacing, chain-safe; gates 95/199 exact). NEXT: verdict → committer → Q9 (content artifacts trim, qwen.md:222-231; Q6 fixture text pin needs E-21-cited amendment — pre-flagged; committer runs FULL-suite milestone census </dev/null). NEVER push; commit via git commit --only -F <msg> -- <paths>; foreign lanes active.
+Current: Q9/reviewing (PAUSED on user request) @ 7f4d641de — tree frozen 89/4 + 190/1; evidence 12/12 PASS; census floors +3-delta = StderrEmitterCensusTest roster fix QUEUED (2→5, rides Q9 commit); c1 reviewer respawn PENDING (file-first verdict Write, ≤8 calls). NEXT ON RESUME: (1) roster-fix micro-task + rerun StderrEmitterCensusTest alone + 3-file gate; (2) reviewer; (3) committer --only -F /tmp/opencode/qwen-Q9/msg.txt 4 paths; (4) Q10 final lane step (spec qwen.md:233-244: preserve_thinking=false config, scripts/qwen-live-smoke.php 3-shape live smoke, docs/ENVIRONMENT.md, RBTest case, final census, qwen.md COMPLETE header). NEVER push; census always stdin-null.
 > This banner line is REWRITTEN (never appended to) at every step transition, by the committer/bookkeeping task.
 
 Paste this into a fresh orchestrator session to begin or continue execution.

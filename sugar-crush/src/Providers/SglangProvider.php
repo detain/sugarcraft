@@ -634,7 +634,7 @@ final readonly class SglangProvider implements ProviderInterface
 
             $data = json_decode($response->getBody()->getContents(), true);
 
-            return $this->parseResponse($data);
+            return $this->parseResponse($data, $this->contentThinkingEnabled($request));
         } catch (GuzzleException $e) {
             // §Q8 (qwen.md; E-56): surface the server's own `error.message`
             // when the response carries one instead of Guzzle's raw-body dump
@@ -718,6 +718,13 @@ final readonly class SglangProvider implements ProviderInterface
             // same `final readonly class` reason as $toolCallBuffer above.
             $streamUsage = null;
 
+            // §Q9: the thinking gate (request-scoped kwargs — never recoverable
+            // from a single frame) and the first-content cursor, threaded by ref
+            // into parseChunk(). Locals, not properties: final readonly class,
+            // lifetime exactly one generator call — same reason as $toolCallBuffer.
+            $contentThinkingOn = $this->contentThinkingEnabled($request);
+            $seenFirstContent = false;
+
             // The LAST non-null `finish_reason` seen on any data frame, read
             // after the loop by the §Q7 flush guard. Captured per frame here
             // rather than inside parseChunk() because parseChunk() is also a
@@ -751,7 +758,7 @@ final readonly class SglangProvider implements ProviderInterface
                         // value.
                         $streamFinishReason = $data['choices'][0]['finish_reason'] ?? $streamFinishReason;
                         if ($data !== null && isset($data['choices'][0]['delta'])) {
-                            $chunk = $this->parseChunk($data, $toolCallBuffer);
+                            $chunk = $this->parseChunk($data, $toolCallBuffer, $contentThinkingOn, $seenFirstContent);
 
                             $sawStructuredToolCalls = $sawStructuredToolCalls
                                 || ($chunk->toolCalls !== null && $chunk->toolCalls !== []);
@@ -1620,7 +1627,7 @@ final readonly class SglangProvider implements ProviderInterface
      * the only decoder, whereas on the streaming path it is a fallback behind
      * `delta.tool_calls[]`.
      */
-    private function parseResponse(array $data): CompleteResponse
+    private function parseResponse(array $data, bool $thinkingOn = false): CompleteResponse
     {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -1628,6 +1635,17 @@ final readonly class SglangProvider implements ProviderInterface
         $toolCalls = $this->resolvedToolCallParser()->parse($message);
 
         [$reasoning, $content] = $this->extractReasoning($message);
+
+        // §Q9 batch half: the whole message IS the first content, so the cursor
+        // is a throwaway; wire model read from the frame (§Q6 per-frame precedent).
+        $seenFirstContentBatch = false;
+        $content = self::applyQwenContentCosmetics(
+            $content,
+            $data['model'] ?? null,
+            $thinkingOn,
+            $choice['finish_reason'] ?? null,
+            $seenFirstContentBatch,
+        );
 
         // P4.S2: every usage number on the way out comes from ONE parsed Usage,
         // so this site and any future carrier cannot disagree about what the
@@ -1864,7 +1882,7 @@ final readonly class SglangProvider implements ProviderInterface
      *
      * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
      */
-    private function parseChunk(array $data, array &$toolCallBuffer = []): CompleteResponse
+    private function parseChunk(array $data, array &$toolCallBuffer = [], bool $thinkingOn = false, bool &$seenFirstContent = false): CompleteResponse
     {
         $delta = $data['choices'][0]['delta'] ?? [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
@@ -1881,6 +1899,15 @@ final readonly class SglangProvider implements ProviderInterface
         // ({@see \SugarCraft\Crush\Runtime::runStreaming()}), not here.
         [$reasoning, $content] = $this->extractReasoning($delta);
 
+        // §Q9 (E-21/E-25/E-26): the Qwen-only content cosmetics, applied to the
+        // extracted text before it crosses the CompleteResponse seam. `$data['model']`
+        // (the id the server used for THIS frame) decides family, so a DeepSeek
+        // stream — even one that happens to share the SSE harness — is skipped in
+        // the helper. `$thinkingOn` and `$seenFirstContent` are threaded from
+        // completeStream() because neither the per-chunk kwargs nor "which delta is
+        // first" is recoverable from a single chunk in isolation.
+        $content = self::applyQwenContentCosmetics($content, $data['model'] ?? null, $thinkingOn, $finishReason, $seenFirstContent);
+
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
@@ -1889,6 +1916,64 @@ final readonly class SglangProvider implements ProviderInterface
             costUsd: 0.0,
         );
     }
+
+    /**
+     * §Q9 (E-21/E-25/E-26) — cosmetic correctness of the Qwen content channel.
+     * Both rules are FAMILY-SCOPED to Qwen so the DeepSeek batch and stream paths
+     * stay byte-for-byte what they were (the spec's "avoid touching DeepSeek
+     * behavior" clause): the guard returns the content untouched for any other
+     * family, and `$wireModel` (never the configured `$this->model`) is what
+     * decides family — it is the id the server generated these bytes with,
+     * mirroring how §Q6 reads usage per-frame.
+     *
+     *  (a) E-21: with thinking ON the first content delta (and the non-stream
+     *      `message.content`) opens with a literal whitespace run — measured as a
+     *      "\n\n" prefix. Trim that run from the FIRST content delta of a turn
+     *      only. Every later delta flows through unchanged, so the stray newline
+     *      deltas E-26 places BETWEEN parallel call groups keep flowing. The
+     *      `$seenFirstContent` carry flag is what makes "first" survive the
+     *      stateless-per-chunk boundary of parseChunk(); batch passes a throwaway.
+     *      Gated on `$thinkingOn` as well as family: with `enable_thinking:false`
+     *      E-22 measured the prefix simply never occurs, so trimming would be
+     *      wrong (and a real leading-space answer would be mangled).
+     *  (b) E-24/E-26: a content that is nothing but whitespace arriving on a
+     *      `finish_reason:"tool_calls"` chunk is the model thinking out loud, not
+     *      an answer, so emit nothing. Independent of `$thinkingOn` on purpose —
+     *      the spec words (b) against the "(trimmed) content", and a whitespace-
+     *      only content is meaningless for the family whether or not thinking ran.
+     *
+     * @param  bool  $seenFirstContent  by-ref turn cursor (only consulted by (a))
+     */
+    private static function applyQwenContentCosmetics(string $content, mixed $wireModel, bool $thinkingOn, ?string $finishReason, bool &$seenFirstContent): string
+    {
+        if (!is_string($wireModel) || !self::isQwen3Next($wireModel)) {
+            return $content;
+        }
+
+        if ($thinkingOn && !$seenFirstContent && $content !== '') {
+            $seenFirstContent = true;
+            $content = ltrim($content);
+        }
+
+        if ($finishReason === 'tool_calls' && $content !== '' && trim($content) === '') {
+            $content = '';
+        }
+
+        return $content;
+    }
+
+    /**
+     * §Q9 (a) gate — the request-side half of the Qwen thinking test. Mirrors
+     * buildBody()'s derivation exactly: the template's own default is ON, so only
+     * an explicit `enable_thinking:false` counts as OFF. Kept separate from
+     * applyQwenContentCosmetics() because the kwargs are request-scoped and never
+     * echoed on the response, while the family gate is per-frame.
+     */
+    private function contentThinkingEnabled(CompleteRequest $request): bool
+    {
+        return ($this->mergedTemplateKwargs($request)['enable_thinking'] ?? true) !== false;
+    }
+
 
     /**
      * W1.A1 (§12 D2): mirrors the OpenAI streaming tool-call shape -

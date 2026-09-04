@@ -108,7 +108,7 @@ use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — FIFTEEN
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — EIGHTEEN
  *     of them, in FIVE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
@@ -370,9 +370,14 @@ final class StderrEmitterCensusTest extends TestCase
         // Round 49, lane b (E345): the once-per-process notice for a refused audit
         // write. One call site behind a latch, so it is one row and stays one.
         'src/Hooks/BuiltIn/AuditHook.php' => 1,
-        // E192, round 48: the two argument-decode refusals. The third site in
-        // that file stayed on channel 3 — see its entry there.
-        'src/Providers/SglangProvider.php' => 2,
+        // E192, round 48: the two argument-decode refusals, plus the three
+        // tool-call flush warnings the Q7 truncation hardening added — a
+        // dropped or half-decoded buffered argument is the data corruption
+        // this seam exists to record, so they route through it exactly like
+        // the refusals do (lane decision 2026-09-04, riding the Q9 commit).
+        // The one site round 48 left on error_log() stayed on channel 3 —
+        // see its entry there.
+        'src/Providers/SglangProvider.php' => 5,
         'src/Providers/ToolCallParser/DsmlToolCallParser.php' => 4,
         'src/Providers/ToolCallParser/MinimaxXmlFallbackToolCallParser.php' => 4,
     ];
@@ -555,6 +560,7 @@ final class StderrEmitterCensusTest extends TestCase
         'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5,
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
         'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15,
+        'eighteen' => 18,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23,
         'twenty-seven' => 27,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
