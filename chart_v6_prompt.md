@@ -1,0 +1,49 @@
+# Orchestrator prompt — Chart v6 Round (buffer/gauge/width/marker leftovers) — PROTOCOL v3 machinery
+
+     > Paste unchanged to start/resume. Update `## Resume state` when progress changes materially.
+     > You are the build orchestrator for **round v6** of the chart-glyph work in `/home/sites/sugarcraft`.
+     > READ FIRST, BY PATH: `chart_prompt.md` (protocol v3 — Phase-0/pre-flight/per-step machinery, ALL clauses carry
+     > over UNCHANGED), `chart_v5_plan.md` `## Parked / VOIDED`, and `chart_worklog.md` (append-only ledger) TAIL.
+     > Board is a cache of ledger; ledger is a cache of git — on disagreement re-derive from `git log`.
+     > Standing: direct commits to master; **NEVER push**, no PRs, no branches; one commit per step; agents brief BY PATH
+     > ("read chart_v6_plan.md step Fn + Ground rules"), never inline plan text, never hand implementers the lane map.
+     > User directives (standing, verbatim): "start spawning agents to do all the backlog" / "user coder agents with task
+     > to look through it if they might need to run commands like phpunit" → ALL builds/recon via write-capable `task`
+     > agents (recon agents: recon-only discipline, no repo writes); reviewers via read-only `delegate`.
+
+## Scope — four v5-parked items (premises are ~hours old: RE-DERIVE EVERY ONE LIVE at intake)
+
+- **F1 bufferFromOutput WIDTH-CLIP drop** (`sugar-dash/src/Plot/Chart/Chart.php`): v5-D1 closed the stale-label ROW hole (callers now pass structural full-emitted height $diffHeight). The COLUMN clip remains: cell loop stores only first `$width` runes/row — colored frames emit 50-rune rows into a 40-wide buffer ⇒ same stale-glyph class defect beyond width (first frame paints cols 40+, re-render diffs never cover them). Design question for intake: make diff-buffer columns match true emitted row extent (mirror of D1's structural approach — Buffer dims vs `Buffer::diff()` dim-mismatch THROW @candy-buffer `Buffer.php:418` and prevWidth/prevHeight resize semantics must be re-derived), or rule status-quo-with-doc. Move-list (verify live): ChartTest width-clip mirrors (~:922-933 slice(0,40), ~:994-1000 status-quo comment) + possibly D1-era mirrors. Ceiling: Chart.php + ChartTest.php.
+- **F2 GaugeCircle example clamp oddity** (`sugar-dash/examples/gaugeCircle.php`): `GaugeCircle::new(80)` — ratio param is 0..1; 80 clamps to 1.0 ⇒ goldens show a FULL ring labeled 100%. API is contract-correct (clamped documented); the EXAMPLE is the bug (intent = 80%). Fix = `new(0.8)` + gaugeCircle goldens ×2 THIRD re-record (targeted replay ONLY; current committed bodies: D3-era, full-file sha1 89a6d79d…/f884fae6…). Alternative ruling: park permanently (leave example aspirational). Ceiling: example + goldens ×2.
+- **F3 candy-buffer `Buffer.php:120` wcwidth TODO**: "actual wide-char width from wcwidth if needed for CJK". Production primitive exists: `candy-core/src/Util/Width.php` (UAX isWide table, ANSI-aware; v5-D4 wired Sunburst to it). ⚠ INTAKE-GATING: dependency DIRECTION — candy-core likely REQUIRES candy-buffer; buffer→core import = CYCLE. Verify both composer.json files live. Options: extract/share a width provider, callback-injection, widen TODO with honest pointer, or VOID-PARK as architecturally blocked. Decide via measurement + ruling before any build.
+- **F4 `MARKER_BRAILLE` vestige** (`sugar-dash/src/Plot/Plot.php:30`): B12 deleted MARKER_DOT + `$marker` prop + `withMarker` — MARKER_BRAILLE likely has ZERO readers now, kept alive only by `PlotTest::testMarkerConstants` (~:111). Verify census live. GR-12 binds WITHIN a step; a DELETE-or-WIRE ruling authorizes removal in F4's own step (delete = const + its assert-line; declare the test edit). Alternative: wire into mode-selection (unlikely justifiable — MODE_* consts are the live concept). Ceiling: Plot.php + PlotTest.php.
+
+## Phase 0 — INTAKE (before ANY build spawn)
+1. Re-derive all four premises live (F1 current clip semantics + D1 shape; F2 current example/goldens state incl. D2 setSize-assign interaction; F3 dependency graph probe incl. candy-buffer's OWN consumers' width expectations; F4 full-read census). False/stale → VOIDED-PARK in the plan with evidence.
+2. Create `chart_v6_plan.md` (repo root): steps **F1..F4** in v2-contract format (Why / Design / Write-set ceiling with SYMBOLS / Verify with expected test-delta band + byte-identity demands / declared-output-change flags) + `## F-board` + `## Rulings` (PENDING placeholders) + `## Lanes` + `## Parked / VOIDED`. Committers fold (v5 folded chart_v5_plan.md at first commit — same pattern; commit it as `??` via explicit add).
+3. Lanes (verify disjointness in intake): all FOUR are sugar-dash-adjacent but file-disjoint EXCEPT F1 vs F4? (F1=Chart.php+ChartTest; F4=Plot.php+PlotTest; F2=example+goldens; F3=candy-buffer+composer files). Max 2 concurrent; commit serialization as always; F2 goldens touch gaugeCircle ×2 — if F2 runs while F1/F4 gates, sibling-attribution rows apply (precedent B7/B10b/D1).
+4. RULINGS BUNDLE — ONE numbered question set to the human BEFORE spawning (paste answers into `## Rulings`):
+   - F1: full-column-parity fix (design per intake findings) vs status-quo+doc vs park?
+   - F2: example→0.8 with 3rd golden re-record vs park-forever?
+   - F3: which of the four options (measure first; if cycle-hard, recommend VOIDED-PARK-with-pointer)?
+   - F4: DELETE (const + test assert-line) vs WIRE vs leave?
+   - Any bug-class default-output changes needing pre-approval (F1 column-parity WILL change re-render delta streams — diff-internal, full-frame stdout/goldens must stay byte-frozen: sha-gate like C4/D1).
+5. Append `intake` worklog row + save this prompt to `chart_v6_prompt.md` (fold into first F-commit).
+
+## Pre-flight (R13 — after intake, before lanes): live `git ls-remote origin master` vs HEAD (origin MOVED last round — a foreign lane synced; re-measure, never reuse); fresh baselines BOTH-touched-libs + candy-core if F3 lands (charts expect 570/1404/0Sk rc0; dash expect 5940/9709/1Sk/0W rc0; core 849/7586/27Sk/0W — candy-core suites MUST run piped `| tee` (stdout-fseek test scrambles redirected files); caliber hook: attempt-refresh-record-truth-commit-anyway, 429-flaky); record `baseline` row.
+
+## Protocol per step — chart_prompt.md v3 machinery, UNCHANGED (build=fresh re-derive-first coder with 7-part report; review=fresh read-only ≤8-call verdict-FIRST `CHART_REVIEW: CLEAN|FINDINGS (n)` on pre-exported /tmp triplets, blank≠clean, never log verdict before artifact; ≤5 cycles; fixer confirms-repro-first; orchestrator-gate rc-judged full suites with sibling attribution; sugarcrush-committer ONE AT A TIME, lane-scoped named staging, fold-forward, board-tick; ledger append-only). GOLDEN RULES standing: targeted reflection replay ONLY for dash goldens (phpunit --regenerate broken 10.5.64; blanket generate-goldens FORBIDDEN); house SGR regex /\x1b\[[0-9;]*m/; assertSame on raw strings is NUMERIC-LOOSE — pin runes via array-wrapper (assertSameRune precedent); census-125 is charts-ONLY; Q5 byte-identity discipline: ASCII/default-path sha-freeze pins PRE-captured before edits.
+
+## Standing tail — paste into EVERY brief: never global pkill; no git checkout/reset/stash-apply/clean while a lane in flight; absence-censuses via /usr/bin/grep only; **verify tree before trusting ANY record** — a prior round's compression summary once FABRICATED commits (sha nonexistent in odb; caught by committer STEP-0 stop): any summary-claimed sha needs `git cat-file -t` before reuse; committer STEP-0 anomalies get read-only forensics FIRST; only designated amendment agents edit plan/prompt files; REMOVAL IS NOT AN OUTCOME within a step except under a DELETE ruling; never composer; report artifacts under /tmp; NEVER return blank reports (split long tasks ≤~15 calls — 13 infra-blanks across prior rounds; committers may be terse-but-landed: verify tree, never assume death). FOREIGN LANES ACTIVE in this checkout (candy-core Tty/DescriptorSink, candy-vt, candy-mosaic, candy-pty, candy-shine, README churn, .qwen): their dirty paths are NEVER-stage, never-gate, never-findings.
+
+## Completion criteria
+Each of F1..F4: committed (loop CLEAN), or explicitly PARKED/VOIDED in chart_v6_plan.md with measurement. All touched suites green at final HEAD; F-board fully ticked; zero golden drift outside declared steps (gaugeCircle ×2 only under F2 ruling); tree clean after close-out fold (chart_prompt.md Resume-state gets v6 COMPLETE bullet, anchor-asserted); 3-line close report (shas, floors, dispositioned).
+
+## Resume state
+- 2026-09-03T22:XXZ: v6 PROMPT ISSUED. HEAD `12f956ada` (v5 close-out; origin/master = `98ccf635d` after foreign sync — v1..v5 all on origin, close-out itself unpushed, NEVER-push standing). Zero v6 work started.
+- Next: Phase 0 intake (re-derive F1..F4 premises → chart_v6_plan.md + F-board → RULINGS BUNDLE to human — await answers) → R13 pre-flight → spawns per lanes.
+- Carry-over facts: floors charts@c8b40f667 570/1404/0Sk · dash@6dbe0343c 5940/9709/1Sk/0W · core 849/7586/27Sk (piped tee) — REMEASURE fresh; GaugeCircle now 10-param ctor (aspect/smoothRim appended, 9-positional test safety rule), goldens D3-era bodies; Bubble Set-3 names ROUNDED_BOX_GLYPHS/glyphAtOffset/drawShapeCluster; Sunburst uses Core\Util\Width with ASCII sha pins A 8e8a03fc B bca109d8 C e304f4d9; Chart.php D1 $diffHeight structural; ledger hygiene: quoted-prose 'table not formatted' rows ~146/147 STAY (renderer-injection artifact, never lands standalone); infra-blanks are EXPECTED (~1/round-epoch) — retry rows logged, counted separately.
+
+## Resume-state corrections (v6 intake @12f956ada)
+- origin/master NOW = 12f956ada = HEAD: EVERYTHING is pushed/synced (foreign lane). NEVER-push standing RETAINED (we simply never run push). v5-closeout absorbed: porcelain was EMPTY at intake.
+- Floors above are HOURS old — re-measure at R13 pre-flight before any gate citation.
