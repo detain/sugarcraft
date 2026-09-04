@@ -7,10 +7,14 @@ namespace SugarCraft\Crush\Context;
 /**
  * One ordered layer of the assembled system prompt.
  *
- * Mirrors the `PromptSection` seam in prompt_expand.md §9.4 and §10 seams 1
- * and 2. Before this interface, `Runtime::buildSystemPrompt()` concatenated its
- * layers with hand-placed separators; each layer knew its own shape only at
- * the concatenation site. A section carries that knowledge with itself: the
+ * DESIGN SOURCE: prompt_expand.md §9.4 and §10 seams 1 and 2, which specify
+ * the PromptSection seam. Like {@see Stability}, this is a SugarCraft
+ * architecture type, not a port — charmbracelet/crush has no PromptSection
+ * symbol to mirror, so the repo's "Mirrors charmbracelet/<repo>.<Method>"
+ * convention does not apply. Before this interface,
+ * `Runtime::buildSystemPrompt()` concatenated its layers with hand-placed
+ * separators; each layer knew its own shape only at the concatenation site. A
+ * section carries that knowledge with itself: the
  * fence it renders inside, how volatile it is, the byte budget it is supposed
  * to fit, and the exact bytes it contributes.
  *

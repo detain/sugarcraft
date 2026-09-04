@@ -7,11 +7,16 @@ namespace SugarCraft\Crush\Context;
 /**
  * How often a {@see PromptSection}'s rendered bytes change over a session.
  *
- * Mirrors charmbracelet/crush's prompt-layer stability tiers (prompt_expand.md
- * §9.4, §10 seam 2). The three classes are the whole alphabet the compaction
- * and caching steps downstream reason over: a section that is byte-stable for
- * the life of the process, one that is stable for the life of a session
- * snapshot, and one that may differ on every turn.
+ * DESIGN SOURCE: prompt_expand.md §9.4 and §10 seam 2, which sketch this enum
+ * beside the PromptSection interface as the classification the memoized
+ * snapshots generalise into. It is a SugarCraft architecture type, not a port
+ * — charmbracelet/crush has no Stability symbol to mirror, so the repo's
+ * "Mirrors charmbracelet/<repo>.<Method>" convention does not apply; the
+ * honest lineage is that this names and generalises crush's prompt-layer idea
+ * of per-layer volatility into a closed alphabet. The three cases are the
+ * whole alphabet the compaction and caching steps downstream reason over: a
+ * section that is byte-stable for the life of the process, one that is stable
+ * for the life of a session snapshot, and one that may differ on every turn.
  *
  * WHY AN ENUM AND NOT A BOOL OR AN INT. A two-valued "stable or not" cannot
  * tell the per-Runtime memoized snapshots apart from the volatile git block:

@@ -125,6 +125,27 @@ final class PromptSectionTest extends TestCase
         self::assertSame(0, substr_count($assembled, "\n\n\n\n"));
     }
 
+    public function testTheProductionSkillGapOfFourNewlinesPassesThroughTheAssemblerUndoubled(): void
+    {
+        $base = $this->section('', Stability::Static, 'HEAD');
+        // Production reality, not the two-newline simplification the test
+        // above uses: Runtime bakes FOUR leading newlines into an enabled
+        // skill section — it prepends "\n\n" to a systemPromptContribution()
+        // that already opens with "\n\n", the bytes the golden froze at P2.S2.
+        // The assembler must pass that body through byte-for-byte.
+        $skill = $this->section('', Stability::PerTurn, "\n\n\n\n## Skill: demo\n\nbody");
+
+        $assembled = Runtime::assemblePrompt([$base, $skill]);
+
+        // No FIFTH separator before a body that already opens "\n\n" — the
+        // golden's four-newline gap survives the assembly. A naive
+        // implode("\n\n", ...) would mint six newlines here and redden both
+        // assertions.
+        self::assertSame("HEAD\n\n\n\n## Skill: demo\n\nbody", $assembled);
+        // Exactly one run of four newlines: the skill gap, no more, no less.
+        self::assertSame(1, substr_count($assembled, "\n\n\n\n"));
+    }
+
     public function testAnEmptySectionContributesNothingNotAnEmptyFenceOrADanglingSeparator(): void
     {
         $base = $this->section('', Stability::Static, 'HEAD');
