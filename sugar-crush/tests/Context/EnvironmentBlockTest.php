@@ -1505,7 +1505,24 @@ final class EnvironmentBlockTest extends TestCase
         $plain = (new EnvironmentBlock('/home/sites/sugarcraft', 'model'))->render();
 
         $this->assertStringContainsString('Working directory: /home/sites/sugarcraft', $plain);
-        $this->assertStringNotContainsString('&lt;', $plain);
+
+        // P5.S3 fix-2 sibling audit: the residue guard is scoped to the
+        // displayed-path LINE, not the whole block. This render carries the
+        // real repository's own `git log --oneline -5` window, and a commit
+        // subject naming a fence tag arrives defanged BY DESIGN — a
+        // whole-block scan is history-dependent and reddens the day such a
+        // subject enters that window (P5.S3's own subjects do, on master,
+        // once merged). The transparency promise this control guards is the
+        // claim right above it: an ordinary path renders byte-identical.
+        $cwdAt = strpos($plain, 'Working directory: ');
+        $this->assertIsInt($cwdAt, 'the block must display a working directory');
+        $cwdLineEnd = strpos($plain, "\n", $cwdAt);
+        $this->assertIsInt($cwdLineEnd, 'the working-directory line must terminate');
+        $this->assertStringNotContainsString(
+            '&lt;',
+            substr($plain, $cwdAt, $cwdLineEnd - $cwdAt),
+            'an ordinary path may not show escape residue on its own line',
+        );
     }
 
     /**

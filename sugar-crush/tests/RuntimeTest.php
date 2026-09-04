@@ -1620,7 +1620,31 @@ DOC;
         $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
 
         $this->assertStringContainsString($doc, $result, 'clean markdown must splice verbatim through the escape');
-        $this->assertStringNotContainsString('&lt;', $result);
+
+        // P5.S3 fix-2 (orchestrator gate V8): the residue guard is scoped to
+        // the spliced instruction-document REGION, not the whole prompt. The
+        // assembled prompt legitimately carries escape residue elsewhere — its
+        // volatile env block ends with the repository's own `git log --oneline
+        // -5` window, and a commit subject naming a fence tag is defanged on
+        // purpose (this branch's history does: the tag-bearing subjects reach
+        // the block as &lt;-prefixed text). A whole-string scan is therefore
+        // history-dependent — red in any worktree whose recent commits mention
+        // a fence tag, master included once they merge. The escape is right;
+        // only the document's own fence can be held residue-free. Presence of
+        // the enclosing pair is asserted first so an absent region fails loud
+        // instead of vacuously scanning an empty string.
+        $openTag = '<project-instructions>';
+        $closeTag = '</project-instructions>';
+        $openAt = strpos($result, $openTag);
+        $this->assertIsInt($openAt, 'the clean document must land inside a project-instructions fence');
+        $closeAt = strpos($result, $closeTag, $openAt);
+        $this->assertIsInt($closeAt, 'the fence opened for the document must terminate after it');
+        $region = substr($result, $openAt + \strlen($openTag), $closeAt - $openAt - \strlen($openTag));
+        $this->assertStringNotContainsString(
+            '&lt;',
+            $region,
+            'a tag-free document may not show escape residue inside its own fence',
+        );
     }
 
     public function testBuildSystemPromptIncludesRootClaudeMdWithExpandedImports(): void
