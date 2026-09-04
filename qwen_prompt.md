@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next plan — START/RESUME PROMPT
-Current: Q1/pre-build @ 2552d2090 (Q0 committed; NEXT_START_SHA in worklog — Q1 runs serial first, then §14 baseline, then Q2)
+Current: Q1/building @ 3e7ad767a3173480602e1604244f26cf8e6c54a5 (Q0+bookkeeping committed; anchor survey done 2026-09-04 — Q1 spec AS-IS, live anchors in worklog ANCHOR SNAPSHOT; foreign-lane re-scope needed ONLY at Q6; after Q1 commit: §14 baseline → Q2)
 > This banner line is REWRITTEN (never appended to) at every step transition, by the committer/bookkeeping task.
 
 Paste this into a fresh orchestrator session to begin or continue execution.

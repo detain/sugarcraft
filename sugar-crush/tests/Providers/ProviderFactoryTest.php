@@ -787,7 +787,7 @@ final class ProviderFactoryTest extends TestCase
     {
         $config = $this->factory->defaultConfig('dev-sglang');
 
-        $this->assertSame('deepseek-ai/DeepSeek-V4-Flash-0731', $config['model']);
+        $this->assertSame('Qwen/Qwen3.8-Flash-Next', $config['model']);
         // The DISCRIMINATOR. `model` alone cannot prove this came from the
         // project file, because the built-in 'sglang' schema now names the same
         // id (and named the same MiniMax id before, so this assertion never
