@@ -415,8 +415,12 @@ final class GaugeCircleTest extends TestCase
         // aspect 2.0 (visually round). The byte-identity gate lives on
         // withAspect(1.0) instead — geometry at 1.0 equals the D2-shipped
         // bytes exactly (division by 1.0 is bit-exact IEEE). Shas re-derived
-        // live 2026-09-03 against the HEAD (D2) class; the last two are the
-        // golden bodies themselves (example chain == replay harness output).
+        // live 2026-09-03 against the HEAD (D2) class. The last two mirror
+        // the example chain at the legacy aspect-1.0 escape; re-derived
+        // 2026-09-04 when v6 F2 fixed the example (new(80) clamped to a
+        // full ring — now new(0.8)). The goldens themselves render at
+        // DEFAULT aspect 2.0 — GoldenSnapshotTest compares those live;
+        // these pins gate the escape geometry, not the golden bodies.
         $escape = GaugeCircle::new(0.8)->withAspect(1.0);
 
         $this->assertSame('2186ff670a87f0500b70148b0356b504108f1d7a', sha1($escape->render()));
@@ -430,13 +434,13 @@ final class GaugeCircleTest extends TestCase
         $uncolored = (new GaugeCircle(0.3, 6, false, false, false))->withAspect(1.0);
         $this->assertSame('c369548d338735f2d29c08781706f453dfb9d9be', sha1($uncolored->render()));
 
-        $example80 = GaugeCircle::new(80)->setSize(80, 24)->withAspect(1.0);
-        $this->assertSame('4b780628c8e5ecfa66c89f0fc8b9c43077d981c3', sha1($example80->render()));
-        $this->assertSame(2158, strlen($example80->render()));
+        $example80 = GaugeCircle::new(0.8)->setSize(80, 24)->withAspect(1.0);
+        $this->assertSame('ac41b4c45040ab789d2fcf0451567c5f9732ae65', sha1($example80->render()));
+        $this->assertSame(2157, strlen($example80->render()));
 
-        $example120 = GaugeCircle::new(80)->setSize(120, 40)->withAspect(1.0);
-        $this->assertSame('dfa434e2099f830b7a688521ff190544d7b54e93', sha1($example120->render()));
-        $this->assertSame(4318, strlen($example120->render()));
+        $example120 = GaugeCircle::new(0.8)->setSize(120, 40)->withAspect(1.0);
+        $this->assertSame('8996386904544f5559bfa93b6dee187e1ebea4c0', sha1($example120->render()));
+        $this->assertSame(4317, strlen($example120->render()));
     }
 
     public function testAspectDefaultsToTwoRoundDial(): void
