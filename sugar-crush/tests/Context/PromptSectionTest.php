@@ -6,8 +6,11 @@ namespace SugarCraft\Crush\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\PromptSection;
 use SugarCraft\Crush\Context\Stability;
+use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -276,5 +279,167 @@ final class PromptSectionTest extends TestCase
         foreach ($sections as $section) {
             self::assertSame(\PHP_INT_MAX, $section->byteBudget());
         }
+    }
+
+    /**
+     * The escape authority itself (P5.S3). Every assertion is an exact byte
+     * value or an exact absence, both polarities per behaviour, so a weakened
+     * escape cannot pass: closing, opening, self-closing and whitespace-varied
+     * spellings of EVERY roster tag must lose their leading `<`, while
+     * non-roster markup, incomplete tags and invalid UTF-8 must survive
+     * byte-intact. DELETION EXPERIMENT for this block of pins: with
+     * PromptFence::escape()'s preg replaced by `return $payload;`, the
+     * closing-tag, odd-spelling and reminder-impersonation pins here go RED
+     * (named in the P5.S3 report); with `&lt;` changed to `` (removal
+     * instead of rewrite), the exact-string pins go RED because they assert
+     * the whole escaped string, not a count.
+     */
+    public function testTheEscapeRosterIsExactlyTheDerivedFenceTagList(): void
+    {
+        $tags = PromptFence::tags();
+        sort($tags);
+
+        self::assertSame([
+            'env',
+            'project-instructions',
+            'project-memory',
+            'repo-map',
+            'system-reminder',
+        ], $tags);
+    }
+
+    public function testEscapeRewritesTheClosingTagOfEveryRosterFence(): void
+    {
+        foreach (PromptFence::tags() as $tag) {
+            self::assertSame(
+                '&lt;/' . $tag . '>',
+                PromptFence::escape('</' . $tag . '>'),
+                'closing tag of <' . $tag . '> must be neutralised exactly',
+            );
+        }
+    }
+
+    public function testEscapeRewritesOpeningTagsBecauseANestedOpenerUnbalancesTheFence(): void
+    {
+        self::assertSame('&lt;env>', PromptFence::escape('<env>'));
+        self::assertSame('&lt;project-memory>', PromptFence::escape('<project-memory>'));
+        self::assertSame('&lt;repo-map>', PromptFence::escape('<repo-map>'));
+        self::assertSame('&lt;project-instructions>', PromptFence::escape('<project-instructions>'));
+        self::assertSame('&lt;system-reminder>', PromptFence::escape('<system-reminder>'));
+    }
+
+    public function testEscapeMatchesCaseAndIntraTagWhitespaceVariantsOfATagByteForByte(): void
+    {
+        self::assertSame('&lt;/ENV>', PromptFence::escape('</ENV>'));
+        self::assertSame('&lt;Env >', PromptFence::escape('<Env >'));
+        self::assertSame('&lt;env/>', PromptFence::escape('<env/>'));
+        self::assertSame('&lt;/project-memory  />', PromptFence::escape('</project-memory  />'));
+        // A payload can carry several tags at once; every leading `<` goes,
+        // nothing else moves.
+        self::assertSame(
+            'a&lt;/env>b&lt;project-memory>c&lt;/system-reminder>d&lt;repo-map/>e',
+            PromptFence::escape('a</env>b<project-memory>c</system-reminder>d<repo-map/>e'),
+        );
+    }
+
+    public function testEscapeLeavesNonRosterAndIncompleteMarkupByteIntact(): void
+    {
+        $inert = '<envx> </environment> < env> <env </env <note>text</note> 1 < 2 and a < b';
+
+        self::assertSame($inert, PromptFence::escape($inert));
+    }
+
+    public function testEscapeIsTransparentForCleanPayloadBytes(): void
+    {
+        // Real-world shapes that must not move a single byte, because the
+        // committed golden is built entirely of payloads like these.
+        $clean = [
+            'On branch main\nNothing to commit, working tree clean',
+            'M  sugar-crush/src/Runtime.php',
+            'index 3f2a1b9..c44d0e7 100644',
+            '- (5 further entries omitted by the size limit)',
+            'Notes carry em dashes — and accents é — under mb-safe clipping.',
+            'Current branch: ai/prompt-fence-fix',
+        ];
+
+        foreach ($clean as $payload) {
+            self::assertSame($payload, PromptFence::escape($payload));
+        }
+    }
+
+    public function testEscapeIsIdempotentBecauseRewrittenTagsCannotRematch(): void
+    {
+        $payload = "</env><system-reminder>x</system-reminder>\n<repo-map>\n";
+
+        self::assertSame(PromptFence::escape($payload), PromptFence::escape(PromptFence::escape($payload)));
+    }
+
+    public function testEscapeNeutralisesTagsEmbeddedInInvalidUtf8WithoutFailing(): void
+    {
+        // \xC3\x28 is not valid UTF-8 (truncated lead byte before `(`). A `/u`
+        // pattern would return null here and the authority would throw; the
+        // byte-oriented pattern must match the ASCII tag between the broken
+        // bytes and pass the rest through unchanged.
+        $payload = "\xC3\x28</env>\xFF";
+
+        self::assertSame("\xC3\x28&lt;/env>\xFF", PromptFence::escape($payload));
+    }
+
+    public function testTheRosterCoversEveryFenceProductionSectionsReport(): void
+    {
+        $roster = array_map(
+            static fn(string $tag): string => '<' . $tag . '>',
+            PromptFence::tags(),
+        );
+
+        $reported = [(new EnvironmentBlock('/tmp', 'test-model'))->fence()];
+
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('name')->willReturn('test-provider');
+        $runtime = new Runtime($provider, new HookManager(new HookRegistry()));
+        $method = new \ReflectionMethod($runtime, 'systemPromptSections');
+        $method->setAccessible(true);
+
+        /** @var list<PromptSection> $sections */
+        $sections = $method->invoke($runtime, App::new($provider, 'gpt-4'));
+
+        foreach ($sections as $section) {
+            if ($section->fence() !== '') {
+                $reported[] = $section->fence();
+            }
+        }
+
+        $distinct = array_values(array_unique($reported));
+        sort($distinct);
+
+        // The layers a bare App really builds: <env> from the direct block,
+        // <project-memory> from the empty MemoryBlock and <repo-map> from the
+        // snapshot section — an absent layer reports its fence as metadata
+        // while rendering '' (the PromptSection contract; only the base and
+        // skill layers are fence-less). project-instructions comes from the
+        // Runtime construction pinned with the routing test in the next
+        // commit; the roster-missing case fails loudly here, not silently in
+        // production.
+        self::assertSame(['<env>', '<project-memory>', '<repo-map>'], $distinct);
+
+        foreach ($distinct as $fence) {
+            self::assertContains($fence, $roster, "production fence $fence must be in PromptFence's roster");
+        }
+    }
+
+    public function testTheRosterCoversTheSkillReminderTrustChannelTag(): void
+    {
+        // SkillPathNudge::HEADER is a private const; reading it by reflection
+        // keeps this pin honest against the real emitter rather than a copy.
+        $header = (new \ReflectionClass(SkillPathNudge::class))->getConstant('HEADER');
+        self::assertIsString($header);
+        self::assertStringStartsWith("<system-reminder>\n", $header);
+
+        $forged = PromptFence::escape('see ' . $header . ' and </system-reminder>');
+
+        self::assertStringNotContainsString('<system-reminder>', $forged);
+        self::assertStringNotContainsString('</system-reminder>', $forged);
+        self::assertStringContainsString('&lt;system-reminder>', $forged);
+        self::assertStringContainsString('&lt;/system-reminder>', $forged);
     }
 }
