@@ -253,6 +253,68 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P5.S2 — three memoized snapshots migrate onto PromptSection · 2026-09-04 · 5c8505501
+
+**Status** done (step 32 of 63; Phase 5: 2 of 6)
+**Worktree** /home/sites/prompt-step-P5.S2 (removed after merge)
+**Base** 4493db1e2 (bookkeeping tip over 8e910daad; sugar-crush tree == 8e910daad)
+
+**Goal (restated in one sentence)**
+environmentSnapshot()/memorySnapshot()/repoMapSnapshot() must flow as PromptSection entries, wrap-not-copy, with the system golden byte-identical as the done-when.
+
+**What changed**
+- `sugar-crush/src/Context/EnvironmentBlock.php` (+58/−1): implements PromptSection; the single minus-line is the class header re-issued with the implements clause; adds fence `<env>`, Stability::PerTurn, byteBudget PHP_INT_MAX + WHY docblocks; render() region md5-identical to base (55ffda…).
+- `sugar-crush/src/Context/MemoryBlock.php` (+56/−1): same shape; `<project-memory>`; PerSession (region md5 ba5c24…).
+- `sugar-crush/src/Context/RepoMapBlock.php` (+56/−1): same shape; `<repo-map>`; PerSession (region md5 b915f2…).
+- `sugar-crush/src/Runtime.php` (net +29; all 23 minus-lines = 16 docblock lines + the two `!== ''` list guards + the env inline wrapper + one stale sentence): systemPromptSections() now appends the three MEMOIZED objects directly (:2457/:2484/:2525); the assembler's render()==='' skip (:2608-2610, `continue` BEFORE the separator match) is the sole identical suppression; the P5.S1 stale "env render is buildSystemPrompt's last statement" docblock was folded in-lane at :770-790 per the brief addendum.
+- `sugar-crush/tests/RuntimeTest.php` (+174/−0): 6 new pins — three list-level assertSame identity pins (memoized objects flow unrewrapped across two builds), two block-level render()==='' suppression pins, one write-signal-polarity pair.
+
+**Deletion experiments** (lead, restored after each; review-2 RE-RAN mutations independently in its own sandbox):
+E1 gut env-section render → 6 red incl. golden (BaseSystemPromptTest:646), identity pins correctly green. E2 `??=`→`=` at :2791 → exactly 10 red (7 pre-existing + 3 new) — review-2 reproduced the enumeration verbatim. E3 env-before-repoMap → 10 red across 4 files. M3 byte-identical per-call re-wrap ×3 → ONLY the 3 new list-identity pins red (catches precisely constraint-3's blindness). (c) assembler ''-skip neutered → 2 P5.S1 PromptSectionTest unit pins red; golden + 8 legacy fence-absence suppression pins GREEN (see Follow-ups).
+
+**MEASURED** (orchestrator gate agent, at de9e8aceb; box-quiet probe 0):
+```
+$ git diff 4493db1e2..HEAD --stat                # 5 files changed, 373 insertions(+), 26 deletions(-) — exactly the declared five
+$ git diff --stat 4493db1e2..HEAD -- sugar-crush/tests/fixtures/   # EMPTY
+$ md5sum …/golden-system-prompt.txt …/golden-agent-prompt.txt
+32ea749d84938811ac9331419cae7380  ef0326dd38535aaa2f1d715919bff26e   (both == base; byte-identical acceptance met)
+$ git log --format='%an <%ae>' 4493db1e2..HEAD | sort | uniq -c
+      2 Joe Huss <detain@interserver.net>
+$ for sha in c8da5ab71 de9e8aceb; do git cat-file commit $sha | /usr/bin/grep -c '\[EMAIL\]'; done
+0  0
+$ git diff 4493db1e2..HEAD -- sugar-crush/tests/RuntimeTest.php | /usr/bin/grep '^-' | /usr/bin/grep -c assert
+0
+$ …/bin/phpunit …/PromptSectionTest.php …/RuntimeTest.php   → OK (151 tests, 563 assertions); RuntimeTest alone OK (139, 530) = +6/+24 exact
+$ …/bin/phpunit …/TreeWideGuardRosterTest.php               → OK (17, 1103); derivation roster 67 / candidates 83 / walker 181 / testFiles 441 / unaccounted 0
+$ nine HAND_MAINTAINED_CENSUS_SET files by path             → OK (176 tests, 31593 assertions)  (+34 derived-prose; tests unmoved)
+$ php tools/check-path-repos.php --no-lib-path-repos        → EXIT=0
+```
+
+**Suite result** (official gate run #2 at branch tip de9e8aceb == merge tree)
+```
+$ cd /home/sites/prompt-step-P5.S2 && php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
+Tests: 10665, Assertions: 165289, Errors: 0, Failures: 0, Skipped: 1   (serial, probe 0, prediction file written BEFORE and HIT: 10665 exact, 165288±4)
+```
+MMG-201 clean arm; 165286 at the MMG-198 arm. Baseline 10351/160648 (P0.S1); vs P5.S1 close (10659/165230): +6 tests / +59 assertions, fully attributed to the 6 new RuntimeTest pins. Run #1 (PTY launch) showed the 5 KNOWN environment reds (3× Cli stdin-pin guards whose fd-0 premise bootstrap.php:324-326 skips on a TTY + the disclosed CompactModelSummary/MouseModalGuard pair) — base-controls stand, not chased. POST-MERGE BELT SKIPPED BY ARGUMENT: merge-base == master tip 4493db1e2 and `git diff 5c8505501 de9e8aceb -- sugar-crush/` EMPTY ⇒ the branch figure describes master by construction (method-change 4).
+
+**Review loop**
+- Lead cycle 1 — reviewer attempts 1–2 DIED (blank/timeout; never counted as results); attempt 3 spawned TWO time-boxed read-only reviewers → A: CLEAN, B: CLEAN. Two self-raised questions closed by measurement (F-1 makeTempRepo():7889 bare empty mkdir — repoMap prose true; F-2 E2 re-run = 10 red). Findings file written FIRST: prompt-scratch/P5.S2/lead/findings-cycle-1.md. No fix cycles.
+- Orchestrator independent review-2 — task(coder) under READ-ONLY rules (subagent_type=reviewer is rejected by task() and the delegate reviewer DIED emitting a raw tool-call echo — routing lesson recorded): sandbox cp -al under prompt-scratch/P5.S2/review-2/, four executed reverts, worktree md5-verified untouched → **CLEAN — 0 major / 1 minor (pre-existing, disclosed) / 1 nit.** Minor: the 8 legacy suppression pins are assertStringNotContainsString-style and survive a neutered ''-skip; byte-exact OFF-config coverage rests on the 2 P5.S1 assembler unit-pins + trace. NIT: none actionable.
+Total cycles: 1 (lead) + 1 (independent), both clean.
+
+**RECOVERED:** lead task returned prematurely twice, ending its turn expecting a pty_exited wake-up that never reaches a finalized task session; ladder rungs: resume ×2 (2nd re-emitted the final report once the run had genuinely completed on disk) — accepted ONLY after orchestrator-side disk verification (14 checks, all PASS) re-measured every claim. 1 reviewer delegate died (status "cancelled", later notified with a garbage tool-echo). NEW PROCESS LAWS born this step: (i) leads must wait on their own background suite runs IN-SESSION or run them synchronously — never end a turn on a notification promise; (ii) `.ocx/receipt.jsonc` (harness install telemetry, two installedAt stamps) dirties the main tree — `git checkout --` it before porcelain gates, never commit it; (iii) identity byte-scan targets the BRACKETED token `\[EMAIL\]` — unbracketed prose in a commit body self-flags (caught X6 here; adjudicated false positive, message not amended).
+
+**Invariants touched**
+Fence spellings (§17): the four fences restated as section metadata, zero byte change (golden+fixtures proof). env-LAST: held — E3 proves list order load-bearing, order pin green. Memoisation assertSame-across-builds: held, newly pinned at list level. No new src/ file — census test counts unmoved; census assertions +34 via derived prose.
+
+**Surprises / things the plan got wrong**
+Constraint 6 ("wire the real budgets") has NO lane-legal landing: the existing production roster pin PromptSectionTest:276-278 forces byteBudget PHP_INT_MAX for every section in the list (verified verbatim by two independent readers); real caps live inside each render() (25,600 derived / 4096 / 8192-per-section). Disclosed, not forced. Also: the P5.S3 step-text declares only MemoryBlock+InstructionFileLoader fences — the TWO carried security vectors (diff-body `</env>` escape; raw branch-name interpolation) plus the broken :288 ref-cap argument (255 bytes is per path COMPONENT; 359-byte multi-segment refs reach the block whole) all live in EnvironmentBlock.php, which the S3 brief must ADD as a documented expansion.
+
+**Follow-ups created**
+- P5.S3 brief: expand file list to EnvironmentBlock.php + tests/Context/EnvironmentBlockTest.php; fold BOTH security vectors + ref-cap into ONE diff; goldens LEGITIMATELY move (re-baseline md5, disclose in entry).
+- Named unit pin for the assembler ''-skip in production off-configs (review-2 minor; honored from lead cycle-1 deferral).
+- Carried: Agents/Agent.php:543-546 stale env-last prose (out-of-lane); PromptSection.php:37-38 fulfilled tense; PromptSectionTest.php:40 cosmetic 122-char line.
+
 ### P5.S1 — PromptSection interface + ordered assembler behind buildSystemPrompt · 2026-09-04 · 8e910daad
 
 **Status: MERGED — step 31 of 63; Phase 5 opened.** §5 collision re-check CLEARED 2026-09-04 by the
