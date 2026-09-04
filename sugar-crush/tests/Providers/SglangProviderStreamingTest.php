@@ -495,4 +495,56 @@ final class SglangProviderStreamingTest extends TestCase
         $this->assertSame(28, $usage->outputTokens, 'fixture line 21 completion');
         $this->assertSame(25, $usage->reasoningTokens, 'fixture line 21 flat reasoning_tokens lands in Usage\'s reasoning bucket (§Q6 part 3, E-31)');
     }
+
+    /**
+     * §Q7 x §Q6 seam ordering. SYNTHETIC stream (spec qwen.md:207 records
+     * synthetic as the sanctioned shape for this leg - §13 cat.8 allows it
+     * here precisely because the point is the ASSEMBLY ORDER the provider
+     * imposes, which no single live capture of a clean turn can show: a
+     * `length` finish that also carries a usage frame and a flushable
+     * buffer is the truncation case, whose bytes a probe cannot deterministically
+     * reproduce).
+     *
+     * Pins the decision recorded in completeStream(): the §Q7 flush frame
+     * rides the SAME final-yield seam as the §Q6 terminal usage chunk, but
+     * BEFORE it, so finish-ordered events keep wire order (E-26:
+     * tool_calls -> finish -> usage) and the bill stays the stream's last
+     * event - the invariant §Q6's own yield docblock states.
+     */
+    public function testTruncatedStreamYieldsTheFlushedToolCallFrameBeforeTheTerminalUsageChunk(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $usageChunk = '{"choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
+        $sse = 'data: {"choices":[{"delta":{"content":"Sure"}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_ok","type":"function","function":{"name":"write_file","arguments":""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"a.php\",\"content\":\"ok\"}"}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{},"finish_reason":"length","matched_stop":null}]}' . "\n"
+            . 'data: ' . $usageChunk . "\n"
+            . "data: [DONE]\n";
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://api.example.com', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('write it')],
+        )));
+
+        $this->assertCount(6, $chunks, 'the four streamed deltas and the finish frame yield as always, THEN the flushed tool-call frame, THEN the terminal usage chunk - [DONE] inert');
+        $this->assertSame('Sure', $chunks[0]->content);
+        $this->assertNull($chunks[0]->toolCalls);
+        $callFrames = array_keys(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->toolCalls !== null));
+        $this->assertSame([4], $callFrames, 'exactly ONE tool-call frame - the flush - and it sits before the usage terminal at index 5');
+        $flush = $chunks[4];
+        $this->assertCount(1, $flush->toolCalls);
+        $this->assertSame('write_file', $flush->toolCalls[0]->name());
+        $this->assertSame(['path' => 'a.php', 'content' => 'ok'], $flush->toolCalls[0]->arguments());
+        $this->assertTrue($flush->truncated);
+        $this->assertSame(0, $flush->tokensUsed, 'the flush executes, it does not bill');
+        $usage = $chunks[5];
+        $this->assertSame('', $usage->content);
+        $this->assertSame(72, $usage->tokensUsed, 'the §Q6 usage terminal still closes the stream');
+        $this->assertFalse($usage->truncated, 'the flag belongs to the flush frame only');
+    }
 }

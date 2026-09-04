@@ -551,4 +551,217 @@ final class SglangProviderTruncationGuardTest extends TestCase
         $this->assertStringContainsString('TAIL_MARKER', $log);
         $this->assertStringNotContainsString($body, $log);
     }
+
+    // -------------------------------------------------------------------------
+    // §Q7 (qwen.md; E-32): the truncation flush - buffered tool-call
+    // fragments at a cut-off end are flushed best-effort, never silently
+    // lost. Qwen-family rows; the mechanism itself is family-agnostic (it
+    // reads only the OpenAI-shaped fragment buffer every family streams).
+    // -------------------------------------------------------------------------
+
+    /**
+     * One COMPLETE call and one PARTIAL call sit in the reassembly buffer
+     * when the stream ends on `length` (and on `abort` - same rule, second
+     * provider leg). Before §Q7 the whole buffer evaporated at
+     * resolveStreamedToolCalls()'s `tool_calls`-only gate: zero tool-call
+     * chunks, zero log lines - E-32's silent loss. Now the complete payload
+     * must execute with its exact decoded arguments, the incomplete one must
+     * NOT execute half-decoded, and the drop must name itself with the
+     * existing malformed-arguments machinery carrying the flush's "dropped"
+     * fate clause.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('truncatedStreamFinishReasons')]
+    public function testTruncatedStreamFlushesCompleteBufferedCallsAndDropsPartialOnes(string $finishReason): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $sse = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_ok","type":"function","function":{"name":"write_file","arguments":""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"a.php\""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":",\"content\":\"ok\"}"}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_cut","type":"function","function":{"name":"edit_file","arguments":""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"body\":\"unclosed"}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{},"finish_reason":"' . $finishReason . '","matched_stop":null}]}' . "\n"
+            . "data: [DONE]\n";
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://api.example.com', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('write it')],
+        )));
+
+        $withCalls = array_values(array_filter($chunks, static fn ($c) => $c->toolCalls !== null));
+        $this->assertCount(1, $withCalls, "finish_reason \"$finishReason\" must flush the buffer exactly once");
+        $calls = array_values($withCalls[0]->toolCalls);
+        $this->assertCount(1, $calls, 'only the call with complete JSON arguments survives the flush');
+        $this->assertSame(
+            ['write_file'],
+            array_map(static fn ($c) => $c->name(), $calls),
+            'the partial call is dropped, never emitted half-decoded',
+        );
+        $this->assertSame('call_ok', $calls[0]->id());
+        $this->assertSame(['path' => 'a.php', 'content' => 'ok'], $calls[0]->arguments());
+        $this->assertTrue($withCalls[0]->truncated, 'the flush frame says so');
+
+        $log = $this->capturedLog();
+        $this->assertStringContainsString('possible MiniMax XML-delimiter truncation', $log);
+        $this->assertStringContainsString('edit_file', $log, 'the dropped call names itself');
+        $this->assertStringContainsString('DROPPED, not executed', $log, 'the fate clause matches what §Q7 actually does');
+        $this->assertStringNotContainsString('write_file', $log, 'the emitted call warned about nothing');
+    }
+
+    /**
+     * §Q7(c) - `stop` is byte-unchanged everywhere, INCLUDING its silence:
+     * a clean stop end still leaves any (pathologically) buffered fragments
+     * unemitted and unwarned, exactly as they were before §Q7. This pin is
+     * deliberate, not oversight: qwen.md:204-209 mandates the stop arm stay
+     * as-is, so the one shape §Q7 does NOT rescue is pinned to stay lost.
+     */
+    public function testACleanStopEndWithBufferedFragmentsStillYieldsNothingUnchanged(): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $sse = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_x","type":"function","function":{"name":"list_dir","arguments":""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\": "}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{},"finish_reason":"stop","matched_stop":248046}]}' . "\n"
+            . "data: [DONE]\n";
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://api.example.com', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('list it')],
+        )));
+
+        $this->assertCount(0, array_filter($chunks, static fn ($c) => $c->toolCalls !== null));
+        $this->assertSame('', $this->capturedLog());
+    }
+
+    /**
+     * §Q7(b) batch half: parseResponse() now reads the finish_reason it used
+     * to ignore and records it as CompleteResponse::$truncated. Capture-only
+     * - every other field rides through untouched, so the legs also assert
+     * one ordinary field to prove it.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('batchFinishReasonFlagProvider')]
+    public function testBatchTruncatedFlagFollowsFinishReason(?string $finishReason, bool $expected): void
+    {
+        $choice = ['message' => ['content' => 'half a story']];
+        if ($finishReason !== null) {
+            $choice['finish_reason'] = $finishReason;
+        }
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], (string) json_encode([
+            'choices' => [$choice],
+            'usage' => ['total_tokens' => 5],
+        ])));
+        $provider = new SglangProvider('https://api.example.com', 'Qwen/Qwen3.8-Flash-Next', null, $httpClient);
+
+        $result = $provider->complete(new CompleteRequest(
+            model: 'Qwen/Qwen3.8-Flash-Next',
+            messages: [new UserMessage('tell it')],
+        ));
+
+        $this->assertSame($expected, $result->truncated);
+        $this->assertSame('half a story', $result->content, 'flagging truncation changes nothing beside it');
+    }
+
+    public static function truncatedStreamFinishReasons(): array
+    {
+        return [
+            'length (max_tokens cut)' => ['length'],
+            'abort (server aborted)' => ['abort'],
+        ];
+    }
+
+    public static function batchFinishReasonFlagProvider(): array
+    {
+        return [
+            'length' => ['length', true],
+            'abort' => ['abort', true],
+            'stop' => ['stop', false],
+            'tool_calls' => ['tool_calls', false],
+            'absent' => [null, false],
+        ];
+    }
+
+    /**
+     * §Q7(c1/F2a): an opened call whose argument delta NEVER arrived is not
+     * "malformed JSON" - there is no JSON to be malformed - so it drops with
+     * its own warning naming the tool, the empty payload, and the drop; it is
+     * never routed through malformedArgumentsWarning()'s shape-inference
+     * (stale json_last_error_msg + MiniMax-XML misread on an empty payload).
+     * Mixed with a complete call for the stronger survivor-set pin.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('truncatedStreamFinishReasons')]
+    public function testTruncatedStreamDropsNeverStreamedCallWithItsOwnWarning(string $finishReason): void
+    {
+        $model = 'Qwen/Qwen3.8-Flash-Next';
+        $sse = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_ok","type":"function","function":{"name":"write_file","arguments":""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"a.php\"}"}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_never","type":"function","function":{"name":"list_dir","arguments":""}}]}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{},"finish_reason":"' . $finishReason . '","matched_stop":null}]}' . "\n"
+            . "data: [DONE]\n";
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://api.example.com', $model, null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: $model,
+            messages: [new UserMessage('list and write')],
+        )));
+
+        $withCalls = array_values(array_filter($chunks, static fn ($c) => $c->toolCalls !== null));
+        $this->assertCount(1, $withCalls, "finish_reason \"$finishReason\" must flush the survivor set exactly once");
+        $calls = array_values($withCalls[0]->toolCalls);
+        $this->assertCount(1, $calls, 'the never-streamed call must not join the survivor set');
+        $this->assertSame(
+            ['write_file'],
+            array_map(static fn ($c) => $c->name(), $calls),
+            'list_dir dropped, never executed - no registry frame exists for it',
+        );
+        $this->assertSame(['path' => 'a.php'], $calls[0]->arguments());
+
+        $log = $this->capturedLog();
+        $this->assertStringContainsString('list_dir', $log, 'the dropped call names itself');
+        $this->assertStringContainsString('arguments never streamed (empty payload)', $log);
+        $this->assertStringContainsString('DROPPED, not executed', $log, 'the fate clause matches what the flush does');
+        $this->assertStringNotContainsString('(No error)', $log, 'a stale json_last_error_msg() must not leak into this warning');
+        $this->assertStringNotContainsString('MiniMax', $log, 'an empty payload matches no XML signature');
+        $this->assertStringNotContainsString('not valid JSON', $log, 'this drop is explicitly not a JSON failure');
+    }
+
+    /**
+     * §Q7(c1/F2b): the flush's pre-decoded-array arm. Reflection on
+     * flushTruncatedToolCalls() is the only way to load one: the streaming
+     * accumulator concatenates strings, so a server that pre-decodes
+     * `function.arguments` cannot produce that shape mid-stream. Kept
+     * VERBATIM, side by side with a clean JSON-string payload, with zero
+     * warnings - nothing ran off the end of either call.
+     */
+    public function testFlushKeepsPreDecodedArrayArgumentsVerbatimAndWarnsNothing(): void
+    {
+        $httpClient = $this->createMock(Client::class);
+        $provider = new SglangProvider('https://api.example.com', 'Qwen/Qwen3.8-Flash-Next', null, $httpClient);
+
+        $flush = new \ReflectionMethod($provider, 'flushTruncatedToolCalls');
+        $flush->setAccessible(true);
+
+        $buffer = [
+            0 => ['id' => 'call_pre', 'name' => 'search', 'arguments' => ['query' => 'sugar', 'limit' => 5]],
+            1 => ['id' => 'call_str', 'name' => 'read_file', 'arguments' => '{"path":"b.php"}'],
+        ];
+
+        $calls = $flush->invoke($provider, $buffer);
+
+        $this->assertNotNull($calls);
+        $this->assertCount(2, $calls, 'both complete payloads survive - pre-decoded and JSON string alike');
+        $this->assertSame(['query' => 'sugar', 'limit' => 5], $calls[0]->arguments(), 'pre-decoded args kept verbatim');
+        $this->assertSame(['path' => 'b.php'], $calls[1]->arguments());
+        $this->assertSame('', $this->capturedLog(), 'a complete pre-decoded payload gives nothing to warn about');
+    }
 }
