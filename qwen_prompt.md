@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next plan — START/RESUME PROMPT
-Current: Q7/reviewing @ 78e1da2d1 — builder shipped uncommitted (4 files, tool-call flush E-32 + DTO $truncated widening, census-proven safe; evidence green, builder report lost to truncation — artifacts authoritative). NEXT: verdict → committer → Q8 (error bodies; plan-bug :652/:723→:669/:741 in FOLLOW-UPS). NEVER push; commit via `git commit --only -F <msg> -- <paths>`; census </dev/null; foreign lanes active.
+Current: Q8/reviewing @ 4cad0ed12 — builder+finish shipped uncommitted (errorBodyMessage: clean error.message surfacing, chain-safe; gates 95/199 exact). NEXT: verdict → committer → Q9 (content artifacts trim, qwen.md:222-231; Q6 fixture text pin needs E-21-cited amendment — pre-flagged; committer runs FULL-suite milestone census </dev/null). NEVER push; commit via git commit --only -F <msg> -- <paths>; foreign lanes active.
 > This banner line is REWRITTEN (never appended to) at every step transition, by the committer/bookkeeping task.
 
 Paste this into a fresh orchestrator session to begin or continue execution.

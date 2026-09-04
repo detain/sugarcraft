@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\RequestException;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
@@ -45,6 +46,15 @@ final readonly class SglangProvider implements ProviderInterface
      * diagnosis (that is where the payload stops), so both ends are kept.
      */
     private const WARNING_EXCERPT_LIMIT = 240;
+
+    /**
+     * §Q8 (E-56): longest server-authored error text kept when it is lifted
+     * out of an error body for display. Measured SGLang bodies (E-40/E-10)
+     * are one short sentence, so this only exists to stop a pathological
+     * server that echoes a whole request into `message` from walling the
+     * Chat pane - the exact readability failure this extraction fixes.
+     */
+    private const ERROR_MESSAGE_DISPLAY_LIMIT = 2000;
 
     /**
      * §Q7 (qwen.md; E-32): the `finish_reason` values that mean "this
@@ -626,7 +636,18 @@ final readonly class SglangProvider implements ProviderInterface
 
             return $this->parseResponse($data);
         } catch (GuzzleException $e) {
-            throw new \RuntimeException('SGLANG request failed: ' . $e->getMessage(), 0, $e);
+            // §Q8 (qwen.md; E-56): surface the server's own `error.message`
+            // when the response carries one instead of Guzzle's raw-body dump
+            // (GuzzleException messages are the request/status line plus the
+            // body clipped to ~2KB - unreadable in Chat). Prefix, exception
+            // class, code 0 and the previous-chain $e are byte-stable, so
+            // TransientFailure::isTransient() classification (400 permanent,
+            // 5xx/408/429 retried) is untouched.
+            throw new \RuntimeException(
+                'SGLANG request failed: ' . (self::errorBodyMessage($e) ?? $e->getMessage()),
+                0,
+                $e
+            );
         }
     }
 
@@ -872,7 +893,18 @@ final readonly class SglangProvider implements ProviderInterface
                 );
             }
         } catch (GuzzleException $e) {
-            throw new \RuntimeException('SGLANG request failed: ' . $e->getMessage(), 0, $e);
+            // §Q8 (qwen.md; E-56): surface the server's own `error.message`
+            // when the response carries one instead of Guzzle's raw-body dump
+            // (GuzzleException messages are the request/status line plus the
+            // body clipped to ~2KB - unreadable in Chat). Prefix, exception
+            // class, code 0 and the previous-chain $e are byte-stable, so
+            // TransientFailure::isTransient() classification (400 permanent,
+            // 5xx/408/429 retried) is untouched.
+            throw new \RuntimeException(
+                'SGLANG request failed: ' . (self::errorBodyMessage($e) ?? $e->getMessage()),
+                0,
+                $e
+            );
         }
     }
 
@@ -2283,5 +2315,74 @@ final readonly class SglangProvider implements ProviderInterface
         $half = intdiv(self::WARNING_EXCERPT_LIMIT, 2);
 
         return substr($raw, 0, $half) . ' [...] ' . substr($raw, -$half);
+    }
+
+    /**
+     * §Q8 (qwen.md; E-56): lifts the server's own clean error sentence out of
+     * a failed SGLANG HTTP response, or returns null when there is nothing
+     * clean to show.
+     *
+     * WHY: with `http_errors` on (the shipped default) every 4xx/5xx surfaces
+     * as a Guzzle RequestException whose getMessage() is the request/status
+     * line plus the RAW response body clipped to ~2KB, and Chat renders
+     * exactly that at Chat.php:7653-7662 - so before this extraction the user
+     * read `Client error: ... {"object":"error","message":"Unexpected...`
+     * JSON garbage instead of the one sentence the server wrote for them.
+     *
+     * Body shapes tried in order: FLAT `message` FIRST because that is the
+     * MEASURED SGLang error object (E-40:
+     * `{"object":"error","message":"Unexpected reasoning effort X. ...","type":"BadRequest","code":400}`;
+     * E-10: `{"object":"error","message":"System message must be at the
+     * beginning.", ...}`), then the OpenAI-style NESTED `error.message` the
+     * spec names, for servers that speak that dialect instead.
+     *
+     * CLASSIFICATION SAFETY: callers keep the identical
+     * `RuntimeException($prefix . $text, 0, $e)` wrap - only $text's source
+     * changes. TransientFailure::isTransient() walks getPrevious() to the
+     * Guzzle exception's status code, so 400 stays permanent and 5xx/408/429
+     * stay retried (pinned by TransientFailureTest's sglang-shape cases).
+     *
+     * Fail-safe by design: no response (connect/TLS failures), unreadable or
+     * empty body, non-JSON body, and absent/blank/non-string message keys all
+     * return null, so the catch sites fall back to the pre-Q8
+     * `$e->getMessage()` byte-for-byte.
+     */
+    private static function errorBodyMessage(GuzzleException $e): ?string
+    {
+        if (!$e instanceof RequestException || !$e->hasResponse()) {
+            return null;
+        }
+
+        try {
+            $body = (string) $e->getResponse()->getBody();
+        } catch (\Throwable) {
+            // Consumed/closed stream: the old Guzzle-message surface wins.
+            return null;
+        }
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        foreach ([$decoded['message'] ?? null, $decoded['error']['message'] ?? null] as $candidate) {
+            if (!is_string($candidate)) {
+                continue;
+            }
+
+            $message = trim($candidate);
+            if ($message === '') {
+                continue;
+            }
+
+            if (strlen($message) > self::ERROR_MESSAGE_DISPLAY_LIMIT) {
+                // Byte ceiling guards runaway echo; mb_substr keeps the cut codepoint-safe.
+                $message = mb_substr($message, 0, self::ERROR_MESSAGE_DISPLAY_LIMIT) . ' [truncated]';
+            }
+
+            return $message;
+        }
+
+        return null;
     }
 }
