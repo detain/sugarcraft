@@ -85,7 +85,7 @@ use PHPUnit\Event\TestSuite\SkippedSubscriber as TestSuiteSkippedSubscriber;
  * discovered
  *
  * The roster is a LINUX figure. MEASURED on this box, PHP 8.3.6, `PHP_OS_FAMILY`
- * `Linux`: one skip, the entry below. It cannot be a constant across platforms,
+ * `Linux`: two skips, the entries below. It cannot be a constant across platforms,
  * because a large family of gates in this suite reads procfs -- `commOf()` reads
  * `/proc/<pid>/comm`, `directChildPids()` reads `/proc/self/task/<tid>/children`
  * -- and every one of them fires on a kernel without it. Those gates observe the
@@ -162,17 +162,28 @@ final class SuiteSkipRoster
     /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
-     * There is exactly one, and it is UNCONDITIONAL -- no environment gate, no
-     * platform check, no `#[Requires…]` attribute. It is a placeholder for a
-     * test that was never written, which is why it skips identically on every
-     * runner and why the Linux figure and the "would be nice to delete this one
-     * day" figure are the same number.
+     * The first is UNCONDITIONAL -- no environment gate, no platform check, no
+     * `#[Requires…]` attribute. It is a placeholder for a test that was never
+     * written, which is why it skips identically on every runner and why the
+     * Linux figure and the "would be nice to delete this one day" figure are
+     * the same number.
+     *
+     * The second is CONDITIONAL on the vendor layout: it skips itself only when
+     * `vendor/sugarcraft` holds no path-repo symlinks -- the case on any
+     * checkout whose siblings resolved from packagist -- and asserts wherever
+     * CI's path-repo injection puts the symlink farm back.
      */
     public const EXPECTED = [
         'SugarCraft\Crush\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
             => 'unconditional placeholder: the failure arm of McpClient::loadConfig() needs a '
                 . 'read that fails after file_exists() passes, and the test was left unwritten '
                 . 'rather than faking a built-in',
+        'SugarCraft\Crush\Tests\Tools\BuiltIn\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed'
+            => 'conditional layout gate: since the 2026-09-04 upstream sync, packagist-resolved '
+                . 'siblings install as real directories under vendor/sugarcraft, so this checkout '
+                . 'has no path-repo symlinks for the walk to guard and the test skips itself; the '
+                . 'symlinks return whenever CI injects the path repositories, and the test runs '
+                . 'and asserts again there',
     ];
 
     private static ?self $live = null;

@@ -42,8 +42,7 @@ final class SuiteSkipRosterTest extends TestCase
     ];
 
     /**
-     * The roster's one real entry names a test that EXISTS and whose skip is
-     * unconditional.
+     * Every roster entry names a test that EXISTS.
      *
      * A roster is a set of names, and a name rots. If the method is renamed the
      * roster silently starts describing nothing: check 3 in `report()` would not
