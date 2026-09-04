@@ -2412,10 +2412,17 @@ DOC;
         // the failure output, and cannot be satisfied by bumping an integer -
         // to green a plant you would have to paste its own file:line here,
         // which is a thing nobody does by accident.
+        // CANONICAL ORDER. The walk above is a RecursiveDirectoryIterator with no
+        // sort, so $correctionsQuoted arrives in raw filesystem readdir order:
+        // Runtime before Agents on this checkout, Agents before Runtime on a
+        // GitHub runner. sort() pins the roster to one alphabetical order on every
+        // machine, so the exact-set assertion below is portable. It only orders
+        // the entries - it moves none in or out - so the set it pins is unchanged.
+        sort($correctionsQuoted);
         $this->assertSame(
             [
-                'src/Runtime.php :: WHAT THIS SAID: "…because the two order `<env>` oppositely."',
                 'src/Agents/Agent.php :: WHAT IT SAID: "…because the two order `<env>` oppositely."',
+                'src/Runtime.php :: WHAT THIS SAID: "…because the two order `<env>` oppositely."',
             ],
             $correctionsQuoted,
             'the A1 correction itself has moved. Exactly these two src/ comments should quote the '
