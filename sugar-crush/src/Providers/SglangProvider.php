@@ -320,6 +320,41 @@ final readonly class SglangProvider implements ProviderInterface
     ];
 
     /**
+     * The `reasoning_effort` values Qwen3.8's CHAT TEMPLATE accepts when the
+     * effort reaches it through `chat_template_kwargs` - measured against
+     * skynet2 2026-09-03 (qwen.md E-40): an invalid name 400s with the
+     * template's own raise "Unexpected reasoning effort X. Supported types
+     * are xhigh (default), medium, and low."
+     *
+     * Deliberately NARROWER than {@see REASONING_EFFORT_LEVELS}: that set is
+     * the server's pydantic enum for the TOP-LEVEL field, which the Qwen
+     * route stops using (qwen.md §Q4). `xhigh` is both the template's default
+     * and this family's tier-3 config default
+     * ({@see QWEN3_NEXT_REASONING_EFFORT}).
+     */
+    private const QWEN3_NEXT_TEMPLATE_EFFORTS = ['low', 'medium', 'xhigh'];
+
+    /**
+     * Translations from wider pydantic-level names to the nearest
+     * template-vocabulary value, applied by {@see sanitizeEffortForTemplate()}
+     * so the effort a deployment or caller already names keeps its INTENT
+     * instead of 400-ing at the template (qwen.md E-41: `high`/`max` pass
+     * pydantic and then fail the template check whenever thinking is on).
+     *
+     * `high`/`max` collapse UP to `xhigh` (the template's strongest setting,
+     * matching what those names ask for), `minimal` collapses DOWN to `low`
+     * (its weakest). Neither pair is an equality the template enforces - it
+     * is a judgement, recorded here rather than buried in a switch.
+     * `none` is NOT in this map: it has no template effort-word; it means
+     * "stop thinking", handled by the enable_thinking arm of the sanitizer.
+     */
+    private const QWEN3_NEXT_EFFORT_TEMPLATE_ALIASES = [
+        'minimal' => 'low',
+        'high' => 'xhigh',
+        'max' => 'xhigh',
+    ];
+
+    /**
      * @param ToolCallParserInterface|null $toolCallParser W1.A6 (§12 D6): the
      *        client-side mirror of SGLang's own `--tool-call-parser` flag.
      *        Left null the provider uses {@see OpenAiArrayToolCallParser} over
@@ -795,6 +830,27 @@ final readonly class SglangProvider implements ProviderInterface
             );
         }
 
+        // Q4 (qwen.md §Q4): the Qwen3.8 family routes its effort INTO
+        // chat_template_kwargs, sanitized to the template's own vocabulary,
+        // and stops sending the top-level field. Everything else — resolve
+        // (request > config > model), validate, place — is shared by both
+        // families, so the tiers keep exactly one implementation.
+        $effort = $this->resolveReasoningEffort($request);
+        $isQwen = self::isQwen3Next($request->model);
+        $effortTemplateKwargs = [];
+        if ($isQwen) {
+            // "Thinking on" is whatever the two caller-facing kwargs layers
+            // declare (config then DTO, Q3's merge); the template's own
+            // default is ON, and only an explicit false counts as OFF — see
+            // sanitizeEffortForTemplate() for why sanitizing does NOT switch
+            // off with it.
+            $declaredKwargs = $this->mergedTemplateKwargs($request);
+            $effortTemplateKwargs = self::sanitizeEffortForTemplate(
+                $effort,
+                ($declaredKwargs['enable_thinking'] ?? true) !== false,
+            );
+        }
+
         foreach ([
             // The ONE knob in this list with a non-null default, and only for
             // one model family - see defaultTopP(). Everything else below
@@ -805,18 +861,25 @@ final readonly class SglangProvider implements ProviderInterface
             'min_p' => $request->minP,
             'repetition_penalty' => $request->repetitionPenalty,
             'stop' => $request->stop,
-            // Config kwargs merged UNDER the DTO's per key - see the merge
-            // method for the precedence and its sentinel semantics.
-            'chat_template_kwargs' => $this->mergedTemplateKwargs($request),
-            // Top-level, NOT under chat_template_kwargs. Those two are
-            // different mechanisms and the difference matters here:
-            // `chat_template_kwargs` feeds a server-side Jinja chat template,
-            // and DeepSeek-V4-Flash ships none, so routing effort through it
-            // would be silently dropped. `reasoning_effort` is a field on
-            // SGLang's own ChatCompletionRequest - proven by the fact that a
-            // bogus value is REJECTED 400 by its pydantic model rather than
-            // ignored (probed 2026-08-20).
-            'reasoning_effort' => $this->resolveReasoningEffort($request),
+            // Config kwargs merged with the per-request DTO's, with the
+            // sanitized Qwen effort between them - see the merge method for
+            // the precedence and its sentinel semantics.
+            'chat_template_kwargs' => $this->mergedTemplateKwargs($request, $effortTemplateKwargs),
+            // For every family EXCEPT Qwen this is top-level, NOT under
+            // chat_template_kwargs. Those two are different mechanisms and
+            // the difference matters here: `chat_template_kwargs` feeds a
+            // server-side Jinja chat template, and DeepSeek-V4-Flash ships
+            // none, so routing effort through it would be silently dropped.
+            // `reasoning_effort` is a field on SGLang's own
+            // ChatCompletionRequest - proven by the fact that a bogus value
+            // is REJECTED 400 by its pydantic model rather than ignored
+            // (probed 2026-08-20). Qwen3.8's deployment DOES ship such a
+            // template and reads effort there (qwen.md E-42), while its
+            // pydantic-side check is the noisy wider enum (E-41) — so Qwen
+            // sends the sanitized value through kwargs instead and this
+            // entry goes null, which the filter below turns into the key
+            // being absent (qwen.md §Q4: never a template-invalid effort).
+            'reasoning_effort' => $isQwen ? null : $effort,
         ] as $key => $value) {
             // Strict comparisons throughout: `0` / `0.0` are meaningful
             // top_k/min_p values and must survive, unlike a falsy filter.
@@ -874,24 +937,134 @@ final readonly class SglangProvider implements ProviderInterface
      * `$extraTemplateKwargs` into the single `chat_template_kwargs` value
      * {@see buildParams()} emits.
      *
-     * PRECEDENCE: per-request > config, applied PER KEY. array_merge's
-     * right-hand side overwrites exactly the string keys it carries, so a
-     * request flipping `enable_thinking` cannot silently drop a deployment's
-     * `preserve_thinking` - a whole-body override would make every per-call
-     * template tweak destructive of the others, which no caller asked for.
+     * PRECEDENCE (qwen.md §Q4 collision mandate, stated here because this is
+     * the seam it lands on), lowest first: config kwargs < the SANITIZED
+     * Qwen effort (`$sanitizedEffortKwargs`) < per-request DTO kwargs.
+     * So a deployment that parked a `reasoning_effort` in its config kwargs
+     * LOSES to the template-valid value this class computed — the sanitized
+     * one is what the served template can actually parse — while an
+     * EXPLICIT per-request kwarg overrides BOTH, which keeps Q3's rule that
+     * caller-named template keys travel verbatim (the open-vocabulary
+     * decision: the template's key space is the server's business, not a
+     * closed enum we get to police). The order is three array_merge
+     * arguments, so the "who wins" story and the code cannot disagree.
+     *
+     * Merging stays PER KEY: array_merge's right-hand side overwrites exactly
+     * the string keys it carries, so a request flipping `enable_thinking`
+     * cannot silently drop a deployment's `preserve_thinking` - a whole-body
+     * override would make every per-call template tweak destructive of the
+     * others, which no caller asked for.
      *
      * SENTINELS: null AND [] on the DTO both mean "this request names no
      * keys", the same unset convention the optional-knob filter applies to
      * every other field. Consequently the merge is empty - and the existing
      * `$value !== []` filter keeps `chat_template_kwargs` off the wire
-     * entirely - exactly when BOTH sides are empty: an unwired config plus an
-     * unwired request still reproduces today's byte-identical body.
+     * entirely - exactly when ALL contributing layers are empty: an unwired
+     * config, a non-Qwen model (whose $sanitizedEffortKwargs is always []),
+     * and an unwired request still reproduce today's byte-identical body.
      *
+     * @param array<string, mixed> $sanitizedEffortKwargs the middle layer:
+     *        {@see sanitizeEffortForTemplate()}'s output, [] for every model
+     *        outside the Qwen3.8 family (which is also the default, so the
+     *        Q3-era two-layer callers, e.g. buildParams' thinking probe,
+     *        merge config+DTO only).
      * @return array<string, mixed>
      */
-    private function mergedTemplateKwargs(CompleteRequest $request): array
+    private function mergedTemplateKwargs(CompleteRequest $request, array $sanitizedEffortKwargs = []): array
     {
-        return array_merge($this->extraTemplateKwargs, $request->extraTemplateKwargs ?? []);
+        return array_merge(
+            $this->extraTemplateKwargs,
+            $sanitizedEffortKwargs,
+            $request->extraTemplateKwargs ?? [],
+        );
+    }
+
+    /**
+     * Translates a resolved `reasoning_effort` into the Qwen3.8
+     * `chat_template_kwargs` entries the deployed template can actually
+     * parse (qwen.md §Q4; vocabulary E-40, forwarding behaviour E-41,
+     * kwargs-reach E-42, thinking switch E-22).
+     *
+     * THE MAPPING, each leg measured rather than guessed:
+     * - `low`/`medium`/`xhigh` pass through — the template's whole set.
+     * - `high`/`max` → `xhigh`, `minimal` → `low` — the wider pydantic names
+     *   keep their intent instead of 400-ing at the template (E-41); see
+     *   {@see QWEN3_NEXT_EFFORT_TEMPLATE_ALIASES} for the judgement.
+     * - `none` → drop effort, emit `enable_thinking: false` (when thinking
+     *   is on) — the template has no effort-word for "don't think";
+     *   `enable_thinking:false` is its switch, and with thinking off the
+     *   effort check is skipped and reasoning comes back null (E-22). When
+     *   `$thinkingOn` is false the config/DTO already carries the false, so
+     *   the sanitizer contributes nothing — same wire value, no redundant
+     *   write through the middle layer.
+     * - null (only reachable for models without a tier-3 default) → nothing.
+     * - ANYTHING ELSE — including a float — throws
+     *   {@see InvalidArgumentException} at BUILD time, before the request
+     *   leaves: fail-fast over a guaranteed template 400. Floats are the
+     *   pydantic side-channel (`constrained-float`, measured 2026-08-20,
+     *   top-level field only); under `chat_template_kwargs` they skip
+     *   pydantic and hit the template's string-compare raise (E-42), and no
+     *   float→level mapping was ever measured, so refusing is the only
+     *   honest option.
+     *
+     * WHY SANITIZING DOES NOT SWITCH OFF WITH `$thinkingOn`: E-41 measured
+     * the template SKIPPING its effort check when thinking is off, so an
+     * unmapped `high` would survive on the wire — but §Q4's goal is
+     * "never send a template-invalid effort", unconditionally, and a
+     * deployment that flips thinking back on must not have its request
+     * quietly change shape. Mapping regardless is the conservative arm;
+     * pinned by testATemplateInvalidEffortIsStillMappedWhenThinkingIsExplicitlyOff.
+     *
+     * WHY NO NOTICE FOR THE MAPPINGS: {@see RuntimeNoticeSink::warn()} is
+     * this class's channel for response-side DATA CORRUPTION the caller
+     * cannot otherwise see (truncated tool arguments); a config that names
+     * `max` is deterministic, intended vocabulary translation — warning on it
+     * would fire on EVERY request of a stable deployment, training readers to
+     * ignore the sink. The loud channel stays the build-time throw for
+     * values that have NO valid translation. (kwargs-only return shape per
+     * that judgement — the spec's "optional notice" resolves to "none, and
+     * here is why".)
+     *
+     * Pure: no I/O, no state — ($effort, $thinkingOn) fully determine the
+     * result, so the matrix above is exhaustively testable in isolation.
+     *
+     * @param  string|float|null $effort the RESOLVED effort — precedence
+     *         (request > config > model) is the caller's job
+     *         ({@see resolveReasoningEffort()}, untouched by §Q4), pydantic
+     *         validation already paid there.
+     * @param  bool $thinkingOn whether the effective kwargs declare thinking
+     *         on (buildParams derives it: merged config→DTO
+     *         `enable_thinking`, absent = the template's default = true).
+     * @return array<string, mixed> the kwargs the sanitizer contributes,
+     *         [] when it contributes none.
+     * @throws \InvalidArgumentException When no template-valid translation
+     *         exists (see above).
+     */
+    private static function sanitizeEffortForTemplate(string|float|null $effort, bool $thinkingOn): array
+    {
+        if ($effort === null) {
+            return [];
+        }
+
+        if ($effort === 'none') {
+            return $thinkingOn ? ['enable_thinking' => false] : [];
+        }
+
+        $templateEffort = is_string($effort)
+            ? (self::QWEN3_NEXT_EFFORT_TEMPLATE_ALIASES[$effort] ?? $effort)
+            : $effort;
+
+        if (!in_array($templateEffort, self::QWEN3_NEXT_TEMPLATE_EFFORTS, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'reasoning_effort %s has no Qwen3.8 chat-template translation; the template accepts %s '
+                . '(pydantic names minimal/high/max are mapped automatically, "none" disables thinking instead) '
+                . '— floats are a top-level pydantic alternative the template never sees as kwargs (qwen.md E-40/E-41/E-42).',
+                var_export($effort, true),
+                implode(', ', self::QWEN3_NEXT_TEMPLATE_EFFORTS),
+            ));
+        }
+
+        return ['reasoning_effort' => $templateEffort];
     }
 
     /**
@@ -1019,6 +1192,12 @@ final readonly class SglangProvider implements ProviderInterface
     /**
      * The `reasoning_effort` for one request, or null to omit the field.
      *
+     * WHAT IT RETURNS decides the VALUE; where the value is PLACED is
+     * family-dependent and belongs to {@see buildParams()}: top-level for
+     * every family but Qwen3.8, whose resolved value is sanitized into
+     * `chat_template_kwargs` instead (qwen.md §Q4 -
+     * {@see sanitizeEffortForTemplate()}).
+     *
      * THREE tiers, most specific first:
      *
      * 1. `CompleteRequest::$reasoningEffort` - this one call.
@@ -1069,7 +1248,10 @@ final readonly class SglangProvider implements ProviderInterface
      * nothing on the wire's BEHAVIOUR - the template applies `xhigh` when
      * effort is absent (E-40) - but records the deployment's intent in the
      * one tier every later request reads, and mirrors what Q1's config key
-     * already pins explicitly.
+     * already pins explicitly. (Q4 moved this family's value from the
+     * top-level field into `chat_template_kwargs`, where the template reads
+     * it - {@see sanitizeEffortForTemplate()} - the tier-3 default itself is
+     * unchanged.)
      *
      * NULL for every remaining model, which is the field being omitted
      * entirely -
