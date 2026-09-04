@@ -253,6 +253,14 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### CI-TRAVERSAL-ORDER FIX — 2026-09-04 — status: done (not a plan step; CI-red remediation)
+GOAL: GitHub CI red at master on RuntimeTest::testBothPromptAssemblersPutTheEnvironmentBlockLastAndAgreeOnTheTail (:2415) while the identical tree was green locally - user reported; explicitly ordered fixed.
+DIAGNOSIS (measured): the rule-42 correction roster is collected by an inline unsorted RecursiveDirectoryIterator walk (RuntimeTest:2227, push :2347); readdir order differs between the local ext4 checkout (Runtime-before-Agents) and the GitHub runner (Agents-before-Runtime) -> assertSame flipped on byte-identical member sets. Pre-existing latent defect, plan-external; surfaced only because earlier work rewrote neighbors of the literal. The house pattern phpFilesUnder() already sorts (:7804/:7823); this inline walk skipped it.
+FIX: sort($correctionsQuoted) + expected literal reordered to the same canonical order; exact-set pin semantics unchanged, portability gained; +8/-1, one file, zero test weakenings (pinned strings incl. env-tag quotations byte-identical). Sibling scan: only ONE order-sensitive traversal-collected literal in the file; the other rule-42 pins consume the sorted helper; violations assert is against [] - nothing else touched.
+GATE: solo RuntimeTest OK 142/542 default + LC_ALL=C; full suite prediction-first, floor EXACT: 10774/165986/0F/Skipped 2/EXIT 0 (7m03s); cmp vs upstream-sync-1/roster-fix/junit.xml zero movers. Commit 9f3348ef5, author literal verified, no push.
+NEW LAW LEARNED (sanitizer): the harness redacts the maintainer email token even inside TOOL ARGUMENTS before git sees them - a correctly typed commit --author wrote the literal [EMAIL] placeholder into the author field (committer from config was fine). Caught by od -c raw-byte dump because DISPLAY shows both identically. LAW for every agent that commits: write the author via shell interpolation from config, e.g. --author="Joe Huss <Joe Huss <detain@interserver.net>>" resolved by git config, NEVER type the address inline in a tool argument; verify the commit OBJECT bytes after committing, not the rendered display.
+CI NOTE: origin/master (21+ commits ahead pre-push incl this fix) needs a user push to turn CI green; the CI Deprecations: 1 line is unreproducible on local PHP 8.3.6 (travel ledger already records 8.4-implicit-nullable invisibility) - not chased, recorded.
+
 ### P5.S3 — 2026-09-04 — status: done (33 of 63)
 
 **GOAL** fence-escape authority + BOTH carried fence-escape vectors + ref-cap, one diff (authorized expansion: EnvironmentBlock.php + EnvironmentBlockTest.php added to the plan's 5-file list). BASE 1e059aeca.
