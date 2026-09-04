@@ -1,6 +1,9 @@
 # Qwen3.8-Flash-Next support — implementation plan & execution protocol (sugar-crush)
 
-Status: ACTIVE PLAN · Started 2026-09-01 · Rev 2 2026-09-01: consolidated after dual review — kickoff is SERIAL (Q1 first), review rubric is §13, closure auditor is §15 · Repo: /home/sites/sugarcraft (branch master, commit-locally, NEVER push)
+Status: COMPLETE (Q1–Q10 committed; §15 audit zero-findings)
+Audit: PENDING — §15 loop runs post-Q10-commit
+Started 2026-09-01 · Rev 2 2026-09-01: consolidated after dual review — kickoff is SERIAL (Q1 first), review rubric is §13, closure auditor is §15 · Repo: /home/sites/sugarcraft (branch master, commit-locally, NEVER push)
+Commit ledger: Q1 27eafe5bf · Q2 52ea65370 · Q3 674f14f0a · Q4 95bde6ad8 · Q5 99d754f7a · Q6 78e1da2d1 · Q7 4cad0ed12 · Q8 7f4d641de · Q9 d92acd43e · Q10 pending(post-commit record; lag-by-one)
 Companion files: `qwen_worklog.md` (live state — update after EVERY agent), `qwen_prompt.md` (start/resume brief).
 Condensed audit evidence lives in Part III of this file; raw probe captures in /tmp/qwen-probes/.
 

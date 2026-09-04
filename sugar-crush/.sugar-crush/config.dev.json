@@ -6,7 +6,7 @@
       "model": "Qwen/Qwen3.8-Flash-Next",
       "apiKey": null,
       "reasoningEffort": "xhigh",
-      "templateKwargs": {}
+      "templateKwargs": {"preserve_thinking": false}
     }
   },
   "defaultProvider": "dev-sglang"

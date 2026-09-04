@@ -325,6 +325,43 @@ final class SglangProviderRequestBuildingTest extends TestCase
         );
     }
 
+    /**
+     * Q10 (spec qwen.md §Q10, E-28): the SHIPPED config policy, not a fixture
+     * stand-in — reads the ACTUAL committed .sugar-crush/config.dev.json (the
+     * same real-file idiom ProviderFactoryTest :719 pins for the default
+     * provider) and drives its `templateKwargs` through the Q3 ctor arm to the
+     * wire. The deployment pins `preserve_thinking:false` so a history
+     * re-render drops replayed assistant reasoning instead of paying those
+     * tokens back every turn (E-28 measures the default-true replay cost);
+     * that policy is only real if it survives the merge layers, so both ends
+     * are asserted: raw config value AND the top-level `chat_template_kwargs`
+     * field the template actually reads (E-22/E-42).
+     */
+    public function testShippedConfigPreserveThinkingPolicyReachesTheWire(): void
+    {
+        $configPath = dirname(__DIR__, 2) . '/.sugar-crush/config.dev.json';
+        $this->assertFileExists($configPath, 'Q10 pins the real committed config, not a fixture');
+
+        $raw = json_decode((string) file_get_contents($configPath), true);
+        $this->assertIsArray($raw);
+        $kwargs = $raw['providers']['dev-sglang']['templateKwargs'] ?? null;
+        $this->assertIsArray($kwargs, 'dev-sglang block must carry a templateKwargs object');
+        $this->assertArrayHasKey('preserve_thinking', $kwargs);
+        $this->assertFalse($kwargs['preserve_thinking'], 'shipped policy is preserve_thinking=false (E-28)');
+
+        // Real config values feed the same ctor arm ProviderFactory passes them to.
+        $provider = $this->providerWithConfigKwargs($kwargs, self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $sent = $this->sentBody();
+        $this->assertArrayHasKey('chat_template_kwargs', $sent);
+        $this->assertArrayHasKey('preserve_thinking', $sent['chat_template_kwargs']);
+        $this->assertFalse($sent['chat_template_kwargs']['preserve_thinking']);
+    }
+
     // -------------------------------------------------------------------------
     // §12 D4: the jsonSchema DTO field finally reaches SGLang's constrained
     // decoding instead of being silently dropped. It goes through
