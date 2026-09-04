@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: PHASE 5 OPEN - P5.S1 MERGED (31 of 63), master `8e910daad`, clean tree.**
+**Current state: PHASE 5 OPEN - P5.S1 MERGED (31 of 63), master = resume/worklog bookkeeping tip directly over `8e910daad`, clean tree.**
   §5 collision re-check CLEARED 2026-09-04 verbatim: "nothing else running go ahead and
   contineu" - Phases 5-11 GO. The two awaiting-user items + NOTE-1 were ANSWERED the same
   day and SCHEDULED as follow-up steps F7 (Gemini tool-shaper) / F8 (workflow-path
@@ -557,7 +557,8 @@ Next step:        P5.S2 - migrate the three memoized snapshots (environment/memo
                   caliber; merges skip pre-commit).
 Steps done:       31 of 63 MERGED. Phase 5: P5.S1 = 31st (PromptSection interface + ordered assembler).
 Phases done:      5 of 12 (P0-P4 CLOSED). Phase 5: 1 of 6 merged.
-Last commit:      **8e910daad** - P5.S1: introduce PromptSection interface + ordered prompt assembler
+Last commit:      resume/worklog bookkeeping (this file, hash-object bypass, no code) directly over
+                  **8e910daad** - P5.S1: introduce PromptSection interface + ordered prompt assembler
                   (merge of prompt/P5.S1; gate at synced tip 9da929ad6).
                   Re-derive: git -C /home/sites/sugarcraft log --oneline -1
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, NEVER edited)
@@ -586,7 +587,7 @@ Latest suite:     **EVERY FIGURE NAMES ITS CWD, ITS TREE, AND SERIALITY.**
                   Retro-review track: none active (F7/F8/F9 are scheduled follow-ups in Open follow-ups,
                   unstaffed).
 In-flight batch:  NONE (write at spawn, clear at batch close). P5.S1 CLOSED at 8e910daad; P5.S2 not yet spawned.
-Live worktrees:   ONLY /home/sites/sugarcraft (master 8e910daad). prompt/P5.S1, /home/sites/prompt-step-P5.S1 and
+Live worktrees:   ONLY /home/sites/sugarcraft (master = bookkeeping tip over 8e910daad). prompt/P5.S1, /home/sites/prompt-step-P5.S1 and
                   the base-control /home/sites/prompt-base-P5S1 were all removed post-merge (§1.12 porcelain-FULL).
                   crush-lane-{a,b,c} + 9 repo-shared stash refs belong to the OTHER plan - NEVER touch.
 Blocked on:       nothing.
