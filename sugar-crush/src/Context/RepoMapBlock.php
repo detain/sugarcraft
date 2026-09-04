@@ -582,7 +582,12 @@ final readonly class RepoMapBlock implements PromptSection
         $bytes = 0;
 
         foreach ($lines as $line) {
-            $line = $this->clip($line);
+            // P5.S3: escape before clip — the same order rule as
+            // MemoryBlock::renderEntry(), same reason: the section and entry
+            // budgets promise bytes of what the model actually reads, and a
+            // package name or description that embeds a fence tag grows when
+            // the tag is neutralised, so the growth must be inside the cap.
+            $line = $this->clip(PromptFence::escape($line));
             $lineBytes = strlen($line);
 
             if ($bytes + $lineBytes > self::MAX_SECTION_BYTES) {

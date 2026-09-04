@@ -370,7 +370,14 @@ final readonly class MemoryBlock implements PromptSection
             $line .= ' (tags: ' . implode(', ', $tags) . ')';
         }
 
-        return $this->clip($line);
+        // P5.S3: escape BEFORE clip, in that order and for one reason — every
+        // byte budget in this class is a promise the header makes about the
+        // rendered line, and rendering happens after escaping, so the clip
+        // must measure escaped bytes. A note carrying several fence tags grows
+        // (`</` → `&lt;/`) and the growth is charged to the entry budget that
+        // produced it, never smuggled past MAX_ENTRY_BYTES into the prompt.
+        // See PromptFence for why the roster is escaped whole.
+        return $this->clip(PromptFence::escape($line));
     }
 
     /** Every run of whitespace — newlines included — collapsed to one space. */
