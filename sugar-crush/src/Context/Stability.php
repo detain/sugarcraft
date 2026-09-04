@@ -41,17 +41,21 @@ enum Stability
     case Static;
 
     /**
-     * Stable for the life of a session snapshot — the memoized blocks captured
-     * once per {@see \SugarCraft\Crush\Runtime} (repo map, project
-     * instructions, project memory). A note added mid-turn does not
+     * Stable for the life of a session. The repo map and project memory are
+     * each captured once per {@see \SugarCraft\Crush\Runtime} and memoized
+     * there; the instruction documents are re-read on every build but their
+     * content is session-stable (cached inside the loader), so all three land
+     * in this same non-volatile tier. A note added mid-turn does not
      * retroactively join the prompt of a turn already in flight.
      */
     case PerSession;
 
     /**
-     * May differ on every turn: the volatile `<env>` block, whose git section
-     * is polled live on render, and the skill layers, whose set can be
-     * re-derived between steps.
+     * May differ from one turn to the next: the volatile `<env>` block, whose
+     * git section is polled live on every render, and the skill layers, whose
+     * set is fixed for the duration of a turn (it does not change between the
+     * steps of a turn) but is re-derived per App, so it can differ across
+     * turns.
      */
     case PerTurn;
 }

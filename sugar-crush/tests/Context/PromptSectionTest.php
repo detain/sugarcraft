@@ -29,6 +29,12 @@ use SugarCraft\Crush\Runtime;
  * this file pins the SEPARATOR RULE in isolation, on concrete sections, so the
  * doubling hazard the step text calls out is guarded at the unit level too.
  *
+ * Scope split: the two contract tests exercise the interface against a
+ * conforming test double (they validate that a PromptSection returns what
+ * it is handed); coverage of the PRODUCTION section list — its real
+ * order, fence() tags and stability() classes — lives in the dedicated
+ * production test, not in those two.
+ *
  * @internal
  */
 final class PromptSectionTest extends TestCase
@@ -240,9 +246,10 @@ final class PromptSectionTest extends TestCase
      * P5.S1 enforces no ceilings at the assembler, the real per-layer caps
      * still live inside each block's own render(). A bare App — no
      * enabledSkills, no instructionLoader, no memoryStore — keeps the layer
-     * set deterministic; base and <env> are the two layers
+     * set deterministic; the base, the skill listing (whose render() is the
+     * empty string when nothing was discovered) and <env> are the three layers
      * systemPromptSections() appends unconditionally, so first/last hold no
-     * matter which optional layers render.
+     * matter which optional layers actually emit bytes.
      */
     public function testTheProductionSectionListOrdersBaseFirstAndEnvLast(): void
     {
