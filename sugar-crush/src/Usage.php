@@ -8,7 +8,8 @@ namespace SugarCraft\Crush;
  * What one provider call — or a whole turn's worth of them summed — actually
  * cost, in PROVIDER-COUNTED tokens and dollars (crush_code.md Phase 5 item 7).
  * Since prompt_plan.md P4.S1 (backlog E17) it also carries the provider's own
- * token BUCKETS — input/output and the two cache sides — null until a provider
+ * token BUCKETS — input/output, the two cache sides, and (since qwen.md §Q6)
+ * the completion-side reasoning side — null until a provider
  * reports each one, and never defaulted to a number a provider did not say.
  *
  * Read the unit before using this. Everything the status bar's *context*
@@ -107,7 +108,7 @@ namespace SugarCraft\Crush;
  * total across an unreported bucket, {@see plus()} carries a reported bucket
  * through a merge that never measured one, and {@see fromArray()} decodes a
  * frame written before the buckets existed — which simply lacks those keys —
- * to unreported buckets rather than to four zeroes. That last one is why a
+ * to unreported buckets rather than to measured zeroes. That last one is why a
  * bucket must be added to BOTH halves of the array pair: the fork boundary's
  * parent cannot receive the object, so a key dropped from `toArray()` makes
  * the async path read that bucket UNREPORTED forever — accounting lost on
@@ -141,6 +142,25 @@ final readonly class Usage
         public ?int $cacheReadTokens = null,
         /** Tokens written to the provider's prompt cache. */
         public ?int $cacheCreationTokens = null,
+        /**
+         * Reasoning tokens on the completion side — the OpenAI-compatible
+         * family's flat `usage.reasoning_tokens` (qwen.md E-31; carried since
+         * §Q6, which the P4.S2 parse seam explicitly deferred to this one).
+         * A SUBSET of {@see $outputTokens}, the same relationship
+         * `cached_tokens` has to {@see $inputTokens}: never added to
+         * {@see $totalTokens} (the server's own total already counts it —
+         * measured `prompt 57 + completion 28 = total 85` beside
+         * `reasoning 25`), never part of {@see promptTokens()} (this is
+         * output-side thinking, not prompt), and never re-summed into the
+         * completion either. Null = unreported; 0 = the provider measured
+         * non-thinking output. WHY IT EARNS ITS PLACE: the skynet2
+         * deployments report this key on EVERY usage document (batch and the
+         * §Q6 streamed terminal chunk), and a reader that deleted the bucket
+         * would silently drop the only signal separating "thought 25 of 28"
+         * from "answered 28" — the exact distinction reasoning-effort tuning
+         * (qwen.md Q1-Q4) is measured against.
+         */
+        public ?int $reasoningTokens = null,
     ) {}
 
     public static function new(
@@ -150,6 +170,7 @@ final readonly class Usage
         ?int $outputTokens = null,
         ?int $cacheReadTokens = null,
         ?int $cacheCreationTokens = null,
+        ?int $reasoningTokens = null,
     ): self {
         return new self(
             max(0, $totalTokens),
@@ -158,6 +179,7 @@ final readonly class Usage
             self::clampBucket($outputTokens),
             self::clampBucket($cacheReadTokens),
             self::clampBucket($cacheCreationTokens),
+            self::clampBucket($reasoningTokens),
         );
     }
 
@@ -185,6 +207,7 @@ final readonly class Usage
         ?int $outputTokens = null,
         ?int $cacheReadTokens = null,
         ?int $cacheCreationTokens = null,
+        ?int $reasoningTokens = null,
     ): ?self {
         if (
             $totalTokens <= 0
@@ -193,11 +216,20 @@ final readonly class Usage
             && $outputTokens === null
             && $cacheReadTokens === null
             && $cacheCreationTokens === null
+            && $reasoningTokens === null
         ) {
             return null;
         }
 
-        return self::new($totalTokens, $costUsd, $inputTokens, $outputTokens, $cacheReadTokens, $cacheCreationTokens);
+        return self::new(
+            $totalTokens,
+            $costUsd,
+            $inputTokens,
+            $outputTokens,
+            $cacheReadTokens,
+            $cacheCreationTokens,
+            $reasoningTokens,
+        );
     }
 
     /**
@@ -219,6 +251,7 @@ final readonly class Usage
             self::plusBucket($this->outputTokens, $other->outputTokens),
             self::plusBucket($this->cacheReadTokens, $other->cacheReadTokens),
             self::plusBucket($this->cacheCreationTokens, $other->cacheCreationTokens),
+            self::plusBucket($this->reasoningTokens, $other->reasoningTokens),
         );
     }
 
@@ -313,6 +346,12 @@ final readonly class Usage
         return $this->mutate(cacheCreationTokens: $tokens, cacheCreationTokensSet: true);
     }
 
+    /** As {@see withInputTokens()}, for the completion-side reasoning bucket. */
+    public function withReasoningTokens(?int $tokens): self
+    {
+        return $this->mutate(reasoningTokens: $tokens, reasoningTokensSet: true);
+    }
+
     /**
      * Immutable fluent base — every `with*()` returns a new instance through
      * here, changing only the buckets whose sentinel says "the caller passed
@@ -329,6 +368,8 @@ final readonly class Usage
         bool $cacheReadTokensSet = false,
         ?int $cacheCreationTokens = null,
         bool $cacheCreationTokensSet = false,
+        ?int $reasoningTokens = null,
+        bool $reasoningTokensSet = false,
     ): self {
         return new self(
             $this->totalTokens,
@@ -337,6 +378,7 @@ final readonly class Usage
             $outputTokensSet ? self::clampBucket($outputTokens) : $this->outputTokens,
             $cacheReadTokensSet ? self::clampBucket($cacheReadTokens) : $this->cacheReadTokens,
             $cacheCreationTokensSet ? self::clampBucket($cacheCreationTokens) : $this->cacheCreationTokens,
+            $reasoningTokensSet ? self::clampBucket($reasoningTokens) : $this->reasoningTokens,
         );
     }
 
@@ -372,12 +414,12 @@ final readonly class Usage
      * and so cannot receive the object itself — same rule
      * {@see Backend\EngineBackend::encodeEvent()} follows for tool events.
      *
-     * EVERY field of the object is on the wire, including the four buckets and
+     * EVERY field of the object is on the wire, including all five buckets and
      * their null-ness: a bucket carried across here as null must come back as
      * UNREPORTED, not as zero, or the fork path silently rewrites the one
      * distinction this class exists to keep.
      *
-     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int}
+     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int}
      */
     public function toArray(): array
     {
@@ -388,6 +430,7 @@ final readonly class Usage
             'outputTokens' => $this->outputTokens,
             'cacheReadTokens' => $this->cacheReadTokens,
             'cacheCreationTokens' => $this->cacheCreationTokens,
+            'reasoningTokens' => $this->reasoningTokens,
         ];
     }
 
@@ -417,12 +460,12 @@ final readonly class Usage
         }
 
         $buckets = [];
-        foreach (['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens'] as $key) {
+        foreach (['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens', 'reasoningTokens'] as $key) {
             $value = $raw[$key] ?? null;
             // Absent or null decodes to UNREPORTED. That is the whole tolerance
             // rule, and the shape it tolerates is not hypothetical: a frame
             // written before the buckets existed simply lacks the keys, and
-            // reading that as four zeroes would cross the socket turning "the
+            // reading that as measured zeroes would cross the socket turning "the
             // provider said nothing" into "the cache was never read".
             // Anything else that is not a plain int is a frame this method did
             // not write — refused whole, per the docblock above.
@@ -440,6 +483,7 @@ final readonly class Usage
             $buckets['outputTokens'],
             $buckets['cacheReadTokens'],
             $buckets['cacheCreationTokens'],
+            $buckets['reasoningTokens'],
         );
     }
 }

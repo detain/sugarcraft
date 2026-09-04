@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next plan — START/RESUME PROMPT
-Current: Q5/building @ 95bde6ad82d4e7dd820693542f59da8bd6560237 — Q4 committed (effort sanitize+route). NEXT: builder → split review + full-suite census → committer → Q6 RE-SCOPE dispatch (FOLLOW-UPS). NEVER push; commit via `git commit --only -F <msg> -- <paths>`; foreign lanes active.
+Current: Q6/reviewing @ 99d754f7a — builder landed re-scoped streamed usage (2 src + 4 tests + NEW live fixture; all gates corroborated 48/149·43/239·86/213·98/274·37/194; stash incident recovered, foreign stash intact). NEXT: c1 verdicts (static + census) → committer on CLEAN → Q7 (truncation guard re-anchor, qwen.md:200+). Q1 27eafe5bf Q2 52ea65370 Q3 674f14f0a Q4 95bde6ad8 Q5 99d754f7a. NEVER push; commit via `git commit --only -F <msg> -- <paths>` (+ git add for new files); foreign lanes active.
 > This banner line is REWRITTEN (never appended to) at every step transition, by the committer/bookkeeping task.
 
 Paste this into a fresh orchestrator session to begin or continue execution.

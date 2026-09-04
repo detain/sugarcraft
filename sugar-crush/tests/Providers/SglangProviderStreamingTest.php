@@ -9,6 +9,7 @@ use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Stream;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -299,5 +300,199 @@ final class SglangProviderStreamingTest extends TestCase
         // its own chunks - a stream is not "either text or tools".
         $text = implode('', array_map(static fn ($c) => $c->content, $chunks));
         $this->assertSame("I'll get the weather for both cities.\n\n", $text);
+    }
+
+    // -------------------------------------------------------------------------
+    // §Q6 (qwen.md) — streamed usage revival. These four cases live beside the
+    // tool-call cases above because they extend the SAME generator loop:
+    // the request arm now asks for usage (`stream_options.include_usage`,
+    // E-30), and the zero-choice terminal usage chunk that flag produces —
+    // which the `delta` gate used to drop (E-27/E-55) — now surfaces as a
+    // final usage-carrying chunk. DESIGN, recorded because the shape is a
+    // judgement call: the streamed result carries the usage through the
+    // EXISTING `tokensUsed`/`costUsd` fields of a terminal `CompleteResponse`,
+    // the same channel Vertex's `message_start`/`message_delta` pair already
+    // bills through and the only one `Runtime::runStreaming()` reads
+    // (src/Runtime.php folds every chunk via `Usage::reported(
+    // $response->tokensUsed, $response->costUsd)` into `Usage::sum()`).
+    // Widening `CompleteResponse` with a full `Usage` carrier - the step that
+    // would lift the bucket fields, incl. reasoning_tokens, above the
+    // provider seam - is the later seam Usage.php's class docblock already
+    // declares; see its "The split now lives here" section. The fixture
+    // below is a verbatim live capture (§13 cat.8); the SYNTHETIC streams are
+    // hand-written shapes the capture does not cover, labelled per case.
+    // -------------------------------------------------------------------------
+
+    /** Pins §Q6 part 1: `stream_options` rides the STREAM body, never the batch one. */
+    public function testStreamOptionsAreRequestedOnTheStreamArmAndNeverOnBatch(): void
+    {
+        $captured = [];
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturnCallback(
+            static function (string $uri, array $options) use (&$captured): Response {
+                $captured[] = ['uri' => $uri, 'json' => $options['json']];
+
+                if (isset($options['json']['stream'])) {
+                    // SYNTHETIC body: one delta, then the usage chunk shape E-30
+                    // measures (`choices: []` beside the usage document), then
+                    // the sentinel. Nothing here is a captured response.
+                    return new Response(200, [], 'data: {"choices":[{"delta":{"content":"ok"}}]}' . "\n"
+                        . 'data: {"choices":[],"usage":{"total_tokens":5}}' . "\n"
+                        . "data: [DONE]\n");
+                }
+
+                // The batch leg answers with a batch-shaped body.
+                return new Response(200, [], '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":5}}');
+            }
+        );
+        $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
+        $request = new CompleteRequest(model: 'MiniMax-M2.7', messages: [new UserMessage('Hi')]);
+
+        iterator_to_array($provider->completeStream($request));
+        $provider->complete($request);
+
+        $this->assertCount(2, $captured, 'the stream leg then the batch leg each post once');
+        $this->assertSame('chat/completions', $captured[0]['uri']);
+        $this->assertTrue($captured[0]['json']['stream'], 'the stream arm still sets stream:true');
+        $this->assertSame(
+            ['include_usage' => true],
+            $captured[0]['json']['stream_options'],
+            '§Q6: the stream arm asks for the terminal usage chunk (E-30) - emitted alongside stream:true'
+        );
+        $this->assertArrayNotHasKey('stream', $captured[1]['json'], 'the batch body never claims to stream');
+        $this->assertArrayNotHasKey('stream_options', $captured[1]['json'], 'stream_options is stream-only - the batch body stays byte-identical to pre-§Q6');
+    }
+
+    /**
+     * Pins §Q6 part 2: the zero-choice terminal usage chunk yields a final
+     * usage-carrying chunk instead of being dropped, and everything before it
+     * rides through untouched. SYNTHETIC stream (two prose deltas + the E-30
+     * shape) - the live capture exercises the same path case 4 below.
+     */
+    public function testZeroChoiceUsageChunkBecomesTerminalUsageBearingFinalChunk(): void
+    {
+        $usageChunk = '{"choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
+        $sse = 'data: {"choices":[{"delta":{"content":"Hel"}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"content":"lo"}}]}' . "\n"
+            . 'data: ' . $usageChunk . "\n"
+            . "data: [DONE]\n";
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(3, $chunks, 'the usage chunk now yields exactly one final chunk; [DONE] still terminates and yields nothing');
+        $this->assertSame(
+            ['Hel', 'lo', ''],
+            array_map(static fn (CompleteResponse $c): string => $c->content, $chunks),
+            'the deltas ride through in wire order, and the usage chunk carries no content to double-bill the transcript'
+        );
+        $this->assertSame(
+            [0, 0, 72],
+            array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks),
+            'the stream bills its total exactly once, on the terminal chunk - per-delta chunks stay zero'
+        );
+        $this->assertSame(0.0, $chunks[2]->costUsd, 'self-hosted: cost stays the structural 0.0 (E-55 pricing follow-up)');
+        $this->assertNull($chunks[2]->toolCalls);
+        $this->assertNull($chunks[2]->reasoning);
+
+        // §Q6 part 3's streamed leg: the terminal document above, parsed at the
+        // same public seam the terminal-chunk handler uses, lands reasoning
+        // (E-31, flat key) in Usage's bucket — tokensUsed alone cannot carry it.
+        $terminalUsageDocument = json_decode(substr($usageChunk, strpos($usageChunk, '{"choices":[],"usage":')), true)['usage'];
+        $this->assertSame(
+            13,
+            $provider->parseUsage($terminalUsageDocument)->reasoningTokens,
+            'reasoning_tokens survives the streamed usage document through the shared parseUsage seam'
+        );
+    }
+
+    /**
+     * The anti-phantom half of the §Q6 gate change: zero-choice lines that
+     * report NO usage document must still yield nothing — the review-5
+     * finding 7 phantom-empty-chunk is only tolerated for the one line that
+     * actually bills. SYNTHETIC shapes (keepalive without usage; explicit
+     * "usage":null, which the live DeepSeek capture emits mid-stream).
+     */
+    public function testZeroChoiceLinesWithoutUsageNeverYieldAPhantomChunk(): void
+    {
+        $sse = 'data: {"choices":[{"delta":{"content":"Hi"}}]}' . "\n"
+            . 'data: {"id":"k1","choices":[]}' . "\n"
+            . 'data: {"id":"k2","choices":[],"usage":null}' . "\n"
+            . "data: [DONE]\n";
+
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $sse));
+        $provider = new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(1, $chunks, 'a zero-choice line that reports no usage document still yields NOTHING - §Q6 accepts usage, not every empty-choices frame');
+        $this->assertSame('Hi', $chunks[0]->content);
+        $this->assertSame(0, $chunks[0]->tokensUsed);
+    }
+
+    /**
+     * The integration-flavoured Done-when of §Q6, on bytes a real server
+     * actually sent. The fixture `tests/fixtures/qwen-usage-stream.txt` is a
+     * verbatim live capture (§13 cat.8 — never reconstruct it): POST
+     * `/v1/chat/completions` to skynet2 on 2026-09-04, model
+     * `Qwen/Qwen3.8-Flash-Next`, `stream: true` + `stream_options:
+     * {include_usage: true}`, one prompt line, max_tokens 64, default effort.
+     * 2953 bytes, sha256 4df01cc2816b62a4395bc03fdec5512337981c72ae657da449cd1c03566e9c30.
+     * 12 `data:` frames: 10 deltas, then the zero-choice terminal usage line
+     * (fixture line 21: "prompt_tokens":57,"total_tokens":85,
+     * "completion_tokens":28,...,"reasoning_tokens":25), then [DONE].
+     */
+    public function testCompleteStreamSurfacesUsageFromTheCapturedLiveStreamFixture(): void
+    {
+        $fixture = (string) file_get_contents(__DIR__ . '/../fixtures/qwen-usage-stream.txt');
+
+        $captured = [];
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturnCallback(
+            static function (string $uri, array $options) use (&$captured, $fixture): Response {
+                $captured = ['uri' => $uri, 'json' => $options['json']];
+
+                return new Response(200, [], $fixture);
+            }
+        );
+        $provider = new SglangProvider('https://skynet2.interserver.net/v1', 'Qwen/Qwen3.8-Flash-Next', null, $httpClient);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'Qwen/Qwen3.8-Flash-Next',
+            messages: [new UserMessage('Reply with exactly: OK')],
+        )));
+
+        $this->assertSame(['include_usage' => true], $captured['json']['stream_options'], 'the request arm that produced this capture is the one the provider now sends');
+        $this->assertCount(11, $chunks, 'ten captured deltas plus ONE terminal usage chunk - [DONE] inert as ever');
+        $this->assertSame("\n\nOK", implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $chunks)), 'the captured reply assembles unchanged');
+
+        $final = $chunks[10];
+        $this->assertSame('', $final->content, 'the usage chunk bills, it does not repeat text');
+        $this->assertSame(85, $final->tokensUsed, 'fixture line 21 reports "total_tokens":85 - the stream readout sees the provider count, not a hardcoded 0 (E-55)');
+        $this->assertSame(0.0, $final->costUsd);
+
+        // The captured terminal document through the shared parse seam: every
+        // figure the line reports, in the bucket it belongs to (fixture line 21).
+        $usage = $provider->parseUsage([
+            'prompt_tokens' => 57,
+            'total_tokens' => 85,
+            'completion_tokens' => 28,
+            'prompt_tokens_details' => null,
+            'reasoning_tokens' => 25,
+        ]);
+        $this->assertSame(85, $usage->totalTokens, 'fixture line 21 total');
+        $this->assertSame(57, $usage->inputTokens, 'fixture line 21 prompt, cached details null - the whole prompt is fresh');
+        $this->assertSame(28, $usage->outputTokens, 'fixture line 21 completion');
+        $this->assertSame(25, $usage->reasoningTokens, 'fixture line 21 flat reasoning_tokens lands in Usage\'s reasoning bucket (§Q6 part 3, E-31)');
     }
 }

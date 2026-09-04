@@ -567,6 +567,10 @@ final class SglangProviderTest extends TestCase
                 'prompt_tokens' => 10,
                 'completion_tokens' => 15,
                 'total_tokens' => 25,
+                // §Q6 (E-31): the flat reasoning key this deployment reports
+                // beside the trio - part of completion, never re-added to the
+                // total (the next assert pins that).
+                'reasoning_tokens' => 7,
             ],
         ]);
 
@@ -589,6 +593,15 @@ final class SglangProviderTest extends TestCase
         $this->assertSame('Hello! How can I help you?', $result->content);
         $this->assertSame(25, $result->tokensUsed);
         $this->assertNull($result->toolCalls);
+
+        // §Q6 batch half: the SAME wire usage document, read at the public
+        // parse seam, buckets the flat reasoning_tokens (E-31) without the
+        // total double-counting it - the projection above stays the wire's
+        // own total_tokens.
+        $wireUsage = json_decode((string) $responseBody, true)['usage'];
+        $parsed = $provider->parseUsage($wireUsage);
+        $this->assertSame(7, $parsed->reasoningTokens, 'flat usage.reasoning_tokens reaches Usage\'s reasoning bucket');
+        $this->assertSame(25, $parsed->totalTokens, 'reasoning is a completion SUBSET - total stays the server-reported 25, never 25+7');
     }
 
     public function testCompleteWithToolCalls(): void

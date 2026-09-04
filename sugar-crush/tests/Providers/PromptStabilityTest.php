@@ -421,8 +421,20 @@ final class PromptStabilityTest extends TestCase
         $this->assertSame(self::messagesBytes($batch), self::messagesBytes($streamed));
         $this->assertSame(self::toolsBytes($batch), self::toolsBytes($streamed));
 
-        // …and the divergence is confined to the tail.
-        $this->assertSame(substr($batch, 0, -1) . ',"stream":true}', $streamed);
+        // …and the divergence is confined to the tail. §Q6 amendment
+        // (qwen.md, 2026-09-04): this arm pinned the streamed body as the
+        // batch body plus `"stream":true` and nothing more; Q6 appended
+        // `"stream_options":{"include_usage":true}` to the stream arm so the
+        // final SSE chunk carries usage, flipping that exact tail claim.
+        // What still guards prefix-cache stability: the messages/tools byte
+        // identity above (the cache-critical prefix) plus the divergence
+        // pinned below — the stream arm carries EXACTLY the stream +
+        // stream_options tail, the batch arm carries neither key.
+        $streamTail = ',"stream":true,"stream_options":{"include_usage":true}';
+        $this->assertSame(substr($batch, 0, -1) . $streamTail . '}', $streamed);
+        $this->assertStringEndsWith($streamTail . '}', $streamed);
+        $this->assertStringNotContainsString('"stream"', $batch);
+        $this->assertStringNotContainsString('"stream_options"', $batch);
     }
 
     // -------------------------------------------------------------------------

@@ -617,6 +617,14 @@ final readonly class SglangProvider implements ProviderInterface
     {
         $params = $this->buildParams($request);
         $params['stream'] = true;
+        // §Q6 (qwen.md; E-27/E-30/E-55): ask for the usage this deployment
+        // knows. OpenAI-compatible servers emit NO usage object on a bare
+        // stream; with `include_usage` they append exactly one terminal
+        // `{"choices":[],"usage":{...}}` frame before `[DONE]` (measured live
+        // 2026-09-04, tests/fixtures/qwen-usage-stream.txt). Set HERE, next to
+        // `stream`, not inside buildParams(): buildParams is shared with
+        // complete(), and the batch body must stay byte-identical to pre-§Q6.
+        $params['stream_options'] = ['include_usage' => true];
 
         try {
             $response = $this->httpClient->post('chat/completions', [
@@ -663,6 +671,15 @@ final readonly class SglangProvider implements ProviderInterface
             $assembledContent = '';
             $sawStructuredToolCalls = false;
 
+            // The usage document from the §Q6 terminal frame, held (not
+            // yielded) until the stream is drained, then emitted once as the
+            // final chunk below. Last-write-wins on purpose: the protocol
+            // sends exactly one such frame (E-30), but a second - buggy or
+            // keepalive-shaped - must not double-bill the turn, because
+            // Runtime SUMS per-chunk usage across the stream. A local for the
+            // same `final readonly class` reason as $toolCallBuffer above.
+            $streamUsage = null;
+
             // GuzzleHttp\Psr7\Stream has no readLine() - it implements only
             // the plain PSR-7 StreamInterface. Buffer raw chunks and split on
             // "\n" ourselves (same approach as CustomProvider::completeStream()).
@@ -699,6 +716,21 @@ final readonly class SglangProvider implements ProviderInterface
                             // so the streamed-token UX is byte-for-byte what
                             // it was.
                             yield $chunk;
+                        } elseif ($data !== null && !isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
+                            // §Q6 (E-27's other half): the terminal
+                            // zero-choice usage frame the `include_usage`
+                            // request arm above produces. The delta gate
+                            // used to DROP this line; it is now kept for the
+                            // single final yield below - parsed through the
+                            // SAME parseUsage seam as the batch path, so the
+                            // two arms cannot disagree about the wire.
+                            // Narrow on purpose: `choices` must be absent or
+                            // empty AND `usage` must be an array, so the
+                            // review-5 phantom-empty-chunk shape survives -
+                            // a zero-choice frame with no usage document
+                            // (keepalive, or `"usage":null` as the captured
+                            // DeepSeek stream emits mid-delta) yields nothing.
+                            $streamUsage = $this->parseUsage($data['usage']);
                         }
                     }
                 }
@@ -723,6 +755,33 @@ final readonly class SglangProvider implements ProviderInterface
                     toolCalls: $recovered,
                     tokensUsed: 0,
                     costUsd: 0.0,
+                );
+            }
+
+            if ($streamUsage !== null) {
+                // §Q6 final chunk: the streamed result carries the usage as a
+                // trailing usage-only CompleteResponse - content '', so the
+                // transcript buffer is untouched, and `Runtime::runStreaming()`
+                // already folds one of these per-chunk into the turn's
+                // Usage::sum() (the same channel Vertex's message_start /
+                // message_delta pair bills through; the E456 comment there
+                // names "usage-only" as an expected chunk shape). Emitted
+                // last, after any recovery chunk, so the bill is the stream's
+                // terminal event and `[DONE]` stays inert. WHY tokensUsed
+                // ONLY: the parsed Usage - buckets incl. reasoning_tokens
+                // (fixture: 57/28/85/25) - is projected to the carrier's two
+                // money fields exactly as parseResponse() does on the batch
+                // path; lifting buckets across providers is the
+                // CompleteResponse widening Usage.php's class docblock names
+                // as the later seam, not this step. A stream that reports
+                // nothing never sets $streamUsage, so this yield is skipped
+                // and the turn still sums to null, not zero.
+                yield new CompleteResponse(
+                    content: '',
+                    reasoning: null,
+                    toolCalls: null,
+                    tokensUsed: $streamUsage->totalTokens,
+                    costUsd: $streamUsage->costUsd,
                 );
             }
         } catch (GuzzleException $e) {
@@ -1507,20 +1566,23 @@ final readonly class SglangProvider implements ProviderInterface
      * `cacheCreationTokens` is null on every parse — an API that reports no
      * cache fields is the legitimate outcome the step text records, not a gap
      * to paper over. `reasoning_tokens` is flat here (NOT under
-     * `completion_tokens_details`) and is not one of Usage's four buckets;
-     * carrying it is a separate seam, reported, deliberately not done here.
+     * `completion_tokens_details`). CORRECTED IN PLACE by qwen.md §Q6: what
+     * this seam first recorded as "a separate seam, deliberately not done
+     * here" is now done — the flat key is carried in
+     * {@see \SugarCraft\Crush\Usage::$reasoningTokens}, a completion-side
+     * SUBSET the server's own `total_tokens` already counts (never re-added).
      *
-     * NOTE FOR THE STREAM ARMS: this provider NEVER receives a usage object on
-     * `completeStream()` — it sends no `stream_options.include_usage` (MEASURED
-     * 2026-09-02: no code path in src/ emits it — every current grep hit for
-     * `stream_options` under src/Providers is a docblock this very step wrote,
-     * zero in executable code), and the terminal usage chunk that flag produces
-     * carries `choices: []`, which the `delta` gate in
-     * {@see completeStream()} drops before any parse runs (the same gate
-     * qwen.md §P1 found). Live probe (2026-09-02) confirms: without the option
-     * the SSE stream contains no `usage` key at all; with it, exactly one
-     * zero-choice chunk. Wiring streamed usage is out of this parse seam and
-     * is REPORTED as its own follow-up.
+     * NOTE FOR THE STREAM ARMS — also corrected in place by §Q6: the P4.S2
+     * measurement (no `stream_options` in executable code; zero-choice chunk
+     * dropped by the delta gate) still described this file on 2026-09-02 and
+     * no longer does. {@see completeStream()} now sends
+     * `stream_options.include_usage` and accepts the one zero-choice
+     * `usage`-bearing frame that flag produces (E-30), parsing it through
+     * THIS method; the parsed total surfaces as the stream's terminal
+     * chunk. What P4.S2 deferred is still deferred one layer up: only
+     * `tokensUsed`/`costUsd` cross the `CompleteResponse` seam today — the
+     * buckets (reasoning included) stop at this parse until the carrier
+     * widening {@see \SugarCraft\Crush\Usage}'s class docblock names.
      *
      * @param array<string, mixed> $usage the decoded `usage` object. A non-array
      *                                    is handed over as `[]` by the call
@@ -1545,6 +1607,10 @@ final readonly class SglangProvider implements ProviderInterface
             self::usageInt($usage['completion_tokens'] ?? null),
             $cached,
             null, // no cache-creation field exists on this protocol - never invented
+            // §Q6 (E-31): the flat reasoning key this family reports on every
+            // usage document; unreported (null) on wires that omit it, never
+            // coerced to a zero - same usageInt doctrine as every other field.
+            self::usageInt($usage['reasoning_tokens'] ?? null),
         );
     }
 
