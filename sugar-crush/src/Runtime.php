@@ -2671,9 +2671,10 @@ final class Runtime
         //   - Verification: the prove-before-done clause is ADVISORY and
         //     states its own ceiling, which is what keeps it true. It is
         //     actionable because {@see \SugarCraft\Crush\Tools\BuiltIn\Bash}
-        //     is registered unconditionally by Bootstrap::tools() and hands
-        //     its command to a real `bash -c`, and because Glob and Grep —
-        //     confined to the root — reach the project's own runner files.
+        //     is registered by Bootstrap::tools() — though `disabledTools`
+        //     config can remove it from the set — and hands its command to
+        //     a real `bash -c`, and because Glob and Grep — confined to
+        //     the root — reach the project's own runner files.
         //     It stops being true on two edges the sentence itself covers:
         //     "nothing here runs one for you" names a standing absence —
         //     no hook under `SugarCraft\Crush\Hooks\BuiltIn` dispatches a

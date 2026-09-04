@@ -486,8 +486,9 @@ final class BaseSystemPromptTest extends TestCase
         );
 
         // The actionable core against the prompt's own polarity: no negator
-        // may ever be inserted before "runs a real shell" while the code says
-        // Bash registers unconditionally and executes through `bash -c`.
+        // may ever be inserted before "runs a real shell" while the code
+        // says Bash is registered by Bootstrap::tools() — a `disabledTools`
+        // config can remove it — and executes through `bash -c`.
         $this->assertPromptDoesNotNegate($base, 'runs a real shell');
 
         // And the claim driven: content round-trips, failure surfaces.
