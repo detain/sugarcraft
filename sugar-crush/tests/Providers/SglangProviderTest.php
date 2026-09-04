@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Providers;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Exception\ServerException;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\Psr7\Stream;
@@ -21,6 +24,7 @@ use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
+use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -196,6 +200,40 @@ final class SglangProviderTest extends TestCase
 
         $this->assertSame(1_048_570, $provider->contextWindow());
         $this->assertNotSame(196_608, $provider->contextWindow());
+    }
+
+    /**
+     * Q2: the Qwen3.8 family gets its own arm, and the figure is the
+     * CONSERVATIVE effective-input cap 744,506 = min(1,000,000, 748,602 −
+     * 4,096) — 748,602 is the deployment's `max_req_input_len` and 1,000,000
+     * its `context_length` (qwen.md E-71), 4,096 is the provider's own
+     * default `max_tokens` output headroom (E-50). Because this server runs
+     * `allow_auto_truncate=false`, over-long is a HARD error rather than a
+     * silent trim (E-71), and erring LARGE would switch every one of Chat's
+     * context tiers off (E-60) — so the window must sit below the enforced
+     * input ceiling, not at the nominal model length.
+     *
+     * Ids are the E-70 forms: canonical served id, bare alias, and a
+     * lowercased spelling pinning the predicate's case-insensitivity. The
+     * negative polarity (Qwen3-235B must NOT take this arm) is pinned by
+     * {@see testContextWindowKeepsTheLegacyFigureForANonDeepSeekV4Model()}
+     * and deliberately not restated here.
+     */
+    public function testContextWindowIsTheConservativeQwen3NextCapForAQwen3NextModel(): void
+    {
+        $client = $this->createMock(Client::class);
+
+        foreach (['Qwen/Qwen3.8-Flash-Next', 'Qwen3.8-Flash-Next', 'qwen/qwen3.8-flash-next'] as $model) {
+            $provider = new SglangProvider('https://api.example.com', $model, null, $client);
+
+            $this->assertSame(744_506, $provider->contextWindow(), $model);
+            // Both neighbouring arms are the regressions this pins: 196,608
+            // is the lie Q2 exists to fix (E-60), and 1,048,570 is the
+            // DEEPSEEK arm — over 2.8× the Qwen server's enforced input
+            // ceiling, the harmful direction (E-71).
+            $this->assertNotSame(196_608, $provider->contextWindow(), $model);
+            $this->assertNotSame(1_048_570, $provider->contextWindow(), $model);
+        }
     }
 
     public function testContextWindowKeepsTheLegacyFigureForANonDeepSeekV4Model(): void
@@ -533,6 +571,10 @@ final class SglangProviderTest extends TestCase
                 'prompt_tokens' => 10,
                 'completion_tokens' => 15,
                 'total_tokens' => 25,
+                // §Q6 (E-31): the flat reasoning key this deployment reports
+                // beside the trio - part of completion, never re-added to the
+                // total (the next assert pins that).
+                'reasoning_tokens' => 7,
             ],
         ]);
 
@@ -555,6 +597,15 @@ final class SglangProviderTest extends TestCase
         $this->assertSame('Hello! How can I help you?', $result->content);
         $this->assertSame(25, $result->tokensUsed);
         $this->assertNull($result->toolCalls);
+
+        // §Q6 batch half: the SAME wire usage document, read at the public
+        // parse seam, buckets the flat reasoning_tokens (E-31) without the
+        // total double-counting it - the projection above stays the wire's
+        // own total_tokens.
+        $wireUsage = json_decode((string) $responseBody, true)['usage'];
+        $parsed = $provider->parseUsage($wireUsage);
+        $this->assertSame(7, $parsed->reasoningTokens, 'flat usage.reasoning_tokens reaches Usage\'s reasoning bucket');
+        $this->assertSame(25, $parsed->totalTokens, 'reasoning is a completion SUBSET - total stays the server-reported 25, never 25+7');
     }
 
     public function testCompleteWithToolCalls(): void
@@ -744,6 +795,180 @@ final class SglangProviderTest extends TestCase
         foreach ($provider->completeStream($request) as $chunk) {
             // process chunk
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // 13b. §Q8 (E-56/E-40/E-10): error bodies surface as clean messages
+    // -------------------------------------------------------------------------
+
+    /**
+     * The measured SGLang 400 error object (qwen.md E-40, probe 03) - the
+     * flat `message` shape this deployment actually emits.
+     */
+    private const E40_BAD_REQUEST_BODY = '{"object":"error","message":"Unexpected reasoning effort X. Supported types are xhigh (default), medium, and low.","type":"BadRequest","code":400}';
+
+    private const E40_CLEAN_MESSAGE = 'Unexpected reasoning effort X. Supported types are xhigh (default), medium, and low.';
+
+    private function providerThatFailsOnPost(\Throwable $exception): SglangProvider
+    {
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->expects($this->once())
+            ->method('post')
+            ->willThrowException($exception);
+
+        return new SglangProvider('https://api.example.com', 'MiniMax-M2.7', null, $httpClient);
+    }
+
+    private function requestForQ8(): CompleteRequest
+    {
+        return new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hello')],
+        );
+    }
+
+    /**
+     * Drives a failing call and hands back the RuntimeException it must throw.
+     */
+    private function captureSglangThrow(callable $drive): \RuntimeException
+    {
+        try {
+            $drive();
+        } catch (\RuntimeException $thrown) {
+            return $thrown;
+        }
+
+        $this->fail('Expected the SGLANG call to throw a RuntimeException');
+    }
+
+    public function testCompleteSurfacesFlatJsonErrorMessageInsteadOfRawBody(): void
+    {
+        $guzzleMessage = 'Client error: `POST https://api.example.com/chat/completions` resulting in a 400 Bad Request response with body ' . self::E40_BAD_REQUEST_BODY;
+        $provider = $this->providerThatFailsOnPost(new ClientException(
+            $guzzleMessage,
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], self::E40_BAD_REQUEST_BODY),
+        ));
+
+        $thrown = $this->captureSglangThrow(fn () => $provider->complete($this->requestForQ8()));
+
+        $this->assertSame('SGLANG request failed: ' . self::E40_CLEAN_MESSAGE, $thrown->getMessage());
+        $this->assertStringNotContainsString('{"object"', $thrown->getMessage());
+    }
+
+    public function testCompleteSurfacesTemplateSystemPositionErrorVerbatim(): void
+    {
+        // E-10: the chat template's own 400 wording, verbatim end to end.
+        $body = '{"object":"error","message":"System message must be at the beginning.","type":"BadRequest","code":400}';
+        $guzzleMessage = 'Client error: `POST https://api.example.com/chat/completions` resulting in a 400 Bad Request response with body ' . $body;
+        $provider = $this->providerThatFailsOnPost(new ClientException(
+            $guzzleMessage,
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], $body),
+        ));
+
+        $thrown = $this->captureSglangThrow(fn () => $provider->complete($this->requestForQ8()));
+
+        $this->assertSame('SGLANG request failed: System message must be at the beginning.', $thrown->getMessage());
+    }
+
+    public function testCompleteSurfacesNestedOpenAiStyleErrorMessage(): void
+    {
+        $body = '{"error":{"message":"Nested OpenAI-style error text.","type":"invalid_request_error"}}';
+        $guzzleMessage = 'Client error: `POST https://api.example.com/chat/completions` resulting in a 400 Bad Request response with body ' . $body;
+        $provider = $this->providerThatFailsOnPost(new ClientException(
+            $guzzleMessage,
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], $body),
+        ));
+
+        $thrown = $this->captureSglangThrow(fn () => $provider->complete($this->requestForQ8()));
+
+        $this->assertSame('SGLANG request failed: Nested OpenAI-style error text.', $thrown->getMessage());
+    }
+
+    public function testCompleteFallsBackToGuzzleMessageOnNonJsonBody(): void
+    {
+        $body = '<html><head><title>502 Bad Gateway</title></head><body>nginx</body></html>';
+        $guzzleMessage = 'Client error: `POST https://api.example.com/chat/completions` resulting in a 400 Bad Request response with body ' . $body;
+        $provider = $this->providerThatFailsOnPost(new ClientException(
+            $guzzleMessage,
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], $body),
+        ));
+
+        $thrown = $this->captureSglangThrow(fn () => $provider->complete($this->requestForQ8()));
+
+        // Fallback must be byte-for-byte the pre-Q8 surface: prefix + Guzzle text.
+        $this->assertSame('SGLANG request failed: ' . $guzzleMessage, $thrown->getMessage());
+    }
+
+    public function testCompleteFallsBackWhenJsonBodyHasNoMessageKey(): void
+    {
+        $body = '{"object":"error","type":"BadRequest","code":400}';
+        $guzzleMessage = 'Client error: `POST https://api.example.com/chat/completions` resulting in a 400 Bad Request response with body ' . $body;
+        $provider = $this->providerThatFailsOnPost(new ClientException(
+            $guzzleMessage,
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], $body),
+        ));
+
+        $thrown = $this->captureSglangThrow(fn () => $provider->complete($this->requestForQ8()));
+
+        $this->assertSame('SGLANG request failed: ' . $guzzleMessage, $thrown->getMessage());
+    }
+
+    public function testErrorBodyExtractionKeepsGuzzleChainAndRetryClassification(): void
+    {
+        // Done-when pin: extraction changes the human text only. The previous
+        // stays the Guzzle RequestException, so TransientFailure::isTransient()
+        // (which walks the chain to getStatusCode) keeps 400 permanent and
+        // keeps 5xx transient - no retry-behavior regression.
+        $badRequest = $this->providerThatFailsOnPost(new ClientException(
+            'Client error: raw dump',
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], self::E40_BAD_REQUEST_BODY),
+        ));
+
+        $thrown400 = $this->captureSglangThrow(fn () => $badRequest->complete($this->requestForQ8()));
+
+        $this->assertSame('SGLANG request failed: ' . self::E40_CLEAN_MESSAGE, $thrown400->getMessage());
+        $this->assertInstanceOf(RequestException::class, $thrown400->getPrevious());
+        $this->assertFalse(TransientFailure::isTransient($thrown400));
+
+        $overloadedBody = '{"object":"error","message":"Server is overloaded, retry later.","type":"ServiceUnavailable","code":503}';
+        $serviceDown = $this->providerThatFailsOnPost(new ServerException(
+            'Server error: raw dump',
+            new Request('POST', 'chat/completions'),
+            new Response(503, [], $overloadedBody),
+        ));
+
+        $thrown503 = $this->captureSglangThrow(fn () => $serviceDown->complete($this->requestForQ8()));
+
+        $this->assertSame('SGLANG request failed: Server is overloaded, retry later.', $thrown503->getMessage());
+        $this->assertTrue(TransientFailure::isTransient($thrown503));
+    }
+
+    public function testCompleteStreamSurfacesErrorMessageWithChainIntact(): void
+    {
+        // Connection-phase 4xx/5xx fail inside post() and land on the stream
+        // catch site (:874-875 in src) with the identical RequestException -
+        // the same extraction must apply there, with the chain intact.
+        $provider = $this->providerThatFailsOnPost(new ClientException(
+            'Client error: raw dump',
+            new Request('POST', 'chat/completions'),
+            new Response(400, [], self::E40_BAD_REQUEST_BODY),
+        ));
+
+        $thrown = $this->captureSglangThrow(function () use ($provider): void {
+            foreach ($provider->completeStream($this->requestForQ8()) as $chunk) {
+                $this->fail('No chunk may be emitted when the request fails');
+            }
+        });
+
+        $this->assertSame('SGLANG request failed: ' . self::E40_CLEAN_MESSAGE, $thrown->getMessage());
+        $this->assertInstanceOf(RequestException::class, $thrown->getPrevious());
+        $this->assertFalse(TransientFailure::isTransient($thrown));
     }
 
     // -------------------------------------------------------------------------

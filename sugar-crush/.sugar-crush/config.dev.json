@@ -3,9 +3,10 @@
     "dev-sglang": {
       "type": "sglang",
       "baseUrl": "https://skynet2.interserver.net/v1",
-      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "model": "Qwen/Qwen3.8-Flash-Next",
       "apiKey": null,
-      "reasoningEffort": "max"
+      "reasoningEffort": "xhigh",
+      "templateKwargs": {"preserve_thinking": false}
     }
   },
   "defaultProvider": "dev-sglang"

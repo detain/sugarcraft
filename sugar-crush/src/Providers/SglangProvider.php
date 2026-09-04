@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\RequestException;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
@@ -45,6 +46,32 @@ final readonly class SglangProvider implements ProviderInterface
      * diagnosis (that is where the payload stops), so both ends are kept.
      */
     private const WARNING_EXCERPT_LIMIT = 240;
+
+    /**
+     * §Q8 (E-56): longest server-authored error text kept when it is lifted
+     * out of an error body for display. Measured SGLang bodies (E-40/E-10)
+     * are one short sentence, so this only exists to stop a pathological
+     * server that echoes a whole request into `message` from walling the
+     * Chat pane - the exact readability failure this extraction fixes.
+     */
+    private const ERROR_MESSAGE_DISPLAY_LIMIT = 2000;
+
+    /**
+     * §Q7 (qwen.md; E-32): the `finish_reason` values that mean "this
+     * response was cut off", on both arms. E-32 measured `stop` and
+     * `tool_calls` as the clean ends this deployment serves; `length` and
+     * `abort` are the truncating ends, and are the only strings that arm the
+     * buffered tool-call flush in {@see completeStream()} or set
+     * {@see CompleteResponse::$truncated} in {@see parseResponse()}.
+     * `error` is deliberately NOT in this set: it names Q8's error-body
+     * surfacing, whose shape work must land before any tool-call behaviour
+     * rides on it. A stream that dies before ANY finish frame (hard cut, no
+     * `finish_reason` ever seen) flushes too - that is the `null` arm at the
+     * call site, not a member of this list.
+     *
+     * @var list<string>
+     */
+    private const TRUNCATED_FINISH_REASONS = ['length', 'abort'];
 
     /**
      * The model id the confirmed skynet2 deployment serves as of 2026-08-20,
@@ -193,14 +220,96 @@ final readonly class SglangProvider implements ProviderInterface
     private const DEEPSEEK_V4_CONTEXT_WINDOW = 1_048_570;
 
     /**
-     * The context window this class reports for anything that is NOT the
-     * DeepSeek-V4 family - i.e. the MiniMax-M2.7 figure it has always
-     * reported, kept because that deployment's `--context-length` was exactly
-     * this (§12 D8) and because inventing a different fallback would retune a
-     * model nobody asked us to retune.
+     * Lowercased substring that identifies the Qwen3.8 family in a model id,
+     * and therefore the family whose deployed-server figures this class
+     * substitutes for the legacy defaults (qwen.md Q2).
+     *
+     * A family token rather than the exact id, for the same reasons as
+     * {@see DEEPSEEK_V4_FAMILY_TOKEN}: the served ids carry an org prefix
+     * and a `-Flash-Next` suffix a redeploy can change without changing
+     * which server's caps the figures below transcribe, and the bare alias
+     * `Qwen3.8-Flash-Next` (qwen.md E-70) must match too.
+     * Deliberately NOT the broader `qwen`: Qwen3-235B, Qwen2.5 and every
+     * other generation were never measured against this deployment, and the
+     * Qwen figures below are transcriptions of THIS family's server -
+     * matching the whole vendor would apply them to models whose limits are
+     * unknown here. The failure modes stay asymmetric the same way the
+     * DeepSeek token argues: a MISS costs only the model-aware window and
+     * the effort default (legacy arm, status quo), an OVER-MATCH would
+     * report a window some other Qwen server may refuse to hold.
+     */
+    private const QWEN3_NEXT_FAMILY_TOKEN = 'qwen3.8';
+
+    /**
+     * The `reasoning_effort` this class sends for the Qwen3.8 family when
+     * neither the request nor the provider config names one.
+     *
+     * `xhigh` is doubly the safe top: it is the chat template's own default
+     * AND the top of the template's accepted set `xhigh|medium|low`
+     * (qwen.md E-40). DeepSeek's {@see DEEPSEEK_V4_REASONING_EFFORT} value
+     * `max` deliberately does NOT carry over - sglang's pydantic enum is
+     * wider than the template's, so `max` passes validation and then 400s AT
+     * the template on every thinking-on request (E-41).
+     */
+    private const QWEN3_NEXT_REASONING_EFFORT = 'xhigh';
+
+    /**
+     * The single-request input ceiling the Qwen3.8 deployment enforces:
+     * `max_req_input_len` from its own `/server_info`, read 2026-09-01
+     * (qwen.md E-71). This is the field that actually rejects a request -
+     * the server runs `allow_auto_truncate=false`, so an over-long input is
+     * a hard error, not a silent trim (E-71).
+     *
+     * A TRANSCRIBED CONSTANT, NOT A LIVE READ, and it decays the way
+     * {@see DEEPSEEK_V4_CONTEXT_WINDOW}'s ancestors did: a redeploy under
+     * different flags makes it wrong with no local symptom, so re-verify
+     * `https://skynet2.interserver.net/server_info` whenever the compaction
+     * tiers start looking wrong. Kept as its own constant rather than only
+     * baked into the derived {@see QWEN3_NEXT_CONTEXT_WINDOW}, because the
+     * later compaction math in this plan needs the RAW ceiling beside the
+     * safe window.
+     */
+    private const QWEN3_NEXT_MAX_REQUEST_INPUT_LEN = 748_602;
+
+    /**
+     * The context window this class reports for the Qwen3.8 family:
+     * `min(1_000_000, 748_602 − 4096)` = **744_506**.
+     *
+     * THE ARITHMETIC, because a bare number invites "just use the model
+     * length" - the three inputs, each cited:
+     * - 1,000,000: `context_length` the server publishes (YaRN 4.0 over the
+     *   native 262,144; qwen.md E-71);
+     * - 748,602: {@see QWEN3_NEXT_MAX_REQUEST_INPUT_LEN} - the ceiling the
+     *   scheduler enforces on ONE REQUEST'S INPUT (E-71), not the total
+     *   window. Which field, and why, is the argument
+     *   {@see DEEPSEEK_V4_CONTEXT_WINDOW}'s docblock makes at length; it
+     *   applies verbatim here.
+     * - 4,096: output headroom - this provider's own default `max_tokens`
+     *   (E-50). Input and generated output share the scheduling budget
+     *   (`max_total_num_tokens` 748,608, E-71), so a request whose input sat
+     *   at 748,602 could not generate anything.
+     *
+     * WHY CONSERVATIVE: with `allow_auto_truncate=false` an over-long
+     * request hard-errors (E-71), and every context tier in Chat is a
+     * percentage of this number - erring LARGE turns reminder, compaction
+     * and refusal OFF, which {@see ProviderInterface::contextWindow()} names
+     * as the harmful direction (E-60 is exactly that tier math run with the
+     * wrong denominator). Erring small costs only an earlier compaction.
+     * The raw constants stay exposed so the margin can be re-tuned without
+     * re-deriving the evidence.
+     */
+    private const QWEN3_NEXT_CONTEXT_WINDOW = 744_506;
+
+    /**
+     * The context window this class reports for anything that is neither
+     * the DeepSeek-V4 nor the Qwen3.8 family - i.e. the MiniMax-M2.7 figure
+     * it has always reported, kept because that deployment's
+     * `--context-length` was exactly this (§12 D8) and because inventing a
+     * different fallback would retune a model nobody asked us to retune.
      *
      * DOMAIN: this is a MiniMax-shaped number serving as the fallback for
-     * every non-DeepSeek-V4 model, which is a guess for any third model. 0
+     * every model outside the two families with measured figures, which is
+     * a guess for any other model. 0
      * ("unknown", per {@see ProviderInterface::contextWindow()}) would be the
      * honest answer for a stranger, but it would also newly disable all four
      * context tiers on any MiniMax deployment reaching this arm, so the
@@ -235,6 +344,41 @@ final readonly class SglangProvider implements ProviderInterface
         'high',
         'xhigh',
         'max',
+    ];
+
+    /**
+     * The `reasoning_effort` values Qwen3.8's CHAT TEMPLATE accepts when the
+     * effort reaches it through `chat_template_kwargs` - measured against
+     * skynet2 2026-09-03 (qwen.md E-40): an invalid name 400s with the
+     * template's own raise "Unexpected reasoning effort X. Supported types
+     * are xhigh (default), medium, and low."
+     *
+     * Deliberately NARROWER than {@see REASONING_EFFORT_LEVELS}: that set is
+     * the server's pydantic enum for the TOP-LEVEL field, which the Qwen
+     * route stops using (qwen.md §Q4). `xhigh` is both the template's default
+     * and this family's tier-3 config default
+     * ({@see QWEN3_NEXT_REASONING_EFFORT}).
+     */
+    private const QWEN3_NEXT_TEMPLATE_EFFORTS = ['low', 'medium', 'xhigh'];
+
+    /**
+     * Translations from wider pydantic-level names to the nearest
+     * template-vocabulary value, applied by {@see sanitizeEffortForTemplate()}
+     * so the effort a deployment or caller already names keeps its INTENT
+     * instead of 400-ing at the template (qwen.md E-41: `high`/`max` pass
+     * pydantic and then fail the template check whenever thinking is on).
+     *
+     * `high`/`max` collapse UP to `xhigh` (the template's strongest setting,
+     * matching what those names ask for), `minimal` collapses DOWN to `low`
+     * (its weakest). Neither pair is an equality the template enforces - it
+     * is a judgement, recorded here rather than buried in a switch.
+     * `none` is NOT in this map: it has no template effort-word; it means
+     * "stop thinking", handled by the enable_thinking arm of the sanitizer.
+     */
+    private const QWEN3_NEXT_EFFORT_TEMPLATE_ALIASES = [
+        'minimal' => 'low',
+        'high' => 'xhigh',
+        'max' => 'xhigh',
     ];
 
     /**
@@ -275,6 +419,25 @@ final readonly class SglangProvider implements ProviderInterface
          * rather than on the first completion.
          */
         private string|float|null $reasoningEffort = null,
+        /**
+         * Deployment-wide `chat_template_kwargs`, from the `sglang` provider
+         * block's optional `templateKwargs` key
+         * ({@see ProviderFactory::createSglang()}).
+         *
+         * Merged UNDER the per-request DTO's `$extraTemplateKwargs`, per key,
+         * at send time - see {@see mergedTemplateKwargs()} for the precedence
+         * and why null/empty mean "carry nothing" rather than "clear". The
+         * shape (associative array of string keys) is enforced at the config
+         * parse seam ({@see ProviderFactory::configuredTemplateKwargs()});
+         * values are template-side business and travel untouched.
+         *
+         * `[]` (the default) reproduces the pre-config wire exactly: the
+         * merged array is empty and the existing empty-knob filter still
+         * drops `chat_template_kwargs` from the body.
+         *
+         * @param array<string, mixed> $extraTemplateKwargs
+         */
+        private array $extraTemplateKwargs = [],
     ) {
         if ($this->reasoningEffort !== null) {
             self::validatedReasoningEffort($this->reasoningEffort, 'provider config');
@@ -287,6 +450,7 @@ final readonly class SglangProvider implements ProviderInterface
         ?string $apiKey = null,
         ?ToolCallParserInterface $toolCallParser = null,
         string|float|null $reasoningEffort = null,
+        array $extraTemplateKwargs = [],
     ): self {
         $headers = [
             'Content-Type' => 'application/json',
@@ -309,7 +473,7 @@ final readonly class SglangProvider implements ProviderInterface
             'headers' => $headers,
         ]);
 
-        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser, $reasoningEffort);
+        return new self($baseUrl, $model, $apiKey, $client, $toolCallParser, $reasoningEffort, $extraTemplateKwargs);
     }
 
     /**
@@ -376,7 +540,7 @@ final readonly class SglangProvider implements ProviderInterface
      * single figure it used to return was measured on a model this server no
      * longer runs.
      *
-     * TWO figures, each with its own domain:
+     * THREE figures, each with its own domain:
      *
      * - {@see DEEPSEEK_V4_CONTEXT_WINDOW} = 1,048,570 for the DeepSeek-V4
      *   family. Not a guess and not from a card: it is `max_req_input_len` in
@@ -395,6 +559,14 @@ final readonly class SglangProvider implements ProviderInterface
      *   form of this argument; this bullet previously contradicted it by
      *   naming both the wrong value (393,216, which the slot held earlier on
      *   the same day) and the wrong field.
+     *
+     * - {@see QWEN3_NEXT_CONTEXT_WINDOW} = 744,506 for the Qwen3.8 family
+     *   (qwen.md Q2): NOT the nominal 1,000,000 model length but the
+     *   CONSERVATIVE effective-input cap `min(1_000_000, 748_602 − 4096)`,
+     *   because `allow_auto_truncate=false` makes an over-long request a
+     *   hard error (E-71) - this arm rides under the enforced input ceiling
+     *   so the tiers fire early rather than the server refusing the request.
+     *   That constant's docblock is the long form of the arithmetic.
      * - {@see LEGACY_DEFAULT_CONTEXT_WINDOW} = 196,608 for everything else.
      *   That is the `--context-length 196608` the MiniMax-M2.7 skynet2 launch
      *   command pinned (§12), which is what this method returned
@@ -420,10 +592,12 @@ final readonly class SglangProvider implements ProviderInterface
      * tiers are percentages of - the 70% reminder, 85% automatic compaction,
      * 95% blocking refusal and the idle-compaction prompt. On the DeepSeek-V4
      * arm those fire at ~733,999 / ~891,284 / ~996,141 estimated tokens; on
-     * the legacy arm at ~137,625 / ~167,116 / ~186,777, unchanged.
+     * the Qwen3.8 arm at ~521,154 / ~632,830 / ~707,280; on the legacy arm
+     * at ~137,625 / ~167,116 / ~186,777, unchanged.
      *
-     * Those three DeepSeek figures are 70/85/95% of 1,048,570 and of nothing
-     * else. They are restated here only because they were last written as
+     * Those three figures per arm are 70/85/95% of 1,048,570, of 744,506 and
+     * of 196,608 respectively and of nothing else. The DeepSeek set was last
+     * written as
      * ~275,251 / ~334,233 / ~373,555 - the same percentages of the superseded
      * 393,216 - and a derived figure left behind after its input moves is this
      * project's signature defect. Recompute them whenever the constant moves.
@@ -432,9 +606,15 @@ final readonly class SglangProvider implements ProviderInterface
      */
     public function contextWindow(): int
     {
-        return self::isDeepSeekV4($this->model)
-            ? self::DEEPSEEK_V4_CONTEXT_WINDOW
-            : self::LEGACY_DEFAULT_CONTEXT_WINDOW;
+        if (self::isDeepSeekV4($this->model)) {
+            return self::DEEPSEEK_V4_CONTEXT_WINDOW;
+        }
+
+        if (self::isQwen3Next($this->model)) {
+            return self::QWEN3_NEXT_CONTEXT_WINDOW;
+        }
+
+        return self::LEGACY_DEFAULT_CONTEXT_WINDOW;
     }
 
     public function costPer1kTokens(string $model, string $direction): float
@@ -454,9 +634,20 @@ final readonly class SglangProvider implements ProviderInterface
 
             $data = json_decode($response->getBody()->getContents(), true);
 
-            return $this->parseResponse($data);
+            return $this->parseResponse($data, $this->contentThinkingEnabled($request));
         } catch (GuzzleException $e) {
-            throw new \RuntimeException('SGLANG request failed: ' . $e->getMessage(), 0, $e);
+            // §Q8 (qwen.md; E-56): surface the server's own `error.message`
+            // when the response carries one instead of Guzzle's raw-body dump
+            // (GuzzleException messages are the request/status line plus the
+            // body clipped to ~2KB - unreadable in Chat). Prefix, exception
+            // class, code 0 and the previous-chain $e are byte-stable, so
+            // TransientFailure::isTransient() classification (400 permanent,
+            // 5xx/408/429 retried) is untouched.
+            throw new \RuntimeException(
+                'SGLANG request failed: ' . (self::errorBodyMessage($e) ?? $e->getMessage()),
+                0,
+                $e
+            );
         }
     }
 
@@ -464,6 +655,14 @@ final readonly class SglangProvider implements ProviderInterface
     {
         $params = $this->buildParams($request);
         $params['stream'] = true;
+        // §Q6 (qwen.md; E-27/E-30/E-55): ask for the usage this deployment
+        // knows. OpenAI-compatible servers emit NO usage object on a bare
+        // stream; with `include_usage` they append exactly one terminal
+        // `{"choices":[],"usage":{...}}` frame before `[DONE]` (measured live
+        // 2026-09-04, tests/fixtures/qwen-usage-stream.txt). Set HERE, next to
+        // `stream`, not inside buildParams(): buildParams is shared with
+        // complete(), and the batch body must stay byte-identical to pre-§Q6.
+        $params['stream_options'] = ['include_usage' => true];
 
         try {
             $response = $this->httpClient->post('chat/completions', [
@@ -510,6 +709,34 @@ final readonly class SglangProvider implements ProviderInterface
             $assembledContent = '';
             $sawStructuredToolCalls = false;
 
+            // The usage document from the §Q6 terminal frame, held (not
+            // yielded) until the stream is drained, then emitted once as the
+            // final chunk below. Last-write-wins on purpose: the protocol
+            // sends exactly one such frame (E-30), but a second - buggy or
+            // keepalive-shaped - must not double-bill the turn, because
+            // Runtime SUMS per-chunk usage across the stream. A local for the
+            // same `final readonly class` reason as $toolCallBuffer above.
+            $streamUsage = null;
+
+            // §Q9: the thinking gate (request-scoped kwargs — never recoverable
+            // from a single frame) and the first-content cursor, threaded by ref
+            // into parseChunk(). Locals, not properties: final readonly class,
+            // lifetime exactly one generator call — same reason as $toolCallBuffer.
+            $contentThinkingOn = $this->contentThinkingEnabled($request);
+            $seenFirstContent = false;
+
+            // The LAST non-null `finish_reason` seen on any data frame, read
+            // after the loop by the §Q7 flush guard. Captured per frame here
+            // rather than inside parseChunk() because parseChunk() is also a
+            // reflection-tested unit (SglangProviderTruncationGuardTest) and
+            // the end-of-stream decision belongs to the generator. A frame
+            // without the key - or with it null, which is what every
+            // pre-finish chunk carries on this wire - keeps the previous
+            // value via `??`; the terminal frame is the one that speaks.
+            // `matched_stop` is deliberately never consulted: E-32 measured
+            // it as ignorable noise that can ride a `tool_calls` finish.
+            $streamFinishReason = null;
+
             // GuzzleHttp\Psr7\Stream has no readLine() - it implements only
             // the plain PSR-7 StreamInterface. Buffer raw chunks and split on
             // "\n" ourselves (same approach as CustomProvider::completeStream()).
@@ -522,8 +749,16 @@ final readonly class SglangProvider implements ProviderInterface
 
                     if (str_starts_with($line, 'data: ')) {
                         $data = json_decode(substr($line, 6), true);
+                        // §Q7: read on EVERY decoded frame, before the delta
+                        // gate - a finish frame the delta branch skips (no
+                        // `delta` key at all) still has to be seen, or a
+                        // clean `stop` end would masquerade as a hard cut
+                        // and arm the flush. `[DONE]` decodes to null and
+                        // the whole chain short-circuits to the previous
+                        // value.
+                        $streamFinishReason = $data['choices'][0]['finish_reason'] ?? $streamFinishReason;
                         if ($data !== null && isset($data['choices'][0]['delta'])) {
-                            $chunk = $this->parseChunk($data, $toolCallBuffer);
+                            $chunk = $this->parseChunk($data, $toolCallBuffer, $contentThinkingOn, $seenFirstContent);
 
                             $sawStructuredToolCalls = $sawStructuredToolCalls
                                 || ($chunk->toolCalls !== null && $chunk->toolCalls !== []);
@@ -546,9 +781,52 @@ final readonly class SglangProvider implements ProviderInterface
                             // so the streamed-token UX is byte-for-byte what
                             // it was.
                             yield $chunk;
+                        } elseif ($data !== null && !isset($data['choices'][0]) && is_array($data['usage'] ?? null)) {
+                            // §Q6 (E-27's other half): the terminal
+                            // zero-choice usage frame the `include_usage`
+                            // request arm above produces. The delta gate
+                            // used to DROP this line; it is now kept for the
+                            // single final yield below - parsed through the
+                            // SAME parseUsage seam as the batch path, so the
+                            // two arms cannot disagree about the wire.
+                            // Narrow on purpose: `choices` must be absent or
+                            // empty AND `usage` must be an array, so the
+                            // review-5 phantom-empty-chunk shape survives -
+                            // a zero-choice frame with no usage document
+                            // (keepalive, or `"usage":null` as the captured
+                            // DeepSeek stream emits mid-delta) yields nothing.
+                            $streamUsage = $this->parseUsage($data['usage']);
                         }
                     }
                 }
+            }
+
+            // §Q7 (E-32): E-32's silent-loss window. The structured path
+            // assembles only on `finish_reason: "tool_calls"`; when the turn
+            // is cut off (`length`/`abort`) - or the connection dies before
+            // any finish frame (`null`) - fragments that had already streamed
+            // used to be dropped here WITHOUT A TRACE. Flush them
+            // best-effort instead: args that decode to a complete JSON object
+            // are emitted, everything else is dropped with the existing
+            // malformed-arguments warning naming it (never half-decoded).
+            // `stop` and `tool_calls` ends keep their exact prior behaviour -
+            // the first never flushes by mandate (qwen.md §Q7(c): byte-
+            // unchanged), the second drains the buffer mid-stream, so the
+            // guard below is inert on it anyway. `error` is left silent here
+            // on purpose: that value belongs to Q8's error-body surfacing.
+            $streamEndedTruncated = $streamFinishReason === null
+                || in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true);
+            $truncatedFlush = $streamEndedTruncated && $toolCallBuffer !== []
+                ? self::flushTruncatedToolCalls($toolCallBuffer)
+                : null;
+
+            if ($truncatedFlush !== null) {
+                // The structured path DID produce calls after all - which
+                // disarms recoverTextualToolCalls() below exactly as a
+                // mid-stream assembly would, so the flushed call and a text
+                // envelope parsed out of the same truncated turn can never
+                // both execute.
+                $sawStructuredToolCalls = true;
             }
 
             $recovered = $this->recoverTextualToolCalls($assembledContent, $sawStructuredToolCalls);
@@ -572,8 +850,68 @@ final readonly class SglangProvider implements ProviderInterface
                     costUsd: 0.0,
                 );
             }
+
+            if ($truncatedFlush !== null) {
+                // §Q7 flush frame: shaped exactly like the recovery frame
+                // above - empty content (the fragments streamed as tool
+                // deltas, not text; repeating anything here would double the
+                // transcript), zero billing (usage arrives on the terminal
+                // chunk below, and `Usage::sum()` skips zero-chunks), and
+                // `truncated: true` so a consumer that learns to read the
+                // flag can tell a flushed call from a cleanly assembled one.
+                // Riding BEFORE the §Q6 terminal usage chunk keeps the bill
+                // the stream's last event (that yield's docblock states the
+                // ordering rule) and mirrors wire order, where finish
+                // precedes the usage frame (E-26's channel order).
+                yield new CompleteResponse(
+                    content: '',
+                    reasoning: null,
+                    toolCalls: $truncatedFlush,
+                    tokensUsed: 0,
+                    costUsd: 0.0,
+                    truncated: true,
+                );
+            }
+
+            if ($streamUsage !== null) {
+                // §Q6 final chunk: the streamed result carries the usage as a
+                // trailing usage-only CompleteResponse - content '', so the
+                // transcript buffer is untouched, and `Runtime::runStreaming()`
+                // already folds one of these per-chunk into the turn's
+                // Usage::sum() (the same channel Vertex's message_start /
+                // message_delta pair bills through; the E456 comment there
+                // names "usage-only" as an expected chunk shape). Emitted
+                // last, after any recovery chunk, so the bill is the stream's
+                // terminal event and `[DONE]` stays inert. WHY tokensUsed
+                // ONLY: the parsed Usage - buckets incl. reasoning_tokens
+                // (fixture: 57/28/85/25) - is projected to the carrier's two
+                // money fields exactly as parseResponse() does on the batch
+                // path; lifting buckets across providers is the
+                // CompleteResponse widening Usage.php's class docblock names
+                // as the later seam, not this step. A stream that reports
+                // nothing never sets $streamUsage, so this yield is skipped
+                // and the turn still sums to null, not zero.
+                yield new CompleteResponse(
+                    content: '',
+                    reasoning: null,
+                    toolCalls: null,
+                    tokensUsed: $streamUsage->totalTokens,
+                    costUsd: $streamUsage->costUsd,
+                );
+            }
         } catch (GuzzleException $e) {
-            throw new \RuntimeException('SGLANG request failed: ' . $e->getMessage(), 0, $e);
+            // §Q8 (qwen.md; E-56): surface the server's own `error.message`
+            // when the response carries one instead of Guzzle's raw-body dump
+            // (GuzzleException messages are the request/status line plus the
+            // body clipped to ~2KB - unreadable in Chat). Prefix, exception
+            // class, code 0 and the previous-chain $e are byte-stable, so
+            // TransientFailure::isTransient() classification (400 permanent,
+            // 5xx/408/429 retried) is untouched.
+            throw new \RuntimeException(
+                'SGLANG request failed: ' . (self::errorBodyMessage($e) ?? $e->getMessage()),
+                0,
+                $e
+            );
         }
     }
 
@@ -646,7 +984,13 @@ final readonly class SglangProvider implements ProviderInterface
 
         $params = [
             'model' => $request->model,
-            'messages' => $this->formatMessages($request->messages),
+            // formatMessages() owns the single leading system row: the
+            // assembled prompt (Runtime::buildSystemPrompt()'s seven layers,
+            // arriving on CompleteRequest::$systemPrompt) joined with any
+            // history SystemMessages — see its docblock for why the merge
+            // lives there (Q5/E-10) and why '' counts as unset here, the same
+            // convention as the optional-knob filter below.
+            'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
             // Model-aware since DeepSeek-V4 became the default: this used to
             // be a flat `?? 0.7`, which is DeepSeek-V4-Flash's card-prescribed
             // 1.0 minus 0.3. Keyed on $request->model, the id this body is
@@ -663,17 +1007,24 @@ final readonly class SglangProvider implements ProviderInterface
             'separate_reasoning' => true,
         ];
 
-        // The assembled prompt (Runtime::buildSystemPrompt()'s seven layers)
-        // arrives on CompleteRequest::$systemPrompt, and this provider used to
-        // never read the field - the whole prompt silently dropped on the
-        // DEFAULT provider, every turn (prompt_expand.md §1.1). Prepended as
-        // the leading system message, OpenAI chat/completions order. '' means
-        // "unset" here, the same convention as the optional-knob filter below
-        // and VertexProvider's systemPrompt hoist.
-        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
-            $params['messages'] = array_merge(
-                [['role' => 'system', 'content' => $request->systemPrompt]],
-                $params['messages']
+        // Q4 (qwen.md §Q4): the Qwen3.8 family routes its effort INTO
+        // chat_template_kwargs, sanitized to the template's own vocabulary,
+        // and stops sending the top-level field. Everything else — resolve
+        // (request > config > model), validate, place — is shared by both
+        // families, so the tiers keep exactly one implementation.
+        $effort = $this->resolveReasoningEffort($request);
+        $isQwen = self::isQwen3Next($request->model);
+        $effortTemplateKwargs = [];
+        if ($isQwen) {
+            // "Thinking on" is whatever the two caller-facing kwargs layers
+            // declare (config then DTO, Q3's merge); the template's own
+            // default is ON, and only an explicit false counts as OFF — see
+            // sanitizeEffortForTemplate() for why sanitizing does NOT switch
+            // off with it.
+            $declaredKwargs = $this->mergedTemplateKwargs($request);
+            $effortTemplateKwargs = self::sanitizeEffortForTemplate(
+                $effort,
+                ($declaredKwargs['enable_thinking'] ?? true) !== false,
             );
         }
 
@@ -687,16 +1038,25 @@ final readonly class SglangProvider implements ProviderInterface
             'min_p' => $request->minP,
             'repetition_penalty' => $request->repetitionPenalty,
             'stop' => $request->stop,
-            'chat_template_kwargs' => $request->extraTemplateKwargs,
-            // Top-level, NOT under chat_template_kwargs. Those two are
-            // different mechanisms and the difference matters here:
-            // `chat_template_kwargs` feeds a server-side Jinja chat template,
-            // and DeepSeek-V4-Flash ships none, so routing effort through it
-            // would be silently dropped. `reasoning_effort` is a field on
-            // SGLang's own ChatCompletionRequest - proven by the fact that a
-            // bogus value is REJECTED 400 by its pydantic model rather than
-            // ignored (probed 2026-08-20).
-            'reasoning_effort' => $this->resolveReasoningEffort($request),
+            // Config kwargs merged with the per-request DTO's, with the
+            // sanitized Qwen effort between them - see the merge method for
+            // the precedence and its sentinel semantics.
+            'chat_template_kwargs' => $this->mergedTemplateKwargs($request, $effortTemplateKwargs),
+            // For every family EXCEPT Qwen this is top-level, NOT under
+            // chat_template_kwargs. Those two are different mechanisms and
+            // the difference matters here: `chat_template_kwargs` feeds a
+            // server-side Jinja chat template, and DeepSeek-V4-Flash ships
+            // none, so routing effort through it would be silently dropped.
+            // `reasoning_effort` is a field on SGLang's own
+            // ChatCompletionRequest - proven by the fact that a bogus value
+            // is REJECTED 400 by its pydantic model rather than ignored
+            // (probed 2026-08-20). Qwen3.8's deployment DOES ship such a
+            // template and reads effort there (qwen.md E-42), while its
+            // pydantic-side check is the noisy wider enum (E-41) — so Qwen
+            // sends the sanitized value through kwargs instead and this
+            // entry goes null, which the filter below turns into the key
+            // being absent (qwen.md §Q4: never a template-invalid effort).
+            'reasoning_effort' => $isQwen ? null : $effort,
         ] as $key => $value) {
             // Strict comparisons throughout: `0` / `0.0` are meaningful
             // top_k/min_p values and must survive, unlike a falsy filter.
@@ -749,6 +1109,142 @@ final readonly class SglangProvider implements ProviderInterface
     }
 
     /**
+     * Merges the deployment-wide config kwargs
+     * ({@see ProviderFactory::createSglang()}) with the per-request DTO's
+     * `$extraTemplateKwargs` into the single `chat_template_kwargs` value
+     * {@see buildParams()} emits.
+     *
+     * PRECEDENCE (qwen.md §Q4 collision mandate, stated here because this is
+     * the seam it lands on), lowest first: config kwargs < the SANITIZED
+     * Qwen effort (`$sanitizedEffortKwargs`) < per-request DTO kwargs.
+     * So a deployment that parked a `reasoning_effort` in its config kwargs
+     * LOSES to the template-valid value this class computed — the sanitized
+     * one is what the served template can actually parse — while an
+     * EXPLICIT per-request kwarg overrides BOTH, which keeps Q3's rule that
+     * caller-named template keys travel verbatim (the open-vocabulary
+     * decision: the template's key space is the server's business, not a
+     * closed enum we get to police). The order is three array_merge
+     * arguments, so the "who wins" story and the code cannot disagree.
+     *
+     * Merging stays PER KEY: array_merge's right-hand side overwrites exactly
+     * the string keys it carries, so a request flipping `enable_thinking`
+     * cannot silently drop a deployment's `preserve_thinking` - a whole-body
+     * override would make every per-call template tweak destructive of the
+     * others, which no caller asked for.
+     *
+     * SENTINELS: null AND [] on the DTO both mean "this request names no
+     * keys", the same unset convention the optional-knob filter applies to
+     * every other field. Consequently the merge is empty - and the existing
+     * `$value !== []` filter keeps `chat_template_kwargs` off the wire
+     * entirely - exactly when ALL contributing layers are empty: an unwired
+     * config, a non-Qwen model (whose $sanitizedEffortKwargs is always []),
+     * and an unwired request still reproduce today's byte-identical body.
+     *
+     * @param array<string, mixed> $sanitizedEffortKwargs the middle layer:
+     *        {@see sanitizeEffortForTemplate()}'s output, [] for every model
+     *        outside the Qwen3.8 family (which is also the default, so the
+     *        Q3-era two-layer callers, e.g. buildParams' thinking probe,
+     *        merge config+DTO only).
+     * @return array<string, mixed>
+     */
+    private function mergedTemplateKwargs(CompleteRequest $request, array $sanitizedEffortKwargs = []): array
+    {
+        return array_merge(
+            $this->extraTemplateKwargs,
+            $sanitizedEffortKwargs,
+            $request->extraTemplateKwargs ?? [],
+        );
+    }
+
+    /**
+     * Translates a resolved `reasoning_effort` into the Qwen3.8
+     * `chat_template_kwargs` entries the deployed template can actually
+     * parse (qwen.md §Q4; vocabulary E-40, forwarding behaviour E-41,
+     * kwargs-reach E-42, thinking switch E-22).
+     *
+     * THE MAPPING, each leg measured rather than guessed:
+     * - `low`/`medium`/`xhigh` pass through — the template's whole set.
+     * - `high`/`max` → `xhigh`, `minimal` → `low` — the wider pydantic names
+     *   keep their intent instead of 400-ing at the template (E-41); see
+     *   {@see QWEN3_NEXT_EFFORT_TEMPLATE_ALIASES} for the judgement.
+     * - `none` → drop effort, emit `enable_thinking: false` (when thinking
+     *   is on) — the template has no effort-word for "don't think";
+     *   `enable_thinking:false` is its switch, and with thinking off the
+     *   effort check is skipped and reasoning comes back null (E-22). When
+     *   `$thinkingOn` is false the config/DTO already carries the false, so
+     *   the sanitizer contributes nothing — same wire value, no redundant
+     *   write through the middle layer.
+     * - null (only reachable for models without a tier-3 default) → nothing.
+     * - ANYTHING ELSE — including a float — throws
+     *   {@see InvalidArgumentException} at BUILD time, before the request
+     *   leaves: fail-fast over a guaranteed template 400. Floats are the
+     *   pydantic side-channel (`constrained-float`, measured 2026-08-20,
+     *   top-level field only); under `chat_template_kwargs` they skip
+     *   pydantic and hit the template's string-compare raise (E-42), and no
+     *   float→level mapping was ever measured, so refusing is the only
+     *   honest option.
+     *
+     * WHY SANITIZING DOES NOT SWITCH OFF WITH `$thinkingOn`: E-41 measured
+     * the template SKIPPING its effort check when thinking is off, so an
+     * unmapped `high` would survive on the wire — but §Q4's goal is
+     * "never send a template-invalid effort", unconditionally, and a
+     * deployment that flips thinking back on must not have its request
+     * quietly change shape. Mapping regardless is the conservative arm;
+     * pinned by testATemplateInvalidEffortIsStillMappedWhenThinkingIsExplicitlyOff.
+     *
+     * WHY NO NOTICE FOR THE MAPPINGS: {@see RuntimeNoticeSink::warn()} is
+     * this class's channel for response-side DATA CORRUPTION the caller
+     * cannot otherwise see (truncated tool arguments); a config that names
+     * `max` is deterministic, intended vocabulary translation — warning on it
+     * would fire on EVERY request of a stable deployment, training readers to
+     * ignore the sink. The loud channel stays the build-time throw for
+     * values that have NO valid translation. (kwargs-only return shape per
+     * that judgement — the spec's "optional notice" resolves to "none, and
+     * here is why".)
+     *
+     * Pure: no I/O, no state — ($effort, $thinkingOn) fully determine the
+     * result, so the matrix above is exhaustively testable in isolation.
+     *
+     * @param  string|float|null $effort the RESOLVED effort — precedence
+     *         (request > config > model) is the caller's job
+     *         ({@see resolveReasoningEffort()}, untouched by §Q4), pydantic
+     *         validation already paid there.
+     * @param  bool $thinkingOn whether the effective kwargs declare thinking
+     *         on (buildParams derives it: merged config→DTO
+     *         `enable_thinking`, absent = the template's default = true).
+     * @return array<string, mixed> the kwargs the sanitizer contributes,
+     *         [] when it contributes none.
+     * @throws \InvalidArgumentException When no template-valid translation
+     *         exists (see above).
+     */
+    private static function sanitizeEffortForTemplate(string|float|null $effort, bool $thinkingOn): array
+    {
+        if ($effort === null) {
+            return [];
+        }
+
+        if ($effort === 'none') {
+            return $thinkingOn ? ['enable_thinking' => false] : [];
+        }
+
+        $templateEffort = is_string($effort)
+            ? (self::QWEN3_NEXT_EFFORT_TEMPLATE_ALIASES[$effort] ?? $effort)
+            : $effort;
+
+        if (!in_array($templateEffort, self::QWEN3_NEXT_TEMPLATE_EFFORTS, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'reasoning_effort %s has no Qwen3.8 chat-template translation; the template accepts %s '
+                . '(pydantic names minimal/high/max are mapped automatically, "none" disables thinking instead) '
+                . '— floats are a top-level pydantic alternative the template never sees as kwargs (qwen.md E-40/E-41/E-42).',
+                var_export($effort, true),
+                implode(', ', self::QWEN3_NEXT_TEMPLATE_EFFORTS),
+            ));
+        }
+
+        return ['reasoning_effort' => $templateEffort];
+    }
+
+    /**
      * True when a model id names the DeepSeek-V4 family.
      *
      * Case-insensitive substring, not equality: the deployed id is
@@ -766,6 +1262,25 @@ final readonly class SglangProvider implements ProviderInterface
     public static function isDeepSeekV4(string $model): bool
     {
         return str_contains(strtolower($model), self::DEEPSEEK_V4_FAMILY_TOKEN);
+    }
+
+    /**
+     * True when a model id names the Qwen3.8 family - the ids the skynet2
+     * deployment serves as `Qwen/Qwen3.8-Flash-Next` and the bare alias
+     * `Qwen3.8-Flash-Next` (qwen.md E-70).
+     *
+     * Case-insensitive substring, the SAME shape as {@see isDeepSeekV4()};
+     * see {@see QWEN3_NEXT_FAMILY_TOKEN} for why the token is `qwen3.8` and
+     * not the broader `qwen`.
+     *
+     * PUBLIC for parity with {@see isDeepSeekV4()} and for the same reason:
+     * one family test behind this class's window, effort and (from Q3/Q4 of
+     * the qwen.md plan) kwargs routing, so a later consumer never spells a
+     * second, independently-drifting substring match for "Qwen3.8".
+     */
+    public static function isQwen3Next(string $model): bool
+    {
+        return str_contains(strtolower($model), self::QWEN3_NEXT_FAMILY_TOKEN);
     }
 
     /**
@@ -854,6 +1369,12 @@ final readonly class SglangProvider implements ProviderInterface
     /**
      * The `reasoning_effort` for one request, or null to omit the field.
      *
+     * WHAT IT RETURNS decides the VALUE; where the value is PLACED is
+     * family-dependent and belongs to {@see buildParams()}: top-level for
+     * every family but Qwen3.8, whose resolved value is sanitized into
+     * `chat_template_kwargs` instead (qwen.md §Q4 -
+     * {@see sanitizeEffortForTemplate()}).
+     *
      * THREE tiers, most specific first:
      *
      * 1. `CompleteRequest::$reasoningEffort` - this one call.
@@ -895,14 +1416,30 @@ final readonly class SglangProvider implements ProviderInterface
      * this model, and the top of the card's own recommended set
      * (`low`/`high`/`max`).
      *
-     * NULL for every other model, which is the field being omitted entirely -
+     * `xhigh` for the Qwen3.8 family (qwen.md Q2): the chat template's own
+     * default and the top of ITS accepted set `xhigh|medium|low` (E-40).
+     * DeepSeek's `max` does not carry over - it passes sglang's wider
+     * pydantic enum and then 400s at the template on every thinking-on
+     * request (E-41), which is exactly what config.dev.json's old `"max"`
+     * walked into. Naming `xhigh` rather than omitting the field changes
+     * nothing on the wire's BEHAVIOUR - the template applies `xhigh` when
+     * effort is absent (E-40) - but records the deployment's intent in the
+     * one tier every later request reads, and mirrors what Q1's config key
+     * already pins explicitly. (Q4 moved this family's value from the
+     * top-level field into `chat_template_kwargs`, where the template reads
+     * it - {@see sanitizeEffortForTemplate()} - the tier-3 default itself is
+     * unchanged.)
+     *
+     * NULL for every remaining model, which is the field being omitted
+     * entirely -
      * and that asymmetry is deliberate rather than lazy. Two facts about it,
      * kept separate because only one of them is measured:
      *
      * - MEASURED (by absence): `reasoning_effort` appeared nowhere in `src/`,
      *   `bin/`, `tests/` or any config file before this change, so no request
      *   this codebase has ever sent carried one. Omitting it for a
-     *   non-DeepSeek-V4 model is therefore the status quo exactly.
+     *   model outside the two named families is therefore the status quo
+     *   exactly.
      * - NOT MEASURED: what an effort level would do to MiniMax-M2.x. That
      *   deployment is gone from the confirmed server, so there is no way to
      *   find out here. Sending one anyway, on the strength of a DeepSeek
@@ -911,9 +1448,15 @@ final readonly class SglangProvider implements ProviderInterface
      */
     private static function defaultReasoningEffort(string $model): ?string
     {
-        return self::isDeepSeekV4($model)
-            ? self::DEEPSEEK_V4_REASONING_EFFORT
-            : null;
+        if (self::isDeepSeekV4($model)) {
+            return self::DEEPSEEK_V4_REASONING_EFFORT;
+        }
+
+        if (self::isQwen3Next($model)) {
+            return self::QWEN3_NEXT_REASONING_EFFORT;
+        }
+
+        return null;
     }
 
     /**
@@ -958,12 +1501,50 @@ final readonly class SglangProvider implements ProviderInterface
     }
 
     /**
+     * Formats the transcript AND owns the ONE system row the body may carry.
+     *
+     * WHY the merge lives here and not beside the prompt prepend: the fix has
+     * to cover requests with no systemPrompt at all - the title one-shot
+     * (Chat.php :7490) sends a lone history SystemMessage with a null prompt,
+     * and notice storms (E-13) stack multiple history rows behind whatever
+     * prompt exists. Both inputs are in hand only here, so this method is the
+     * single collection point; buildParams() is its only caller with a prompt,
+     * and complete()/completeStream() share buildParams(), so both wire paths
+     * inherit one seam.
+     *
+     * THE RULE (E-10, measured on the deployed Qwen template): a system row
+     * at index > 0 - or a second system row anywhere - is an HTTP 400
+     * "System message must be at the beginning.", and even where a server
+     * tolerates it, only messages[0]'s system content is ever rendered. So
+     * every system source collapses into exactly one leading row: the
+     * request-level assembled prompt FIRST, then history SystemMessages in
+     * message order, non-empty contents joined with "\n\n", empty-string rows
+     * dropped. That joiner and empty-drop rule conform to
+     * VertexProvider::systemInstruction(); BedrockProvider::systemBlocks()
+     * matches the prompt-first ordering only (it keeps separate blocks
+     * instead of joining or dropping empties) (E-11); sugar-crush points
+     * its baseUrl straight at the server, so it
+     * cannot lean on opencode's out-of-band merge proxy (E-12).
+     *
+     * Non-system rows are untouched, in order. A single-system-at-index-0
+     * history and a prompt-only request both produce byte-identical output to
+     * the pre-Q5 prepend block this replaces - which is what lets the E-14
+     * pins (SglangProviderTest's formatMessages legs, MatrixTest's Sglang
+     * rows) survive the change unedited. (Historical note carried from that
+     * block: this provider once never read $systemPrompt at all - the whole
+     * prompt silently dropped every turn, prompt_expand.md §1.1. It must stay
+     * read; the merge may reorder, never omit.)
+     *
      * @param array<Message> $messages
+     * @param string|null $systemPrompt the request-level assembled prompt; '' counts as unset.
      * @return array<array{role: string, content: string}|array{role: string, content: string, tool_calls: array}|array{role: string, tool_call_id: string, content: string}>
      */
-    private function formatMessages(array $messages): array
+    private function formatMessages(array $messages, ?string $systemPrompt = null): array
     {
-        return array_map(function (Message $msg) {
+        // The typed callback stays: raw-array histories (the WorkflowEngine
+        // gap named at defaultTopP()'s docblock) must keep TypeErroring here
+        // exactly as before.
+        $rows = array_map(function (Message $msg) {
             return match (true) {
                 $msg instanceof UserMessage => ['role' => 'user', 'content' => $msg->content()],
                 $msg instanceof AssistantMessage => array_filter([
@@ -980,6 +1561,27 @@ final readonly class SglangProvider implements ProviderInterface
                 default => ['role' => 'user', 'content' => $msg->content()],
             };
         }, $messages);
+
+        $systemParts = [];
+        if ($systemPrompt !== null && $systemPrompt !== '') {
+            $systemParts[] = $systemPrompt;
+        }
+        foreach ($messages as $msg) {
+            if ($msg instanceof SystemMessage && $msg->content() !== '') {
+                $systemParts[] = $msg->content();
+            }
+        }
+
+        $rows = array_values(array_filter(
+            $rows,
+            static fn(array $row): bool => $row['role'] !== 'system',
+        ));
+
+        if ($systemParts !== []) {
+            array_unshift($rows, ['role' => 'system', 'content' => implode("\n\n", $systemParts)]);
+        }
+
+        return $rows;
     }
 
     /**
@@ -1025,7 +1627,7 @@ final readonly class SglangProvider implements ProviderInterface
      * the only decoder, whereas on the streaming path it is a fallback behind
      * `delta.tool_calls[]`.
      */
-    private function parseResponse(array $data): CompleteResponse
+    private function parseResponse(array $data, bool $thinkingOn = false): CompleteResponse
     {
         $choice = $data['choices'][0] ?? [];
         $message = $choice['message'] ?? [];
@@ -1033,6 +1635,17 @@ final readonly class SglangProvider implements ProviderInterface
         $toolCalls = $this->resolvedToolCallParser()->parse($message);
 
         [$reasoning, $content] = $this->extractReasoning($message);
+
+        // §Q9 batch half: the whole message IS the first content, so the cursor
+        // is a throwaway; wire model read from the frame (§Q6 per-frame precedent).
+        $seenFirstContentBatch = false;
+        $content = self::applyQwenContentCosmetics(
+            $content,
+            $data['model'] ?? null,
+            $thinkingOn,
+            $choice['finish_reason'] ?? null,
+            $seenFirstContentBatch,
+        );
 
         // P4.S2: every usage number on the way out comes from ONE parsed Usage,
         // so this site and any future carrier cannot disagree about what the
@@ -1043,12 +1656,27 @@ final readonly class SglangProvider implements ProviderInterface
         // UsageWiringTest pins the clamp.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
 
+        // §Q7 (E-32): `finish_reason` was read nowhere on the batch arm, so a
+        // response the server itself declared cut off (`length`/`abort` - the
+        // TRUNCATED_FINISH_REASONS set, same list the stream flush guards on)
+        // reached the tool layer indistinguishable from a clean one. The
+        // parse is capture-only: no argument here changes shape (the batch
+        // message arrives whole-or-absent, not fragmented), the flag just
+        // says "whatever this is, the turn did not end on its own terms".
+        // `stop`, `tool_calls` and a missing finish_reason all stay false,
+        // which is the byte-unchanged `stop` promise of §Q7(c). Surfacing is
+        // the whole deliverable - see CompleteResponse::$truncated for who
+        // may consume it later (E-56 retry context is a CALLER decision, not
+        // this parse's).
+        $truncated = in_array($choice['finish_reason'] ?? null, self::TRUNCATED_FINISH_REASONS, true);
+
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
             toolCalls: $toolCalls,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            truncated: $truncated,
         );
     }
 
@@ -1090,20 +1718,23 @@ final readonly class SglangProvider implements ProviderInterface
      * `cacheCreationTokens` is null on every parse — an API that reports no
      * cache fields is the legitimate outcome the step text records, not a gap
      * to paper over. `reasoning_tokens` is flat here (NOT under
-     * `completion_tokens_details`) and is not one of Usage's four buckets;
-     * carrying it is a separate seam, reported, deliberately not done here.
+     * `completion_tokens_details`). CORRECTED IN PLACE by qwen.md §Q6: what
+     * this seam first recorded as "a separate seam, deliberately not done
+     * here" is now done — the flat key is carried in
+     * {@see \SugarCraft\Crush\Usage::$reasoningTokens}, a completion-side
+     * SUBSET the server's own `total_tokens` already counts (never re-added).
      *
-     * NOTE FOR THE STREAM ARMS: this provider NEVER receives a usage object on
-     * `completeStream()` — it sends no `stream_options.include_usage` (MEASURED
-     * 2026-09-02: no code path in src/ emits it — every current grep hit for
-     * `stream_options` under src/Providers is a docblock this very step wrote,
-     * zero in executable code), and the terminal usage chunk that flag produces
-     * carries `choices: []`, which the `delta` gate in
-     * {@see completeStream()} drops before any parse runs (the same gate
-     * qwen.md §P1 found). Live probe (2026-09-02) confirms: without the option
-     * the SSE stream contains no `usage` key at all; with it, exactly one
-     * zero-choice chunk. Wiring streamed usage is out of this parse seam and
-     * is REPORTED as its own follow-up.
+     * NOTE FOR THE STREAM ARMS — also corrected in place by §Q6: the P4.S2
+     * measurement (no `stream_options` in executable code; zero-choice chunk
+     * dropped by the delta gate) still described this file on 2026-09-02 and
+     * no longer does. {@see completeStream()} now sends
+     * `stream_options.include_usage` and accepts the one zero-choice
+     * `usage`-bearing frame that flag produces (E-30), parsing it through
+     * THIS method; the parsed total surfaces as the stream's terminal
+     * chunk. What P4.S2 deferred is still deferred one layer up: only
+     * `tokensUsed`/`costUsd` cross the `CompleteResponse` seam today — the
+     * buckets (reasoning included) stop at this parse until the carrier
+     * widening {@see \SugarCraft\Crush\Usage}'s class docblock names.
      *
      * @param array<string, mixed> $usage the decoded `usage` object. A non-array
      *                                    is handed over as `[]` by the call
@@ -1128,6 +1759,10 @@ final readonly class SglangProvider implements ProviderInterface
             self::usageInt($usage['completion_tokens'] ?? null),
             $cached,
             null, // no cache-creation field exists on this protocol - never invented
+            // §Q6 (E-31): the flat reasoning key this family reports on every
+            // usage document; unreported (null) on wires that omit it, never
+            // coerced to a zero - same usageInt doctrine as every other field.
+            self::usageInt($usage['reasoning_tokens'] ?? null),
         );
     }
 
@@ -1247,7 +1882,7 @@ final readonly class SglangProvider implements ProviderInterface
      *
      * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
      */
-    private function parseChunk(array $data, array &$toolCallBuffer = []): CompleteResponse
+    private function parseChunk(array $data, array &$toolCallBuffer = [], bool $thinkingOn = false, bool &$seenFirstContent = false): CompleteResponse
     {
         $delta = $data['choices'][0]['delta'] ?? [];
         $finishReason = $data['choices'][0]['finish_reason'] ?? null;
@@ -1264,6 +1899,15 @@ final readonly class SglangProvider implements ProviderInterface
         // ({@see \SugarCraft\Crush\Runtime::runStreaming()}), not here.
         [$reasoning, $content] = $this->extractReasoning($delta);
 
+        // §Q9 (E-21/E-25/E-26): the Qwen-only content cosmetics, applied to the
+        // extracted text before it crosses the CompleteResponse seam. `$data['model']`
+        // (the id the server used for THIS frame) decides family, so a DeepSeek
+        // stream — even one that happens to share the SSE harness — is skipped in
+        // the helper. `$thinkingOn` and `$seenFirstContent` are threaded from
+        // completeStream() because neither the per-chunk kwargs nor "which delta is
+        // first" is recoverable from a single chunk in isolation.
+        $content = self::applyQwenContentCosmetics($content, $data['model'] ?? null, $thinkingOn, $finishReason, $seenFirstContent);
+
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
@@ -1272,6 +1916,64 @@ final readonly class SglangProvider implements ProviderInterface
             costUsd: 0.0,
         );
     }
+
+    /**
+     * §Q9 (E-21/E-25/E-26) — cosmetic correctness of the Qwen content channel.
+     * Both rules are FAMILY-SCOPED to Qwen so the DeepSeek batch and stream paths
+     * stay byte-for-byte what they were (the spec's "avoid touching DeepSeek
+     * behavior" clause): the guard returns the content untouched for any other
+     * family, and `$wireModel` (never the configured `$this->model`) is what
+     * decides family — it is the id the server generated these bytes with,
+     * mirroring how §Q6 reads usage per-frame.
+     *
+     *  (a) E-21: with thinking ON the first content delta (and the non-stream
+     *      `message.content`) opens with a literal whitespace run — measured as a
+     *      "\n\n" prefix. Trim that run from the FIRST content delta of a turn
+     *      only. Every later delta flows through unchanged, so the stray newline
+     *      deltas E-26 places BETWEEN parallel call groups keep flowing. The
+     *      `$seenFirstContent` carry flag is what makes "first" survive the
+     *      stateless-per-chunk boundary of parseChunk(); batch passes a throwaway.
+     *      Gated on `$thinkingOn` as well as family: with `enable_thinking:false`
+     *      E-22 measured the prefix simply never occurs, so trimming would be
+     *      wrong (and a real leading-space answer would be mangled).
+     *  (b) E-24/E-26: a content that is nothing but whitespace arriving on a
+     *      `finish_reason:"tool_calls"` chunk is the model thinking out loud, not
+     *      an answer, so emit nothing. Independent of `$thinkingOn` on purpose —
+     *      the spec words (b) against the "(trimmed) content", and a whitespace-
+     *      only content is meaningless for the family whether or not thinking ran.
+     *
+     * @param  bool  $seenFirstContent  by-ref turn cursor (only consulted by (a))
+     */
+    private static function applyQwenContentCosmetics(string $content, mixed $wireModel, bool $thinkingOn, ?string $finishReason, bool &$seenFirstContent): string
+    {
+        if (!is_string($wireModel) || !self::isQwen3Next($wireModel)) {
+            return $content;
+        }
+
+        if ($thinkingOn && !$seenFirstContent && $content !== '') {
+            $seenFirstContent = true;
+            $content = ltrim($content);
+        }
+
+        if ($finishReason === 'tool_calls' && $content !== '' && trim($content) === '') {
+            $content = '';
+        }
+
+        return $content;
+    }
+
+    /**
+     * §Q9 (a) gate — the request-side half of the Qwen thinking test. Mirrors
+     * buildBody()'s derivation exactly: the template's own default is ON, so only
+     * an explicit `enable_thinking:false` counts as OFF. Kept separate from
+     * applyQwenContentCosmetics() because the kwargs are request-scoped and never
+     * echoed on the response, while the family gate is per-frame.
+     */
+    private function contentThinkingEnabled(CompleteRequest $request): bool
+    {
+        return ($this->mergedTemplateKwargs($request)['enable_thinking'] ?? true) !== false;
+    }
+
 
     /**
      * W1.A1 (§12 D2): mirrors the OpenAI streaming tool-call shape -
@@ -1287,6 +1989,13 @@ final readonly class SglangProvider implements ProviderInterface
      * carrying only `tool_calls` (no `content`) had its fragments read then
      * discarded here every time - `completeStream()` could never deliver a
      * tool call, only `complete()` (non-streaming) could.
+     *
+     * §Q7 note for the gate below: on a NON-`tool_calls` end the buffer is
+     * intentionally left intact here - abandoning it was E-32's silent-loss
+     * bug, and {@see flushTruncatedToolCalls()} is what now drains it at the
+     * generator's terminal seam. Do not "clean up" the buffer on other
+     * finish reasons: the flush guard and the clean `stop` promise of
+     * qwen.md §Q7(c) both read it exactly as this method leaves it.
      *
      * @param array<string, mixed> $delta
      * @param array<int, array{id?: ?string, name?: ?string, arguments?: string}> $toolCallBuffer
@@ -1324,6 +2033,113 @@ final readonly class SglangProvider implements ProviderInterface
         $toolCallBuffer = [];
 
         return $toolCalls;
+    }
+
+    /**
+     * §Q7 (qwen.md; E-32): the truncation twin of
+     * {@see resolveStreamedToolCalls()}'s `tool_calls` assembly. Called by
+     * {@see completeStream()} once per stream, only when the end was
+     * truncated (see `TRUNCATED_FINISH_REASONS` for the exact set and why
+     * `stop`/`tool_calls`/`error` are not in it).
+     *
+     * THE RULE, AND WHY IT DIFFERS FROM THE CLEAN-FINISH RULE: on a
+     * `tool_calls` finish the server declares every call complete, so
+     * W1.A4's doctrine there is "decode, and if the payload still broke,
+     * keep the call alive with empty arguments and say so". On a truncated
+     * end the server has declared the opposite - the turn was cut - so an
+     * argument payload that does not decode is not "a call that ran with
+     * wrong arguments", it is a call that was never finished, and executing
+     * it is the exact silent-corruption failure W1.A4 exists to stop.
+     * Complete-JSON args are therefore EMITTED; anything else is DROPPED -
+     * never emitted half-decoded - and each drop names itself through
+     * {@see malformedArgumentsWarning()}, reused with a fate clause saying
+     * "dropped" instead of "executed", so the transcript shows what happened
+     * to every victim. An empty payload drops too: on the E-26 fragment
+     * shape, an opener whose first argument delta never arrived is
+     * indistinguishable from a genuine zero-argument call, and on a cut
+     * stream the safe reading of "indistinguishable" is "not provably
+     * complete".
+     *
+     * FAMILY-AGNOSTIC BY CONSTRUCTION: this reads only the OpenAI-shaped
+     * fragment buffer, which Qwen, DeepSeek, and MiniMax-structured streams
+     * all produce (E-26/E-32); no model predicate gates it, mirroring
+     * {@see malformedArgumentsWarning()}'s "diagnose, don't attribute"
+     * stance. `matched_stop` values differ across the family (248046 vs 1)
+     * and are never consulted here or by the flush guard.
+     *
+     * @param array<int, array{id?: ?string, name?: ?string, arguments?: mixed}> $toolCallBuffer
+     * @return ?list<ToolCall> null when NOTHING survived - every payload was
+     *                         incomplete - so the caller yields no frame
+     *                         (warnings already tell the story); an empty
+     *                         array is not a possible return.
+     */
+    private static function flushTruncatedToolCalls(array $toolCallBuffer): ?array
+    {
+        $droppedFate = 'the call is being DROPPED, not executed, because the stream '
+            . 'was truncated before its arguments completed';
+        $calls = [];
+
+        foreach ($toolCallBuffer as $tc) {
+            $name = (string) ($tc['name'] ?? '');
+            $raw = $tc['arguments'] ?? '';
+
+            if (is_array($raw)) {
+                // Pre-decoded server payload (the tolerance W1.A4 documents):
+                // already structured, nothing ran off the end of it.
+                $calls[] = ToolCall::fromArray([
+                    'id' => $tc['id'] ?? '',
+                    'name' => $name,
+                    'arguments' => $raw,
+                ]);
+                continue;
+            }
+
+            $rawString = is_string($raw) ? $raw : '';
+
+            if (trim($rawString) === '') {
+                // §Q7/E-32: deliberately NOT malformedArgumentsWarning() - that
+                // formatter infers the cause from the payload's shape, and an
+                // empty shape has none; reusing it would also print a stale
+                // json_last_error_msg() because this arm never runs a decode.
+                RuntimeNoticeSink::warn(sprintf(
+                    'SglangProvider: tool call "%s" arguments never streamed (empty payload); '
+                    . 'this is not malformed JSON - nothing arrived to parse - so %s.',
+                    $name,
+                    $droppedFate,
+                ));
+                continue;
+            }
+
+            $decoded = json_decode($rawString, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                RuntimeNoticeSink::warn(self::malformedArgumentsWarning($name, $rawString, $droppedFate));
+                continue;
+            }
+
+            if (!is_array($decoded)) {
+                // Same taxonomy as decodeToolArguments()'s non-object arm,
+                // opposite outcome - decodeToolArguments() degrades to []
+                // because a clean finish said the call is real; here the
+                // stream said it is not, so the call goes.
+                RuntimeNoticeSink::warn(sprintf(
+                    'SglangProvider: tool call "%s" arguments decoded to %s, not an object; '
+                    . 'dropping the truncated call instead of executing it. Raw payload: %s',
+                    $name,
+                    get_debug_type($decoded),
+                    self::excerpt($rawString),
+                ));
+                continue;
+            }
+
+            $calls[] = ToolCall::fromArray([
+                'id' => $tc['id'] ?? '',
+                'name' => $name,
+                'arguments' => $decoded,
+            ]);
+        }
+
+        return $calls === [] ? null : $calls;
     }
 
     /**
@@ -1430,18 +2246,25 @@ final readonly class SglangProvider implements ProviderInterface
      * included, measured 2026-08-20 as not having it - the same shape has some
      * other cause and naming MiniMax as fact would send the reader to the
      * wrong server.
+     *
+     * §Q7 adds the optional $fate clause, and the default keeps EVERY
+     * existing call site byte-identical: it replaces only the final "what
+     * happens to the call" sentence, per branch. The flush passes a
+     * "dropped, not executed" fate because that is what §Q7 does with an
+     * incomplete payload; the W1.A4 degrade-to-no-arguments callers keep
+     * their original wording without repeating it here.
      */
-    private static function malformedArgumentsWarning(string $toolName, string $raw): string
+    private static function malformedArgumentsWarning(string $toolName, string $raw, ?string $fate = null): string
     {
         $trimmed = rtrim($raw);
         $structurallyClosed = str_ends_with($trimmed, '}') || str_ends_with($trimmed, ']');
 
         if ($structurallyClosed) {
             return sprintf(
-                'SglangProvider: tool call "%s" arguments are not valid JSON (%s); '
-                . 'defaulting to no arguments. Raw payload: %s',
+                'SglangProvider: tool call "%s" arguments are not valid JSON (%s); %s. Raw payload: %s',
                 $toolName,
                 json_last_error_msg(),
+                $fate ?? 'defaulting to no arguments',
                 self::excerpt($raw),
             );
         }
@@ -1451,14 +2274,15 @@ final readonly class SglangProvider implements ProviderInterface
             . 'arguments are not valid JSON (%s) and end mid-value without a closing structure%s. '
             . 'That matches the signature of the known MiniMax-M2.x "%s" tool-call bug '
             . '(server-side, not fixable client-side) - the CAUSE is inferred from the shape, not '
-            . 'from the model, so on a non-MiniMax model look for another truncation source; the '
-            . 'call is being executed with no arguments. Raw payload: %s',
+            . 'from the model, so on a non-MiniMax model look for another truncation source; %s. '
+            . 'Raw payload: %s',
             $toolName,
             json_last_error_msg(),
             str_contains($raw, self::XML_PARAM_CLOSE_TAG)
                 ? sprintf(', and contain the literal "%s"', self::XML_PARAM_CLOSE_TAG)
                 : '',
             self::XML_PARAM_CLOSE_TAG,
+            $fate ?? 'the call is being executed with no arguments',
             self::excerpt($raw),
         );
     }
@@ -1576,5 +2400,74 @@ final readonly class SglangProvider implements ProviderInterface
         $half = intdiv(self::WARNING_EXCERPT_LIMIT, 2);
 
         return substr($raw, 0, $half) . ' [...] ' . substr($raw, -$half);
+    }
+
+    /**
+     * §Q8 (qwen.md; E-56): lifts the server's own clean error sentence out of
+     * a failed SGLANG HTTP response, or returns null when there is nothing
+     * clean to show.
+     *
+     * WHY: with `http_errors` on (the shipped default) every 4xx/5xx surfaces
+     * as a Guzzle RequestException whose getMessage() is the request/status
+     * line plus the RAW response body clipped to ~2KB, and Chat renders
+     * exactly that at Chat.php:7653-7662 - so before this extraction the user
+     * read `Client error: ... {"object":"error","message":"Unexpected...`
+     * JSON garbage instead of the one sentence the server wrote for them.
+     *
+     * Body shapes tried in order: FLAT `message` FIRST because that is the
+     * MEASURED SGLang error object (E-40:
+     * `{"object":"error","message":"Unexpected reasoning effort X. ...","type":"BadRequest","code":400}`;
+     * E-10: `{"object":"error","message":"System message must be at the
+     * beginning.", ...}`), then the OpenAI-style NESTED `error.message` the
+     * spec names, for servers that speak that dialect instead.
+     *
+     * CLASSIFICATION SAFETY: callers keep the identical
+     * `RuntimeException($prefix . $text, 0, $e)` wrap - only $text's source
+     * changes. TransientFailure::isTransient() walks getPrevious() to the
+     * Guzzle exception's status code, so 400 stays permanent and 5xx/408/429
+     * stay retried (pinned by TransientFailureTest's sglang-shape cases).
+     *
+     * Fail-safe by design: no response (connect/TLS failures), unreadable or
+     * empty body, non-JSON body, and absent/blank/non-string message keys all
+     * return null, so the catch sites fall back to the pre-Q8
+     * `$e->getMessage()` byte-for-byte.
+     */
+    private static function errorBodyMessage(GuzzleException $e): ?string
+    {
+        if (!$e instanceof RequestException || !$e->hasResponse()) {
+            return null;
+        }
+
+        try {
+            $body = (string) $e->getResponse()->getBody();
+        } catch (\Throwable) {
+            // Consumed/closed stream: the old Guzzle-message surface wins.
+            return null;
+        }
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        foreach ([$decoded['message'] ?? null, $decoded['error']['message'] ?? null] as $candidate) {
+            if (!is_string($candidate)) {
+                continue;
+            }
+
+            $message = trim($candidate);
+            if ($message === '') {
+                continue;
+            }
+
+            if (strlen($message) > self::ERROR_MESSAGE_DISPLAY_LIMIT) {
+                // Byte ceiling guards runaway echo; mb_substr keeps the cut codepoint-safe.
+                $message = mb_substr($message, 0, self::ERROR_MESSAGE_DISPLAY_LIMIT) . ' [truncated]';
+            }
+
+            return $message;
+        }
+
+        return null;
     }
 }

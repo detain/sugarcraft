@@ -51,7 +51,32 @@ final class SglangProviderRequestBuildingTest extends TestCase
      * caller's control, because the sampling defaults below are MODEL-KEYED
      * and a fixed 'MiniMax-M2.7' cannot exercise them.
      */
-    private function providerForModel(string $model, string|float|null $reasoningEffort = null): SglangProvider
+    private function providerForModel(string $model, string|float|null $reasoningEffort = null, string $body = '{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}'): SglangProvider
+    {
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, [], $body),
+        ]));
+        $stack->push(Middleware::history($this->history));
+
+        return new SglangProvider(
+            'https://api.example.com',
+            $model,
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+            null,
+            $reasoningEffort,
+        );
+    }
+
+    /**
+     * Same mock harness as {@see providerForModel()} with the constructor's
+     * config-kwargs arm exposed - the Q3 seam where deployment-wide
+     * `templateKwargs` lands from ProviderFactory.
+     *
+     * @param array<string, mixed> $configKwargs
+     */
+    private function providerWithConfigKwargs(array $configKwargs, string $model = 'MiniMax-M2.7'): SglangProvider
     {
         $this->history = [];
         $stack = HandlerStack::create(new MockHandler([
@@ -65,7 +90,8 @@ final class SglangProviderRequestBuildingTest extends TestCase
             null,
             new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
             null,
-            $reasoningEffort,
+            null,
+            $configKwargs,
         );
     }
 
@@ -202,6 +228,30 @@ final class SglangProviderRequestBuildingTest extends TestCase
         $this->assertTrue($sent['separate_reasoning']);
     }
 
+    /**
+     * §Q4:166 collision mandate at its sharpest edge: effort resolves to
+     * `none` (which wants thinking OFF) while the per-request DTO kwargs
+     * explicitly re-enable thinking. The DTO is the top merge layer, so it
+     * wins: thinking stays true and the effort key simply drops — the
+     * template's own default governs. Green-at-birth pin of the documented
+     * precedence, not new behaviour.
+     */
+    public function testEffortNoneWithDtoReEnablingThinkingKeepsDtoAndDropsEffort(): void
+    {
+        $provider = $this->providerForModel(self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'none',
+            extraTemplateKwargs: ['enable_thinking' => true],
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+        $this->assertSame(['enable_thinking' => true], $sent['chat_template_kwargs']);
+    }
+
     public function testEmptyChatTemplateKwargsAreOmitted(): void
     {
         $provider = $this->provider();
@@ -212,6 +262,104 @@ final class SglangProviderRequestBuildingTest extends TestCase
         ));
 
         $this->assertArrayNotHasKey('chat_template_kwargs', $this->sentBody());
+    }
+
+    // -------------------------------------------------------------------------
+    // Q3: deployment-wide `templateKwargs` config reaches the SAME wire field,
+    // merged UNDER the per-request DTO. Empty-config + empty-DTO key-absence
+    // is already pinned by the two tests above (both are today's wire); what
+    // follows pins only the new merge behaviour.
+    // -------------------------------------------------------------------------
+
+    public function testConfiguredTemplateKwargsAreEmittedUnderChatTemplateKwargs(): void
+    {
+        // No per-request kwargs involved: config alone lands on the wire.
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => true, 'preserve_thinking' => false]);
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertSame(
+            ['enable_thinking' => true, 'preserve_thinking' => false],
+            $this->sentBody()['chat_template_kwargs'],
+        );
+    }
+
+    public function testPerRequestTemplateKwargsOverrideConfigPerKey(): void
+    {
+        // PRECEDENCE pinned both ways in ONE body: the DTO wins for the key it
+        // carries (enable_thinking flips false -> true) while the config-only
+        // key survives (preserve_thinking). A whole-body override would make a
+        // single per-call tweak silently drop the deployment's other template
+        // settings, which no caller asked for.
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => false, 'preserve_thinking' => true]);
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+            extraTemplateKwargs: ['enable_thinking' => true],
+        ));
+
+        $this->assertSame(
+            ['enable_thinking' => true, 'preserve_thinking' => true],
+            $this->sentBody()['chat_template_kwargs'],
+        );
+    }
+
+    public function testAnEmptyDtoKwargsListCarriesNoKeysAndCannotVetoConfiguredOnes(): void
+    {
+        // SENTINEL semantics: [] on the DTO means "this request names nothing"
+        // - the same unset convention the optional-knob filter applies to
+        // every other field - NOT "clear the config". Only a key the DTO
+        // actually carries can override that key's config value.
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => true]);
+        $provider->complete(new CompleteRequest(
+            model: 'MiniMax-M2.7',
+            messages: [new UserMessage('Hi')],
+            extraTemplateKwargs: [],
+        ));
+
+        $this->assertSame(
+            ['enable_thinking' => true],
+            $this->sentBody()['chat_template_kwargs'],
+        );
+    }
+
+    /**
+     * Q10 (spec qwen.md §Q10, E-28): the SHIPPED config policy, not a fixture
+     * stand-in — reads the ACTUAL committed .sugar-crush/config.dev.json (the
+     * same real-file idiom ProviderFactoryTest :719 pins for the default
+     * provider) and drives its `templateKwargs` through the Q3 ctor arm to the
+     * wire. The deployment pins `preserve_thinking:false` so a history
+     * re-render drops replayed assistant reasoning instead of paying those
+     * tokens back every turn (E-28 measures the default-true replay cost);
+     * that policy is only real if it survives the merge layers, so both ends
+     * are asserted: raw config value AND the top-level `chat_template_kwargs`
+     * field the template actually reads (E-22/E-42).
+     */
+    public function testShippedConfigPreserveThinkingPolicyReachesTheWire(): void
+    {
+        $configPath = dirname(__DIR__, 2) . '/.sugar-crush/config.dev.json';
+        $this->assertFileExists($configPath, 'Q10 pins the real committed config, not a fixture');
+
+        $raw = json_decode((string) file_get_contents($configPath), true);
+        $this->assertIsArray($raw);
+        $kwargs = $raw['providers']['dev-sglang']['templateKwargs'] ?? null;
+        $this->assertIsArray($kwargs, 'dev-sglang block must carry a templateKwargs object');
+        $this->assertArrayHasKey('preserve_thinking', $kwargs);
+        $this->assertFalse($kwargs['preserve_thinking'], 'shipped policy is preserve_thinking=false (E-28)');
+
+        // Real config values feed the same ctor arm ProviderFactory passes them to.
+        $provider = $this->providerWithConfigKwargs($kwargs, self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $sent = $this->sentBody();
+        $this->assertArrayHasKey('chat_template_kwargs', $sent);
+        $this->assertArrayHasKey('preserve_thinking', $sent['chat_template_kwargs']);
+        $this->assertFalse($sent['chat_template_kwargs']['preserve_thinking']);
     }
 
     // -------------------------------------------------------------------------
@@ -440,6 +588,9 @@ final class SglangProviderRequestBuildingTest extends TestCase
 
     private const DEEPSEEK = 'deepseek-ai/DeepSeek-V4-Flash-0731';
 
+    /** Qwen3.8's canonical served id per qwen.md E-70 (probe-verified form). */
+    private const QWEN = 'Qwen/Qwen3.8-Flash-Next';
+
     /** @return array<Tool> */
     private function oneTool(): array
     {
@@ -642,6 +793,64 @@ final class SglangProviderRequestBuildingTest extends TestCase
         $this->assertCount(1, $sent['tools']);
     }
 
+    public function testQwen3NextKeepsLegacySamplingAndGetsXHighEffort(): void
+    {
+        // Q2's family arm for Qwen3.8-Next, pinned with the E-61 shape: this
+        // model takes the LEGACY sampling defaults, NOT DeepSeek's card
+        // numbers, and the only new thing it gets is a tier-3 effort default.
+        $provider = $this->providerForModel(self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            tools: $this->oneTool(),
+        ));
+
+        $sent = $this->sentBody();
+
+        // 0.7 because that is the value the code ACTUALLY produces here:
+        // defaultTemperature()'s non-V4 arm is LEGACY_DEFAULT_TEMPERATURE,
+        // which IS 0.7 — so E-61's measurement and the pre-existing default
+        // coincide and no sampling code had to change. Pinned against a
+        // future "Qwen card" edit that would retune a measured deployment.
+        $this->assertSame(0.7, $sent['temperature']);
+        // top_p is a DeepSeek-card-only knob; non-V4 models keep it absent so
+        // the server's launch-time default wins (E-61, defaultTopP null arm).
+        $this->assertArrayNotHasKey('top_p', $sent);
+        // Tier-3 model default (nothing named in request or config): 'xhigh',
+        // NOT DeepSeek's 'max' — the template accepts exactly xhigh|medium|low
+        // and 'max' 400s at the template whenever thinking is on (qwen.md
+        // E-40/E-41). 'xhigh' doubles as the template's own default (E-40).
+        // Q4 AMENDMENT (qwen.md §Q4 — the emission-shape change this step is
+        // authorized to make): the VALUE stays 'xhigh', the PLACEMENT moves
+        // into chat_template_kwargs, which is where the Qwen3.8 template reads
+        // effort (E-42); the top-level field is no longer emitted at all for
+        // this family.
+        $this->assertSame(['reasoning_effort' => 'xhigh'], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+        // The window arm lives on the configured model; asserted beside the
+        // body so the family's full request-shape lives in one leg.
+        $this->assertSame(744_506, $provider->contextWindow());
+    }
+
+    public function testAnEarlierQwenGenerationIsNotTreatedAsQwen3Next(): void
+    {
+        // The negative that makes the `qwen3.8` token meaningful, mirroring
+        // testADifferentDeepSeekGenerationIsNotTreatedAsV4(): Qwen3-235B
+        // shares the vendor name but was never measured against this
+        // deployment, so matching bare `qwen` would silently hand it an
+        // 'xhigh' effort and the conservative window of a server it does not
+        // live on (E-70/E-71). It must keep the untouched legacy behaviour.
+        $provider = $this->providerForModel('Qwen3-235B');
+        $provider->complete(new CompleteRequest(model: 'Qwen3-235B', messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(0.7, $sent['temperature']);
+        $this->assertArrayNotHasKey('top_p', $sent);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+        $this->assertSame(196_608, $provider->contextWindow());
+    }
+
     public function testCallerSuppliedSamplingBeatsTheModelDefaults(): void
     {
         $provider = $this->providerForModel(self::DEEPSEEK);
@@ -822,6 +1031,252 @@ final class SglangProviderRequestBuildingTest extends TestCase
             messages: [new UserMessage('Hi')],
             reasoningEffort: '',
         ));
+    }
+
+    // -------------------------------------------------------------------------
+    // Q4 (qwen.md §Q4): for the Qwen3.8 family the effort is sanitized into
+    // the template's own vocabulary (E-40: xhigh|medium|low) and routed
+    // through chat_template_kwargs (E-42); the top-level reasoning_effort is
+    // NOT emitted for that family. DeepSeek-family legs above are the pin
+    // that the top-level field stays exactly as it was for every other model.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Every name the server's pydantic enum accepts that the Qwen template can
+     * hear, mapped to the template's closed set (qwen.md E-40/E-41): the three
+     * shared names pass through, `minimal` collapses to its template
+     * neighbour `low`, and `high`/`max` collapse to `xhigh`. Asserted as the
+     * EXACT merged kwargs body, so an effort leaking to the top level or an
+     * unmapped name on the wire both fail here, not at a template 400.
+     */
+    #[DataProvider('qwenTemplateEffortMappingProvider')]
+    public function testEveryPydanticLevelIsRoutedMappedIntoChatTemplateKwargsForQwen(string $level, string $templateLevel): void
+    {
+        $provider = $this->providerForModel(self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: $level,
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(['reasoning_effort' => $templateLevel], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function qwenTemplateEffortMappingProvider(): array
+    {
+        return [
+            'low passes through' => ['low', 'low'],
+            'medium passes through' => ['medium', 'medium'],
+            'xhigh passes through' => ['xhigh', 'xhigh'],
+            'high maps to xhigh' => ['high', 'xhigh'],
+            'max maps to xhigh' => ['max', 'xhigh'],
+            'minimal maps to low' => ['minimal', 'low'],
+        ];
+    }
+
+    /**
+     * `none` is not in the template's vocabulary at all — the template's own
+     * "no thinking" switch is enable_thinking:false, and with it off the
+     * effort check is skipped entirely (qwen.md E-22). So `none` DROPS the
+     * effort key and asserts thinking off instead.
+     */
+    public function testQwenEffortNoneDropsTheLevelAndTurnsThinkingOff(): void
+    {
+        $provider = $this->providerForModel(self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'none',
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(['enable_thinking' => false], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * A tier-2 CONFIG effort walks the same sanitize+route path as a
+     * per-request one — precedence (request > config > model) is resolved
+     * BEFORE the family routing, untouched per §Q4.
+     */
+    public function testProviderConfiguredEffortIsMappedThroughTheTemplateArmForQwen(): void
+    {
+        $provider = $this->providerForModel(self::QWEN, 'max');
+        $provider->complete(new CompleteRequest(model: self::QWEN, messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(['reasoning_effort' => 'xhigh'], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * COLLISION MANDATE direction 1 (qwen.md §Q4): a deployment that parked a
+     * `reasoning_effort` in config templateKwargs LOSES to the sanitized
+     * effort — the sanitized template-vocabulary value overwrites it per key,
+     * while the config's other keys survive (per-key merge, Q3's rule).
+     */
+    public function testConfiguredKwargEffortLosesToTheSanitizedEffortForQwen(): void
+    {
+        $provider = $this->providerWithConfigKwargs(['reasoning_effort' => 'high', 'preserve_thinking' => true], self::QWEN);
+        $provider->complete(new CompleteRequest(model: self::QWEN, messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        // Key order: config's insertion order, with `reasoning_effort`'s VALUE
+        // replaced in place by the sanitized layer (array_merge semantics).
+        $this->assertSame(['reasoning_effort' => 'xhigh', 'preserve_thinking' => true], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * COLLISION MANDATE direction 2 (qwen.md §Q4): an explicit PER-REQUEST DTO
+     * kwarg overrides BOTH the config kwargs and the sanitized effort —
+     * caller-named template keys travel unchecked (Q3's open-vocabulary rule;
+     * a bad value here 400s at the template per E-42, which is the caller's
+     * named intent, not our sanitizer's).
+     */
+    public function testPerRequestKwargEffortBeatsTheSanitizedEffortForQwen(): void
+    {
+        $provider = $this->providerWithConfigKwargs(['reasoning_effort' => 'high'], self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'low',
+            extraTemplateKwargs: ['reasoning_effort' => 'banana'],
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(['reasoning_effort' => 'banana'], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * CONSERVATIVE-OFF PIN (qwen.md E-41): with thinking explicitly off the
+     * SERVER skips the template's effort check, so sending `high` verbatim
+     * would survive — §Q4 still chooses to sanitize ("never send a
+     * template-invalid effort", unconditionally). Mapping regardless of
+     * thinking state is the decided behaviour and this test is its pin.
+     */
+    public function testATemplateInvalidEffortIsStillMappedWhenThinkingIsExplicitlyOff(): void
+    {
+        $provider = $this->providerForModel(self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'max',
+            extraTemplateKwargs: ['enable_thinking' => false],
+        ));
+
+        $sent = $this->sentBody();
+
+        // Merged-layer order: sanitized contributes reasoning_effort, the DTO
+        // layer adds enable_thinking (last layer, fresh key position).
+        $this->assertSame(['reasoning_effort' => 'xhigh', 'enable_thinking' => false], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * The $thinkingOn=false arm of the `none` mapping: thinking is ALREADY off
+     * via config kwargs, so the sanitizer contributes nothing new and the
+     * deployment's own `enable_thinking:false` lands untouched — same wire
+     * value, no redundant overwrite through the sanitized layer.
+     */
+    public function testQwenEffortNoneLeavesAlreadyDisabledThinkingToTheConfig(): void
+    {
+        $provider = $this->providerWithConfigKwargs(['enable_thinking' => false], self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            reasoningEffort: 'none',
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(['enable_thinking' => false], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+    }
+
+    /**
+     * Values with no template translation are refused at build time, before
+     * any HTTP request leaves. Two throw sites, asserted differently on
+     * purpose: an unknown STRING is rejected already by the shared pydantic
+     * validator in resolveReasoningEffort() - the SAME fail-fast every
+     * family gets, asserted here only for its Qwen outcome (throw + nothing
+     * sent, message layer-agnostic on purpose); a FLOAT passes that
+     * validator (it is the server's `constrained-float` alternative for the
+     * top-level field, measured 2026-08-20) and is refused ONLY by the Qwen
+     * sanitizer — under chat_template_kwargs a float skips pydantic and 400s
+     * at the template's string-compare chain (E-42), and no float→level
+     * mapping was ever measured (E-40 names three strings and a default,
+     * nothing else), so that leg pins the template-vocabulary message.
+     */
+    #[DataProvider('qwenTemplateImpossibleEffortProvider')]
+    public function testATemplateImpossibleEffortThrowsForQwenBeforeAnyRequestIsSent(string|float $bad, string $expectedFragment): void
+    {
+        $provider = $this->providerForModel(self::QWEN);
+
+        try {
+            $provider->complete(new CompleteRequest(
+                model: self::QWEN,
+                messages: [new UserMessage('Hi')],
+                reasoningEffort: $bad,
+            ));
+            $this->fail('a template-impossible reasoning_effort must not reach the wire for Qwen');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString(var_export($bad, true), $e->getMessage());
+            $this->assertStringContainsString($expectedFragment, $e->getMessage());
+        }
+
+        $this->assertSame([], $this->history);
+    }
+
+    /** @return array<string, array{string|float, string}> */
+    public static function qwenTemplateImpossibleEffortProvider(): array
+    {
+        return [
+            // pydantic-validator arm (message names the 7-level set):
+            'invented name' => ['bogus', 'Unknown reasoning_effort'],
+            'near-miss of a legal name' => ['maximum', 'Unknown reasoning_effort'],
+            'wrong case' => ['High', 'Unknown reasoning_effort'],
+            // sanitizer arm (message names the template's closed set):
+            'float out of pydantic band' => [5.0, 'low, medium, xhigh'],
+            'float inside pydantic band' => [0.5, 'low, medium, xhigh'],
+        ];
+    }
+
+    /**
+     * Streamed-vs-batch consistency: completeStream() and complete() build
+     * their bodies through the SAME buildParams() (src :599/:616 — the
+     * pre-existing sharing this class's docblock guards), so one assertion of
+     * the family routing on the streaming path proves it for both. Pinned
+     * anyway because drift here is exactly the "two bodies" bug the sharing
+     * exists to prevent.
+     */
+    public function testQwenStreamingSendsTheSanitizedEffortThroughKwargsToo(): void
+    {
+        $provider = $this->providerForModel(
+            self::QWEN,
+            'max',
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n",
+        );
+
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+        )));
+
+        $sent = $this->sentBody();
+
+        $this->assertTrue($sent['stream']);
+        $this->assertSame(['reasoning_effort' => 'xhigh'], $sent['chat_template_kwargs']);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
     }
 
     // -------------------------------------------------------------------------

@@ -1,6 +1,9 @@
 # Qwen3.8-Flash-Next support — implementation plan & execution protocol (sugar-crush)
 
-Status: ACTIVE PLAN · Started 2026-09-01 · Rev 2 2026-09-01: consolidated after dual review — kickoff is SERIAL (Q1 first), review rubric is §13, closure auditor is §15 · Repo: /home/sites/sugarcraft (branch master, commit-locally, NEVER push)
+Status: COMPLETE (Q1–Q10 committed; §15 audit zero-findings)
+Audit: §15 CLOSED — round-1 (2026-09-04) FINDINGS 1 MAJOR process + 3 MINOR scope, all CONFIRMED vs git and dispositioned via the Part II ERRATA below; round-2 fresh independent auditor CLEAN zero-findings (per-step VERIFIED-DONE re-derived from git, errata-accuracy VERIFIED, full-suite 10710T/97026A/1704E/21F/0W/1Sk/15R == floor @d984be664, live smoke exit 0) — PLAN COMPLETE. Evidence /tmp/opencode/qwen-audit/{round1.md}, /tmp/opencode/qwen-audit2/round2.md
+Started 2026-09-01 · Rev 2 2026-09-01: consolidated after dual review — kickoff is SERIAL (Q1 first), review rubric is §13, closure auditor is §15 · Repo: /home/sites/sugarcraft (branch master, commit-locally, NEVER push)
+Commit ledger: Q1 27eafe5bf · Q2 52ea65370 · Q3 674f14f0a · Q4 95bde6ad8 · Q5 99d754f7a · Q6 78e1da2d1 · Q7 4cad0ed12 · Q8 7f4d641de · Q9 d92acd43e · Q10 d984be664 (this file's own sha lands in the post-commit recovery record; lag-by-one)
 Companion files: `qwen_worklog.md` (live state — update after EVERY agent), `qwen_prompt.md` (start/resume brief).
 Condensed audit evidence lives in Part III of this file; raw probe captures in /tmp/qwen-probes/.
 
@@ -242,6 +245,16 @@ Legend: `src/` and `tests/` are relative to `/home/sites/sugarcraft/sugar-crush/
 - **Test touch-list**: `tests/Providers/SglangProviderRequestBuildingTest.php` — one case: config `templateKwargs.preserve_thinking=false` reaches the wire (extends Q3 matrix). Smoke script is manual-gate (CI not required); builder runs it once live and pastes trimmed output into worklog.
 - **Gate**: `vendor/bin/phpunit --filter 'RequestBuilding'` (intended) + `php scripts/qwen-live-smoke.php` (live) + FULL suite (final).
 - **Done when**: live smoke exits 0 printing the 3 verified shapes; final commit records the conservative window + single-system + usage in a real response. THEN the §15 plan-auditor loop closes the plan.
+
+### AUDIT ROUND-1 ERRATA (2026-09-04) — dispositions
+Per §15/§1.3. Code conformance was verified per-step at HEAD (all Done-when clauses, all gates, independent full-suite census PASS); the four findings are process/attribution items. History is immutable (no push, no rewrite) — the honest remedy is this erratum record.
+
+- **F1 MAJOR (process, §11)** — Q7 (4cad0ed12) added three RuntimeNoticeSink::warn sites (:2104/:2116/:2125) WITHOUT amending the StderrEmitterCensusTest roster in-step; the roster stood at 2 (verified `git show 7f4d641de:tests/Cli/StderrEmitterCensusTest.php` → `375: 'src/Providers/SglangProvider.php' => 2,`) through Q8, leaving master full-suite-red for that window; the 2→5 fix rode Q9 (d92acd43e) under the in-flight OPEN-PARKED-Q9 FOLLOW-UPS decision (recorded pre-review, reviewer c1 aware via diff). Current state clean: roster 5 == live 5, census OK 94/4983, milestone + final censuses green. LANDED LESSON (worklog FOLLOW-UPS): any commit adding/removing an emitter site MUST carry its census-file update in the same step; census-file touch entries are mandatory in Lane A step touch-lists.
+- **F2 MINOR (scope)** — CompleteResponse.php (+22/−0, purely additive promoted `public bool $truncated = false` + docblock) rode Q7 outside the touch-list. SPEC GAP, not builder deviation: Q7's own line "expose truncated flag on result" (qwen.md:207) names the carrier DTO without listing its file; the flag cannot exist on the immutable DTO otherwise. Accepted; erratum recorded. LESSON: touch-lists must enumerate DTO files implied by "expose X on result/event" clauses.
+- **F3 MINOR (scope)** — Q6 (78e1da2d1) rode tests/Integration/UsageWiringTest.php (22/17), tests/Providers/PromptStabilityTest.php (14/2), tests/UsageTest.php (11/1) — outside the listed test set. src/Usage.php (51/7) was spec-ADMITTED by the :193 failing-test conditional with on-disk evidence (/tmp/opencode/qwen-Q6/failures-base.txt, fd0-proof.txt; auditor cited the stale path /tmp/opencode/qwen-Q6e/ — directory renamed at reconstruction, same class of artifact); the three test files are the same evidence class (they failed against Q6's behavior change — §13 cat.2 reachability proof) though the spec's conditional named only Usage.php. All three flips are behavior corrections recording revived stream usage (no deletion, no weakening — Q6 round verified additions/removals counts in its review). Accepted with erratum; LESSON as F1 (enumerate evidence-driven files explicitly in the step record BEFORE building).
+- **F4 MINOR (scope)** — StderrEmitterCensusTest.php (10/4) rode Q9 (d92acd43e) outside Q9's touch-list — the vehicle of F1's fix, decided in-flight and logged pre-review (OPEN-PARKED-Q9 entry + roster-fix dispatch + reviewer saw the 5-file tree). Accepted with erratum (subsumed by F1's lesson).
+- **Chain note** — the step chain 27eafe5bf→d984be664 contains ONE foreign merge de1ea9f55 (sugar-dash GIF churn; parents 27eafe5bf+56e2baf37) between Q1 and Q2; Q2's recorded start_sha=de1ea9f55 already accounts for it; no lane commits lost, ancestry intact.
+- Verdicts per step after errata: Q1-Q10 all VERIFIED-DONE (re-confirmation is §15 round-2's independent job).
 
 ---
 

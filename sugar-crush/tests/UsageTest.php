@@ -155,6 +155,10 @@ final class UsageTest extends TestCase
             'outputTokens' => null,
             'cacheReadTokens' => null,
             'cacheCreationTokens' => null,
+            // §Q6 (qwen.md): the reasoning side joined the bucket pair; a key
+            // missing from EITHER half of the wire pair is the silent
+            // async-only loss this exact-shape assert exists to catch.
+            'reasoningTokens' => null,
         ], $wire);
 
         $back = Usage::fromArray($wire);
@@ -574,13 +578,19 @@ final class UsageTest extends TestCase
      */
     public function testEveryBucketRoundTripsAcrossTheForkWireByValue(): void
     {
-        $full = Usage::new(4321, 0.1234, 1000, 2000, 30000, 400);
+        // The 7th positional arg is §Q6's reasoning bucket - riding the SAME
+        // both-halves wire proof as the four E17 buckets, because the class
+        // docblock's fork-boundary trap is indifferent to which bucket fell
+        // off: a key dropped from toArray() or a key fromArray() stopped
+        // reading loses that bucket on the async side only, silently.
+        $full = Usage::new(4321, 0.1234, 1000, 2000, 30000, 400, 777);
         $back = Usage::fromArray($full->toArray());
         $this->assertEquals($full, $back);
         $this->assertSame(1000, $back->inputTokens);
         $this->assertSame(2000, $back->outputTokens);
         $this->assertSame(30000, $back->cacheReadTokens);
         $this->assertSame(400, $back->cacheCreationTokens);
+        $this->assertSame(777, $back->reasoningTokens);
 
         $mixed = Usage::new(11, 0.5, inputTokens: 1, cacheReadTokens: 0);
         $backMixed = Usage::fromArray($mixed->toArray());

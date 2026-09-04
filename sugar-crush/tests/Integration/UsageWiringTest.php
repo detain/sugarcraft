@@ -542,19 +542,19 @@ JSON;
         $this->assertSame(15, $broken->cacheReadTokens);
     }
 
-    public function testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
+    public function testP4S2SglangStreamTurnsTheZeroChoiceUsageChunkIntoATerminalUsageBearingChunk(): void
     {
-        // review-5 finding 7: removing the `isset($data['choices'][0]['delta'])`
-        // guard in completeStream survived everything, because no test fed a
-        // line the guard is about. This is the LIVE-PROBE terminal usage
-        // chunk (2026-09-02 skynet2 stream, worklog §1c - only ever emitted
-        // with stream_options.include_usage, which this provider does not
-        // send, making it a forward-shape pin): `choices: []` beside a full
-        // usage document. Without the gate, parseChunk's `?? []` tolerance
-        // turns that line into an EXTRA empty CompleteResponse - a phantom
-        // chunk in wire order. The guard drops it (and the `data: [DONE]`
-        // line drops at the `$data !== null` guard), so the stream yields
-        // EXACTLY the two delta chunks, content and billing intact.
+        // §Q6 amendment (qwen.md, 2026-09-04): this was
+        // testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor -
+        // review-5 finding 7's FORWARD-SHAPE pin, written while the provider
+        // neither sent `stream_options.include_usage` nor accepted the chunk
+        // it produces. Q6 makes both halves true on the Sglang arm, so the
+        // DROP assertions are flipped here - the flip IS the change; the pin
+        // keeps guarding review-5's phantom-chunk finding for every frame that
+        // reports no usage document.
+        // Unchanged from the original: the two delta lines and the usage line
+        // are the LIVE-PROBE shapes (2026-09-02 skynet2, worklog §1c) and
+        // `[DONE]` still yields nothing.
         $delta = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"delta":{"content":"%s"},"logprobs":null,"finish_reason":null,"matched_stop":null}]}';
         $usageChunk = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
         $sse = sprintf('data: ' . $delta . "\n", 'Hel')
@@ -569,9 +569,11 @@ JSON;
             ),
         ));
 
-        $this->assertCount(2, $chunks, 'the zero-choice usage chunk and [DONE] yield NOTHING - gate removed, parseChunk emits a third, empty chunk');
-        $this->assertSame(['Hel', 'lo'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the surviving deltas, intact');
-        $this->assertSame([0, 0], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero - the usage document on the dropped line never reaches a chunk');
+        // §Q6: the zero-choice usage line now yields ONE terminal usage-carrying
+        // chunk instead of nothing; [DONE] still yields nothing.
+        $this->assertCount(3, $chunks, 'the usage chunk bills as a final chunk; the no-usage frames (incl. [DONE]) still yield nothing - gate removed wholesale, parseChunk would emit a phantom here too');
+        $this->assertSame(['Hel', 'lo', ''], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the deltas, intact; the terminal chunk carries no text to double-bill');
+        $this->assertSame([0, 0, 72], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), '§Q6 flips this pin: per-chunk deltas still bill zero, and the usage document on the terminal line now reaches a chunk - total_tokens 72, once');
     }
 
     public function testP4S2SglangNegativeWireTotalBillsZeroThroughTheRealParsePath(): void
@@ -682,7 +684,10 @@ JSON;
         // unfalsifiable: mutating the gate at :252 to `if (true)` left all 90
         // tests of UsageWiringTest + CustomProviderTest +
         // CustomProviderStreamingTest green. This is the Custom twin of
-        // testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor,
+        // testP4S2SglangStreamTurnsTheZeroChoiceUsageChunkIntoATerminalUsageBearingChunk
+        // (§Q6 renamed that one when it amended the Sglang arm; the DROP claim
+        // pinned HERE stands - CustomProvider still sends no stream_options and
+        // still drops, which is what these assertions keep pinning),
         // fed the identical 2026-09-02 skynet2 LIVE-PROBE lines (the docblock
         // imports that evidence by family - Custom fronts exactly this class of
         // server). It pins the whole sentence by test, not prose:

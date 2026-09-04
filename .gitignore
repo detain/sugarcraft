@@ -41,3 +41,4 @@
 sugarcraft
 .sugar-crush-build/
 /.sugar-crush-prompt/
+codacy-coverage-reporter

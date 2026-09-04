@@ -55,5 +55,27 @@ final readonly class CompleteResponse
          * not this field's default.
          */
         public ?bool $errorTransient = null,
+        /**
+         * Whether the server said this response was CUT OFF (§Q7 of the qwen
+         * lane, evidence E-32: `finish_reason` `length`/`abort`).
+         *
+         * Batch: {@see SglangProvider::parseResponse()} sets it from the
+         * choice's `finish_reason` — capture only, no field beside it
+         * changes. Stream: the §Q7 flush frame (the last
+         * {@see SglangProvider::completeStream()} tool-call chunk, emitted
+         * when truncated completion left fragments in the reassembly buffer)
+         * carries it; every other streamed chunk keeps the default false.
+         *
+         * FALSE IS NOT A PROOF OF CLEANLINESS. `stop`/`tool_calls` ends
+         * never set it, and a provider that does not parse finish_reason at
+         * all cannot report what it did not read — the field is sglang's
+         * honest statement, not a cross-provider guarantee. Nothing in src/
+         * consumes it yet: Runtime folds chunks today without consulting
+         * it, and whether a truncated BATCH should re-enter the E-56 retry
+         * classification is deliberately a caller-layer decision for the
+         * orchestrator, not a silent behaviour change smuggled in on a
+         * flag.
+         */
+        public bool $truncated = false,
     ) {}
 }
