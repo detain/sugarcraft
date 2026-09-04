@@ -1388,17 +1388,22 @@ final class EnvironmentBlockTest extends TestCase
         // 5-byte `.lock` suffix while it writes the ref file. THAT is the real
         // bound the old SUMMARY_MAX_BYTES prose was fumbling when it said
         // "255-byte filename limit" — and it is why the cap on the ESCAPED
-        // value is 255, not 250: an ordinary 250-byte ref carries no roster
-        // tag (a closing tag needs `/`, and no opening roster name fits twice
-        // in 5 spare bytes), so every legitimately creatable single-segment
-        // ref passes through both escape and cap byte-inert.
+        // value is 255, not 250: a 250-byte ref carrying NO roster tag at all
+        // grows by nothing under escape (a closing tag needs `/`, impossible
+        // inside one component, and this `r` payload carries no opening tag
+        // either), so tag-free single-segment refs pass both escape and cap
+        // byte-inert. Scoped at fix-1: that is the whole of the class — NOT
+        // every legitimately creatable single-segment ref is inert; one
+        // PACKED with `<env>` repeats escapes 250 B to 400 B and is clipped
+        // at 255, pinned as behavior by
+        // testASingleComponentRefPackedWithOpeningTagsIsEscapedThenCappedVisibly().
         $maxOne = str_repeat('r', 250);
         shell_exec('git -C ' . $q . ' checkout -q -b ' . escapeshellarg($maxOne) . ' 2>/dev/null');
 
         $viaMaxSingle = EnvironmentBlock::capture($this->tempDir, 'model')->render();
 
         $this->assertStringContainsString('Current branch: ' . $maxOne, $viaMaxSingle);
-        $this->assertStringNotContainsString('truncated', substr($viaMaxSingle, (int) strpos($viaMaxSingle, 'Current branch: ')), 'a single-component ref at the true filesystem bound must not be clipped');
+        $this->assertStringNotContainsString('truncated', substr($viaMaxSingle, (int) strpos($viaMaxSingle, 'Current branch: ')), 'a TAG-FREE single-component ref at the true filesystem bound must not be clipped');
     }
 
     /**
@@ -1637,6 +1642,136 @@ final class EnvironmentBlockTest extends TestCase
                 substr_count($prompt, '</env>'),
                 'a capped ref may not disturb the single real env terminator',
             );
+        } finally {
+            $fixture->destroy();
+        }
+    }
+
+    /**
+     * THE SINGLE-COMPONENT COUNTEREXAMPLE, AS BEHAVIOUR (fix-1, MINOR-1):
+     * the cap bites a ref PACKED WITH OPENING TAGS, not only the
+     * multi-segment length-attack surface the pre-fix prose reserved it for.
+     *
+     * `str_repeat('<env>', 50)` is 250 B and slash-free — and an OPENING
+     * roster tag needs no `/`; only a closing one does. Real `git checkout
+     * -b` takes it (MEASURED at fix-1: exit 0, and `branch --show-current`
+     * returns all 250 bytes; the 251-byte sibling hits git's `.lock`
+     * NAME_MAX wall), so this is the ordinary-single-component shape the
+     * BRANCH_MAX_BYTES docblock used to declare byte-inert — and it is not:
+     * escape runs BEFORE the cap and rewrites all 50 leading `<` to `&lt;`
+     * at +3 B each, growing 250 B to 400 B, and truncateOutput then clips
+     * the ESCAPED stream. What crosses 255 is the escaping, visibly, with
+     * the standard marker. The block pins the escaped head, the exact
+     * marker arithmetic, the field inside {@see
+     * EnvironmentBlock::BRANCH_MAX_BYTES}, and one fence pair; the marker's
+     * 400-byte TOTAL is itself the order proof — a cap-first world would
+     * state 250 and no clip at all. The assembled-level half repeats the
+     * terminator count through the real buildSystemPrompt.
+     *
+     * DELETION EXPERIMENTS: removing PromptFence::escape() at the branch
+     * site lets the RAW 250-byte payload arrive whole (250 ≤ 255, so the
+     * cap never fires and no marker appears) — reddening the raw-absence,
+     * prefix, and both block count pins; removing
+     * truncateOutput(...BRANCH_MAX_BYTES...) lets the full 400-byte escaped
+     * value through — reddening the marker and field-cap pins.
+     */
+    public function testASingleComponentRefPackedWithOpeningTagsIsEscapedThenCappedVisibly(): void
+    {
+        $this->initGitRepo();
+        file_put_contents($this->tempDir . '/a.txt', "one\n");
+        $this->gitCommitAll('seed');
+
+        $ref = str_repeat('<env>', 50);
+        $this->assertSame(250, \strlen($ref), 'the probe ref is no longer the 250-byte fixture its byte figures were derived from');
+        $this->assertStringNotContainsString('/', $ref, 'the probe ref must stay slash-free - ONE component is the point');
+        $q = escapeshellarg($this->tempDir);
+        shell_exec('git -C ' . $q . ' checkout -q -b ' . escapeshellarg($ref) . ' 2>/dev/null');
+        // The instrument before the claim: git must CREATE the ref and report
+        // it as the current branch, or this pin has lost its subject.
+        $this->assertSame(
+            $ref,
+            trim((string) shell_exec('git -C ' . $q . ' branch --show-current 2>/dev/null')),
+            'git stopped accepting the single-component tag-packed ref, so this pin has lost its subject',
+        );
+
+        $output = EnvironmentBlock::capture($this->tempDir, 'model')->render();
+
+        $this->assertStringNotContainsString(
+            'Current branch: ' . $ref,
+            $output,
+            'the 250-byte tag-packed ref reached the block raw - escape or cap is not being applied',
+        );
+
+        $branchStart = (int) strpos($output, 'Current branch: ') + \strlen('Current branch: ');
+        $branchField = substr(
+            $output,
+            $branchStart,
+            // to the field's own end: the blank line before Status: — the
+            // kept fragment and its marker span a newline (as in the 359-B
+            // sibling), so a single-line read would miss the evidence below
+            (int) strpos(substr($output, $branchStart), "\n\n"),
+        );
+
+        // Escape-before-cap, in the bytes AND in the marker's own arithmetic:
+        // 400 B escaped in, 72 B kept (MEASURED: budget 255 - marker 182 - 1
+        // = exactly 9 whole `&lt;env>` tags), 328 dropped of a 400-B total.
+        $this->assertStringStartsWith(
+            str_repeat('&lt;env>', 9),
+            $branchField,
+            'the kept head must be the ESCAPED form - 9 whole `&lt;env>` tags, no raw `<` survives into the value',
+        );
+        $this->assertSame(
+            1,
+            preg_match('/\[truncated: (\d+) of (\d+) bytes omitted\./', $branchField, $m),
+            'the clip must announce itself inside the branch field',
+        );
+        $this->assertSame('328', $m[1], 'dropped bytes: 400 escaped total minus the 72-byte kept fragment');
+        $this->assertSame('400', $m[2], 'the total named by the marker is the ESCAPED length - escape ran before the cap (cap-first would say 250 and clip nothing)');
+        $this->assertLessThanOrEqual(
+            EnvironmentBlock::BRANCH_MAX_BYTES,
+            \strlen($branchField),
+            'the escaped+clipped value must fit its cap - the block-wide 25,600 B promise budgets the branch line at 255',
+        );
+
+        // One fence pair, exact: the value carries no raw opening tag either.
+        $this->assertSame(1, substr_count($output, '</env>'), 'a clipped tag-packed ref may not forge the fence terminator');
+        $this->assertSame(1, substr_count($output, '<env>'), 'nor leave a raw opening roster tag beyond the block\'s own fence');
+
+        // The same ref, assembled through the real buildSystemPrompt.
+        $fixture = new \SugarCraft\Crush\Tests\Prompt\PromptFixture();
+        try {
+            $fq = escapeshellarg($fixture->root());
+            shell_exec('git -C ' . $fq . ' init -q 2>/dev/null');
+            shell_exec('git -C ' . $fq . ' config user.email crush@example.test 2>/dev/null');
+            shell_exec('git -C ' . $fq . ' config user.name crush 2>/dev/null');
+            $fixture->write('a.txt', "one\n");
+            shell_exec('git -C ' . $fq . ' add -A 2>/dev/null');
+            shell_exec('git -C ' . $fq . ' commit -q -m seed 2>/dev/null');
+            shell_exec('git -C ' . $fq . ' checkout -q -b ' . escapeshellarg($ref) . ' 2>/dev/null');
+            $this->assertSame(
+                $ref,
+                trim((string) shell_exec('git -C ' . $fq . ' branch --show-current 2>/dev/null')),
+                'git stopped accepting the single-component fixture on the assembled path, so these pins lost their subject',
+            );
+
+            $prompt = $fixture->systemPrompt();
+
+            $this->assertStringNotContainsString(
+                'Current branch: ' . $ref,
+                $prompt,
+                'the assembled prompt may carry the tag-packed ref only escaped-and-clipped',
+            );
+            $this->assertStringContainsString(
+                str_repeat('&lt;env>', 9),
+                $prompt,
+                'the escaped clipped head must arrive in the real assembled prompt too',
+            );
+            $this->assertSame(
+                1,
+                substr_count($prompt, '</env>'),
+                'a clipped tag-packed ref may not disturb the single real env terminator',
+            );
+            $this->assertSame(1, substr_count($prompt, '<env>'), 'nor re-open a second fence');
         } finally {
             $fixture->destroy();
         }

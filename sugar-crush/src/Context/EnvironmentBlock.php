@@ -322,13 +322,27 @@ final readonly class EnvironmentBlock implements PromptSection
      * 255 is chosen with open eyes, not inherited from the false claim
      * {@see SUMMARY_MAX_BYTES} used to make: it is NAME_MAX, and the largest
      * SINGLE-component ref that can actually be created on this box is 250
-     * bytes (git writes `<name>.lock`, so 251 already fails — MEASURED). An
-     * ordinary ref — no roster tag, and none of the closing tags can appear
-     * without a `/`, which the components individually cannot carry — reaches
-     * 250 bytes and passes byte-inert, well under 255. Only the
-     * multi-segment length-attack surface, the same property that lets a ref
-     * carry `</env>` at all, gets clipped, visibly, with the standard
-     * `truncated:` marker reserved INSIDE the 255.
+     * bytes (git writes `<name>.lock`, so 251 already fails — MEASURED). What
+     * that bound limits is the RAW value, and the paragraph before fix-1
+     * over-read it — it claimed a single component "passes byte-inert, well
+     * under 255" and reserved clipping for "only the multi-segment
+     * length-attack surface". FALSE as written, and FALSE through the wrong
+     * verb: a closing roster tag does need a `/`, which one component cannot
+     * carry, but an OPENING one needs NOTHING — a 250 B slash-free ref of
+     * repeated `<env>` is creatable (MEASURED at fix-1: `git checkout -b`
+     * takes `str_repeat('<env>', 50)` whole and `branch --show-current`
+     * returns all 250 of it; the 251-byte sibling hits the same `.lock`
+     * wall), and escape-before-cap rewrites each tag's leading `<` to `&lt;`
+     * at +3 B a tag, growing those 250 bytes to 400. So what crosses 255 is
+     * the ESCAPING, and it reaches even a single component: the field is
+     * clipped at the cap and lands at exactly 255 B announcing
+     * `truncated: 328 of 400`, visibly, with the standard `truncated:`
+     * marker reserved INSIDE the 255. Byte-inertness at 250 belongs to refs
+     * carrying NO roster tag at all (MEASURED: `r`×250 arrives whole, pinned
+     * inside
+     * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testAFenceClosingGitBranchNameArrivesFenceNeutralisedAndTheRefIsCapped()});
+     * both polaries are now behavior — the clipped one pinned by
+     * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testASingleComponentRefPackedWithOpeningTagsIsEscapedThenCappedVisibly()}.
      *
      * The cap lives inside the fixed-part slack the block-wide ceiling test
      * already reserves ("1 KiB covers the fixed part including the branch
@@ -1033,9 +1047,17 @@ final readonly class EnvironmentBlock implements PromptSection
         // P5.S3: escape before the cap — Status: and Recent commits: are the
         // two fields a commit subject (no length limit) and a multi-component
         // path (`x<` dir + `env>y/f.txt`, which git prints UNQUOTED, measured)
-        // can both reach with a complete `</env>` in hand. The dropped-byte
-        // figure in the marker still counts raw git output; escaping only ever
-        // grows what is RETAINED, and the cap bounds that.
+        // can both reach with a complete `</env>` in hand. The cap then
+        // bounds ESCAPED bytes, and the marker speaks MIXED currency:
+        // $stdoutDropped is the capture's RAW tail-drop (pre-escape), but
+        // when escape grows the retained stream past the cap the head-clip
+        // counts POST-ESCAPE bytes — and escape only inserts, so each such
+        // byte stands for at most one raw byte. Every figure the marker
+        // states is therefore an UPPER bound on the raw git volume it names:
+        // it can overstate raw volume (the head region most, where escaped
+        // bytes replaced the fewest raw ones) and can never understate it
+        // (MEASURED at fix-1: 5,110 B of tag-packed `status --porcelain`
+        // reported `truncated: 3859 of 7510`, raw truth 2,809 of 5,110).
         return $this->truncateOutput(
             PromptFence::escape($captured['stdout']),
             $maxBytes,
