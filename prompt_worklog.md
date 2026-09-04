@@ -253,6 +253,24 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### F6c — residual citation sweep + transcriptSignature REPLACE third control · 2026-09-03 · de1048ccf
+
+**Status: MERGED.** Base `bcf419855` (F6b merge) + sync `372534352` (user pull, disjoint); branch `prompt/F6c`; synced tip `295b95e40`. Gap-filler (not one of the 63 steps), last of the F6b-reported residuals.
+
+**What landed (5 commits `e39b0adc1` T1+T2 · `58f6537f9` T3 · `b02313027` fix-1 · `a387a70f5` fix-2 · `4620c5156` fix-3; 3 files +85/-9):**
+- `tests/Providers/ProviderRequestResponseTest.php` comment/string cites refreshed: Bedrock :364-367→:500-503 (emit :509); Custom :389→:488; OpenAI :257→:357; disclosed STRING change at :501 EchoProvider :18-23→:109-124. Ten other cite groups measured CORRECT, untouched (full list in lead ledger `/home/sites/prompt-scratch/F6c/lead/ledger.md`).
+- `prompt_plan.md` :1606/:1610 rule-42 in-line corrections (Bootstrap 1887→1888, 1458-1460→1459-1461; Chat 7725→7777, 7820→7872, 7844→7896, 7842→7894; originals kept).
+- `tests/Renderer/StatusLineSegmentTest.php` +74 lines: transcriptSignature same-count-REPLACE known-positive third control + fix-3 guard (grown-cacheChat fixture pin). 22/4113→23/4117.
+- Proofs: PRR tokens 3113→3113 elementwise (5 comment + 1 string, zero code diffs); line counts PRR 751, plan 3626 UNCHANGED; goldens byte-identical `32ea749d…`/`ef0326dd…`; path gate 0.
+**Deletion experiments (T3):** count-only plant → only new control reds; array_keys plant → same; method-deleted+plant → red reverts; grown-cacheChat → fixture pin reds. Re-run by reviewers 1&3.
+**Figures:** focused cwd /home/sites/prompt-step-F6c/sugar-crush serial </dev/null probe 0: PRR 32/72; PRR+Vertex+SymbolCitation 192/3504; nine-file census 176/31461; roster 17/1101. Merge-gate at synced tip 295b95e40 (cwd checkout root): **Gate at synced tip 295b95e40 (cwd /home/sites/prompt-step-F6c checkout root, serial, </dev/null, box-quiet probe 0): Tests 10645 / Assertions 165017 (MMG-201 arm; 165014 at 198) / Skipped 1 / 0 failures / EXIT 0 - prediction exact. cmp.py gate-junit vs F6b gate2-junit: sole mover StatusLineSegmentTest +4a/+1t; MouseModalGuard same arm (201) both runs - no flip; zero unexplained movement.** Belt on master post-merge: **Belt on merged master de1048ccf (cwd /home/sites/sugarcraft checkout root, serial, </dev/null): Tests 10645 / Assertions 165017 (MMG-201 arm) / Skipped 1 / 0 failures / SUITE-EXIT=0.**
+**Review loop:** C1 fresh reviewer DIRTY (3 minor/3 nit) → dedicated fix-1; fix-1 regression (indent/wrap) caught by LEAD verification → fix-2; C2 fresh DIRTY (1 minor: tautological-side guard) → fix-3; C3 fresh CLEAN (2 record-nits). Cap-3 held; lead-never-fixes held.
+**Brief claims measured FALSE (report-only):** GlobFigureDriftTest counts lines — FALSE (strlen()-based settings-glob generator; no LOC-counting test exists; constraint honored anyway). 'A guard polices File.php:NNN cites' — FALSE (verified two ways), so T1/T2 pin-red experiments N/A.
+**Incidents this round:** (a) orchestrator claimed 'F6c lead running' before spawning it — disk check refuted; second confabulation-class near-miss, caught pre-action, nothing false recorded anywhere durable. (b) 9 PRE-EXISTING git stash entries observed in the F6c worktree (not agent-created; NOT dropped; worktree removal handled per §1.12 + recorded here).
+**Process note:** task() notifications arrive on the next user message, not spontaneously — orchestrator now asks the user to ping after agent rounds.
+**Carries forward:** PREPEND/DROP third controls still lack known-positives; commit-object prose nits recorded-not-rewritten (ledger §travel); NOTE-1 (Anthropic-only readout) decision still awaiting user.
+
+
 ### F6b - citation-refresh gap-filler (sweep step) + CONFABULATION incident - 2026-09-03 - tip 3bea55552 UNMERGED
 - Status: COMPLETE-AT-CAP on branch `prompt/F6b` (worktree /home/sites/prompt-step-F6b, base `0fdfd9033`), 5 commits 98aeffbb6 6653de093 b601103e4 a956f9271 3bea55552; disk-verified by orchestrator (cat-file -t, 20/20 identity fields literal detain@interserver.net, porcelain 0, diffstat 4 files +10/-10). NOT merged, NOT pushed.
 - Scope: comment/string-only citation refresh at four sites; per-file LINE COUNTS unchanged (8424/2349/751/3626 - GlobFigureDrift-safe); token_get_all zero code-token diffs; php -l clean; goldens byte-identical; path gate 0.
