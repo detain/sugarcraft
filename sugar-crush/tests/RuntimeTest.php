@@ -10,6 +10,9 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\RepoMapBlock;
+use SugarCraft\Crush\Context\Stability;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
@@ -2731,6 +2734,177 @@ final class RuntimeTest extends TestCase
         $runtime->markWriteSinceLastRender(true);
         $armed = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
         $this->assertSame(1, substr_count($armed, 'Staged changes (git diff --cached, index vs HEAD)'));
+    }
+
+    // =========================================================================
+    // P5.S2 — the memoized snapshots ARE the PromptSections
+    // =========================================================================
+
+    /**
+     * The `<env>` layer's section contract, read from the block itself rather
+     * than from a wrapper's constructor arguments.
+     *
+     * WHY THESE VALUES: `fence()` names the tag {@see EnvironmentBlock::render()}
+     * already emits at both ends — pinned here against the literal opening and
+     * closing bytes, not just the string, so a fence drift between what render()
+     * writes and what the section reports reds this test as well as the golden.
+     * `stability()` is PerTurn because the git body is re-polled per render()
+     * (the live-polled design {@see EnvironmentBlock} ships on purpose), and
+     * `byteBudget()` is the advisory PHP_INT_MAX every production section
+     * reports until the compaction tiers promote the blocks' per-field caps —
+     * see the WHY on {@see EnvironmentBlock::byteBudget()}.
+     */
+    public function testTheEnvironmentBlockReportsItsPromptSectionContract(): void
+    {
+        $block = EnvironmentBlock::capture($this->makeTempRepo(), 'gpt-4');
+
+        $this->assertSame('<env>', $block->fence());
+        $this->assertSame(Stability::PerTurn, $block->stability());
+        $this->assertSame(\PHP_INT_MAX, $block->byteBudget());
+
+        $rendered = $block->render();
+        $this->assertSame('<env>' . "\n", substr($rendered, 0, 6), 'render() opens with the fence + a newline');
+        $this->assertSame("\n</env>", substr($rendered, -7), 'render() closes with a newline + the fence');
+    }
+
+    /**
+     * The `<project-memory>` layer's section contract, on the EMPTY block —
+     * which is the polarity that carries the suppression: an App with no
+     * memory store folds to this object, its render() is the empty string,
+     * and that empty string is now the ONE voice that keeps the layer out of
+     * the prompt (the assembler's documented skip of an empty render, not a
+     * `!== ''` guard in systemPromptSections()). The populated polarity is
+     * pinned byte-for-byte by tests/Integration/MemoryPromptWiringTest.php.
+     */
+    public function testTheMemoryBlockReportsItsPromptSectionContract(): void
+    {
+        $block = MemoryBlock::empty();
+
+        $this->assertSame('<project-memory>', $block->fence());
+        $this->assertSame(Stability::PerSession, $block->stability());
+        $this->assertSame(\PHP_INT_MAX, $block->byteBudget());
+        $this->assertSame('', $block->render(), 'an absent memory layer renders nothing, fence included');
+    }
+
+    /**
+     * The `<repo-map>` layer's section contract, on a root it cannot describe
+     * (an empty directory: no composer.json, nothing to walk). Same
+     * suppression polarity as {@see
+     * testTheMemoryBlockReportsItsPromptSectionContract()}; the populated map
+     * is pinned by tests/Context/RepoMapBlockTest.php.
+     */
+    public function testTheRepoMapBlockReportsItsPromptSectionContract(): void
+    {
+        $block = RepoMapBlock::capture($this->makeTempRepo());
+
+        $this->assertSame('<repo-map>', $block->fence());
+        $this->assertSame(Stability::PerSession, $block->stability());
+        $this->assertSame(\PHP_INT_MAX, $block->byteBudget());
+        $this->assertSame('', $block->render(), 'a workspace the map cannot describe renders nothing, fence included');
+    }
+
+    /**
+     * The production list carries the MEMOIZED BLOCK OBJECTS, identity-wise —
+     * not wrappers around their strings.
+     *
+     * This is the pin the migration is actually for: if a rebuild ever
+     * re-wraps a snapshot (P5.S1's shape, `section(..., $block->render())`)
+     * the list would still assemble byte-identical prompts — the golden cannot
+     * see the difference — but the section objects stop being the accessors'
+     * identities and §17.2 invariant 9 no longer governs what is assembled.
+     * Identity, so: the same object out of the accessor and into the list,
+     * every build, or this reds.
+     */
+    public function testTheProductionSectionListCarriesTheMemoizedSnapshotObjects(): void
+    {
+        $app = App::new($this->provider, 'gpt-4');
+
+        $sections = $this->invokePrivateMethod($this->runtime, 'systemPromptSections', [$app]);
+
+        $environment = $this->invokePrivateMethod($this->runtime, 'environmentSnapshot', [$app]);
+        $memory = $this->invokePrivateMethod($this->runtime, 'memorySnapshot', [$app]);
+        $repoMap = $this->invokePrivateMethod($this->runtime, 'repoMapSnapshot', [$app]);
+
+        $this->assertSame($environment, $this->sectionByFence($sections, '<env>'), 'the <env> section IS the memoized block');
+        $this->assertSame($memory, $this->sectionByFence($sections, '<project-memory>'), 'the <project-memory> section IS the memoized block');
+        $this->assertSame($repoMap, $this->sectionByFence($sections, '<repo-map>'), 'the <repo-map> section IS the memoized block');
+        $this->assertSame($environment, $sections[count($sections) - 1], 'and the volatile one is still last');
+    }
+
+    /**
+     * Across TWO builds of the section list the three snapshot sections are
+     * the SAME three objects — memoisation held through the assembler seam,
+     * not just inside the accessor.
+     *
+     * The existing identity pins (testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns,
+     * testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges)
+     * prove it at the accessor; this proves the list itself reuses them, so a
+     * per-build `clone`/re-capture inserted between accessor and list — which
+     * no byte test could see — reds here.
+     */
+    public function testSystemPromptSectionsHandOutTheSameSnapshotObjectsAcrossBuilds(): void
+    {
+        $app = App::new($this->provider, 'gpt-4');
+
+        $first = $this->invokePrivateMethod($this->runtime, 'systemPromptSections', [$app]);
+        $second = $this->invokePrivateMethod($this->runtime, 'systemPromptSections', [$app]);
+
+        $this->assertSame($first[count($first) - 1], $second[count($second) - 1], 'same <env> section object');
+
+        $firstMap = $this->sectionByFence($first, '<repo-map>');
+        $secondMap = $this->sectionByFence($second, '<repo-map>');
+        $this->assertSame($firstMap, $secondMap, 'same <repo-map> section object');
+
+        $firstMemory = $this->sectionByFence($first, '<project-memory>');
+        $secondMemory = $this->sectionByFence($second, '<project-memory>');
+        $this->assertSame($firstMemory, $secondMemory, 'same <project-memory> section object');
+    }
+
+    /**
+     * The write signal's identity flip reaches the SECTION, not just the
+     * accessor — and only when the signal actually changes (both polarities
+     * against one runtime, mirroring the accessor-level pin at
+     * testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges).
+     */
+    public function testTheEnvironmentSectionIdentityTracksTheWriteSignalFlip(): void
+    {
+        $runtime = new Runtime($this->provider, $this->hookManager);
+        $app = App::new($this->provider, 'gpt-4');
+
+        $before = $this->invokePrivateMethod($runtime, 'systemPromptSections', [$app]);
+        $beforeSection = $before[count($before) - 1];
+
+        // Marking what the fresh block already carries must not churn it.
+        $runtime->markWriteSinceLastRender(true);
+        $steady = $this->invokePrivateMethod($runtime, 'systemPromptSections', [$app]);
+        $this->assertSame($beforeSection, $steady[count($steady) - 1], 'a no-op mark keeps the section identity');
+
+        // Marking the opposite value must mint both a new block and a new
+        // section from it — one object, not a wrapper's copy.
+        $runtime->markWriteSinceLastRender(false);
+        $flipped = $this->invokePrivateMethod($runtime, 'systemPromptSections', [$app]);
+        $flippedSection = $flipped[count($flipped) - 1];
+        $this->assertNotSame($beforeSection, $flippedSection);
+        $this->assertSame(
+            $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]),
+            $flippedSection,
+            'the list carries the post-flip memoized block itself',
+        );
+        $this->assertFalse($flippedSection->writeSinceLastRender(), 'the section IS the block, so the write signal reads through it');
+    }
+
+    /**
+     * @param list<\SugarCraft\Crush\Context\PromptSection> $sections
+     */
+    private function sectionByFence(array $sections, string $fence): \SugarCraft\Crush\Context\PromptSection
+    {
+        foreach ($sections as $section) {
+            if ($section->fence() === $fence) {
+                return $section;
+            }
+        }
+
+        $this->fail("no section reports fence {$fence}");
     }
 
     /**
