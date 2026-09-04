@@ -198,6 +198,40 @@ final class SglangProviderTest extends TestCase
         $this->assertNotSame(196_608, $provider->contextWindow());
     }
 
+    /**
+     * Q2: the Qwen3.8 family gets its own arm, and the figure is the
+     * CONSERVATIVE effective-input cap 744,506 = min(1,000,000, 748,602 −
+     * 4,096) — 748,602 is the deployment's `max_req_input_len` and 1,000,000
+     * its `context_length` (qwen.md E-71), 4,096 is the provider's own
+     * default `max_tokens` output headroom (E-50). Because this server runs
+     * `allow_auto_truncate=false`, over-long is a HARD error rather than a
+     * silent trim (E-71), and erring LARGE would switch every one of Chat's
+     * context tiers off (E-60) — so the window must sit below the enforced
+     * input ceiling, not at the nominal model length.
+     *
+     * Ids are the E-70 forms: canonical served id, bare alias, and a
+     * lowercased spelling pinning the predicate's case-insensitivity. The
+     * negative polarity (Qwen3-235B must NOT take this arm) is pinned by
+     * {@see testContextWindowKeepsTheLegacyFigureForANonDeepSeekV4Model()}
+     * and deliberately not restated here.
+     */
+    public function testContextWindowIsTheConservativeQwen3NextCapForAQwen3NextModel(): void
+    {
+        $client = $this->createMock(Client::class);
+
+        foreach (['Qwen/Qwen3.8-Flash-Next', 'Qwen3.8-Flash-Next', 'qwen/qwen3.8-flash-next'] as $model) {
+            $provider = new SglangProvider('https://api.example.com', $model, null, $client);
+
+            $this->assertSame(744_506, $provider->contextWindow(), $model);
+            // Both neighbouring arms are the regressions this pins: 196,608
+            // is the lie Q2 exists to fix (E-60), and 1,048,570 is the
+            // DEEPSEEK arm — over 2.8× the Qwen server's enforced input
+            // ceiling, the harmful direction (E-71).
+            $this->assertNotSame(196_608, $provider->contextWindow(), $model);
+            $this->assertNotSame(1_048_570, $provider->contextWindow(), $model);
+        }
+    }
+
     public function testContextWindowKeepsTheLegacyFigureForANonDeepSeekV4Model(): void
     {
         $client = $this->createMock(Client::class);

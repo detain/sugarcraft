@@ -440,6 +440,9 @@ final class SglangProviderRequestBuildingTest extends TestCase
 
     private const DEEPSEEK = 'deepseek-ai/DeepSeek-V4-Flash-0731';
 
+    /** Qwen3.8's canonical served id per qwen.md E-70 (probe-verified form). */
+    private const QWEN = 'Qwen/Qwen3.8-Flash-Next';
+
     /** @return array<Tool> */
     private function oneTool(): array
     {
@@ -640,6 +643,61 @@ final class SglangProviderRequestBuildingTest extends TestCase
         // Everything MiniMax DID get still arrives.
         $this->assertTrue($sent['separate_reasoning']);
         $this->assertCount(1, $sent['tools']);
+    }
+
+    public function testQwen3NextKeepsLegacySamplingAndGetsXHighEffort(): void
+    {
+        // Q2's family arm for Qwen3.8-Next, pinned with the E-61 shape: this
+        // model takes the LEGACY sampling defaults, NOT DeepSeek's card
+        // numbers, and the only new thing it gets is a tier-3 effort default.
+        $provider = $this->providerForModel(self::QWEN);
+        $provider->complete(new CompleteRequest(
+            model: self::QWEN,
+            messages: [new UserMessage('Hi')],
+            tools: $this->oneTool(),
+        ));
+
+        $sent = $this->sentBody();
+
+        // 0.7 because that is the value the code ACTUALLY produces here:
+        // defaultTemperature()'s non-V4 arm is LEGACY_DEFAULT_TEMPERATURE,
+        // which IS 0.7 — so E-61's measurement and the pre-existing default
+        // coincide and no sampling code had to change. Pinned against a
+        // future "Qwen card" edit that would retune a measured deployment.
+        $this->assertSame(0.7, $sent['temperature']);
+        // top_p is a DeepSeek-card-only knob; non-V4 models keep it absent so
+        // the server's launch-time default wins (E-61, defaultTopP null arm).
+        $this->assertArrayNotHasKey('top_p', $sent);
+        // Tier-3 model default (nothing named in request or config): 'xhigh',
+        // NOT DeepSeek's 'max' — the template accepts exactly xhigh|medium|low
+        // and 'max' 400s at the template whenever thinking is on (qwen.md
+        // E-40/E-41). 'xhigh' doubles as the template's own default (E-40).
+        $this->assertSame('xhigh', $sent['reasoning_effort']);
+        // No DeepSeek-only or not-yet-wired params ride along: kwargs
+        // placement is Q3/Q4 territory, today nothing may emit the key here.
+        $this->assertArrayNotHasKey('chat_template_kwargs', $sent);
+        // The window arm lives on the configured model; asserted beside the
+        // body so the family's full request-shape lives in one leg.
+        $this->assertSame(744_506, $provider->contextWindow());
+    }
+
+    public function testAnEarlierQwenGenerationIsNotTreatedAsQwen3Next(): void
+    {
+        // The negative that makes the `qwen3.8` token meaningful, mirroring
+        // testADifferentDeepSeekGenerationIsNotTreatedAsV4(): Qwen3-235B
+        // shares the vendor name but was never measured against this
+        // deployment, so matching bare `qwen` would silently hand it an
+        // 'xhigh' effort and the conservative window of a server it does not
+        // live on (E-70/E-71). It must keep the untouched legacy behaviour.
+        $provider = $this->providerForModel('Qwen3-235B');
+        $provider->complete(new CompleteRequest(model: 'Qwen3-235B', messages: [new UserMessage('Hi')]));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame(0.7, $sent['temperature']);
+        $this->assertArrayNotHasKey('top_p', $sent);
+        $this->assertArrayNotHasKey('reasoning_effort', $sent);
+        $this->assertSame(196_608, $provider->contextWindow());
     }
 
     public function testCallerSuppliedSamplingBeatsTheModelDefaults(): void

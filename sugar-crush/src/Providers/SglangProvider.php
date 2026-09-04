@@ -193,14 +193,96 @@ final readonly class SglangProvider implements ProviderInterface
     private const DEEPSEEK_V4_CONTEXT_WINDOW = 1_048_570;
 
     /**
-     * The context window this class reports for anything that is NOT the
-     * DeepSeek-V4 family - i.e. the MiniMax-M2.7 figure it has always
-     * reported, kept because that deployment's `--context-length` was exactly
-     * this (§12 D8) and because inventing a different fallback would retune a
-     * model nobody asked us to retune.
+     * Lowercased substring that identifies the Qwen3.8 family in a model id,
+     * and therefore the family whose deployed-server figures this class
+     * substitutes for the legacy defaults (qwen.md Q2).
+     *
+     * A family token rather than the exact id, for the same reasons as
+     * {@see DEEPSEEK_V4_FAMILY_TOKEN}: the served ids carry an org prefix
+     * and a `-Flash-Next` suffix a redeploy can change without changing
+     * which server's caps the figures below transcribe, and the bare alias
+     * `Qwen3.8-Flash-Next` (qwen.md E-70) must match too.
+     * Deliberately NOT the broader `qwen`: Qwen3-235B, Qwen2.5 and every
+     * other generation were never measured against this deployment, and the
+     * Qwen figures below are transcriptions of THIS family's server -
+     * matching the whole vendor would apply them to models whose limits are
+     * unknown here. The failure modes stay asymmetric the same way the
+     * DeepSeek token argues: a MISS costs only the model-aware window and
+     * the effort default (legacy arm, status quo), an OVER-MATCH would
+     * report a window some other Qwen server may refuse to hold.
+     */
+    private const QWEN3_NEXT_FAMILY_TOKEN = 'qwen3.8';
+
+    /**
+     * The `reasoning_effort` this class sends for the Qwen3.8 family when
+     * neither the request nor the provider config names one.
+     *
+     * `xhigh` is doubly the safe top: it is the chat template's own default
+     * AND the top of the template's accepted set `xhigh|medium|low`
+     * (qwen.md E-40). DeepSeek's {@see DEEPSEEK_V4_REASONING_EFFORT} value
+     * `max` deliberately does NOT carry over - sglang's pydantic enum is
+     * wider than the template's, so `max` passes validation and then 400s AT
+     * the template on every thinking-on request (E-41).
+     */
+    private const QWEN3_NEXT_REASONING_EFFORT = 'xhigh';
+
+    /**
+     * The single-request input ceiling the Qwen3.8 deployment enforces:
+     * `max_req_input_len` from its own `/server_info`, read 2026-09-01
+     * (qwen.md E-71). This is the field that actually rejects a request -
+     * the server runs `allow_auto_truncate=false`, so an over-long input is
+     * a hard error, not a silent trim (E-71).
+     *
+     * A TRANSCRIBED CONSTANT, NOT A LIVE READ, and it decays the way
+     * {@see DEEPSEEK_V4_CONTEXT_WINDOW}'s ancestors did: a redeploy under
+     * different flags makes it wrong with no local symptom, so re-verify
+     * `https://skynet2.interserver.net/server_info` whenever the compaction
+     * tiers start looking wrong. Kept as its own constant rather than only
+     * baked into the derived {@see QWEN3_NEXT_CONTEXT_WINDOW}, because the
+     * later compaction math in this plan needs the RAW ceiling beside the
+     * safe window.
+     */
+    private const QWEN3_NEXT_MAX_REQUEST_INPUT_LEN = 748_602;
+
+    /**
+     * The context window this class reports for the Qwen3.8 family:
+     * `min(1_000_000, 748_602 − 4096)` = **744_506**.
+     *
+     * THE ARITHMETIC, because a bare number invites "just use the model
+     * length" - the three inputs, each cited:
+     * - 1,000,000: `context_length` the server publishes (YaRN 4.0 over the
+     *   native 262,144; qwen.md E-71);
+     * - 748,602: {@see QWEN3_NEXT_MAX_REQUEST_INPUT_LEN} - the ceiling the
+     *   scheduler enforces on ONE REQUEST'S INPUT (E-71), not the total
+     *   window. Which field, and why, is the argument
+     *   {@see DEEPSEEK_V4_CONTEXT_WINDOW}'s docblock makes at length; it
+     *   applies verbatim here.
+     * - 4,096: output headroom - this provider's own default `max_tokens`
+     *   (E-50). Input and generated output share the scheduling budget
+     *   (`max_total_num_tokens` 748,608, E-71), so a request whose input sat
+     *   at 748,602 could not generate anything.
+     *
+     * WHY CONSERVATIVE: with `allow_auto_truncate=false` an over-long
+     * request hard-errors (E-71), and every context tier in Chat is a
+     * percentage of this number - erring LARGE turns reminder, compaction
+     * and refusal OFF, which {@see ProviderInterface::contextWindow()} names
+     * as the harmful direction (E-60 is exactly that tier math run with the
+     * wrong denominator). Erring small costs only an earlier compaction.
+     * The raw constants stay exposed so the margin can be re-tuned without
+     * re-deriving the evidence.
+     */
+    private const QWEN3_NEXT_CONTEXT_WINDOW = 744_506;
+
+    /**
+     * The context window this class reports for anything that is neither
+     * the DeepSeek-V4 nor the Qwen3.8 family - i.e. the MiniMax-M2.7 figure
+     * it has always reported, kept because that deployment's
+     * `--context-length` was exactly this (§12 D8) and because inventing a
+     * different fallback would retune a model nobody asked us to retune.
      *
      * DOMAIN: this is a MiniMax-shaped number serving as the fallback for
-     * every non-DeepSeek-V4 model, which is a guess for any third model. 0
+     * every model outside the two families with measured figures, which is
+     * a guess for any other model. 0
      * ("unknown", per {@see ProviderInterface::contextWindow()}) would be the
      * honest answer for a stranger, but it would also newly disable all four
      * context tiers on any MiniMax deployment reaching this arm, so the
@@ -376,7 +458,7 @@ final readonly class SglangProvider implements ProviderInterface
      * single figure it used to return was measured on a model this server no
      * longer runs.
      *
-     * TWO figures, each with its own domain:
+     * THREE figures, each with its own domain:
      *
      * - {@see DEEPSEEK_V4_CONTEXT_WINDOW} = 1,048,570 for the DeepSeek-V4
      *   family. Not a guess and not from a card: it is `max_req_input_len` in
@@ -395,6 +477,14 @@ final readonly class SglangProvider implements ProviderInterface
      *   form of this argument; this bullet previously contradicted it by
      *   naming both the wrong value (393,216, which the slot held earlier on
      *   the same day) and the wrong field.
+     *
+     * - {@see QWEN3_NEXT_CONTEXT_WINDOW} = 744,506 for the Qwen3.8 family
+     *   (qwen.md Q2): NOT the nominal 1,000,000 model length but the
+     *   CONSERVATIVE effective-input cap `min(1_000_000, 748_602 − 4096)`,
+     *   because `allow_auto_truncate=false` makes an over-long request a
+     *   hard error (E-71) - this arm rides under the enforced input ceiling
+     *   so the tiers fire early rather than the server refusing the request.
+     *   That constant's docblock is the long form of the arithmetic.
      * - {@see LEGACY_DEFAULT_CONTEXT_WINDOW} = 196,608 for everything else.
      *   That is the `--context-length 196608` the MiniMax-M2.7 skynet2 launch
      *   command pinned (§12), which is what this method returned
@@ -420,10 +510,12 @@ final readonly class SglangProvider implements ProviderInterface
      * tiers are percentages of - the 70% reminder, 85% automatic compaction,
      * 95% blocking refusal and the idle-compaction prompt. On the DeepSeek-V4
      * arm those fire at ~733,999 / ~891,284 / ~996,141 estimated tokens; on
-     * the legacy arm at ~137,625 / ~167,116 / ~186,777, unchanged.
+     * the Qwen3.8 arm at ~521,154 / ~632,830 / ~707,280; on the legacy arm
+     * at ~137,625 / ~167,116 / ~186,777, unchanged.
      *
-     * Those three DeepSeek figures are 70/85/95% of 1,048,570 and of nothing
-     * else. They are restated here only because they were last written as
+     * Those three figures per arm are 70/85/95% of 1,048,570, of 744,506 and
+     * of 196,608 respectively and of nothing else. The DeepSeek set was last
+     * written as
      * ~275,251 / ~334,233 / ~373,555 - the same percentages of the superseded
      * 393,216 - and a derived figure left behind after its input moves is this
      * project's signature defect. Recompute them whenever the constant moves.
@@ -432,9 +524,15 @@ final readonly class SglangProvider implements ProviderInterface
      */
     public function contextWindow(): int
     {
-        return self::isDeepSeekV4($this->model)
-            ? self::DEEPSEEK_V4_CONTEXT_WINDOW
-            : self::LEGACY_DEFAULT_CONTEXT_WINDOW;
+        if (self::isDeepSeekV4($this->model)) {
+            return self::DEEPSEEK_V4_CONTEXT_WINDOW;
+        }
+
+        if (self::isQwen3Next($this->model)) {
+            return self::QWEN3_NEXT_CONTEXT_WINDOW;
+        }
+
+        return self::LEGACY_DEFAULT_CONTEXT_WINDOW;
     }
 
     public function costPer1kTokens(string $model, string $direction): float
@@ -769,6 +867,25 @@ final readonly class SglangProvider implements ProviderInterface
     }
 
     /**
+     * True when a model id names the Qwen3.8 family - the ids the skynet2
+     * deployment serves as `Qwen/Qwen3.8-Flash-Next` and the bare alias
+     * `Qwen3.8-Flash-Next` (qwen.md E-70).
+     *
+     * Case-insensitive substring, the SAME shape as {@see isDeepSeekV4()};
+     * see {@see QWEN3_NEXT_FAMILY_TOKEN} for why the token is `qwen3.8` and
+     * not the broader `qwen`.
+     *
+     * PUBLIC for parity with {@see isDeepSeekV4()} and for the same reason:
+     * one family test behind this class's window, effort and (from Q3/Q4 of
+     * the qwen.md plan) kwargs routing, so a later consumer never spells a
+     * second, independently-drifting substring match for "Qwen3.8".
+     */
+    public static function isQwen3Next(string $model): bool
+    {
+        return str_contains(strtolower($model), self::QWEN3_NEXT_FAMILY_TOKEN);
+    }
+
+    /**
      * The `temperature` to send when the caller named none.
      *
      * TWO domains, and that is the whole reason this is a method rather than a
@@ -895,14 +1012,27 @@ final readonly class SglangProvider implements ProviderInterface
      * this model, and the top of the card's own recommended set
      * (`low`/`high`/`max`).
      *
-     * NULL for every other model, which is the field being omitted entirely -
+     * `xhigh` for the Qwen3.8 family (qwen.md Q2): the chat template's own
+     * default and the top of ITS accepted set `xhigh|medium|low` (E-40).
+     * DeepSeek's `max` does not carry over - it passes sglang's wider
+     * pydantic enum and then 400s at the template on every thinking-on
+     * request (E-41), which is exactly what config.dev.json's old `"max"`
+     * walked into. Naming `xhigh` rather than omitting the field changes
+     * nothing on the wire's BEHAVIOUR - the template applies `xhigh` when
+     * effort is absent (E-40) - but records the deployment's intent in the
+     * one tier every later request reads, and mirrors what Q1's config key
+     * already pins explicitly.
+     *
+     * NULL for every remaining model, which is the field being omitted
+     * entirely -
      * and that asymmetry is deliberate rather than lazy. Two facts about it,
      * kept separate because only one of them is measured:
      *
      * - MEASURED (by absence): `reasoning_effort` appeared nowhere in `src/`,
      *   `bin/`, `tests/` or any config file before this change, so no request
      *   this codebase has ever sent carried one. Omitting it for a
-     *   non-DeepSeek-V4 model is therefore the status quo exactly.
+     *   model outside the two named families is therefore the status quo
+     *   exactly.
      * - NOT MEASURED: what an effort level would do to MiniMax-M2.x. That
      *   deployment is gone from the confirmed server, so there is no way to
      *   find out here. Sending one anyway, on the strength of a DeepSeek
@@ -911,9 +1041,15 @@ final readonly class SglangProvider implements ProviderInterface
      */
     private static function defaultReasoningEffort(string $model): ?string
     {
-        return self::isDeepSeekV4($model)
-            ? self::DEEPSEEK_V4_REASONING_EFFORT
-            : null;
+        if (self::isDeepSeekV4($model)) {
+            return self::DEEPSEEK_V4_REASONING_EFFORT;
+        }
+
+        if (self::isQwen3Next($model)) {
+            return self::QWEN3_NEXT_REASONING_EFFORT;
+        }
+
+        return null;
     }
 
     /**

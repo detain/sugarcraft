@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next plan — START/RESUME PROMPT
-Current: Q1/building @ 3e7ad767a3173480602e1604244f26cf8e6c54a5 (Q0+bookkeeping committed; anchor survey done 2026-09-04 — Q1 spec AS-IS, live anchors in worklog ANCHOR SNAPSHOT; foreign-lane re-scope needed ONLY at Q6; after Q1 commit: §14 baseline → Q2)
+Current: Q2/building @ de1ea9f559a9dd6c9401c421baa791465a18fb76 (Q1 committed 27eafe5bf + §14 baseline recorded — full-suite is an env-broken vendor floor, targeted gates only until vendor restored out-of-band; Durable anchors: worklog `## ANCHOR SNAPSHOT @ 3e7ad767a`. Q6 re-scope + Q8 plan-bug + Q3 docblock-nit in FOLLOW-UPS. Commit via `git commit --only -F <msg> -- <paths>`; foreign lanes active — re-verify porcelain at every commit.)
 > This banner line is REWRITTEN (never appended to) at every step transition, by the committer/bookkeeping task.
 
 Paste this into a fresh orchestrator session to begin or continue execution.
