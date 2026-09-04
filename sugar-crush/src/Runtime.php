@@ -2668,6 +2668,22 @@ final class Runtime
         //     qualifies the CONCURRENCY (fork-dependent); batching is never
         //     wrong to ask for either way, which is what makes the instruction
         //     actionable on both builds.
+        //   - Verification: the prove-before-done clause is ADVISORY and
+        //     states its own ceiling, which is what keeps it true. It is
+        //     actionable because {@see \SugarCraft\Crush\Tools\BuiltIn\Bash}
+        //     is registered unconditionally by Bootstrap::tools() and hands
+        //     its command to a real `bash -c`, and because Glob and Grep —
+        //     confined to the root — reach the project's own runner files.
+        //     It stops being true on two edges the sentence itself covers:
+        //     "nothing here runs one for you" names a standing absence —
+        //     no hook under `SugarCraft\Crush\Hooks\BuiltIn` dispatches a
+        //     test command, and if one ever is wired the clause and this
+        //     line must move together — and a hook or permission deny can
+        //     refuse the Bash call itself, which is why the clause sends the
+        //     model to report the miss rather than imply the check happened.
+        //     A green suite pins behaviour, never intent: hence the final
+        //     sentence drawing the code/feature line rather than the clause
+        //     promising verification makes a change right.
         // Deliberately NOT claimed here: that the model can elect the
         // permission-gated path itself. HookResult::ask()/settleAsk() are
         // applied TO a call by the runtime; there is no tool the model can
@@ -2702,7 +2718,12 @@ final class Runtime
             that writes runs on its own, in the position you asked for it, so the order
             you request calls in is the order they take effect. When a tool call comes
             back an error, read what it says and fix the call — the same call repeated
-            unchanged fails the same way.
+            unchanged fails the same way. When a change is nearly done, prove it before
+            you say so: Bash runs a real shell, so a test suite or a type check that
+            Glob or Grep finds can be run through it, and nothing here runs one for
+            you — if you cannot find a runner, say that rather than implying the change
+            is verified. A green run is evidence about the code, not about the feature:
+            state which one you actually checked.
 
             # Acting vs. asking
             Act on local, reversible work without asking first: editing a file in

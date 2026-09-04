@@ -18,6 +18,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\Tool;
 
@@ -443,6 +444,63 @@ final class BaseSystemPromptTest extends TestCase
     }
 
     /**
+     * The §10.7 verify-before-done clause, pinned as an exact anchor inside the
+     * policed base slice — and the heading decision recorded here, because the
+     * step demands the choice in the test before the prose is read: the clause
+     * is FOLDED into `# Tool use` rather than opening a fifth heading, since a
+     * heading added after `# Security` would land past {@see BASE_END_MARKER},
+     * outside basePrompt() and therefore outside every assertion in this file
+     * that consumes it. Folding keeps the clause inside the fence, keeps
+     * REQUIRED_SECTIONS at four, and touches no allowlist: the prose adds no
+     * capitalised token that is not already a registered tool (Bash, Glob,
+     * Grep) or already in {@see PROSE_WORDS} (When).
+     *
+     * The claim is not decorative. "Bash runs a real shell" is the mechanism
+     * that makes "prove it" actionable, so the wording is guarded by the same
+     * polarity machinery that once caught a negated "confined", and the claim
+     * is then driven rather than believed: a command round-trips output and a
+     * failing exit comes back flagged — the runner's verdict is visible to the
+     * model, which is the entire point of demanding it before "done".
+     */
+    public function testBasePromptCarriesTheVerifyBeforeDoneClause(): void
+    {
+        $base = $this->basePrompt();
+
+        // Exact clause, line-wraps folded to single spaces. A substr_count of
+        // exactly 1 pins presence AND singleness: a duplicated verification
+        // instruction is the same defect class the de-duplication pins catch
+        // for instructions elsewhere in the prompt.
+        $collapsed = (string) preg_replace('/\s+/', ' ', $base);
+        $this->assertSame(
+            1,
+            substr_count(
+                $collapsed,
+                'When a change is nearly done, prove it before you say so: Bash runs a real '
+                . 'shell, so a test suite or a type check that Glob or Grep finds can be run '
+                . 'through it, and nothing here runs one for you — if you cannot find a '
+                . 'runner, say that rather than implying the change is verified. A green run '
+                . 'is evidence about the code, not about the feature: state which one you '
+                . 'actually checked.',
+            ),
+            'the verify-before-done clause is missing from the policed base slice, or duplicated',
+        );
+
+        // The actionable core against the prompt's own polarity: no negator
+        // may ever be inserted before "runs a real shell" while the code says
+        // Bash registers unconditionally and executes through `bash -c`.
+        $this->assertPromptDoesNotNegate($base, 'runs a real shell');
+
+        // And the claim driven: content round-trips, failure surfaces.
+        $bash = new Bash();
+        $ok = $bash->execute(['command' => 'printf verified', 'description' => 'probe']);
+        $this->assertFalse($ok->isError());
+        $this->assertSame('verified', $ok->content());
+
+        $failed = $bash->execute(['command' => 'exit 3', 'description' => 'probe']);
+        $this->assertTrue($failed->isError());
+    }
+
+    /**
      * `canFork()` really is what gates concurrency, proven by taking pcntl away.
      *
      * `function_exists()` cannot be made to lie in-process, so the negative
@@ -753,7 +811,7 @@ final class BaseSystemPromptTest extends TestCase
         // which is the cheap half of a discipline that already requires
         // diffing old against new.
         self::assertSame(
-            5176,
+            5559,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',
