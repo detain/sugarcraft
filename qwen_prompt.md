@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next plan — START/RESUME PROMPT
-Current: Q4/reviewing @ 674f14f0a84325a764936fe04bc51627d1ffd9da — builder 85/211 predicted=measured (2 files: SP 205/23, RBTest 255/6; Q2-leg amendment declared). NEXT: verdict → committer on CLEAN → Q5 (single-system merge, qwen.md:172-182; milestone full-suite = red-floor census-diff). Q1 27eafe5bf, Q2 52ea65370, Q3 674f14f0a. NEVER push; commit via `git commit --only -F <msg> -- <paths>`; foreign lanes active.
+Current: Q5/building @ 95bde6ad82d4e7dd820693542f59da8bd6560237 — Q4 committed (effort sanitize+route). NEXT: builder → split review + full-suite census → committer → Q6 RE-SCOPE dispatch (FOLLOW-UPS). NEVER push; commit via `git commit --only -F <msg> -- <paths>`; foreign lanes active.
 > This banner line is REWRITTEN (never appended to) at every step transition, by the committer/bookkeeping task.
 
 Paste this into a fresh orchestrator session to begin or continue execution.

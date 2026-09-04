@@ -799,7 +799,13 @@ final readonly class SglangProvider implements ProviderInterface
 
         $params = [
             'model' => $request->model,
-            'messages' => $this->formatMessages($request->messages),
+            // formatMessages() owns the single leading system row: the
+            // assembled prompt (Runtime::buildSystemPrompt()'s seven layers,
+            // arriving on CompleteRequest::$systemPrompt) joined with any
+            // history SystemMessages — see its docblock for why the merge
+            // lives there (Q5/E-10) and why '' counts as unset here, the same
+            // convention as the optional-knob filter below.
+            'messages' => $this->formatMessages($request->messages, $request->systemPrompt),
             // Model-aware since DeepSeek-V4 became the default: this used to
             // be a flat `?? 0.7`, which is DeepSeek-V4-Flash's card-prescribed
             // 1.0 minus 0.3. Keyed on $request->model, the id this body is
@@ -815,20 +821,6 @@ final readonly class SglangProvider implements ProviderInterface
             // <think>-stripping fallback still matters regardless.
             'separate_reasoning' => true,
         ];
-
-        // The assembled prompt (Runtime::buildSystemPrompt()'s seven layers)
-        // arrives on CompleteRequest::$systemPrompt, and this provider used to
-        // never read the field - the whole prompt silently dropped on the
-        // DEFAULT provider, every turn (prompt_expand.md §1.1). Prepended as
-        // the leading system message, OpenAI chat/completions order. '' means
-        // "unset" here, the same convention as the optional-knob filter below
-        // and VertexProvider's systemPrompt hoist.
-        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
-            $params['messages'] = array_merge(
-                [['role' => 'system', 'content' => $request->systemPrompt]],
-                $params['messages']
-            );
-        }
 
         // Q4 (qwen.md §Q4): the Qwen3.8 family routes its effort INTO
         // chat_template_kwargs, sanitized to the template's own vocabulary,
@@ -1324,12 +1316,50 @@ final readonly class SglangProvider implements ProviderInterface
     }
 
     /**
+     * Formats the transcript AND owns the ONE system row the body may carry.
+     *
+     * WHY the merge lives here and not beside the prompt prepend: the fix has
+     * to cover requests with no systemPrompt at all - the title one-shot
+     * (Chat.php :7490) sends a lone history SystemMessage with a null prompt,
+     * and notice storms (E-13) stack multiple history rows behind whatever
+     * prompt exists. Both inputs are in hand only here, so this method is the
+     * single collection point; buildParams() is its only caller with a prompt,
+     * and complete()/completeStream() share buildParams(), so both wire paths
+     * inherit one seam.
+     *
+     * THE RULE (E-10, measured on the deployed Qwen template): a system row
+     * at index > 0 - or a second system row anywhere - is an HTTP 400
+     * "System message must be at the beginning.", and even where a server
+     * tolerates it, only messages[0]'s system content is ever rendered. So
+     * every system source collapses into exactly one leading row: the
+     * request-level assembled prompt FIRST, then history SystemMessages in
+     * message order, non-empty contents joined with "\n\n", empty-string rows
+     * dropped. That joiner and empty-drop rule conform to
+     * VertexProvider::systemInstruction(); BedrockProvider::systemBlocks()
+     * matches the prompt-first ordering only (it keeps separate blocks
+     * instead of joining or dropping empties) (E-11); sugar-crush points
+     * its baseUrl straight at the server, so it
+     * cannot lean on opencode's out-of-band merge proxy (E-12).
+     *
+     * Non-system rows are untouched, in order. A single-system-at-index-0
+     * history and a prompt-only request both produce byte-identical output to
+     * the pre-Q5 prepend block this replaces - which is what lets the E-14
+     * pins (SglangProviderTest's formatMessages legs, MatrixTest's Sglang
+     * rows) survive the change unedited. (Historical note carried from that
+     * block: this provider once never read $systemPrompt at all - the whole
+     * prompt silently dropped every turn, prompt_expand.md §1.1. It must stay
+     * read; the merge may reorder, never omit.)
+     *
      * @param array<Message> $messages
+     * @param string|null $systemPrompt the request-level assembled prompt; '' counts as unset.
      * @return array<array{role: string, content: string}|array{role: string, content: string, tool_calls: array}|array{role: string, tool_call_id: string, content: string}>
      */
-    private function formatMessages(array $messages): array
+    private function formatMessages(array $messages, ?string $systemPrompt = null): array
     {
-        return array_map(function (Message $msg) {
+        // The typed callback stays: raw-array histories (the WorkflowEngine
+        // gap named at defaultTopP()'s docblock) must keep TypeErroring here
+        // exactly as before.
+        $rows = array_map(function (Message $msg) {
             return match (true) {
                 $msg instanceof UserMessage => ['role' => 'user', 'content' => $msg->content()],
                 $msg instanceof AssistantMessage => array_filter([
@@ -1346,6 +1376,27 @@ final readonly class SglangProvider implements ProviderInterface
                 default => ['role' => 'user', 'content' => $msg->content()],
             };
         }, $messages);
+
+        $systemParts = [];
+        if ($systemPrompt !== null && $systemPrompt !== '') {
+            $systemParts[] = $systemPrompt;
+        }
+        foreach ($messages as $msg) {
+            if ($msg instanceof SystemMessage && $msg->content() !== '') {
+                $systemParts[] = $msg->content();
+            }
+        }
+
+        $rows = array_values(array_filter(
+            $rows,
+            static fn(array $row): bool => $row['role'] !== 'system',
+        ));
+
+        if ($systemParts !== []) {
+            array_unshift($rows, ['role' => 'system', 'content' => implode("\n\n", $systemParts)]);
+        }
+
+        return $rows;
     }
 
     /**
