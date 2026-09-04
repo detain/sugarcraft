@@ -2439,6 +2439,14 @@ final class Runtime
             $this->section('', Stability::Static, $this->basePrompt()),
         ];
 
+        // Directly after the base heredoc and BEFORE the instruction
+        // documents: it is the same KIND of thing the base is - fact derived
+        // from the repository, not convention an author wrote down - and
+        // every line in it is a path the model resolves against the working
+        // directory the <env> block names. Read who you are and what is
+        // where you are before the conventions that talk about both; the
+        // volatile <env> block itself sits at the very end (see the assembly
+        // note above).
         $repoMap = $this->repoMapSnapshot($app)->render();
         if ($repoMap !== '') {
             $sections[] = $this->section('<repo-map>', Stability::PerSession, $repoMap);
@@ -2463,6 +2471,12 @@ final class Runtime
             }
         }
 
+        // After the instruction documents and before the skills, because it is
+        // the same KIND of thing as an instruction document - standing project
+        // context - and is deliberately fenced separately from them so the
+        // model can weigh a checked-in convention differently from a note a
+        // previous session wrote down. See MemoryBlock's docblock for why this
+        // is scope-selected rather than searched, and for what it costs.
         $memory = $this->memorySnapshot($app)->render();
         if ($memory !== '') {
             $sections[] = $this->section('<project-memory>', Stability::PerSession, $memory);
@@ -2484,11 +2498,13 @@ final class Runtime
             }
         }
 
-        // Level-1 metadata for every DISCOVERED skill (name + description only),
-        // distinct from the full bodies the explicitly-enabled skills above
-        // contribute. An empty registry renders '', which the assembler folds
-        // away, so a session that discovered no skills is byte-for-byte what it
-        // was before this refactor (crush_feat.md section 7 E1/E2 Strategy A).
+        // Level-1 metadata for every DISCOVERED skill (name + description
+        // only), distinct from the full bodies the explicitly-enabled skills
+        // above contribute. Without this listing the Skill tool is a tool the
+        // model has no reason to call, so a populated registry would still be
+        // un-auto-triggerable (crush_feat.md section 7 E1/E2 Strategy A).
+        // Empty registry => empty string, so nothing changes for a session
+        // that discovered no skills.
         $sections[] = $this->section(
             '',
             Stability::PerTurn,
@@ -2576,7 +2592,7 @@ final class Runtime
      *
      * @param list<PromptSection> $sections
      */
-    public static function assemblePrompt(array $sections): string
+    private static function assemblePrompt(array $sections): string
     {
         $prompt = '';
 
