@@ -198,8 +198,17 @@ use SugarCraft\Crush\Support\ContainedPath;
  * rather than an empty fence. This is a describe-what-is-there block, and the
  * alternative would be to report a repository's own manifest problems into
  * every turn of a conversation that is not about them.
+ *
+ * AS A PROMPT SECTION (P5.S2)
+ * ---------------------------
+ * This class implements {@see PromptSection} directly: `Runtime`'s memoized
+ * `repoMapSnapshot()` IS the `<repo-map>` section, and the empty string
+ * {@see render()} returns when both sections have nothing to map is now the
+ * ONE place the absence is expressed — the assembler's documented rule ("an
+ * absent layer adds nothing") folds it away, replacing the `!== ''` guard this
+ * used to sit behind. Same bytes, one fewer voice.
  */
-final readonly class RepoMapBlock
+final readonly class RepoMapBlock implements PromptSection
 {
     /**
      * Retained bytes of rendered entry lines, PER SECTION.
@@ -496,6 +505,52 @@ final readonly class RepoMapBlock
         );
 
         return "<repo-map>\n" . $header . "\n\n" . implode("\n\n", $sections) . "\n</repo-map>";
+    }
+
+    /**
+     * The opening fence this block's body sits inside.
+     *
+     * {@see render()} emits BOTH ends itself (and returns the empty string for
+     * a workspace it cannot describe, fence and all), so this names the layer
+     * for metadata only — the answer P5.S3's fence-escaping step reads when it
+     * asks "escape against which fence?".
+     */
+    public function fence(): string
+    {
+        return '<repo-map>';
+    }
+
+    /**
+     * Session-stable: {@see capture()} walks the manifests once and
+     * `Runtime::repoMapSnapshot()` memoizes the block per Runtime, so a source
+     * file created mid-turn does not move the map between steps of the same
+     * turn — the cost that memoization exists to prevent, and the reason
+     * `PromptStabilityTest` treats the map as the stable layer around the
+     * volatile `<env>` tail.
+     *
+     * This is the tier P5.S1's inline wrapper already declared for this layer;
+     * the migration restates it, it does not invent it.
+     */
+    public function stability(): Stability
+    {
+        return Stability::PerSession;
+    }
+
+    /**
+     * Advisory ceiling; see {@see PromptSection::byteBudget()}.
+     *
+     * PHP_INT_MAX because no ceiling is enforced at the assembler, and this
+     * block's real bound is PER SECTION ({@see MAX_SECTION_BYTES} applies to
+     * each of the two sections independently, and the sections are near
+     * mutually exclusive on any real tree), not whole-block — no single
+     * constant here is a section-wide ceiling to promote. Wiring one would
+     * pre-empt the compaction tiers' decision; every production section
+     * reports this same value until then (pinned by
+     * {@see \SugarCraft\Crush\Tests\Context\PromptSectionTest::testTheProductionSectionListOrdersBaseFirstAndEnvLast()}).
+     */
+    public function byteBudget(): int
+    {
+        return \PHP_INT_MAX;
     }
 
     /**

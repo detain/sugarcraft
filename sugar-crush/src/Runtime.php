@@ -774,9 +774,10 @@ final class Runtime
      *
      *     WHAT THIS SAID: "…because the two order `<env>` oppositely."
      *     WHAT IS TRUE: BOTH assemblers put `<env>` LAST, and their orders are
-     *     IDENTICAL rather than opposite. The last statement of
-     *     {@see buildSystemPrompt()} before its `return` appends
-     *     `environmentSnapshot($app)->render()`, under the comment "Volatile
+     *     IDENTICAL rather than opposite. The volatile block is the LAST ENTRY
+     *     {@see systemPromptSections()} returns — the memoized
+     *     `environmentSnapshot($app)` itself since P5.S2, which
+     *     {@see assemblePrompt()} renders last under the comment "Volatile
      *     content LAST"; the WHOLE body of
      *     {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()} is one ternary
      *     returning the rendered block, or the agent prompt followed by it.
@@ -2426,10 +2427,16 @@ final class Runtime
      * This is the pre-refactor concatenation turned inside out, not rewritten:
      * the seven layers appear in the same order, each carries the same bytes,
      * and the separators are decided in exactly one place
-     * ({@see assemblePrompt()}). The three memoized snapshot accessors are each
-     * called ONCE here, so the per-Runtime memoisation §17.2 invariant 9 pins
-     * is untouched — the sections simply carry the string those single calls
-     * returned.
+     * ({@see assemblePrompt()}). The three memoized snapshot accessors are
+     * each called ONCE here, and since P5.S2 their returned blocks ARE the
+     * sections — §17.2 invariant 9's per-Runtime identity is therefore the
+     * identity the assembled list carries, not just the accessor's. A block's
+     * render() then runs exactly once per build, inside
+     * {@see assemblePrompt()}: for the {@see EnvironmentBlock}, whose render()
+     * polls git five times, one call per build is the cost contract that held
+     * before the migration and holds after it. An empty map or memory block is
+     * no longer guarded away HERE — its render() returning '' IS the
+     * absence, which the assembler folds away under its documented rule.
      *
      * @return list<PromptSection>
      */
@@ -2447,10 +2454,7 @@ final class Runtime
         // where you are before the conventions that talk about both; the
         // volatile <env> block itself sits at the very end (see the assembly
         // note above).
-        $repoMap = $this->repoMapSnapshot($app)->render();
-        if ($repoMap !== '') {
-            $sections[] = $this->section('<repo-map>', Stability::PerSession, $repoMap);
-        }
+        $sections[] = $this->repoMapSnapshot($app);
 
         if ($app->instructionLoader !== null) {
             $docs = [
@@ -2477,10 +2481,7 @@ final class Runtime
         // model can weigh a checked-in convention differently from a note a
         // previous session wrote down. See MemoryBlock's docblock for why this
         // is scope-selected rather than searched, and for what it costs.
-        $memory = $this->memorySnapshot($app)->render();
-        if ($memory !== '') {
-            $sections[] = $this->section('<project-memory>', Stability::PerSession, $memory);
-        }
+        $sections[] = $this->memorySnapshot($app);
 
         foreach ($app->enabledSkills as $skill) {
             if ($skill instanceof \SugarCraft\Crush\Skills\Skill) {
@@ -2517,11 +2518,11 @@ final class Runtime
         // prompt would void the cache prefix for every layer after it from the
         // first edit of a session. Claude Code places its git block "at the
         // very end of the system prompt" (§4.4); this is the same decision.
-        $sections[] = $this->section(
-            '<env>',
-            Stability::PerTurn,
-            $this->environmentSnapshot($app)->render(),
-        );
+        // Since P5.S2 the appended value is the memoized block ITSELF — it
+        // implements PromptSection — so the per-Runtime identity §17.2
+        // invariant 9 pins is the identity the assembled list carries, and
+        // render() runs exactly once per build, inside assemblePrompt().
+        $sections[] = $this->environmentSnapshot($app);
 
         return $sections;
     }
@@ -2531,9 +2532,14 @@ final class Runtime
      *
      * The section stores the exact bytes it contributes; beyond what is already
      * in `$body` it owns no separator. Keeping the wrapper this thin is what
-     * lets P5.S1 introduce the shape without changing what any layer emits —
-     * P5.S2 replaces these inline wrappers with classes that compute render()
-     * themselves.
+     * lets P5.S1 introduce the shape without changing what any layer emits.
+     * P5.S2 replaced the three SNAPSHOT wrappers with the block classes
+     * themselves — {@see EnvironmentBlock}, {@see MemoryBlock} and
+     * {@see RepoMapBlock} now implement {@see PromptSection} and are appended
+     * to the list directly; this helper still carries the layers whose bytes
+     * are assembled inline here (the base heredoc, the instruction documents,
+     * the skill contributions and the skill listing) until their own steps
+     * give them classes of their own.
      */
     private function section(string $fence, Stability $stability, string $body): PromptSection
     {

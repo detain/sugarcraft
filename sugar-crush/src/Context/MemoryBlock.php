@@ -87,8 +87,17 @@ use SugarCraft\Crush\Memory\MemoryStore;
  * checked in", while these are notes accreted at runtime by the user and the
  * agent. Filing them under the same tag would remove the model's ability to
  * weigh a curated convention differently from an accreted note.
+ *
+ * AS A PROMPT SECTION (P5.S2)
+ * ---------------------------
+ * This class implements {@see PromptSection} directly: `Runtime`'s memoized
+ * `memorySnapshot()` IS the `<project-memory>` section, and the empty string
+ * {@see render()} returns for a store with nothing to say is now the ONE place
+ * the absence is expressed — the assembler's documented rule ("an absent layer
+ * adds nothing") folds it away, replacing the `!== ''` guard this used to sit
+ * behind. Same bytes, one fewer voice.
  */
-final readonly class MemoryBlock
+final readonly class MemoryBlock implements PromptSection
 {
     /**
      * Most notes rendered, newest first. Anything past this is dropped and the
@@ -287,6 +296,52 @@ final readonly class MemoryBlock
         }
 
         return "<project-memory>\n" . $header . "\n\n" . implode("\n", $rendered) . "\n</project-memory>";
+    }
+
+    /**
+     * The opening fence this block's body sits inside.
+     *
+     * {@see render()} emits BOTH ends itself (and returns the empty string for
+     * an absent layer, fence and all), so this names the layer for metadata
+     * only — the answer P5.S3's fence-escaping step reads when it asks
+     * "escape against which fence?". The A NOTE ON THE FENCE NAME section
+     * above is why the value is this tag and not `<project-instructions>`.
+     */
+    public function fence(): string
+    {
+        return '<project-memory>';
+    }
+
+    /**
+     * Session-stable: {@see capture()} reads the project-scope store once and
+     * `Runtime::memorySnapshot()` memoizes the block per Runtime, so a note
+     * added mid-turn does not retroactively join a prompt already in flight —
+     * the snapshot contract stated on that accessor.
+     *
+     * This is the tier P5.S1's inline wrapper already declared for this layer;
+     * the migration restates it, it does not invent it.
+     */
+    public function stability(): Stability
+    {
+        return Stability::PerSession;
+    }
+
+    /**
+     * Advisory ceiling; see {@see PromptSection::byteBudget()}.
+     *
+     * PHP_INT_MAX because no ceiling is enforced at the assembler, and this
+     * block's real bounds are the per-entry caps {@see render()} applies
+     * ({@see MAX_ENTRIES}, {@see MAX_BYTES}, {@see MAX_ENTRY_BYTES}) — the
+     * {@see MAX_BYTES} docblock is explicit that the fence, header and joining
+     * newlines sit OUTSIDE that budget, so no single constant here is a
+     * whole-section ceiling to promote. Wiring one would pre-empt the
+     * compaction tiers' decision; every production section reports this same
+     * value until then (pinned by
+     * {@see \SugarCraft\Crush\Tests\Context\PromptSectionTest::testTheProductionSectionListOrdersBaseFirstAndEnvLast()}).
+     */
+    public function byteBudget(): int
+    {
+        return \PHP_INT_MAX;
     }
 
     /**

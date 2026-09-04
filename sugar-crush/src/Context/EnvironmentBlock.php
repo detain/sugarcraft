@@ -126,8 +126,18 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  *
  * The full line set is enumerated on {@see render()}, which is the method that
  * emits it — one list, in one place, so the two cannot drift apart again.
+ *
+ * AS A PROMPT SECTION (P5.S2)
+ * ---------------------------
+ * This class implements {@see PromptSection} directly: `Runtime`'s memoized
+ * `environmentSnapshot()` IS the `<env>` section of the assembled prompt, with
+ * no wrapper between the block's identity and the assembler's fold. The three
+ * contract methods below restate metadata this layer already carried as an
+ * inline wrapper at P5.S1 — the same fence, the same tier, the same advisory
+ * ceiling — so migrating changes no bytes; see each method for what its value
+ * is and why it is not a new invention here.
  */
-final readonly class EnvironmentBlock
+final readonly class EnvironmentBlock implements PromptSection
 {
     /**
      * Bounded process capture and the one truncation wording, reused rather
@@ -714,6 +724,53 @@ final readonly class EnvironmentBlock
         }
 
         return "<env>\n" . $this->utf8Safe(implode("\n", $lines)) . "\n</env>";
+    }
+
+    /**
+     * The opening fence this block's body sits inside.
+     *
+     * {@see render()} emits BOTH ends of the fence itself, so this names the
+     * layer for metadata only — it is the single answer P5.S3's fence-escaping
+     * step asks when it needs to know "escape against which fence?". The value
+     * is the literal render() already writes; nothing here can drift from it
+     * without the golden going red.
+     */
+    public function fence(): string
+    {
+        return '<env>';
+    }
+
+    /**
+     * Per-turn volatile: the git section is re-polled on every {@see render()}
+     * — live by design, see {@see GIT_STATE_CAVEAT} — so the bytes can change
+     * between two renders of the same captured block, and a cache tier must
+     * not treat them as session-stable.
+     *
+     * This is the tier P5.S1's inline wrapper already declared for this layer
+     * in {@see \SugarCraft\Crush\Runtime::systemPromptSections()}; the
+     * migration restates it, it does not invent it.
+     */
+    public function stability(): Stability
+    {
+        return Stability::PerTurn;
+    }
+
+    /**
+     * Advisory ceiling; see {@see PromptSection::byteBudget()}.
+     *
+     * PHP_INT_MAX because no ceiling is enforced at the assembler, and the real
+     * bounds of this block are PER FIELD ({@see DIFF_MAX_BYTES},
+     * {@see SUMMARY_MAX_BYTES}) — a whole-section number for this class exists
+     * only as a derivation (under 25,600 B, pinned by
+     * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testTheWholeGitSectionStaysBoundedHoweverDirtyTheTreeIs()}).
+     * Promoting that derivation into the section contract is the compaction
+     * tiers' decision to make, not this refactor's — which is why every
+     * production section reports this same value (pinned by
+     * {@see \SugarCraft\Crush\Tests\Context\PromptSectionTest::testTheProductionSectionListOrdersBaseFirstAndEnvLast()}).
+     */
+    public function byteBudget(): int
+    {
+        return \PHP_INT_MAX;
     }
 
     /**
