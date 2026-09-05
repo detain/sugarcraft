@@ -12,6 +12,7 @@ use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\PromptSection;
 use SugarCraft\Crush\Context\RepoMapBlock;
+use SugarCraft\Crush\Context\Sections\MaximsSection;
 use SugarCraft\Crush\Context\Stability;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -2447,8 +2448,19 @@ final class Runtime
             $this->section('', Stability::Static, $this->basePrompt()),
         ];
 
-        // Directly after the base heredoc and BEFORE the instruction
-        // documents: it is the same KIND of thing the base is - fact derived
+        // core.maxims (prompt_expand.md §9.13) rides directly behind the base
+        // identity and ahead of every derived layer: it is voice, not data —
+        // how this harness wants results reported — so the model reads it
+        // before the blocks that describe repositories this project does not
+        // control. Unfenced like the base because its bytes are a class
+        // constant with no untrusted input reaching them; the why-safe
+        // argument and the H2-not-H1 heading decision are in
+        // {@see MaximsSection} and its test's placement record.
+        $sections[] = new MaximsSection();
+
+        // Behind the base heredoc and the maxims voice layer, and BEFORE the
+        // instruction documents: it is the same KIND of thing the base is -
+        // fact derived
         // from the repository, not convention an author wrote down - and
         // every line in it is a path the model resolves against the working
         // directory the <env> block names. Read who you are and what is
