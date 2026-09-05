@@ -2153,7 +2153,7 @@ overturned here, so both notes STAND UNCHANGED and **`MaximsSection.php` / `Maxi
 this step's file list.**
 
 **Why wrapping is mechanically unavailable today**, recorded so nobody rediscovers it. `PromptFence::escape()`
-is depth-blind — one flat case-insensitive alternation (`src/Context/PromptFence.php:118`) applied per-body at
+is depth-blind — one flat case-insensitive alternation (`src/Context/PromptFence.php:159`) applied per-body at
 each construction site — so any region passed through it has its LEGITIMATE inner fences neutralised
 (`<repo-map>` → `&lt;repo-map>`). Nesting is therefore only expressible by concatenating harness-authored
 opener/closer literals around already-escaped sections, and `PromptSection` has no composite shape to carry
@@ -2188,7 +2188,9 @@ file, the Phase-6 provenance-fence row) was wrong: the two are separable, and on
 `tests/BaseSystemPromptTest.php:992-1004` — the `$expected` map at :992-999 plus the
 `assertSame(array_keys($expected), PromptFence::tags())` tripwire at :1000-1004. **CORRECTED 2026-09-05:** the
 cites here were taken at an older tree — `BaseSystemPromptTest.php:977-981` is the middle of the `$forgedDoc`
-attack payload, not a pin, and `PromptFence::TAGS` is at :78-85, not :70-76. **The census was also
+attack payload, not a pin, and `PromptFence::TAGS` is at :118-126, not :70-76 — **re-measured at the P6.S2b
+tip**: the array sat at :78-85 through the P6.S2 era and P6.S2b's own +43-line growth to `PromptFence.php`
+moved it, which is also why the `escape()` alternation cite above now reads :159. **The census was also
 under-stated:** "two roster pins, two orders, one insert" prices only a pure widening, and is false as the
 complete P6.S2b census the day a wrapper lands — then the emitted-fence subset pins
 (`PromptSectionTest.php:444-448`, `:474-478`), the section-0-empty-fence pin (`:271-273`), the byte pin
