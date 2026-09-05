@@ -201,6 +201,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Cli/Bootstrap.php|.sugar-crush/hooks.yaml' => self::REPOSITORY,
         'Cli/Bootstrap.php|.sugar-crush/workflows' => self::REPOSITORY,
         'Commands/CommandLoader.php|.sugar-crush/commands' => self::REPOSITORY,
+        // The project rules tier (Phase 6 P6.S2). Repository-chosen on the same
+        // basis as the two rows around it: `<repoRoot>/.sugar-crush/rules` is a
+        // directory the shipped tree picks. It is a NAMED GAP rather than a feeder
+        // (OD2) - `RuleLoader` records refusals loader-local in its own
+        // `refusedPaths()` and nothing in `Cli/Bootstrap.php` drains them into
+        // `$projectTierRefusals`, so it has no {@see DRAIN_EVIDENCE} entry.
+        'Context/RuleLoader.php|.sugar-crush/rules' => self::REPOSITORY,
         // MOVED OUT OF THE PACKAGE-RELATIVE BLOCK BELOW, and the move is the
         // finding rather than a tidy-up. This literal was package-relative
         // because {@see \SugarCraft\Crush\Agents\WorktreeManager} constructed
@@ -215,7 +222,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/WorktreeConfig.php|.sugar-crush/config.json' => self::REPOSITORY,
         // The settings layering's project tier. Both files arrive with a CLONE,
         // and neither feeds this collector — see the gap list in
-        // {@see testTheEightThatFeedTheCollectorAndTheFiveThatAreNamedGaps()}
+        // {@see testTheEightThatFeedTheCollectorAndTheSixThatAreNamedGaps()}
         // for why a silent refusal is right for these two specifically. THREE
         // rows joined the repository-chosen block in this change-set; the row
         // above is the third and it is a RECLASSIFICATION, not a new path, so
@@ -306,11 +313,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is THIRTY-THREE occurrences — one per entry
-     * in {@see DOT_PATHS} — of TWENTY-THREE distinct paths. SIXTEEN of those
+     * APPEARS IN. On this tree that is THIRTY-FOUR occurrences — one per entry
+     * in {@see DOT_PATHS} — of TWENTY-FOUR distinct paths. SEVENTEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
-     * they are THIRTEEN distinct paths — which is the figure
+     * they are FOURTEEN distinct paths — which is the figure
      * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
      * on PATHS. All four figures are measured off the map above, and each is
      * written next to the thing it counts because the pair has been mixed up in
@@ -381,10 +388,10 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * THIRTEEN repository-chosen paths, and the enumeration in
+     * FOURTEEN repository-chosen paths, and the enumeration in
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
-     * ten; it now names thirteen. See that doc-block for which of the three
+     * ten; it now names fourteen. See that doc-block for which of the three
      * additions is a NEW path and which is one literal reclassified.
      *
      * `BOTH` counts here: a string serving the project tier is repository-chosen
@@ -394,7 +401,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     {
         $repository = $this->repositoryChosenPaths();
 
-        $this->assertCount(13, $repository);
+        $this->assertCount(14, $repository);
 
         // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
         // file-wide, this passed while the enumeration itself was missing a name,
@@ -478,23 +485,23 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(23, $distinct, 'distinct dot-DIRECTORY paths in src/');
-        self::assertCount(13, $this->repositoryChosenPaths(), 'of which repository-chosen');
+        self::assertCount(24, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(14, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
             \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
             'public static function projectTierRefusals()',
         );
 
-        self::assertStringContainsString('THIRTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('TWENTY-THREE distinct', $enumeration);
+        self::assertStringContainsString('FOURTEEN repository-chosen', $enumeration);
+        self::assertStringContainsString('TWENTY-FOUR distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
         // Spelled out in words in the prose, so they are compared in words:
         // a digit here would pass against a paragraph that says something else.
-        $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO', 33 => 'THIRTY-THREE'];
-        $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE'];
+        $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO', 33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR'];
+        $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE', 24 => 'TWENTY-FOUR'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN', 16 => 'SIXTEEN', 17 => 'SEVENTEEN'];
 
         $occurrences = \count(self::DOT_PATHS);
@@ -533,9 +540,9 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the THIRTEEN reach the collector, and which are gated elsewhere.
-     * EIGHT and FIVE — stated here so "eight feeders" cannot quietly stand in
-     * for "and five paths nobody drains".
+     * Which of the FOURTEEN reach the collector, and which are gated elsewhere.
+     * EIGHT and SIX — stated here so "eight feeders" cannot quietly stand in
+     * for "and six paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
      * {@see Bootstrap::foreignAgentPresets()}: `.claude/agents` and
@@ -544,7 +551,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * THREE there, and EIGHT AND TWO when crush_code.md Phase 2 item 4 wired
      * {@see CommandLoader} into {@see Bootstrap::chat()} and drained its
      * `refusedDirectories()` — the same shape of move, recorded the same way.
-     * Phase 6 items 1+2 added THREE gaps and no feeder, so it is EIGHT AND FIVE.
+     * Phase 6 items 1+2 added THREE gaps and no feeder, making it EIGHT AND FIVE,
+     * and P6.S2 added a SIXTH gap: `.sugar-crush/rules`, whose `RuleLoader` records
+     * refusals loader-local in its own `refusedPaths()` and is never drained into
+     * `$projectTierRefusals` (OD2) — a gap DELIBERATELY, not pending work, so the
+     * feeder column stays EIGHT.
      *
      * `.sugar-crush/commands` NEARLY WENT BACK TO THE GAP COLUMN, and the union
      * check below could not have stopped it: `assertSame($union, $paths)` plus
@@ -566,17 +577,17 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * matching evidence row in the same edit. The positive direction is what
      * this covers, and it is the direction the defect ran in.
      */
-    public function testTheEightThatFeedTheCollectorAndTheFiveThatAreNamedGaps(): void
-    {
-        $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
-            '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
-            '.sugar-crush/skills', '.sugar-crush/workflows'];
-        $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml',
-            '.sugar-crush/config.json', '.sugar-crush/settings.json',
-            '.sugar-crush/settings.local.json'];
+     public function testTheEightThatFeedTheCollectorAndTheSixThatAreNamedGaps(): void
+     {
+         $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
+             '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
+             '.sugar-crush/skills', '.sugar-crush/workflows'];
+         $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml',
+             '.sugar-crush/config.json', '.sugar-crush/settings.json',
+             '.sugar-crush/settings.local.json', '.sugar-crush/rules'];
 
-        $this->assertCount(8, $feeders, 'the EIGHT this test is named for');
-        $this->assertCount(5, $gaps, 'and the FIVE');
+         $this->assertCount(8, $feeders, 'the EIGHT this test is named for');
+         $this->assertCount(6, $gaps, 'and the SIX');
 
         $union = array_merge($feeders, $gaps);
         sort($union);
@@ -753,6 +764,18 @@ final class ProjectTierRefusalInventoryTest extends TestCase
                 'src/Agents/WorktreeManager.php',
                 \SugarCraft\Crush\Tests\Agents\WorktreeIncludeContainmentTest::class,
                 ['within'],
+            ],
+            // The three-tier rules surface (Phase 6 P6.S2). Dormant: `Runtime` does
+            // not construct `RuleLoader` until the `<user-rules>` fence ships, so
+            // nothing in `src/` builds it yet. It holds the repository-chosen
+            // `.sugar-crush/rules`, so it carries the same `below` (directory
+            // anchor) + `within` (per-entry) gate pair as `CommandLoader`; the move
+            // to wiredHolders() when it acquires a caller keeps both gates, exactly
+            // as the `custom commands` row below records for that precedent.
+            'rule files' => [
+                'src/Context/RuleLoader.php',
+                \SugarCraft\Crush\Tests\Context\RuleLoaderContainmentTest::class,
+                ['below', 'within'],
             ],
         ];
     }
