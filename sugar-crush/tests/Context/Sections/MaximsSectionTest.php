@@ -250,9 +250,14 @@ final class MaximsSectionTest extends TestCase
             );
         }
 
+        // Absolute, __DIR__-anchored path: the suite's process cwd is the
+        // worktree root, not the package root, and a relative 'src/Context'
+        // resolves differently between a solo run and the full assembly —
+        // the same cwd trap BaseSystemPromptTest's inPackageRoot() exists for,
+        // here defused by not depending on cwd at all.
         $result = (new Grep())->execute([
             'pattern' => 'function fence(): string',
-            'path' => 'src/Context',
+            'path' => \dirname(__DIR__, 3) . '/src/Context',
             'output_mode' => 'content',
         ]);
 
