@@ -214,7 +214,11 @@ final class RulesCommand
         }
 
         if (count($args) > 1) {
-            echo "\n  /rules takes one pack name; read it as \"" . implode(' ', array_map('strval', $args)) . "\".\n";
+            // The arity refusal quotes the operator's bytes back at them, which is
+            // the same hand-composed-outside-a-cell route as the two lines above,
+            // so it carries the same defence.
+            echo "\n  /rules takes one pack name; read it as \""
+                . implode(' ', array_map(Ansi::strip(...), array_map('strval', $args))) . "\".\n";
             echo "  Nothing was toggled.\n\n";
 
             return 1;
@@ -223,7 +227,10 @@ final class RulesCommand
         $nowEnabled = $this->state->toggle($name);
         $rule = $known[$name];
 
-        echo "\n  Pack {$name}: " . ($nowEnabled ? 'ON' : 'OFF') . " for this session."
+        // The success line echoes the same untrusted name the lookup matched on,
+        // and a match says only that a FILE on disk is spelled this way — stems are
+        // disk bytes, not vetted ones, so this strip rides the same rule as above.
+        echo "\n  Pack " . Ansi::strip($name) . ": " . ($nowEnabled ? 'ON' : 'OFF') . " for this session."
             . $this->collisionNote($matches[$name]) . "\n";
         echo '  ' . $this->effectLine($rule, $nowEnabled) . "\n\n";
 

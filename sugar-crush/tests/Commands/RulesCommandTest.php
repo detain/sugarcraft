@@ -387,6 +387,52 @@ final class RulesCommandTest extends TestCase
     }
 
     /**
+     * The arity refusal repeats every typed token back verbatim — the same
+     * hand-composed line the two error tests above defend, reached only when the
+     * first word names a real pack. The stray token here is the carrier; the known
+     * name is the control proving the plain half of the quote still reads correctly.
+     */
+    public function testAnEscapeSequenceInATrailingTokenIsStrippedFromTheArityRefusal(): void
+    {
+        $this->writePackFile($this->packsDir . '/terse.md', "BE TERSE\n");
+        $state = RulesState::new();
+
+        $text = $this->reply($this->submit('/rules terse ' . "\033[31m" . 'stray' . "\033[0m", $state));
+
+        self::assertSame(
+            "/rules takes one pack name; read it as \"terse stray\".\n  Nothing was toggled.",
+            $text,
+        );
+        self::assertStringNotContainsString("\033", $text, 'no raw escape byte may reach the transcript');
+        self::assertSame([], $state->disabled(), 'the refused toggle must not have moved the state');
+    }
+
+    /**
+     * The last unechoed surface: the SUCCESS line. A pack whose stem carries an
+     * escape is legal to the filesystem, and typing those exact bytes toggles it —
+     * so the reply interpolates disk-derived bytes on the branch that has no error
+     * framing around it. The state assertion keeps the strip a DISPLAY defence only:
+     * the toggle must still move the real, unstripped key.
+     */
+    public function testAnEscapeSequenceInAToggledPackFilenameStemIsStrippedFromTheReply(): void
+    {
+        $this->writePackFile($this->rulesDir . "/\033[31mred\033[0m.md", "ESCAPED PACK\n");
+        $state = RulesState::new();
+
+        $text = $this->reply($this->submit("/rules \033[31mred\033[0m", $state));
+
+        // Pinned to the exact bytes the command echoes: the success route keeps its
+        // surrounding newlines and indent (unlike the trimmed error replies), and a
+        // display strip must not disturb any of that framing.
+        self::assertSame(
+            "\n  Pack red: OFF for this session.\n  It will be out of the prompt from the next turn onward.\n\n",
+            $text,
+        );
+        self::assertStringNotContainsString("\033", $text, 'the success line is transcript text too');
+        self::assertSame(["\033[31mred\033[0m"], $state->disabled(), 'the raw key still moved; only the display was stripped');
+    }
+
+    /**
      * `/rules a b` is one name plus a stray token. Both readings are refused here:
      * the name does not exist, so it is an unknown-pack error, and a name that DOES
      * exist with a trailing token is refused by the arity check rather than quietly
