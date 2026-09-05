@@ -2083,7 +2083,12 @@ glob matching a path outside the repo root, and an intent description long enoug
 
 ### P6.S2 — `RuleLoader` — the tiers
 
-> **P5.S6 deferrals land here (2026-09-05):** user-rules fence + two-framings provenance split + harness-injected fence & roster-widening decision — ship with this step (see prompt_worklog.md Phase 5 close entry; condition: fences ship WITH their feeder tier).
+> **P5.S6 deferrals land here (2026-09-05; SPLIT the same day):** the `<user-rules>` fence (**D1**) and the
+> two-framings project-vs-user provenance split (**D2**) ship **IN THIS STEP** — `<user-rules>`'s feeder tier is
+> precisely what P6.S2 builds (see prompt_worklog.md Phase 5 close entry; condition: fences ship WITH their feeder
+> tier). The `<harness-injected>` fence and the `PromptFence` escape-roster widening (**D3**) **moved to P6.S2b**:
+> nothing created here feeds that fence, and a second fence gauntlet in one step doubles the golden work and muddies
+> P6.S2's pure-insertion audit trail.
 
 **Goal** A loader mirroring the tiering `InstructionFileLoader` and `CommandLoader` already
 implement:
@@ -2113,6 +2118,26 @@ from P6.S1 (`paths:`, `keywords:`).
 
 **Done when** the containment test symlinks a rules dir at `$HOME/.ssh` and asserts refusal, and a
 separate test asserts the refusal is *recorded*.
+
+### P6.S2b — the `<harness-injected>` fence and the escape-roster widening
+
+**Split out of P6.S2 on 2026-09-05** so that step keeps a clean pure-insertion audit trail.
+**Goal** (1) the `<harness-injected>` provenance fence; (2) widen the `PromptFence` escape roster
+5→6/7 tags (`src/Context/PromptFence.php:70-76`); (3) the **layer-mapping decision, recorded as
+OPEN**: which layers are harness-injected (base/maxims authored-static vs repo-map/env derived), and
+whether that fence nests at all (`PromptFence` has no nesting concept) — settle it in the premise
+check and write the ruling here before any code.
+**Companion** refresh the stale "five-tag roster" note at `src/Context/Sections/MaximsSection.php:25-38`.
+**Source** §3, the P5.S6 deferrals (worklog Phase-5-close entry), `prompt_expand.md` seam 8.
+**Files** `src/Context/PromptFence.php` · `src/Context/Sections/MaximsSection.php` · the section that
+owns the new fence · `tests/Context/PromptSectionTest.php` · `tests/BaseSystemPromptTest.php` ·
+`tests/Providers/PromptStabilityTest.php` · the system golden.
+**Depends on** P6.S2.
+**Tripwires that fire BY DESIGN** two roster pins, two orders, one insert: the SORTED roster at
+`tests/Context/PromptSectionTest.php:297-309`, the DECLARATION-order roster at
+`tests/BaseSystemPromptTest.php:977-981`.
+**Done when** a forged `harness-injected` close inside a project instruction document cannot render,
+asserted per §1.11, and every golden move is justified as PURE INSERTION.
 
 ### P6.S3 — Rulebooks: named, toggleable rule packs
 
@@ -2174,6 +2199,7 @@ bytes stay under the cap and that the overflow is deferred, not lost. Record the
 **Concurrency (Phase 6)**
 - **Batch 1 (one, alone):** P6.S1 — new files only, but P6.S2 depends on it.
 - **Batch 2 (one, alone):** P6.S2 — everything else depends on it.
+- **Batch 2b (one, alone):** P6.S2b — the D3 fence split; runs after P6.S2 merges and before Batch 3.
 - **Batch 3 (three concurrent):** P6.S3, P6.S4, P6.S5 — **only if** `RuleLoader.php` is assigned to
   exactly one of them. S3 and S5 both want it. Recommended: run **P6.S4 concurrently with P6.S3**
   (disjoint: `LayeredSettings`/`Bootstrap` vs `CommandRegistry`), then **P6.S5 alone**.
@@ -3480,7 +3506,7 @@ building one, stop it.
 | Utility prompts (`away-recap`, `next-action-suggestion`, `tool-summary`) | §9.15 | Cheap polish, no defect behind them. Out of scope; note them for a later plan. |
 | A memory-consolidation prompt at `SessionEnd`/`PreCompact` | §9.15 | Depends on `SessionEnd`/`PreCompact` having dispatch sites, which Phase 7 only builds for `SessionStart`/`UserPromptSubmit`. Defer. |
 | Wiring the per-step write signal into `Agents\Agent::systemPrompt()` — the second assembler | §3.4, §9.2; P3.S5's open gap, dispositioned by P3.S6 (`1461e1685`) | **ESCALATED, NOT WAIVED — the seam exists and is live; it is simply not reachable from P3.S6's declared file list.** MEASURED at P3.S6 by a token census over `src/` and `bin/`: the agent assembler has **eight** call sites. **Five are in `Workflows/WorkflowEngine.php` and are production-reachable** (`bin/sugarcrush` → `Bootstrap::chat()` → `workflowEngine:` at `Bootstrap.php:1058`, the same construction point as `agentManager:` at `:1044` → `Chat::workflowRun()`); **two are dormant** (`AgentManager.php:433` in `executeSubAgent()`, whose production caller count is MEASURED zero — `/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/ bin/` exits 1; and `App/App.php:569` in `dispatchSkill()`, which says of itself *"Nothing calls dispatchSkill() in production yet"*); one is `ProcessExecutor.php:473`. The path re-renders **within a single run**: `WorkflowEngine.php:1105` and `:875` each re-render once per stage, and `:1252`/`:1294` render twice in one verification stage (F6b re-measured 2026-09-03 at tip 0fdfd9033: the sequential nested-stages loop is now :1126 — the other current `foreach ($nestedStages` at :1108 is the task pre-scan, not the render loop —, the main stages loop is now :895, and the two verification-stage renders are now :1275/:1318; originals kept as written history). MEASURED with a logging `git` shim on a real repository: one render costs **5** git subprocesses (**3** with the diff suppressed), a K-stage workflow costs **5 × K** (10 at K=2, 25 at K=5), and one `ProcessExecutor` dispatch costs **10** because it renders twice. In every case the stages see **one distinct prompt** — each render byte-identical, the two git-diff sections re-sent unchanged per stage. **The disposition rests on DECLARED SCOPE, and deliberately not on underivability.** P3.S6's first draft of this row claimed the signal was *underivable* on this path; **its own review cycle 2 falsified that** and the claim is not repeated here. Whether a stage's write is derivable is genuinely contested and both halves are measured: `ProcessExecutor.php:985` passes a literal `tools: null`, while `AgentWorkerPool.php:410` forwards `tools: $request->tools`. What is NOT contested is the carrier: `AgentResult::__construct` is `agentId, status, output, error, tokensUsed, costUsd, startedAt, completedAt` — VERIFIED, eight parameters, **no tool-call field** — and the worker's `complete` IPC frame carries only `output`/`tokensUsed`/`costUsd`. So wiring this is a **build-it-out** across `WorkflowEngine.php` + `AgentResult.php` + the worker IPC frame, not a one-line mark, and it needs its own step. P3.S6 pins the measurement instead, in `tests/Agents/AgentTest.php`, including an exact-list reflection assertion over `AgentResult::__construct` **so the day a tool-call field is added — the change that unblocks this — the test reds and names it.** |
-| Provenance fences — `<harness-injected>` + `<user-rules>` (escape-roster widening 5→6/7 tags, layer-mapping decision, two-framings project-vs-user split) | §3, P5.S6, P6.S2 | 2026-09-05: S6 shipped project-instructions preamble; remaining fences deferred to P6.S2 (worklog Phase-5-close entry). |
+| Provenance fences — `<user-rules>` + the two-framings project-vs-user split (**P6.S2**), and `<harness-injected>` + escape-roster widening 5→6/7 tags + the layer-mapping decision (**P6.S2b**) | §3, P5.S6, P6.S2, P6.S2b | 2026-09-05: S6 shipped project-instructions preamble; the remaining fences were deferred to P6.S2 (worklog Phase-5-close entry), then SPLIT the same day — D1/D2 stay in P6.S2 with their feeder tier, D3 moves to new step P6.S2b. The step total is now 64. |
 | Anything in `docs/plans/crush_code_*.md` or `left_steps.md` | — | **Read-only to this plan.** No edits of any kind. |
 
 ---
