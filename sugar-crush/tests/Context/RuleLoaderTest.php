@@ -309,6 +309,92 @@ final class RuleLoaderTest extends TestCase
         self::assertStringContainsString('file cap', reset($skipped));
     }
 
+    public function testTheReadCapBoundsEveryFileTouchedEvenWhenNoneParse(): void
+    {
+        // P6.S2 review fix (MINOR). The old cap counted ACCEPTED rules, so a
+        // directory of files that all fail to parse never ticked it and every
+        // byte of all of them was read at prompt-build time - unbounded work
+        // from a cloned repo. The counter now ticks at the READ, before the
+        // parse, so the cap bounds reads regardless of parse outcome.
+        $cap = (new ReflectionClass(RuleLoader::class))->getConstant('MAX_FILES');
+        self::assertIsInt($cap);
+
+        $root = $this->sandbox . '/repo-malformed';
+        $rules = $root . '/.sugar-crush/rules';
+        mkdir($rules, 0o755, true);
+        // cap + 3 files, EACH a frontmatter block that parses to a scalar (the
+        // same malformed shape the parse-failure test uses), so not one of them
+        // can ever be accepted. A parse-based cap would read all cap+3.
+        for ($i = 0; $i < $cap + 3; $i++) {
+            $this->emitRule(sprintf($rules . '/bad%02d.md', $i), "---\nthis is just a plain scalar\n---\nBODY\n");
+        }
+
+        $loader = new RuleLoader($root);
+        $loaded = $loader->loadProjectRules();
+        self::assertSame([], $this->ruleNames($loaded), 'none of these files can parse to a rule');
+
+        $skipped = $loader->skippedFiles();
+        $capSkips = array_values(array_filter(
+            $skipped,
+            static fn(string $r): bool => str_contains($r, 'file cap'),
+        ));
+        $parseSkips = array_values(array_filter(
+            $skipped,
+            static fn(string $r): bool => str_contains($r, 'Failed to load rule'),
+        ));
+
+        // POSITIVE CONTROL against the old read-everything behaviour: exactly
+        // `cap` files were read (so `cap` parse failures recorded) and the extra
+        // 3 were refused BEFORE reading (3 cap trips). If the counter were still
+        // keyed on accepted rules, cap would stay 0 and all cap+3 would be read:
+        // there would be cap+3 parse skips and ZERO cap skips - this assertion
+        // reddens on that revert.
+        self::assertCount($cap, $parseSkips, 'exactly the cap were read far enough to fail parsing');
+        self::assertCount(3, $capSkips, 'the files past the read cap are refused without being read');
+    }
+
+    // -- Caps: per-file bytes -------------------------------------------------
+
+    public function testTheByteCeilingRefusesJustPastItAndAdmitsJustUnder(): void
+    {
+        // P6.S2 review fix (MINOR). readRule() stats the file and refuses one
+        // past MAX_FILE_BYTES before reading it (the Read tool's stat-before-read
+        // precedent), so a 300 MB `.sugar-crush/rules/x.md` is never pulled into
+        // memory at prompt-build time.
+        $ceiling = (new ReflectionClass(RuleLoader::class))->getConstant('MAX_FILE_BYTES');
+        self::assertIsInt($ceiling);
+
+        $root = $this->sandbox . '/repo-bytes';
+        $rules = $root . '/.sugar-crush/rules';
+        mkdir($rules, 0o755, true);
+
+        // A valid rule padded to EXACTLY the ceiling (boundary is `>`, so a
+        // file whose byte size equals the ceiling is admitted), and one a byte
+        // over it (refused whole).
+        $prefix = "---\nname: padded\n---\n";
+        $under = $prefix . str_repeat('x', $ceiling - strlen($prefix) - 1) . "\n";
+        $this->emitRule($rules . '/under.md', $under);
+        self::assertSame($ceiling, filesize($rules . '/under.md'), 'the just-under file is exactly at the ceiling in real bytes');
+
+        $over = $prefix . str_repeat('y', $ceiling - strlen($prefix)) . "\n";
+        $this->emitRule($rules . '/over.md', $over);
+        self::assertSame($ceiling + 1, filesize($rules . '/over.md'), 'the just-over file is one byte past the ceiling in real bytes');
+
+        $loader = new RuleLoader($root);
+        $loaded = $loader->loadProjectRules();
+
+        self::assertSame(['padded'], $this->ruleNames($loaded), 'the at-ceiling file loads; the over-ceiling file is refused');
+
+        $skipped = $loader->skippedFiles();
+        $overSkip = $skipped[realpath($rules . '/over.md')] ?? '';
+        self::assertStringContainsString('byte', $overSkip, 'the oversized file is recorded as a byte-ceiling skip, not silent');
+        // POSITIVE CONTROL: the recorded reason names the real measured size,
+        // so a revert of the ceiling (which would read and parse the valid
+        // over-ceiling file into a loaded rule) reddens BOTH the loaded-name
+        // pin above AND this presence check.
+        self::assertStringContainsString((string) ($ceiling + 1), $overSkip, 'the refusal quotes the file\'s real byte count');
+    }
+
     // -- Rule value object immutability / fail-fast ---------------------------
 
     public function testWithReturnsANewInstanceAndLeavesTheOriginalUntouched(): void

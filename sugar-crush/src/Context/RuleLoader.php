@@ -78,7 +78,14 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *
  * CAPS: {@see MAX_DEPTH} bounds the recursive walk (a hard depth also stops a
  * symlink cycle inside a tier from recursing forever); {@see MAX_FILES} bounds
- * how many `*.md` files one tier directory contributes. A file past either cap
+ * how many `*.md` files one tier directory READS — the counter ticks at the
+ * read, not at a successful parse, so a directory of malformed files cannot
+ * force unbounded reads past the ceiling (P6.S2 review fix; counting accepted
+ * rules bounded what the prompt received, never what the process did);
+ * {@see MAX_FILE_BYTES} bounds one file and is enforced on stat BEFORE the
+ * read, the {@see \SugarCraft\Crush\Tools\BuiltIn\Read} precedent, so an
+ * oversized file is refused without its bytes ever being loaded. A file past
+ * either of the latter caps
  * is recorded in {@see skippedFiles()}, never dropped in silence, but - unlike a
  * containment refusal - it goes to the skip ledger and NOT to
  * {@see refusedPaths()}, because a cap trip or a parse error is a truncation of
@@ -107,13 +114,38 @@ final class RuleLoader
 
     /**
      * How many `*.md` rule files one tier directory may contribute, counted
-     * after containment but before de-duplication. Bounded because the walk is
-     * over content the repository (project/root tiers) or another process
-     * (via a link) chose, and an unbounded list of files becomes an unbounded
-     * prompt. Net-new: no cap of this kind exists elsewhere in this repo, so it
-     * is a plain safety ceiling rather than a mirror of a sibling value.
+     * AFTER containment, AT THE READ — the tick moved from the accepted-rule
+     * counter to the read counter at the P6.S2 review fix, because the old
+     * position bounded what reached the prompt, not what the process touched:
+     * 70 malformed files in a cloned repo's project tier sailed past an
+     * accept-counter and forced 70 file_get_contents calls per prompt build.
+     * Counted before de-duplication for the same reason — a duplicate still
+     * costs a read. Bounded because the walk is over content the repository
+     * (project/root tiers) or another process (via a link) chose, and an
+     * unbounded list of files becomes an unbounded prompt. Net-new: no cap of
+     * this kind exists elsewhere in this repo, so it is a plain safety ceiling
+     * rather than a mirror of a sibling value.
      */
     private const MAX_FILES = 64;
+
+    /**
+     * The largest single rules file this loader will read, in bytes, enforced
+     * on stat BEFORE the read ({@see \SugarCraft\Crush\Tools\BuiltIn\Read}'s
+     * `clearstatcache`/`filesize` shape, not that tool's truncate-and-continue
+     * policy — a half-read rule is a half-instructed model, so an oversized
+     * file is refused whole and recorded in the skip ledger).
+     *
+     * Deliberately far below the Read tool's 1 MiB default: those bytes are
+     * not one display, they are multiplied by up to MAX_FILES per tier and
+     * re-read on every prompt build, and a rule is hand-written instruction
+     * prose — the shipped fixture rule is 200 bytes. 64 KiB of frontmatter
+     * plus prose is already an order of magnitude past any rule that should
+     * ride a system prompt; anything larger is an accident (a log pasted into
+     * the wrong directory) or an attack (a 300 MB `x.md` in a cloned repo),
+     * and neither belongs in memory at prompt-build time. A just-under/just-over
+     * pair pins this boundary in RuleLoaderTest.
+     */
+    private const MAX_FILE_BYTES = 65536;
 
     /**
      * Containment refusals: path as spelled => why it was not read.
@@ -358,8 +390,10 @@ final class RuleLoader
      * directory (a missing directory is the normal "tier not configured" case,
      * so it returns empty WITHOUT a refusal), refuse the directory if it escapes
      * its anchor, then for each file refuse an entry that escapes the resolved
-     * directory and skip (recorded) any file past the count cap or that fails to
-     * parse. Ordering is filesystem-dependent until the `ksort` at the end, which
+     * directory and skip (recorded) any file past the read-count cap, past the
+     * byte ceiling, or that fails to parse. The count cap is consumed by every
+     * READ, so malformed and oversized files spend it too rather than forcing
+     * unbounded work. Ordering is filesystem-dependent until the `ksort` at the end, which
      * is the tree's only sort precedent and what makes tier contents stable
      * across machines.
      *
@@ -396,7 +430,7 @@ final class RuleLoader
         $iterator->setMaxDepth(self::MAX_DEPTH);
 
         $byKey = [];
-        $accepted = 0;
+        $reads = 0;
         foreach ($iterator as $file) {
             if (!$file instanceof \SplFileInfo || !$file->isFile()) {
                 continue;
@@ -421,7 +455,13 @@ final class RuleLoader
                 continue;
             }
 
-            if ($accepted >= self::MAX_FILES) {
+            // The cap is on READS, and it is checked here - before the read -
+            // exactly like the depth cap bounds the iterator before it walks
+            // (P6.S2 review fix). Counting accepted rules instead bounded the
+            // prompt, not the work: malformed files parsed to null, never
+            // ticked the counter, and 70 of them in a cloned repo's project
+            // tier read every byte on every prompt build.
+            if ($reads >= self::MAX_FILES) {
                 $reason = sprintf(
                     'Skipping rules file %s: this tier already reached its %d-file cap.',
                     $spelled,
@@ -435,13 +475,13 @@ final class RuleLoader
 
             $realPath = (string) realpath($spelled);
             $key = $this->ruleKeyFor($realDir, $realPath);
+            $reads++;
             $rule = $this->readRule($realPath, $tier, $key);
             if ($rule === null) {
                 continue;
             }
 
             $byKey[$key] = $rule;
-            $accepted++;
         }
 
         ksort($byKey);
@@ -455,10 +495,28 @@ final class RuleLoader
      *
      * A malformed file must not abort the tier (one bad `---` block should not
      * hide the dozen good rules beside it), but it must not be silent either: it
-     * lands in the skip ledger with the parser's own message.
+     * lands in the skip ledger with the parser's own message. The byte ceiling
+     * is enforced on stat BEFORE the read so an oversized file is refused
+     * without allocating it, and a file that became unreadable between the walk
+     * and the read still falls through to the false-return below.
      */
     private function readRule(string $realPath, string $tier, string $key): ?Rule
     {
+        clearstatcache(true, $realPath);
+        $size = @filesize($realPath);
+        if ($size !== false && $size > self::MAX_FILE_BYTES) {
+            $reason = sprintf(
+                'Skipping rules file %s: its %d bytes exceed this loader\'s %d-byte ceiling.',
+                $realPath,
+                $size,
+                self::MAX_FILE_BYTES,
+            );
+            $this->report($reason);
+            $this->skippedFiles[$realPath] = $reason;
+
+            return null;
+        }
+
         try {
             $content = file_get_contents($realPath);
         } catch (\Throwable $e) {
