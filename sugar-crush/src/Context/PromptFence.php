@@ -70,8 +70,39 @@ final class PromptFence
      * foreign bytes like a repo file is, and a body carrying `</user-rules>`
      * would close its own fence early and hand the remainder of the render to
      * the model outside any provenance frame. Widening for it costs zero
-     * golden bytes (the fixture rule body carries no fence marker) — pinned
-     * by BaseSystemPromptTest's user-rules forgery guard.
+     * golden bytes (the fixture rule body carries no fence marker) — and
+     * `harness-injected`, the seventh entry and the only one the roster carries
+     * with NO emitter: no `PromptSection` reports it and no construction site
+     * opens it, so unlike the six above it is not derived from a fence that
+     * exists. It is the roster's one pre-registered tag, and it is here because
+     * the §9.15 harness-voiced channel is coming and this array — not the
+     * section list — is the single head every construction site already agrees
+     * on. A tag added before the bytes that need it is free; a tag added after
+     * leaves a window in which repository-controlled bytes could forge the
+     * harness's own provenance voice, exactly the `system-reminder` case above,
+     * which is itself proof that a defang-only tag earns its place with nothing
+     * emitting it.
+     *
+     * WHAT PINS THIS ROSTER — FIVE SITES, not the one this note used to name.
+     * Two are whole-roster: the SORTED list in
+     * {@see \SugarCraft\Crush\Tests\Context\PromptSectionTest::testTheEscapeRosterIsExactlyTheDerivedFenceTagList()}
+     * and the DECLARATION-order map in
+     * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testForgedInstructionDocumentCannotForgeFencesOrAuthorityVoice()},
+     * whose `assertSame(array_keys($expected), tags())` tripwire reddens any
+     * widening until the expectation grows with it. Three are tier forgery
+     * guards in the same file —
+     * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testAForgedUserRuleBodyCannotEscapeItsOwnFence()},
+     * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testAForgedProjectRuleBodyCannotEscapeTheProjectInstructionsFence()}
+     * and
+     * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testAForgedRootRulesFileCannotEscapeTheProjectInstructionsFence()}
+     * — each reading a prompt the real assembler produced, so a tag DROPPED from
+     * this array stops matching at a splice and reddens its guard's
+     * neutralised-copy counts. The earlier prose here credited only the
+     * user-tier guard and was understated by four. `harness-injected` itself is
+     * load-bearing on the roster plus guard evidence only, which is what makes
+     * this widening cost zero golden bytes:
+     * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()}
+     * is the guard that proves it, and no fixture byte moves for it.
      *
      * @var list<string>
      */
@@ -82,6 +113,7 @@ final class PromptFence
         'project-instructions',
         'system-reminder',
         'user-rules',
+        'harness-injected',
     ];
 
     private function __construct()
