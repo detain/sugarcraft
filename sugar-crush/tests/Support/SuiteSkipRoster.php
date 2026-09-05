@@ -160,6 +160,14 @@ use PHPUnit\Event\TestSuite\SkippedSubscriber as TestSuiteSkippedSubscriber;
 final class SuiteSkipRoster
 {
     /**
+     * The one {@see EXPECTED} key whose rostering is a function of the vendor
+     * layout, as a constant so the table and {@see expectedForLayout()} cannot
+     * drift apart.
+     */
+    private const CONDITIONAL =
+        'SugarCraft\Crush\Tests\Tools\BuiltIn\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -168,22 +176,29 @@ final class SuiteSkipRoster
      * Linux figure and the "would be nice to delete this one day" figure are
      * the same number.
      *
-     * The second is CONDITIONAL on the vendor layout: it skips itself only when
-     * `vendor/sugarcraft` holds no path-repo symlinks -- the case on any
-     * checkout whose siblings resolved from packagist -- and asserts wherever
-     * CI's path-repo injection puts the symlink farm back.
+     * The second is LAYOUT-CONDITIONAL, and the condition is implemented, not
+     * merely described: {@see expectedForLayout()} lifts it out of the roster
+     * a run is actually judged against exactly when {@see hasPathRepoSymlinks()}
+     * finds symlinks under `vendor/sugarcraft` -- CI's injected path-repo
+     * layout, where the test runs and asserts instead of skipping. Where the
+     * siblings resolved from packagist the farm holds only real directories,
+     * the test skips itself, and the entry is rostered. The const itself keeps
+     * BOTH entries so the name-existence loop in `SuiteSkipRosterTest` still
+     * polices both names; it is {@see install()} that hands the constructor
+     * the layout-computed subset.
      */
     public const EXPECTED = [
         'SugarCraft\Crush\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
             => 'unconditional placeholder: the failure arm of McpClient::loadConfig() needs a '
                 . 'read that fails after file_exists() passes, and the test was left unwritten '
                 . 'rather than faking a built-in',
-        'SugarCraft\Crush\Tests\Tools\BuiltIn\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed'
-            => 'conditional layout gate: since the 2026-09-04 upstream sync, packagist-resolved '
-                . 'siblings install as real directories under vendor/sugarcraft, so this checkout '
-                . 'has no path-repo symlinks for the walk to guard and the test skips itself; the '
-                . 'symlinks return whenever CI injects the path repositories, and the test runs '
-                . 'and asserts again there',
+        self::CONDITIONAL
+            => 'conditional layout gate: rostered only while vendor/sugarcraft holds no path-repo '
+                . 'symlinks -- the packagist-resolved checkout, where the test skips itself. '
+                . 'expectedForLayout() drops it from the effective roster the moment the symlinks '
+                . 'are present, as they are wherever CI injects the path repositories, and the '
+                . 'test runs and asserts there; hasPathRepoSymlinks() mirrors the test body\'s own '
+                . 'gate exactly',
     ];
 
     private static ?self $live = null;
@@ -237,7 +252,9 @@ final class SuiteSkipRoster
             return;
         }
 
-        $roster = new self();
+        // The vendor layout decides whether the conditional entry is part of
+        // the roster this run is judged against (see expectedForLayout()).
+        $roster = new self(self::expectedForLayout(\dirname(__DIR__, 2) . '/vendor/sugarcraft'));
 
         try {
             EventFacade::instance()->registerSubscribers(
@@ -328,6 +345,49 @@ final class SuiteSkipRoster
         }
 
         return $test->id();
+    }
+
+    /**
+     * True when `vendor/sugarcraft` is a path-repo SYMLINK farm: false when the
+     * directory is absent, and false when it holds only real directories.
+     *
+     * Byte-exact mirror of the self-skip gate in
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltIn\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed()}
+     * -- an absent farm and a packagist farm both yield zero `is_link()` hits,
+     * and the test marks itself skipped; one symlink makes it run and assert.
+     * The roster may only hold the entry to that test's account when the same
+     * predicate says the skip will actually happen.
+     */
+    public static function hasPathRepoSymlinks(string $linkFarm): bool
+    {
+        return array_filter(glob($linkFarm . '/*') ?: [], 'is_link') !== [];
+    }
+
+    /**
+     * The roster this checkout's layout can be judged against:
+     * {@see EXPECTED} minus the layout-conditional entry wherever the path-repo
+     * symlinks are present and the conditional test therefore RUNS instead of
+     * skipping.
+     *
+     * {@see install()} feeds this to the constructor. Expressing the condition
+     * on the roster side -- rather than forcing one layout to tolerate the
+     * other's skip behaviour -- is what lets a single suite be green in both
+     * layouts: CI's symlink farm sees a roster of 1 matched by 1 skip, the
+     * packagist checkout sees a roster of 2 matched by 2 skips, and checks 1-3
+     * stay fully armed for every key on the effective roster either way.
+     *
+     * @return array<string,string>
+     */
+    public static function expectedForLayout(string $linkFarm): array
+    {
+        if (!self::hasPathRepoSymlinks($linkFarm)) {
+            return self::EXPECTED;
+        }
+
+        $effective = self::EXPECTED;
+        unset($effective[self::CONDITIONAL]);
+
+        return $effective;
     }
 
     public function recordPrepared(string $key): void
