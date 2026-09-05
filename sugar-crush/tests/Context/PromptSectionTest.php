@@ -402,30 +402,100 @@ final class PromptSectionTest extends TestCase
         $method = new \ReflectionMethod($runtime, 'systemPromptSections');
         $method->setAccessible(true);
 
-        /** @var list<PromptSection> $sections */
-        $sections = $method->invoke($runtime, App::new($provider, 'gpt-4'));
+        // HOST-HERMETIC BY CONSTRUCTION (P6.S2 fix). A bare App used to fall
+        // through `Runtime::systemPromptSections()` to `getcwd()` for the rules
+        // root and to the developer's real `$HOME` for the user tier, so one
+        // file in `~/.sugar-crush/rules` — precisely the directory real users
+        // create — reddened the exact-list pin below with a fourth fence. Both
+        // inputs are now pinned at empty /tmp sandboxes, and the SECOND
+        // polarity below (one planted user rule) proves the three-element
+        // assertion is hermetic by pinning, not by the accident of a bare host.
+        $root = sys_get_temp_dir() . '/promptsection_root_' . uniqid('', true);
+        $home = sys_get_temp_dir() . '/promptsection_home_' . uniqid('', true);
+        mkdir($root, 0o700);
+        mkdir($home, 0o700);
+        $previousEnv = getenv('HOME');
+        $previousServer = $_SERVER['HOME'] ?? null;
+        putenv('HOME=' . $home);
+        $_SERVER['HOME'] = $home;
 
-        foreach ($sections as $section) {
-            if ($section->fence() !== '') {
-                $reported[] = $section->fence();
+        try {
+            /** @var list<PromptSection> $sections */
+            $sections = $method->invoke($runtime, App::new($provider, 'gpt-4')->withRoot($root));
+
+            foreach ($sections as $section) {
+                if ($section->fence() !== '') {
+                    $reported[] = $section->fence();
+                }
             }
-        }
 
-        $distinct = array_values(array_unique($reported));
-        sort($distinct);
+            $distinct = array_values(array_unique($reported));
+            sort($distinct);
 
-        // The layers a bare App really builds: <env> from the direct block,
-        // <project-memory> from the empty MemoryBlock and <repo-map> from the
-        // snapshot section — an absent layer reports its fence as metadata
-        // while rendering '' (the PromptSection contract; only the base and
-        // skill layers are fence-less). project-instructions comes from the
-        // Runtime construction pinned with the routing test in the next
-        // commit; the roster-missing case fails loudly here, not silently in
-        // production.
-        self::assertSame(['<env>', '<project-memory>', '<repo-map>'], $distinct);
+            // The layers this pinned App really builds on an empty host: <env>
+            // from the direct block, <project-memory> from the empty
+            // MemoryBlock and <repo-map> from the snapshot section — an absent
+            // layer reports its fence as metadata while rendering '' (the
+            // PromptSection contract; only the base and skill layers are
+            // fence-less). project-instructions comes from the Runtime
+            // construction pinned with the routing test in the next commit;
+            // the roster-missing case fails loudly here, not silently in
+            // production.
+            self::assertSame(
+                ['<env>', '<project-memory>', '<repo-map>'],
+                $distinct,
+                'an empty rules root and an empty HOME must build exactly the always-present fences',
+            );
 
-        foreach ($distinct as $fence) {
-            self::assertContains($fence, $roster, "production fence $fence must be in PromptFence's roster");
+            foreach ($distinct as $fence) {
+                self::assertContains($fence, $roster, "production fence $fence must be in PromptFence's roster");
+            }
+
+            // Polarity two of the same pin: with ONE rule planted in the
+            // sandbox HOME the user fence must appear — without this the
+            // three-element assertion above could be satisfied by a splice
+            // that never reads HOME at all.
+            mkdir($home . '/.sugar-crush/rules', 0o700, true);
+            file_put_contents(
+                $home . '/.sugar-crush/rules/pinned.md',
+                "---\nname: pinned\n---\nOne planted user rule.\n",
+            );
+
+            $ruleSections = $method->invoke($runtime, App::new($provider, 'gpt-4')->withRoot($root));
+            $withRule = $distinct;
+
+            foreach ($ruleSections as $section) {
+                if ($section->fence() !== '' && !in_array($section->fence(), $withRule, true)) {
+                    $withRule[] = $section->fence();
+                }
+            }
+            sort($withRule);
+
+            self::assertSame(
+                ['<env>', '<project-memory>', '<repo-map>', '<user-rules>'],
+                $withRule,
+                'one rule in the pinned HOME must add its fence - the render reads the sandbox, not the host',
+            );
+
+            foreach ($withRule as $fence) {
+                self::assertContains($fence, $roster, "production fence $fence must be in PromptFence's roster");
+            }
+        } finally {
+            $previousEnv === false ? putenv('HOME') : putenv('HOME=' . $previousEnv);
+
+            if ($previousServer === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServer;
+            }
+
+            // Exact teardown of the tree THIS test built - no iterator, the
+            // shape is known byte-for-byte from the mkdirs above.
+            @unlink($home . '/.sugar-crush/rules/pinned.md');
+            @rmdir($home . '/.sugar-crush/rules');
+            @rmdir($home . '/.sugar-crush');
+            @rmdir($home);
+            @rmdir($root);
         }
     }
 
