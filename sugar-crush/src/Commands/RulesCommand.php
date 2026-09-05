@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Commands;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\Rule;
 use SugarCraft\Crush\Context\RuleLoader;
@@ -191,10 +192,23 @@ final class RulesCommand
             // printed nothing would read as a successful toggle of a pack that
             // does not exist, and the operator would find out at the next
             // prompt that the rules they just switched off are still in it.
-            echo "\n  Unknown rule pack: {$name}\n";
+            //
+            // The two lines below compose transcript text OUTSIDE
+            // {@see TranscriptTable::cell()} - and `cell()` is where this surface's ANSI
+            // neutralisation lives, because {@see \SugarCraft\Core\Util\Width::truncate()}
+            // opens with {@see Ansi::strip()}. A hand-composed line therefore has to say
+            // the strip itself: `$name` is whatever the operator typed and the array keys
+            // are filename stems read off the operator's disk, so without it an escape
+            // sequence reaches the transcript intact and surfaces as literal bracket-31m
+            // text - the same defect
+            // {@see \SugarCraft\Crush\Tests\Commands\NoRawAnsiInTranscriptTest} exists
+            // for, acquired at runtime where that source-reading guard cannot see it.
+            echo "\n  Unknown rule pack: " . Ansi::strip($name) . "\n";
+            $knownNames = implode(', ', array_map(Ansi::strip(...), array_keys($known)));
+
             echo count($known) === 1
-                ? "  The only pack here is: " . implode(', ', array_keys($known)) . "\n\n"
-                : '  Available packs: ' . implode(', ', array_keys($known)) . "\n\n";
+                ? "  The only pack here is: {$knownNames}\n\n"
+                : "  Available packs: {$knownNames}\n\n";
 
             return 1;
         }

@@ -330,6 +330,63 @@ final class RulesCommandTest extends TestCase
     }
 
     /**
+     * The unknown-name refusal must not carry an escape sequence into the transcript.
+     *
+     * THE HOLE THIS CLOSES. `TranscriptTable::cell()` neutralises ANSI because
+     * {@see \SugarCraft\Core\Util\Width::truncate()} opens with `Ansi::strip($s)` — that
+     * is pinned at {@see \SugarCraft\Crush\Tests\Commands\TranscriptTableTest}, and is
+     * why the LISTING needs no defence. But these two error lines are composed by hand
+     * outside any cell, so the bytes the operator typed are interpolated verbatim and
+     * an escape reaches the transcript intact, where the TUI styles its own text and a
+     * stray ESC resurfaces as literal bracket-31m prose. This is the same defect class
+     * {@see \SugarCraft\Crush\Tests\Commands\NoRawAnsiInTranscriptTest} exists for; that
+     * guard reads SOURCE for a literal escape and so cannot see an escape acquired at
+     * RUNTIME from an argument — which is exactly why the pin lives here instead.
+     *
+     * Asserted on the exact neutralised message rather than on the absence of an ESC:
+     * a strip so aggressive it deleted the name too would pass the weaker check, and the
+     * name is the one part of an error the operator still has to be able to read.
+     */
+    public function testAnEscapeSequenceInTheTypedNameIsStrippedFromTheUnknownPackError(): void
+    {
+        $this->writePackFile($this->packsDir . '/terse.md', "BE TERSE\n");
+        $state = RulesState::new();
+
+        $text = $this->reply($this->submit("/rules \033[31mghost\033[0m", $state));
+
+        self::assertSame("Unknown rule pack: ghost\n  The only pack here is: terse", $text);
+        self::assertStringNotContainsString("\033", $text, 'no raw escape byte may reach the transcript');
+        self::assertSame([], $state->disabled(), 'and the stripped name must not match a pack');
+    }
+
+    /**
+     * The same defence on the other composition site: the AVAILABLE-PACKS list, whose
+     * entries are filename stems read off the operator's disk rather than text typed at
+     * this prompt. A pack called `"\033[31mred\033[0m.md"` is legal to the filesystem, so
+     * the stem arrives here already carrying the escape and the listing inherits it.
+     *
+     * TWO packs are written so this exercises the `Available packs:` branch — the one
+     * with the comma-separated list — rather than the single-pack sentence the test above
+     * already pins. The plain pack is the control: stripping the escaped name must not
+     * disturb the neighbour that never needed it, so the expected string asserts both
+     * spellings at once.
+     */
+    public function testAnEscapeSequenceInAPackFilenameStemIsStrippedFromThePacksList(): void
+    {
+        $this->writePackFile($this->rulesDir . "/\033[31mred\033[0m.md", "ESCAPED PACK\n");
+        $this->writePackFile($this->packsDir . '/plain.md', "PLAIN PACK\n");
+        $state = RulesState::new();
+
+        $text = $this->reply($this->submit('/rules typo', $state));
+
+        // `rules/` is walked before `rulebooks/`, which is the order packs() emits and
+        // therefore the order the list prints.
+        self::assertSame("Unknown rule pack: typo\n  Available packs: red, plain", $text);
+        self::assertStringNotContainsString("\033", $text, 'a stem from disk is not trusted input either');
+        self::assertSame([], $state->disabled());
+    }
+
+    /**
      * `/rules a b` is one name plus a stray token. Both readings are refused here:
      * the name does not exist, so it is an unknown-pack error, and a name that DOES
      * exist with a trailing token is refused by the arity check rather than quietly
