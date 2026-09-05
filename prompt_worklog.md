@@ -274,6 +274,7 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 **PUSH / CI STATE** master is **27 commits over `origin/master`** (`2d3a096d5` lineage; origin tip `20f41020a`); push remains user-gated and this session's earlier authorization was already spent on `2d3a096d5..20f41020a`.
 
 Full agent reports: /tmp/opencode/P6.S2*/(PREDICTION.txt, STATUS.md, fix1.xml, fix2.xml), /tmp/opencode/P6.S2-gate/gate.xml, /tmp/opencode/P6.S2-merge/MSG.
+**RESUME-CORRECTIONS** §0’s phase legend still titled **4** Token accounting and cache observability and **5** The PromptSection architecture as remaining although both phases are closed; trimmed in this rewrite to the six that are not (**6**-**11**). §0’s step count (63 -> 64) and §R’s `<N> of 62` §8 template were ALREADY corrected by `b8dd324ca`, so no edit was needed there - recorded so the next reader does not hunt for a fix this rewrite did not make.
 
 ### P6.S1 BOOKKEEPING CORRECTIONS — 2026-09-05 — status: done
 
