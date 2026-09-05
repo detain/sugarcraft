@@ -2186,7 +2186,10 @@ file, the Phase-6 provenance-fence row) was wrong: the two are separable, and on
 **Tripwires that fire BY DESIGN** two roster pins, two orders, one insert: the SORTED roster at
 `tests/Context/PromptSectionTest.php:297-310` (literal list at :302-309), the DECLARATION-order roster at
 `tests/BaseSystemPromptTest.php:992-1004` — the `$expected` map at :992-999 plus the
-`assertSame(array_keys($expected), PromptFence::tags())` tripwire at :1000-1004. **CORRECTED 2026-09-05:** the
+`assertSame(array_keys($expected), PromptFence::tags())` tripwire at :1000-1004. **CORRECTED 2026-09-05 (same-day
+second pass, at tip `1695a6afe`):** that span is five lines behind this tip — measured here the `$expected` array
+sits at **:997-1005** and the `assertSame(array_keys($expected), PromptFence::tags())` tripwire at **:1006-1010**
+(whole block **:997-1010**), moved by the same growth the note below describes. **CORRECTED 2026-09-05:** the
 cites here were taken at an older tree — `BaseSystemPromptTest.php:977-981` is the middle of the `$forgedDoc`
 attack payload, not a pin, and `PromptFence::TAGS` is at :118-126, not :70-76 — **re-measured at the P6.S2b
 tip**: the array sat at :78-85 through the P6.S2 era and P6.S2b's own +43-line growth to `PromptFence.php`
@@ -2214,9 +2217,67 @@ expected move count is zero, and the guard, not the fixture, is what proves the 
 **Depends on** P6.S2.
 **Hard constraint** Seven `CONTROL_PLANE` command names are reserved and unoverridable
 (`CommandLoader.php:504-528`). Check `rules` is not among them, and if a new reserved name is added,
-add it to that list in the same commit.
+add it to that list in the same commit. **CITE PINNED 2026-09-05 at tip `1695a6afe`:** the seven-name
+`CONTROL_PLANE` list itself is at `src/Commands/CommandRegistry.php:68` (verified — `rules` is not among the seven);
+`CommandLoader.php:504-528` is the enforcement loop that consumes that list, which is what this constraint also names.
 **Done when** toggling a rulebook changes the assembled prompt, asserted by a golden diff, and the
 toggle persists across a session restart (or explicitly does not, and a test pins which).
+
+**RULING 2026-09-05 (premise check `armed-harlequin-wolverine`) — SEQUENCE; do NOT run S3 concurrently with S4.**
+The Batch-3 recommendation in the concurrency note below is FALSE on measured file overlap and is superseded. S3's
+stated `~/.sugar-crush/rulebooks` literal obliges a `ProjectTierRefusalInventoryTest` `DOT_PATHS` row, the
+distinct-literal count assert (24→25 at this tip), and the `Bootstrap::projectTierRefusals()` docblock prose —
+`src/Cli/Bootstrap.php` and `tests/Cli/ProjectTierRefusalInventoryTest.php` are two of the four files P6.S4 declares.
+And no persistence route confines itself to S3's three declared files: the guarded write door is census-pinned to
+exactly `{provider, theme}`, so persisting a rules toggle lands in P6.S4's `LayeredSettings` surface. Therefore
+**S3 lands a session-scoped toggle and S4 owns persistence — S3 first, S4 after, never parallel.**
+
+**A1 as written.** Rulebooks live at `~/.sugar-crush/rulebooks/*.md`; one file is one pack; pack identity is the
+basename minus `.md` — which is the shape the loader's existing `ruleKeyFor()` (`src/Context/RuleLoader.php:552-558`)
+already produces for a flat directory. No new identity function.
+
+**Tier decision: rulebooks REUSE the `user` tier — there is no fourth `TIERS` value.** `Rule::TIERS`
+(`src/Context/Rule.php:77`) stays `['user','project','root']` and rulebook-sourced rules carry tier `user`.
+`~/.sugar-crush/rulebooks/` is operator-controlled by definition, so `<user-rules>` plus
+`USER_RULES_AUTHORITY_PREAMBLE` (`src/Runtime.php:131`, spliced at `:2579`) is the honest provenance frame rather than
+a convenience one. Containment comes free: the loader's user anchor is the PARENT `$HOME/.sugar-crush` —
+`RuleLoader::loadUserRules()` (`:279`) passes it as the `anchoredIn` argument at `:294-298` — so a third
+`loadFromDirectory()` call adds **zero** `ContainedPath` call sites and **zero** read sinks.
+
+**Interaction rule (previously unpinned).** Frontmatter `enabled:` and the runtime disabled-pack set are **AND**ed: a
+pack whose file says `enabled: false` stays off regardless of the runtime toggle. Pinned by its own test, not by a comment.
+
+**`MAX_FILES` is ruled GLOBAL across directories — and at this tip that is a CHANGE, not a restatement (MEASURED).**
+The P6.S2-reviewed meaning is "reads per prompt build", but the counter today is a local `$reads` initialised inside
+`loadFromDirectory()` (`src/Context/RuleLoader.php:433`) and checked at `:464`; the refusal message at `:466` reads
+"this tier already reached its %d-file cap", and the prose says "one tier directory may contribute" (`:117`) and "how
+many `*.md` files one tier directory READS" (`:80-82`). Implementing the ruling therefore hoists the counter to
+instance state and rewrites those two prose spots plus the message. A test pins that a directory of many rulebooks
+cannot exceed the ceiling, and the starvation interaction — rulebooks consuming read slots that `rules/` would
+otherwise get — is recorded in the loader docblock.
+
+**NIT-5 is discharged here, not carried further.** A dangling `*.md` symlink inside either rules directory currently
+vanishes at `src/Context/RuleLoader.php:435` via `!$file->isFile()` with **zero** ledger entries. It becomes a
+RECORDED refusal with a reason, plus a test. The ledger the code supports is `refusedPaths()`: the class docblock
+reserves `skippedFiles()` for cap trips and parse errors, i.e. truncation of content that did resolve, whereas a path
+whose `realpath()` fails cannot be shown to stay inside the anchor — a containment question — and the plan's standing
+rule is that the scanner fails CLOSED, so an unknown spelling costs a false positive and never a silent miss.
+
+**Corrected file list for S3 (the three-file list above is insufficient — the done-when cannot be met without these):**
+`src/Context/RuleLoader.php` · `src/Commands/CommandRegistry.php` · `src/Commands/RulesCommand.php` (new) ·
+`src/Chat.php` (dispatch arm plus handler — unavoidable, because `SlashDispatchTest` reds on a registry row with no
+live branch) · `src/App/App.php` (the disabled-set rides here, mirroring `enabledSkills`) · `src/Runtime.php` (the
+splice reads it) · `src/Backend/EngineBackend.php` (per-turn carry from Chat to App) ·
+`tests/Commands/RulesCommandTest.php` (new) · `tests/Context/RuleLoaderTest.php` · and the pre-authorized census pair
+`src/Cli/Bootstrap.php` + `tests/Cli/ProjectTierRefusalInventoryTest.php`. **`RuleLoader.php` is assigned to S3
+exclusively while S3 is open — P6.S5 must not touch it.**
+
+**Golden ruling: this step's expected golden move is ZERO.** Assert the toggle by two live renders under synthetic
+temp HOMEs; do NOT add committed fixture rulebooks. `ensureFixtureUserHome()` (`tests/BaseSystemPromptTest.php:1747`)
+guards on one sentinel — `is_file($home . '/.sugar-crush/rules/global-style.md')` at `:1751` — so new fixture files
+would not be delivered at all on a warm `vendor/` tree, and user-tier content DOES render into the golden, which would
+move the 7,829-byte pin at `tests/BaseSystemPromptTest.php:835`. The "asserted by a golden diff" clause above is
+therefore satisfied by the render pair, and here a golden move is itself the defect.
 
 ### P6.S4 — Config surface for rules
 
@@ -2231,7 +2292,8 @@ toggle persists across a session restart (or explicitly does not, and a test pin
 **Depends on** P6.S2.
 **Hard constraint** `PROJECT_TIER_KEYS` deliberately omits `provider`, `allowedTools`, `statusLine`,
 and `instructions`. Any new key whose **file contents become prompt text** follows `instructions`:
-**user-tier only.** The rationale (`LayeredSettings.php:507-514`) is not about a file-read primitive
+**user-tier only.** The rationale (`LayeredSettings.php:507-514` — **STALE, CORRECTED 2026-09-05 at tip
+`1695a6afe`:** at this tree the WHO-declared rationale is at `LayeredSettings.php:521-528`) is not about a file-read primitive
 — containment already handles that — it is that "forced" means *the user* declared this text
 authoritative, and a project may not declare that on the user's behalf.
 **Also:** the layer stack is lowest-first project → project-local → user → user-config, so
@@ -2266,6 +2328,12 @@ bytes stay under the cap and that the overflow is deferred, not lost. Record the
 - **Batch 3 (three concurrent):** P6.S3, P6.S4, P6.S5 — **only if** `RuleLoader.php` is assigned to
   exactly one of them. S3 and S5 both want it. Recommended: run **P6.S4 concurrently with P6.S3**
   (disjoint: `LayeredSettings`/`Bootstrap` vs `CommandRegistry`), then **P6.S5 alone**.
+- **CORRECTED 2026-09-05 (premise check `armed-harlequin-wolverine`):** the "disjoint" claim in the bullet above is
+  FALSE as written, and Batch 3 is not three-wide. S3's `rulebooks` literal obliges `src/Cli/Bootstrap.php` and
+  `tests/Cli/ProjectTierRefusalInventoryTest.php`, both of which S4 declares, and no persistence route stays inside
+  S3's declared files because the guarded write door is census-pinned to exactly `{provider, theme}`. Run **P6.S3,
+  then P6.S4, serially**; `RuleLoader.php` belongs to S3 exclusively while S3 is open, so **P6.S5 waits for S3 to
+  merge** instead of contending for it. See the RULING under P6.S3.
 
 ---
 
