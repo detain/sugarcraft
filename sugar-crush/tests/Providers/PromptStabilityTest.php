@@ -668,10 +668,13 @@ final class PromptStabilityTest extends TestCase
      * starts, not by how big the diff gets". That is true only for a change
      * that leaves the layers ahead of `<env>` alone. It is FALSE for a turn
      * that creates a source file: `<repo-map>` carries a per-directory `.php`
-     * COUNT, so `(2 files)` becomes `(3 files)` at byte 3,188 — ahead of
-     * everything P3.S1 moved, and below this floor.
+     * COUNT, so the divergence sits 707 B INSIDE the map — P3.S1 measured that
+     * byte at 3,188, ahead of everything P3.S1 moved and below this floor,
+     * until P5.S5's static voice layer ahead of the map lifted the shape over
+     * it (MEASURED 4,762, 2026-09-05).
      * {@see testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne()} pins
-     * that limit, and the lifetime that saves it.
+     * the position (inside the map, ahead of `<env>`), the lifetime that saved
+     * it before the lift, and the lift itself — above this floor — since.
      *
      * Both `<env>` figures are OF THIS FIXTURE and of nothing else. §3.4's own
      * pair — 598 B then 615 B, first differing at 524 — is of a two-edit
@@ -1435,8 +1438,11 @@ final class PromptStabilityTest extends TestCase
      * claimed the worst case was "bounded by WHERE `<env>` starts, not by how
      * big the diff gets". A review found the counterexample in one command: a
      * turn that CREATES a `.php` file moves `<repo-map>`'s per-directory file
-     * count, which sits at byte 3,188 — ahead of `<env>` and below the floor.
-     * That shape is out of scope here and has its own test,
+     * count, which P3.S1 measured at byte 3,188 — ahead of `<env>` and, as the
+     * floor then lay, below it. P5.S5's static voice layer ahead of the map has
+     * since lifted that shape over the floor (its own test records the flip);
+     * it is still out of scope HERE, which pins only changes that move `<env>`
+     * and nothing ahead of it —
      * {@see testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne()}.
      *
      * The test above drives the nicest in-scope shape there is: the same file
@@ -1598,16 +1604,17 @@ final class PromptStabilityTest extends TestCase
 
     /**
      * THE LIMIT OF WHAT P3.S1 BOUGHT, pinned rather than left to be
-     * rediscovered: moving `<env>` last does not make everything ahead of it
-     * stable, because `<repo-map>` is derived from the working tree too.
+     * rediscovered — and since 2026-09-05, the record of that limit MOVING.
      *
+     * Moving `<env>` last does not make everything ahead of it stable, because
+     * `<repo-map>` is derived from the working tree too.
      * {@see \SugarCraft\Crush\Context\RepoMapBlock} emits a per-directory count
      * of `.php` files. Create one and `- src/  ->  Fixture\Prefix\  (2 files)`
-     * becomes `(3 files)` — MEASURED at byte 3,188 on this fixture, which is
-     * ahead of `<env>` (4,056), ahead of the instruction documents, the memory
-     * block and both skill layers, and BELOW
+     * becomes `(3 files)` — 707 B INSIDE the map. P3.S1 measured that byte at
+     * 3,188: ahead of `<env>` (then 4,056), ahead of the instruction documents,
+     * the memory block and both skill layers, and BELOW
      * {@see MIN_STABLE_PREFIX_BYTES}. A turn that adds a source file therefore
-     * re-prefills almost everything, and no amount of moving `<env>` changes
+     * re-prefilled almost everything, and no amount of moving `<env>` changed
      * that.
      *
      * WHAT SAVES IT IS A LIFETIME, AND THE TWO ARE WORTH TELLING APART.
@@ -1617,23 +1624,47 @@ final class PromptStabilityTest extends TestCase
      * Runtime per user TURN. So:
      *
      *   - within one turn, the map is frozen and a new file moves only `<env>`
-     *     — MEASURED prefix 4,403, the same figure as any other `Status:`
-     *     change;
-     *   - across turns, the map is re-captured and the prefix collapses to
-     *     3,188.
+     *     — MEASURED 2026-09-05, PHP 8.3.6, Linux 6.8.0-138-generic, this
+     *     worktree: prefix 5,977, still the same 347 B-into-`<env>` shape as
+     *     any other `Status:` change, riding the fence's new position at 5,630;
+     *   - across turns, the map is re-captured and the prefix diverges again at
+     *     the file count — 4,762, still the same 707 B-into-the-map shape P3.S1
+     *     measured at 3,188, riding the map's new position at 4,055.
      *
      * Both are asserted below, from ONE fixture in ONE test, because the pair
      * is the finding: the within-turn number alone reads as "the reorder
      * worked" and the across-turn number alone reads as "the reorder did
      * nothing", and neither sentence is true on its own.
      *
-     * This is a PIN ON A MEASURED LIMIT, not an endorsement. If a later step
-     * makes the repo map stable across turns — capturing it per session, or
-     * dropping the file counts — the across-turn assertion here is expected to
-     * flip, and it should be rewritten deliberately rather than deleted
-     * quietly. The finding itself lives in `src/Context/RepoMapBlock.php` and
-     * `src/Backend/EngineBackend.php`, both outside this step's declared file
-     * list, so it is reported in the worklog and pinned here rather than fixed.
+     * THE ACROSS-TURN PIN FLIPPED, AND THIS PARAGRAPH IS THE DELIBERATE
+     * REWRITE THE PREVIOUS VERSION AUTHORIZED. It licensed a flip if a later
+     * step made the map stable across turns — "it should be rewritten
+     * deliberately rather than deleted quietly" — and the flip arrived by a
+     * DIFFERENT route: the map is NOT stable (it is still re-captured per
+     * turn, and the structural assertions below, inside-map and ahead-of-`<env>`,
+     * pass untouched). P5.S5 wired a 1,191 B STATIC voice layer at section
+     * index one, AHEAD of the map, and the divergence rode it over the floor:
+     * MEASURED 4,762 at this tip, against 3,571 re-measured with that wiring
+     * commented out in a sandbox copy (the 3,188 -> 3,571 part is ordinary
+     * static-prose growth — P3.S1's figure stays what this family says it is,
+     * a dated observation; both post-flip figures were re-measured, not
+     * corrected by arithmetic, per the rule closing the floor's own doc-block).
+     *
+     * SO THE TEST POLICES THE IMPROVEMENT, NOT A NUMBER. The shared floor
+     * constant stayed 4,096 — the within-turn half and the two tests above
+     * (cache-prefix reach, env-only shapes) bind it from the same side and
+     * stay green at the new figures; the family's doctrine for moving the
+     * constant is re-measure-and-move, and nothing here re-measures THAT
+     * property. What is pinned is the side of
+     * the floor a file-creating across-turn render now lives on: 666 B of
+     * slack above it, consumable by later prose edits ahead of the map before
+     * this reddens, exactly like the slack the floor's doc-block prices. If a
+     * later step makes the map ITSELF stable across turns, the STRUCTURAL
+     * assertions flip next — same licence: rewrite deliberately, do not delete
+     * quietly. The finding about the map's own volatility lives in
+     * `src/Context/RepoMapBlock.php` and `src/Backend/EngineBackend.php`, both
+     * outside this step's declared file list, so it was reported in the worklog
+     * and pinned here rather than fixed.
      */
     public function testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne(): void
     {
@@ -1671,10 +1702,20 @@ final class PromptStabilityTest extends TestCase
             'if a new source file no longer voids the prefix ahead of <env>, the repo map became stable — '
                 . 'rewrite this test deliberately, do not delete it',
         );
-        $this->assertLessThan(
+        // THE FLIPPED PIN (P5.S5 — see the doc-block). P3.S1 pinned
+        // `acrossTurns < floor` as a LIMITATION; this step's static voice
+        // layer ahead of <repo-map> lifted the divergence over the floor, so
+        // the relation is now pinned the other way and POLICES THE LIFT: if
+        // the layer is unwired, or prose ahead of the map is cut past the
+        // slack, the cache posture this step bought is gone and this reddens
+        // naming it.
+        $this->assertGreaterThan(
             self::MIN_STABLE_PREFIX_BYTES,
             $acrossTurns,
-            'the across-turn prefix now clears the floor; the limit this test pins is gone',
+            'the across-turn prefix collapsed to ' . $acrossTurns . ' bytes, back below the floor of '
+                . self::MIN_STABLE_PREFIX_BYTES . ' - the static maxims layer P5.S5 wired ahead of <repo-map> '
+                . 'is what carries this shape over the floor; if it is gone the lift is gone, and if only the '
+                . 'prose ahead of the map shrank, the floor\'s 666 B of slack just priced that edit honestly (P5.S5)',
         );
 
         // WITHIN ONE TURN: the same two writes, one Runtime. buildSystemPrompt()

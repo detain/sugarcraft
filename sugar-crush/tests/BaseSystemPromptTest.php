@@ -812,7 +812,7 @@ final class BaseSystemPromptTest extends TestCase
         // which is the cheap half of a discipline that already requires
         // diffing old against new.
         self::assertSame(
-            5559,
+            6750,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',
