@@ -144,7 +144,7 @@ final class RuleLoader
 
     /**
      * @param string    $repoRoot       The checkout these tiers are anchored to - the project and root tiers resolve inside it, the user tier does not use it.
-     * @param bool|null $reportRefusals Force stderr reporting on (true) or off (false); null (every production caller) lets {@see DEBUG_REFUSALS_ENV} decide. Present so a test can exercise the reporting half without a leaking putenv().
+     * @param bool|null $reportRefusals Force stderr reporting on (true) or off (false); null (every production caller) lets {@see DEBUG_RULES_REFUSALS_ENV} decide. Present so a test can exercise the reporting half without a leaking putenv().
      */
     public function __construct(
         private readonly string $repoRoot,
@@ -155,12 +155,20 @@ final class RuleLoader
     /**
      * The env var that puts this loader's refusals on stderr, off by default.
      *
-     * A sibling of {@see \SugarCraft\Crush\Commands\CommandLoader::DEBUG_REFUSALS_ENV}.
-     * unset, empty and `0` all read as off, matching every other SUGARCRUSH_*
-     * switch. Adding this name is what obliges the `docs/ENVIRONMENT.md` roster
-     * row and the EnvRosterDriftTest entry.
+     * A sibling of {@see \SugarCraft\Crush\Commands\CommandLoader::DEBUG_REFUSALS_ENV}
+     * in every respect except its identifier. The identifier differs on purpose:
+     * the environment-roster guard resolves a `getenv(self::NAME)` argument
+     * to the value declared by a constant of that NAME, and two loaders each
+     * holding a constant literally spelled `DEBUG_REFUSALS_ENV` make that
+     * resolution ambiguous - the roster derived from source then mis-attributes one
+     * loader's read to the other and reports a variable that is read as though it
+     * were not. `DEBUG_RULES_REFUSALS_ENV` is unique, so both names resolve to
+     * exactly the string each is declared to be. unset, empty and `0` all read as
+     * off, matching every other SUGARCRUSH_* switch. Adding the
+     * SUGARCRUSH_DEBUG_RULES value is what obliges the `docs/ENVIRONMENT.md` roster
+     * row that accompanies this commit.
      */
-    public const DEBUG_REFUSALS_ENV = 'SUGARCRUSH_DEBUG_RULES';
+    public const DEBUG_RULES_REFUSALS_ENV = 'SUGARCRUSH_DEBUG_RULES';
 
     /**
      * Every tier loaded, in load order, deduplicated, enabled only.
@@ -508,7 +516,7 @@ final class RuleLoader
 
     /**
      * Put one refusal on stderr, if anyone asked for it - one funnel so the call
-     * sites cannot drift on the gate. See {@see DEBUG_REFUSALS_ENV}.
+     * sites cannot drift on the gate. See {@see DEBUG_RULES_REFUSALS_ENV}.
      */
     private function report(string $message): void
     {
@@ -519,7 +527,7 @@ final class RuleLoader
 
     private static function debugRefusalsRequested(): bool
     {
-        $value = getenv(self::DEBUG_REFUSALS_ENV);
+        $value = getenv(self::DEBUG_RULES_REFUSALS_ENV);
 
         return $value !== false && $value !== '' && $value !== '0';
     }
