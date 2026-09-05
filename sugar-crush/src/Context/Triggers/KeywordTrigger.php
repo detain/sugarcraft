@@ -32,8 +32,11 @@ use InvalidArgumentException;
  *   behaviour: with Unicode-aware boundaries, letters adjacent to non-ASCII
  *   letters fuse into one word, so "uncafé" does NOT match "café" — the same
  *   whole-word discipline the ASCII cases pin, extended to non-ASCII text.
- *   Without `u`, a standalone "café" still matches — bytes align, boundaries at
- *   the ASCII edges — so `u` is required for the folding and constituents above.
+ *   Without `u` an accented word cannot match standalone: é is `0xC3 0xA9`,
+ *   non-word bytes in ASCII mode, so the closing `/\b/` finds no boundary at a
+ *   space or end-of-string and "café"/"café bar" both miss, while a fused
+ *   "caféx" spuriously matches because `x` supplies that boundary. Unicode case
+ *   folding is lost too. `u` is therefore required, not optional.
  * - Caveat kept honest: a word whose edge characters are non-word characters
  *   (e.g. "c++") can never fire, because `/\b/` demands a word constituent on
  *   exactly one side of the anchor. Words are expected to be alphanumeric
