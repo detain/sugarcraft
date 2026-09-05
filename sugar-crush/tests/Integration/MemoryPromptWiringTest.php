@@ -11,6 +11,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -325,6 +326,10 @@ final class MemoryPromptWiringTest extends TestCase
             'withInstructionLoader' => fn(EngineBackend $b): EngineBackend => $b->withInstructionLoader(
                 new InstructionFileLoader($this->dir),
             ),
+            // In this map because the reflected set demands every builder be exercised;
+            // what this test proves of it is only that a rules-state copy keeps the
+            // memory store intact. The rules state itself is pinned in RulesCommandTest.
+            'withRulesState' => fn(EngineBackend $b): EngineBackend => $b->withRulesState(RulesState::new()),
             'withHooks' => fn(EngineBackend $b): EngineBackend => $b->withHooks(
                 new HookManager(new HookRegistry()),
             ),
