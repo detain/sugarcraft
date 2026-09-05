@@ -22,8 +22,8 @@ That is your instruction. Do not stop at a phase boundary to ask whether to cont
 Concretely:
 
 1. Work the queue in §8 in order. When Phase 3's close review passes, **immediately open Phase 4**
-   and keep going. Same at every later boundary. `prompt_plan.md` has twelve phases (0-11) and 63
-   steps; Phases 0-2 are closed, Phase 3 is nearly closed, Phases 4-11 remain:
+   and keep going. Same at every later boundary. `prompt_plan.md` has twelve phases (0-11) and 64
+   steps; Phases 0-5 are closed, Phase 6 is in progress, Phases 7-11 remain:
    **4** Token accounting and cache observability · **5** The PromptSection architecture ·
    **6** The rules tier and the trigger union · **7** Wire the dormant seams ·
    **8** Rebuild the compaction prompt · **9** Tool descriptions as prompt ·
@@ -85,7 +85,7 @@ changes that feel too small to be worth spawning for.
 ## 3. What has been built so far
 
 Phases 0-3 are closed; Phase 3 closed when close-review cycle 3 (FINAL) found no code or test defect —
-its six record-side findings were fixed and merged as `58150a432`. Ten things a fresh agent needs about the
+its six record-side findings were fixed and merged as `58150a432`. Things a fresh agent needs about the
 **current** shape of the code:
 
 1. **The prompt reaches the model.** `Runtime::buildSystemPrompt()` (`sugar-crush/src/Runtime.php`)
@@ -611,7 +611,7 @@ say so in the worklog entry for the step that fixed it.
 ```
 Phase:            <current phase id and title, or "between phases">
 Next step:        <STEP_ID> — <one-line goal>
-Steps done:       <N> of 62
+Steps done:       <N> of 64
 Phases done:      <N> of 12
 Last commit:      <sha> — <subject line>
 Baseline:         Tests: <N>, Assertions: <N>, Skipped: <N>  (from P0.S1, never edited)
