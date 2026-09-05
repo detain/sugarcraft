@@ -17,8 +17,16 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *
  * THE THREE TIERS, in the load order this class emits them (OD3 ruling):
  *   1. user    - `~/.sugar-crush/rules/*.md`, the person's own machine config
+ *   1b. user   - `~/.sugar-crush/rulebooks/*.md`, the same tier's named packs
+ *                (P6.S3): one file per pack, pack identity = filename minus the
+ *                extension, toggled for the session by `/rules <name>`
  *   2. project - `<repoRoot>/.sugar-crush/rules/*.md`, shipped in-repo
  *   3. root    - `<repoRoot>/RULES.md`, an optional single file at the top
+ *
+ * FOUR DIRECTORIES, THREE TIERS. Rulebooks are not a tier of their own and the
+ * reason is in {@see loadUserRulebooks()}: a tier records authorship, the
+ * operator authored these bytes, so `user` is the true value and the fence that
+ * renders them says so.
  *
  * THE TIERS AND WHO CHOOSES THEM (OD1 ruling, resolving a wording clash in the
  * sources): the project rules tier IS allowed to exist. prompt_expand.md seam 8
@@ -91,6 +99,20 @@ use SugarCraft\Crush\Support\HomeDirectory;
  * {@see refusedPaths()}, because a cap trip or a parse error is a truncation of
  * the user's own content, not the security event a refusal names.
  *
+ * THE AGGREGATE ARITHMETIC OF THE FILE CAP, stated out loud because P6.S3 added a
+ * directory to the walk and a reader is entitled to do the sum without opening
+ * the loop: the counter is LOCAL TO ONE {@see loadFromDirectory()} CALL, so the
+ * ceiling a single `load()` can spend is (directories walked x MAX_FILES) = 3 x 64
+ * = 192 reads - user `rules`, user `rulebooks`, project `rules` - plus the root
+ * tier's single `RULES.md`, which has no walk to cap. Per-directory is the
+ * semantics kept, deliberately and after measurement: the P6.S2 finding this cap
+ * answers was an untrusted clone forcing UNBOUNDED reads, and a fixed, closed set
+ * of directories each under its own ceiling is still a bounded aggregate. What a
+ * GLOBAL counter would have bought is the opposite of the point of a rulebook -
+ * an operator who filled `rulebooks/` to 64 packs would silently stop loading
+ * their own standing `rules/`, and the starvation would land on whichever
+ * directory happened to be walked second.
+ *
  * TRIGGERS ARE BUILT, NOT APPLIED. Each rule's `paths:`/`keywords:`/`description`
  * frontmatter becomes the P6.S1 value objects inside {@see Rule}; deciding
  * whether a rule fires for a given prompt or path is a later wiring step (P7.S4,
@@ -160,6 +182,15 @@ final class RuleLoader
      * GIVEN (the reader can go and look at that path; the resolved target is the
      * far end of the link that caused the refusal).
      *
+     * Two shapes of entry, and both are containment questions in the same sense:
+     * a path that resolves OUTSIDE its boundary (a link aimed at `~/.ssh`), and a
+     * `*.md` path that resolves to NOTHING at all (a dangling symlink, or a
+     * directory wearing the extension - NIT-5, closed at P6.S3). The second is
+     * here rather than in {@see skippedFiles()} because the boundary claim cannot
+     * be checked on a target that does not exist, and the standing rule for that
+     * asymmetry is that an unknown spelling costs a false positive and never a
+     * silent miss.
+     *
      * @var array<string, string>
      */
     private array $refusedPaths = [];
@@ -175,12 +206,14 @@ final class RuleLoader
     private array $skippedFiles = [];
 
     /**
-     * @param string    $repoRoot       The checkout these tiers are anchored to - the project and root tiers resolve inside it, the user tier does not use it.
-     * @param bool|null $reportRefusals Force stderr reporting on (true) or off (false); null (every production caller) lets {@see DEBUG_RULES_REFUSALS_ENV} decide. Present so a test can exercise the reporting half without a leaking putenv().
+     * @param string           $repoRoot       The checkout these tiers are anchored to - the project and root tiers resolve inside it, the user tier does not use it.
+     * @param bool|null        $reportRefusals Force stderr reporting on (true) or off (false); null (every production caller) lets {@see DEBUG_RULES_REFUSALS_ENV} decide. Present so a test can exercise the reporting half without a leaking putenv().
+     * @param RulesState|null  $rulesState     The session's rulebook toggle set, applied inside {@see load()} through {@see RulesState::effectiveRule()}. Null - which is what every caller that predates P6.S3 passes and what a test gets by default - means no pack is turned off, so `load()` behaves exactly as it did before this operand existed. It is a constructor argument rather than a `load()` parameter because the set is a fact about the SESSION, and the loader outlives one call: `Runtime::buildSystemPrompt()` constructs one per prompt build and the toggles must survive every tier walk it makes.
      */
     public function __construct(
         private readonly string $repoRoot,
         private readonly ?bool $reportRefusals = null,
+        private readonly ?RulesState $rulesState = null,
     ) {
     }
 
@@ -205,12 +238,17 @@ final class RuleLoader
     /**
      * Every tier loaded, in load order, deduplicated, enabled only.
      *
-     * The single assembly-facing entry point: it walks user, then project, then
-     * root, and folds the three lists through the two de-dup passes so a file
-     * reached by more than one tier is emitted once (first-seen wins). The
-     * returned rules are those whose `enabled:` frontmatter is true (or absent);
-     * a disabled rule is parsed (so it can still occupy a de-dup slot and cannot
-     * reappear as an enabled twin) but excluded here.
+     * The single assembly-facing entry point: it walks user rules, user rulebooks,
+     * then project, then root, and folds the lists through the two de-dup passes
+     * so a file reached by more than one tier is emitted once (first-seen wins).
+     * The returned rules are those whose `enabled:` frontmatter is true (or
+     * absent) AND whose pack this session has not turned off; a rule excluded
+     * either way is still parsed (so it can still occupy a de-dup slot and cannot
+     * reappear as an enabled twin) but not emitted here.
+     *
+     * The session half is applied by {@see RulesState::effectiveRule()}, which is
+     * the only production caller of {@see Rule::withEnabled()} - see that method
+     * for why the conjunction is computed once rather than at each read site.
      *
      * @return list<Rule>
      */
@@ -218,6 +256,7 @@ final class RuleLoader
     {
         $ordered = [
             ...$this->loadUserRules(),
+            ...$this->loadUserRulebooks(),
             ...$this->loadProjectRules(),
             ...$this->loadRootRules(),
         ];
@@ -251,6 +290,13 @@ final class RuleLoader
 
             $seenReal[$real] = $rule->path;
             $seenLower[$lower] = $rule->path;
+
+            // Session intent is folded in AFTER de-dup and before emission, so a
+            // pack this session turned off still occupied its dedup slot (a twin
+            // reached later must not resurrect it as an enabled rule) and the
+            // `enabled` bit below is the single effective value every read site
+            // sees - the same one `/rules` prints.
+            $rule = $this->rulesState?->effectiveRule($rule) ?? $rule;
 
             if (!$rule->enabled) {
                 continue;
@@ -293,6 +339,57 @@ final class RuleLoader
 
         return $this->loadFromDirectory(
             $home . '/.sugar-crush/rules',
+            $home . '/.sugar-crush',
+            'user',
+        );
+    }
+
+    /**
+     * Tier 1b - `~/.sugar-crush/rulebooks/*.md`, the named packs `/rules` toggles.
+     *
+     * THE SAME TIER, NOT A FOURTH ONE (P6.S3 ruling). A tier records WHO WROTE the
+     * bytes, because that is the only thing the prompt's framing can act on: the
+     * value picks the fence and the authority preamble at
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} and nothing else.
+     * A rulebook is written by the operator of this machine inside their own home
+     * directory - which is exactly what `user` means, and exactly what
+     * `USER_RULES_AUTHORITY_PREAMBLE` tells the model - so filing these files
+     * under a new `rulebook` tier would put a directory name where a provenance
+     * claim belongs and render operator bytes behind a preamble describing
+     * something else. `user` is the honest value, not the convenient one.
+     *
+     * WHAT MAKES IT A SEPARATE DIRECTORY AT ALL is the toggle, not the trust.
+     * `rules/*.md` is standing instruction the operator left on; `rulebooks/*.md`
+     * is instruction they expect to switch per project, so `/rules` needs a set of
+     * files whose whole purpose is to be named and turned off. Both are walked by
+     * this method's twin with the same anchor, the same caps and the same
+     * containment gate; the walk is not repeated here and no second boundary is
+     * introduced, which is what keeps this step at zero new containment compares
+     * and zero new read sinks.
+     *
+     * Loaded after {@see loadUserRules()} and before the project tiers, so the
+     * operator's two directories always outrank anything a clone shipped.
+     *
+     * @return list<Rule>
+     */
+    public function loadUserRulebooks(): array
+    {
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            $reason = 'Skipping user rulebooks: this process cannot establish that $HOME is this user\'s own '
+                . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
+                . '~/.sugar-crush/rulebooks inside.';
+            $this->report($reason);
+            // Recorded under the literal `~/...` spelling for the reason
+            // loadUserRules() gives for its own: establishing a resolved path is
+            // precisely what failed.
+            $this->refusedPaths['~/.sugar-crush/rulebooks'] = $reason;
+
+            return [];
+        }
+
+        return $this->loadFromDirectory(
+            $home . '/.sugar-crush/rulebooks',
             $home . '/.sugar-crush',
             'user',
         );
@@ -391,7 +488,10 @@ final class RuleLoader
      * so it returns empty WITHOUT a refusal), refuse the directory if it escapes
      * its anchor, then for each file refuse an entry that escapes the resolved
      * directory and skip (recorded) any file past the read-count cap, past the
-     * byte ceiling, or that fails to parse. The count cap is consumed by every
+     * byte ceiling, or that fails to parse. Ahead of all of those, a `*.md` entry
+     * that is not a regular file is refused rather than passed over: there is no
+     * read to bound and no content to truncate, so it belongs to the refusal
+     * ledger ({@see $refusedPaths}) and not the skip ledger. The count cap is consumed by every
      * READ, so malformed and oversized files spend it too rather than forcing
      * unbounded work. Ordering is filesystem-dependent until the `ksort` at the end, which
      * is the tree's only sort precedent and what makes tier contents stable
@@ -432,10 +532,43 @@ final class RuleLoader
         $byKey = [];
         $reads = 0;
         foreach ($iterator as $file) {
-            if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+            if (!$file instanceof \SplFileInfo) {
                 continue;
             }
             if (strtolower($file->getExtension()) !== 'md') {
+                continue;
+            }
+
+            // NIT-5 (P6.S3): a `*.md` entry that is not a regular file. Before
+            // this branch existed the check above came first and the entry
+            // vanished with no ledger entry at all - which for the one case that
+            // matters, a DANGLING SYMLINK (`x.md -> nowhere`), is a path the walk
+            // reached whose contents this loader cannot show it did not read.
+            // `ContainedPath::within()` cannot answer for it either, because
+            // `realpath()` fails on the target, so the entry would be refused at
+            // the gate below only if the gate could see it - and it never got
+            // there. The scanner therefore fails CLOSED on the unknown spelling:
+            // a name this tier was going to read, on a path that resolves to
+            // nothing readable, is recorded as a refusal.
+            //
+            // `refusedPaths()` and not `skippedFiles()`, per the class doc-block's
+            // split: the skip ledger is for truncation of content that DID resolve
+            // (a cap trip, a parse error), and this is not that. The cost is the
+            // sanctioned false positive - a directory that happens to be named
+            // `x.md` is now recorded too, and a directory is not a smuggling risk.
+            // An unreadable rule the operator meant to have is the case both
+            // readings agree is worth a line.
+            if (!$file->isFile()) {
+                $dangling = $file->getPathname();
+                $reason = sprintf(
+                    'Skipping rules file %s: the name ends in .md but the path does not resolve to a regular file'
+                    . ' (a broken symlink or a directory), inside %s.',
+                    $dangling,
+                    $realDir,
+                );
+                $this->report($reason);
+                $this->refusedPaths[$dangling] = $reason;
+
                 continue;
             }
 
@@ -532,7 +665,7 @@ final class RuleLoader
         }
 
         try {
-            return Rule::new($realPath, $tier, $content, $key);
+            return Rule::new($realPath, $tier, $content, fallbackName: $key, key: $key);
         } catch (\Throwable $e) {
             $reason = sprintf('Failed to load rule from %s: %s', $realPath, $e->getMessage());
             $this->report($reason);
