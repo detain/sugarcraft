@@ -247,7 +247,7 @@ final class NoRawAnsiInTranscriptTest extends TestCase
         );
 
         $this->assertSame(
-            ['AgentsCommand', 'McpAuthCommand', 'ShareCommand', 'WebSearchCommand'],
+            ['AgentsCommand', 'McpAuthCommand', 'RulesCommand', 'ShareCommand', 'WebSearchCommand'],
             $names,
             'a command that writes to stdout was added or removed; '
                 . 'confirm its output is escape-free and update this list',
@@ -265,7 +265,7 @@ final class NoRawAnsiInTranscriptTest extends TestCase
         $captured = self::capturedCommandClasses();
 
         $this->assertSame(
-            ['AgentsCommand', 'McpAuthCommand', 'ShareCommand', 'WebSearchCommand'],
+            ['AgentsCommand', 'McpAuthCommand', 'RulesCommand', 'ShareCommand', 'WebSearchCommand'],
             $captured,
             'Chat captures a different set of commands than this test believes; '
                 . 'a new ob_start() site means a new class whose stdout is transcript',

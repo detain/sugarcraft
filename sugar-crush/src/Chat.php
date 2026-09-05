@@ -48,6 +48,7 @@ use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\McpAuthCommand;
+use SugarCraft\Crush\Commands\RulesCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
@@ -70,6 +71,7 @@ use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
+use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -6864,6 +6866,9 @@ final class Chat implements Model
             // — it is already on the screen — so every spelling gets a superset
             // of what it asked for rather than a "no such subcommand".
             'permissions' => $this->handlePermissionsCommand($text),
+            // Both forms reach the same arm, and the bare one is why this is NOT in
+            // the bare-only block above: `/rules` lists, `/rules terse` toggles.
+            'rules' => $this->handleRulesCommand($text),
             'compact' => $this->handleCompactCommand($text),
             'budget' => $this->handleBudgetCommand($text),
             'workflow' => $this->handleWorkflowCommand($text),
@@ -8392,6 +8397,69 @@ final class Chat implements Model
      * @return array{0:Chat,1:?\Closure}
      */
     private function agentsResponse(string $inputBuf, string $response): array
+    {
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+        return [$next, null];
+    }
+
+    /**
+     * `/rules` — list the operator's rule packs, or toggle one for this session
+     * only (prompt_plan.md P6.S3).
+     *
+     * The shape is {@see handleAgentsCommand()}'s, including the two parts that
+     * look incidental: the output is captured with `ob_start()` because
+     * {@see \SugarCraft\Crush\Commands\RulesCommand} writes to stdout, and a
+     * non-zero exit goes through {@see commandFailureResponse()} so a bad pack
+     * name lands in the transcript as a `Role::System` notice rather than as an
+     * assistant reply the provider would be shown on the next turn.
+     *
+     * NO "not configured" degradation, unlike the agents handler above it. The two
+     * collaborators this needs are ones a Chat always has: {@see $rulesState} is
+     * allocated in the constructor when nobody injects one, and the loader is built
+     * here against {@see projectRoot()} — the same resolution the prompt splice
+     * uses, so the listing and the prompt cannot be looking at different
+     * directories. Walking per COMMAND rather than caching per keystroke is the
+     * right trade here: the walk happens once when the user asks, and a pack file
+     * dropped in mid-session shows up immediately, which is the behaviour an
+     * operator editing those files expects.
+     *
+     * THE STATE MUTATION AND THE HISTORY WRITE ARE THE SAME STEP. `execute()`
+     * mutates the shared {@see RulesState} in place and the returned Chat carries
+     * the same object, so there is nothing to thread through `mutate()`'s changes
+     * array and no window in which the transcript says one thing about a pack and
+     * the next prompt says another. It also means a toggle survives the next
+     * `mutate()` by identity, which is what the session-scoped-but-not-volatile
+     * property rests on.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRulesCommand(string $inputBuf): array
+    {
+        $afterCommand = ltrim(mb_substr(trim($inputBuf), mb_strlen('/rules')));
+        $args = $afterCommand !== '' ? (preg_split('/\s+/', $afterCommand) ?: []) : [];
+
+        ob_start();
+        $rulesCommand = new RulesCommand(new RuleLoader($this->projectRoot()), $this->rulesState);
+        $exitCode = $rulesCommand->execute($this, $args);
+        $output = ob_get_clean();
+
+        if ($exitCode !== 0) {
+            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
+        }
+
+        return $this->rulesResponse($inputBuf, $output);
+    }
+
+    /**
+     * Return a rules command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function rulesResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],

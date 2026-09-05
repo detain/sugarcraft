@@ -184,6 +184,21 @@ final class CommandRegistry
                 'Show this session\'s permission mode, its source, and the rules it decides by',
                 'App',
             ),
+            // Deliberately NOT near `permissions` in category, though the two read
+            // alike. `/permissions` reports the gate that decides what a tool call
+            // may DO, and is read-only by design - changing that mid-session would
+            // hand a just-refused model a way to ask for the refusal to be lifted.
+            // `/rules` changes what the prompt SAYS and is a toggle on purpose:
+            // switching a rulebook off is exactly the correction a user should be
+            // able to make mid-session, and it reaches no authority, only prose.
+            // The hint is optional because both forms are real and do different
+            // things, as with `model` above.
+            CommandSpec::new(
+                'rules',
+                'List the rule packs, or toggle one for this session',
+                'Rules',
+                argumentHint: '[name]',
+            ),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
             // Deliberately NOT `/new`: this wipes the transcript and keeps the
             // session id, so the session file on disk keeps accumulating the
