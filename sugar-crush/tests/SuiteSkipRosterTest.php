@@ -42,6 +42,18 @@ final class SuiteSkipRosterTest extends TestCase
     ];
 
     /**
+     * The two real roster keys, written out in full so a rename inside
+     * `SuiteSkipRoster::EXPECTED` reddens the layout tests below (via an
+     * undefined index) rather than quietly aiming them at a stale key.
+     */
+    private const MCP_ENTRY =
+        'SugarCraft\\Crush\\Tests\\MCP\\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails';
+
+    /** The layout-conditional key -- the private `SuiteSkipRoster::CONDITIONAL`, by literal. */
+    private const GITIGNORE_ENTRY =
+        'SugarCraft\\Crush\\Tests\\Tools\\BuiltIn\\GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed';
+
+    /**
      * Every roster entry names a test that EXISTS.
      *
      * A roster is a set of names, and a name rots. If the method is renamed the
@@ -68,6 +80,222 @@ final class SuiteSkipRosterTest extends TestCase
                 'the skip roster names ' . $entry . ', which does not exist. A rostered test was renamed '
                 . 'or deleted: update ' . SuiteSkipRoster::class . '::EXPECTED.',
             );
+        }
+    }
+
+    /**
+     * hasPathRepoSymlinks() on an ABSENT farm reads false -- the mirror of the
+     * test's own `!is_dir()` skip, which is why the entry stays rostered there.
+     */
+    public function testHasPathRepoSymlinksIsFalseForALinkFarmThatDoesNotExist(): void
+    {
+        $dir = $this->createFarmSandbox();
+
+        try {
+            self::assertFalse(
+                SuiteSkipRoster::hasPathRepoSymlinks($dir . '/never-created'),
+                'an absent vendor/sugarcraft must read as "no path-repo symlinks": the test skips '
+                . 'itself on !is_dir(), so the roster entry has to stay',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The packagist layout: real directories and real files, zero links -> false.
+     * A dangling-LOOKING entry that is not a link must not satisfy the predicate
+     * either -- is_link() is a property of the entry, not of whether its target
+     * resolves, and only a real symlink makes the test run.
+     */
+    public function testHasPathRepoSymlinksIsFalseForAFarmOfRealDirectoriesOnly(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/candy-core');
+        file_put_contents($farm . '/not-a-link.txt', 'a real file, not a link');
+
+        try {
+            self::assertFalse(
+                SuiteSkipRoster::hasPathRepoSymlinks($farm),
+                'a farm of packagist real directories contains no path-repo symlinks; the predicate '
+                . 'must not be satisfied by entries that merely exist',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /** CI's layout: one injected path-repo symlink -> true. */
+    public function testHasPathRepoSymlinksIsTrueForAFarmWithOneSymlink(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/candy-core-real');
+        mkdir($farm . '/honey-bounce');
+        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+
+        try {
+            self::assertTrue(
+                SuiteSkipRoster::hasPathRepoSymlinks($farm),
+                "a farm holding even one path-repo symlink is CI's layout: the conditional test "
+                . 'runs and asserts there, so it must not be rostered',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * Over a symlink farm the effective roster is EXACTLY the one unconditional
+     * entry -- the structure is pinned, not just the count.
+     */
+    public function testExpectedForLayoutDropsTheConditionalEntryOverSymlinks(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/candy-core-real');
+        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+
+        try {
+            self::assertSame(
+                [self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY]],
+                SuiteSkipRoster::expectedForLayout($farm),
+                'over a path-repo symlink farm the conditional test RUNS, so the effective roster '
+                . 'must be the const minus exactly its GitignoreAwareness key, reason intact',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /** Over a packagist farm the effective roster is the FULL const. */
+    public function testExpectedForLayoutKeepsTheFullRosterOverRealDirectories(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/candy-core');
+
+        try {
+            self::assertSame(
+                SuiteSkipRoster::EXPECTED,
+                SuiteSkipRoster::expectedForLayout($farm),
+                'over a packagist farm the conditional test skips, so the effective roster must be '
+                . 'the full const -- both keys, both reasons, same order',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * CI-shape at the constructor seam: the layout-computed roster of 1, BOTH
+     * conditional tests prepared, only the unconditional one skipping -- the
+     * run is CLEAN.
+     *
+     * This is the exact event shape CI was printing as a violation before the
+     * roster computed its condition: check 3 must not see the non-rostered
+     * conditional key's non-skip, and the event count must match the EFFECTIVE
+     * roster, not the const.
+     */
+    public function testTheCiShapeRosterJudgesACiRunClean(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/candy-core-real');
+        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+
+        try {
+            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
+            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
+            $roster->recordPrepared(self::GITIGNORE_ENTRY);
+
+            self::assertSame(
+                [],
+                $roster->rosterEntriesThatStoppedSkipping(),
+                'the conditional key is off the CI-shape roster, so its non-skip must not read as '
+                . 'a roster entry that stopped skipping',
+            );
+            self::assertNull(
+                $roster->report(),
+                'a CI-layout run (roster of 1, one skip, conditional test running and passing) was '
+                . 'judged a violation -- this is the regression this fix exists to end',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * Packagist-shape mirror through the same seam: the layout-computed roster
+     * of 2 with both rostered skips is clean -- the shape of every local run
+     * and of the suite floor.
+     */
+    public function testThePackagistShapeRosterJudgesAPackagistRunClean(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($farm . '/candy-core');
+
+        try {
+            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
+            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster->recordSkip(self::MCP_ENTRY, self::MCP_ENTRY, 'placeholder');
+            $roster->recordPrepared(self::GITIGNORE_ENTRY);
+            $roster->recordSkip(
+                self::GITIGNORE_ENTRY,
+                self::GITIGNORE_ENTRY,
+                'no path-repo symlinks in this checkout',
+            );
+
+            self::assertSame(2, $roster->skipEventCount());
+            self::assertNull(
+                $roster->report(),
+                'the packagist-shape run no longer matches its roster -- the local floor of two '
+                . 'skips against two entries has to stay green',
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
+        }
+    }
+
+    /**
+     * The CI shape does not disarm the guard: with the conditional key
+     * legitimately lifted, the UNCONDITIONAL key prepared-but-not-skipped must
+     * still fire check 3. Dropping an entry from the effective roster may not
+     * take the bite out of the ones that remain.
+     */
+    public function testTheCiShapeRosterStillRedsTheUnconditionalKeyThatStoppedSkipping(): void
+    {
+        $dir  = $this->createFarmSandbox();
+        $farm = $dir . '/sugarcraft';
+        mkdir($farm);
+        mkdir($dir . '/candy-core-real');
+        symlink($dir . '/candy-core-real', $farm . '/candy-core');
+
+        try {
+            $roster = new SuiteSkipRoster(SuiteSkipRoster::expectedForLayout($farm), 'Linux');
+            $roster->recordPrepared(self::MCP_ENTRY);
+            $roster->recordPrepared(self::GITIGNORE_ENTRY);
+
+            self::assertSame(
+                [self::MCP_ENTRY],
+                $roster->rosterEntriesThatStoppedSkipping(),
+                'check 3 lost its bite on the one key that stayed rostered',
+            );
+            self::assertStringContainsString(
+                'ON THE ROSTER BUT RAN WITHOUT SKIPPING: ' . self::MCP_ENTRY,
+                (string) $roster->report(),
+            );
+        } finally {
+            $this->purgeFarmSandbox($dir);
         }
     }
 
@@ -501,6 +729,53 @@ final class SuiteSkipRosterTest extends TestCase
     private function syntheticRoster(): SuiteSkipRoster
     {
         return new SuiteSkipRoster(self::SYNTHETIC_ROSTER, 'Linux');
+    }
+
+    /**
+     * An empty sandbox directory standing in for a synthetic `vendor/sugarcraft`
+     * farm (the tests build their own layout inside it and purge by exact path).
+     *
+     * Named with `tempnam()` so it cannot collide with a sibling checkout on
+     * this shared box -- same discipline as {@see runChildSuite()}.
+     */
+    private function createFarmSandbox(): string
+    {
+        $stem = tempnam(sys_get_temp_dir(), 'sc_skiproster_farm_');
+        self::assertIsString($stem);
+        unlink($stem);
+        $dir = $stem . '.d';
+        self::assertTrue(mkdir($dir, 0o700), 'could not create the link-farm sandbox');
+
+        return $dir;
+    }
+
+    /**
+     * Remove a farm sandbox two levels deep -- links first (is_link before
+     * is_dir: a link to a directory answers to both), then files, then the
+     * real dirs, then the root. Exact paths only, never a glob.
+     */
+    private function purgeFarmSandbox(string $dir): void
+    {
+        foreach ((array) scandir($dir) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $dir . '/' . $entry;
+            if (is_link($path) || !is_dir($path)) {
+                @unlink($path);
+                continue;
+            }
+
+            foreach ((array) scandir($path) as $child) {
+                if ($child !== '.' && $child !== '..') {
+                    @unlink($path . '/' . $child);
+                }
+            }
+            @rmdir($path);
+        }
+
+        @rmdir($dir);
     }
 
     /**
