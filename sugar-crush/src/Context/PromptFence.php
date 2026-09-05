@@ -102,8 +102,11 @@ final class PromptFence
      * `</user-rules>` plus the `<system-reminder>` pair, the project and root
      * guards plant the `<user-rules>` pair, and none of the three forges
      * `harness-injected` — so dropping that tag reddens none of them and is
-     * caught instead by the two whole-roster sites above and by the assembler
-     * guard named below. The earlier prose here credited only the user-tier
+     * caught instead by the two whole-roster sites above, by the escape-level guard
+     * {@see \SugarCraft\Crush\Tests\Context\PromptSectionTest::testEscapeNeutralisesTheHarnessInjectedTagThatNothingEmits()}
+     * — which reads the roster through escape() alone and never touches a splice —
+     * and by the assembler guard named below. The earlier prose here credited only
+     * the user-tier
      * guard and was understated by four. `harness-injected` itself is
      * load-bearing on the roster plus guard evidence only, which is what makes
      * this widening cost zero golden bytes:
