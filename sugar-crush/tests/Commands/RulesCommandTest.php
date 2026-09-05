@@ -381,7 +381,7 @@ final class RulesCommandTest extends TestCase
     private function provider(): ProviderInterface
     {
         $provider = $this->createMock(ProviderInterface::class);
-        $provider->method('name')->willReturn('stub-rules');
+        $provider->method('name')->willReturn('test-provider');
 
         return $provider;
     }
