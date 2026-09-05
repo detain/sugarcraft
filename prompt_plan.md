@@ -2306,6 +2306,65 @@ authoritative, and a project may not declare that on the user's behalf.
 **Done when** `ProjectTierRefusalInventoryTest` covers the new key and asserts a project-tier attempt
 is refused with a message naming the key.
 
+> **NOTE 2026-09-05 (premise check `standard-blush-ape`, static-read method — its sandbox denies
+> php/git, so "pinned" there means "a static assertion the edit would trip", not "observed red").
+> RULING: P6.S4 = option (i), read-side key registration, user-tier-only, NO write door.**
+>
+> **Instrument correction of the done-when above.** The step's honest homes are
+> `tests/Config/LayeredSettingsTest.php` and `tests/Cli/BootstrapLayeredSettingsTest.php`, NOT
+> `ProjectTierRefusalInventoryTest`. That inventory test cannot host a settings-key assertion: it
+> builds `DOT_PATHS` from a `token_get_all` walk over `.sugar-crush/*` FILE dot-paths
+> (`dotPathsIn()` `:966-998`, regex `:987`) and carries ZERO settings-key assertions. A settings key
+> has no `x/y` slash form that regex can see, so there is nothing for it to inventory.
+>
+> **"Refused with a message naming the key" is NEW machinery today, and is therefore DEFERRED here
+> rather than smuggled in.** `LayeredSettings::projectLayer()` (`:626-634`) filters each project file
+> through `only()` (`:761-771`) SILENTLY, and its own docblock (`:615-619`) states the design: "A
+> refused file is the ABSENCE of a layer, not an error. There is no channel to report through." No
+> `refusedKeys()` accessor exists anywhere. Building that channel is a separate step, not this one.
+>
+> **Persistence ruling REVISED (the earlier `armed-harlequin-wolverine` note mis-sourced it from the
+> premise check, not from the research — `disabledRules` occurs NOWHERE in `prompt_expand.md` or the
+> repo; §2.12 speaks only of layering and tier authority, seam 7 only that a new prompt key respect
+> the `instructions` user-tier rule).** Option (i) satisfies the user's intent in the plan-compliant
+> form: a hand-edited `disabledRules` in `config`/`settings` IS honoured at launch (the seed below),
+> while `/rules` stays session-scoped and S3's pinned contract
+> (`RulesCommandTest::testTogglingAPackLeavesTheConfigFileByteIdentical`) stands untouched. The
+> guarded write door is DEFERRED to its own step, and its cost is a **three-census rewrite**: the
+> `LayeredSettings.php:37-55` "EXACTLY TWO KEYS" class docblock (whose `'two producers'` lead-in at
+> `:430` is locator-pinned), `ConfigWriteProducerDocumentationDriftTest`'s `{provider, theme}` assert
+> + `DOORS` + README prose guards, and `ChatConfigChangeDoorsDocumentationDriftTest`'s FOUR-doors
+> roster + `docs/ENVIRONMENT.md:19`. No third-door shortcut exists: `keysWrittenFromSource()`
+> token-walks ALL of `src/` and forbids the alias/`call_user_func` spellings it could not follow.
+>
+> **Completed file list (supersedes the four under **Files**).** In: `LayeredSettings.php` (add
+> `disabledRules` to `LAYERED_KEYS` `:272-284`; do NOT add to `PROJECT_TIER_KEYS` `:486-494` —
+> `userTierOnlyKeys()` derives user-tier-only automatically via `array_diff` `:543-546`),
+> `Bootstrap.php` (seed the already-dormant `RulesState::new(array $disabled = [])` `:98-107` from
+> config at `Bootstrap.php:1010` — the §1.10 wire-it outcome, same adoption pattern as P6.S3's
+> `Rule::withEnabled()`), `tests/Cli/BootstrapLayeredSettingsTest.php`,
+> `tests/Config/LayeredSettingsTest.php` (its EXACT-LIST `assertSame(['provider','instructions',
+> 'allowedTools','statusLine'], userTierOnlyKeys())` `:54-57` goes hard red on a 5th user-tier key,
+> and `testNoKeyIsLayeredThatNothingReads` `:76-88` is satisfied by the seed), and `docs/SETTINGS.md`
+> (a new 3-column row obliged by `TrustKeyDocumentationDriftTest:266-277`, col-3 "no" ⇔ not in
+> `PROJECT_TIER_KEYS` at `:284-299`). Out: `ProjectTierRefusalInventoryTest` (nothing to inventory).
+> Tier rationale to record in the docblock, with the `disabledSkills` counter-precedent
+> (`PROJECT_TIER_KEYS:490`, "REMOVES a capability rather than adding one" `:296-306`): a disable-list
+> holds *names*, not contents, so the "file contents become prompt text" wording does not decide its
+> tier on its own — the real drivers are seam 7's "any new **prompt key**" wording,
+> `LayeredSettings.php:521-528`, and `RulesState::TOGGLEABLE_TIER='user'` (`:81`) / "SCOPE OF A
+> TOGGLE" (`:66-73`): a project must not silence a user pack.
+>
+> **WITHDRAWN instruction.** The P6.S3 close wrote that "P6.S4 MUST grow
+> `ProjectTierRefusalInventoryTest`'s `$ownWords` map (zero headroom at 37) as its own scope." That
+> is WITHDRAWN as an instruction — measured FALSE for THIS step: S4 introduces no new dot-path, and
+> adding a 38th row with no 38th path would itself break `testTheDotPathEnumerationIsDerivedFromSrc`
+> `:366-382` plus the prose equalities `:517-518`. The zero-headroom facts are true and verified
+> (`$ownWords` tops at THIRTY-SEVEN holding exactly 37 `:524-527`/`:539`; `$pathWords` tops at 25 and
+> is consumed UNGUARDED `:548`, so it CRASHES rather than asserts on overflow) — they are a **landmine
+> to avoid**, and the only design that trips them all at once is persisting rulebooks to a new path
+> like `~/.sugar-crush/rules.json`, which this ruling rejects on that cost alone.
+
 ### P6.S5 — Glob-scoped rules reach the prompt
 
 **Goal** The gap §9.7 names: a rule whose globs describe *the files it governs* rather than *its own
@@ -2326,6 +2385,27 @@ path-triggered channel with no cap reintroduces exactly that.
 **Done when** a test builds the pathological input (many rules, huge bodies) and asserts the emitted
 bytes stay under the cap and that the overflow is deferred, not lost. Record the measured bytes.
 
+> **NOTE 2026-09-05 — briefing BLOCKED: NO premise check exists for P6.S5.** Three attempts produced
+> nothing: `incredible-coral-lynx` (completed, EMPTY artifact, ~3 min), `many-tomato-grasshopper`
+> (completed, EMPTY artifact, **12 seconds**), and a third cancelled at the user's instruction to hand
+> off. `/tmp/opencode/P6.S5-premise/report.md` was never created (verified by direct read: file not
+> found). **Write the brief only after a real artifact lands.** Two things it must resolve:
+>
+> - **The pivotal question is filter-in-system-prompt vs a transient `SkillPathNudge`-style channel**,
+>   and the deciding constraint is that `PromptStabilityTest` pins a stable PREFIX across turns — so
+>   per-turn-varying content placed in the system prompt breaks that contract by design. The transient
+>   channel is the shape that respects it; do not decide this from the brief alone.
+> - **F-PATHDIALECT is owed here** — reconcile `PathTrigger`'s glob dialect against
+>   `SkillRegistry::pathMatches()` / `legacyPathMatch()`; the two were never compared by the step that
+>   built either.
+>
+> **Cap arithmetic must be RE-DERIVED from the CURRENT caps, not copied from the skills-derived
+> 10,002,823-byte figure** above. Today `RuleLoader` caps at `MAX_FILES = 64` per directory over 3
+> walked dirs (`RuleLoader.php:151`, per-directory semantics confirmed by the `:102-110` arithmetic —
+> user `rules`, user `rulebooks`, project `rules`) plus an uncapped single root `RULES.md`
+> (`loadRootRules()` `:429-455`), with `MAX_FILE_BYTES = 65536` (`:170`). Do the sum from those, and
+> from whatever `SkillPathNudge`'s `MAX_ENTRIES`/`MAX_ENTRY_BYTES` are at the step's tip.
+
 **Concurrency (Phase 6)**
 - **Batch 1 (one, alone):** P6.S1 — new files only, but P6.S2 depends on it.
 - **Batch 2 (one, alone):** P6.S2 — everything else depends on it.
@@ -2339,6 +2419,13 @@ bytes stay under the cap and that the overflow is deferred, not lost. Record the
   S3's declared files because the guarded write door is census-pinned to exactly `{provider, theme}`. Run **P6.S3,
   then P6.S4, serially**; `RuleLoader.php` belongs to S3 exclusively while S3 is open, so **P6.S5 waits for S3 to
   merge** instead of contending for it. See the RULING under P6.S3.
+- **NOTE 2026-09-05 (premise check `standard-blush-ape`, after S3 merged):** **P6.S4 and the P6.S5
+  PREMISE CHECK may proceed in parallel** — they are disjoint: S4 touches
+  `LayeredSettings`/`Bootstrap`/`LayeredSettingsTest`/`docs/SETTINGS.md`, the S5 premise check reads
+  `RuleLoader`/`SkillPathNudge`. But **P6.S4 and P6.S5 themselves stay SERIAL** — S5's *build* wants
+  `RuleLoader.php`, and running the two builds concurrently is exactly the collision the bullet above
+  corrected. Launch the S5 premise check (read-only) alongside the S4 build; run the S5 build only
+  after S4 merges.
 
 ---
 
