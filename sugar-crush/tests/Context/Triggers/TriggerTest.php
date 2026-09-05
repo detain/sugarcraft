@@ -17,13 +17,14 @@ use SugarCraft\Crush\Context\Triggers\Trigger;
  * calls the real matcher/projector and asserts an exact bool/list/string/int,
  * both polarities, plus the pathological input the step is about.
  *
- * The core of the step — whole-word keyword anchoring (§4.20) — is pinned in
- * {@see self::testKeywordMatchesWholeWords()}, whose `rethinking`/`thinking`
- * /`bethinks` non-matches go red the instant the `/\b…\b/iu` anchoring is
- * weakened to a naive unanchored scan (the deletion experiment). The lifetime
- * dedup semantics derived in the KeywordTrigger docblock (per-word key,
- * instance scope, union-on-merge, fresh-on-withWords) are pinned with exact
- * bools and ledgers so any change of mechanism reddens a test.
+ * The core of the step — whole-word keyword anchoring (§4.20) — is pinned by
+ * {@see TriggerTest::testKeywordDoesNotMatchEmbeddedSubstrings()}: the fused
+ * forms that test rejects — `rethinking`, `thinking`, `bethinks` — go red the
+ * instant the `/\b…\b/iu` anchoring is weakened to a naive unanchored scan (the
+ * deletion experiment), while the punctuation/case positives pin the accepting
+ * side. The lifetime dedup semantics derived in the KeywordTrigger docblock
+ * (per-word key, instance scope, union-on-merge, fresh-on-withWords) are pinned
+ * with exact bools and ledgers so any change of mechanism reddens a test.
  */
 final class TriggerTest extends TestCase
 {

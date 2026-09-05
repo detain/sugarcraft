@@ -26,9 +26,9 @@ use InvalidArgumentException;
  *
  * GLOB DIALECT — one deliberate flavour, documented to the character:
  * - `**` spans anything including `/`. A double star followed by a separator
- *   matches zero or more whole leading segments, so the pattern
- *   "src/double-star-separator/test.php" matches "src/test.php" as well as
- *   "src/a/b/test.php".
+ *   matches zero or more whole leading segments, so the pattern made of "src/",
+ *   a double star, and "/test.php" matches "src/test.php" as well as
+ *   "src/a/b/test.php". (Prose: `**` touching `/` closes comments.)
  * - `*`   matches within ONE segment only — it never crosses `/`, so
  *   `src/*.php` does not match `src/deep/x.php`.
  * - `?`   matches exactly one non-`/` character.
