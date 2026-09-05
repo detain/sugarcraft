@@ -265,6 +265,27 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // one. User-tier for the same reason as the entry above: the file is
         // under `~`, so a repository cannot write it.
         'Chat.php|.sugar-crush/settings.json' => self::USER,
+        // The two sentences `/rules` prints when there is nothing to list: where
+        // a pack goes, and the older directory that holds packs too. Neither is a
+        // path this file reads or builds — same shape as the
+        // `Chat.php|.sugar-crush/config.json` entry above, which is only the
+        // transcript telling the operator where to put something. Rooted at `~`,
+        // so user-tier by the same rule as everything around it, and each is a
+        // SECOND occurrence of a path this inventory already knows from another
+        // file — which is the case the derivation keys per file precisely to catch.
+        'Commands/RulesCommand.php|.sugar-crush/rulebooks' => self::USER,
+        'Commands/RulesCommand.php|.sugar-crush/rules' => self::USER,
+        // The rulebook tier (Phase 6 P6.S3). Reused class, not a new one: the
+        // classification axis here is WHO CHOSE the path, not which loader opens
+        // it, and `~/.sugar-crush/rulebooks` is rooted at `~` exactly like the
+        // `teams` rows above and the rules-directory row it sits beside in
+        // `RuleLoader`. A cloned repository cannot place a file there, which is
+        // the whole test for this class — so the path stays OUT of
+        // `repositoryChosenPaths()` and out of both the feeder and the gap column.
+        // `RuleLoader::loadUserRulebooks()` anchors containment at the PARENT
+        // `$HOME/.sugar-crush`, the same boundary its sibling `loadUserRules()`
+        // uses, so this second directory adds no gate of its own.
+        'Context/RuleLoader.php|.sugar-crush/rulebooks' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json' => self::USER,
         'Cli/Help.php|.sugar-crush/config.json.' => self::USER,
         // The install path `sugarcrush completion fish` PRINTS, in a comment.
@@ -313,8 +334,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is THIRTY-FOUR occurrences — one per entry
-     * in {@see DOT_PATHS} — of TWENTY-FOUR distinct paths. SEVENTEEN of those
+     * APPEARS IN. On this tree that is THIRTY-SEVEN occurrences — one per entry
+     * in {@see DOT_PATHS} — of TWENTY-FIVE distinct paths. SEVENTEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FOURTEEN distinct paths — which is the figure
@@ -485,7 +506,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(24, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(25, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(14, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -494,14 +515,15 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('FOURTEEN repository-chosen', $enumeration);
-        self::assertStringContainsString('TWENTY-FOUR distinct', $enumeration);
+        self::assertStringContainsString('TWENTY-FIVE distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
         // Spelled out in words in the prose, so they are compared in words:
         // a digit here would pass against a paragraph that says something else.
-        $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO', 33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR'];
-        $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE', 24 => 'TWENTY-FOUR'];
+        $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO', 33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR',
+            35 => 'THIRTY-FIVE', 36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN'];
+        $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE', 24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN', 16 => 'SIXTEEN', 17 => 'SEVENTEEN'];
 
         $occurrences = \count(self::DOT_PATHS);

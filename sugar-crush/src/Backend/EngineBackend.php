@@ -12,6 +12,7 @@ use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
@@ -260,6 +261,24 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * before this. @see withMemoryStore()
          */
         private readonly ?MemoryStore $memoryStore = null,
+        /**
+         * The rule packs the CURRENT SESSION turned off with `/rules`, forwarded
+         * onto {@see App::$rulesState} on every {@see complete()} so the splice in
+         * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} subtracts them.
+         *
+         * This is the per-turn carry the skills already make with
+         * {@see $skills} at the `withEnabledSkills()` site below, and it exists for
+         * the same structural reason: this backend rebuilds the App from scratch on
+         * every turn, so anything that changes the prompt has to be re-attached
+         * here or it silently stops applying after the first turn.
+         *
+         * Null means no pack is turned off, which is what every caller that predates
+         * rulebooks gets. `withRulesState()` is how a launch installs one; the
+         * object is shared by reference rather than copied — see
+         * {@see \SugarCraft\Crush\Context\RulesState} for why a toggle made in
+         * `Chat` has to be visible to the instance that builds the next turn.
+         */
+        private readonly ?RulesState $rulesState = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -290,7 +309,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -298,7 +317,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -313,7 +332,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -325,13 +344,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -359,7 +378,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withPermissionGate(PermissionGate $permissionGate): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -432,7 +451,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withPermissionApprover(\Closure $approver): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $approver, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $approver, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -442,7 +461,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -456,7 +475,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withRoot(?string $root): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -465,12 +484,37 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withMemoryStore(?MemoryStore $memoryStore): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $memoryStore, $this->rulesState);
+    }
+
+    /**
+     * The session's rulebook toggle set. @see App::$rulesState
+     *
+     * A reader as well as a writer because one instance has to be reachable from
+     * both owners of the same set: {@see \SugarCraft\Crush\Chat} builds the box (or
+     * is handed the launch's) and this object reads it per turn, and a
+     * Ctrl+P provider switch rebuilds the backend wholesale — without a reader the
+     * new copy could not be given the old copy's set, and every pack the user
+     * turned off would come back on mid-session. Mirrors
+     * {@see permissionGate()}'s reason exactly.
+     */
+    public function rulesState(): ?RulesState
+    {
+        return $this->rulesState;
+    }
+
+    /**
+     * Install the launch's rulebook toggle set, for the per-turn carry
+     * {@see complete()} makes onto the App.
+     */
+    public function withRulesState(?RulesState $rulesState): self
+    {
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $rulesState);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -494,7 +538,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
     }
 
     /**
@@ -554,6 +598,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $app = App::new($this->provider, $this->model)
             ->withTools($this->tools)
             ->withEnabledSkills($this->skills)
+            // The P6.S3 rulebook toggle set, on the same per-turn carry the enabled
+            // skills ride. Read here rather than cached into the App at
+            // construction because this App is rebuilt every turn: the set is
+            // session state that `Chat` mutates between turns, and a value copied
+            // once at launch would freeze it for the whole session.
+            ->withRulesState($this->rulesState)
             ->withAvailableSkills($this->skillRegistry ?? new SkillRegistry())
             ->withInstructionLoader($this->instructionLoader)
             ->withRoot($this->root)

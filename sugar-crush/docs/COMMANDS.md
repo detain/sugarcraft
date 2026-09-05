@@ -22,7 +22,7 @@ Three tiers, merged by name, later overriding earlier
 
 | Tier | Source | `` !`cmd` `` allowed? |
 |---|---|---|
-| built-in | `CommandRegistry::all()` — 22 rows | n/a, they are PHP |
+| built-in | `CommandRegistry::all()` — 24 rows | n/a, they are PHP |
 | user | `~/.sugar-crush/commands/*.md` | yes |
 | project | `<root>/.sugar-crush/commands/*.md` | **only if this root is trusted** |
 

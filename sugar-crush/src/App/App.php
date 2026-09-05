@@ -25,6 +25,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -156,6 +157,30 @@ final class App implements Model
          * by a test or an embedder gets.
          */
         public readonly ?MemoryStore $memoryStore = null,
+        /**
+         * The rule packs THIS SESSION turned off, which the rules splice subtracts
+         * from what the loader found (P6.S3).
+         *
+         * Carried for the same reason {@see $memoryStore} and
+         * {@see $instructionLoader} are: {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()}
+         * assembles the prompt off this object and nothing else, so a fact that
+         * changes the prompt has to arrive on it.
+         *
+         * It is a reference to one shared object rather than a copied value —
+         * which is unlike every other field here — because the writer is
+         * {@see \SugarCraft\Crush\Chat} (the `/rules` command) and the reader is
+         * {@see \SugarCraft\Crush\Backend\EngineBackend} building THIS App fresh on
+         * every turn. A value field would have to be re-pushed into the backend on
+         * each toggle as well, and the two copies disagreeing is a silent bug: the
+         * symptom is a prompt carrying a pack the user just switched off. The
+         * reasoning, including what stays immutable despite this, is on
+         * {@see \SugarCraft\Crush\Context\RulesState}.
+         *
+         * Null leaves the prompt exactly as it was: no pack is turned off. That is
+         * what every App gets whose builder never heard of rulebooks — a test, an
+         * embedder, and the per-turn App of a launch that wired no rules state.
+         */
+        public readonly ?RulesState $rulesState = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -326,6 +351,21 @@ final class App implements Model
     public function withMemoryStore(?MemoryStore $v): self
     {
         return $this->mutate(memoryStore: $v);
+    }
+
+    /**
+     * The session's rulebook toggle set, forwarded to the rules splice.
+     *
+     * NOTE for anyone tempted to reach for this with a plain array: the operand is
+     * one shared object, and `mutate()` carries the reference. A frozen App that
+     * holds it therefore sees a toggle made after this App was built — which is
+     * the behaviour `/rules` exists to have, and is why the set is not copied in
+     * here the way {@see withEnabledSkills()} copies its list. See
+     * {@see \SugarCraft\Crush\Context\RulesState} for the two-owners argument.
+     */
+    public function withRulesState(?RulesState $v): self
+    {
+        return $this->mutate(rulesState: $v);
     }
 
     /**
@@ -1286,6 +1326,7 @@ final class App implements Model
             cols: array_key_exists('cols', $changes) ? $changes['cols'] : $this->cols,
             root: array_key_exists('root', $changes) ? $changes['root'] : $this->root,
             memoryStore: array_key_exists('memoryStore', $changes) ? $changes['memoryStore'] : $this->memoryStore,
+            rulesState: array_key_exists('rulesState', $changes) ? $changes['rulesState'] : $this->rulesState,
         );
     }
 }

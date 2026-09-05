@@ -2563,7 +2563,25 @@ final class Runtime
         // P6.S5 / P7.S4 wiring gates it (measured at P6.S2 review: YES, it
         // renders). Framing and escape are tier-blind, so this is a scoping
         // gap, not a safety gap; recorded as a row in prompt_plan §18.
-        $rules = (new RuleLoader($app->root ?? (getcwd() ?: '')))->load();
+        // P6.S3: the loader is handed the session's rulebook toggle set, which is
+        // the ONLY thing here that can subtract a pack. It travels on the App for
+        // the same reason the memory store below does - this method assembles the
+        // prompt off that object and nothing else - and the subtraction happens
+        // inside RuleLoader::load() rather than in a filter here, so the `/rules`
+        // listing and the prompt cannot disagree about which packs are on. A null
+        // set (every App that predates rulebooks, every embedder) loads exactly
+        // what it always did.
+        //
+        // The user tier now covers TWO directories - ~/.sugar-crush/rules and
+        // ~/.sugar-crush/rulebooks - both walked by the loader and both rendered
+        // behind this same fence with this same preamble, because both are the
+        // operator's own bytes: see the provenance note on
+        // RuleLoader::loadUserRulebooks() for why a rulebook is a tier `user` rule
+        // rather than a fourth tier.
+        $rules = (new RuleLoader(
+            $app->root ?? (getcwd() ?: ''),
+            rulesState: $app->rulesState,
+        ))->load();
 
         foreach ($rules as $rule) {
             if ($rule->tier !== 'user' || trim($rule->body) === '') {

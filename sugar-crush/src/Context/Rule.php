@@ -50,6 +50,20 @@ use SugarCraft\Crush\Support\Frontmatter;
  * consumer of a rule's `paths:` will see. The reconciliation of that split is
  * flagged for the orchestrator, not decided here.
  *
+ * NAME VERSUS KEY - two identifiers, because they answer two different
+ * questions and only one of them is stable. {@see $name} is what the file chose
+ * to be called (its `name:` frontmatter, falling back to the derived stem);
+ * {@see $key} is what the LOADER called it, always - the path relative to the
+ * tier directory minus `.md`. They are the same string for a file that names
+ * itself after nothing, and different the moment an operator writes
+ * `name: Terse Replies` into `rulebooks/terse.md`. The distinction is load-bearing
+ * from P6.S3 on: a pack is toggled by {@see $key} (`/rules terse`), because the
+ * thing the user types at a command has to be derivable from the directory
+ * listing alone, whereas {@see $name} is display text two files may legitimately
+ * share - which is exactly why {@see \SugarCraft\Crush\Context\RuleLoader} sorts
+ * on the key and not the name. Nothing here re-derives either: the loader
+ * computes the key once through `ruleKeyFor()` and threads it in.
+ *
  * IMMUTABILITY. The public shape is read-only properties (bare - there is no
  * `get*`); every `with*()` returns a NEW Rule through {@see mutate()}. Parsing
  * and validation happen ONCE, at {@see new()}, the boundary; {@see mutate()}
@@ -73,6 +87,17 @@ final class Rule
      * The three tiers, in load order (user -> project -> root). Kept as a
      * private const list so {@see new()} can parse-don't-validate the tier
      * operand at the boundary rather than trusting any string a caller spells.
+     *
+     * THREE, AND P6.S3 DID NOT ADD A FOURTH FOR RULEBOOKS. `~/.sugar-crush/rulebooks/`
+     * is a fourth DIRECTORY, but a tier here records WHO WROTE the bytes, because
+     * that is the only thing the prompt's framing can act on: the tier picks the
+     * fence and the authority preamble, and nothing else. A rulebook is written
+     * by the operator of this machine in their own home directory, which is
+     * exactly what `user` already means, so a `rulebook` value would be a
+     * directory name masquerading as an authority level - and it would render
+     * into a fence whose preamble lied about it. `user` is therefore the correct
+     * tier for a pack, not a shortcut: see the provenance paragraph on
+     * {@see \SugarCraft\Crush\Context\RuleLoader::loadUserRulebooks()}.
      */
     private const TIERS = ['user', 'project', 'root'];
 
@@ -85,6 +110,7 @@ final class Rule
      * @param bool             $enabled     Frontmatter `enabled:`; a rule with the key absent is enabled.
      * @param list<string>     $models      Model identifiers from `models:` (empty when the key is absent).
      * @param list<Trigger>    $triggers    The trigger value objects built from this file's frontmatter, in canonical order.
+     * @param string           $key         The loader's pack identity for this file - never derived from frontmatter, so a `name:` cannot move what `/rules` types.
      */
     private function __construct(
         public readonly string $name,
@@ -95,6 +121,7 @@ final class Rule
         public readonly bool $enabled,
         public readonly array $models,
         public readonly array $triggers,
+        public readonly string $key,
     ) {
     }
 
@@ -102,21 +129,29 @@ final class Rule
      * Build one rule by parsing a rules document.
      *
      * `::new()` is this value object's root factory (the same shape the P6.S1
-     * triggers use), and it doubles as the parse-and-validate boundary: the four
-     * operands are the resolved path, the tier, the raw file bytes, and the
-     * fallback name. This is where every frontmatter operand is checked, so the
-     * rest of the object can be trusted. `$fallbackName` is what a name-less
+      * triggers use), and it doubles as the parse-and-validate boundary: the
+      * operands are the resolved path, the tier, the raw file bytes, and the
+      * fallback name. This is where every frontmatter operand is checked, so the
+      * rest of the object can be trusted. `$fallbackName` is what a name-less
      * file falls back to (the loader derives it from the file's path relative
      * to its tier root, mirroring how {@see \SugarCraft\Crush\Commands\CommandLoader}
      * names a command from its path); it is required because a rule with
      * neither a `name:` nor any way to derive one cannot be de-duplicated or
      * reported on.
      *
+     * `$key` is the same derived string, kept as a separate operand because the
+     * name is allowed not to be it: `name:` is display text, the key is the
+     * identity a toggle addresses, and collapsing them would let an operator's
+     * `name: Terse Replies` silently move what `/rules terse` means. Null is a
+     * caller with no tier walk to derive an identity from - an embedder, a test
+     * - and gets the fallback, the one identifier this method already insists
+     * every rule has.
+     *
      * @throws InvalidArgumentException on a non-mapping frontmatter block, a
      *         non-string `name`/`description`/`models` entry, a non-boolean
      *         `enabled`, or an out-of-range `$tier` operand.
      */
-    public static function new(string $path, string $tier, string $content, string $fallbackName): self
+    public static function new(string $path, string $tier, string $content, string $fallbackName, ?string $key = null): self
     {
         if (!in_array($tier, self::TIERS, true)) {
             throw new InvalidArgumentException(sprintf(
@@ -128,6 +163,9 @@ final class Rule
         }
         if (trim($fallbackName) === '') {
             throw new InvalidArgumentException(sprintf('Rule needs a fallback name to derive an identifier from (%s).', $path));
+        }
+        if ($key !== null && trim($key) === '') {
+            throw new InvalidArgumentException(sprintf('Rule pack identity must not be blank when a caller supplies one (%s).', $path));
         }
 
         $meta = [];
@@ -159,6 +197,7 @@ final class Rule
             enabled: $enabled,
             models: $models,
             triggers: self::buildTriggers($meta, $description, $path),
+            key: $key ?? $fallbackName,
         );
     }
 
@@ -202,8 +241,17 @@ final class Rule
     // -- Immutable with*() builders ------------------------------------------
 
     /**
-     * The same rule toggled enabled/disabled - the primitive a later rulebook
-     * step builds on; here it lets a caller flip eligibility without reparsing.
+     * The same rule toggled enabled/disabled.
+     *
+     * P6.S3 adopted this as the runtime rulebook toggle:
+     * {@see \SugarCraft\Crush\Context\RulesState::effectiveRule()} is the one
+     * production caller, and it is the only way session state reaches a rule's
+     * eligibility. That matters for what the method may NOT be: a caller with a
+     * set of turned-off pack names could equally filter its rule list and skip
+     * this primitive, which would work for the splice and leave the `/rules`
+     * listing without any effective state to print. Going through here means the
+     * prompt and the listing read the same `enabled` bit, so the two cannot
+     * disagree about what the model is about to receive.
      */
     public function withEnabled(bool $enabled): self
     {
@@ -245,7 +293,7 @@ final class Rule
      * Reconstruct with selected fields replaced, trusting already-parsed state.
      * Only the fields that have a `with*()` builder are operands here; every
      * other field carries through unchanged, and the ones a builder cannot
-     * touch (identity `name`, source `path`/`tier`, and the read-only
+     * touch (identity `name` and pack identity `key`, source `path`/`tier`, and the read-only
      * `description`/`models` parsed once from the file) have no parameter to
      * get out of sync.
      */
@@ -263,6 +311,7 @@ final class Rule
             enabled: $enabled ?? $this->enabled,
             models: $this->models,
             triggers: $triggers ?? $this->triggers,
+            key: $this->key,
         );
     }
 

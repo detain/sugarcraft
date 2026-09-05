@@ -48,6 +48,7 @@ use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\McpAuthCommand;
+use SugarCraft\Crush\Commands\RulesCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
 use SugarCraft\Crush\Palette\PaletteAction;
@@ -70,6 +71,8 @@ use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
+use SugarCraft\Crush\Context\RuleLoader;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
@@ -221,6 +224,27 @@ final class Chat implements Model
      * {@see $compactor} is.
      */
     private readonly TokenTracker $tokenTracker;
+
+    /**
+     * The rule packs this SESSION turned off with `/rules` (P6.S3).
+     *
+     * Mutable and shared by object identity across every {@see mutate()} clone,
+     * exactly like {@see $tokenTracker} and for the same reason — a fresh instance
+     * per keystroke would reset the set and silently switch every pack back on the
+     * moment the user touched the keyboard. It is therefore passed through
+     * `mutate()`'s property list rather than rebuilt there.
+     *
+     * THE SAME OBJECT THE TURN'S BACKEND HOLDS. {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+     * builds one instance and hands it to both this Chat and the
+     * {@see \SugarCraft\Crush\Backend\EngineBackend} that assembles each turn's
+     * App, because the writer of a toggle (a command handled here) and the reader
+     * of it (the prompt splice, two layers inside the backend) are not in a call
+     * chain with each other. That is also why this is never null: a Chat built by
+     * an embedder or a test gets its own set, so `/rules` always has something to
+     * toggle and always answers with its own transcript line instead of the
+     * "not configured" degradation the optional collaborators above need.
+     */
+    private readonly RulesState $rulesState;
 
     /** @var AgentManager|null Agent manager for /agents command */
     private ?AgentManager $agentManager = null;
@@ -1049,6 +1073,17 @@ final class Chat implements Model
          * decision and are made in the same method.
          */
         private readonly bool $drainsRuntimeNotices = false,
+        /**
+         * The launch's rulebook toggle set, shared by reference with the backend
+         * that builds each turn's App. Null — which is every caller except
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} and a test that wants to
+         * observe a toggle from both sides — allocates a fresh empty set here, so
+         * `/rules` is never degraded for want of wiring.
+         *
+         * @see \SugarCraft\Crush\Chat::$rulesState for why one object is held by
+         *      two owners instead of a copy pushed to each.
+         */
+        ?RulesState $rulesState = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -1097,6 +1132,7 @@ final class Chat implements Model
 
         $this->compactor = new ContextCompactor($this->compactorConfig ?? CompactorConfig::new());
         $this->tokenTracker = $tokenTracker ?? new TokenTracker();
+        $this->rulesState = $rulesState ?? RulesState::new();
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
         $this->currentSessionId = $currentSessionId;
@@ -5012,6 +5048,20 @@ final class Chat implements Model
     }
 
     /**
+     * The session's rulebook toggle set — the state `/rules` reads and writes
+     * (P6.S3).
+     *
+     * Bare accessor, no `get`, per the project convention. Never null (see the
+     * property's doc-block for the reason), and it is THE SAME OBJECT the
+     * turn's backend holds on a real launch, which is what makes a toggle here
+     * reach the prompt with no push-back step.
+     */
+    public function rulesState(): RulesState
+    {
+        return $this->rulesState;
+    }
+
+    /**
      * The directory this session is rooted at, already resolved — the
      * configured {@see $projectRoot} (`--root`), else the process directory.
      *
@@ -5565,6 +5615,10 @@ final class Chat implements Model
             // is: it is the session's running spend, and a clone that allocated
             // a fresh tracker would zero the total on the next keystroke.
             'tokenTracker' => $this->tokenTracker,
+            // Carried by object identity like the two above it: this is the
+            // session's `/rules` toggle set, and a clone that allocated a fresh one
+            // would switch every pack back on at the next keystroke.
+            'rulesState' => $this->rulesState,
             'maxCostUsd' => $this->maxCostUsd,
             'summaryBackend' => $this->summaryBackend,
             'pendingCompactionId' => $this->pendingCompactionId,
@@ -6812,6 +6866,9 @@ final class Chat implements Model
             // — it is already on the screen — so every spelling gets a superset
             // of what it asked for rather than a "no such subcommand".
             'permissions' => $this->handlePermissionsCommand($text),
+            // Both forms reach the same arm, and the bare one is why this is NOT in
+            // the bare-only block above: `/rules` lists, `/rules terse` toggles.
+            'rules' => $this->handleRulesCommand($text),
             'compact' => $this->handleCompactCommand($text),
             'budget' => $this->handleBudgetCommand($text),
             'workflow' => $this->handleWorkflowCommand($text),
@@ -8340,6 +8397,69 @@ final class Chat implements Model
      * @return array{0:Chat,1:?\Closure}
      */
     private function agentsResponse(string $inputBuf, string $response): array
+    {
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+        return [$next, null];
+    }
+
+    /**
+     * `/rules` — list the operator's rule packs, or toggle one for this session
+     * only (prompt_plan.md P6.S3).
+     *
+     * The shape is {@see handleAgentsCommand()}'s, including the two parts that
+     * look incidental: the output is captured with `ob_start()` because
+     * {@see \SugarCraft\Crush\Commands\RulesCommand} writes to stdout, and a
+     * non-zero exit goes through {@see commandFailureResponse()} so a bad pack
+     * name lands in the transcript as a `Role::System` notice rather than as an
+     * assistant reply the provider would be shown on the next turn.
+     *
+     * NO "not configured" degradation, unlike the agents handler above it. The two
+     * collaborators this needs are ones a Chat always has: {@see $rulesState} is
+     * allocated in the constructor when nobody injects one, and the loader is built
+     * here against {@see projectRoot()} — the same resolution the prompt splice
+     * uses, so the listing and the prompt cannot be looking at different
+     * directories. Walking per COMMAND rather than caching per keystroke is the
+     * right trade here: the walk happens once when the user asks, and a pack file
+     * dropped in mid-session shows up immediately, which is the behaviour an
+     * operator editing those files expects.
+     *
+     * THE STATE MUTATION AND THE HISTORY WRITE ARE THE SAME STEP. `execute()`
+     * mutates the shared {@see RulesState} in place and the returned Chat carries
+     * the same object, so there is nothing to thread through `mutate()`'s changes
+     * array and no window in which the transcript says one thing about a pack and
+     * the next prompt says another. It also means a toggle survives the next
+     * `mutate()` by identity, which is what the session-scoped-but-not-volatile
+     * property rests on.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleRulesCommand(string $inputBuf): array
+    {
+        $afterCommand = ltrim(mb_substr(trim($inputBuf), mb_strlen('/rules')));
+        $args = $afterCommand !== '' ? (preg_split('/\s+/', $afterCommand) ?: []) : [];
+
+        ob_start();
+        $rulesCommand = new RulesCommand(new RuleLoader($this->projectRoot()), $this->rulesState);
+        $exitCode = $rulesCommand->execute($this, $args);
+        $output = ob_get_clean();
+
+        if ($exitCode !== 0) {
+            return $this->commandFailureResponse($inputBuf, $output, $exitCode);
+        }
+
+        return $this->rulesResponse($inputBuf, $output);
+    }
+
+    /**
+     * Return a rules command response, adding both user command and assistant response to history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function rulesResponse(string $inputBuf, string $response): array
     {
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputBuf), Message::assistant($response)],
