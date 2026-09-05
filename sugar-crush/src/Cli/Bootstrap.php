@@ -20,6 +20,7 @@ use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookConfig;
@@ -991,8 +992,29 @@ final class Bootstrap
         // survive the statement — see the `commandLoader:` argument below.
         $commandLoader = new CommandLoader();
 
+        // ONE set, TWO OWNERS (P6.S3). `Chat` is the only thing that writes it (the
+        // `/rules` command is handled there) and `EngineBackend` is the only thing
+        // that reads it (it builds each turn's `App`, and the rules splice subtracts
+        // what the App carries). Neither is in a call chain with the other, so the
+        // instance is created here and handed to both — which is the same reason
+        // {@see tools()} shares one guard chain and {@see agentRoster()} one manager
+        // across the launch: two copies would be two sources of truth about which
+        // packs the operator just switched off, and the failure is silent.
+        //
+        // Guarded by `instanceof` because {@see backend()} answers `Backend`, and a
+        // launch configured to shell out to an external binary returns a
+        // {@see \SugarCraft\Crush\Backend\CommandBackend} that builds no prompt at
+        // all. On that path the toggle still records the session's intent and still
+        // lists correctly, but it cannot change bytes this process never assembles —
+        // stated rather than left to be discovered.
+        $rulesState = RulesState::new();
+        $backend = self::backend($root, $skills, $permissionGate);
+        if ($backend instanceof EngineBackend) {
+            $backend = $backend->withRulesState($rulesState);
+        }
+
         $chat = new Chat(
-            backend: self::backend($root, $skills, $permissionGate),
+            backend: $backend,
             memoryStore: self::memoryStore(),
             sessionStore: $sessionStore,
             currentSessionId: $sessionId,
@@ -1090,6 +1112,10 @@ final class Bootstrap
             // polled would steal rows rather than duplicate them — and this
             // method is the only place in `src/` that does either.
             drainsRuntimeNotices: true,
+            // The instance the backend above got too — see the block there. This is
+            // the argument that makes `/rules` reach the prompt rather than merely
+            // decorate the transcript.
+            rulesState: $rulesState,
         );
 
         // Drained AFTER construction for the same reason the workflow registry's

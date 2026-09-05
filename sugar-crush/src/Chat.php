@@ -70,6 +70,7 @@ use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Session\SessionStore;
@@ -221,6 +222,27 @@ final class Chat implements Model
      * {@see $compactor} is.
      */
     private readonly TokenTracker $tokenTracker;
+
+    /**
+     * The rule packs this SESSION turned off with `/rules` (P6.S3).
+     *
+     * Mutable and shared by object identity across every {@see mutate()} clone,
+     * exactly like {@see $tokenTracker} and for the same reason — a fresh instance
+     * per keystroke would reset the set and silently switch every pack back on the
+     * moment the user touched the keyboard. It is therefore passed through
+     * `mutate()`'s property list rather than rebuilt there.
+     *
+     * THE SAME OBJECT THE TURN'S BACKEND HOLDS. {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+     * builds one instance and hands it to both this Chat and the
+     * {@see \SugarCraft\Crush\Backend\EngineBackend} that assembles each turn's
+     * App, because the writer of a toggle (a command handled here) and the reader
+     * of it (the prompt splice, two layers inside the backend) are not in a call
+     * chain with each other. That is also why this is never null: a Chat built by
+     * an embedder or a test gets its own set, so `/rules` always has something to
+     * toggle and always answers with its own transcript line instead of the
+     * "not configured" degradation the optional collaborators above need.
+     */
+    private readonly RulesState $rulesState;
 
     /** @var AgentManager|null Agent manager for /agents command */
     private ?AgentManager $agentManager = null;
@@ -1049,6 +1071,17 @@ final class Chat implements Model
          * decision and are made in the same method.
          */
         private readonly bool $drainsRuntimeNotices = false,
+        /**
+         * The launch's rulebook toggle set, shared by reference with the backend
+         * that builds each turn's App. Null — which is every caller except
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} and a test that wants to
+         * observe a toggle from both sides — allocates a fresh empty set here, so
+         * `/rules` is never degraded for want of wiring.
+         *
+         * @see \SugarCraft\Crush\Chat::$rulesState for why one object is held by
+         *      two owners instead of a copy pushed to each.
+         */
+        ?RulesState $rulesState = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -1097,6 +1130,7 @@ final class Chat implements Model
 
         $this->compactor = new ContextCompactor($this->compactorConfig ?? CompactorConfig::new());
         $this->tokenTracker = $tokenTracker ?? new TokenTracker();
+        $this->rulesState = $rulesState ?? RulesState::new();
         $this->memoryStore = $memoryStore;
         $this->sessionStore = $sessionStore;
         $this->currentSessionId = $currentSessionId;
@@ -5012,6 +5046,20 @@ final class Chat implements Model
     }
 
     /**
+     * The session's rulebook toggle set — the state `/rules` reads and writes
+     * (P6.S3).
+     *
+     * Bare accessor, no `get`, per the project convention. Never null (see the
+     * property's doc-block for the reason), and it is THE SAME OBJECT the
+     * turn's backend holds on a real launch, which is what makes a toggle here
+     * reach the prompt with no push-back step.
+     */
+    public function rulesState(): RulesState
+    {
+        return $this->rulesState;
+    }
+
+    /**
      * The directory this session is rooted at, already resolved — the
      * configured {@see $projectRoot} (`--root`), else the process directory.
      *
@@ -5565,6 +5613,10 @@ final class Chat implements Model
             // is: it is the session's running spend, and a clone that allocated
             // a fresh tracker would zero the total on the next keystroke.
             'tokenTracker' => $this->tokenTracker,
+            // Carried by object identity like the two above it: this is the
+            // session's `/rules` toggle set, and a clone that allocated a fresh one
+            // would switch every pack back on at the next keystroke.
+            'rulesState' => $this->rulesState,
             'maxCostUsd' => $this->maxCostUsd,
             'summaryBackend' => $this->summaryBackend,
             'pendingCompactionId' => $this->pendingCompactionId,
