@@ -776,7 +776,11 @@ final class PromptStabilityTest extends TestCase
      * (its 414 B header) and {@see \SugarCraft\Crush\Skills\SkillMatcher}
      * (its 41 B caption), plus the file-count arithmetic `RepoMapBlock`
      * performs. Four of this plan's later steps are licensed to edit exactly
-     * that prose. MEASURED: changing `'A map of where code lives'` to
+     * that prose. RE-MEASURED 2026-09-05 (P5.S6): the production side became
+     * 1,568 when Runtime's authority preamble (280 B) plus its blank-line
+     * separator (2 B) landed inside the project-instructions fence; the
+     * 1,286 above is the pre-P5.S6 figure and is kept as the historical
+     * baseline the surrounding measurement notes were written against. MEASURED: changing `'A map of where code lives'` to
      * `'A map of where the code lives'` in `RepoMapBlock` — four bytes, no
      * behaviour — red this constant at 1,579, under a failure message offering
      * two causes ("a layer moved out from between the fences" / "this file's
@@ -801,10 +805,15 @@ final class PromptStabilityTest extends TestCase
      * message would list the three possible repairs; a menu is not a name, and
      * the offsets to tell them apart were already in the test.
      */
-    private const STABLE_LAYERS_BYTES = 1575;
+    // MEASURED 2026-09-05 at P5.S6: 1,575 -> 1,857. One mover only: the
+    // project-instructions layer grew by the authority preamble Runtime now
+    // renders inside every fence (280 B + 2 B separator; this fixture carries
+    // one document). Sum identity with STABLE_LAYER_WIDTHS re-verified.
+    private const STABLE_LAYERS_BYTES = 1857;
 
     /**
-     * The same 1,575 bytes as {@see STABLE_LAYERS_BYTES}, split per layer, so a
+     * The same 1,857 bytes (post-P5.S6; 1,575 before) as
+     * {@see STABLE_LAYERS_BYTES}, split per layer, so a
      * width that moves names the layer AND the code that authored the bytes.
      *
      * Keyed by the layer's marker, in assembly order; the value is the byte
@@ -818,11 +827,16 @@ final class PromptStabilityTest extends TestCase
      *   | layer                    | width | fixture | production, and by whom |
      *   |--------------------------|------:|--------:|-------------------------|
      *   | `<repo-map>`             |   727 |      19 |  708  RepoMapBlock header + PSR-4 note + entry formatting + fences |
-     *   | `<project-instructions>` |   139 |      90 |   49  the two fence spellings |
+     *   | `<project-instructions>` |   421 |      90 |  331  the fence spellings + P5.S6 authority preamble (280 B) + separator |
      *   | `<project-memory>`       |   518 |      51 |  467  MemoryBlock header + `- [pattern] ` + fences |
      *   | `## Skill: prefix-demo`  |    73 |      59 |   14  Skill::systemPromptContribution()'s heading |
      *   | the skill listing        |   118 |      70 |   48  SkillMatcher's caption + `- `/`: ` |
-     *   | **total**                | 1,575 |     289 | 1,286 |
+     *   | **total**                | 1,857 |     289 | 1,568 |
+     *
+     * The `project-instructions` row is MEASURED 2026-09-05 (P5.S6): the
+     * pre-preamble take of it was 139/90/49, recorded 2026-08-31; the whole
+     * delta of 282 bytes sits on the production side because the preamble is
+     * harness-authored bytes rendered inside the fence, not fixture content.
      *
      * The widths sum to {@see STABLE_LAYERS_BYTES} and that identity is
      * asserted, so the two constants cannot drift apart silently. The `fixture`
@@ -832,7 +846,7 @@ final class PromptStabilityTest extends TestCase
      */
     private const STABLE_LAYER_WIDTHS = [
         '<repo-map>' => 727,
-        '<project-instructions>' => 139,
+        '<project-instructions>' => 421,
         '<project-memory>' => 518,
         '## Skill: prefix-demo' => 73,
         'Available skills (invoke via Skill tool):' => 118,
@@ -889,7 +903,7 @@ final class PromptStabilityTest extends TestCase
      */
     private const STABLE_LAYER_OWNERS = [
         '<repo-map>' => 'SugarCraft\\Crush\\Context\\RepoMapBlock',
-        '<project-instructions>' => 'SugarCraft\\Crush\\Runtime (the fence spellings only)',
+        '<project-instructions>' => 'SugarCraft\\Crush\\Runtime (the fence spellings and the P5.S6 authority preamble)',
         '<project-memory>' => 'SugarCraft\\Crush\\Context\\MemoryBlock',
         '## Skill: prefix-demo' => 'SugarCraft\\Crush\\Skills\\Skill::systemPromptContribution()',
         'Available skills (invoke via Skill tool):' => 'SugarCraft\\Crush\\Skills\\SkillMatcher',
