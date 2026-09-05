@@ -152,10 +152,12 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * SEVEN files and only THREE of the seven are genuinely tree-wide, so it buys
  * three members at the price of four wrong ones and of a roster nobody can
  * check by reading. The ones it gets right are declared by hand instead, in
- * {@see DECLARED_TREE_WIDE_GUARDS} - which now holds FOUR rows rather than the
- * three that rule promoted correctly, because `BaseSystemPromptTest.php` was
- * later reclassified into it for an unrelated and separately measured reason. The
- * sentence used to say "the three it gets right are declared by hand", which read
+ * {@see DECLARED_TREE_WIDE_GUARDS} - which holds THREE rows, the three that
+ * rule promoted correctly, after `BaseSystemPromptTest.php`'s row was reclassified
+ * into it for an unrelated and separately measured reason and then RETIRED again
+ * once the P6.S2 fixture-home chmod walk gave channel B a resolvable recursive
+ * site in that file (the row's warrant, and the retraction, are both recorded in
+ * the WALKS_A_DIRECTORY_THE_TEST_MADE doc-block below). The sentence used to say "the three it gets right are declared by hand", which read
  * as though the constant WAS those three. Each row carries its own reason, which
  * is rule 15's
  * actual instruction: derive what can be derived, and declare the remainder
@@ -457,11 +459,13 @@ final class TreeWideGuardRosterTest extends TestCase
      * EVERY ROW HAS THE SAME CAUSE, and it is stated rather than implied: the
      * root reaches the walker through a function PARAMETER, and parameter taint
      * is not in the derivation for the measured reason the class doc-block
-     * gives. A human has read each of these FOUR ROWS and confirmed the walk is
+     * gives. A human has read each of these THREE ROWS and confirmed the walk is
      * over the package's own files. (This said "each of these three" and was
      * correct until `BaseSystemPromptTest.php` was reclassified into the constant
      * a commit later - the sentence did not travel with the row it describes.
-     * MEASURED at HEAD: four rows, and `why` agrees with declared = 4.)
+     * MEASURED at that HEAD: four rows, and `why` agreed with declared = 4. It
+     * said FOUR until P6.S2 retired that row the other way; MEASURED here, three
+     * rows and `why` agrees at 3.)
      *
      * THAT USED TO CITE "rule 40" AND NO SUCH RULE EXISTS. WHAT IT SAID: "which
      * is rule 40". WHAT IS TRUE: prompt_plan.md's section 16.8 rule 40 is "a
@@ -520,35 +524,6 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/ProjectTierRefusalInventoryTest.php' => 'dotPathsIn() takes src/ as a parameter and walks it recursively',
         // phpFilesUnder($root . '/src') where $root = \dirname(__DIR__).
         'DenialPrefixRosterTest.php' => 'phpFilesUnder() takes src/ as a parameter and walks it recursively',
-        // RECLASSIFIED FROM local TO tree-wide, and the reason it was local was
-        // MEASURED FALSE. copyTree() walks `tests/fixtures/prompt/tree` - inside
-        // the package - and this row used to sit in
-        // WALKS_A_DIRECTORY_THE_TEST_MADE on the argument that "if a step ever
-        // adds a file under that fixture tree, the golden prompt tests are what
-        // catch it". They do not, on any tree that has run the suite once:
-        // ensureFixtureRepo() caches the copy at
-        // `tests/../vendor/prompt-fixture/system-repo` and returns early when
-        // its `.git` exists, so copyTree() never runs again. MEASURED by a
-        // reviewer: adding a file under that fixture tree left
-        // `vendor/bin/phpunit tests/BaseSystemPromptTest.php` at
-        // `OK (15 tests, 179 assertions)`, byte-identical to baseline. RE-MEASURED
-        // HERE, all three states, because the pair that stood in this comment -
-        // "with the cache cleared FIRST, baseline is OK (49 tests, 601
-        // assertions)" - cannot be true of a file that declares 15 test methods
-        // and no data provider, and I shipped it without deriving it:
-        //     cache warm                            OK (15 tests, 179 assertions)
-        //     cache cleared                         OK (15 tests, 195 assertions)
-        //     cache cleared + one file added under
-        //     tests/fixtures/prompt/tree            Tests: 15, Assertions: 195,
-        //                                           Failures: 1, at
-        //                                           BaseSystemPromptTest.php:672
-        // The 49/601 was wrong; the ARGUMENT it was supporting is right and the
-        // corrected figures make it sharper - the walk is masked by its own
-        // vendor/ cache (179 vs 195 assertions is the masking, measured), and it
-        // unmasks the moment the cache is cleared. By this roster's stated
-        // criterion the walk qualifies, and it is declared rather than argued
-        // away.
-        'BaseSystemPromptTest.php' => 'copyTree() takes a fixture tree inside tests/ as a parameter; the golden guard it delegated to is masked by ensureFixtureRepo()\'s vendor/ cache',
     ];
 
     /**
@@ -571,11 +546,16 @@ final class TreeWideGuardRosterTest extends TestCase
      * are what catch it" if a step adds a file under that tree. A reviewer
      * MEASURED that false - `ensureFixtureRepo()` caches the copy under
      * `vendor/` and returns early, so the golden guard is masked on every
-     * sandbox that has run the suite once - and the file is now in
-     * {@see DECLARED_TREE_WIDE_GUARDS}, where its full reason is recorded. Both
-     * of its walker sites, the fixture copy AND the `removeTree()` teardown, are
-     * covered by that declaration: a file declared tree-wide is IN the roster,
-     * so this bucket stops asking about it.
+     * sandbox that has run the suite once. The file then joined
+     * {@see DECLARED_TREE_WIDE_GUARDS} for exactly that reason, and P6.S2
+     * RETIRED the row: the fixture-home chmod walk added a recursive site whose
+     * local variable the derivation's channel B can resolve, and MEASURED here,
+     * `derivation()['why']['BaseSystemPromptTest.php']` now names both
+     * `RecursiveDirectoryIterator($home,...)` and `removeTree()`'s
+     * `RecursiveDirectoryIterator($dir,...)` - the file is IN the roster on the
+     * derivation's own reading, which is also why the un-answered `scandir($source)`
+     * copy site stays out of this bucket: a file already in the roster, by
+     * derivation or by declaration, stops being asked about here.
      *
      * MAINTENANCE, said plainly so nobody guesses: a new row here is a
      * one-line HUMAN classification, and it is required precisely because the
@@ -2032,14 +2012,17 @@ final class TreeWideGuardRosterTest extends TestCase
         );
 
         // AND ITS SIZE IS PINNED, which is what lets the two paragraphs above
-        // say FOUR out loud. Same reasoning as the sibling constants: the loop
+        // say THREE out loud. Same reasoning as the sibling constants: the loop
         // below is a `foreach`, so a deleted row is one fewer iteration and one
         // fewer chance to fail. This is the ONE size in this file written in
         // prose AND owned by an assertion; the rest are derived at the point of
         // use or are before/after pairs - see THE POPULATIONS ARE NOT PINNED IN
         // PROSE.
+        // Moved 4 -> 3 at P6.S2, in the same change-set that retired the
+        // `BaseSystemPromptTest.php` row (warrant and retraction recorded in the
+        // WALKS_A_DIRECTORY_THE_TEST_MADE doc-block), as this message demands.
         $this->assertCount(
-            4,
+            3,
             self::DECLARED_TREE_WIDE_GUARDS,
             'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
             . 'deliberate act that belongs in the same change-set as this count; removing one '

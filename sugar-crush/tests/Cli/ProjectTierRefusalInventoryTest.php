@@ -765,18 +765,6 @@ final class ProjectTierRefusalInventoryTest extends TestCase
                 \SugarCraft\Crush\Tests\Agents\WorktreeIncludeContainmentTest::class,
                 ['within'],
             ],
-            // The three-tier rules surface (Phase 6 P6.S2). Dormant: `Runtime` does
-            // not construct `RuleLoader` until the `<user-rules>` fence ships, so
-            // nothing in `src/` builds it yet. It holds the repository-chosen
-            // `.sugar-crush/rules`, so it carries the same `below` (directory
-            // anchor) + `within` (per-entry) gate pair as `CommandLoader`; the move
-            // to wiredHolders() when it acquires a caller keeps both gates, exactly
-            // as the `custom commands` row below records for that precedent.
-            'rule files' => [
-                'src/Context/RuleLoader.php',
-                \SugarCraft\Crush\Tests\Context\RuleLoaderContainmentTest::class,
-                ['below', 'within'],
-            ],
         ];
     }
 
@@ -810,6 +798,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             'custom commands' => [
                 'src/Commands/CommandLoader.php',
                 \SugarCraft\Crush\Tests\Support\CommandLoaderContainmentTest::class,
+                ['below', 'within'],
+            ],
+            // Left dormantHolders() when P6.S2 rulings D1/D2 shipped: `Runtime`
+            // now constructs `RuleLoader` at the single prompt-sections
+            // construction site, so the three-tier rules surface has a
+            // production caller. Same tuple, deliberately — the gate
+            // requirement is keyed to holding the repository-chosen
+            // `.sugar-crush/rules` directory, not to being dormant, so the move
+            // keeps the `below` (directory anchor) + `within` (per-entry) pair
+            // the row carried while it was dormant, exactly as the
+            // `custom commands` precedent above records.
+            'rule files' => [
+                'src/Context/RuleLoader.php',
+                \SugarCraft\Crush\Tests\Context\RuleLoaderContainmentTest::class,
                 ['below', 'within'],
             ],
         ];
