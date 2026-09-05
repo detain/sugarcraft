@@ -253,6 +253,14 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P6.S1 BOOKKEEPING CORRECTIONS — 2026-09-05 — status: done
+
+**CORRECTIONS** three stale counts in `prompt_resume.md`, committed as `b8dd324ca`: §0 "twelve phases (0-11) and 63 steps" → 64, with that same sentence's progress enumeration brought current (Phases 0-5 closed, Phase 6 in progress, Phases 7-11 remain); §R's §8 required-fields template line `Steps done: <N> of 62` → `<N> of 64`; §3's lead-in numeral "Ten things a fresh agent needs…" dropped to "Things a fresh agent needs…" because the list is 13 long and the numeral rotted on every addition. Diff audit: three hunks, four lines, every other byte of the file unchanged, verified by diff against a saved pre-edit copy.
+**WHY §R PERMITS THIS** §R locks §0 and §3 against substance rewrites but authorizes fixing errors inside the verbatim-locked sections provided the fix is recorded — that record is this entry plus the commit message. The §R template line was the load-bearing one: a fresh agent copying §R literally would have written the wrong total forever.
+**ALSO LANDED** the P6.S1 step entry immediately below (`2b01f1c0b`) and the §8 resume rewrite (`cbc0df024`) are both on master, so the step, its record and the pointer file now agree at 37 of 64. Figures are not restated here — read them in the P6.S1 entry.
+**ROUTING LESSON, NOW MEASURED** the `scribe` agent blanked SEVEN consecutive times across two sessions writing exactly this bookkeeping, while `coder` completed it first try. Route documentation-with-git work to `coder` after two `scribe` blanks; a blank return still means resume the same agent (up to ~10 times), never accept it as a result.
+**P6.S2 BRIEF + PLAN AMENDMENT NOW EXIST** `prompt_kit/briefs/P6.S2-step-brief.md` and the `prompt_plan.md` amendment creating `### P6.S2b` landed in the next commit, closing the "neither exists yet — writing them is the immediate next action" gap recorded in §8 and in the P6.S1 entry below.
+
 ### P6.S1 — 2026-09-05 — status: done (37 of 64; Phase 6 step 1 of 5) "The trigger union"
 
 **GOAL** the trigger union — four new context-trigger classes under `src/Context/Triggers/`, shipped unwired by design; no prompt content changes.
