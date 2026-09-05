@@ -355,11 +355,14 @@ final class PromptSectionTest extends TestCase
      *
      * DELETION EXPERIMENT (re-run at this fix; the red is quoted in the step's
      * worklog entry): removing 'harness-injected' from PromptFence::TAGS stops
-     * the pattern matching, so escape() hands the raw bytes straight back and
-     * every value assert below goes red — PHPUnit names the first one and stops.
-     * The reddening instruments sit at three different levels: this guard reads
-     * the roster through escape() alone and never touches a splice; the two
-     * whole-roster pins read the array as a list; and the assembler-level guard
+     * the pattern matching, so escape() hands the raw bytes straight back and the
+     * four polarity pins below go red — PHPUnit names the first one and stops.
+     * The two guards beside them stay green on purpose: idempotence still holds on
+     * raw bytes, and polarity two asserts that near-miss markup never matched in
+     * the first place. The reddening instruments sit at three different levels:
+     * this guard reads the roster through escape() alone and never touches a
+     * splice; the two whole-roster pins read the array as a list; and the
+     * assembler-level guard
      * testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()
      * is the one that proves the defang over the production splice.
      */
