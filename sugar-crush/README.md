@@ -677,7 +677,7 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
 `/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/permissions`
-`/rename` `/rewind` `/sessions` `/share` `/theme` `/websearch` `/workflow`
+`/rename` `/rewind` `/rules` `/sessions` `/share` `/theme` `/websearch` `/workflow`
 `/exit` (`/quit`).
 
 The parenthesised spellings are aliases: they dispatch, but they have no
