@@ -395,6 +395,56 @@ final class RuleLoaderTest extends TestCase
         self::assertStringContainsString((string) ($ceiling + 1), $overSkip, 'the refusal quotes the file\'s real byte count');
     }
 
+    public function testTheByteCeilingBoundsTheRootRulesFileToo(): void
+    {
+        // P6.S2 fix 2 (NIT-4): the pair above covers the directory tier.
+        // loadRootRules() reaches the SAME readRule() by its own route (a bare
+        // file, no walk, no key derivation), and until now nothing in the suite
+        // had ever put a RULES.md at the ceiling - so a ceiling that bound one
+        // tier and not the other would have stayed invisible. RULES.md is the
+        // single file an untrusted clone is most likely to ship fat, which makes
+        // this the tier the bound most needs to hold on.
+        $ceiling = (new ReflectionClass(RuleLoader::class))->getConstant('MAX_FILE_BYTES');
+        self::assertIsInt($ceiling);
+
+        $root = $this->sandbox . '/repo-root-bytes';
+        mkdir($root, 0o755, true);
+        $rulesFile = $root . '/RULES.md';
+        $prefix = "---\nname: rootpadded\n---\n";
+
+        // Just-under: the boundary is `>`, so a file whose byte size equals the
+        // ceiling is admitted whole.
+        $this->emitRule($rulesFile, $prefix . str_repeat('x', $ceiling - strlen($prefix) - 1) . "\n");
+        self::assertSame($ceiling, filesize($rulesFile), 'the just-under RULES.md is exactly at the ceiling in real bytes');
+        $underLoader = new RuleLoader($root);
+        self::assertSame(['rootpadded'], $this->ruleNames($underLoader->loadRootRules()), 'a RULES.md at the ceiling loads');
+        self::assertSame([], $underLoader->skippedFiles(), 'an admitted RULES.md leaves the skip ledger empty');
+        self::assertSame([], $underLoader->refusedPaths(), 'and nothing here is a containment event');
+
+        // Just-over: one byte past, refused on the stat, before the read.
+        $this->emitRule($rulesFile, $prefix . str_repeat('y', $ceiling - strlen($prefix)) . "\n");
+        // Same path rewritten, so the stat cache must be dropped or the size
+        // assertion below would re-measure the previous file.
+        clearstatcache(true, $rulesFile);
+        self::assertSame($ceiling + 1, filesize($rulesFile), 'the just-over RULES.md is one byte past the ceiling in real bytes');
+
+        $loader = new RuleLoader($root);
+        self::assertSame([], $this->ruleNames($loader->loadRootRules()), 'the oversized RULES.md is refused whole, not truncated');
+
+        $skipped = $loader->skippedFiles();
+        self::assertCount(1, $skipped, 'the refusal is recorded, not silently skipped');
+        self::assertSame(
+            [realpath($rulesFile)],
+            array_keys($skipped),
+            'the ledger keeps the resolved path as its key - same path => reason shape the directory tiers use',
+        );
+        $reason = (string) reset($skipped);
+        self::assertStringContainsString('byte', $reason, 'recorded as a byte-ceiling skip');
+        self::assertStringContainsString((string) ($ceiling + 1), $reason, 'the refusal quotes the file\'s real byte count');
+        self::assertStringContainsString((string) $ceiling, $reason, 'and the ceiling it exceeded');
+        self::assertSame([], $loader->refusedPaths(), 'a byte-ceiling skip is not a containment refusal');
+    }
+
     // -- Rule value object immutability / fail-fast ---------------------------
 
     public function testWithReturnsANewInstanceAndLeavesTheOriginalUntouched(): void
