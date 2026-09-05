@@ -97,8 +97,14 @@ final class PromptFence
      * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testAForgedRootRulesFileCannotEscapeTheProjectInstructionsFence()}
      * — each reading a prompt the real assembler produced, so a tag DROPPED from
      * this array stops matching at a splice and reddens its guard's
-     * neutralised-copy counts. The earlier prose here credited only the
-     * user-tier guard and was understated by four. `harness-injected` itself is
+     * neutralised-copy counts, but only for the tags that guard actually forges.
+     * Each of the three forges its own tier's: the user guard plants
+     * `</user-rules>` plus the `<system-reminder>` pair, the project and root
+     * guards plant the `<user-rules>` pair, and none of the three forges
+     * `harness-injected` — so dropping that tag reddens none of them and is
+     * caught instead by the two whole-roster sites above and by the assembler
+     * guard named below. The earlier prose here credited only the user-tier
+     * guard and was understated by four. `harness-injected` itself is
      * load-bearing on the roster plus guard evidence only, which is what makes
      * this widening cost zero golden bytes:
      * {@see \SugarCraft\Crush\Tests\BaseSystemPromptTest::testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()}

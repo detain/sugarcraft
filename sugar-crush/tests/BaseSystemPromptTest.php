@@ -1439,6 +1439,10 @@ final class BaseSystemPromptTest extends TestCase
      *      Runtime::systemPromptSections() — the same four assertions flip the
      *      same way, because this test reads the prompt the real assembler
      *      produced and names escape() nowhere in its body.
+     * PHPUnit reports the FIRST failure of a test and stops, so either row prints
+     * one red assertion rather than four: row 1 was re-run at this fix and reddens
+     * at the live-opener count in (1). "All four" above names the assertions the
+     * revert leaves non-viable, not the failures a single run shows.
      * Row 2 is this step's check on P6.S2 review cycle 2 rather than a new
      * obligation: that splice was unpinned there and is pinned by the project-
      * and root-tier guards above, and it held.

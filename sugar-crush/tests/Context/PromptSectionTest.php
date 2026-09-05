@@ -321,17 +321,26 @@ final class PromptSectionTest extends TestCase
         }
     }
 
+    /**
+     * The opener mirror of testEscapeRewritesTheClosingTagOfEveryRosterFence(),
+     * and derived from the roster for the same reason. The first draft of this
+     * test hand-wrote one `assertSame` per tag, so a future tag was silently
+     * UNDER-covered until someone remembered to add its line: MEASURED at this
+     * tip, a placeholder eighth tag in `PromptFence::TAGS` with both whole-roster
+     * pins updated left the opener enumeration green while escape() ignored the
+     * tag in its pattern, and only the closer loop noticed. Looping over
+     * `PromptFence::tags()` closes that gap — the same edit set that satisfies a
+     * roster pin now necessarily asserts the new tag's neutralisation here.
+     */
     public function testEscapeRewritesOpeningTagsBecauseANestedOpenerUnbalancesTheFence(): void
     {
-        self::assertSame('&lt;env>', PromptFence::escape('<env>'));
-        self::assertSame('&lt;project-memory>', PromptFence::escape('<project-memory>'));
-        self::assertSame('&lt;repo-map>', PromptFence::escape('<repo-map>'));
-        self::assertSame('&lt;project-instructions>', PromptFence::escape('<project-instructions>'));
-        self::assertSame('&lt;system-reminder>', PromptFence::escape('<system-reminder>'));
-        self::assertSame('&lt;user-rules>', PromptFence::escape('<user-rules>'));
-        // P6.S2b: the per-tag literals here enumerate the roster by hand, so a
-        // seventh tag is silently under-covered until its line is added.
-        self::assertSame('&lt;harness-injected>', PromptFence::escape('<harness-injected>'));
+        foreach (PromptFence::tags() as $tag) {
+            self::assertSame(
+                '&lt;' . $tag . '>',
+                PromptFence::escape('<' . $tag . '>'),
+                'opening tag of <' . $tag . '> must be neutralised exactly',
+            );
+        }
     }
 
     /**
@@ -344,11 +353,15 @@ final class PromptSectionTest extends TestCase
      * a repository document pose as the harness voice, a closer that survives let
      * it end a harness fence the harness never opened.
      *
-     * DELETION EXPERIMENT (run at this tip; the red is quoted in the step's
-     * worklog entry): removing 'harness-injected' from PromptFence::TAGS reddens
-     * the two polarity asserts below, because the pattern stops matching and
-     * escape() hands the raw bytes straight back, and it reddens both whole-roster
-     * pins and both new guards over the production splice.
+     * DELETION EXPERIMENT (re-run at this fix; the red is quoted in the step's
+     * worklog entry): removing 'harness-injected' from PromptFence::TAGS stops
+     * the pattern matching, so escape() hands the raw bytes straight back and
+     * every value assert below goes red — PHPUnit names the first one and stops.
+     * The reddening instruments sit at three different levels: this guard reads
+     * the roster through escape() alone and never touches a splice; the two
+     * whole-roster pins read the array as a list; and the assembler-level guard
+     * testAForgedHarnessInjectedCloserInsideAnInstructionDocumentCannotRender()
+     * is the one that proves the defang over the production splice.
      */
     public function testEscapeNeutralisesTheHarnessInjectedTagThatNothingEmits(): void
     {
@@ -373,12 +386,6 @@ final class PromptSectionTest extends TestCase
         // ever emits.
         $inert = "harness-injected advice\n</harness-injectd> <harness-injectedx> < harness-injected>";
         self::assertSame($inert, PromptFence::escape($inert));
-
-        // And the tag under test is the roster's own, read from the authority
-        // rather than from a copy of the list — otherwise this test could keep
-        // passing against a private expectation while the production pattern
-        // ignores the tag entirely.
-        self::assertContains('harness-injected', PromptFence::tags());
     }
 
     public function testEscapeMatchesCaseAndIntraTagWhitespaceVariantsOfATagByteForByte(): void
