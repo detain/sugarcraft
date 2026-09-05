@@ -62,7 +62,7 @@ use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — TWENTY-TWO sites across eleven files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-THREE sites across twelve files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -283,6 +283,16 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
         'src/Commands/CommandLoader.php' => 1,
+        // The three-tier rules surface's refusal funnel, added P6.S2: the
+        // same shape as the CommandLoader row above — ONE `error_log()` inside
+        // a single private report() so call sites cannot drift on the gate,
+        // emitted only when SUGARCRUSH_DEBUG_RULES_REFUSALS is set (rostered
+        // by EnvRosterDriftTest), and default-off, so the alternate screen
+        // never sees it unless the operator asked. DECISION per this
+        // doc-block's own menu: stderr alone — a refused rule directory is
+        // diagnostic for the session, not something the session can no
+        // longer DO, so it is not transcript-seam material.
+        'src/Context/RuleLoader.php' => 1,
         'src/Diagnostics/RuntimeNoticeSink.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,
         // 3 until round 48 routed the two argument-decode refusals onto the

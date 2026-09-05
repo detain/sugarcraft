@@ -30,10 +30,12 @@ use SugarCraft\Crush\Context\Stability;
  * is what stops hostile bytes inside that content from ending the layer early.
  * This section's render() is a class constant. No untrusted input reaches it
  * at any point, so there is no provenance to mark and no forgery surface to
- * close, and the five-tag roster is deliberately NOT widened for it (the
- * §9.13 provenance-fence sketch imagines fencing the rules tier too; building
- * a sixth tag here would move the escape-authority pins to wrap bytes that
- * were never at risk). The contrast is exactly the base layer's: fence '',
+ * close, and the roster is deliberately NOT widened for it either — the
+ * sixth tag the roster carries since the P6.S2 fix (`user-rules`) wraps the
+ * rules tier the §9.13 provenance-fence sketch names, never this constant,
+ * and a seventh tag around bytes no model can influence would move
+ * escape-authority pins to wrap bytes that were never at risk. The contrast
+ * is exactly the base layer's: fence '',
  * author bytes, pinned by the production-list pins in
  * {@see \SugarCraft\Crush\Tests\Context\PromptSectionTest}.
  *

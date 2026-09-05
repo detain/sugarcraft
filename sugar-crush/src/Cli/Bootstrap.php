@@ -693,16 +693,16 @@ final class Bootstrap
      * the mismatch is recorded here instead of being left for the next reader to
      * infer from the values.
      *
-     * FIVE OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
-     * is named rather than counted, because "five feeders" quietly becoming
-     * "five feeders and three things nobody drains" is the drift this collector
-     * keeps producing. It was FOUR until crush_code.md Phase 1 item 3 wired
-     * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}, and THREE until
-     * Phase 2 item 4 wired {@see \SugarCraft\Crush\Commands\CommandLoader} — which
-     * is what a named gap is for, twice over. It is FIVE now, and the three
-     * that arrived with Phase 6 items 1+2 are NOT of the same kind as the two
-     * that were already here, so "dormant and gated" is no longer the whole
-     * list's property and is stated per entry instead:
+      * SIX OTHER HOLDERS of a repository-chosen path do NOT feed this, and each
+      * is named rather than counted, because "five feeders" quietly becoming
+      * "six things nobody drains" is the drift this collector keeps producing. It
+      * was FOUR until crush_code.md Phase 1 item 3 wired
+      * {@see \SugarCraft\Crush\Agents\ForeignAgentPresetRegistry}, and THREE until
+      * Phase 2 item 4 wired {@see \SugarCraft\Crush\Commands\CommandLoader} — which
+      * is what a named gap is for, twice over. It is FIVE now, and the three
+      * that arrived with Phase 6 items 1+2 are NOT of the same kind as the two
+      * that were already here, so "dormant and gated" is no longer the whole
+      * list's property and is stated per entry instead. P6.S2 added the sixth:
      *
      *  - {@see \SugarCraft\Crush\Memory\ForeignMemoryImporter}
      *    (`.opencode/memory`) is DORMANT — nothing in `src/` or `bin/`
@@ -727,10 +727,19 @@ final class Bootstrap
      *    "this project is not opted in" — the ordinary state of every project
      *    the user has not listed under
      *    {@see \SugarCraft\Crush\Config\LayeredSettings::PROJECT_SETTINGS_TRUST_KEY}
-     *    — read as a failure in a doctor report. Both are gated
-     *    ({@see projectSettingsTrusted()} plus two `ContainedPath` compares);
-     *    neither is reported.
-     *
+      *    — read as a failure in a doctor report. Both are gated
+      *    ({@see projectSettingsTrusted()} plus two `ContainedPath` compares);
+      *    neither is reported;
+      *  - `.sugar-crush/rules` (the Phase 6 P6.S2 rules tier, read by
+      *    {@see \SugarCraft\Crush\Context\RuleLoader}) is a gap for a fourth
+      *    reason: `RuleLoader` records its containment refusals LOADER-LOCAL in
+      *    its own `refusedPaths()` and nothing here drains them, so this launch
+      *    reports none. It is gated on both anchors (`ContainedPath::below` on the
+      *    directory, `::within` on each entry) — the same discipline as
+      *    `CommandLoader` — and drains only into a doctor pane when
+      *    `SUGARCRUSH_DEBUG_RULES` is set. Deliberate, per the split ruling; not
+      *    pending work.
+      *
      * The full enumeration and its derivation live in
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}.
      *
@@ -1252,17 +1261,19 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * THIRTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * FOURTEEN repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * TWENTY-THREE distinct ones on this tree, thirteen of them classified
+     * TWENTY-FOUR distinct ones on this tree, fourteen of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Crush\Tests\Cli\ProjectTierRefusalInventoryTest}, which
-     * reds when a fourteenth appears.
+     * reds when a new path appears unclassified.
      *
      * IT WENT TEN -> THIRTEEN IN ONE CHANGE-SET, from three different causes, and
-     * they are worth separating because only one of them is a new path:
+     * they are worth separating because only one of them is a new path; P6.S2 then
+     * added `.sugar-crush/rules` (the rules tier) as a fourteenth, and it is a new
+     * path and a named gap at once — see the gap column below.
      *
      *  - `.sugar-crush/settings.json` and `.sugar-crush/settings.local.json` are
      *    genuinely new — the project tier of
@@ -1300,11 +1311,12 @@ final class Bootstrap
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
      * reader; the split was five and five before it.
      *
-     * The FIVE that are gated elsewhere and named as gaps rather than counted
+     * The SIX that are gated elsewhere and named as gaps rather than counted
      * here — `.opencode/memory`, `.sugar-crush/hooks.yaml`,
      * `.sugar-crush/config.json`, `.sugar-crush/settings.json`,
-     * `.sugar-crush/settings.local.json` — are itemised on
-     * {@see $projectTierRefusals}, all five of them.
+     * `.sugar-crush/settings.local.json`, and the rules tier
+     * `.sugar-crush/rules` — are itemised on
+     * {@see $projectTierRefusals}, all six of them.
      *
      * `.sugar-crush/commands` IS NOT ONE OF THEM, and this sentence used to say
      * it was — a gap list that went stale when crush_code.md Phase 2 item 4

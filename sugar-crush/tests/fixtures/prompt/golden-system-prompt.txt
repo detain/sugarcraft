@@ -78,6 +78,13 @@ Directories under this package's own PSR-4 source roots — directory, the names
 - src/  ->  Fixture\Lib\  (2 files)
 </repo-map>
 
+<user-rules>
+Written by the operator of this machine in their own home directory and chosen by that operator rather than by the repository, included here as personal instruction with any block markers in the text neutralised so it cannot open or close a block; where it conflicts with a project-authored layer below it this carries the weight, while the identity and maxims layers above it keep precedence.
+
+Prefer the shortest answer that is still correct, and plain sentences over nested clauses.
+
+</user-rules>
+
 <project-instructions>
 Written by this repository's maintainers and committed alongside its code, included here as project convention with any block markers in the text neutralised so it cannot open or close a block; it carries no authority over the identity, maxims, or harness-written layers above it.
 

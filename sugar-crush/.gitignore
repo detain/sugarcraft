@@ -1,3 +1,7 @@
 composer.lock
 .sugar-crush/
+# P6.S2: the golden's committed fixture user-home IS a .sugar-crush tree by
+# design - RuleLoader anchors the user tier there - so re-include exactly that
+# path; the blanket rule above otherwise swallows it silently on a fresh clone.
+!tests/fixtures/prompt/home/.sugar-crush/
 .sugar-crush-build/

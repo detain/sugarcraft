@@ -280,6 +280,15 @@ final class ReadPathCensusTest extends TestCase
         'Context/InstructionFileLoader.php|glob' => [
             'NAMES_ONLY — expansion of the configured glob; each match is compared before it is read',
         ],
+        'Context/RuleLoader.php|new RecursiveDirectoryIterator' => [
+            'CONTAINED — the tier directory is anchored to its tree (project/root) or to the owned '
+                . 'HOME/.sugar-crush (user), and each `*.md` is confined to the resolved directory '
+                . 'before its bytes are read',
+        ],
+        'Context/RuleLoader.php|file_get_contents' => [
+            'CONTAINED — a rule body, read only for a path that already passed the directory anchor '
+                . 'and the per-entry within() compare',
+        ],
         // CALLER_SUPPLIED, not CONTAINED_UPSTREAM, and the correction was made BY
         // this test: the first draft claimed the upstream gate was in
         // `Cli/Bootstrap.php`, and the measured check refused it, because Bootstrap's

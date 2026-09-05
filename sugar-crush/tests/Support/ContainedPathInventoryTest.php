@@ -182,6 +182,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Config/LayeredSettings.php' => 2,
         'Context/InstructionFileLoader.php' => 6,
         'Context/RepoMapBlock.php' => 3,
+        'Context/RuleLoader.php' => 3,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Providers/ProviderFactory.php' => 2,
         'Skills/SkillLoader.php' => 3,
