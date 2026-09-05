@@ -207,6 +207,124 @@ final class RuleLoaderContainmentTest extends TestCase
         self::assertArrayHasKey($rules . '/evil.md', $loader->refusedPaths(), 'the escaping file is a recorded refusal');
     }
 
+    // -- P6.S3: the rulebooks directory reaches the same boundaries ----------
+
+    /**
+     * The plan's done-when for the user tier, re-run against the SECOND user
+     * directory, and it passes without a single new containment call:
+     * `loadUserRulebooks()` hands `~/.sugar-crush/rulebooks` to the same
+     * {@see RuleLoader::loadFromDirectory()} with the same `$HOME/.sugar-crush`
+     * anchor, so a rulebook directory symlinked at `~/.ssh` is refused by the gate
+     * that already existed.
+     *
+     * This is the test that would fail if someone "helpfully" gave rulebooks its
+     * own boundary check: the ledger would look the same while the call-site ledger
+     * in `ContainedPathInventoryTest` gained a row it was never given room for.
+     */
+    public function testARulebooksDirectoryLinkedAtHomeSshIsRefusedAndRecorded(): void
+    {
+        $home = $this->sandbox . '/home';
+        $spelled = $home . '/.sugar-crush/rulebooks';
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        mkdir($home . '/.ssh', 0o700, true);
+        $this->stageDoc($home . '/.ssh/id_ed25519.md', 'stolen-key');
+        self::assertTrue(symlink($home . '/.ssh', $spelled));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserRulebooks(), 'a rulebooks link at ~/.ssh is refused like the rules one');
+        self::assertArrayHasKey($spelled, $loader->refusedPaths(), 'and the refusal is recorded under the spelling used');
+    }
+
+    // -- NIT-5: a name that resolves to nothing is a refusal, not a vanishing --
+
+    /**
+     * NIT-5, carried to this step from the P6.S2 review.
+     *
+     * A `*.md` SYMLINK whose target no longer exists used to satisfy
+     * `!$file->isFile()` and be dropped with ZERO ledger entries - indistinguishable
+     * from a directory that holds nothing. That is the one input shape where the
+     * loader cannot prove the path stays inside its anchor, because `realpath()`
+     * fails, and the plan's standing rule is that the scanner fails CLOSED: an
+     * unknown spelling costs a false-positive refusal, never a silent miss.
+     *
+     * It goes to {@see RuleLoader::refusedPaths()} and NOT to
+     * {@see RuleLoader::skippedFiles()}. The skip ledger is reserved for cap trips
+     * and parse errors - truncation of content that DID resolve - and filing a
+     * non-resolving path there would let a containment question hide among the
+     * ordinary ones. Both halves are asserted: present here, absent there.
+     */
+    public function testADanglingMarkdownSymlinkIsARecordedRefusalNotASilentAbsence(): void
+    {
+        $home = $this->sandbox . '/home';
+        $rules = $home . '/.sugar-crush/rules';
+        mkdir($rules, 0o700, true);
+        $this->stageDoc($rules . '/kept.md', 'kept');
+        $dangling = $rules . '/gone.md';
+        self::assertTrue(symlink($rules . '/never-existed.md', $dangling));
+        self::assertFileDoesNotExist($dangling, 'the fixture is a real dangling link, not a live one');
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+        $loaded = $loader->loadUserRules();
+
+        self::assertSame(['kept'], $this->titlesIn($loaded), 'the good sibling is still read');
+        self::assertArrayHasKey($dangling, $loader->refusedPaths(), 'the unresolvable name is a recorded refusal');
+        self::assertStringContainsString(
+            'does not resolve to a regular file',
+            $loader->refusedPaths()[$dangling],
+            'and the reason says the path resolved to nothing, rather than alleging it escaped',
+        );
+        self::assertSame([], $loader->skippedFiles(), 'an unresolvable path is not a truncation of resolved content');
+    }
+
+    /**
+     * The same refusal on the rulebook side, so neither user directory can hold a
+     * silently vanishing entry.
+     */
+    public function testADanglingMarkdownSymlinkInARulebooksDirectoryIsRefusedToo(): void
+    {
+        $home = $this->sandbox . '/home';
+        $packs = $home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        $dangling = $packs . '/gone.md';
+        self::assertTrue(symlink('/tmp/definitely-not-here-' . bin2hex(random_bytes(6)) . '.md', $dangling));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserRulebooks());
+        self::assertArrayHasKey($dangling, $loader->refusedPaths());
+        self::assertSame([], $loader->skippedFiles());
+    }
+
+    /**
+     * THE CONTROL, and the scope limit. The refusal is for files the loader would
+     * otherwise READ: a dangling link called `notes.txt` is not a rule candidate,
+     * and recording it would put arbitrary home-directory litter in a security
+     * ledger. If the unresolvable-name check ever moves above the extension check,
+     * this reddens - which is the correct outcome to have to argue about.
+     */
+    public function testADanglingLinkThatIsNotMarkdownStaysOutOfBothLedgers(): void
+    {
+        $home = $this->sandbox . '/home';
+        $rules = $home . '/.sugar-crush/rules';
+        mkdir($rules, 0o700, true);
+        self::assertTrue(symlink($rules . '/never-existed.txt', $rules . '/notes.txt'));
+
+        $this->useHomeSandbox($home, create: false);
+
+        $loader = new RuleLoader($home);
+
+        self::assertSame([], $loader->loadUserRules());
+        self::assertSame([], $loader->refusedPaths(), 'a non-markdown dangling name is not a rule candidate at all');
+        self::assertSame([], $loader->skippedFiles());
+    }
+
     // -- Root tier single file ------------------------------------------------
 
     public function testARootRulesFileSymlinkedOutOfTheCheckoutIsRefusedAndRecorded(): void

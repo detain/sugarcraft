@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SugarCraft\Crush\Context\Rule;
 use SugarCraft\Crush\Context\RuleLoader;
+use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Context\Triggers\IntentTrigger;
 use SugarCraft\Crush\Context\Triggers\KeywordTrigger;
 use SugarCraft\Crush\Context\Triggers\PathTrigger;
@@ -443,6 +444,285 @@ final class RuleLoaderTest extends TestCase
         self::assertStringContainsString((string) ($ceiling + 1), $reason, 'the refusal quotes the file\'s real byte count');
         self::assertStringContainsString((string) $ceiling, $reason, 'and the ceiling it exceeded');
         self::assertSame([], $loader->refusedPaths(), 'a byte-ceiling skip is not a containment refusal');
+    }
+
+    // -- P6.S3: the rulebooks directory (the user tier's second spelling) ----
+
+    /**
+     * `~/.sugar-crush/rulebooks/*.md` is walked by the same
+     * {@see RuleLoader::loadFromDirectory()} as `rules/` and carries tier `user`,
+     * because a rulebook is operator-controlled by definition - the provenance the
+     * tier records, not a shortcut around adding a fourth one.
+     *
+     * The assertions here are the ones that only hold if the directory is REALLY
+     * wired through the existing machinery: the key derives from the basename the
+     * same way, the tier string is `user`, and a load with an empty toggle set
+     * returns it. Revert the directory walk and every one of these reddens.
+     */
+    public function testUserRulebooksDirectoryLoadsCarryingTheUserTier(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root, 0o755, true);
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        $this->emitRule($packs . '/terse.md', "---\nname: Terse\n---\nBE TERSE.\n");
+
+        $loaded = (new RuleLoader($root))->loadUserRulebooks();
+
+        self::assertSame(['terse'], array_map(static fn (Rule $r): string => $r->key, $loaded), 'the key is the basename stem');
+        self::assertSame('user', $loaded[0]->tier, 'a rulebook is tier user, not a fourth tier');
+        self::assertSame('terse', $loaded[0]->key, 'the key is the basename minus .md - the toggle handle');
+        self::assertSame($packs . '/terse.md', $loaded[0]->path, 'the path is the file it was read from');
+    }
+
+    /**
+     * An absent `rulebooks/` is the ordinary case (nobody has made a pack yet) and
+     * must be silent, not a refusal - exactly as an absent `rules/` is. If this
+     * ever recorded a refusal, every user without a rulebook directory would get
+     * a phantom entry in the refusal ledger on every prompt build.
+     */
+    public function testAnAbsentRulebooksDirectoryIsNotARefusal(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root, 0o755, true);
+
+        $loader = new RuleLoader($root);
+
+        self::assertSame([], $loader->loadUserRulebooks());
+        self::assertSame([], $loader->refusedPaths(), 'a tier nobody configured is not a security event');
+        self::assertSame([], $loader->skippedFiles());
+    }
+
+    /**
+     * Load order across the two user directories, pinned because the prompt
+     * renders in this order and the golden-adjacent byte order depends on it:
+     * `rules/` (sorted) then `rulebooks/` (sorted), project, root.
+     */
+    public function testLoadEmitsRulesDirectoryPacksThenRulebooksDirectoryPacks(): void
+    {
+        $root = $this->sandbox . '/repo';
+        $rules = $this->home . '/.sugar-crush/rules';
+        mkdir($rules, 0o700, true);
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        mkdir($root . '/.sugar-crush/rules', 0o755, true);
+        $this->emitRule($rules . '/b_standing.md', "B Standing\n");
+        $this->emitRule($rules . '/a_standing.md', "A Standing\n");
+        $this->emitRule($packs . '/z_pack.md', "Z Pack\n");
+        $this->emitRule($packs . '/m_pack.md', "M Pack\n");
+        $this->emitRule($root . '/.sugar-crush/rules/p_project.md', "P Project\n");
+        $this->emitRule($root . '/RULES.md', "R Root\n");
+
+        $loaded = (new RuleLoader($root))->load();
+
+        self::assertSame(
+            ['a_standing', 'b_standing', 'm_pack', 'z_pack', 'p_project', 'RULES.md'],
+            $this->ruleNames($loaded),
+            'each directory is filename-sorted and rules/ precedes rulebooks/, which precede the repo tiers',
+        );
+    }
+
+    /**
+     * The same stem in both directories is TWO packs, not one: de-duplication is
+     * by `realpath()`, and these are two different files the operator wrote twice.
+     *
+     * What they DO share is the toggle handle, because the handle is the key. So
+     * the second half of this test pins the collision behaviour rather than
+     * leaving it to be discovered: one `/rules x` turns both spellings off, which
+     * is the only answer that cannot leave a pack the user believes is off still
+     * riding in the prompt.
+     */
+    public function testTheSameStemInBothUserDirectoriesStaysTwoPacksToggledByOneName(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root, 0o755, true);
+        $rules = $this->home . '/.sugar-crush/rules';
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($rules, 0o700, true);
+        mkdir($packs, 0o700, true);
+        $this->emitRule($rules . '/x.md', "FROM RULES DIR\n");
+        $this->emitRule($packs . '/x.md', "FROM RULEBOOKS DIR\n");
+
+        $loader = new RuleLoader($root);
+        self::assertCount(2, $loader->load(), 'two files, two packs - realpath dedup does not merge them');
+
+        $toggled = (new RuleLoader($root, rulesState: RulesState::new(['x'])))->load();
+        self::assertSame([], $toggled, 'the one name both share turns both off');
+    }
+
+    // -- P6.S3: the session toggle set ---------------------------------------
+
+    /**
+     * Both polarities at the loader boundary: a named pack leaves `load()`, and
+     * toggling the same name again puts it back. A one-polarity test could be
+     * satisfied by a loader that simply never returns user rules at all.
+     */
+    public function testTheSessionDisabledSetRemovesAPackAndTogglingAgainRestoresIt(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root, 0o755, true);
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        $this->emitRule($packs . '/on.md', "ONE\n");
+        $this->emitRule($packs . '/other.md', "TWO\n");
+
+        $state = RulesState::new();
+        self::assertSame(['on', 'other'], $this->ruleNames((new RuleLoader($root, rulesState: $state))->load()));
+
+        self::assertFalse($state->toggle('on'), 'the toggle reports the state it switched TO');
+        self::assertSame(['other'], $this->ruleNames((new RuleLoader($root, rulesState: $state))->load()));
+
+        self::assertTrue($state->toggle('on'), 'and switching it back reports on');
+        self::assertSame(['on', 'other'], $this->ruleNames((new RuleLoader($root, rulesState: $state))->load()));
+    }
+
+    /**
+     * AND-SEMANTICS (requirement 6). A pack whose own frontmatter says
+     * `enabled: false` stays out of `load()` even when the session set is empty -
+     * i.e. under the toggle position that would otherwise switch it on.
+     *
+     * The direction that matters is frontmatter-wins, and the test says so in both
+     * halves: off-by-frontmatter with the session on = out, and a session disable
+     * of the same pack changes nothing about that verdict.
+     */
+    public function testAFrontmatterDisabledPackStaysOutOfLoadUnderAnOnToggle(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root, 0o755, true);
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        $this->emitRule($packs . '/shy.md', "---\nenabled: false\n---\nSHY\n");
+
+        // Session OFF first, then toggled back ON: the position a user reaches by
+        // typing `/rules shy` twice. The frontmatter must hold it out both times.
+        $fresh = RulesState::new(['shy']);
+        self::assertSame([], $this->ruleNames((new RuleLoader($root, rulesState: $fresh))->load()));
+
+        // `toggle()` on a pack the file already disabled flips the SESSION bit and
+        // must not resurrect the pack: the conjunction is an AND, not an override.
+        self::assertTrue($fresh->toggle('shy'), 'the session bit switched to on');
+        self::assertFalse($fresh->isDisabled('shy'), 'the session no longer holds it back');
+        self::assertSame(
+            [],
+            $this->ruleNames((new RuleLoader($root, rulesState: $fresh))->load()),
+            'frontmatter enabled:false still wins - a session toggle cannot enable a pack that disabled itself',
+        );
+    }
+
+    /**
+     * A `null` state - every App that predates rulebooks, every embedder that
+     * never allocates one - must load EXACTLY what the loader loaded before this
+     * step existed. This is the no-behaviour-change half of the session-scoping
+     * requirement, asserted against a non-empty toggle set rather than in a vacuum.
+     */
+    public function testNullRulesStateLoadsEveryEnabledPackAsThoughTheStepNeverHappened(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root, 0o755, true);
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        $this->emitRule($packs . '/a.md', "---\nenabled: false\n---\nA\n");
+        $this->emitRule($packs . '/b.md', "B\n");
+
+        self::assertSame(
+            ['b'],
+            $this->ruleNames((new RuleLoader($root))->load()),
+            'with no state at all, only frontmatter decides',
+        );
+        self::assertSame(
+            ['b'],
+            $this->ruleNames((new RuleLoader($root, rulesState: RulesState::new(['zzz'])))->load()),
+            'a set naming nothing present changes nothing either',
+        );
+    }
+
+    /**
+     * The session set is scoped to the user tier. A project or root file is the
+     * repository's voice, and a name the operator typed into `/rules` is not a
+     * place where they revoke a checkout's authority - or, the other way round,
+     * where a cloned repository picks its own name to dodge a pack the operator
+     * switched off.
+     *
+     * Both non-user tiers are pinned with a file deliberately named to collide
+     * with the disabled pack, so a loader that applied the subtraction tier-blind
+     * cannot pass.
+     */
+    public function testTheSessionSetCannotReachTheProjectOrRootTier(): void
+    {
+        $root = $this->sandbox . '/repo';
+        mkdir($root . '/.sugar-crush/rules', 0o755, true);
+        $this->emitRule($root . '/.sugar-crush/rules/terse.md', "PROJECT TERSE\n");
+        $this->emitRule($root . '/RULES.md', "ROOT TERSE\n");
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($packs, 0o700, true);
+        $this->emitRule($packs . '/terse.md', "USER TERSE\n");
+
+        $loaded = (new RuleLoader($root, rulesState: RulesState::new(['terse'])))->load();
+
+        self::assertSame(
+            ['terse', 'RULES.md'],
+            $this->ruleNames($loaded),
+            'the user pack named terse is gone; the project file of the same name and the root file are untouched',
+        );
+        self::assertSame(['project', 'root'], array_values(array_map(static fn (Rule $r): string => $r->tier, $loaded)));
+    }
+
+    /**
+     * Requirement 8, stated as the arithmetic the loader doc-block now spells out:
+     * `MAX_FILES` bounds EACH directory walked, so the aggregate is
+     * (directories x cap) and a big `rulebooks/` cannot consume `rules/`'s slots.
+     *
+     * The positive control is the point of the test. Under a hoisted GLOBAL
+     * counter - the ruling this brief withdrew - the first directory would spend
+     * the whole budget and the second would load ZERO, so `cap` in each is only
+     * obtainable with the per-directory counter that exists. The second half
+     * asserts each overflow names ITS OWN directory, which is what makes the
+     * refusal actionable instead of mysterious.
+     */
+    public function testEachUserDirectoryKeepsItsOwnFileCapSoNeitherStarvesTheOther(): void
+    {
+        $cap = (new ReflectionClass(RuleLoader::class))->getConstant('MAX_FILES');
+        self::assertIsInt($cap);
+
+        $root = $this->sandbox . '/repo-caps';
+        mkdir($root, 0o755, true);
+        $rules = $this->home . '/.sugar-crush/rules';
+        $packs = $this->home . '/.sugar-crush/rulebooks';
+        mkdir($rules, 0o700, true);
+        mkdir($packs, 0o700, true);
+
+        foreach ([$rules => 'r', $packs => 'p'] as $dir => $stem) {
+            for ($i = 0; $i < $cap; $i++) {
+                $this->emitRule(sprintf($dir . '/%s%02d.md', $stem, $i), "BODY\n");
+            }
+            // One past the ceiling in EACH directory.
+            $this->emitRule($dir . '/zz_overflow.md', "OVERFLOW\n");
+        }
+
+        $loader = new RuleLoader($root);
+        $loaded = $loader->load();
+
+        self::assertCount(2 * $cap, $loaded, 'the aggregate is directories x cap, not cap');
+        self::assertCount($cap, (new RuleLoader($root))->loadUserRules(), 'rules/ got its own full budget');
+        self::assertCount($cap, (new RuleLoader($root))->loadUserRulebooks(), 'rulebooks/ got its own full budget');
+
+        // WHICH of a directory's files is refused depends on filesystem walk
+        // order, so the assertion is about ATTRIBUTION: each refusal must name a
+        // path inside the directory that hit its own ceiling, and each directory
+        // must be represented exactly once. A hoisted global counter would put both
+        // refusals in the second directory (the first would have spent the budget),
+        // which this fails.
+        $refusedPaths = array_keys($loader->skippedFiles());
+        $inRules = array_values(array_filter($refusedPaths, static fn (string $p): bool => str_starts_with($p, $rules . '/')));
+        $inPacks = array_values(array_filter($refusedPaths, static fn (string $p): bool => str_starts_with($p, $packs . '/')));
+
+        self::assertCount(1, $inRules, 'exactly one rules/ file was refused past its own directory cap');
+        self::assertCount(1, $inPacks, 'exactly one rulebooks/ file was refused past its own directory cap');
+        self::assertStringContainsString(
+            'this tier already reached its ' . $cap . '-file cap',
+            (string) $loader->skippedFiles()[$inRules[0]],
+            'the refusal quotes the ceiling that directory reached',
+        );
     }
 
     // -- Rule value object immutability / fail-fast ---------------------------
