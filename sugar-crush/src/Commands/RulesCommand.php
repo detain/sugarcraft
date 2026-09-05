@@ -175,8 +175,15 @@ final class RulesCommand
     private function toggle(string $name, array $args): int
     {
         $known = [];
+        // How many PACKS answer to this name, not merely whether one does. The two
+        // user directories are separate walks, each de-duplicated by key inside
+        // {@see RuleLoader::loadFromDirectory()}, so a key appears at most once per
+        // directory and at most TWICE across {@see packs()} — which is what makes
+        // "both" in {@see collisionNote()} an exact figure rather than a guess.
+        $matches = [];
         foreach ($this->packs() as $rule) {
             $known[$rule->key] = $rule;
+            $matches[$rule->key] = ($matches[$rule->key] ?? 0) + 1;
         }
 
         if (!isset($known[$name])) {
@@ -202,10 +209,37 @@ final class RulesCommand
         $nowEnabled = $this->state->toggle($name);
         $rule = $known[$name];
 
-        echo "\n  Pack {$name}: " . ($nowEnabled ? 'ON' : 'OFF') . " for this session.\n";
+        echo "\n  Pack {$name}: " . ($nowEnabled ? 'ON' : 'OFF') . " for this session."
+            . $this->collisionNote($matches[$name]) . "\n";
         echo '  ' . $this->effectLine($rule, $nowEnabled) . "\n\n";
 
         return 0;
+    }
+
+    /**
+     * The disclosure a shared pack name owes the operator, or `''` for a name only
+     * one pack answers to.
+     *
+     * WHY THIS EXISTS. `~/.sugar-crush/rules/focus.md` and
+     * `~/.sugar-crush/rulebooks/focus.md` are two packs, and one toggle turns both
+     * of them off — that is the design, it is deliberate, and it is pinned where the
+     * bytes are decided ({@see \SugarCraft\Crush\Tests\Context\RuleLoaderTest::testTheSameStemInBothUserDirectoriesStaysTwoPacksToggledByOneName()}).
+     * What was NOT pinned, and what this fixes, is the sentence the operator reads:
+     * `Pack focus: OFF for this session.` in the SINGULAR about an action that just
+     * silenced two files. The listing is honest about it because it has a `Source`
+     * column; the toggle reply had no such column, so a user who toggled from a
+     * remembered name and moved on took away the wrong arithmetic.
+     *
+     * The count is stated as a number rather than only "several" because the maximum
+     * is two and the operator can check it: the value is "did I just switch off more
+     * than the file I meant", and one row of the listing per directory makes that
+     * legible.
+     */
+    private function collisionNote(int $matchingPacks): string
+    {
+        return $matchingPacks > 1
+            ? " (this name matches {$matchingPacks} packs — both toggled)"
+            : '';
     }
 
     /**

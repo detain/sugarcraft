@@ -177,6 +177,59 @@ final class RulesCommandTest extends TestCase
     }
 
     /**
+     * THE COLLISION DISCLOSURE, pinned at the COMMAND level: one name, two packs,
+     * and a reply that says both moved.
+     *
+     * `~/.sugar-crush/rules/focus.md` and `~/.sugar-crush/rulebooks/focus.md` are
+     * two packs by design and one toggle turns BOTH off — a decision already pinned
+     * where the bytes are decided, at
+     * {@see \SugarCraft\Crush\Tests\Context\RuleLoaderTest::testTheSameStemInBothUserDirectoriesStaysTwoPacksToggledByOneName()},
+     * which this test leaves untouched. What the loader test cannot see is the
+     * SENTENCE, and until now it read `Pack focus: OFF for this session.` in the
+     * singular about an action that had just silenced two files. The listing
+     * distinguishes them with a `Source` column; the toggle reply has no column to
+     * put it in, so the fact goes in the sentence.
+     *
+     * THREE polarities are asserted — off, back on, and a name no collision touches.
+     * The last one is the control that keeps the note from printing always: a
+     * disclosure on every toggle would be noise the operator stops reading, which is
+     * the same as no disclosure.
+     */
+    public function testTogglingANameTwoPacksShareDisclosesThatBothMoved(): void
+    {
+        $this->writePackFile($this->rulesDir . '/focus.md', "RULES-DIR FOCUS\n");
+        $this->writePackFile($this->packsDir . '/focus.md', "RULEBOOKS-DIR FOCUS\n");
+
+        $state = RulesState::new();
+        $off = $this->submit('/rules focus', $state);
+
+        self::assertSame(['focus'], $state->disabled(), 'one handle, one set entry, both packs out');
+        self::assertStringContainsString('Pack focus: OFF for this session.', $this->reply($off));
+        self::assertStringContainsString(
+            'this name matches 2 packs — both toggled',
+            $this->reply($off),
+            'the sentence must not describe a two-file action in the singular',
+        );
+
+        // The note is about the NAME, not the direction, so the way back says it too.
+        $on = $this->submit('/rules focus', $state);
+        self::assertStringContainsString('Pack focus: ON for this session.', $this->reply($on));
+        self::assertStringContainsString('this name matches 2 packs — both toggled', $this->reply($on));
+
+        // The control: an unshared name reads exactly as it did before this note
+        // existed, because `/rules x` with two rows is a different fact from
+        // `/rules x` with one.
+        $this->writePackFile($this->packsDir . '/terse.md', "SOLO PACK\n");
+        $solo = $this->submit('/rules terse', $state);
+        self::assertStringContainsString('Pack terse: OFF for this session.', $this->reply($solo));
+        self::assertStringNotContainsString(
+            'this name matches',
+            $this->reply($solo),
+            'a name one pack answers to must not acquire a collision note',
+        );
+    }
+
+    /**
      * A pack disabled in its own frontmatter cannot be enabled by the session bit.
      *
      * The command must say which half of the conjunction is holding it, because
