@@ -2547,12 +2547,14 @@ final class Runtime
         // reconcile a claim against a position.
         //
         // The bodies route through PromptFence::escape() like every other
-        // dynamic byte entering the prompt. NOTE the recorded gap: the
-        // current escape roster (PromptFence::TAGS) neutralises the five
-        // existing production tags, not `user-rules` itself, so a user-tier
-        // body spelling its own closer could still end its fence early until
-        // P6.S2b widens the roster; payload bytes can forge none of the
-        // layers that exist today.
+        // dynamic byte entering the prompt, and the roster now includes
+        // `user-rules` itself (widened at P6.S2 fix): a user-tier body
+        // spelling its own closer arrives at the model as the inert
+        // `&lt;/user-rules>`, never as a live early fence end. The property
+        // is pinned by BaseSystemPromptTest's forged-user-rule guard -
+        // deleting either the roster entry or this escape call turns that
+        // test red - and the roster-wide semantics by the forged-instruction
+        // guard's neutralised-copy counts above it.
         $rules = (new RuleLoader($app->root ?? (getcwd() ?: '')))->load();
 
         foreach ($rules as $rule) {

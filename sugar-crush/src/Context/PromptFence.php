@@ -58,12 +58,20 @@ final class PromptFence
      * `env` (EnvironmentBlock::fence()), `project-memory`
      * (MemoryBlock::fence()), `repo-map` (RepoMapBlock::fence()),
      * `project-instructions` (Runtime::systemPromptSections() inline
-     * construction), and `system-reminder` — the last is not a PromptSection
-     * fence at all but SkillPathNudge's trust channel
+     * construction), `system-reminder` — not a PromptSection fence at all but
+     * SkillPathNudge's trust channel
      * ({@see \SugarCraft\Crush\Skills\SkillPathNudge::HEADER}); it joins the
      * roster because a payload that can forge `<system-reminder>` inside any
      * section forges the platform's own reminder voice, which is the more
-     * dangerous of the two attacks the acceptance matrix names.
+     * dangerous of the two attacks the acceptance matrix names — and
+     * `user-rules` (Runtime::systemPromptSections() inline construction, the
+     * P6.S2 rules-tier fence). It joins on the same argument the maxims note
+     * refused: not because inert prose needed it, but because a rule body is
+     * foreign bytes like a repo file is, and a body carrying `</user-rules>`
+     * would close its own fence early and hand the remainder of the render to
+     * the model outside any provenance frame. Widening for it costs zero
+     * golden bytes (the fixture rule body carries no fence marker) — pinned
+     * by BaseSystemPromptTest's user-rules forgery guard.
      *
      * @var list<string>
      */
@@ -73,6 +81,7 @@ final class PromptFence
         'repo-map',
         'project-instructions',
         'system-reminder',
+        'user-rules',
     ];
 
     private function __construct()

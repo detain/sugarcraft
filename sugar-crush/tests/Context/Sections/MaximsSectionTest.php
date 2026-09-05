@@ -40,10 +40,12 @@ use SugarCraft\Crush\Tools\Tool;
  *    turn, all of which can carry hostile bytes. This section's render() is
  *    a class constant — author-static bytes with zero untrusted input — so
  *    there is no provenance to fence and no forgery surface to close. That
- *    is also why the five-tag roster (PromptFence::tags()) is deliberately
- *    NOT widened for it: a sixth tag around inert prose buys nothing and
- *    moves an escape-authority pin (§5.3 of the step brief). The §9.13
- *    provenance-fence idea is NOT built by this step and NOT implied here.
+ *    is also why the roster (PromptFence::tags()) was never widened FOR IT:
+ *    the sixth tag it carries since the P6.S2 fix (`user-rules`) wraps the
+ *    rules tier, not inert prose, and a seventh tag around these constants
+ *    would buy nothing and move an escape-authority pin (§5.3 of the step
+ *    brief). The §9.13 provenance-fence idea for THIS layer is not built and
+ *    not implied here.
  * 3. STABILITY Static, byteBudget() PHP_INT_MAX. Static because the bytes
  *    never change across sessions, which is what makes the index-[1] slot
  *    cache-friendly under the stable-first ordering. PHP_INT_MAX because no

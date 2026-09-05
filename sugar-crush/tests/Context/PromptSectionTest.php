@@ -305,6 +305,7 @@ final class PromptSectionTest extends TestCase
             'project-memory',
             'repo-map',
             'system-reminder',
+            'user-rules',
         ], $tags);
     }
 
@@ -326,6 +327,7 @@ final class PromptSectionTest extends TestCase
         self::assertSame('&lt;repo-map>', PromptFence::escape('<repo-map>'));
         self::assertSame('&lt;project-instructions>', PromptFence::escape('<project-instructions>'));
         self::assertSame('&lt;system-reminder>', PromptFence::escape('<system-reminder>'));
+        self::assertSame('&lt;user-rules>', PromptFence::escape('<user-rules>'));
     }
 
     public function testEscapeMatchesCaseAndIntraTagWhitespaceVariantsOfATagByteForByte(): void
