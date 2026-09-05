@@ -663,7 +663,11 @@ final class BaseSystemPromptTest extends TestCase
      *
      *   1. the base heredoc (the four guidance sections the tests above check)
      *   2. the <repo-map> block, when the root has anything to map
-     *   3. the <project-instructions> documents (loadRoot(), then loadForced())
+     *   2b. the <user-rules> fences — P6.S2 splices them here, and this render
+     *       pins HOME at the fixture user-home so the fence is a pinned byte
+     *       region, not host-dependent prose ({@see renderUnderFixtureUserHome()})
+     *   3. the <project-instructions> documents (loadRoot(), then loadForced()),
+     *       then the project-voiced rule tiers of the same loader walk
      *   4. the <project-memory> block, when the app has a memory store
      *   5. each enabled skill's systemPromptContribution()
      *   6. the SkillMatcher listing of every auto-invocable discovered skill
@@ -721,14 +725,14 @@ final class BaseSystemPromptTest extends TestCase
             . 'failed; the path is __DIR__-anchored, so this is not a working-directory problem.',
         );
 
-        $rendered = self::inPackageRoot(static function (): string {
+        $rendered = self::renderUnderFixtureUserHome(static fn (): string => self::inPackageRoot(static function (): string {
             [$runtime, $app] = self::goldenContext();
 
             $build = new \ReflectionMethod($runtime, 'buildSystemPrompt');
             $build->setAccessible(true);
 
             return (string) $build->invoke($runtime, $app);
-        });
+        }));
 
         self::assertSame(
             self::readSystemPromptGolden(),
@@ -818,8 +822,18 @@ final class BaseSystemPromptTest extends TestCase
         // of the golden fixture - 2 documents x (280 B preamble + 2 B blank
         // line) = +564 B, nothing else. Diff of the two goldens is exactly
         // those two insertions (see the P5.S6 lead report).
+        // MEASURED 2026-09-05 at P6.S2: 7,314 -> 7,829. The move is exactly
+        // ONE pure insertion of 515 B at offset 4,782 - proven by difflib:
+        // single insert op, zero delete/replace ops, old bytes [0:4782]
+        // identical, old tail identical from new offset 5,297. Geometry of
+        // the 515: 2 B assembler separator + "<user-rules>\n" 13 + preamble
+        // 393 + blank line 2 + fixture rule body 91 + "\n</user-rules>" 14 =
+        // 515, landing between the repo-map block and the first
+        // project-instructions fence - the user-rules splice of the single
+        // construction site, rendered against the committed fixture user
+        // home. No pre-existing byte moved anywhere in the file.
         self::assertSame(
-            7314,
+            7829,
             strlen($golden),
             'the system-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',
@@ -1186,6 +1200,12 @@ final class BaseSystemPromptTest extends TestCase
      */
     private static function ensureFixtureRepo(): string
     {
+        // The user-home fixture is materialised FIRST and unconditionally:
+        // the .git guard below early-returns on every warm run, and a golden
+        // render that found the home absent would silently drop the
+        // user-rules fence and pass against a stale file.
+        self::ensureFixtureUserHome();
+
         $repo = __DIR__ . '/../vendor/prompt-fixture/system-repo';
 
         if (is_dir($repo . '/.git')) {
@@ -1228,6 +1248,98 @@ final class BaseSystemPromptTest extends TestCase
         self::writeFixtureFile($repo . '/scratch.txt', "scratch\n");
 
         return $repo;
+    }
+
+    /**
+     * Materialises the deterministic USER-home fixture the golden renders,
+     * under vendor/prompt-fixture/system-home (gitignored with the rest of
+     * vendor/, same as the fixture repo).
+     *
+     * WHY IT EXISTS: the P6.S2 splice gives operator-chosen rule bytes their
+     * own fence, and the golden must pin that fence or the layer is unpinned
+     * prose. RuleLoader anchors the user tier at {@see HomeDirectory::owned()}
+     * - a HOME this process can prove is its own - so the fixture cannot be
+     * "whatever the machine running phpunit happens to have in ~/.sugar-crush";
+     * it is a committed tree under tests/fixtures/prompt/home copied to the
+     * same vendor/ location the repo fixture uses, and
+     * {@see renderUnderFixtureUserHome()} pins HOME at it for exactly one
+     * render. The committed tree is a user tier only - the project and root
+     * rule tiers deliberately stay out of the golden, because shipping files
+     * under the fixture repo would move its commit hash or its three-line
+     * porcelain and break the pure-insertion property every future golden
+     * diff is argued from.
+     *
+     * Idempotent the same way ensureFixtureRepo() is: a warm materialisation
+     * is returned untouched, so repeated renders cannot drift from the first.
+     * Every directory is chmod 0755 AFTER the copy - copyTree() creates dirs
+     * with mkdir(0777) masked by the HOST umask, and a world-writable home is
+     * exactly what HomeDirectory::owned() refuses, which under a `umask 000`
+     * checkout would silently delete the user-rules fence from the render
+     * while the golden still carried it.
+     */
+    private static function ensureFixtureUserHome(): string
+    {
+        $home = __DIR__ . '/../vendor/prompt-fixture/system-home';
+
+        if (is_file($home . '/.sugar-crush/rules/global-style.md')) {
+            return $home;
+        }
+
+        if (is_dir($home)) {
+            self::removeTree($home);
+        }
+
+        self::copyTree(__DIR__ . '/fixtures/prompt/home', $home);
+
+        $dirs = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($home, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+        foreach ($dirs as $dir) {
+            if ($dir->isDir()) {
+                chmod($dir->getPathname(), 0755);
+            }
+        }
+        chmod($home, 0755);
+
+        return $home;
+    }
+
+    /**
+     * Runs $render with HOME pinned at the fixture user-home tree, restoring
+     * the real spelling afterwards on every path - a leaked sandbox HOME
+     * would redirect every later test that reads ~/.sugar-crush, which is a
+     * worse defect than the un-pinned render this prevents. The try/finally
+     * shape mirrors {@see inPackageRoot()} for exactly that reason.
+     *
+     * Scope discipline: ONLY the golden render calls this. The other
+     * prompt-producing tests build App roots under temp fixtures with no
+     * .sugar-crush/rules tree, and the agent-assembler golden is rendered
+     * with the REAL HOME so it also keeps proving the agent layer never
+     * picks up the user tier.
+     *
+     * @param callable():string $render
+     */
+    private static function renderUnderFixtureUserHome(callable $render): string
+    {
+        $home = self::ensureFixtureUserHome();
+        $previousEnv = getenv('HOME');
+        $previousServer = $_SERVER['HOME'] ?? null;
+
+        putenv('HOME=' . $home);
+        $_SERVER['HOME'] = $home;
+
+        try {
+            return $render();
+        } finally {
+            $previousEnv === false ? putenv('HOME') : putenv('HOME=' . $previousEnv);
+
+            if ($previousServer === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServer;
+            }
+        }
     }
 
     /**
