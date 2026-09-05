@@ -2247,14 +2247,19 @@ a convenience one. Containment comes free: the loader's user anchor is the PAREN
 **Interaction rule (previously unpinned).** Frontmatter `enabled:` and the runtime disabled-pack set are **AND**ed: a
 pack whose file says `enabled: false` stays off regardless of the runtime toggle. Pinned by its own test, not by a comment.
 
-**`MAX_FILES` is ruled GLOBAL across directories — and at this tip that is a CHANGE, not a restatement (MEASURED).**
-The P6.S2-reviewed meaning is "reads per prompt build", but the counter today is a local `$reads` initialised inside
-`loadFromDirectory()` (`src/Context/RuleLoader.php:433`) and checked at `:464`; the refusal message at `:466` reads
-"this tier already reached its %d-file cap", and the prose says "one tier directory may contribute" (`:117`) and "how
-many `*.md` files one tier directory READS" (`:80-82`). Implementing the ruling therefore hoists the counter to
-instance state and rewrites those two prose spots plus the message. A test pins that a directory of many rulebooks
-cannot exceed the ceiling, and the starvation interaction — rulebooks consuming read slots that `rules/` would
-otherwise get — is recorded in the loader docblock.
+**`MAX_FILES` semantics are UNCHANGED — the cap is PER-DIRECTORY, and that is deliberate.**
+SUPERSEDED 2026-09-05: the first ruling on 2026-09-05 said `MAX_FILES` "stays GLOBAL across directories". Measurement
+at tip `1695a6afe` showed the counter is per-directory TODAY (local `$reads` initialised at
+`src/Context/RuleLoader.php:433`, checked at `:464`, refusal message at `:466`, prose at `:80-82` and `:117`), so that
+wording described a semantics CHANGE under the words "restatement". **The change is withdrawn** — per-directory is the
+correct semantics for this plan. The P6.S2 finding being guarded against was an untrusted clone forcing UNBOUNDED
+reads, and a per-directory ceiling over a fixed, closed set of directories keeps the aggregate bounded while
+PREVENTING the starvation a global counter would cause (rulebooks consuming the read slots the `rules/` directory
+would otherwise get). Changing it would also have reddened a reviewed existing test, and altering a reviewed test to
+accommodate a change is forbidden by this plan's §7. The loader's refusal message (`:466`) and prose (`:80-82`, `:117`)
+must NOT be rewritten. Required test instead: a pack directory at the cap cannot lift the aggregate past
+(directories × `MAX_FILES`), the refusal names the directory that hit its own ceiling, and the docblock states the
+aggregate arithmetic out loud.
 
 **NIT-5 is discharged here, not carried further.** A dangling `*.md` symlink inside either rules directory currently
 vanishes at `src/Context/RuleLoader.php:435` via `!$file->isFile()` with **zero** ledger entries. It becomes a
