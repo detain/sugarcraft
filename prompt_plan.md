@@ -2126,26 +2126,79 @@ separate test asserts the refusal is *recorded*.
 **Split out of P6.S2 on 2026-09-05** so that step keeps a clean pure-insertion audit trail.
 **Goal** (1) the `<harness-injected>` provenance fence; (2) the `PromptFence` escape-roster widening —
 **NOT to be done here**: widening consumed by P6.S2 (orchestrator reversal, see worklog), landed there with
-D1/D2; (3) the **layer-mapping decision, recorded as
-OPEN**: which layers are harness-injected (base/maxims authored-static vs repo-map/env derived), and
-whether that fence nests at all (`PromptFence` has no nesting concept) — settle it in the premise
-check and write the ruling here before any code.
+D1/D2; (3) the layer-mapping decision — **RECORDED AS OPEN at the split; RULED 2026-09-05 below.** The open
+question was which layers are harness-injected (base/maxims authored-static vs repo-map/env derived) and
+whether that fence nests at all (`PromptFence` has no nesting concept); the premise check was instructed to
+settle it and write the ruling here before any code, and it did. The history stays visible in place: the
+sentence this replaces asked a question, and the answer is that no layer is wrapped at this tip.
+
+**RULING 2026-09-05 (premise check `binding-harlequin-wolf`): no layer is wrapped at this tip.** P6.S2b lands
+`<harness-injected>` as the **seventh `PromptFence::TAGS` entry with no emitter** — the `system-reminder`
+precedent, which already proves a roster tag can be load-bearing for defang-only purposes without any section
+emitting it (`tests/Context/PromptSectionTest.php:502-516` pins exactly that shape: a tag in the roster, no
+`PromptSection` anywhere that returns it). This discharges the step's done-when literally: a forged
+`</harness-injected>` inside a project-instruction document becomes unrenderable, and that is a **roster +
+guard property, provable with ZERO golden movement**.
+
+**Why not a wrapper — the two rejected options, with their measured costs.** Wrapping `repo-map`…skill-listing
+would need pure insertion at TWO boundaries, re-base `STABLE_LAYERS_BYTES` and at least one
+`STABLE_LAYER_WIDTHS` row, and — decisively — would place the **unescaped skill bodies** under a
+harness-authorship frame the bytes cannot honour: `Skill::systemPromptContribution()`
+(`src/Skills/Skill.php:107-110`) interpolates file content with no `PromptFence::escape()` call anywhere in
+`src/Skills/`. Wrapping only `maxims` moves the golden for a provenance claim that **two standing,
+freshly-verified in-source rulings reject** — `src/Context/Sections/MaximsSection.php:31-38` and
+`tests/Context/Sections/MaximsSectionTest.php:37-48` both argue, correctly, that a seventh tag around bytes no
+model can influence moves escape-authority pins to protect bytes that were never at risk. That argument is NOT
+overturned here, so both notes STAND UNCHANGED and **`MaximsSection.php` / `MaximsSectionTest.php` come OUT of
+this step's file list.**
+
+**Why wrapping is mechanically unavailable today**, recorded so nobody rediscovers it. `PromptFence::escape()`
+is depth-blind — one flat case-insensitive alternation (`src/Context/PromptFence.php:118`) applied per-body at
+each construction site — so any region passed through it has its LEGITIMATE inner fences neutralised
+(`<repo-map>` → `&lt;repo-map>`). Nesting is therefore only expressible by concatenating harness-authored
+opener/closer literals around already-escaped sections, and `PromptSection` has no composite shape to carry
+that: it is a 4-method leaf protocol (`src/Context/PromptSection.php:40-78`), `assemblePrompt()` is a flat
+fold, and the snapshot blocks ride the section list BY IDENTITY (§17.2 invariant 9,
+`src/Runtime.php:2486-2489`). Post-fold string surgery in `buildSystemPrompt()` would bypass the section list
+and blind every `fence()`-metadata guard. **The wrap therefore defers to the step that builds the real
+harness-voiced channel** (§9.15 transient harness channel, `prompt_expand.md:3723-3725`), logged as a
+follow-up rather than a deferred obligation with no owner.
+
 **Companion (consumed)** the stale "five-tag roster" note at `src/Context/Sections/MaximsSection.php:25-38` was
-refreshed in P6.S2 alongside the widening (companion refresh consumed by P6.S2 — orchestrator reversal, see worklog);
-it is no longer a P6.S2b touch, though that step may still fence `MaximsSection` under the OPEN layer-mapping decision.
+refreshed in P6.S2 alongside the widening (companion refresh consumed by P6.S2 — orchestrator reversal, see
+worklog); it is no longer a P6.S2b touch. **CORRECTED 2026-09-05:** the clause that closed this line — "though
+that step may still fence `MaximsSection` under the OPEN layer-mapping decision" — died with the ruling above:
+`MaximsSection` is not fenced here, and its note is the ruling's evidence rather than this step's target.
 **Source** §3, the P5.S6 deferrals (worklog Phase-5-close entry), `prompt_expand.md` seam 8.
 **Files** `src/Context/PromptFence.php` — including the `PromptFence::TAGS` roster docblock-sentence refresh now
-owned here (deferred from P6.S2: the note says "pinned by BaseSystemPromptTest's user-rules forgery guard" in the
-singular when three tier guards now pin the roster; prose edits there move `GlobFigureDriftTest`'s paragraph census) ·
-`src/Context/Sections/MaximsSection.php` · the section that
-owns the new fence · `tests/Context/PromptSectionTest.php` · `tests/BaseSystemPromptTest.php` ·
-`tests/Providers/PromptStabilityTest.php` · the system golden.
+owned here (deferred from P6.S2: the note at :67-74 says "pinned by BaseSystemPromptTest's user-rules forgery
+guard" in the singular when **five** sites now pin the roster — the two whole-roster pins plus the three tier
+forgery guards at `tests/BaseSystemPromptTest.php:1109` (user), `:1231` (project), `:1324` (root); prose edits
+there move `GlobFigureDriftTest`'s paragraph census) · `tests/Context/PromptSectionTest.php` ·
+`tests/BaseSystemPromptTest.php`. **CORRECTED 2026-09-05 by the ruling above:** this list formerly also named
+`src/Context/Sections/MaximsSection.php`, "the section that owns the new fence",
+`tests/Providers/PromptStabilityTest.php` and "the system golden". All four are out — the emitter phrase
+presupposed a wrapper this ruling declines, the maxims notes are the ruling's evidence rather than its target,
+and with no layer wrapped there is no stable-layer row and no golden byte to move. Relatedly, the §18 row's
+phrasing that P6.S2b "retains the `<harness-injected>` fence AND the mapping decision as one build" (this
+file, the Phase-6 provenance-fence row) was wrong: the two are separable, and only the wrap moves goldens.
 **Depends on** P6.S2.
 **Tripwires that fire BY DESIGN** two roster pins, two orders, one insert: the SORTED roster at
-`tests/Context/PromptSectionTest.php:297-309`, the DECLARATION-order roster at
-`tests/BaseSystemPromptTest.php:977-981`.
+`tests/Context/PromptSectionTest.php:297-310` (literal list at :302-309), the DECLARATION-order roster at
+`tests/BaseSystemPromptTest.php:992-1004` — the `$expected` map at :992-999 plus the
+`assertSame(array_keys($expected), PromptFence::tags())` tripwire at :1000-1004. **CORRECTED 2026-09-05:** the
+cites here were taken at an older tree — `BaseSystemPromptTest.php:977-981` is the middle of the `$forgedDoc`
+attack payload, not a pin, and `PromptFence::TAGS` is at :78-85, not :70-76. **The census was also
+under-stated:** "two roster pins, two orders, one insert" prices only a pure widening, and is false as the
+complete P6.S2b census the day a wrapper lands — then the emitted-fence subset pins
+(`PromptSectionTest.php:444-448`, `:474-478`), the section-0-empty-fence pin (`:271-273`), the byte pin
+(`BaseSystemPromptTest.php:835`), the golden head/tail landmarks (`:793-803`) and the derived-census cascade
+all join it too. Under THIS ruling the golden does not move at all, so the done-when's "every golden move is
+justified as PURE INSERTION" clause is satisfied **vacuously — a golden move in this step would itself be the
+defect.** There is no regen in P6.S2b; do not "helpfully" regenerate the fixture.
 **Done when** a forged `harness-injected` close inside a project instruction document cannot render,
-asserted per §1.11, and every golden move is justified as PURE INSERTION.
+asserted per §1.11, and every golden move is justified as PURE INSERTION — vacuous under the ruling above: the
+expected move count is zero, and the guard, not the fixture, is what proves the tag is load-bearing.
 
 ### P6.S3 — Rulebooks: named, toggleable rule packs
 
