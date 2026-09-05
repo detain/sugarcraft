@@ -2555,6 +2555,14 @@ final class Runtime
         // deleting either the roster entry or this escape call turns that
         // test red - and the roster-wide semantics by the forged-instruction
         // guard's neutralised-copy counts above it.
+        //
+        // TRIGGERS ARE NOT YET APPLIED (named so, not hidden): the loader
+        // builds each rule's paths/keywords/description triggers into the Rule
+        // object and neither splice here reads $rule->triggers, so a rule
+        // scoped with `paths: ["src/**"]` renders into EVERY session until the
+        // P6.S5 / P7.S4 wiring gates it (measured at P6.S2 review: YES, it
+        // renders). Framing and escape are tier-blind, so this is a scoping
+        // gap, not a safety gap; recorded as a row in prompt_plan §18.
         $rules = (new RuleLoader($app->root ?? (getcwd() ?: '')))->load();
 
         foreach ($rules as $rule) {

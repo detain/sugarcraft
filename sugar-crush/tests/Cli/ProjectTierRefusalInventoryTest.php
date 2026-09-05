@@ -577,17 +577,17 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * matching evidence row in the same edit. The positive direction is what
      * this covers, and it is the direction the defect ran in.
      */
-     public function testTheEightThatFeedTheCollectorAndTheSixThatAreNamedGaps(): void
-     {
-         $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
-             '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
-             '.sugar-crush/skills', '.sugar-crush/workflows'];
-         $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml',
-             '.sugar-crush/config.json', '.sugar-crush/settings.json',
-             '.sugar-crush/settings.local.json', '.sugar-crush/rules'];
+    public function testTheEightThatFeedTheCollectorAndTheSixThatAreNamedGaps(): void
+    {
+        $feeders = ['.claude/agents', '.claude/skills', '.opencode/agents',
+            '.opencode/skills', '.sugar-crush/agents', '.sugar-crush/commands',
+            '.sugar-crush/skills', '.sugar-crush/workflows'];
+        $gaps = ['.opencode/memory', '.sugar-crush/hooks.yaml',
+            '.sugar-crush/config.json', '.sugar-crush/settings.json',
+            '.sugar-crush/settings.local.json', '.sugar-crush/rules'];
 
-         $this->assertCount(8, $feeders, 'the EIGHT this test is named for');
-         $this->assertCount(6, $gaps, 'and the SIX');
+        $this->assertCount(8, $feeders, 'the EIGHT this test is named for');
+        $this->assertCount(6, $gaps, 'and the SIX');
 
         $union = array_merge($feeders, $gaps);
         sort($union);

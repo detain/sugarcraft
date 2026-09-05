@@ -1529,6 +1529,17 @@ final class BaseSystemPromptTest extends TestCase
      */
     private static function writeFixtureFile(string $path, string $contents): void
     {
+        // Unlink BEFORE writing, never truncate in place: vendor/prompt-fixture
+        // lives INSIDE the `cp -al` hard-link farm shared with the main
+        // checkout, so a path reaching here may still name an inode the main
+        // tree also holds - and file_put_contents would rewrite that shared
+        // copy. Removing the link first makes the write private. Provable today
+        // that no live call site hits a shared inode (both materialisers either
+        // early-return or removeTree() first), which is exactly why this is a
+        // one-line prophylactic rather than a fix: unlink-then-create is the
+        // same mechanism that is the only reason `.git/index` survived the
+        // farm. @unlink: the normal case is a path that does not exist yet.
+        @unlink($path);
         file_put_contents($path, $contents);
         chmod($path, 0644);
     }
