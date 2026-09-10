@@ -127,15 +127,21 @@ final class McpClientTest extends TestCase
         $method = (new \ReflectionClass($client))->getMethod('loadConfig');
         $method->setAccessible(true);
 
+        // Capture-and-assert, never try{fail()}catch(RuntimeException): the
+        // failure this test exists to prevent is the assertion being eaten by
+        // the same net that catches the subject (SwallowingCatchCensusTest).
+        $caught = null;
         try {
             $method->invoke($client);
-            $this->fail('expected RuntimeException for an unreadable existing path');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('could not be read', $e->getMessage());
+            $caught = $e;
         } finally {
             chmod($unreadable, 0644);
             unlink($unreadable);
         }
+
+        $this->assertNotNull($caught, 'loadConfig() should throw for an unreadable existing path');
+        $this->assertStringContainsString('could not be read', $caught->getMessage());
     }
 
     public function testLoadConfigParsesValidJson(): void
@@ -171,14 +177,17 @@ final class McpClientTest extends TestCase
         $method = $reflection->getMethod('loadConfig');
         $method->setAccessible(true);
 
+        $caught = null;
         try {
             $method->invoke($client);
-            $this->fail('expected RuntimeException for malformed JSON');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString($this->configPath, $e->getMessage());
-            $this->assertStringContainsString('is not valid JSON', $e->getMessage());
-            $this->assertPrevious($e);
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'loadConfig() should throw for malformed JSON');
+        $this->assertStringContainsString($this->configPath, $caught->getMessage());
+        $this->assertStringContainsString('is not valid JSON', $caught->getMessage());
+        $this->assertPrevious($caught);
     }
 
     public function testLoadConfigThrowsForAnEmptyFileTheSameWayTheInventoryReadsIt(): void
@@ -203,22 +212,24 @@ final class McpClientTest extends TestCase
         $method = (new \ReflectionClass($client))->getMethod('loadConfig');
         $method->setAccessible(true);
 
-        // [1,2,3] parses; it just is not a config.
-        file_put_contents($this->configPath, '[1,2,3]');
-        try {
-            $method->invoke($client);
-            $this->fail('expected RuntimeException for a JSON array at top level');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('has no "mcpServers" object', $e->getMessage());
-        }
+        foreach (
+            [
+                // [1,2,3] parses; it just is not a config.
+                'a JSON array at top level' => '[1,2,3]',
+                // An object without the key is the other wrong-shape spelling.
+                'a missing mcpServers key' => '{"servers":{}}',
+            ] as $shape => $bytes
+        ) {
+            file_put_contents($this->configPath, $bytes);
+            $caught = null;
+            try {
+                $method->invoke($client);
+            } catch (\RuntimeException $e) {
+                $caught = $e;
+            }
 
-        // An object without the key is the other wrong-shape spelling.
-        file_put_contents($this->configPath, '{"servers":{}}');
-        try {
-            $method->invoke($client);
-            $this->fail('expected RuntimeException for a missing mcpServers key');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('has no "mcpServers" object', $e->getMessage());
+            $this->assertNotNull($caught, "loadConfig() should throw for {$shape}");
+            $this->assertStringContainsString('has no "mcpServers" object', $caught->getMessage());
         }
     }
 
