@@ -1988,8 +1988,12 @@ final class AgentManagerTest extends TestCase
      *
      * @param list<string> $grant
      * @param ?list<\SugarCraft\Crush\Tools\Tool> $registry
+     * @param ?list<\SugarCraft\Crush\Tools\Tool> $universe The UNFILTERED
+     *        ceiling $registry was narrowed from — supply it whenever the
+     *        fixture models a session with `allowedTools`/`disabledTools`
+     *        (E639 option 1); omit it to keep the old all-or-nothing refusal.
      */
-    private function captureSubAgentRequest(array $grant, ?array $registry): CompleteRequest
+    private function captureSubAgentRequest(array $grant, ?array $registry, ?array $universe = null): CompleteRequest
     {
         $captured = null;
         $provider = $this->createMock(ProviderInterface::class);
@@ -2005,6 +2009,7 @@ final class AgentManagerTest extends TestCase
             provider: $provider,
             skillRegistry: $this->skillRegistry,
             toolRegistry: $registry,
+            toolUniverse: $universe,
         );
         $manager->register(new Agent(
             name: 'granted',
@@ -2119,9 +2124,11 @@ final class AgentManagerTest extends TestCase
 
     /**
      * NO REGISTRY IS NOT AN EMPTY REGISTRY, and this pins the pre-existing
-     * behaviour deliberately kept reachable: a caller that supplies none — every
-     * test double in this file, and Bootstrap until its own change lands — gets
-     * `tools: null` exactly as before, rather than a refusal it cannot act on.
+     * behaviour deliberately kept reachable: a caller that supplies none —
+     * every test double in this file — gets `tools: null` exactly as before,
+     * rather than a refusal it cannot act on. `Bootstrap` supplies BOTH sets
+     * now (E639), so what still reaches here with null is a caller that has
+     * genuinely no tool set to speak of.
      */
     public function testWithNoRegistryTheRequestKeepsItsPreExistingNullTools(): void
     {
@@ -3107,68 +3114,116 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
-     * THE TRAP IN THE WIRING, PINNED SO THE NEXT AGENT MEETS IT AS A RED TEST
-     * RATHER THAN AS A BROKEN SESSION.
+     * THE TRAP IN THE WIRING, NOW DISARMED THE WAY E639 DECIDED (option 1):
+     * a policy-narrowed absence resolves through the UNFILTERED ceiling — the
+     * grant survives, narrowed — while a never-existing name still refuses.
      *
-     * resolveGrantedTools() refuses a declaration that matches no tool in the
-     * registry, and that is correct ONLY while the registry it is handed is the
-     * UNFILTERED ceiling. `Bootstrap::tools()` does not return that: it returns
-     * `filterToolSet($tools)`, already narrowed by the operator's own
-     * `allowedTools`/`disabledTools`, and `filterToolSet()`'s own doc-block
-     * names `disabledTools: ["*"]` as a SUPPORTED way to ask for a toolless
-     * agent. So handing this method the filtered set turns a documented
-     * configuration into a hard refusal.
+     * WHAT THIS TEST USED TO PIN, recorded because the tripwire's failure
+     * message ordered exactly this rewrite rather than a deletion. Before the
+     * universe existed, `resolveGrantedTools()` refused EVERY declaration that
+     * matched no registry entry, which was sound only against the unfiltered
+     * ceiling — and the obvious thing to pass, `Bootstrap::tools()`, returns
+     * the FILTERED set. Measured on PHP 8.3.6 at round 60: `disabledTools:
+     * ["Bash"]` threw for five of the six built-in presets, and a
+     * policy-narrowed absence produced the byte-identical refusal of a typo.
+     * That indistinguishability is now the NULL-UNIVERSE polarity, asserted
+     * third below, because a caller that supplies only half the truth still
+     * gets the refusal that half can support.
      *
-     * MEASURED on PHP 8.3.6 at the round-60 review, by reflection against
-     * `Bootstrap::tools()`'s eleven-tool ceiling: with `Bash` removed, FIVE of
-     * the six built-in presets throw (only `architect` survives); with the
-     * registry empty, all six do.
-     *
-     * This test asserts the SEMANTICS rather than that figure — a count over
-     * the preset table would rot the moment a preset changes, and the figure is
-     * recorded above as the reason the semantics matter. What it pins is that
-     * an absence caused by policy is indistinguishable here from a typo, which
-     * is exactly why the wiring is not the one-liner the backlog first called
-     * it.
+     * The semantics asserted below, not the preset count: a figure over the
+     * table would rot the moment a preset changes.
      */
     public function testAPolicyNarrowedRegistryIsIndistinguishableFromATypo(): void
     {
+        $narrowed = $this->fakeRegistry('Read', 'Grep');
+        $ceiling = $this->fakeRegistry('Read', 'Grep', 'Bash');
+
+        // FIRST: with both sets, the disabled tool narrows out and the grant
+        // survives — no throw, no Bash, Read still delivered.
+        $request = $this->captureSubAgentRequest(['Read', 'Bash'], $narrowed, $ceiling);
+        $this->assertSame(['Read'], self::toolNames($request->tools));
+
+        // SECOND: a name the ceiling never had is still refused, and the
+        // message says so rather than sending the reader to the config file.
         $caught = null;
 
         try {
-            // The ceiling holds Bash; this session's policy removed it. The
-            // declaration is correct and the operator asked for the narrowing.
-            $this->captureSubAgentRequest(['Read', 'Bash'], $this->fakeRegistry('Read', 'Grep'));
+            $this->captureSubAgentRequest(['Read', 'Reed'], $narrowed, $ceiling);
         } catch (\RuntimeException $e) {
             $caught = $e;
         }
 
-        $this->assertNotNull(
-            $caught,
-            'if this stops throwing, resolveGrantedTools() has been changed to intersect — '
-            . 'update AgentManager::resolveGrantedTools()\'s doc-block and the backlog entry with it',
-        );
-        $this->assertStringContainsString('"Bash"', $caught->getMessage());
+        $this->assertNotNull($caught, 'a never-existing tool must refuse even with the ceiling in hand');
+        $this->assertStringContainsString('"Reed"', $caught->getMessage());
         $this->assertStringContainsString('match no tool this session offers', $caught->getMessage());
+        $this->assertStringContainsString('never existed rather than being disabled by policy', $caught->getMessage());
 
-        // The same message a genuine typo produces, byte for byte in its shape.
-        // THIS is the finding: the method cannot tell the two apart, so a
-        // caller that hands it a filtered set converts a supported config into
-        // a crash.
+        // THIRD: WITHOUT the ceiling the old indistinguishability stands —
+        // a policy narrowing and a typo produce the identical refusal, which
+        // is the reason the wiring passes both sets.
+        $noCeiling = null;
+
+        try {
+            $this->captureSubAgentRequest(['Read', 'Bash'], $narrowed);
+        } catch (\RuntimeException $e) {
+            $noCeiling = $e;
+        }
+
+        $this->assertNotNull($noCeiling, 'null universe must keep the all-or-nothing refusal');
+
         $typo = null;
 
         try {
-            $this->captureSubAgentRequest(['Read', 'Reed'], $this->fakeRegistry('Read', 'Grep'));
+            $this->captureSubAgentRequest(['Read', 'Reed'], $narrowed);
         } catch (\RuntimeException $e) {
             $typo = $e;
         }
 
         $this->assertNotNull($typo);
         $this->assertSame(
-            str_replace('"Bash"', '<absent>', $caught->getMessage()),
-            str_replace('"Reed"', '<absent>', $typo->getMessage()),
-            'policy-narrowed and typo\'d declarations produce the identical refusal',
+            str_replace('"Bash"', '<absent>', (string) $noCeiling?->getMessage()),
+            str_replace('"Reed"', '<absent>', (string) $typo?->getMessage()),
+            'without a universe, policy-narrowed and typo\'d declarations produce the identical refusal',
         );
+    }
+
+    /**
+     * The whole ceiling narrowed away is STILL a supported configuration:
+     * `disabledTools: ["*"]` is documented as the way to ask for a toolless
+     * agent, so every preset's grant must survive as EMPTY (delivered as
+     * `tools: null`) rather than crash — the six-presets-throw case of the
+     * round-60 measurement, now on the survive side.
+     */
+    public function testAFullyNarrowedSessionYieldsAToollessGrantNotACrash(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['Read', 'Grep', 'Bash'],
+            $this->fakeRegistry(),
+            $this->fakeRegistry('Read', 'Grep', 'Bash'),
+        );
+
+        $this->assertNull($request->tools, 'a grant narrowed to nothing by policy is null, not a crash');
+    }
+
+    /**
+     * The ceiling is validated like the registry: a universe holding something
+     * that is not a {@see Tool} would leave every real tool "unexplained" and
+     * convert narrowing into refusal — but refusing on a broken ceiling is the
+     * SAFE direction, so it throws rather than silently degrading to the
+     * pre-universe behaviour for just that agent.
+     */
+    public function testANonToolUniverseEntryIsRefused(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequest(['Read'], $this->fakeRegistry('Grep'), ['Read']);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('Tool universe entry', $caught->getMessage());
     }
 
     private function createAgent(

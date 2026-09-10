@@ -62,10 +62,19 @@ final class AgentManager
      *        supplied none, and every sub-agent then reaches its provider with
      *        `tools: null` exactly as it did before this parameter existed —
      *        the pre-existing behaviour, kept reachable so a caller that has no
-     *        tool set (every test double in `tests/`, and `Bootstrap` until its
-     *        own one-line change lands) is not forced to invent one. An empty
-     *        ARRAY is a different statement: a registry exists and offers
-     *        nothing, so any declaration at all is unresolvable and refused.
+     *        tool set (every test double in `tests/`) is not forced to invent
+     *        one. An empty ARRAY is a different statement: a registry exists
+     *        and offers nothing, so any declaration at all is refused.
+     * @param ?list<Tool> $toolUniverse The CEILING that {@see $toolRegistry}
+     *        was filtered FROM — the unfiltered built-in + MCP set, before
+     *        `allowedTools`/`disabledTools` shrink it. It exists for exactly
+     *        one distinction, and {@see resolveGrantedTools()} carries the
+     *        whole argument: a declaration matching no registry entry is a
+     *        SESSION NARROWING (intersect — the grant survives without the
+     *        removed tool) when the unfiltered ceiling still has it, and a
+     *        TYPO (refuse) when nothing ever had it. Null — every caller that
+     *        cannot produce the ceiling — keeps the old all-or-nothing
+     *        refusal: the behaviour that half the truth can support.
      */
     public function __construct(
         private ProviderInterface $provider,
@@ -74,6 +83,7 @@ final class AgentManager
         private ?\Closure $permissionGateFactory = null,
         private ?\Closure $permissionApprover = null,
         private ?array $toolRegistry = null,
+        private ?array $toolUniverse = null,
     ) {}
 
     /**
@@ -749,38 +759,45 @@ final class AgentManager
      * quietly ignores what it cannot parse has a hole shaped like the next
      * defect.
      *
-     * AND THAT REFUSAL IS SOUND ONLY WHILE THE REGISTRY IS THE UNFILTERED
-     * CEILING — a caveat this paragraph did not carry, and the reason wiring
-     * this method up is not the one-liner the backlog first called it.
-     * `$toolRegistry` is compared against as if it were every tool that could
-     * exist, but the obvious thing to pass is
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, whose return is
-     * `filterToolSet($tools)` — ALREADY narrowed by the operator's own
-     * `allowedTools`/`disabledTools`. That method's own doc-block names
-     * `disabledTools: ["*"]` as the SUPPORTED way to ask for a toolless agent
-     * and says refusing it "would break a configuration this class documents as
-     * intentional". Handed the filtered set, this method refuses exactly that.
+     * A NARROWED GRANT SURVIVES; A NEVER-EXISTING TOOL REFUSES. This used to
+     * refuse EVERY declaration that matched no registry entry — sound only
+     * while `$toolRegistry` was the unfiltered ceiling, which the obvious
+     * thing to pass is NOT: {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}
+     * returns `filterToolSet($tools)`, already narrowed by the operator's own
+     * `allowedTools`/`disabledTools`, and that method's doc-block names
+     * `disabledTools: ["*"]` as the SUPPORTED way to ask for a toolless agent.
+     * MEASURED on PHP 8.3.6 at the round-60 review by reflection against
+     * `Bootstrap::tools()`'s eleven-tool ceiling: with `Bash` removed the
+     * all-or-nothing refusal threw for FIVE of the six built-in presets (only
+     * `architect` survives, being genuinely read-only); with the registry empty,
+     * all six. A documented configuration turned into a crash, indistinguishable
+     * in both message and severity from the typo this method exists to catch —
+     * which is why wiring the grant was never the one-liner the backlog first
+     * called it, and why the constructor now takes the ceiling as
+     * `$toolUniverse` alongside the filtered `$toolRegistry`.
      *
-     * MEASURED on PHP 8.3.6, by reflection against `Bootstrap::tools()`'s
-     * eleven-tool ceiling: with `Bash` removed, FIVE of the six built-in
-     * presets throw (only `architect` survives, being genuinely read-only);
-     * with the registry empty, all six do. The figure is recorded here, not
-     * asserted anywhere — a count over the preset table would rot the next time
-     * a preset changes. What IS pinned is the semantics, by
-     * AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo:
-     * a policy-narrowed absence and a typo produce the identical refusal, so
-     * this method cannot tell an operator's deliberate narrowing from a
-     * mistake.
+     * WHAT IT DOES NOW, once `$toolUniverse` is supplied: an unresolved
+     * declaration gets a second look against the unfiltered ceiling. A match
+     * there means the shortfall is the SESSION's own narrowing — the grant
+     * SURVIVES, narrowed: the declaration is marked resolved and contributes no
+     * tool, because the operator removed that tool from every model in the
+     * session and re-widening a sub-agent past `disabledTools` is the exact
+     * fail-open this bundle exists to close. No match anywhere means the name
+     * never existed: refused, loudly, because a typo'd `Reed` must not silently
+     * shrink a roster. With `$toolUniverse` null the old refusal stands —
+     * pinned by AgentManagerTest, both polarities, via
+     * ::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo (which now
+     * passes on the narrowing half and still throws on the typo half).
      *
-     * LEFT AS A REFUSAL, DELIBERATELY, because fixing it properly needs
-     * something no caller currently has. Distinguishing "the registry never had
-     * this tool" from "the registry had it and policy removed it" requires the
-     * UNFILTERED set, which `filterToolSet()` discards; intersecting instead
-     * would re-open the silent-narrowing hole this whole method exists to
-     * close, for typos as much as for policy. So the decision is deferred to
-     * whoever wires the launch path, with the trade-off written down here and
-     * in the hardening backlog rather than discovered by a user whose
-     * `disabledTools` suddenly crashes five presets.
+     * WHY NOT JUST INTERSECT WITHOUT THE CEILING: intersection against the
+     * filtered set alone cannot tell the two cases apart — that
+     * indistinguishability was the finding, and silently dropping typos is the
+     * hole this method was born to close. Why not pass the UNFILTERED set as
+     * the registry: sub-agent rosters would then ignore `disabledTools`, a
+     * widening. Why not keep the crash: it punishes a configuration this
+     * project documents as intentional. Passing both sets (E639 option 1) was
+     * decided at round 61; the two rejected options are recorded there so the
+     * argument does not have to be re-litigated from memory.
      *
      * ORDER IS THE REGISTRY'S, not the declaration list's: `Bootstrap::tools()`
      * documents its array as a wire order the model has learned, and a subset
@@ -904,6 +921,15 @@ final class AgentManager
             }
         }
 
+        // E639 option 1: with the ceiling in hand, a declaration the SESSION
+        // narrowed away is a resolved grant whose tool is absent, and only a
+        // name the ceiling never had is refused. Without it the all-or-nothing
+        // throw below is the honest answer — the caller supplied a set it
+        // cannot tell policy from typos against. Doc-block above.
+        if ($unresolved !== [] && $this->toolUniverse !== null) {
+            $unresolved = $this->minusSessionNarrowing($unresolved);
+        }
+
         if ($unresolved !== []) {
             throw new \RuntimeException(sprintf(
                 'Agent "%s" grants %s, which match no tool this session offers (%s). '
@@ -928,7 +954,10 @@ final class AgentManager
                         static fn(Tool $t): string => $t->name(),
                         array_filter($this->toolRegistry, static fn($t): bool => $t instanceof Tool),
                     )),
-            ));
+            ) . ($this->toolUniverse === null
+                ? ''
+                : ' None of them matches the unfiltered ceiling this session was narrowed from '
+                  . 'either, so these names never existed rather than being disabled by policy.'));
         }
 
         // EMPTY AFTER THE DENY IS `null`, NOT `[]`, on the same argument the
@@ -957,6 +986,68 @@ final class AgentManager
         // AgentManagerTest::testAFullyDeniedGrantIsNotReportedAsUnresolvable,
         // which reds if this returns `[]`.
         return $granted === [] ? null : $granted;
+    }
+
+    /**
+     * Drop every unresolved declaration the UNFILTERED ceiling explains: a
+     * name matching a tool there was removed from this session's registry by
+     * `allowedTools`/`disabledTools` — a narrowing the operator asked for, not
+     * a misspelling the preset author should hear about as a crash. What comes
+     * back is what still has no explanation anywhere, and the caller refuses
+     * exactly that set.
+     *
+     * @param array<array-key, string> $unresolvedDeclarations validated
+     *        declaration strings, keyed as {@see namePatterns()} keyed them
+     * @return array<array-key, string> the declarations the ceiling cannot explain
+     */
+    private function minusSessionNarrowing(array $unresolvedDeclarations): array
+    {
+        $ceilingNames = $this->universeToolNames();
+
+        foreach ($unresolvedDeclarations as $i => $declaration) {
+            // Validated already: every entry here came out of namePatterns()
+            // un-thrown, so the pattern parses and its name half is real.
+            $namePattern = (new PermissionRule($declaration, PermissionAction::Allow))->toolNamePattern();
+
+            foreach ($ceilingNames as $name) {
+                if (PermissionRule::matchesToolName($namePattern, $name)) {
+                    unset($unresolvedDeclarations[$i]);
+                    break;
+                }
+            }
+        }
+
+        return $unresolvedDeclarations;
+    }
+
+    /**
+     * The names of the tools in {@see $toolUniverse}, validated the way the
+     * registry loop validates its entries: a ceiling holding a non-{@see Tool}
+     * would let a real tool go unexplained and turn every "never existed"
+     * refusal into a false negative — the fail-open direction — so it throws
+     * rather than being skipped. Only reached when a universe was supplied.
+     *
+     * @return list<string>
+     */
+    private function universeToolNames(): array
+    {
+        $names = [];
+
+        foreach ((array) $this->toolUniverse as $index => $tool) {
+            if (!$tool instanceof Tool) {
+                throw new \RuntimeException(sprintf(
+                    'Tool universe entry %s is a %s, not a %s, so a session narrowing cannot be '
+                    . 'distinguished from a typo.',
+                    var_export($index, true),
+                    get_debug_type($tool),
+                    Tool::class,
+                ));
+            }
+
+            $names[] = $tool->name();
+        }
+
+        return $names;
     }
 
     /**

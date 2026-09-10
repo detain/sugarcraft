@@ -1502,9 +1502,27 @@ final class Bootstrap
         // launch" the main-loop gate already commits to.
         $permissionRules = self::permissionRules(self::permissionConfig());
 
+        // ONE skill registry for the manager AND the tool set: the SkillTool in
+        // the grant below reads the same instance the sub-agent prompt splice
+        // does, so a skill disabled in the user config is disabled for
+        // sub-agents in both senses at once.
+        $resolvedSkills = $skills ?? self::skillRegistry($root);
+
+        // THE SUB-AGENT GRANT NEEDS BOTH HALVES of the tool story, which is
+        // why this builds the ceiling ONCE and filters it locally rather than
+        // calling tools(): AgentManager distinguishes "the operator disabled
+        // Bash" (intersect — the grant survives narrowed) from "the preset
+        // misspelled Reed" (refuse), and that comparison needs the filtered
+        // set as the roster's ceiling and the unfiltered one as the universe.
+        // Passing only the filtered set turned `disabledTools: ["Bash"]` —
+        // documented as intentional — into a hard crash for five of the six
+        // built-in presets; E639's measured trap and the reason this wiring
+        // is not the one-liner the backlog first called it.
+        $toolUniverse = self::unfilteredTools($root, skills: $resolvedSkills);
+
         $manager = new AgentManager(
             $provider,
-            $skills ?? self::skillRegistry($root),
+            $resolvedSkills,
             // Sub-agent gates are built from the SAME config the main loop's
             // gate is (crush_code.md Phase 1 item 2's "one config source"),
             // rather than AgentManager's own bare `new PermissionGate($mode)`
@@ -1524,6 +1542,8 @@ final class Bootstrap
                 "this agent preset's permissionMode",
             ),
             permissionApprover: $approver,
+            toolRegistry: self::filterToolSet($toolUniverse),
+            toolUniverse: $toolUniverse,
         );
 
         // A snapshot captured at $root for every agent, which is what closes
@@ -5627,6 +5647,64 @@ final class Bootstrap
         bool $fdAvailable = false,
         ?RulesState $rulesState = null,
     ): array {
+        // FILTERED HERE, NOT AT THE CALL SITES, and that is the load-bearing
+        // part rather than tidiness: `withTools(self::tools(...))` appears
+        // THREE times in this class — in `app()`, `backend()` and
+        // `backendFor()` — and a filter applied at two of them is a config key
+        // that works until the user switches provider. (The plan for this item
+        // named two sites; there are three. An earlier version of this comment
+        // named `chat()` as one of them, which is wrong in the way this project
+        // keeps being wrong: `chat()` reaches tools only transitively through
+        // `backend()` and holds no `self::tools(` call of its own. Measured with
+        // `grep -n 'self::tools(' src/Cli/Bootstrap.php`; deliberately no line
+        // numbers, since a comment quoting them decays on the next insertion
+        // above.) Everything
+        // downstream of this return receives an already-filtered set, including
+        // `mcpTools()`'s appended bridges, which is what makes
+        // `disabledTools: ["mcp__git__*"]` mean anything.
+        return self::filterToolSet(self::unfilteredTools(
+            $root,
+            $loader,
+            $skills,
+            $lsp,
+            $rgAvailable,
+            $fdAvailable,
+            $rulesState,
+        ));
+    }
+
+    /**
+     * The exact array {@see tools()} builds, BEFORE `filterToolSet()` applies
+     * the session's `allowedTools`/`disabledTools` — the ceiling itself rather
+     * than one session's slice of it.
+     *
+     * WHY THIS IS PUBLIC. `AgentManager::resolveGrantedTools()` has to tell
+     * "the operator disabled this tool" from "the preset misspelled it", and
+     * that distinction needs BOTH halves: the filtered set as the grant's
+     * ceiling and this unfiltered set as the universe the narrowing happened
+     * against. Handing it only `tools()` turned `disabledTools: ["Bash"]` —
+     * documented as intentional — into a crash for five of the six built-in
+     * presets (E639's measured trap); passing only THIS would let sub-agent
+     * rosters ignore `disabledTools`, a widening. The two-set shape is the
+     * decided remedy, argued in that method's doc-block.
+     *
+     * Same construction cost as tools() minus one filter pass — nothing here
+     * spawns what backend()/app() are not already spawning on the same launch.
+     *
+     * @return list<Tool>
+     *
+     * @see tools() for the argument documentation, which is about THIS build —
+     *      tools() is one line of delegation over every parameter below.
+     */
+    public static function unfilteredTools(
+        ?string $root = null,
+        ?InstructionFileLoader $loader = null,
+        ?SkillRegistry $skills = null,
+        ?LspClient $lsp = null,
+        bool $rgAvailable = false,
+        bool $fdAvailable = false,
+        ?RulesState $rulesState = null,
+    ): array {
         $root = self::requireRoot($root);
         $loader ??= self::instructionLoader($root);
         $skills ??= self::skillRegistry($root);
@@ -5731,22 +5809,13 @@ final class Bootstrap
             ...self::mcpTools($root),
         ];
 
-        // FILTERED HERE, NOT AT THE CALL SITES, and that is the load-bearing
-        // part rather than tidiness: `withTools(self::tools(...))` appears
-        // THREE times in this class — in `app()`, `backend()` and
-        // `backendFor()` — and a filter applied at two of them is a config key
-        // that works until the user switches provider. (The plan for this item
-        // named two sites; there are three. An earlier version of this comment
-        // named `chat()` as one of them, which is wrong in the way this project
-        // keeps being wrong: `chat()` reaches tools only transitively through
-        // `backend()` and holds no `self::tools(` call of its own. Measured with
-        // `grep -n 'self::tools(' src/Cli/Bootstrap.php`; deliberately no line
-        // numbers, since a comment quoting them decays on the next insertion
-        // above.) Everything
-        // downstream of this return receives an already-filtered set, including
-        // `mcpTools()`'s appended bridges, which is what makes
-        // `disabledTools: ["mcp__git__*"]` mean anything.
-        return self::filterToolSet($tools);
+        // THE CEILING, not the session's slice of it. Every caller that renders
+        // tools to a model wants tools() — which filters this array with the
+        // operator's allowedTools/disabledTools in ONE place; the argument for
+        // filtering there rather than at the call sites lives on that method.
+        // Only a caller that must distinguish narrowing from absence (the
+        // sub-agent grant, E639) asks for this one directly.
+        return $tools;
     }
 
     /**
