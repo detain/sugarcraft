@@ -6,7 +6,6 @@ namespace SugarCraft\Crush;
 
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\SgrState;
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
