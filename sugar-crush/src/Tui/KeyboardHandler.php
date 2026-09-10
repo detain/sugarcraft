@@ -266,9 +266,10 @@ final class KeyboardHandler
      * modal instead of moving the highlighted skill — which is exactly why the
      * Skills pane could be OPENED but never selected from).
      *
-     * Read twice: once as claim rule 2, and once by {@see chatOwns()} for the
-     * one chord {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}
-     * declares as the shell's while this holds.
+     * Read three times: once as claim rule 2, once by {@see chatOwns()} for
+     * the one chord {@see KeyBindingRegistry::chatCtrlRunesYieldedToShell()}
+     * declares as the shell's while this holds, and once by
+     * {@see paletteIsAbandoned()} as the liveness half of the E666 gate.
      *
      * The second read is DEFENCE IN DEPTH, not a behaviour, and saying so is
      * the honest form: measured, dropping the conjunct from `chatOwns()` — so
@@ -362,7 +363,9 @@ final class KeyboardHandler
      * This is the stand-down half of the E12 fix: while such a view owns the
      * keyboard, the chord is a true no-op — nothing opens, and nothing waits
      * on the other side of the exit. {@see \SugarCraft\Crush\App\App::delegateToChat()}
-     * enforces it at the one delivery choke point BOTH doors share. The
+     * enforces it at the one delivery choke point BOTH doors share. A
+     * palette opened BEFORE such a view took the keyboard is the other half
+     * of the leak and is closed there by {@see paletteIsAbandoned()}. The
      * composite half — the shell painting a hosted overlay over its full-pane
      * views — stays open as a layout item, recorded as the E12 follow-up in
      * `docs/plans/crush_code_hardening_backlog.md`.
@@ -377,6 +380,49 @@ final class KeyboardHandler
         return $msg->type === KeyType::Char
             && $msg->ctrl
             && $msg->rune === 'p'
+            && self::shellOwnsKeyboard($app);
+    }
+
+    /**
+     * Is the hosted chat's palette open but ABANDONED — left behind by a
+     * hand-over of the keyboard to one of the shell's own views?
+     *
+     * {@see paletteStandsDown()} gates the OPENING chord only. A palette
+     * opened in `Pane::Chat` — where that gate is correctly silent and the
+     * modal is painted and drivable — and then left open across a hand-over
+     * (Tab to the agent dashboard, the F10 menu, an opening skill picker) is
+     * the same E12 defect through a different door: the chords that still
+     * fall through to Chat feed the invisible modal (measured pre-fix red:
+     * `Ctrl+O` in `Pane::Agents` appended an unseen `o` to the buried
+     * palette's query), and `Ctrl+P`, the toggle-close inside the pane, is
+     * itself withheld by the stand-down — so the abandoned modal cannot be
+     * closed from the owning view at all. Tracker E666, the lane-W seam.
+     *
+     * The entry offered two shapes: re-entry re-validation (every hand-over
+     * site closes or adopts the palette) versus a per-keystroke gate. This
+     * is the per-keystroke gate, and the reason is a count, not a taste: the
+     * hand-over has many doors — `Tab`, `Shift+Tab`, `a`, `,`, F10, the skill
+     * picker's opener, a mouse pane-jump — each needing its own hook,
+     * while {@see \SugarCraft\Crush\App\App::delegateToChat()} is the single
+     * choke point that already sees every keystroke bound for Chat, the same
+     * discipline E12 chose. The predicate is live state, not edge detection:
+     * a keyboard-owning view is up AND a palette is open. CLOSE is chosen
+     * over ADOPT because adopting is the composite route — a `Renderer`
+     * layout change, tracked separately as the E12 follow-up; a seam, not a
+     * fix in this lane.
+     *
+     * Scope guard: a palette the user can see and drive is nobody's to
+     * close. In the sidebar panes (`Files`, `Tools`) the chat is painted
+     * alongside, {@see shellOwnsKeyboard()} is false, and keystrokes keep
+     * reaching the modal exactly as Chat designed it.
+     *
+     * Pinned by
+     * {@see \SugarCraft\Crush\Tests\Tui\KeyboardHandlerTest::testAPaletteLeftBehindByAPaneSwitchIsClosedByTheNextFallThroughKey()}.
+     */
+    public static function paletteIsAbandoned(App $app): bool
+    {
+        return $app->chat !== null
+            && $app->chat->palette() !== null
             && self::shellOwnsKeyboard($app);
     }
 

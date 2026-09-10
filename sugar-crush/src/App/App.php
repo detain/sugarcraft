@@ -1140,6 +1140,26 @@ final class App implements Model
             return [$this, null];
         }
 
+        // E666 (the abandonment half of E12's stand-down): a palette opened
+        // in the chat pane and left open across a hand-over to a
+        // keyboard-owning view used to feed the fall-through chords into an
+        // invisible modal. The first keystroke that would have been
+        // swallowed instead CLOSES the palette — through Chat's own Escape
+        // arm, the canonical close — and is itself consumed: the next
+        // keystroke acts on a clean chat. Design decision (per-keystroke
+        // live state over per-transition hooks) and scope guard live at
+        // {@see KeyboardHandler::paletteIsAbandoned()}.
+        if ($msg instanceof KeyMsg && KeyboardHandler::paletteIsAbandoned($this)) {
+            [$closedChat] = $this->chat->update(new KeyMsg(KeyType::Escape));
+
+            return [
+                $closedChat instanceof Chat && $closedChat !== $this->chat
+                    ? $this->withChat($closedChat)
+                    : $this,
+                null,
+            ];
+        }
+
         // Trackers #83/#85 (E12, stand-down route): the palette chord is
         // Chat's and stays claimed — yielding it measures WORSE (`/model`
         // instead of nothing; see KeyBindingRegistry) — but delivery is

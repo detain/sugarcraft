@@ -1681,6 +1681,76 @@ final class KeyboardHandlerTest extends TestCase
         $this->resetMenuBarState();
     }
 
+    /**
+     * E666 (the lane-W seam): the stand-down covers the OPENING chord, but a
+     * palette opened in `Pane::Chat` and LEFT OPEN across a hand-over of the
+     * keyboard kept eating the fall-through chords invisibly. Measured red
+     * before the fix: in `Pane::Agents`, `Ctrl+O` did not toggle a tool
+     * output — it appended an invisible `o` to the buried modal's query and
+     * left it open (`PaletteState::$query === 'o'`), the same shape every
+     * non-`p` fall-through chord takes — while `Ctrl+P`, the toggle-close
+     * inside the pane, was itself withheld by the stand-down, so the modal
+     * could not be closed from the dashboard at all.
+     *
+     * The fixed contract, enforced at {@see \SugarCraft\Crush\App\App::delegateToChat()}
+     * through {@see KeyboardHandler::paletteIsAbandoned()}: while a
+     * keyboard-owning shell view is up AND the hosted palette is open, the
+     * first keystroke that would have fed the invisible modal CLOSES it —
+     * through Chat's own Escape arm — and is itself consumed. Leaving the
+     * pane then reveals nothing, because nothing is left waiting.
+     *
+     * Scope, pinned on the negative side: a palette the user can SEE and
+     * drive is nobody's to close — in a sidebar pane the same chord still
+     * falls through to the painted palette as typeahead, untouched by the
+     * gate. And the third keyboard-owning state (the F10 menu) closes alike.
+     */
+    public function testAPaletteLeftBehindByAPaneSwitchIsClosedByTheNextFallThroughKey(): void
+    {
+        $chat = new Chat(
+            history: [Message::user('hello'), Message::assistant('hi')],
+            backend: new EchoBackend(),
+        );
+        [$app] = App::new($this->provider, 'gpt-4')
+            ->withChat($chat)
+            ->update(new WindowSizeMsg(100, 30));
+
+        // Fixture: the chord opens a palette the chat pane paints.
+        [$open] = $app->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($open->chat?->palette(), 'fixture: Ctrl+P opens in Pane::Chat');
+        $this->assertStringContainsString('🔍', self::body($open), 'fixture: and the chat pane paints it');
+
+        // Fixture for the leak's precondition: a hand-over leaves it open and unpainted.
+        $abandoned = $open->withPane(Pane::Agents);
+        $this->assertNotNull($abandoned->chat?->palette(), 'fixture: the pane switch leaves the palette open');
+        $this->assertStringNotContainsString('🔍', self::body($abandoned), 'and the dashboard paints none of it');
+
+        // The first fall-through chord closes the modal instead of feeding it.
+        [$closed] = $abandoned->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertNotSame($closed, $abandoned, 'the closure is observable — the App changes');
+        $this->assertNull($closed->chat?->palette(), 'the abandoned palette stands down');
+
+        // And nothing waits on the other side of the exit.
+        [$escaped] = $closed->update(new KeyMsg(KeyType::Escape));
+        [$escaped] = $escaped->update(new KeyMsg(KeyType::Escape));
+        $this->assertSame(Pane::Chat, $escaped->pane, 'Escape leaves the dashboard');
+        $this->assertNull($escaped->chat?->palette(), 'leaving reveals nothing, because nothing was left open');
+
+        // Negative scope: in a sidebar pane the chat — palette included — is
+        // painted and drivable, so the gate must not fire and the chord must
+        // keep reaching the modal exactly as Chat designed it.
+        $sidebar = $open->withPane(Pane::Files);
+        [$typeahead] = $sidebar->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertNotNull($typeahead->chat?->palette(), 'a visible palette is nobody\'s to close');
+        $this->assertSame('o', $typeahead->chat->palette()->query, 'and the chord still feeds it as typeahead');
+
+        // The menu state closes alike: with the F10 menu up over the chat
+        // pane, the buried palette is as unreachable as behind the dashboard.
+        MenuBar::openMenu(1);
+        [$underMenu] = $open->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertNull($underMenu->chat?->palette(), 'the abandoned palette stands down under the F10 menu too');
+        $this->resetMenuBarState();
+    }
+
     private static function body(App $app): string
     {
         $view = $app->view();
