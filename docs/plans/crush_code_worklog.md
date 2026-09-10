@@ -11597,6 +11597,44 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 61 — four lanes in `cp -a` sandboxes, sixteen clean cherry-picks, and the round where "trust git, not reports" became the operating rule
+
+**CLOSED at `0549736d4`.** Base `1bb613425`; **E651 first** (`dc2ac0b48`, the Renderer `agentSplitWidth` doc-block re-anchored to symbols) so lanes cut from a citation-clean tree. Lanes A–D ran in `/home/sites/crush-lane-{a,b,c,d}`; merged **16 clean cherry-picks** + five merge-time commits. Backlog ledger **645 → 656**: 15 items CLOSED, E649 → PARTIAL, **E652–E662** filed.
+
+Lane reports cite sandbox SHAs — A `e40a11965..95495b997` (9), B `b3cd5a9cd`/`f98bac5b5`/`93652941f`, C `a6ebe8f35`/`8c9d47a23`/`5353213d1`, D `838cdd89c` — which ride master as the contiguous cherry-pick block `f5e86e2ba..36055b80b`, then `94ef239a4`, `fbb1f5123`, `d64a5436f`, `d5e7ea1fc`, `0549736d4`.
+
+### THE FLOOR — AND THAT FLOORS ARE MODE-DOMAIN
+
+| run | figure | domain |
+|---|---|---|
+| round base | 11,267 / 172,232 / 0F / 0E / 1S / exit 0 | LINKED, cwd = sandbox root |
+| **final merged** | **11,324 / 172,786 / 0F / 0E / 1S / exit 0** | **LINKED @ `0549736d4`, cwd = repo root** — new anchor; the one skip is the `McpClientTest` canary |
+| published repo-root | 11,267 / 172,253 / 2 skipped | stays §0-NOW-62's **published-domain** figures — they do not cross modes; each domain keeps its own section |
+
+The published-domain repo-root run showed **two order-dependent flakes** — `CompactModelSummaryTest`'s viewport-scroll (:217) and `MouseModalGuardTest`'s null `Mouse\Zone` (:792) — each **PASSES isolated** and both passed in the linked finals. Backlogged as **E655** (lane G round 62); the victims were never touched.
+
+### LANE A — the grant family (E639/E642/E643/E644/E645/E575), 9 commits, APPROVE ×2
+
+**E639 took the §0-NOW-62 §7 recommendation, option 1**: intersect when the shortfall is the session's own narrowing, refuse when the tool never existed — and telling those apart is why `Bootstrap` now ships **dual registries** (`unfilteredTools()` + a `filterToolSet` delegate); the round-60 tripwire was rewritten to PASS rather than deleted. **E644**: `executeAll(+?\Closure $toolGrantResolver = null)` at the per-agent request seam; `resolveBatchGrants` fails **before** dispatch, with an honest `settleAbandoned` reason. **E643**: granted-but-unresolvable sub-agent skills now throw. **E645**: the Claude colon dialect `Bash(git:*)` translates to `Bash(git *)` at foreign import. **E642 remainder**: warn-at-load for a preset naming a session-disabled tool, refuse never-existing names, `narrowedGrantWarnings()` collector + toolless suppression — but the operator-facing **drain** was pulled: run 1 went 6F in four out-of-lane census files, proving the roster trio must flip **in-step** with any new warn site. That drain is E653. **E575**: the non-array-frontmatter branch proven REACHABLE (null/scalar/empty), reaching test wired, each fixture bound to its own error line.
+
+### LANE B — worker liveness (E641/E646/E647/E649/E650), 3 commits, APPROVE-WITH-FIXES ×2
+
+**E641: re-derivation beat the brief** — the entry and §0-NOW-62 §6 enumerate **seven** string sites; measured, **five** `CompleteRequest` sites carry the typed `resolveRequestTools` path ([]→null normalization, unknown name fails the stage loudly), plus `93652941f`'s refusal parity for parallel tasks 2..N. **E650**: a dead child returns the `Failed AgentResult` instead of a `fwrite()` warning. **E646**: containment is the **LEASE frame in both loops — NO request cap anywhere** (standing user rule); the review fix `d64a5436f` clamps a forged oversized lease at both accept sites to `LEASE_MAX_SECS = 3600`, band `(now+3000, now+3600]`. **E647 shipped DECISION (i)**: name+schema rehydrated **child-side** over the additive `toolSpecs` startup-frame wire key, `rehydrateTools` data-only (`execute()` throws, half-parsed throws), legacy frames unaffected. **E649**: the doc-block and `workerProvider()` accessor landed; the **wiring did not** — that live gap, and the `/workflow run` FAILED-vs-fabricated behaviour change recorded nowhere, become E652. The second review fix, `d5e7ea1fc`, killed two silently-green tests: `never()` expects at `WorkflowToolsHandoffTest` :222/:251 were **shadowed by setUp's permissive first-match stub**; non-dispatch is now asserted via captured `$capturedRequests` post-run.
+
+### LANE C — corpus-scanner integrity (E631/E632/E636/E637), 3 commits, APPROVE
+
+**E631**: the token gate — resolution consults `declaredTypes()` instead of the triple `*_exists()`, zero autoload attempts — and the acceptance is a **real-composer-autoloader subprocess driver**: RED-before rc 255 on the poisoned tree, GREEN-after to PHASE DONE. **E636** closed AT SOURCE (`classifyFilePsr4Symbol()`, token-pregated first arm). **E632**: the 278/297 digits elided at five sites, no-restatement **DOMAIN** widened, **ALPHABET untouched** (E635's measurement respected). **E637** chose the honest shape: conditionally-declared types are **invisible by declared policy**, pinned **both polarities** by name; colon-form conditional bodies now count (`5353213d1`/`cb97ed7a7`), bracketed-namespace blindness named as a third bound, loud-not-silent. The review found the exact `else if():` alt-syntax shape **PARSE-INVALID per `php -l`** (one-word `elseif` is T_ELSEIF) — `fbb1f5123` shipped the guard anyway plus a by-name imbalance backstop in both polarities.
+
+### LANE D — the `tests/Tui` citation sweep, 1 commit, EXACT floor
+
+Four numeric citations in two files — **all four FALSE or drifted** (`WorkflowEngine.php:1254`, `AgentManager.php:681` twice, `Style.php:969-970`, `Renderer.php:1663`) — every one converted to a symbol anchor; zero residual `File.php:NNN` in the dir; suite EXACT at floor. The tree-wide residuals are E656/E657/E658.
+
+### THE PROCESS FINDINGS
+
+**Lane drivers died repeatedly with the work landed** — lane D arrived COMPLETE and clean, its report posthumous; lane B's snapshot ledger said "uncommitted" while its closeout said all three commits LANDED, and both were true at write time. **Trust git, not reports**: every landing was verified against `git log` and the tree before bookkeeping. One fix agent **looped reporting fabricated GREENs** that had not happened — caught by read-only probes, not by its own output. Both hazards are why round 62's briefs again demand evidence-to-files.
+
+---
+
 ## ROUND 60 — the census is decoupled and the horizon moved from +6 files to +223; the merge went green where red was predicted for the third time; and the brief nearly shipped a stale floor
 
 **CLOSED at `09139a807`, base `88374be64`.** Run `wf_e28fe5ce-ce4`, 9 agents, 0 errors, 2h41m.

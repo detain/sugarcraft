@@ -4,15 +4,109 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-62 BELOW. It carries the standing order, the current floor, the round-61 lane
-ranking and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
+🔴 **START AT §0-NOW-63 BELOW. It carries the standing order, the current floor, the round-62 lanes
+E/G/H and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
 kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
 (counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
 them. Rules are durable; figures are not.
 
 ---
 
-## 0-NOW-62. THE PROMPT PLAN IS DONE — ROUND 61 IS UNBLOCKED, AND EVERY FIGURE IN §0-NOW-61 IS DEAD
+## 0-NOW-63. ROUND 61 CLOSED (linked floor 11,324 / 172,786) — ROUND 62 RUNS LANES E, G, H
+
+**Written 2026-09-10 at `0549736d4`. §0-NOW-62 below is superseded history — but its machinery SURVIVES
+and stays in force: §3 (prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the
+`cp -a` lane recipe — 18 entries AND 18 links), rules 59–62. Only its FIGURES and lane assignments are
+dead. Floors are MODE-DOMAIN: never quote a published figure into a linked brief or the other way.**
+
+### STANDING ORDER — run this plan to completion
+
+**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
+at a round boundary to ask whether to continue.** Concretely:
+
+1. Work §2's lanes **E, G, H** as round 62. Close it (worklog entry + a new `0-NOW-64` section +
+   backlog ledger stamps), then **immediately choose round 63** from what round 62 files, and keep
+   going. `## 2. The loop` and `## 3. Sequencing rules` further down still carry the per-bundle
+   mechanics.
+2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
+   Not at the end of a session — at each close. If you are running out of context, doing that is
+   the last and highest-value thing you do.
+3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
+   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
+4. **Trust git, not reports.** Round 61's lane drivers died repeatedly with their work landed, and one
+   fix agent looped reporting fabricated GREENs. Verify every claim against `git log` and the tree
+   before bookkeeping; demand evidence-to-files in every brief.
+
+**STOP AND ASK only for these:**
+
+- A decision of the **E639 class taken against the recommendation** (round 61 took option 1; a
+  non-recommended pick asks first).
+- Anything that would **remove** unfinished, dormant, unwired or unreachable code. Standing rule:
+  *fix it or wire it, never delete it.* Move and consolidate are fine.
+- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
+  `prompt_expand.md`.
+- A **blanket total-request timeout on an LLM call.** Completions may legitimately run tens of
+  minutes; `connect_timeout` is fine, a total cap is not. This is the E646 rule restated — contain
+  with the LEASE frame, never with a cap.
+
+### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-61 FINAL / NEW ANCHOR** | **11,324 / 172,786 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** | **LINKED, cwd = repo root, at `0549736d4`** — `/home/sites/crush-r61-artifacts/merged-r61-final.txt`. Round base in the same domain: **11,267 / 172,232 / 0F / 0E / 1S**. |
+| published repo-root | 11,267 / 172,253 / 2 skipped | §0-NOW-62 §2's **published-domain** figures — they stay in their own domain (§2/§4 there); the 2-skip is the cwd property §4 documented. |
+
+The published-domain run showed **two order-dependent flakes** — `CompactModelSummaryTest` viewport
+scroll, `MouseModalGuardTest` null `Mouse\Zone` — each PASSING isolated and both green in the linked
+finals: **E655**, round 62's lane G. Pre-flight before believing any figure: `refresh-deps.php
+--status` (rule 62), and name cwd + mode beside every number (rule 59).
+
+### 2. ROUND 62 — THREE FILE-DISJOINT LANES (the ownership map goes VERBATIM into each brief; lanes refuse out-of-lane edits and report seams — the mechanism that ran round 61 clean)
+
+**Lane E — the agent-live wiring.**
+
+| id | why it ranks here |
+|---|---|
+| **E652** | Full `workerProvider` plumbing: `AgentPoolConfig` field + `Chat` fallback → feed **BOTH `ProcessExecutor` AND `AgentWorkerPool`** (the lane-B seam list) + `Bootstrap` feed. AND the doc half is part of the item: the `/workflow run` FAILED-vs-fabricated behaviour change is live and recorded nowhere. |
+| **E653** | The TUI/operator drain for `narrowedGrantWarnings()` — 3-line foreach after executeAll's register loop, IN-STEP with the census roster trio (roster count + uppercase-number anchor word + NUMBER_WORDS map) in the 4 named `tests/Cli` files, or the run reds exactly like lane A's run 1 did. |
+| **E656** | `tests/Agents/AgentManagerTest.php` :1616/:1618/:1714 false anchors — this lane owns the file, so the E651 sweep finishes here too. |
+
+Files owned: `sugar-crush/src/Agents/AgentPoolConfig.php` · `src/Cli/Chat.php` · `src/Cli/Bootstrap.php` ·
+`src/Tui/` (notice wiring ONLY) · `tests/Agents/AgentWorkerPoolTest.php` · `tests/Agents/AgentManagerTest.php` ·
+`tests/Workflows/` run-path tests · the docs file carrying the behaviour note.
+Rules: **NO total-request timeout** (E646 rule); **never remove dormant code** (E660's cross-fork seam
+stays named unless this round's feed wires it).
+
+**Lane G — suite reliability (E655).** Find the polluter behind the order-dependent reds — shared
+ReactPHP `Loop::get()` / global residue is the suspect (`candy-pty`'s `SharedLoopResidue` proves the
+shape). Targeted pair/sequence reproduction first, then fix the **polluter**, ship a regression pin.
+The victims (`CompactModelSummaryTest`, `MouseModalGuardTest`) are **READ-ONLY — never weaken them**.
+If the polluter lives in a lane-E file, report the seam rather than editing.
+
+**Lane H — citation sweep (E657 + E658).** Rule-4 symbol re-anchors across `src/` prose
+(`SglangProvider`, `VertexProvider` ×6, `Runtime`…) and the ~20 test dirs carrying the `.php:NNN`
+pattern — **EXCLUDING lane-E-owned files**. Prose only; floor-exact discipline (round 61's lane D is
+the model: 4/4 false-or-drifted, zero residual, EXACT floor). **NEVER cite a constant for a per-file
+assertion delta (E634).** Reconcile `SymbolCitationDriftTest` at merge for every lane.
+
+### 3. ROUND-63 CARRY LIST — record, do NOT schedule here
+
+Phase 9 containment (design settled round 40 — layered detach-always + PTY-opt-in, no askpass; needs
+`Chat.php` → goes AFTER lane E finishes owning it) · **E633** wants its own round · **P2.9 / P3.3 /
+P6.5 / P8.15** unchanged from §0-NOW-62 §8(b) · `crush_feat_plan.md`'s two human attestations unchanged
+(neither blocks anything) · `/home/sites/crush-lane-{a,b,c,d}` sandboxes are **deletable once round 62
+merges**.
+
+### 4. LEDGER AFTER ROUND 61
+
+645 → **656** entries: **CLOSED +15** (E575, E631, E632, E636, E637, E639, E641, E642, E643, E644,
+E645, E646, E647, E650, E651 — fixing commits cited per row), **E649 → PARTIAL** (doc+accessor landed,
+wiring is the live gap), **E652–E662** filed (11). Actionable **157**. The `### E652+` headings in
+`crush_code_hardening_backlog.md` are not yet minted — mint them at the next backlog-touching close.
+
+---
+
+## 0-NOW-62 (now superseded by 0-NOW-63 above — ROUND 61 CLOSED at `0549736d4`; its §6 lane map and §2 figures are dead history, its §3/§4/§4b machinery and rules 59–62 survive). THE PROMPT PLAN IS DONE — ROUND 61 WAS UNBLOCKED, AND EVERY FIGURE IN §0-NOW-61 WAS DEAD
 
 **Written 2026-09-10 by a supervisor session that did no code work — it only measured. Nothing below
 is carried from §0-NOW-61 except where it says so.**
