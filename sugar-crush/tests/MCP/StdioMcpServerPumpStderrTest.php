@@ -122,11 +122,24 @@ final class StdioMcpServerPumpStderrTest extends TestCase
 
             $tail = $this->tailOf($server);
             $this->assertLessThanOrEqual(65536, strlen($tail), 'the cap was not applied');
+            // Deterministic by arithmetic, not timing: the flood is 200,000 F
+            // bytes before ENDMARK, one pump absorbs at most 16 × 8192, so the
+            // marker CANNOT be in the first pass's tail.
             $this->assertStringNotContainsString('ENDMARK', $tail, 'one pass absorbed more than its budget');
 
-            $server->pumpStderr();
-            $tail = $this->tailOf($server);
+            // The tail's END state is a race with the writer under full-suite
+            // load — a starved child has not flushed all 200KB yet when the
+            // second pump finds the pipe momentarily empty. Keep pumping to a
+            // deadline; each individual pump stays bounded, which is the
+            // property under test.
+            $deadline = microtime(true) + 10.0;
+            do {
+                $server->pumpStderr();
+                $tail = $this->tailOf($server);
+            } while (!str_ends_with($tail, 'ENDMARK') && microtime(true) < $deadline);
+
             $this->assertStringEndsWith('ENDMARK', $tail, 'the cap kept the head instead of the tail');
+            $this->assertLessThanOrEqual(65536, strlen($tail), 'the cap was not applied');
             // The child was never wedged by our boundedness: it can still answer.
             $this->assertSame('pong', $server->callTool('ping', [])['content'][0]['text']);
         } finally {
