@@ -9,6 +9,7 @@ use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
 use SugarCraft\Crush\Tools\McpToolBridge;
+use SugarCraft\Crush\Tools\TaskTool;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -85,11 +86,26 @@ final class BuiltInToolCorpus
      * write. Without this list the bidirectional assertion would have had to be
      * weakened to `assertContains`, which loses the direction that matters.
      *
+     * AND THE PREDICTED SECOND RESIDENT HAS LANDED. {@see classNames()}'s
+     * doc-block once recorded that the widening still guarded "a LATENT case, for
+     * some future tool that a real run dispatches without `Bootstrap::tools()`
+     * naming it", with the bridge as the only live instance. P8.13's
+     * {@see TaskTool} is that case, and it is exempted for the mirror-image
+     * reason: a Task tool constructed as a literal would be a task tool with no
+     * session `AgentManager` behind it — reachable every session and inert every
+     * session, which is the `Write` defect wearing the opposite face. The bound
+     * instance is built at the launch's tool-feed site, and that feed is a
+     * documented Bootstrap seam; until that feed lands, no
+     * real run dispatches `Task` — {@see \SugarCraft\Crush\Tests\Integration\TaskToolWiringTest}
+     * is what proves a real `Runtime` dispatch reaches a real
+     * {@see \SugarCraft\Crush\Agents\AgentManager::executeAll()} when it does.
+     *
      * KEEP IT AT THE SHORTEST LIST THAT IS TRUE. Anything in here is a tool no
      * scanned assertion can prove is reachable, so each entry needs its own
-     * end-to-end reachability test naming it — for this one,
+     * end-to-end reachability test naming it — for the bridge,
      * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}, which drives
-     * a real call through `Runtime`.
+     * a real call through `Runtime`; for the Task tool,
+     * {@see \SugarCraft\Crush\Tests\Integration\TaskToolWiringTest}, same shape.
      *
      * AND THAT RULE IS NOW THE SHAPE OF THIS CONSTANT RATHER THAN A SENTENCE
      * ABOVE IT. It was a flat list, and the rule was asserted nowhere: MEASURED,
@@ -108,6 +124,8 @@ final class BuiltInToolCorpus
     public const DYNAMIC_TOOL_CLASSES = [
         McpToolBridge::class => \SugarCraft\Crush\Tests\Integration\McpToolWiringTest::class
             . '::testAModelToolCallReachesTheMcpServerAndItsAnswerReachesTheModel',
+        TaskTool::class => \SugarCraft\Crush\Tests\Integration\TaskToolWiringTest::class
+            . '::testAModelTaskCallReachesTheAgentManagerAndTheSubAgentAnswerComesBack',
     ];
 
     /**
@@ -142,12 +160,13 @@ final class BuiltInToolCorpus
      * {@see \SugarCraft\Crush\Tests\Providers\ToolSchemaEncodingTest},
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest}).
      * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
-     * this tree, `src/` holds TWELVE concrete `Tool` implementors, eleven in
-     * `src/Tools/BuiltIn/` and one — {@see McpToolBridge},
-     * the adapter that makes a project's MCP tools dispatchable — in
-     * `src/Tools/`. Under the flat glob that twelfth would have been invisible to
-     * all four consumers, which is verbatim the recurrence this corpus was written
-     * to prevent.
+     * this tree, `src/` holds THIRTEEN concrete `Tool` implementors, eleven in
+     * `src/Tools/BuiltIn/` and two in `src/Tools/` — {@see McpToolBridge},
+     * the adapter that makes a project's MCP tools dispatchable, and
+     * {@see TaskTool}, the P8.13 delegation tool. When the widening landed there
+     * were TWELVE and the twelfth — the bridge — is the one the flat glob could
+     * not see, which is verbatim the recurrence this corpus was written to
+     * prevent.
      *
      * AND THE PREDICTION THAT USED TO SIT HERE WAS WRONG, which is worth leaving
      * on the record rather than deleting. It read: "The next planned tool,
@@ -162,10 +181,13 @@ final class BuiltInToolCorpus
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::testBootstrapToolsShipsAWriteToolAndTheWholeBuiltInSet()}
      * requires every exempted class to be ABSENT from the array. Measured, not
      * reasoned: with the file at `src/Tools/LspTool.php` that first assertion
-     * failed `actual size 11 matches expected size 10`. The widening is therefore
-     * still guarding a LATENT case, for some future tool that a real run
-     * dispatches without `Bootstrap::tools()` naming it, and `McpToolBridge`
-     * remains its only live instance.
+     * failed `actual size 11 matches expected size 10`. The widening has now
+     * caught its second resident: `TaskTool` (P8.13) is exempted for the same
+     * shape — a tool that must be BOUND, not merely built, before a real run can
+     * dispatch it — and its named reachability test proves a bound instance is
+     * genuinely dispatched through `Runtime`. Together the two are why the
+     * exemption list carries a reachability test per entry rather than being
+     * prose.
      *
      * The counterpart is {@see DYNAMIC_TOOL_CLASSES}: the widening is what puts a
      * tool outside the wired directory INTO every test, and that list is what

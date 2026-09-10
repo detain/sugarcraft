@@ -338,8 +338,8 @@ final class Runtime
      *
      * A SECOND SPELLING OF AN EXISTING ROSTER, and said so rather than
      * presented as new. `PermissionGate::isWriteTool()` answers exactly this
-     * question — MEASURED at `src/Permissions/PermissionGate.php:687`, it
-     * holds `['Bash', 'Edit', 'Write']` plus the same `mcp__` prefix rule —
+     * question — it holds `['Bash', 'Edit', 'Write', 'Task']` plus the same
+     * `mcp__` prefix rule —
      * and this constant repeats it. THREE NEIGHBOURING tool-name rosters answer
      * DIFFERENT questions and are deliberately not reconciled with it — and
      * this census said TWO until a reviewer found the third, which is the one
@@ -545,9 +545,19 @@ final class Runtime
      * on this page advisory. Both need `src/Tools/Tool.php` and every
      * implementor, which is outside this step's declared file list.
      *
+     * `Task` JOINED THIS ROSTER ON THE SAME JUDGEMENT `Bash` RIDES, not on a
+     * primitive scan: {@see \SugarCraft\Crush\Tools\TaskTool} calls no write
+     * primitive itself — it dispatches a sub-agent through
+     * {@see \SugarCraft\Crush\Agents\AgentManager::executeAll()}, and whatever
+     * that agent's granted tools do to the tree happens in a forked worker this
+     * scanner cannot see any more than it can read a shell's argv. A call whose
+     * child may have written the tree must re-arm the diff for the NEXT prompt,
+     * so the name belongs here rather than on the read-only list, where the
+     * direct-call scanner would see nothing and pass for the wrong reason.
+     *
      * @var list<string>
      */
-    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write'];
+    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write', 'Task'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

@@ -669,7 +669,10 @@ final class PermissionGate
 
     /**
      * Write-capable tools: `Edit`/`Write` mutate files directly, `Bash` can do
-     * anything a shell can, and MCP tools follow the `mcp__<server>__<tool>`
+     * anything a shell can, `Task` delegates to a sub-agent whose own tools can
+     * do the same behind this process (crush_code.md P8.13 — the judgement is
+     * `Bash`'s: the tool writes nothing itself and everything through what it
+     * launches), and MCP tools follow the `mcp__<server>__<tool>`
      * naming convention (@see PermissionRule) — their capability is
      * server-defined and unknowable here, so they're treated conservatively as
      * writes. `McpTool` was never a real tool name.
@@ -684,7 +687,7 @@ final class PermissionGate
      */
     private function isWriteTool(ToolCall $call): bool
     {
-        if (in_array($call->name, ['Bash', 'Edit', 'Write'], true)) {
+        if (in_array($call->name, ['Bash', 'Edit', 'Write', 'Task'], true)) {
             return true;
         }
 
