@@ -7,6 +7,7 @@ use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Hooks\BuiltIn\AuditHook;
 use SugarCraft\Crush\Support\ToolIpcFiles;
+use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -538,3 +539,42 @@ if (!stream_isatty(\STDIN)) {
     // method PHPUnit includes this file from.
     $GLOBALS['__sugarcrushSuiteStdin'] = fopen('/dev/null', 'r');
 }
+
+/*
+ * The suite is hermetic against the terminal it runs in, INCLUDING its size.
+ *
+ * `TuiRenderer::getTerminalSize()` probes `(new Tty(STDOUT))->size()` whenever
+ * its process-global cache is null, and every `Chat::view()` that carries no
+ * explicit size reads that fallback through `Chat::rows()`/`Chat::cols()`. A
+ * size-agnostic render was therefore asserting against the RUNNER: measured
+ * in round 61, the published-mode full suite (STDOUT a small live tty) went
+ * red on exactly two such tests — `CompactModelSummaryTest`'s "earliest
+ * exchange is still verbatim" viewport assertion and `MouseModalGuardTest`'s
+ * `pane:agents` bar fixture, both because the small `rows` clipped the top of
+ * the render — while the linked-mode run of the same tree, same order, same
+ * code (STDOUT a pipe, so the documented 60x200 fallback answers) stayed
+ * green twice. Same binary, different terminal, different verdict; that is a
+ * flake no reordering can fix, only hermeticity can.
+ *
+ * Pinning the documented fallback HERE, before the first test event, means
+ * the probe never runs at all. 200x60 is deliberately the SAME viewport
+ * `getTerminalSize()` already answers for a non-tty STDOUT, so nothing that
+ * passes today sees a change; what changes is that a tty runner can no
+ * longer feed its window into a snapshot. Tests that want a specific
+ * viewport still call `setSize()` themselves and are unaffected.
+ *
+ * The other half of the fix lives in `tests/App/AppModelTest.php` and
+ * `tests/App/SlashMenuTabCompletionTest.php` — the only size-touching classes
+ * that run BEFORE the two victims: their tearDowns re-pin to this default
+ * instead of calling `resetSizeCache()`, because a reset hands the next
+ * size-agnostic `view()` straight back to `Tty(STDOUT)` — which is the whole
+ * hole. `tests/Tui/RendererTest.php` still exercises the null-cache fallback
+ * explicitly; that probe path is its subject, taken in isolation, and it is
+ * downstream of everything pinned here.
+ *
+ * `tests/TerminalSizeFallbackIsolationTest.php` pins this contract: it drives
+ * the exact sequence — pinned default, size-agnostic render, forced small
+ * ambient viewport — and a re-introduced null handoff fails as a clipped
+ * transcript, not as a silent re-base.
+ */
+TuiRenderer::setSize(200, 60);

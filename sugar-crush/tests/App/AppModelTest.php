@@ -67,7 +67,12 @@ final class AppModelTest extends TestCase
 
     protected function tearDown(): void
     {
-        TuiRenderer::resetSizeCache();
+        // Re-pin to the suite's deterministic default instead of
+        // resetSizeCache(): a NULL cache hands the next size-agnostic
+        // Chat::view() straight to Tty(STDOUT), and the runner's window then
+        // leaks into snapshot assertions downstream (round-61 published-mode
+        // flake; the other half of the fix is the pin in tests/bootstrap.php).
+        TuiRenderer::setSize(200, 60);
     }
 
     private function app(): App

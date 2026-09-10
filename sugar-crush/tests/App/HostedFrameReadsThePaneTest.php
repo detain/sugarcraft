@@ -52,14 +52,14 @@ final class HostedFrameReadsThePaneTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        TuiRenderer::resetSizeCache();
+        TuiRenderer::setSize(200, 60); // deterministic default; a NULL cache re-arms the Tty(STDOUT) probe (round-61 flake; see tests/bootstrap.php)
         $this->provider = $this->createMock(ProviderInterface::class);
         $this->provider->method('name')->willReturn('TestProvider');
     }
 
     protected function tearDown(): void
     {
-        TuiRenderer::resetSizeCache();
+        TuiRenderer::setSize(200, 60); // deterministic default; a NULL cache re-arms the Tty(STDOUT) probe (round-61 flake; see tests/bootstrap.php)
         parent::tearDown();
     }
 
