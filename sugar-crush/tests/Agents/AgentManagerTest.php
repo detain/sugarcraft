@@ -3429,6 +3429,101 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(['Bash', 'Read'], self::toolNames($recorder->requests['sub-2']->tools ?? null));
     }
 
+    // -------------------------------------------------------------------------
+    // The sub-agent SKILL grant (E643).
+    //
+    // The identical fail-open, one field over: a granted skill that does not
+    // resolve used to be silently SKIPPED while the preset prompt — pinned by
+    // AgentDefinitionTest to NAME its granted skills — told the model the
+    // skill was there. Fail-closed mirrors the tool-grant refusal above in
+    // both shape and severity.
+    // -------------------------------------------------------------------------
+
+    /**
+     * A manager whose one agent GRANTS `security-audit`, plus a holder the
+     * provider callback writes the live request into (an object, because the
+     * point of these tests is what reaches the provider AFTER construction —
+     * a by-value return would snapshot `null`).
+     *
+     * @return array{AgentManager, \stdClass, string} manager, request holder, agent name
+     */
+    private function managerGrantingSkill(): array
+    {
+        $sink = new \stdClass();
+        $sink->request = null;
+
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturnCallback(
+            function (CompleteRequest $request) use ($sink): CompleteResponse {
+                $sink->request = $request;
+
+                return new CompleteResponse(content: 'done');
+            },
+        );
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: new SkillRegistry(),
+        );
+        $manager->register(new Agent(
+            name: 'skillful',
+            description: 'skillful description',
+            prompt: 'Consult the security-audit skill you have been granted.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: ['security-audit'],
+            hooks: [],
+            isActive: true,
+        ));
+
+        return [$manager, $sink, 'skillful'];
+    }
+
+    public function testAGrantedSkillThatDoesNotResolveFailsTheSubAgentRatherThanBeingSkipped(): void
+    {
+        [$manager, $sink, $name] = $this->managerGrantingSkill();
+        $subAgent = $manager->createSubAgent($name, 'audit it');
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNull(
+            $sink->request,
+            'a prompt advertising an unresolvable skill must not reach the provider',
+        );
+        $this->assertNotNull($caught, 'a granted-but-missing skill must refuse, not skip');
+        $this->assertStringContainsString('"security-audit"', $caught->getMessage());
+        $this->assertStringContainsString('SkillRegistry does not resolve', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+    }
+
+    public function testAGrantedSkillThatResolvesIsStillAppendedToThePrompt(): void
+    {
+        // THE OTHER POLARITY: fail-closed must not become fail-always. A skill
+        // the registry does resolve keeps the pre-fix behaviour — its body is
+        // appended and the provider sees it.
+        [$manager, $sink, $name] = $this->managerGrantingSkill();
+
+        $registry = (new \ReflectionProperty(AgentManager::class, 'skillRegistry'))->getValue($manager);
+        $this->assertInstanceOf(SkillRegistry::class, $registry);
+        $registry->register([
+            Skill::parse("---\ndescription: Audits PHP\n---\n\nAudit checklist body", 'security-audit'),
+        ]);
+
+        $subAgent = $manager->createSubAgent($name, 'audit it');
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertNotNull($sink->request, 'a resolvable skill must not fail the sub-agent');
+        $this->assertStringContainsString('## Skill: security-audit', (string) $sink->request->systemPrompt);
+        $this->assertStringContainsString('Audit checklist body', (string) $sink->request->systemPrompt);
+    }
+
     private function createAgent(
         string $name = 'test-agent',
         string $prompt = 'Test prompt',

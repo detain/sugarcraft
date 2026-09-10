@@ -442,12 +442,34 @@ final class AgentManager
             // Build system prompt from agent config
             $systemPrompt = $subAgent->agent->systemPrompt();
 
-            // Apply skills
+            // APPLY SKILLS, FAIL-CLOSED (E643). A granted-but-missing skill
+            // used to be silently SKIPPED — the identical shape to the tool
+            // grant this class's whole C7 bundle exists to end, one field
+            // over. The preset prompts are ASSERTED to name their granted
+            // skills (AgentDefinitionTest names that pin), so on the skip
+            // path the model reads "consult the
+            // php-best-practices skill you have been granted" with no skill
+            // body anywhere in reach — a prompt that lies, reddening nothing.
+            // Refused, then, at the severity the grant refusal uses: the
+            // sub-agent FAILS with the name in hand, and no lying prompt
+            // reaches a provider. That the trade is loud failures on hosts
+            // missing optional skill files was weighed and chosen — a wrong
+            // answer costs the operator a config fix, a silent lie costs them
+            // the model's judgement.
             foreach ($subAgent->agent->skillNames as $skillName) {
                 $skill = $this->skillRegistry->get($skillName);
-                if ($skill !== null) {
-                    $systemPrompt .= $skill->systemPromptContribution();
+                if ($skill === null) {
+                    throw new \RuntimeException(sprintf(
+                        'Agent "%s" is granted the skill "%s", which this session\'s SkillRegistry does '
+                        . 'not resolve. A granted skill that cannot be loaded is refused rather than '
+                        . 'skipped: skipping it sends the model a prompt advertising a skill whose body '
+                        . 'it will never receive.',
+                        $subAgent->agent->name,
+                        $skillName,
+                    ));
                 }
+
+                $systemPrompt .= $skill->systemPromptContribution();
             }
 
             // Run completion.
