@@ -257,6 +257,49 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $this->assertSame(['good'], array_keys($result));
     }
 
+    /**
+     * E575, REACHED. The "Invalid YAML frontmatter in:" branch of
+     * frontmatter() was suspected unreachable — the theory being the earlier
+     * guards swallow every malformed input. Measured, it is not: the guards
+     * only catch unreadable files and missing delimiters, and a genuinely
+     * broken YAML body throws a ParseException from Frontmatter::parse()
+     * BEFORE this check — neither of those classes reaches it. What DOES
+     * reach it is frontmatter that parses CLEANLY to a non-array, which
+     * Frontmatter::parse() documents as its contract — "an array for a
+     * mapping, NULL for an empty or comment-only block, a scalar for a bare
+     * value". All three shapes are valid YAML, so nothing before this line
+     * fires. THE FINDING IS THEREFORE "untested", not "unreachable" — and
+     * the standing rule is fix-or-wire, never delete, so the input arrives
+     * here rather than in a comment.
+     */
+    public function testFrontmatterThatParsesToANonArrayIsReportedInvalidByNameAndSkipped(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/non-array-frontmatter';
+        $dir = $projectRoot . '/.claude/agents';
+        mkdir($dir, 0777, true);
+
+        // One per non-array shape the parse contract publishes.
+        file_put_contents($dir . '/scalar.md', "---\n42\n---\nBody.");
+        file_put_contents($dir . '/comment-only.md', "---\n# just a note\n---\nBody.");
+        file_put_contents($dir . '/empty-block.md', "---\n\n---\nBody.");
+        $this->writeAgent($dir, 'good', 'description: Still imported');
+
+        $result = $registry->discoverClaude($projectRoot);
+
+        $this->assertSame(
+            ['good'],
+            array_keys($result),
+            'non-array frontmatter is skipped per-file without aborting the directory',
+        );
+
+        $log = (string) file_get_contents($this->tempDir . '/error.log');
+        $this->assertStringContainsString('Invalid YAML frontmatter in: ', $log);
+        $this->assertStringContainsString('scalar.md', $log, 'the report names the file an operator has to fix');
+        $this->assertStringContainsString('comment-only.md', $log);
+        $this->assertStringContainsString('empty-block.md', $log);
+    }
+
     // -------------------------------------------------------------------------
     // The Claude prefix dialect (E645).
     //
