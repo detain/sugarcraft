@@ -1915,24 +1915,38 @@ final class Chat implements Model
             // `CSI H`/`CSI F` and `CSI 1~`/`CSI 4~`, and Delete as `CSI 3~`;
             // all five were driven through the decoder.
             //
-            // Two encodings a terminal may send for the same INTENT do NOT
-            // reach here, and neither is a regression - both behave exactly as
-            // they did before this arm existed:
+            // Two encodings a terminal may send for the same INTENT, and both
+            // reach word motion now:
+            //
+            //   * the CSI spellings the arms below match directly -
+            //     `CSI 1;3D`/`CSI 1;5D` decode to KeyMsg(Left, alt/ctrl), the
+            //     xterm-family and modifier-in-parameter spellings;
+            //   * `ESC b`/`ESC f`, readline's Alt+B/Alt+F word motion, decodes
+            //     as KeyMsg(Char 'b'|'f', alt) on terminals that send Alt as a
+            //     bare ESC prefix. Those two runes had an arm of their own
+            //     (E2) since before this comment only promised them; they
+            //     route to the SAME offset helpers as the arrows, which is the
+            //     whole point - one boundary rule, two byte spellings.
+            //
+            // One encoding still does NOT reach here, and it is not a
+            // regression - it behaves exactly as it did before this arm
+            // existed:
             //
             //   * `ESC ESC[D`, the ESC-prefixed Alt+Left some terminals emit,
             //     decodes as TWO messages (Escape, then a bare Left), so the
             //     Escape is consumed by the Escape arm above and the Left
-            //     moves one character rather than one word;
-            //   * `ESC b`/`ESC f`, readline's Alt+B/Alt+F word motion, decodes
-            //     as KeyMsg(Char "b", alt) and is therefore TYPED by the
-            //     delegation below, exactly as it was before this change.
-            //
-            // Binding those two is a keymap addition rather than part of
-            // moving the draft into the widget, so it is left as a follow-up
-            // instead of smuggled in here.
+            //     moves one character rather than one word.
             ($msg->type === KeyType::Left && ($msg->alt || $msg->ctrl))
                 => [$this->withInputCursor($this->wordLeftOffset()), null],
             ($msg->type === KeyType::Right && ($msg->alt || $msg->ctrl))
+                => [$this->withInputCursor($this->wordRightOffset()), null],
+            // The ESC-prefix spelling of the two arms above (E2). Checked with
+            // `!$msg->ctrl` so a ctrl-flagged rune keeps falling through to the
+            // ctrl-Char arm below, which TYPES the letter - `ctrl: true,
+            // rune: 'b'` behaves exactly as it did before this arm existed.
+            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'b'
+                => [$this->withInputCursor($this->wordLeftOffset()), null],
+            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && $msg->rune === 'f'
                 => [$this->withInputCursor($this->wordRightOffset()), null],
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the real SessionStore listing — see
