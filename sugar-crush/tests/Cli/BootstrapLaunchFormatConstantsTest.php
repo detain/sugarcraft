@@ -126,10 +126,17 @@ use SugarCraft\Crush\Tests\Config\ReadmeSettingsTierClaimTest;
  * that; a total does not. (2) and (3) The two `mcpClient()`
  * messages looked like fragment readers too — the clause everything asserts is
  * `'could not be fully started'`, which both of them carry. Rewording the spans
- * that clause does NOT cover gives `Failures: 3` and `Failures: 2`:
- * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} pins three
- * separate clauses across the pair, because its whole subject is that those two
- * lines must not collapse into each other.
+ * that clause does NOT cover reds three tests of
+ * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} for the log
+ * line — `testAClientWhoseConfigThrewPartWayThroughIsStillReachableByTheShutdownSeam()`,
+ * `testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()` and
+ * `testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()` — and
+ * the last two of those again for the notice line (E213: these NAMES replace
+ * the two `Failures:` counts left beside the totals E188 removed; both sets
+ * were re-measured at this lane's cut by mutating each constant's
+ * not-fragmented span and reading the failure list). The asymmetry IS the
+ * finding: the file pins three separate clauses across the pair, because its
+ * whole subject is that those two lines must not collapse into each other.
  *
  * THE LESSON FOR THE NEXT WALK, and it is the reusable part: `grep` for a
  * format's WORDS finds the files that TALK about it; only a mutation finds the
