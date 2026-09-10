@@ -1917,15 +1917,20 @@ final class BuiltInToolCorpusTest extends TestCase
             "a well-formed tool must still be found beside a mis-namespaced sibling:\n{$out}",
         );
         $this->assertStringContainsString(
-            'RESULT A_EXEMPT=Support/Ghost.php',
+            'RESULT A_EXEMPT=Support/AltTether.php,Support/Ghost.php',
             $out,
-            "the mis-namespaced file outside the wired directory must be REPORTED as exempt:\n{$out}",
+            "both poisoned files outside the wired directory must be REPORTED as exempt — the "
+            . "mis-namespaced Ghost AND the alt-syntax Tether whose conditional primary the "
+            . "brace-only first-draft gate counted as declared:\n{$out}",
         );
         $this->assertStringContainsString(
-            'RESULT C_KINDS=Support/Ghost.php:none,Tools/BuiltIn/Anchor.php:concrete',
+            'RESULT C_KINDS=Support/AltTether.php:none,Support/Ghost.php:none,'
+            . 'Tools/BuiltIn/Anchor.php:concrete',
             $out,
             "the reflection census must classify the poisoned tree to completion — `none` for the "
-            . "mis-namespaced file WITHOUT a fatal, `concrete` for the good one (E636 proof):\n{$out}",
+            . "mis-namespaced file AND the tethered alt-syntax file WITHOUT a fatal (the second "
+            . "ladder probe of a never-executed AltTether would re-include the file and redeclare "
+            . "Tether — E631 re-armed through the gate), `concrete` for the good one; E636 proof:\n{$out}",
         );
         $this->assertStringNotContainsString('Fatal error', $out, "no engine-level fatal may occur:\n{$out}");
     }
@@ -1997,9 +2002,15 @@ final class BuiltInToolCorpusTest extends TestCase
      * the bound paragraph in BuiltInToolCorpus::declaredTypes() promises, and
      * why it is written there instead of being left to be rediscovered.
      *
-     * (The `getenv()` branch is never taken: the env var exists nowhere in the
-     * suite, so PHP itself has not defined the class either — the miss is not
-     * an artefact of reading source for a runtime question.)
+     * The conditional appears in BOTH PHP syntax forms — `if (…) { class … }`
+     * and the braceless `if (…): class … endif;` — because a walk that tracked
+     * only braces counted the second form's declarations at depth zero and
+     * re-armed the E631 fatal through the gate itself (round-two review;
+     * BuiltInToolCorpus::declaredTypes() carries the measurement).
+     *
+     * (The `getenv()` branches are never taken: those env vars exist nowhere in
+     * the suite, so PHP itself has not defined the classes either — the miss is
+     * not an artefact of reading source for a runtime question.)
      */
     public function testAConditionallyDeclaredToolIsMissedByDesignAndAnUnconditionalOneIsNot(): void
     {
@@ -2061,6 +2072,31 @@ final class BuiltInToolCorpusTest extends TestCase
                     }
                 }
             }
+
+            if (getenv('CORPUS_PROBE_ALT_NEVER_TAKEN') !== false):
+                final class AltSyntaxTool implements Tool
+                {
+                    public function name(): string
+                    {
+                        return 'alt-conditional';
+                    }
+
+                    public function description(): string
+                    {
+                        return 'invisible without braces';
+                    }
+
+                    public function inputSchema(): array
+                    {
+                        return [];
+                    }
+
+                    public function execute(array $args): ToolResult
+                    {
+                        return ToolResult::error('alt-conditional');
+                    }
+                }
+            endif;
             PHP);
 
         $file = $this->probeDir . '/Support/Host.php';
@@ -2068,7 +2104,8 @@ final class BuiltInToolCorpusTest extends TestCase
         $this->assertSame(
             ['CorpusProbe\\Support\\Host', 'CorpusProbe\\Support\\UnconditionalTool'],
             BuiltInToolCorpus::declaredTypes($file),
-            'depth-zero declarations, in file order — no third entry for the conditional one',
+            'depth-zero declarations, in file order — no entry for EITHER conditional form, '
+            . 'brace-delimited or alternative-syntax',
         );
         $this->assertSame(
             ['CorpusProbe\\Support\\UnconditionalTool', 'CorpusProbe\\Tools\\BuiltIn\\Anchor'],
@@ -2082,6 +2119,13 @@ final class BuiltInToolCorpusTest extends TestCase
             . 'bound paragraph in BuiltInToolCorpus::declaredTypes() earning its place',
         );
         $this->assertSame('none', self::classifyFilePsr4Symbol($file, 'CorpusProbe\\Support\\ConditionalTool'));
+        $this->assertSame(
+            'none',
+            self::classifyFilePsr4Symbol($file, 'CorpusProbe\\Support\\AltSyntaxTool'),
+            'the colon-form conditional is `none` WITHOUT reaching the *_exists() ladder — the '
+            . 'ladder is what the first-draft brace-only gate let through, and under a plain-'
+            . 'include autoloader it re-includes this very file',
+        );
     }
 
     /**
@@ -2103,11 +2147,22 @@ final class BuiltInToolCorpusTest extends TestCase
                 }
             }
             PHP);
+        $this->writeProbe('Support/AltGated.php', <<<'PHP'
+            namespace CorpusProbe\Support;
+
+            if (getenv('CORPUS_PROBE_ALT_NEVER_TAKEN') !== false):
+                final class AltOnly
+                {
+                }
+            endif;
+            PHP);
 
         $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
         $this->assertSame(
-            ['Support/Gated.php'],
+            ['Support/AltGated.php', 'Support/Gated.php'],
             BuiltInToolCorpus::nonClassSources($this->probeDir, self::PROBE_PREFIX),
+            'BOTH conditional syntax forms reject by name — the brace form and the colon form, '
+            . 'which the first-draft gate counted as declared',
         );
     }
 

@@ -467,20 +467,52 @@ final class BuiltInToolCorpus
      * {@see nonClassSources()} branch on its output), so its bounds are the
      * scanner's bounds, and a guard has to state what it cannot see:
      *
-     * A type declared inside ANY brace-delimited conditional — `if (…) { class
-     * … }`, a function body, a loop — sits at depth > 0 and is INVISIBLE here.
-     * That is POLICY, not oversight, and it is pinned BOTH ways by
+     * FIRST BOUND, depth: a type declared inside ANY brace-delimited
+     * conditional — `if (…) { class … }`, a function body, a loop — sits at
+     * depth > 0 and is INVISIBLE here. That is POLICY, not oversight, and it
+     * is pinned BOTH ways by
      * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest} (an
      * unconditional decoy IS seen, a conditional sibling in the same file is
      * NOT): whether PHP has even defined such a class depends on execution
      * history, and an instrument that reads SOURCE without running it cannot
-     * inherit that question. A file whose PRIMARY declaration is conditional
-     * fails the gate and surfaces LOUDLY — reported by {@see nonClassSources()}
-     * as a PSR-4 exemption, or a named throw inside the wired directory — never
-     * silently; it is a conditional SECONDARY inside an otherwise-resolving
-     * file that is missed by design, exactly as it was before this gate existed
-     * (finding E637). `src/` ships zero conditional declarations, measured by
-     * this walk's own depth accounting.
+     * inherit that question.
+     *
+     * SECOND BOUND, alternative syntax — the shape the FIRST DRAFT of this
+     * gate got WRONG, which is worse than a bound because it was not a miss
+     * but a re-arm. WHAT THE OLD TEXT SAID: "any brace-delimited conditional"
+     * was the whole claim, and the walk tracked braces only. WHAT IS TRUE NOW:
+     * `if (…): class … endif;` carries no braces, so brace depth read zero,
+     * the gate counted such a declaration UNCONDITIONAL, and handing its name
+     * to `class_exists()` executes the file once; the conditional body never
+     * runs; the probed name stays unknown; and any further `*_exists()` probe
+     * RE-INCLUDES the file, redeclaring the class the first include defined —
+     * E631 smuggled straight back through the gate. The walk now counts
+     * colon-form control bodies (`if`/`for`/`foreach`/`while`/`switch`/
+     * `declare` opened with `:` until the matching `end*`) as scopes beside the
+     * brace depth, so EITHER conditional form makes a type invisible, and the
+     * alt-syntax arm is pinned by the same both-polarity tests plus the
+     * driver's tethered-alt tree (a conditional primary SHARED with an
+     * unconditional class — the exact redeclare payload).
+     *
+     * THIRD BOUND, bracketed namespaces — LOUD, and named because this
+     * paragraph previously did not say it: a file in the braced form
+     * `namespace X { class Y … }` puts EVERY declaration at depth > 0, so the
+     * gate reads such a file as "declares nothing at its PSR-4 name" and
+     * REJECTS IT BY NAME — exempt-reported by {@see nonClassSources()} or a
+     * named throw in the wired directory. Nothing is silently missed; the
+     * cost is a false exemption, visible in red, and a multi-bracketed file
+     * inside the wired directory throws on its disagreement. `src/` uses the
+     * declaration form of `namespace` exclusively; the bracketed form has no
+     * live support here and none is promised.
+     *
+     * A conditional PRIMARY (either brace or colon form) therefore fails the
+     * gate and surfaces LOUDLY — reported by name, or thrown by name inside
+     * the wired directory — never silently; it is a conditional SECONDARY
+     * inside an otherwise-resolving file that is missed by design, exactly as
+     * it was before this gate existed (finding E637). `src/` ships zero
+     * conditional declarations of EITHER syntax form, measured both by this
+     * walk's scope accounting and by a token sweep over every `end*` keyword
+     * in the tree.
      *
      * Independently: a secondary type is only REFLECTABLE once its file has
      * been loaded, which happens as a side effect of the primary symbol
@@ -498,8 +530,56 @@ final class BuiltInToolCorpus
         $names = [];
         $depth = 0;
 
+        // ALTERNATIVE-SYNTAX CONTROL BODIES. `if (…): … endif;` opens a
+        // conditional WITHOUT braces, so the brace depth alone reads zero
+        // inside one — and a gate that counted the declaration unconditional
+        // handed the name straight back to `*_exists()` probes, re-arming the
+        // E631 redeclare fatal through the gate itself (found on the round-two
+        // review of E631). Colon-form bodies are therefore counted as scopes
+        // too: a control keyword awaits its body opener, `:` opens a counted
+        // scope, the matching `end*` closes it. `elseif`/`else` continue a
+        // chain whose scope is already open from the `if`, so they are not
+        // openers of their own.
+        $altScopes = 0;
+        $awaitingBodyOpener = false;
+        $conditionParen = 0;
+
         for ($i = 0, $n = \count($tokens); $i < $n; ++$i) {
             $token = $tokens[$i];
+
+            if ($awaitingBodyOpener
+                && !(\is_array($token)
+                    && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true))
+            ) {
+                if (\is_string($token) && $token === '(') {
+                    ++$conditionParen;
+
+                    continue;
+                }
+
+                // A `{` while the condition's parens are still open is a
+                // closure or array-like literal INSIDE the condition, not the
+                // body opener — let the generic brace counter track it.
+                if (\is_string($token) && $conditionParen > 0 && $token === ')') {
+                    --$conditionParen;
+
+                    continue;
+                }
+
+                if ($conditionParen === 0) {
+                    if (\is_string($token) && $token === ':') {
+                        ++$altScopes;
+                    }
+
+                    $awaitingBodyOpener = false;
+
+                    if (\is_string($token) && $token === '{') {
+                        ++$depth;
+
+                        continue;
+                    }
+                }
+            }
 
             if (\is_string($token)) {
                 $depth += $token === '{' ? 1 : ($token === '}' ? -1 : 0);
@@ -530,7 +610,24 @@ final class BuiltInToolCorpus
                 continue;
             }
 
-            if ($depth !== 0
+            if (\in_array($token[0], [\T_IF, \T_FOR, \T_FOREACH, \T_WHILE, \T_SWITCH, \T_DECLARE], true)) {
+                $awaitingBodyOpener = true;
+                $conditionParen = 0;
+
+                continue;
+            }
+
+            if (\in_array(
+                $token[0],
+                [\T_ENDIF, \T_ENDFOR, \T_ENDFOREACH, \T_ENDWHILE, \T_ENDSWITCH, \T_ENDDECLARE],
+                true,
+            )) {
+                --$altScopes;
+
+                continue;
+            }
+
+            if ($depth !== 0 || $altScopes !== 0
                 || !\in_array($token[0], [\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM], true)
             ) {
                 continue;

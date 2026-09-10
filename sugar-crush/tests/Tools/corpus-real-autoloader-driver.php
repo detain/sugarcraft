@@ -78,6 +78,27 @@ $buildTree = static function (string $dir, string $prefix, string $place): void 
         $dir . '/src/' . $place . '/Ghost.php',
         "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$ghostNamespace};\n\nfinal class Ghost\n{\n}\n",
     );
+
+    // THE TETHERED ALTERNATIVE-SYNTAX FILE (E631's round-two review, finding
+    // on the FIRST DRAFT of the token gate): the PSR-4 name IS declared —
+    // but only inside an `if (): … endif;` body, which carries no braces, so
+    // a brace-depth-only walk counts it unconditional. A gate that counts it
+    // hands the never-executed name to `class_exists()`, which includes the
+    // file (defining the UNCONDITIONAL Tether below); the name stays unknown,
+    // and the next `*_exists()` probe RE-INCLUDES the file — redeclaring
+    // Tether, fatal rc 255, E631 re-armed through the gate. The walk now
+    // counts colon-form bodies, so this file must fail the gate and be
+    // REPORTED by name instead.
+    if (!is_dir($dir . '/src/Support')) {
+        mkdir($dir . '/src/Support', 0o777, true);
+    }
+    file_put_contents(
+        $dir . '/src/Support/AltTether.php',
+        "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$prefix}Support;\n\n"
+        . "if (getenv('CORPUS_PROBE_ALT_TETHER_NEVER_TAKEN') !== false):\n"
+        . "final class AltTether\n{\n}\n"
+        . "endif;\n\nfinal class Tether\n{\n}\n",
+    );
 };
 
 $echo = static function (string $line): void {
@@ -105,10 +126,13 @@ $echo('RESULT A_EXEMPT=' . implode(',', $exempt));
 // ({@see BuiltInToolCorpusTest::classifyFilePsr4Symbol()}) over tree A: the
 // mis-namespaced file must answer `none` and the good file `concrete`, and the
 // subprocess must still arrive at DONE. Pre-fix this is where a second rc-255
-// would land even if the scanner's own gate survived.
+// would land even if the scanner's own gate survived — and the TETHERED ALT
+// file lands here too: the first-draft brace-only gate counted its
+// never-executed conditional name as declared, so the ladder re-include
+// redeclared Tether right here. The token gate answers `none` before probing.
 $echo('PHASE C:census-instrument');
 $kinds = [];
-foreach (['Support/Ghost.php', 'Tools/BuiltIn/Anchor.php'] as $relative) {
+foreach (['Support/AltTether.php', 'Support/Ghost.php', 'Tools/BuiltIn/Anchor.php'] as $relative) {
     $expected = 'CorpusRealAutoloadProbeA\\' . str_replace('/', '\\', substr($relative, 0, -4));
     $kinds[] = $relative . ':' . BuiltInToolCorpusTest::classifyFilePsr4Symbol($dirA . '/src/' . $relative, $expected);
 }
