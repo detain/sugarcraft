@@ -52,7 +52,12 @@ So:
 
 ## Running tests — KEEP CONTEXT SMALL
 - While iterating, run ONE test FILE: `cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/X/YTest.php`
-  (~0.05-6s). Never run `tests/Cli` as a DIRECTORY — it hangs >4min.
+  (~0.05-6s). Running `tests/Cli` as a DIRECTORY is allowed — the old ">4min hang" claim is
+  OBSOLETE: re-timed 2026-09-10, linked mode, cwd=sugar-crush, PHP 8.3.6 on a 64-core AMD
+  Eng-Sample devbox: `timeout 300 php vendor/bin/phpunit tests/Cli --colors=never </dev/null`
+  finished OK (860 tests, 8503 assertions) in 16.7s wall. Cwd matters for config resolution:
+  the same directory argument from the sandbox ROOT (no `phpunit.xml`/bootstrap there) also
+  ran fast (18.3s) but failed the 4 stdin-pin tests — measure from cwd=sugar-crush.
 - Run the FULL suite at most TWICE (once to see where you are, once at the end):
   `cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit > /tmp/o.txt 2>&1; echo "rc=$?"; tail -5 /tmp/o.txt`
   REDIRECT, never pipe — `phpunit | tail` reports tail's exit code. Judge by rc, never the banner.
