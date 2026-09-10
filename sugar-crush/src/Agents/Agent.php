@@ -578,19 +578,19 @@ final readonly class Agent
      * `Workflows/WorkflowEngine.php`. Re-derived over this tree rather than
      * reasoned about:
      *
-     *   - `WorkflowEngine.php:1126` `foreach ($nestedStages as $nestedStage)`
-     *     encloses the render at `:1174` - ONE RENDER PER NESTED PIPELINE
+     *   - `WorkflowEngine::executePipelineStage()`'s `foreach ($nestedStages as $nestedStage)`
+     * encloses that stage's `CompleteRequest` render - ONE RENDER PER NESTED PIPELINE
      *     STAGE.
      *   - `WorkflowEngine::executeVerificationStage()` renders TWICE,
-     *     straight-line, at `:1275` (the task agent) and `:1318` (the
-     *     verifier), the verifier after the task's sub-agent has already run.
-     *   - `WorkflowEngine.php:895`
-     *     `foreach ($workflow->stages as $stageIndex => $stage)` reaches
-     *     `:1063`/`:1275`/`:1318`/`:1422` once per stage.
+     * straight-line (the task agent first, then the
+     * verifier), the verifier after the task's sub-agent has already run.
+     *   - `WorkflowEngine::runFromWorkflow()`'s
+     * `foreach ($workflow->stages as $stageIndex => $stage)` reaches the
+     * sequential, pipeline, verification-pair and parallel renders once per stage.
      *   - And this is the LIVE half, unlike the two dormant sites in the roster
-     *     below: `Bootstrap.php:1183` `workflowEngine()` is wired at
-     *     `Bootstrap.php:1058`, the same construction point as `agentManager:`
-     *     at `Bootstrap.php:1044`, so it is reachable from `bin/sugarcrush`.
+     *     below: `Bootstrap::workflowEngine()` is wired as the
+     * `workflowEngine:` argument of `Bootstrap::chat()`'s `new Chat(`, the same
+     * construction point as `agentManager:`, so it is reachable from `bin/sugarcrush`.
      *
      * MEASURED with a logging `git` shim on `PATH`, driving the nested-pipeline
      * shape (a fresh `Agent` per stage, `environment` left null, the process
@@ -646,15 +646,14 @@ final readonly class Agent
      *      WHAT IS TRUE NOW: it is answerable, and the answer is a derivable
      *      CONSTANT. A workflow stage's worker cannot execute a tool at all.
      *      `ProcessExecutor`'s live worker script builds its request with
-     *      `tools: null` - "Deliberately null: the parent sends tool NAMES,
-     *      not tools", `ProcessExecutor.php:983-985` - and its body
-     *      (`ProcessExecutor.php:1003-1034`) is a single
+     *      `tools: null` - the parent sends tool NAMES,
+     * not tools - and the worker script's completion body is a single
      *      `completeStream()`/`complete()` with NO tool-execution loop after
      *      it. So for stages 2..N of one run the answer is a constant `false`,
      *      not an unknown, and a review demonstrated exactly that: one hoisted
      *      `EnvironmentBlock::capture(...)->withWriteSinceLastRender(false)`
-     *      above `WorkflowEngine.php:1126`, passed into the render at `:1174`,
-     *      green.
+     *      above `executePipelineStage()`'s nested loop, passed into that stage's render,
+     * green.
      *
      *      WHY THE DISPOSITION SURVIVES IT ANYWAY: that hoisted line is an
      *      edit to `WorkflowEngine.php`, which reason 1 already puts outside
@@ -667,7 +666,7 @@ final readonly class Agent
      *      (`src/Agents/AgentResult.php:15-23`) is exactly `agentId`,
      *      `status`, `output`, `error`, `tokensUsed`, `costUsd`, `startedAt`,
      *      `completedAt` - NO TOOL CALLS - and the worker's own `complete`
-     *      frame (`ProcessExecutor.php:1037-1042`) carries `output`,
+     *      frame (the `complete` emission in `ProcessExecutor`'s embedded worker script) carries `output`,
      *      `tokensUsed` and `costUsd` and nothing else. Wiring THAT is a
      *      BUILD-IT-OUT across `WorkflowEngine` + `AgentResult` + the worker
      *      IPC frame, not a one-line mark. It is pinned as a decision by the
@@ -686,13 +685,11 @@ final readonly class Agent
      * SIX are production-reachable and TWO are dormant:
      *
      *   - LIVE: the five in `WorkflowEngine` named above, and
-     *     {@see ProcessExecutor::spawnWorker()} at `ProcessExecutor.php:473`,
-     *     which those five reach through `AgentWorkerPool::executeOne()`.
-     *   - DORMANT, TWO OF THEM: {@see AgentManager::executeSubAgent()} at
-     *     `AgentManager.php:433`, which `Renderer.php:164-166` and
+     *     {@see ProcessExecutor::spawnWorker()},
+     * which those five reach through `AgentWorkerPool::executeOne()`.
+     *   - DORMANT, TWO OF THEM: {@see AgentManager::executeSubAgent()}, which `Renderer.php:164-166` and
      *     `AgentDefinition.php:137` already record as callerless; and
-     *     `App::dispatchSkill()` at `App/App.php:569`, whose own comment at
-     *     `App.php:533` says "Nothing calls dispatchSkill() in production
+     *     `App::dispatchSkill()`, whose own in-code comment says "Nothing calls dispatchSkill() in production
      *     yet".
      *
      *     RE-DERIVE THE FIRST WITH THE EXCLUSION, WHICH IS LOAD-BEARING:
@@ -716,7 +713,7 @@ final readonly class Agent
      *
      * AND THE STEP TEXT SAYS OTHERWISE - recorded here because nothing else in
      * this diff can record it. prompt_plan.md's P3.S6 Goal names
-     * `AgentManager.php:433` as the terminus of a LIVE production path. It is
+     * `AgentManager::executeSubAgent()` as the terminus of a LIVE production path. It is
      * not one, and the command above is the whole of the argument. MEASURED
      * from `sugar-crush/`:
      *
@@ -731,15 +728,15 @@ final readonly class Agent
      * THE PATH THAT IS ACTUALLY LIVE, every hop re-derived over this tree
      * rather than reasoned about: `bin/sugarcrush:423` builds
      * `Bootstrap::app($args->root)`; `Bootstrap::app()` calls
-     * `Bootstrap::chat()` at `Bootstrap.php:1888` (`chat()` itself at
-     * `Bootstrap.php:838`); `chat()` hands the `Chat` its engine through the
-     * `workflowEngine:` argument at `Bootstrap.php:1058`, built by
-     * `Bootstrap::workflowEngine()` at `Bootstrap.php:1183`;
-     * `Chat::workflowRun()` (`src/Chat.php:7820`) calls
-     * `$engine->run($workflowName, $context)` at `Chat.php:7844`, inside the
-     * `\Fiber` opened at `Chat.php:7842`; and `WorkflowEngine::run()`
-     * (`WorkflowEngine.php:368`) reaches this assembler at
-     * `WorkflowEngine.php:1063`, `:1174`, `:1275`, `:1318` and `:1422`.
+     * `Bootstrap::chat()` (the `Chat`
+     * construction lives inside it); `chat()` hands the `Chat` its engine through the
+     * `workflowEngine:` argument, built by
+     * `Bootstrap::workflowEngine()`;
+     * `Chat::workflowRun()` calls
+     * `$engine->run($workflowName, $context)` inside the `\Fiber` it opens;
+     * and `WorkflowEngine::run()` reaches this assembler through the five
+     * per-stage renders - `executeStage()`, `executePipelineStage()`, the
+     * `executeVerificationStage()` pair, and `executeParallelStage()`.
      *
      * That is why every measurement in this doc-block is taken against
      * `WorkflowEngine` and not against `AgentManager`. `prompt_plan.md` is
@@ -748,7 +745,7 @@ final readonly class Agent
      * escalated to the orchestrator with the rest.
      *
      * (A review of this step wrote "five reachable, three dormant". That sums
-     * to eight but splits it wrongly: `ProcessExecutor.php:473` is reached from
+     * to eight but splits it wrongly: `ProcessExecutor::spawnWorker()` is reached from
      * every WorkflowEngine stage. Six and two are the derived numbers.)
      *
      * WHICH OF THE EIGHT ARE DRIVEN BY A TEST, AND WHICH ARE CLASSIFIED BY
@@ -756,23 +753,22 @@ final readonly class Agent
      * deliverable and a reader is entitled to know how much of it is executed.
      * FOUR ARE DRIVEN:
      *
-     *   - `AgentManager.php:433`, by
+     *   - `AgentManager::executeSubAgent()`, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()};
-     *   - `ProcessExecutor.php:473`, by
+     *   - `ProcessExecutor::spawnWorker()`, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()};
-     *   - `WorkflowEngine.php:1174`, the nested-pipeline render, by
+     *   - `WorkflowEngine::executePipelineStage()`'s nested-pipeline render, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()};
-     *   - `WorkflowEngine.php:1063`, the plain sequential-stage render reached
-     *     from the outer `foreach` at `WorkflowEngine.php:895`, by
+     *   - `WorkflowEngine::executeStage()`'s plain sequential-stage render reached
+     * from the outer `foreach ($workflow->stages ...)` in `runFromWorkflow()`, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEngineSequentialStageChainRendersTheAgentAssemblerOncePerStage()}.
      *
      * FOUR ARE CLASSIFIED BY READING ONLY - no test enters them, and a wiring
      * applied at any of them would not red anything in this diff:
-     * `App/App.php:569`, and `WorkflowEngine.php:1275`, `:1318` and `:1422`
-     * (the verification stage's straight-line pair, and the parallel stage's
-     * single `$firstAgent->systemPrompt()`). The two per-step seams this
-     * doc-block calls out by name are now BOTH driven - the `:1126` loop and
-     * the `:895` loop - but `executeVerificationStage()`'s double render is
+     * `App::dispatchSkill()`, and `executeVerificationStage()`'s straight-line
+     * pair plus `executeParallelStage()`'s single `$firstAgent->systemPrompt()`. The two per-step seams this
+     * doc-block calls out by name are now BOTH driven - the nested-`$nestedStages` loop and
+     * the outer stages loop - but `executeVerificationStage()`'s double render is
      * not, and neither is the dormant `App::dispatchSkill()`. Do not read the
      * roster as four-driven-implies-eight-covered.
      *
@@ -803,23 +799,21 @@ final readonly class Agent
      * fixing it, and it is here only because every other number in this
      * doc-block is a count of BYTES or of SUBPROCESSES and a reader could
      * finish it believing the repeated render is merely wasteful. It is also
-     * BLOCKING. `Chat::workflowRun()` (`src/Chat.php:7820`) runs
-     * `$engine->run(...)` (`Chat.php:7844`) inside a `\Fiber` opened at
-     * `Chat.php:7842` - on the MAIN loop, not in a child.
+     * BLOCKING. `Chat::workflowRun()` runs
+     * `$engine->run(...)` inside a `\Fiber` it opens itself - on the MAIN loop, not in a child.
      * {@see \SugarCraft\Crush\Agents\AgentWorkerPool} does suspend that fiber
      * while it waits on children (`\Fiber::suspend()`,
      * `AgentWorkerPool.php:869`), which is what keeps the TUI alive across the
      * model call - but the PARENT-side render is not inside that wait. At
-     * `WorkflowEngine.php:1174` (and at `:1063`, `:1275`, `:1318`, `:1422`)
-     * `$agent->systemPrompt()` is evaluated as an argument to the
+     * `executePipelineStage()`'s render (and at the sequential, verification-pair
+     * and parallel renders) `$agent->systemPrompt()` is evaluated as an argument to the
      * `CompleteRequest` constructor, i.e. fully synchronously, BEFORE
      * `$this->pool->executeOne()` is entered and therefore before any suspend -
      * and {@see EnvironmentBlock::render()}'s five git calls are blocking
      * `proc_open`/`shell_exec`, four and one respectively. `EnvironmentBlock`'s
-     * own class doc-block measures a render at **399 ms** on a large working
-     * tree (`EnvironmentBlock.php:54`; 373 of those milliseconds inside
-     * `git diff`, and it explicitly refuses to call any millisecond figure a
-     * ceiling). So a K-stage workflow can stall the event loop for roughly K
+     * own class doc-block measures a render at hundreds of milliseconds on a large
+     * working tree (the bulk of it inside `git diff`, and it explicitly refuses
+     * to call any millisecond figure a ceiling). So a K-stage workflow can stall the event loop for roughly K
      * times that, in K separate un-suspendable chunks, on a repository big
      * enough. Not fixed here, and not fixable here: every one of the five
      * render sites is in `Workflows/WorkflowEngine.php`, which reason 1 above
@@ -827,14 +821,14 @@ final readonly class Agent
      *
      * AND ONE DISPATCH RENDERS TWICE, WHICH IS A FINDING AND NOT A FIX.
      * `App::dispatchSkill()` and FOUR of the five `WorkflowEngine` sites
-     * (`:1063`, `:1174`, `:1275`, `:1318`) build their `CompleteRequest` with
+     * (the sequential, nested-pipeline and verification-pair renders) build their `CompleteRequest` with
      * this method AND then {@see ProcessExecutor::spawnWorker()} calls it again
      * for the worker's startup message - TEN subprocesses for one dispatch, two
      * unmemoised renders of a live git section that can disagree with each
      * other. NOT "every caller that goes through the worker pool", which is
      * what an earlier revision of this sentence said: `Chat::executeAgents()`
-     * (`src/Chat.php:5124`) also goes through the pool and is not one of the
-     * eight call sites at all. The PARALLEL stage at `:1422` is a third shape
+     * also goes through the pool and is not one of the
+     * eight call sites at all. The PARALLEL stage (`executeParallelStage()`) is a third shape
      * again - `$firstAgent->systemPrompt()` builds one `$defaultRequest`, the
      * per-task agents built in the `foreach` below it call nothing, and
      * `AgentWorkerPool::executeAll()` copies `$request->systemPrompt` onto each
@@ -859,18 +853,18 @@ final readonly class Agent
      * WHAT IS TRUE NOW. TEN-to-EIGHT is the ASYMMETRIC edit: the
      * `CompleteRequest` built from an unmarked block (five) and the worker's
      * second render from a marked one (three). `App/App.php` has no attachment
-     * point that produces it. There is exactly ONE, at `App.php:552-554`
-     * (`$agent = $agent->withEnvironment(EnvironmentBlock::capture(...))`),
-     * and BOTH consumers - the request's `systemPrompt` at `App.php:569` and
-     * `ProcessExecutor::spawnWorker()`'s second render at
-     * `ProcessExecutor.php:473` - read that one block. So the edit `App.php`
+     * point that produces it. There is exactly ONE in `App.php` - the
+     * `$agent = $agent->withEnvironment(EnvironmentBlock::capture(...))`
+     * attachment inside `dispatchSkill()` - and BOTH consumers: the request's
+     * `systemPrompt:` argument and `ProcessExecutor::spawnWorker()`'s second
+     * render - read that one block. So the edit `App.php`
      * actually admits is SYMMETRIC. MEASURED with the same logging-`git`-shim
      * technique against `ProcessExecutor(simulatedWorker: true)`, on the same
      * generated fixture repository, all three shapes side by side:
      *
      *     DEFAULT, one unmarked block feeding both     => 10 subprocesses; consumers agree
      *     ASYMMETRIC, only the SubAgent's agent marked =>  8 subprocesses; consumers DISAGREE
-     *     SYMMETRIC, the single App.php:552 attachment =>  6 subprocesses; consumers agree
+     *     SYMMETRIC, the single App.php dispatchSkill attachment =>  6 subprocesses; consumers agree
      *
      * The symmetric edit is 10 -> 6, and the two consumers still render
      * BYTE-FOR-BYTE identical prompts. So the "disagree MORE" reasoning is
@@ -888,25 +882,24 @@ final readonly class Agent
      * golden has changed default behaviour and is wrong. It is also a
      * suppression keyed on nothing in the sense reason 2 establishes: the write
      * signal it would spend is one this path cannot derive. And
-     * `dispatchSkill()` is dormant besides - `App.php:533` says so in its own
-     * words - so the six-versus-ten saving is a saving on a path nothing runs.
+     * `dispatchSkill()` is dormant besides - its own in-code comment says so - so the six-versus-ten saving is a saving on a path nothing runs.
      *
      * AND THE SECOND PROPOSED WIRING, IN THE OTHER DECLARED FILE - ALSO
      * MEASURED, ALSO DECLINED. An earlier revision of this block dispositioned
      * `App/App.php` and said nothing at all about `Cli/Bootstrap.php`, which
      * left the reader to assume no attachment point was there. One is.
      * `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
-     * production attachment points - `Bootstrap.php:1463`
+     * production attachment points - `Bootstrap.php`
      * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)))`,
-     * inside `Bootstrap::agentManager()`'s roster loop) and `App.php:552`
+     * inside `Bootstrap::agentManager()`'s roster loop) and `App::dispatchSkill()`
      * treated above; every other hit is this file's own, the setter's
      * declaration and this doc-block's quotations of the two.
      *
      * IT IS LIVE AS A CONSTRUCTION POINT, which is why it needs an argued
      * answer rather than a shrug: `Bootstrap::agentManager()` is reached from
-     * `bin/sugarcrush` through the `agentManager:` argument at
-     * `Bootstrap.php:1044`, the same construction call `chat()` takes its
-     * engine from. It is also, mechanically, the ONLY place a registered
+     * `bin/sugarcrush` through the `agentManager:` argument of the
+     * `new Chat(` inside `Bootstrap::chat()` - the same construction call whose
+     * `workflowEngine:` argument takes the engine. It is also, mechanically, the ONLY place a registered
      * agent's block is built, so it is the only place a mark could be applied
      * to one.
      *
@@ -929,16 +922,16 @@ final readonly class Agent
      *   the orienting-line mismatch that capture site exists to prevent. The
      *   write-signal argument above is about attaching a BLOCK and is untouched
      *   by passing a DIRECTORY: each stage still captures and renders its own
-     *   block, at the root the launch resolved. `ProcessExecutor::spawnWorker()`'s second render at
-     *   `ProcessExecutor.php:473` renders the SubAgent's OWN agent, which on
+     *   block, at the root the launch resolved. `ProcessExecutor::spawnWorker()`'s second render
+     * renders the SubAgent's OWN agent, which on
      *   the live path is that same fresh one. The one consumer that does read
      *   a registered agent's block is {@see AgentManager::executeSubAgent()}
-     *   at `AgentManager.php:433` - dormant, by the `--exclude=Agent.php`
+     * - dormant, by the `--exclude=Agent.php`
      *   command above, which prints nothing and exits 1. So the mark's whole
      *   audience is a path with no caller.
      *
      *   SECOND, IT WOULD CHANGE DEFAULT BEHAVIOUR UNCONDITIONALLY, which is
-     *   the same ground `App.php:552` was declined on. A once-per-launch
+     *   the same ground `App::dispatchSkill()`'s attachment was declined on. A once-per-launch
      *   roster loop has no step to key a per-step signal on; a mark placed
      *   there is spent on every dispatch the launch ever makes. MEASURED with
      *   the same logging-`git`-shim technique, against a throwaway fixture
@@ -959,13 +952,13 @@ final readonly class Agent
      *   diff sections are gone. That is a moved default, and a diff that moves
      *   the default is wrong here in the step text's own terms.
      *
-     * SO THE HONEST DISPOSITION FOR `Bootstrap.php:1463` IS THE ESCALATED ONE.
+     * SO THE HONEST DISPOSITION FOR THE `Bootstrap::agentManager()` ATTACHMENT IS THE ESCALATED ONE.
      * Carrying a real write signal to the renders that actually repeat needs
      * `WorkflowEngine` to pass a block at all (it passes none, measured above),
      * {@see AgentResult}'s constructor to carry what a stage did, and the
      * worker's `complete` IPC frame to report it - the BUILD-IT-OUT named
      * under reason 2, across `WorkflowEngine` + `AgentResult` + the worker IPC
-     * frame. `Bootstrap.php:1463` is downstream of none of that and cannot
+     * frame. The `Bootstrap::agentManager()` attachment is downstream of none of that and cannot
      * substitute for it.
      *
      * AND WHY THAT DISPOSITION IS RECORDED HERE AND NOT AT THE SITE, since a

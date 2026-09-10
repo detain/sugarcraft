@@ -492,7 +492,7 @@ final class AgentManager
      * `liveOutput(\'style-fixer\')` a full buffer while this method returned
      * `[]`. Neither shipped workflow names a parallel task after a roster
      * agent (`examples/workflows/lint-then-fix.yaml:41,49`,
-     * `workflows/deep-research.php:46,57,68,79`), so the registered map was the
+     * `workflows/deep-research.php`'s four `Tasks::agent('researcher')` tasks), so the registered map was the
      * one place the answer could never be.
      *
      * And it had no liveness filter, while every other consumer of this data
