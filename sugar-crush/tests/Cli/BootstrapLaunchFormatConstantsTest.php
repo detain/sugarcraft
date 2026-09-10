@@ -605,6 +605,50 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'methodBody() stops at a nested closing brace, so it reads only the head of every method',
         );
 
+        // E276'S OWN TRUNCATION, as a fixture. Over a token_get_all() stream an
+        // interpolation opens as an ARRAY token and closes as a bare `}`, so a
+        // walker that increments only on the bare `'{'` goes one closer over at
+        // the `}` of the FIRST interpolated string and ends the body early —
+        // every literal after a `"{$x}"` vanishes and the guards above answer
+        // `[]` for a body they never finished reading. MEASURED before the fix,
+        // through the shipped methods: this fixture's body came back at 5
+        // significant tokens instead of 22 and the late format literal was
+        // invisible. The deprecated `${` spelling is asserted in the same
+        // breath because a PARTIAL fix — the everyday opener only — is exactly
+        // the shape InterpolationOpenerTokenTest's row set exists to catch.
+        // Single-quoted pieces: the `{$x}` bytes are the FIXTURE'S data, never
+        // this file's own interpolation — the exact shape INTERPOLATIONS in
+        // InterpolationOpenerTokenTest uses for the same reason.
+        $interpolated = "<?php class B {\n"
+            . "    private static function f(): void {\n"
+            . '        $s = "a {$x} b";' . "\n"
+            . "        self::emit(sprintf('late %s', \$a));\n"
+            . "    }\n}\n";
+        self::assertSame(
+            ["'late %s'"],
+            self::formatLiteralsIn(self::methodBody('f', $interpolated)),
+            'an interpolated string in the middle of a body truncates it, so a format literal after one '
+            . 'is invisible to every guard that reads methodBody() — this walker fails OPEN',
+        );
+        $interpolatedTokens = self::methodBody('f', $interpolated);
+        self::assertCount(22, $interpolatedTokens, 'the interpolated body no longer walks to its true end');
+        self::assertTrue(
+            \in_array('}', $interpolatedTokens, true),
+            'the bare closer of an interpolation vanished from the walked body: openers and closers must '
+            . 'stay one-to-one or every depth after the first string is a lie',
+        );
+        $deprecatedOpener = "<?php class B {\n"
+            . "    private static function f(): void {\n"
+            . '        $s = "a ${x} b";' . "\n"
+            . "        self::emit(sprintf('late %s', \$a));\n"
+            . "    }\n}\n";
+        self::assertSame(
+            ["'late %s'"],
+            self::formatLiteralsIn(self::methodBody('f', $deprecatedOpener)),
+            'the walk handles the everyday opener but not the deprecated one — a half fix, the shape a '
+            . 'deferral row is written to catch',
+        );
+
         self::assertSame(2, self::conversionsIn('%s and %d'));
         self::assertSame(0, self::conversionsIn('100%% done'), '%% is an escaped percent, not a conversion');
         self::assertSame(1, self::conversionsIn("sugarcrush: %s.\n"));
@@ -1781,7 +1825,23 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $body = [];
         for ($i = $at; $i < \count($significant); $i++) {
             $token = $significant[$i];
-            if ($token === '{') {
+
+            // E276. An interpolation opener arrives on this stream as an ARRAY
+            // token — `T_CURLY_OPEN` with text `{`, or the deprecated
+            // `T_DOLLAR_OPEN_CURLY_BRACES` with text `${` — while the `}` that
+            // closes it is a bare one-byte string. Counting depth on the bare
+            // `'{'` alone therefore missed the OPENER and still matched the
+            // closer, so one `"{$x}"` inside a scanned method ended the body a
+            // level early and hid every literal after it: this walker failed
+            // OPEN, which is why this row was first in KNOWN_GAPS. Both ids are
+            // named here, not a text test, because the file's sibling guard
+            // ({@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest})
+            // reads named constants, and the closer needs no arm at all: a
+            // bare `}` decrements whether it closed a block or an interpolation.
+            if (
+                $token === '{'
+                || (\is_array($token) && \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true))
+            ) {
                 $depth++;
                 if ($depth === 1) {
                     continue;

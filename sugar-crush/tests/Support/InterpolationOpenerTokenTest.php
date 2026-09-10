@@ -140,13 +140,22 @@ final class InterpolationOpenerTokenTest extends TestCase
      * row, the row with no gap, and the row that no longer describes its gap -
      * and an empty map would still be the only place the next one can go.
      *
-     * ALL THREE ROWS BELOW CAME FROM ONE WIDENING, and that is the entry
-     * worth reading twice. Selection used to be "names `T_CURLY_OPEN` as
-     * code", which is a walker that already knows the problem exists. A
+     * ONE WIDENING PRODUCED EVERY ROW THIS MAP HAS EVER HELD SINCE, and the
+     * map has now eaten one of them. Selection used to be "names `T_CURLY_OPEN`
+     * as code", which is a walker that already knows the problem exists. A
      * walker that counts depth on the BARE one-byte strings knows nothing
      * about it, misses the everyday `{$x}` spelling as well as the deprecated
      * one, and was invisible to this guard by construction - the alphabet had
-     * been written to match the cases already known.
+     * been written to match the cases already known. Three rows came of that
+     * widening, and the FIRST of them - `tests/Cli/BootstrapLaunchFormatConstantsTest.php`,
+     * the fail-open one the entry put first precisely because it HIDES defects
+     * rather than inventing them - has since been given the full opener roster
+     * and its row deleted, which is the lifecycle the map exists for: the row
+     * is the obligation, the fix is the payment, deleting the row in the same
+     * change-set is the receipt, and
+     * {@see testTheKnownGapReconciliationFailsInEveryDirection()} reddens a
+     * receipt filed without a payment just as loudly as a payment without a
+     * receipt.
      *
      * A ROW RECORDS WHICH OPENERS THE FILE IS MISSING, NOT JUST THAT IT IS
      * MISSING SOME. Keying a deferral on the FILENAME alone was the weaker
@@ -163,26 +172,6 @@ final class InterpolationOpenerTokenTest extends TestCase
      * @var array<string,array{openers:list<string>,reason:string}>
      */
     private const KNOWN_GAPS = [
-        'tests/Cli/BootstrapLaunchFormatConstantsTest.php' => [
-            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
-            'reason' =>
-            'methodBody() counts depth on the BARE string `{` over a token_get_all() stream, '
-            . 'where T_CURLY_OPEN comes back as an ARRAY token and its closer comes back as a '
-            . 'bare `}` - so it misses the everyday spelling, not just the deprecated one, and '
-            . 'the count goes one closer over. IT FAILS OPEN, which is why this row is first: '
-            . 'measured on PHP 8.3.6 through the shipped private methods by reflection, one '
-            . '`"{$x}"` inserted into a scanned method cut the body from 16 significant tokens '
-            . 'to 6 and made a format literal that '
-            . 'testNoMethodThatOwnsANamedFormatAlsoHoldsALiteralOne() exists to reject '
-            . 'invisible - [] where the offender should have been. Latent only because no '
-            . 'Bootstrap method it reads carries an interpolation today: measured through the '
-            . 'SHIPPED methodBody() against a corrected walk, over the method set derived from '
-            . 'the shipped obligations(), which agree on every one. A COUNT WAS RETIRED FROM '
-            . 'THIS ROW: an earlier draft said "the eight Bootstrap methods it reads", which '
-            . 'was both wrong - the derived set is smaller - and not the claim, since the set '
-            . 'is derived and a cardinality in prose is wrong by the next merge. tests/Cli/ '
-            . "was in no lane's file list for the round that found this.",
-        ],
         'tests/Commands/SlashDispatchTest.php' => [
             'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
             'reason' =>
