@@ -93,7 +93,12 @@ final readonly class Bash implements Tool, PromptGuidance
             . 'included — so append 2>&1 yourself when the warnings are what you are after. '
             . $bound . ' '
             . 'Prefer Read/Grep/Glob for reading and searching files; reach for this for '
-            . 'build, test and git work, and for anything those tools cannot do.';
+            . 'build, test and git work, and for anything those tools cannot do. '
+            . 'Commands run detached from any controlling terminal with interactive '
+            . 'prompts disabled: sudo, ssh, git credentials and pagers fail fast and '
+            . 'say so on stderr. A command that needs a human at a keyboard cannot '
+            . 'run here — configure passwordless access or have the user run it '
+            . 'themselves.';
     }
 
     /**

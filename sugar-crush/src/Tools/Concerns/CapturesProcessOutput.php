@@ -23,6 +23,49 @@ namespace SugarCraft\Crush\Tools\Concerns;
  * plenty of well-behaved tools write progress and warnings to stderr on a
  * successful run and folding that into the result would corrupt the output
  * the model reasons about.
+ *
+ * ## NO CONTROLLING TERMINAL FOR TOOL CHILDREN — Phase 9 layer A
+ *
+ * A closed stdin pipe does NOT make a command non-interactive. `sudo`, `ssh`,
+ * git's credential path and every pager reach for `/dev/tty` — the
+ * CONTROLLING TERMINAL, resolved by the kernel, not through fd 0/1/2 — so
+ * their prompts paint outside the app frame at whatever cursor the terminal
+ * is on, and the tool hangs waiting for a human the TUI cannot see. Closing
+ * or redirecting stdin cannot help: the child never asked fd 0 for anything.
+ *
+ * The one lever that reaches `/dev/tty` is removing the session's controlling
+ * terminal before exec. Every child is therefore spawned through
+ * `setsid -w`, which starts a new session with no terminal attached;
+ * `/dev/tty` then fails at OPEN time (ENXIO, "No such device or address"),
+ * so an interactive command exits immediately and its diagnostic —
+ * `sudo: a password is required`, `Permission denied (publickey,password)` —
+ * arrives on the stderr pipe this trait already captures and the renderer
+ * already displays. Detach is a PREREQUISITE for the display fix, not an
+ * alternative to it: a child that still holds the controlling terminal can
+ * scribble on the screen at any time, and a renderer that paints by diffing
+ * its own model of the screen has no way to know it happened. The plan's
+ * `sudo -n` rides as a note rather than a flag: this trait cannot know which
+ * argv belongs to sudo, and the detach makes sudo's -n outcome unconditional.
+ *
+ * {@see NONINTERACTIVE_ENV} carries the fail-fast half the detach cannot
+ * reach — prompts that consult the environment before touching a device.
+ * Both halves apply to EVERY runCaptured() caller (Bash, Grep,
+ * EnvironmentBlock share this one choke point), which is what "sweep the
+ * behaviour, not the token" asked for.
+ *
+ * FALLBACK IS MEASURED, NOT ASSUMED: on a host with no usable `setsid(1)`
+ * (macOS ships none) the env block still applies and the spawn proceeds
+ * attached; {@see detachedSpawnBinary()} proves `-w` exit-status forwarding
+ * by running it, because a wrapper that laundered every command's exit code
+ * into the wrapper's own would trade a hang for a lie.
+ *
+ * LAYER C SEAM, RECORDED NOT BUILT: the settled design gives the PTY-backed
+ * interactive mode as an optional `interactive` PARAMETER on Bash (never a
+ * second tool, which would split every permission/hook rule across two
+ * names). The parameter is deliberately absent until the mechanism exists —
+ * a schema flag with no effect is a lie the model pays for — and
+ * InteractivePromptContainmentTest pins its absence so the arrival is a
+ * chosen change, not drift.
  */
 trait CapturesProcessOutput
 {
@@ -35,6 +78,58 @@ trait CapturesProcessOutput
      */
     private const SUPPRESSED_STDERR_MARKER =
         '... [stderr suppressed: the command succeeded and also wrote to stderr; re-run with 2>&1 to see it]';
+
+    /**
+     * Fail-fast environment forced on every tool child. These are not
+     * askpass (the askpass route was rejected as a credential-entry surface
+     * driven by model output) — they are how a command refuses LOUDLY on the
+     * captured stderr instead of hanging on an invisible prompt.
+     *
+     * GIT_TERMINAL_PROMPT=0: git's own switch for refusing terminal prompts.
+     * GIT_ASKPASS=/bin/false: the plan left this value to the implementer
+     * ("=/bin/false or empty"). An executed /bin/false fails every credential
+     * prompt as a refusal git explains on stderr; an EMPTY value would point
+     * git at the default askpass path and, where one exists, feed it an
+     * empty secret — a wrong-credential ATTEMPT where a refusal was asked
+     * for. SSH_ASKPASS=echo (the brief's value, not /bin/false, because ssh
+     * 3-times a succeeding askprogram before dying "Permission denied" and
+     * an EMPTY reply is the legible outcome there) is the same trade seen
+     * from the other side: with no controlling terminal, OpenSSH ≥ 8.4 uses
+     * the askprogram at all, so pinning it pins the refusal path.
+     * DEBIAN_FRONTEND=noninteractive: apt's config/overwrite prompts.
+     * PAGER / GIT_PAGER: kill the pager class of hang.
+     * SYSTEMD_PAGER=/bin/cat — WHAT THE PLAN SAID: `SYSTEMD_PAGER=` (empty,
+     * systemd's documented disable). WHAT IS TRUE NOW: PHP's proc_open env
+     * array DROPS empty-string values (measured: `${VAR+x}` reads unset in
+     * the child, and an inherited value is shadowed away), so the empty
+     * spelling cannot reach a child at all — and a bare UNSET is worse than
+     * the hang it prevents, because systemctl then falls back to its
+     * built-in `less` default. WHY IT EARNS ITS PLACE: /bin/cat is a pager
+     * that streams and exits, and unlike empty it also defeats a
+     * user-exported SYSTEMD_PAGER=less rather than reviving it.
+     *
+     * No LC_ALL here: the phase text lists it only as "where the plan says",
+     * and the plan says it nowhere. Output locale is the caller's business.
+     */
+    private const NONINTERACTIVE_ENV = [
+        'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_ASKPASS' => '/bin/false',
+        'SSH_ASKPASS' => 'echo',
+        'DEBIAN_FRONTEND' => 'noninteractive',
+        'PAGER' => 'cat',
+        'GIT_PAGER' => 'cat',
+        'SYSTEMD_PAGER' => '/bin/cat',
+    ];
+
+    /**
+     * Inherited names REMOVED from the child environment. SUDO_ASKPASS per
+     * the plan's option (A) ("unset + sudo -n"): a user-wide askpass helper
+     * must not be handed to a child that has no terminal to refuse it on.
+     * GPG_TTY is deliberately NOT stripped — the plan does not name it; it
+     * is carried as a lane finding because a stale GPG_TTY path can still be
+     * opened by name from outside a session.
+     */
+    private const STRIPPED_ENV_NAMES = ['SUDO_ASKPASS'];
 
     /**
      * $maxBytes bounds what is RETAINED per stream, not what is read: the
@@ -79,7 +174,19 @@ trait CapturesProcessOutput
             2 => ['pipe', 'w'],
         ];
 
-        $process = @proc_open($command, $descriptors, $pipes, $cwd);
+        // Phase 9 layer A: with a usable setsid the child runs in a NEW
+        // SESSION — no controlling terminal — so every /dev/tty channel
+        // (sudo, ssh, credential prompts, pagers) fails at open and reports
+        // on the captured stderr. The array form names /bin/sh explicitly
+        // because that is exactly the shell PHP's string form runs, and
+        // `-w` keeps proc_close() reporting the COMMAND's status, not the
+        // wrapper's. The env block rides both paths: detach is the
+        // half that needs a binary, fail-fast env needs none.
+        $setsid = self::detachedSpawnBinary();
+        $env = self::containmentEnv();
+        $process = $setsid === ''
+            ? @proc_open($command, $descriptors, $pipes, $cwd, $env)
+            : @proc_open([$setsid, '-w', '--', '/bin/sh', '-c', $command], $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
             return [
                 'stdout' => '',
@@ -149,6 +256,109 @@ trait CapturesProcessOutput
             'stdoutMidLine' => $stdoutMidLine,
             'stderrMidLine' => $stderrMidLine,
         ];
+    }
+
+    /**
+     * Path of a `setsid(1)` proven to forward its child's exit status
+     * through `-w`, or '' when this host offers no usable detach.
+     *
+     * The probe RUNS the claim it makes — `setsid -w -- /bin/sh -c 'exit 7'`
+     * must come back 7 — because the two real failure modes are silent:
+     * a binary predating `-w` (or a busybox lacking it) execs, the wrapper
+     * exits 0 immediately, and every tool result on the box reports success
+     * for commands that failed. Trading a hang for a lie is not containment.
+     *
+     * Located by a stat walk, never by spawning a probe of `setsid` itself
+     * when it may be missing: PHP warns when proc_open targets an absent
+     * binary and phpunit.xml sets failOnWarning — the same hazard
+     * DetectsCapabilities documents for `rg --version`. The walk is that
+     * primitive duplicated ON PURPOSE: a trait cannot call a sibling
+     * trait's method (the host class is under no obligation to compose
+     * both), and a dozen stat calls are cheaper than that coupling.
+     *
+     * Memoized in FUNCTION-LEVEL statics, not trait properties: the hosts
+     * are `final readonly class`es and PHP refuses a readonly class that
+     * composes a trait declaring any property — a static one included, the
+     * exact trap DetectsCapabilities' doc-block warns about (which is why
+     * its own memo lives on the boot factory, a class it can use at all).
+     * Method statics are runtime scope storage, not property declarations,
+     * so they survive that rule. The cost of the trade is honest: the probe
+     * runs once per HOST CLASS (Bash, Grep, EnvironmentBlock), ~5 ms each,
+     * against zero cost on an unshareable global — containment pays.
+     */
+    private static function detachedSpawnBinary(): string
+    {
+        static $probed = false;
+        static $resolved = '';
+
+        if ($probed) {
+            return $resolved;
+        }
+        $probed = true;
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            return $resolved = '';
+        }
+
+        $path = self::locateOnPath('setsid');
+        if ($path === '') {
+            return $resolved = '';
+        }
+
+        $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $pipes = [];
+        $probe = @proc_open([$path, '-w', '--', '/bin/sh', '-c', 'exit 7'], $descriptors, $pipes);
+        if (!is_resource($probe)) {
+            return $resolved = '';
+        }
+        fclose($pipes[0]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return $resolved = proc_close($probe) === 7 ? $path : '';
+    }
+
+    /**
+     * First executable named $binary on the process PATH, or '' when absent.
+     *
+     * An empty PATH element is skipped, not treated as '.': answering a
+     * containment question from whatever the working directory happens to be
+     * is the nondeterminism DetectsCapabilities exists to avoid, same rule.
+     */
+    private static function locateOnPath(string $binary): string
+    {
+        foreach (explode(':', (string) getenv('PATH')) as $dir) {
+            if ($dir === '') {
+                continue;
+            }
+            $candidate = rtrim($dir, '/') . '/' . $binary;
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The inherited environment with {@see NONINTERACTIVE_ENV} forced over
+     * it and {@see STRIPPED_ENV_NAMES} removed.
+     *
+     * Built from a getenv() COPY, not a replacement: proc_open's $env is the
+     * child's WHOLE environment, so a hand-rolled array would strip PATH
+     * (every `bash -c` lookup dies) and HOME (git refuses to find its
+     * config). Rebuilt per call, never cached: putenv() in this process —
+     * tests and supervisors do it — must reach the next child, not be
+     * frozen out by a stale snapshot.
+     */
+    private static function containmentEnv(): array
+    {
+        $env = getenv();
+        foreach (self::STRIPPED_ENV_NAMES as $name) {
+            unset($env[$name]);
+        }
+
+        return array_merge($env, self::NONINTERACTIVE_ENV);
     }
 
     /**
