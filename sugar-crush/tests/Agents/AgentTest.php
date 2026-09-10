@@ -2370,12 +2370,13 @@ final class AgentTest extends TestCase
      * anywhere in `src/` or `bin/`. That test pins a real property of a dormant
      * path and it stays. What it cannot see is the per-RUN question, because
      * the shape that asks it is a loop in a different file:
-     * `WorkflowEngine.php:1126` `foreach ($nestedStages as $nestedStage)`
-     * encloses a render at `:1174`, `executeVerificationStage()` renders twice
-     * straight-line at `:1275` and `:1318`, and `WorkflowEngine.php:895`
-     * reaches `:1063`/`:1275`/`:1318`/`:1422` once per stage - and unlike the
+     * `WorkflowEngine::executePipelineStage()`'s `foreach ($nestedStages as $nestedStage)`
+     * encloses a render, `executeVerificationStage()` renders twice
+     * straight-line, and `WorkflowEngine::runFromWorkflow()`'s outer stage loop
+     * reaches the sequential, pipeline, verification-pair and parallel renders once per stage - and unlike the
      * dormant pair, that engine is LIVE from `bin/sugarcrush` via
-     * `Bootstrap.php:1183`, wired at `Bootstrap.php:1058`.
+     * `Bootstrap::workflowEngine()`, wired as the `workflowEngine:` argument of
+     * `Bootstrap::chat()`'s `new Chat(`.
      *
      * WHAT IS REPRODUCED HERE. A FRESH `Agent` per iteration with `environment`
      * null and `prompt` empty, rendered inside a loop with the process
@@ -2901,8 +2902,8 @@ final class AgentTest extends TestCase
      * written: a review applied to `WorkflowEngine.php` exactly the wiring
      * P3.S6 declines - hoisting
      * `EnvironmentBlock::capture((string) getcwd(), $this->model)->withWriteSinceLastRender(false)`
-     * above the `foreach` at `WorkflowEngine.php:1126` and passing it into the
-     * render at `:1174` - and THIS FILE stayed green under it: at `c4cb9492c`,
+     * above the `foreach` in `WorkflowEngine::executePipelineStage()` and passing it into the
+     * render below it - and THIS FILE stayed green under it: at `c4cb9492c`,
      * `vendor/bin/phpunit -c phpunit.xml tests/Agents/AgentTest.php` reported
      * OK at 31 tests and 266 assertions with that mutation applied. The
      * disposition this step exists to record was pinned by nothing, because
@@ -2925,7 +2926,7 @@ final class AgentTest extends TestCase
      * once per stage" from "renders once and re-sends": both are one number.
      *
      * WHY THE EXECUTOR IS A MOCK AND THE COUNT IS STILL REAL. The render this
-     * counts happens in the PARENT, at `WorkflowEngine.php:1174`, before the
+     * counts happens in the PARENT, at `executePipelineStage()`'s render, before the
      * `SubAgent` is handed to {@see AgentWorkerPool::executeOne()}. Injecting a
      * mock {@see ExecutorInterface} keeps the whole run in-process - no
      * `proc_open()`, no fork, no provider - while leaving that parent-side call
@@ -3092,9 +3093,8 @@ final class AgentTest extends TestCase
      * five render sites - `:1174`, enclosed by `executePipelineStage()`'s
      * `foreach ($nestedStages as $nestedStage)` at `:1126`. The doc-block on
      * {@see Agent::systemPrompt()} names a SECOND loop, the outer one:
-     * `foreach ($workflow->stages as $stageIndex => $stage)` at
-     * `WorkflowEngine.php:895`, reaching `:1063` once per stage through
-     * `executeStage()`. A whole pipeline is ONE entry in that outer loop, so
+     * `foreach ($workflow->stages as $stageIndex => $stage)` in
+     * `WorkflowEngine::runFromWorkflow()`, reaching `executeStage()`'s render once per stage. A whole pipeline is ONE entry in that outer loop, so
      * the pipeline test never enters `executeStage()` and never touches
      * `:1063` - which is why the workflow here is built with plain `->stage()`
      * calls and NOT with `->pipeline()`. Everything else about the harness is
@@ -3102,8 +3102,8 @@ final class AgentTest extends TestCase
      *
      * MEASURED, AND THAT MEASUREMENT IS WHY THIS TEST WAS WRITTEN. Hoisting a
      * shared `EnvironmentBlock::capture((string) getcwd(), $this->model)
-     * ->withWriteSinceLastRender(false)` above the `foreach` at
-     * `WorkflowEngine.php:895` and passing it into the render at `:1063` -
+     * ->withWriteSinceLastRender(false)` above the `foreach` in
+     * `WorkflowEngine::runFromWorkflow()` and passing it into `executeStage()`'s render -
      * exactly the wiring P3.S6 declines, applied at the outer seam instead of
      * the inner one - left the sibling test and the rest of this file GREEN,
      * and reds only here: 6 against an expected 10 at K = 2.

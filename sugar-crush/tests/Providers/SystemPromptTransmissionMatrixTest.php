@@ -78,7 +78,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * place. Those three rows are now split `#complete`/`#stream`, with a
      * drive each. The remaining body-shaped rows are genuinely
      * single-builder and stay undiscriminated: Sglang shares buildParams()
-     * (SglangProvider.php:642, called from :447 and :464); Vertex
+     * (`SglangProvider::buildParams()`, called from both `complete()` and `completeStream()`); Vertex
      * `#anthropic` is one method serving both paths
      * (anthropicBody($request, stream:), called from complete() and
      * completeStream()); Vertex `#google` is reached on the stream path only
@@ -860,7 +860,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     public function testBedrockEmptyStringSystemPromptIsTransmittedBecauseTheGuardIsNotNullOnly(): void
     {
         // Measured guard difference: systemBlocks() checks `!== null` only
-        // (BedrockProvider.php:341), so '' — which Sglang/Custom/Vertex treat
+        // (the `BedrockProvider::systemBlocks()` guard), so '' — which Sglang/Custom/Vertex treat
         // as "unset" — IS shaped into a system block. The wire itself cannot
         // carry it: the AWS SDK's Converse validator rejects a zero-length
         // text block before any I/O (measured 2026-08-26: "expected string

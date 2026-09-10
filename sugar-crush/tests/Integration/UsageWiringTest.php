@@ -1329,7 +1329,7 @@ JSON;
         // `publishers/google` `:predict` (PaLM-era chat-bison). What is
         // MEASURED here is the provider side only: this arm's parse reads no
         // usage anywhere, and its parseResponse hardcodes `tokensUsed: 0` /
-        // `costUsd: 0.0` (src/Providers/VertexProvider.php:1903, parseResponse).
+        // `costUsd: 0.0` (src/Providers/VertexProvider.php, `parseResponse()`).
         // Whether PaLM-era `:predict` response documents ever carried usage
         // at all could not be probed - no Vertex credentials exist for this
         // plan - so the API-side absence is UNVERIFIED, and this comment

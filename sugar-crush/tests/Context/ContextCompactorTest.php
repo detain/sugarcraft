@@ -1816,8 +1816,8 @@ final class ContextCompactorTest extends TestCase
      * into summaries is 0% of 200,520 estimated tokens — submit() does NOT adopt
      * the rewrite, so $baseHistory is still $this->history: 24 entries, off by the
      * two dropped summaries against the 22-entry $compactedWire the rescue
-     * truncates and splices. The re-derivation at Chat.php:5982-5984
-     * (messagesFromWire on the else arm of the ternary) is the ONLY thing that
+     * truncates and splices. The re-derivation in `Chat` via
+     * `messagesFromWire()` on the else arm of the ternary is the ONLY thing that
      * re-aligns them, and until now NOTHING covered it: replacing the whole
      * ternary with `$rescueBase = $baseHistory;` left ContextCompactorTest
      * (78/254), the five-file set (282/1185) and the compact-neighbours (130/26421)

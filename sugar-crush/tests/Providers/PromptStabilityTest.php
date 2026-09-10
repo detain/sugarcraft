@@ -2735,8 +2735,8 @@ final class PromptStabilityTest extends TestCase
         //                                   no `.git/info/attributes`. MEASURED
         //                                   with a hostile `core.attributesFile`
         //                                   saying `*.php -diff`: this file is
-        //                                   green and `RuntimeTest` reds at
-        //                                   `RuntimeTest.php:1918`. That file is
+        //                                   green and `RuntimeTest` reds in
+        //                                   `testShouldPromptIdleCompactionReturnsFalseWhenRecentlyActive()`. That file is
         //                                   outside this step's declared list,
         //                                   so it is REPORTED, not edited.
         //   `log.decorate=full`             prompt 4,844 -> 4,872 B, prefix -> 4,698
