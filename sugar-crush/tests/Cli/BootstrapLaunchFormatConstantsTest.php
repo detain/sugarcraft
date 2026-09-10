@@ -706,10 +706,18 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
         self::assertSame(3, $census['literal'], 'a sprintf() in Bootstrap.php gained or lost a literal format');
+        // E189: the message used to name ONE cause for a figure that has two.
+        // The equality holds only while every promoted format is `sprintf()`ed
+        // at EXACTLY one call site; a second site — the same line rendered in
+        // two places, a perfectly ordinary edit — reds here just as a roster
+        // move does, and the old wording sent the reader to the roster for both.
         self::assertSame(
             \count(self::NAMED_FORMATS),
             $census['constant'],
-            'Bootstrap.php formats from a different number of constants than this file names as promoted',
+            'the constant-format sprintf() count moved off the promoted roster — either '
+            . 'NAMED_FORMATS no longer matches Bootstrap\'s promoted set, or a promoted format gained a '
+            . 'SECOND call site (the census counts call sites, so a legitimately rendered-twice line '
+            . 'lands here too; grep `sprintf(self::` in src/Cli/Bootstrap.php to see which one moved)',
         );
 
         // A RE-INLINED INTERPOLATED FORMAT IS THE FAILURE E163 NAMES, and until
@@ -953,11 +961,31 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
 
         self::assertFileExists($path, "{$page} is quoted as a reader of the project-tier refusal but is gone");
 
-        $flat = (string) preg_replace('/\s+/', ' ', (string) file_get_contents($path));
+        // E189: the haystack is the PARAGRAPH that carries the quotation, not
+        // the flattened page. The assertion was always right and its failure
+        // output was always ~17 KB of TROUBLESHOOTING.md on one line — a correct
+        // red nobody can read. Paragraphs are the unit the page itself is
+        // written in, and a quoted shape never crosses one; a page with no
+        // `ignoring ` paragraph any more is itself drift, so that answers loudly
+        // rather than as a substring miss inside a page nobody can read.
+        $paragraphs = [];
+        foreach (preg_split('/\n[ \t]*\n/', (string) file_get_contents($path)) as $paragraph) {
+            if (\str_contains($paragraph, 'ignoring ')) {
+                $paragraphs[] = (string) preg_replace('/\s+/', ' ', $paragraph);
+            }
+        }
+
+        if ($paragraphs === []) {
+            throw new \RuntimeException(
+                "{$page} carries no paragraph containing 'ignoring ' any more; either the refusal was "
+                . 'reworded and this expectation has to learn the new word, or the page dropped the '
+                . 'operator guidance that quotes it — both are drift, neither is a substring miss'
+            );
+        }
 
         self::assertStringContainsString(
             sprintf(Bootstrap::PROJECT_TIER_REFUSAL_FORMAT, '<path>', '<reason>'),
-            $flat,
+            implode(' / ', $paragraphs),
             "{$page} no longer quotes the shape Bootstrap::PROJECT_TIER_REFUSAL_FORMAT renders. Either the "
             . 'launcher was reworded and the page was not, or the page renamed its placeholders; the first '
             . 'is drift and the second means this expectation has to learn the new names',
