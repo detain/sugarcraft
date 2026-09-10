@@ -5312,32 +5312,35 @@ final class Bootstrap
      * unnoticed. A config that is simply absent says nothing at all, which is the
      * common case.
      *
-     * A BROKEN CONFIG IS A DIFFERENT QUESTION AND MOSTLY DEGRADES SILENTLY. An
-     * earlier revision of this doc-block said "a broken config is reported on
-     * stderr", which is true of one of the five shapes a broken one takes.
-     * Measured on this tree, with the root trusted so the trust gate is not what
-     * is being observed:
+     * A BROKEN CONFIG IS A DIFFERENT QUESTION AND DEGRADES ON THE PART THAT IS
+     * NOT THE WHOLE FILE. An earlier revision of this doc-block said "a broken
+     * config is reported on stderr", which was true of one of the five shapes a
+     * broken one takes; a later revision measured all five and found three
+     * silent. After E41(c) landed in {@see McpClient::loadConfig()}, the file-
+     * level shapes report:
      *
      *     A) a server whose command does not exist   SILENT  <- the common case
      *     B) an unknown `type`                       reported: "could not be
      *                                                fully started (…Unknown MCP
      *                                                server type: weird)"
-     *     C) malformed JSON                          SILENT
-     *     D) valid JSON, wrong top-level key         SILENT
+     *     C) malformed JSON                          reported: "… is not valid
+     *                                                JSON (…)" — E41(c)
+     *     D) valid JSON, wrong top-level key         reported: "… has no
+     *                                                "mcpServers" object" — E41(c)
      *     E) unknown `type`, then a good server      reported, and the servers
      *                                                after the bad entry are
      *                                                never reached
      *
-     * Only the `default => throw` arm of {@see McpClient::startServer()} reaches
-     * the `catch` below at all; a server whose own `start()` fails is swallowed in
-     * there by `catch (\RuntimeException) { return; }`, and C and D are an empty
-     * config as far as {@see McpClient::loadConfig()} is concerned. So (A) — a
-     * `command` that is misspelled or not installed, overwhelmingly the way a real
-     * `.mcp.json` is broken — costs the user every tool on that server with
-     * nothing said anywhere. The repair belongs in `McpClient`, which owns both
-     * the swallow and the JSON parse, and is on the hardening backlog as E41;
-     * widening this method to reach around it would put the diagnostic in the
-     * wrong class and leave the swallow in place.
+     * C and D throw from `loadConfig()` BEFORE the first server is attempted, so
+     * unlike (E) nothing is half-started when they fire; the wording is the same
+     * one {@see mcpServerInventory()} prints for the same file, which is the
+     * property that matters — `crush mcp` and the launch cannot disagree about
+     * whether a config is usable. (A) stays SILENT by the documented two-catch
+     * contract of {@see McpClient::startServer()}: a server whose own `start()`
+     * fails is skipped there so one dead server costs only its own tools. That
+     * swallow is the remaining E41 seam, left open deliberately: widening it into
+     * a refusal here would turn a capability loss into a launch failure, which
+     * the paragraph above rules out.
      *
      * @throws \RuntimeException when neither $root nor a working directory exists
      *         ({@see requireRoot()}) — the same refusal every other rooted
@@ -5416,9 +5419,12 @@ final class Bootstrap
         try {
             $client->startServers();
         } catch (\Throwable $e) {
-            // An unknown `type` in the config is the throwing case
-            // ({@see McpClient::startServer()}); a server whose own start() fails
-            // is already skipped in there. Reported rather than swallowed, and
+            // Two families throw to here: the config-level shapes (C) and (D) of
+            // the table above, from {@see McpClient::loadConfig()} before any
+            // server is attempted, and the `default => throw` arm of
+            // {@see McpClient::startServer()} on an unknown `type` (E); a server
+            // whose own start() fails is already skipped in there. Reported rather
+            // than swallowed, and
             // not rethrown: this is on {@see tools()}, which every launch and
             // every provider switch reaches, and a PHP fatal over a live TUI is
             // strictly worse than a session with fewer tools.

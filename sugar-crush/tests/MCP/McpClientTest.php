@@ -83,6 +83,10 @@ final class McpClientTest extends TestCase
 
     // =========================================================================
     // loadConfig Tests
+    //
+    // E41(c): an ABSENT file is still "nothing declared" ([]), but a file that
+    // EXISTS and is broken now throws with Bootstrap::mcpServerInventory()'s
+    // exact wording — the launch's catch turns each into a visible report.
     // =========================================================================
 
     public function testLoadConfigReturnsEmptyArrayWhenFileDoesNotExist(): void
@@ -104,6 +108,34 @@ final class McpClientTest extends TestCase
         // This would require mocking file_get_contents, which is complex
         // The method already handles file_exists check
         $this->markTestSkipped('Would require mocking built-in functions');
+    }
+
+    public function testLoadConfigThrowsWhenAnExistingPathCannotBeRead(): void
+    {
+        // The arm the placeholder above never got to write, with no built-in
+        // faked: a mode-000 regular file passes file_exists() and fails the
+        // read for every non-root uid (000 is where root would sail through —
+        // every uid this suite is ever run under is non-root, the same
+        // assumption the permission-gate tests already make). A directory is
+        // NOT the fixture: Linux opens one for reading and PHP yields "" rather
+        // than false, which reaches the JSON arm instead of the read arm.
+        $unreadable = $this->configPath . '.unreadable';
+        file_put_contents($unreadable, '{"mcpServers":{}}');
+        chmod($unreadable, 0);
+
+        $client = new McpClient($unreadable);
+        $method = (new \ReflectionClass($client))->getMethod('loadConfig');
+        $method->setAccessible(true);
+
+        try {
+            $method->invoke($client);
+            $this->fail('expected RuntimeException for an unreadable existing path');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('could not be read', $e->getMessage());
+        } finally {
+            chmod($unreadable, 0644);
+            unlink($unreadable);
+        }
     }
 
     public function testLoadConfigParsesValidJson(): void
@@ -130,7 +162,7 @@ final class McpClientTest extends TestCase
         $this->assertArrayHasKey('test-server', $result['mcpServers']);
     }
 
-    public function testLoadConfigReturnsEmptyArrayForInvalidJson(): void
+    public function testLoadConfigThrowsForInvalidJsonNamingThePath(): void
     {
         file_put_contents($this->configPath, 'not valid json {');
 
@@ -139,23 +171,60 @@ final class McpClientTest extends TestCase
         $method = $reflection->getMethod('loadConfig');
         $method->setAccessible(true);
 
-        $result = $method->invoke($client);
-
-        $this->assertSame([], $result);
+        try {
+            $method->invoke($client);
+            $this->fail('expected RuntimeException for malformed JSON');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString($this->configPath, $e->getMessage());
+            $this->assertStringContainsString('is not valid JSON', $e->getMessage());
+            $this->assertPrevious($e);
+        }
     }
 
-    public function testLoadConfigReturnsEmptyArrayForEmptyFile(): void
+    public function testLoadConfigThrowsForAnEmptyFileTheSameWayTheInventoryReadsIt(): void
     {
+        // Empty is not "no servers"; it is undecodable, and
+        // mcpServerInventory() already says so for the same bytes.
         file_put_contents($this->configPath, '');
 
         $client = new McpClient($this->configPath);
-        $reflection = new \ReflectionClass($client);
-        $method = $reflection->getMethod('loadConfig');
+        $method = (new \ReflectionClass($client))->getMethod('loadConfig');
         $method->setAccessible(true);
 
-        $result = $method->invoke($client);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('is not valid JSON');
 
-        $this->assertSame([], $result);
+        $method->invoke($client);
+    }
+
+    public function testLoadConfigThrowsWhenTopLevelIsNotAnObjectWithMcpServers(): void
+    {
+        $client = new McpClient($this->configPath);
+        $method = (new \ReflectionClass($client))->getMethod('loadConfig');
+        $method->setAccessible(true);
+
+        // [1,2,3] parses; it just is not a config.
+        file_put_contents($this->configPath, '[1,2,3]');
+        try {
+            $method->invoke($client);
+            $this->fail('expected RuntimeException for a JSON array at top level');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('has no "mcpServers" object', $e->getMessage());
+        }
+
+        // An object without the key is the other wrong-shape spelling.
+        file_put_contents($this->configPath, '{"servers":{}}');
+        try {
+            $method->invoke($client);
+            $this->fail('expected RuntimeException for a missing mcpServers key');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('has no "mcpServers" object', $e->getMessage());
+        }
+    }
+
+    private function assertPrevious(\RuntimeException $e): void
+    {
+        $this->assertInstanceOf(\JsonException::class, $e->getPrevious());
     }
 
     // =========================================================================

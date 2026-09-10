@@ -361,6 +361,19 @@ final class McpClient
      * approved between two stats — answered by the trust gate upstream, not by a
      * second containment here. The hard-link limit of that grant is qualified at
      * {@see \SugarCraft\Crush\Support\ContainedPath}'s threat-model paragraph.
+     *
+     * E41 (c) — WHAT SAID: an existing-but-broken config used to answer `[]`
+     * three different ways (unreadable, unparseable, wrong shape) and the launch
+     * proceeded as if the project had declared nothing. TRUE NOW: only an absent
+     * file is "nothing declared"; each of the three broken shapes throws a
+     * RuntimeException naming the path, in the SAME wording
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpServerInventory()} reports for
+     * the identical file, so `crush mcp` and the launch can never disagree about
+     * whether a config is usable. WHY IT EARNS ITS PLACE: at the launch the throw
+     * lands in mcpClient()'s existing catch, which puts the reason on stderr and
+     * in the transcript — the alternative was users debugging a silently absent
+     * toolset; the inventory arm already refused to stay silent about these
+     * three.
      */
     private function loadConfig(): array
     {
@@ -368,12 +381,26 @@ final class McpClient
             return [];
         }
 
-        $content = file_get_contents($this->configPath);
-        if ($content === false) {
-            return [];
+        $content = @file_get_contents($this->configPath);
+        if (!is_string($content)) {
+            throw new \RuntimeException($this->configPath . ' could not be read');
         }
 
-        return json_decode($content, true) ?? [];
+        try {
+            $data = json_decode($content, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \RuntimeException(
+                $this->configPath . ' is not valid JSON (' . $e->getMessage() . ')',
+                0,
+                $e,
+            );
+        }
+
+        if (!is_array($data) || !is_array($data['mcpServers'] ?? null)) {
+            throw new \RuntimeException($this->configPath . ' has no "mcpServers" object');
+        }
+
+        return $data;
     }
 
     /**
