@@ -173,10 +173,10 @@ final class AgentSplitCompositorTest extends TestCase
      *
      * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
      * builds ad-hoc `Agent`s named `$task->name ?? $task->agentType`
-     * (`WorkflowEngine.php:1254`) and hands the `SubAgent`s to
-     * `AgentManager::executeAll()`, which files them under the SUB-AGENT map
-     * and never calls `register()`. `liveOutputs()` used to iterate the
-     * registered map, so this frame had no split at all — every other
+     * (the per-task loop where `$agent`/`$subAgents` are built) and hands the
+     * `SubAgent`s to `AgentManager::executeAll()`, which files them under the
+     * SUB-AGENT map and never calls `register()`. `liveOutputs()` used to
+     * iterate the registered map, so this frame had no split at all — every other
      * activation test in this file registered its agent and so could not see
      * it.
      */
@@ -631,7 +631,7 @@ final class AgentSplitCompositorTest extends TestCase
      * A manager holding one live, UNREGISTERED agent — the workflow shape.
      *
      * The SubAgent is filed exactly as {@see AgentManager::executeAll()}'s
-     * first loop files it (`AgentManager.php:681`), which is the only thing
+     * first loop files it into `AgentManager::$subAgents`, which is the only thing
      * `WorkflowEngine::executeParallelStage()` does with one.
      */
     private function managerWithWorkflowAgent(string $name, string $output): AgentManager

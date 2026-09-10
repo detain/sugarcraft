@@ -365,8 +365,9 @@ final class AgentViewPaneGeometryTest extends TestCase
      * generalisation FAILS today: `render()`'s clamp makes the body fit by
      * `Width::string`, and `Width::string` is not the measure the box uses.
      * `Style::render()` expands a tab to four spaces
-     * (`candy-sprinkles/src/Style.php:969-970`) after the clamp has scored it
-     * 0, so `operation = "\t" . U+1F3FD` — two codepoints — makes this pane
+     * (its tab-expansion preamble, width from `Width::TAB_WIDTH`) after the
+     * clamp has scored it 0, so `operation = "\t" . U+1F3FD` — two codepoints
+     * — makes this pane
      * return `$width + 6` at 117 of these 121 widths. That is NOT a
      * regression: the pre-clamp pane at `70a4efb3` returns `$width + 6` at 120
      * of the same 121. It is a width-authority divergence, recorded as E69,
@@ -455,8 +456,8 @@ final class AgentViewPaneGeometryTest extends TestCase
      * status and operation before anything measures or cuts them, so the
      * precondition is enforced by the code rather than asserted of data
      * nothing validates — `$name` is `$agent->name` verbatim
-     * (`Renderer.php:1663`), straight off the Agent registry and out of
-     * imported foreign presets.
+     * (`AgentViewPane::render()`'s `$name` assignment), straight off the
+     * Agent registry and out of imported foreign presets.
      *
      * The check is deliberately "no ESC survives stripping well-formed CSI",
      * not "the output equals X": it is the SEVERED sequence that is the
