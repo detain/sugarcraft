@@ -129,6 +129,29 @@ final class McpClient
     }
 
     /**
+     * Pump every STARTED stdio server's stderr once, between exchanges.
+     *
+     * E440's dispatch side from this angle: the client owns the server set, so
+     * a caller that knows no exchange is in flight (the parent between turns)
+     * can refresh all diagnostic tails in one call instead of holding server
+     * handles. The instanceof narrowing is deliberate — {@see McpServer} does
+     * NOT grow a pumpStderr(): only a spawned child has an fd 2, and making
+     * HTTP/Git servers answer with a no-op would advertise a capability their
+     * transport cannot have.
+     *
+     * Same per-server contract as {@see StdioMcpServer::pumpStderr()} —
+     * bounded, idempotent, never throws on a torn-down server.
+     */
+    public function pumpStderr(): void
+    {
+        foreach ($this->servers as $server) {
+            if ($server instanceof StdioMcpServer) {
+                $server->pumpStderr();
+            }
+        }
+    }
+
+    /**
      * Start a single server, and NEVER let one entry's failure reach the loop
      * that is starting the others.
      *

@@ -443,6 +443,56 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * Absorb whatever the server has already written to stderr, from a process
+     * that is IDLE — no request in flight — and return promptly.
+     *
+     * WHAT WAS SAID (E440): a server that talks on stderr between exchanges
+     * parks those bytes in the pipe until the next exchange's select loop gets
+     * around to {@see absorbStderr()} — so a failure diagnostic could be
+     * seconds-and-a-turn late or truncated by the cap before anyone looked.
+     * WHAT IS TRUE NOW: the class offers this bounded pump; the in-exchange
+     * drains are unchanged. WHY IT EARNS ITS PLACE: the bytes are worthless
+     * wherever they sit, and the only remedy that does not touch another
+     * layer's file is an on-demand seam this side can ship alone.
+     *
+     * WHY A CALLER-PUMPED SEAM AND NOT A LOOP MOUNT (E537, VERBATIM ruling —
+     * do not reopen against this class): an fd-2 reader mounted on the shared
+     * event loop means TWO processes destructively reading one pipe whenever a
+     * tool call forks, and the residual idle stall this leaves (bytes sit at
+     * most until the next exchange, ~one turn) is a staleness bound, not a
+     * deadlock. The judgement of WHEN to pump — e.g. the parent between turns,
+     * when no forked call is in flight — belongs to the dispatch layer, which
+     * is the only code that knows it; that wiring is the remaining seam.
+     *
+     * THE CONTRACT:
+     *  - call it only from the process that ran {@see start()} and only while
+     *    no exchange is in flight on this server;
+     *  - up to 16 passes x 8192 bytes per call — bounded, so a server writing
+     *    faster than we read cannot hold the caller; the tail cap
+     *    ({@see MAX_STDERR_BYTES}, tail kept, head dropped) applies as always;
+     *  - NO-OP before {@see start()} and after {@see stop()}: the guards inside
+     *    {@see absorbStderr()} (flag, null pipes, closed resource) answer for
+     *    teardown races, so this cannot throw.
+     */
+    public function pumpStderr(): void
+    {
+        if ($this->pipes === null) {
+            return;
+        }
+
+        // Re-asserted here, NOT trusted from start(), for the reason spelled
+        // out on the identical line in LspConnection::drainStderr(): a
+        // "blocking" pipe turns this pump into a wait on a child that has
+        // nothing more to say, converting a lost line elsewhere into a hung
+        // caller.
+        stream_set_blocking($this->pipes[2], false);
+
+        for ($pass = 0; $pass < 16 && $this->stderrOpen; $pass++) {
+            $this->absorbStderr();
+        }
+    }
+
+    /**
      * Release the three pipe resources, if they are still open.
      *
      * Idempotent, because {@see stop()} calls it twice on the ordinary path —
