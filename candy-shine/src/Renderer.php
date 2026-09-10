@@ -78,6 +78,7 @@ final class Renderer
     private readonly ?string $baseUrl;
     private readonly bool $tableWrap;
     private readonly bool $inlineTableLinks;
+    private readonly bool $tableColumnBudget;
     private readonly bool $preservedNewLines;
     private readonly bool $expandEmoji;
     private readonly bool $sanitize;
@@ -97,6 +98,7 @@ final class Renderer
         ?string $baseUrl = null,
         bool $tableWrap = false,
         bool $inlineTableLinks = true,
+        bool $tableColumnBudget = false,
         bool $preservedNewLines = false,
         bool $expandEmoji = false,
         bool $sanitize = true,
@@ -107,6 +109,7 @@ final class Renderer
         $this->baseUrl = $baseUrl;
         $this->tableWrap = $tableWrap;
         $this->inlineTableLinks = $inlineTableLinks;
+        $this->tableColumnBudget = $tableColumnBudget;
         $this->preservedNewLines = $preservedNewLines;
         $this->expandEmoji = $expandEmoji;
         $this->sanitize = $sanitize;
@@ -208,6 +211,12 @@ final class Renderer
      * Wrap text inside table cells at the renderer's word-wrap width.
      * Default off (cells render unwrapped, matching glamour's default).
      * Mirrors glamour's `WithTableWrap`.
+     *
+     * NOTE (E49): this wraps EACH CELL at the full `wrapWidth`, so it does
+     * not bound the table itself — a three-column table can still render
+     * roughly three times pane-wide with its border rows wrapping. For a
+     * width-bounded table pair it with {@see withTableColumnBudget()}, the
+     * knob that actually solves "table too wide".
      */
     public function withTableWrap(bool $on = true): self
     {
@@ -224,6 +233,29 @@ final class Renderer
     public function withInlineTableLinks(bool $on = true): self
     {
         return $this->copy(inlineTableLinks: $on);
+    }
+
+    /**
+     * Bound a table's TOTAL rendered width by giving every column its share
+     * of the renderer's word-wrap width (E49). Natural column contents are
+     * scaled down proportionally, floor one cell per column, until padding,
+     * border rules and all columns together fit `withWordWrap($cols)`; each
+     * cell is then CLIPPED to its column budget. Default off — legacy
+     * `withTableWrap` per-cell full-width reflow is untouched.
+     *
+     * When both are on, the budget wins over the wrap: this port's
+     * Sprinkles column metrics sum a wrapped multi-line cell's lines, so a
+     * reflowed cell would re-inflate the very border rows the budget exists
+     * to bound. Clipping keeps one physical line per cell, which is exactly
+     * the shape E43's horizontal-scroll proposal wants — a genuinely wide
+     * table keeps bounded geometry in candy-shine and regains the clipped
+     * bytes by scrolling in the consumer, not by reflow. A budget-clipped
+     * table never needs the block-clip tag of that proposal's step 1; the
+     * tag remains only for blocks (fences) this API cannot shrink.
+     */
+    public function withTableColumnBudget(bool $on = true): self
+    {
+        return $this->copy(tableColumnBudget: $on);
     }
 
     /**
@@ -297,6 +329,7 @@ final class Renderer
     public function baseURL(?string $url): self          { return $this->withBaseURL($url); }
     public function tableWrap(bool $on = true): self     { return $this->withTableWrap($on); }
     public function inlineTableLinks(bool $on = true): self { return $this->withInlineTableLinks($on); }
+    public function tableColumnBudget(bool $on = true): self { return $this->withTableColumnBudget($on); }
     public function preservedNewLines(bool $on = true): self { return $this->withPreservedNewLines($on); }
     public function emoji(bool $on = true): self         { return $this->withEmoji($on); }
     public function standardStyle(string $name): self    { return $this->withStandardStyle($name); }
@@ -309,6 +342,7 @@ final class Renderer
         ?string $baseUrl = null, bool $baseUrlSet = false,
         ?bool $tableWrap = null,
         ?bool $inlineTableLinks = null,
+        ?bool $tableColumnBudget = null,
         ?bool $preservedNewLines = null,
         ?bool $expandEmoji = null,
         ?bool $sanitize = null,
@@ -320,6 +354,7 @@ final class Renderer
             $baseUrlSet ? $baseUrl : $this->baseUrl,
             $tableWrap        ?? $this->tableWrap,
             $inlineTableLinks ?? $this->inlineTableLinks,
+            $tableColumnBudget ?? $this->tableColumnBudget,
             $preservedNewLines ?? $this->preservedNewLines,
             $expandEmoji      ?? $this->expandEmoji,
             $sanitize         ?? $this->sanitize,
@@ -891,8 +926,12 @@ final class Renderer
      */
     private function renderTable(MdTable $table): string
     {
-        $headers = [];
-        $rows    = [];
+        // Pass 1 renders every cell's inline pipeline RAW; wrap and cell
+        // style move to pass 2 so the E49 column budget can be computed
+        // from natural content widths first. The default path (budget off)
+        // keeps the historic order — wrap@wrapWidth, then style — byte
+        // for byte.
+        $sections = [];
         foreach ($table->children() as $section) {
             if (!$section instanceof TableSection) {
                 continue;
@@ -902,34 +941,52 @@ final class Renderer
                 if (!$row instanceof TableRow) {
                     continue;
                 }
-                $cells = [];
+                $raw = [];
                 foreach ($row->children() as $cell) {
                     if (!$cell instanceof TableCell) {
                         continue;
                     }
                     $this->inTableCell = true;
                     try {
-                        $body = rtrim($this->renderChildren($cell));
+                        $raw[] = rtrim($this->renderChildren($cell));
                     } finally {
                         $this->inTableCell = false;
                     }
-                    if ($this->tableWrap && $this->wrapWidth !== null) {
-                        $body = Width::wrapAnsi($body, $this->wrapWidth);
-                    }
-                    // Apply per-cell theme style (header vs body) when set.
-                    $cellStyle = $isHeader
-                        ? $this->theme->tableHeader
-                        : $this->theme->tableCell;
-                    if ($cellStyle !== null) {
-                        $body = $cellStyle->render($body);
-                    }
-                    $cells[] = $body;
                 }
-                if ($isHeader) {
-                    $headers = $cells;
-                } else {
-                    $rows[] = $cells;
+                $sections[] = [$raw, $isHeader];
+            }
+        }
+
+        $budgets = ($this->tableColumnBudget && $this->wrapWidth !== null && $sections !== [])
+            ? $this->tableColumnBudgets($sections)
+            : null;
+
+        $headers = [];
+        $rows    = [];
+        foreach ($sections as [$cells, $isHeader]) {
+            // Apply per-cell theme style (header vs body) when set.
+            $cellStyle = $isHeader
+                ? $this->theme->tableHeader
+                : $this->theme->tableCell;
+            foreach ($cells as $i => $body) {
+                if ($budgets !== null) {
+                    // Budget clips at the column width — a wrapped cell
+                    // would inflate the Sprinkles column metrics past any
+                    // budget anyway, and E49's chosen trade is bounded
+                    // geometry now, full content via E43's scroll later.
+                    $body = Width::truncateAnsi($body, $budgets[$i]);
+                } elseif ($this->tableWrap && $this->wrapWidth !== null) {
+                    $body = Width::wrapAnsi($body, $this->wrapWidth);
                 }
+                if ($cellStyle !== null) {
+                    $body = $cellStyle->render($body);
+                }
+                $cells[$i] = $body;
+            }
+            if ($isHeader) {
+                $headers = $cells;
+            } else {
+                $rows[] = $cells;
             }
         }
         $st = SprinklesTable::new()->border($this->buildTableBorder());
@@ -940,6 +997,42 @@ final class Renderer
             $st = $st->row(...$r);
         }
         return $st->render() . "\n\n";
+    }
+
+    /**
+     * Per-column CONTENT budgets (cells only — padding and border rules
+     * excluded) such that a bordered table never renders wider than the
+     * renderer's wrap width. The shrink mirrors Sprinkles\Table::render()'s
+     * width-cap math — proportional scale, floor 1 cell per column — so the
+     * two mechanisms agree whenever both could apply.
+     *
+     * @param list<array{0: list<string>, 1: bool}> $sections raw cell text per row
+     * @return list<int> one budget per column (ragged rows: widest row wins)
+     */
+    private function tableColumnBudgets(array $sections): array
+    {
+        $colCount = 0;
+        foreach ($sections as [$cells]) {
+            $colCount = max($colCount, count($cells));
+        }
+        $natural = array_fill(0, $colCount, 0);
+        foreach ($sections as [$cells]) {
+            foreach ($cells as $i => $cell) {
+                $natural[$i] = max($natural[$i], Width::of($cell));
+            }
+        }
+        // buildTableBorder() is always-on here: left + right rule, a rule
+        // between every pair of columns, one space of padding each side.
+        $overhead = 2 * $colCount + ($colCount + 1);
+        $available = max($colCount, $this->wrapWidth - $overhead);
+        $total = array_sum($natural);
+        $scale = $total > 0 ? $available / $total : 1.0;
+        $budgets = [];
+        for ($i = 0; $i < $colCount; $i++) {
+            // Never budget wider than the content — shrink only.
+            $budgets[$i] = min($natural[$i], max(1, (int) floor($natural[$i] * $scale)));
+        }
+        return $budgets;
     }
 
     /**
