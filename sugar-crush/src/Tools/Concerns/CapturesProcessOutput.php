@@ -180,13 +180,18 @@ trait CapturesProcessOutput
         // on the captured stderr. The array form names /bin/sh explicitly
         // because that is exactly the shell PHP's string form runs, and
         // `-w` keeps proc_close() reporting the COMMAND's status, not the
-        // wrapper's. The env block rides both paths: detach is the
-        // half that needs a binary, fail-fast env needs none.
+        // wrapper's. ONE proc_open call, with the spec chosen above, not a
+        // ternary of two: DescriptorInheritanceGuardTest licenses spawn
+        // sites by name, and a doubly-anonymous result would read as two
+        // unclassifiable exposed children where one known site lives. The
+        // env block rides both paths: detach is the half that needs a
+        // binary, fail-fast env needs none.
         $setsid = self::detachedSpawnBinary();
+        $spawnSpec = $setsid === ''
+            ? $command
+            : [$setsid, '-w', '--', '/bin/sh', '-c', $command];
         $env = self::containmentEnv();
-        $process = $setsid === ''
-            ? @proc_open($command, $descriptors, $pipes, $cwd, $env)
-            : @proc_open([$setsid, '-w', '--', '/bin/sh', '-c', $command], $descriptors, $pipes, $cwd, $env);
+        $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
             return [
                 'stdout' => '',
