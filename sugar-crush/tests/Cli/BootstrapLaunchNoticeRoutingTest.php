@@ -598,6 +598,18 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     }
 
     /**
+     * E156: the per-spawn redirection below is LOAD-BEARING, not tidiness.
+     * WHAT WAS SAID: the file should stop leaking sixty-odd `sugarcrush:`
+     * notices onto the suite's stderr. TRUE NOW: it cannot — every child this
+     * harness spawns writes stdout and stderr into per-launch files
+     * (`>%s 2>%s`), and those files ARE the assertion channels, so the suite's
+     * own streams never see a byte of child noise. WHY IT EARNS ITS PLACE:
+     * silencing at the source (error_log routing, ini flags) would blind the
+     * exact checks that live in this file — the stderr half of every seam is
+     * read back from `$errFile`. The noise the round-62 audit counted came
+     * from spawns in OTHER harness files that inherit the suite's streams;
+     * those files carry their own E156 entry (seam list in the lane report).
+     *
      * @param array<string, string> $env
      * @return array{0: string, 1: mixed} stderr, decoded stdout
      */
