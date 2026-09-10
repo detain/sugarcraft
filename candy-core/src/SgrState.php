@@ -178,6 +178,19 @@ final class SgrState
      * number is observed and ignored. The tracked state flows into the
      * row-boundary re-open/close of {@see rowOpen()} / {@see rowClose()},
      * never into {@see toPrefix()} itself.
+     *
+     * Delta vs the pre-E667 `Renderer::balanceSgr()` tracker, on the
+     * MALFORMED two-field body `8;URI` (the spec's params field omitted):
+     * the old tracker split the body and read index 2 with `?? ''`, so a
+     * two-field OSC landed in the empty-URI branch and was never tracked —
+     * no close was emitted at a row boundary and a terminal that opened the
+     * link let it leak across rows. This class takes the lone field as the
+     * URI (lenient parse, Fail-Fast would only shed information) and
+     * balances it like any other link. Fine because the delta is observable
+     * only on input that is invalid per the OSC 8 grammar; no tape, golden,
+     * or snapshot byte feeds one, and under either terminal reading of
+     * `8;URI` (open with URI, or close) emitting a balanced close/re-open is
+     * the safer boundary behaviour than leaking.
      */
     public function applyOsc(Token $t): void
     {
