@@ -41,8 +41,18 @@ use PHPUnit\Framework\TestCase;
  * artifact's tests figure against the same live enumeration. The moment a test
  * arrives without a regeneration, BOTH the README pin and the artifact pin go
  * red, and the documented remedy (a full run + the refresh script) re-derives
- * the assertions figure at the same time. The failure is never silent — that
- * is the whole design: staleness is converted from a slow rot into a red test.
+ * the assertions figure at the same time. The failure is never silent FOR THE
+ * DIMENSION IT MEASURES — that is the whole design: staleness is converted
+ * from a slow rot into a red test. THE SENTENCE USED TO STOP AT "never
+ * silent", AND THE LIMIT IT HID: WHAT IT SAID: "The failure is never
+ * silent." WHAT IS TRUE NOW: never-silent holds for the tests dimension,
+ * which every arm re-derives live; the assertions figure is cross-checked
+ * only AT A CONSTANT TEST COUNT, so a count-preserving test edit — a method's
+ * body gaining or losing asserts — rots the assertions figure silently until
+ * the next full-run refresh. The artifact's measured_at date discloses that
+ * exposure window; it is a receipt, not a guard. Closing the window for real
+ * would mean re-running the suite inside the suite, the self-reference the
+ * design above refuses.
  *
  * VACUITY DISCIPLINE. Every arm fails loud rather than passing on absence:
  * the README pattern is asserted to match before it is compared (a reworded
@@ -117,6 +127,76 @@ final class ReadmeSuiteFigureDriftTest extends TestCase
             . 'sugar-crush/, then update the README headline from the same run. Until then '
             . 'the assertions figure in the artifact is by construction older than this '
             . 'message says, which is the rot the pair used to carry silently.',
+        );
+    }
+
+    /**
+     * The refresher's whole-suite gate is measured, so its refusals are
+     * pinned. The gate used to be the sentence "a full run writes one
+     * <testsuite>" plus a count===1 shape check — which refused nothing a
+     * filtered run would trip, since a filtered run also writes exactly one
+     * top-level <testsuite>. Each fixture below is shaped like the accident
+     * its gate names, and neither refusal may touch the artifact.
+     */
+    public function testRefreshScriptRefusesLogsThatAreNotAGreenWholeRun(): void
+    {
+        $script = __DIR__ . '/Support/refresh-suite-figure.php';
+        $artifactBefore = (string) sha1_file(self::ARTIFACT);
+
+        $filteredLog = <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <testsuites>
+              <testsuite name="/fake/phpunit.xml" tests="3" assertions="7" errors="0" failures="0" skipped="0" time="0.01">
+                <testsuite name="SugarCrush" tests="3" assertions="7" errors="0" failures="0" skipped="0" time="0.01">
+                  <testsuite name="Some\Filtered\DriftTest" tests="3" assertions="7" errors="0" failures="0" skipped="0" time="0.01">
+                    <testcase name="a" class="c"/>
+                    <testcase name="b" class="c"/>
+                    <testcase name="c" class="c"/>
+                  </testsuite>
+                </testsuite>
+              </testsuite>
+            </testsuites>
+            XML;
+
+        $contradictingLog = <<<'XML'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <testsuites>
+              <testsuite name="/fake/phpunit.xml" tests="12000" assertions="1" errors="0" failures="0" skipped="0" time="0.01">
+                <testcase name="a" class="c"/>
+                <testcase name="b" class="c"/>
+              </testsuite>
+            </testsuites>
+            XML;
+
+        foreach ([
+            'a filtered run' => [$filteredLog, 'below the suite floor'],
+            'a log that contradicts itself' => [$contradictingLog, 'contradicts itself'],
+        ] as $shape => [$fixture, $needle]) {
+            $path = tempnam(sys_get_temp_dir(), 'suite-figure-') . '.xml';
+            file_put_contents($path, $fixture);
+
+            $output = [];
+            $status = 0;
+            exec(\sprintf(
+                '%s %s %s 2>&1',
+                \escapeshellarg(\PHP_BINARY),
+                \escapeshellarg($script),
+                \escapeshellarg($path),
+            ), $output, $status);
+            unlink($path);
+
+            self::assertSame(2, $status, "the refuser accepted {$shape} with exit {$status}");
+            self::assertStringContainsString(
+                $needle,
+                implode("\n", $output),
+                "the refusal of {$shape} did not name the gate that fired",
+            );
+        }
+
+        self::assertSame(
+            $artifactBefore,
+            (string) sha1_file(self::ARTIFACT),
+            'a refusal must never write the artifact — the maintained figures changed under a refused log',
         );
     }
 
