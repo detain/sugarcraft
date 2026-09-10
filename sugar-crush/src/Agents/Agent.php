@@ -474,8 +474,8 @@ final readonly class Agent
      * question is about and this is where the next reader lands.
      *
      * READ THE LINE NUMBERS BELOW AS DIRECTIONS, NOT AS FACTS UNDER TEST. This
-     * doc-block carries 31 distinct citations of the form file-dot-php-colon-line
-     * in 54 occurrences. TWO figures need TWO commands, because one pipeline
+     * doc-block carries 4 distinct citations of the form file-dot-php-colon-line
+     * in 4 occurrences. TWO figures need TWO commands, because one pipeline
      * cannot produce both - the second is the first without its `sort -u`:
      *
      *   distinct:
@@ -487,7 +487,9 @@ final readonly class Agent
      * the `sort -u` pipeline attached - so the second figure had no generator at
      * all, which is the defect the paragraph is about happening inside the
      * paragraph.
-     * WHAT IS TRUE: 31 and 54.
+     * WHAT IS TRUE: 4 and 4 - re-measured by the two pipelines above after the
+     * round-62 stale-citation sweep re-anchored this block's drifted line numbers
+     * to symbols; the previous pair was 31 / 54.
      * HOW MEASURED: both commands above, run from `sugar-crush/`, at
      * `f958ba8e6` - the merge that WROTE the wrong pair - and again at
      * `bb4a311d0`. Identical at both, 31 / 54. So this is not later drift:
