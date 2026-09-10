@@ -567,10 +567,11 @@ final class BuiltInToolCorpusTest extends TestCase
      * in a handful of files, and the balance between the two totals is a real
      * invariant with its own test next door.
      *
-     * `src/ToolRegistry.php` declaring `SugarCraft\\Crush\\Tool` is reported
-     * rather than moved: it is one `use` away from colliding with
-     * `SugarCraft\\Crush\\Tools\\Tool`, and `tests/ToolRegistryTest.php`
-     * already imports it.
+     * `src/ToolRegistry.php` ONCE declared `SugarCraft\\Crush\\Tool` — one
+     * `use` away from colliding with `SugarCraft\\Crush\\Tools\\Tool`. E14
+     * MOVED the side pair into `SugarCraft\\Crush\\Registry`, ONE CLASS PER
+     * FILE — each declaration now sits behind its own PSR-4 path, so the map
+     * names neither `ToolRegistry.php` nor either `Registry/` file.
      */
     public function testTheSecondaryDeclarationMap(): void
     {
@@ -584,13 +585,14 @@ final class BuiltInToolCorpusTest extends TestCase
                 'Compactor.php' => 1,
                 'MCP/McpAuthStore.php' => 1,
                 'MCP/OAuthClientRegistration.php' => 1,
-                'ToolRegistry.php' => 2,
                 'Tui/StallDetector.php' => 1,
             ],
             array_map('count', $secondary),
         );
 
-        $this->assertContains('SugarCraft\\Crush\\Tool', $secondary['ToolRegistry.php']);
+        $this->assertArrayNotHasKey('ToolRegistry.php', $secondary);
+        $this->assertArrayNotHasKey('Registry/Tool.php', $secondary);
+        $this->assertArrayNotHasKey('Registry/ToolSignature.php', $secondary);
     }
 
     /**

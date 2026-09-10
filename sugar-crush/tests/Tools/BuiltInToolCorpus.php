@@ -44,9 +44,11 @@ use SugarCraft\Crush\Tools\Tool;
  * pins BY NAME is the living record — a minority of files declare more than
  * their PSR-4 symbol, in whatever numbers the current census yields. What does
  * not rot is the argument itself: `src/App/App.php` alone declares twelve
- * (`Msg`, `Cmd`, `UserInputMsg`, …), and `src/ToolRegistry.php` declares
+ * (`Msg`, `Cmd`, `UserInputMsg`, …), and `src/ToolRegistry.php` once declared
  * `SugarCraft\Crush\Tool` — one `use` away from colliding with the tool
- * interface, and `tests/ToolRegistryTest.php` already imports it.
+ * interface — until E14 moved the registry pair into
+ * `SugarCraft\Crush\Registry` (`src/Registry/`), where
+ * `tests/ToolRegistryTest.php` now imports it from.
  * {@see declaredTypes()} is what the scan reads now — and since finding E631
  * what its RESOLUTION GATE reads too: resolution never asks the engine whether
  * a symbol exists, because under Composer's plain-`include` autoloader the

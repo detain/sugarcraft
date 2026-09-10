@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests;
 
-use SugarCraft\Crush\Tool;
+use SugarCraft\Crush\Registry\Tool;
+use SugarCraft\Crush\Registry\ToolSignature;
 use SugarCraft\Crush\ToolRegistry;
 use SugarCraft\Crush\ToolResult;
-use SugarCraft\Crush\ToolSignature;
 use PHPUnit\Framework\TestCase;
 
 final class ToolRegistryTest extends TestCase
@@ -185,5 +185,18 @@ final class ToolRegistryTest extends TestCase
         $this->assertSame('', $result->result);
         $this->assertTrue($result->isError());
         $this->assertSame('call-id', $result->id);
+    }
+
+    /**
+     * E14 regression pin: the registry pair no longer lives in the root
+     * namespace, so a bare `SugarCraft\Crush\Tool` can never be declared
+     * again — that phantom name was one `use` away from colliding with the
+     * `SugarCraft\Crush\Tools\Tool` interface every live tool implements.
+     */
+    public function testTheRootNamespaceDeclaresNoBareToolSymbol(): void
+    {
+        $this->assertFalse(class_exists('SugarCraft\\Crush\\Tool', false));
+        $this->assertTrue(class_exists(Tool::class));
+        $this->assertTrue(class_exists(ToolSignature::class));
     }
 }

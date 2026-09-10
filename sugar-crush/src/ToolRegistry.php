@@ -4,61 +4,23 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
-/**
- * Signature describing a tool's expected arguments.
- *
- * @readonly
- * @immutable
- */
-final class ToolSignature
-{
-    /**
-     * @param list<string>                 $positional  Ordered names of positional args
-     * @param array<string, bool>         $named       Map of flag-name => whether-it-takes-a-value
-     * @param non-empty-string|null       $description Human-readable one-liner
-     */
-    public function __construct(
-        public readonly array $positional = [],
-        public readonly array $named = [],
-        public readonly ?string $description = null,
-    ) {}
-}
-
-/**
- * A registered tool/command with metadata and an execute handler.
- *
- * @readonly
- * @immutable
- */
-final class Tool
-{
-    /**
-     * @param non-empty-string                          $name       Unique lowercase identifier
-     * @param ToolSignature                              $signature  Arg signature
-     * @param callable(array<string, mixed>): ToolResult $execute    Handler receiving named args, returning ToolResult
-     */
-    public function __construct(
-        public readonly string $name,
-        public readonly ToolSignature $signature,
-        #[\SensitiveParameter]
-        private readonly mixed $execute,
-    ) {}
-
-    /**
-     * Invoke the tool with the given arguments.
-     *
-     * @param array<string, mixed> $args
-     */
-    public function execute(array $args): ToolResult
-    {
-        return ($this->execute)($args);
-    }
-}
+use SugarCraft\Crush\Registry\Tool;
+use SugarCraft\Crush\Registry\ToolSignature;
 
 /**
  * Registry of available slash-commands / built-in tools.
  *
  * Ships with five built-in tools: filter, sort, goto, select, quit.
+ *
+ * E14 (docs/plans/crush_code_hardening_backlog.md): the side declarations
+ * `ToolSignature` and `Tool` that used to share this file now live in
+ * `SugarCraft\Crush\Registry` (`src/Registry/`), moved out of the root
+ * namespace where the bare `Tool` sat one `use` away from colliding with the
+ * `SugarCraft\Crush\Tools\Tool` interface. The root
+ * `SugarCraft\Crush\ToolRegistry` FQN is deliberately untouched: crush_code.md
+ * flags it superseded with zero production callers, and retiring it is a
+ * human consolidation decision, not a rename — everything the move deletes
+ * is nothing.
  */
 final class ToolRegistry
 {
