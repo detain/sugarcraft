@@ -5,14 +5,27 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPreset;
+use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Agents\Effort;
 use SugarCraft\Crush\Agents\ForeignAgentPresetRegistry;
 use SugarCraft\Crush\Agents\Isolation;
 use SugarCraft\Crush\Agents\MemoryScope;
+use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\PermissionRule;
+use SugarCraft\Crush\Permissions\PermissionAction;
+use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Tools\ToolResult;
 
 /**
  * Tests for ForeignAgentPresetRegistry — imports Claude Code and opencode
@@ -242,6 +255,183 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $result = $registry->discoverClaude($projectRoot);
 
         $this->assertSame(['good'], array_keys($result));
+    }
+
+    // -------------------------------------------------------------------------
+    // The Claude prefix dialect (E645).
+    //
+    // Claude Code scopes an argument-bearing rule as `Bash(git:*)` (prefix
+    // after a colon); PermissionRule reads it as `Bash(git *)` (glob after a
+    // space). The foreign form PARSES CLEANLY and matches NOTHING — measured
+    // at this base: fnmatch('git:*', 'git status') is false — so a verbatim
+    // import grants the tool by name and refuses every call by argument. The
+    // importer is the only place that knows the source dialect, so it is the
+    // only place the translation can honestly live.
+    // -------------------------------------------------------------------------
+
+    public function testDiscoverClaudeTranslatesTheColonPrefixDialectToTheSpaceForm(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/dialect';
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'git-safety',
+            "description: Runs git\ntools: Bash(git:*), Read\ndisallowedTools: Bash(rm:*)",
+        );
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'untouched',
+            "description: No prefix rules here\ntools: Bash(git *), WebFetch(domain:github.com), Read",
+        );
+
+        $presets = $registry->discoverClaude($projectRoot);
+
+        $this->assertSame(['Bash(git *)', 'Read'], $presets['git-safety']->tools);
+        $this->assertSame(['Bash(rm *)'], $presets['git-safety']->disallowedTools);
+
+        // NON-DESTRUCTIVE PASS-THROUGH: the native form keeps its bytes, and a
+        // colon that is NOT a `:*` prefix tail — Claude's exact-value rule
+        // shape — is left alone rather than guessed at.
+        $this->assertSame(
+            ['Bash(git *)', 'WebFetch(domain:github.com)', 'Read'],
+            $presets['untouched']->tools,
+        );
+    }
+
+    /**
+     * THE IMPORT ACTUALLY MATCHES A GIT CALL, end to end. The translation is
+     * worthless if the imported declaration still cannot survive its own
+     * grant, so this runs the FULL chain — foreign file -> preset -> Agent ->
+     * AgentManager grant -> per-call enforcement — in both directions: the
+     * call the rule was written for goes THROUGH (the pre-fix shape died
+     * here, refused by an argument half that matched nothing), and a call it
+     * never covered is still refused (proving the translation did not widen
+     * into a bare `Bash`).
+     */
+    public function testATranslatedForeignGrantAdmitsTheCallItWasWrittenFor(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/dialect-e2e';
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'git-runner',
+            "description: Commits things\ntools: Bash(git:*)",
+        );
+        $preset = $registry->discoverClaude($projectRoot)['git-runner'];
+
+        [$manager, $subAgent] = $this->managerRunning(
+            $preset,
+            new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
+        );
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(
+            SubAgent::STATUS_COMPLETE,
+            $subAgent->status,
+            'the imported rule must ADMIT the git call it was written for — the pre-fix verbatim import died here',
+        );
+
+        [$manager2, $subAgent2] = $this->managerRunning(
+            $preset,
+            new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /']),
+        );
+        $caught = null;
+
+        try {
+            iterator_to_array($manager2->executeSubAgent($subAgent2->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'translation must not widen the rule past git');
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent2->status);
+    }
+
+    /**
+     * The one matcher the enforcement path uses, applied to the imported
+     * string itself — a cheap pin that survives even if AgentManager's
+     * plumbing moves, and the direct refutation of the measured `false`
+     * the verbatim import produced.
+     */
+    public function testTheImportedDeclarationMatchesTheGitCallInTheSameMatcherTheGrantUses(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/dialect-matcher';
+        $this->writeAgent(
+            $projectRoot . '/.claude/agents',
+            'git-only',
+            "description: Runs git\ntools: Bash(git:*)",
+        );
+        $imported = $registry->discoverClaude($projectRoot)['git-only']->tools[0];
+
+        $this->assertTrue(
+            (new PermissionRule($imported, PermissionAction::Allow))
+                ->matches(new ToolCall(name: 'Bash', arguments: ['command' => 'git status'])),
+            'the imported rule must match the call it was written for',
+        );
+        $this->assertFalse(
+            (new PermissionRule($imported, PermissionAction::Allow))
+                ->matches(new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /'])),
+            'and only that',
+        );
+    }
+
+    /**
+     * Run one preset through a real AgentManager: an in-process executor is
+     * not needed because executeSubAgent() drives the provider directly; the
+     * provider answers the scripted tool call exactly once and the gate is
+     * the permissive BypassPermissions so any refusal observed here can only
+     * have come from the GRANT — the same control AgentManagerTest uses.
+     *
+     * @return array{AgentManager, SubAgent}
+     */
+    private function managerRunning(AgentPreset $preset, ToolCall $call): array
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [$call],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: new SkillRegistry(),
+            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+            toolRegistry: [$this->fakeBashTool()],
+        );
+        $manager->register(Agent::fromPreset($preset, 'anthropic', 'claude-sonnet-4-6', true));
+
+        return [$manager, $manager->createSubAgent($preset->name, 'do it')];
+    }
+
+    /** The smallest Tool that satisfies the registry contract for name `Bash`. */
+    private function fakeBashTool(): Tool
+    {
+        return new class implements Tool {
+            public function __construct(private readonly string $name = 'Bash') {}
+
+            public function name(): string
+            {
+                return $this->name;
+            }
+
+            public function description(): string
+            {
+                return 'fake Bash';
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object'];
+            }
+
+            public function execute(array $args): ToolResult
+            {
+                return new ToolResult('id', 'ok');
+            }
+        };
     }
 
     // -------------------------------------------------------------------------

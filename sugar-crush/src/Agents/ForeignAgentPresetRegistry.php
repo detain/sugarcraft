@@ -738,7 +738,8 @@ final class ForeignAgentPresetRegistry
 
     /**
      * Normalise a `tools:` value that may be a YAML list or Claude Code's
-     * comma-separated string form into a list of tool names.
+     * comma-separated string form into a list of tool names, translating
+     * Claude's argument-scoped prefix dialect on the way in (E645).
      *
      * @return list<string>
      */
@@ -749,11 +750,45 @@ final class ForeignAgentPresetRegistry
         foreach ($items as $item) {
             $name = trim((string) $item);
             if ($name !== '') {
-                $names[] = $name;
+                $names[] = self::fromClaudePrefixDialect($name);
             }
         }
 
         return $names;
+    }
+
+    /**
+     * Translate Claude Code's `Bash(git:*)` prefix dialect into this
+     * project's `Bash(git *)` subject-glob dialect, at the import boundary.
+     *
+     * WHY THIS IS NOT COSMETIC — the measured failure (E645): the two shapes
+     * parse as each other's worst enemy. `Bash(git:*)` is WELL-FORMED to
+     * {@see \SugarCraft\Crush\Permissions\PermissionRule} — name half `Bash`,
+     * argument half the glob `git:*` — so it passes every check this importer
+     * and `AgentManager` run, lands on the roster by name, and then matches
+     * NOTHING at call time: `fnmatch('git:*', 'git status')` is false because
+     * no real git invocation contains a `git:` prefix. The imported rule
+     * granted the tool by name while refusing every call by argument — a
+     * silently neutered preset, exactly the class of "the declaration lies and
+     * nothing reddens" defect this bundle exists to end.
+     *
+     * TRANSLATE, NOT WARN-ALONE. A warning would leave the operator holding a
+     * preset that answers "permission denied" to every call it was written to
+     * allow; the two dialects state the same intent one character apart, so
+     * nothing has to be lost. The rewrite is surgically anchored: only the
+     * `(prefix:*)` tail form — Claude's documented prefix-match rule — is
+     * touched. Every other shape passes through byte-identically, including
+     * `WebFetch(domain:github.com)` (a colon with no `*` tail, whose meaning
+     * this project's matcher does not share) and already-native `Bash(git *)`.
+     * This is a boundary translation, not a general YAML or dialect parser —
+     * adding a second syntax this class cannot enforce is how the next E645
+     * gets written.
+     */
+    private static function fromClaudePrefixDialect(string $declaration): string
+    {
+        $translated = preg_replace('/\(([^()]*):\*\)$/', '($1 *)', $declaration, 1);
+
+        return is_string($translated) ? $translated : $declaration;
     }
 
     /**
