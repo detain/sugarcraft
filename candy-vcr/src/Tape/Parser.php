@@ -110,6 +110,14 @@ final readonly class Parser
 
             Lexer::TOKEN_UNKNOWN => null,
 
+            // E15 grammar port: JSON/REGEX values are classified by the lexer
+            // (so they can never hide the directive behind them) but candy-vcr
+            // has no AST directive that consumes a bare value token yet — the
+            // Set composite carries JSON/regex text inside TOKEN_SET values,
+            // and a stray value token drops here by KIND, not by text sniff.
+            Lexer::TOKEN_JSON  => null,
+            Lexer::TOKEN_REGEX => null,
+
             default => null,
         };
     }

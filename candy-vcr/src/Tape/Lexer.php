@@ -11,8 +11,39 @@ use SugarCraft\Vcr\Tape\Ast\ParseError;
  *
  * Each non-empty line that doesn't start with # is a directive.
  * Token types: TYPE, ENTER, TAB, BACKSPACE, SLEEP, SET, ENV, OUTPUT,
- * ARROW, CTRL, SPACE, ESCAPE, HIDE, SHOW, WAIT, SCREEN, SCREENSHOT, SOURCE, UNKNOWN.
+ * ARROW, CTRL, SPACE, ESCAPE, HIDE, SHOW, WAIT, SCREEN, SCREENSHOT, SOURCE,
+ * JSON, REGEX, UNKNOWN.
  * Comments are preserved for round-trip.
+ *
+ * ## Grammar port (E15 / tracker #81)
+ *
+ * The two value-delimiter kinds the original port omitted — JSON (`{` … `}`)
+ * and REGEX (`/` … `/`) — are upstream first-class token kinds, measured
+ * against the real `vhs` binary by the oracle sweep in
+ * `sugar-crush/tests/VhsTapeContractTest.php`. The facts that port with them:
+ *
+ * - **Tab is whitespace.** Upstream's stream has no newline token and its
+ *   whitespace class includes `\t`, so `Type "x"\tSleep 1s` is two
+ *   directives. Our peel loop's `ltrim` uses PHP's default char class
+ *   (`" \t\n\r\0\x0B`), which matches.
+ * - **Three time units, not two.** `s`, `ms`, `m` — see
+ *   {@see durationSeconds()} for the scale each carries.
+ * - **The JSON closer is synthesized.** A `{`-opened run with no matching `}`
+ *   swallows the remainder of the line and the lexer fabricates the missing
+ *   closers, mirroring upstream `readJSON` returning a well-formed literal at
+ *   EOF. A `#` inside the braces is literal, never a comment opener.
+ * - **Gates are on token KIND, not text.** Upstream's predicate set
+ *   (`isLetter`/`isDigit`/`isDot`/`isDash`/`isUnderscore`/`isSlash`/`isPercent`
+ *   feeding `readIdentifier`/`readNumber`/`readJSON`/`readRegex`) decides
+ *   what a directive accepted by name may carry; here the same idea is the
+ *   match chain — a delimiter token is only recognized at a token START, and
+ *   only when a whitespace/line-end boundary follows its closer, so
+ *   `./bin/sugarcrush` (identifier run-class bytes hold it together) and
+ *   `Set Shell /bin/sh` (no boundary after `/bin/`) lex as one token, never
+ *   as an opened regex.
+ * - **Five delimiter pairs make `#` literal:** `"` `"`, `'` `'`, `` ` `` `` ` ``,
+ *   `/` `/`, `{` `}`. All three quotes are literal INSIDE a regex, and a `#`
+ *   inside any of them cannot hide the directive that follows the closer.
  */
 final readonly class Lexer
 {
@@ -34,6 +65,8 @@ final readonly class Lexer
     public const TOKEN_SCREEN = 'SCREEN';
     public const TOKEN_SCREENSHOT = 'SCREENSHOT';
     public const TOKEN_SOURCE = 'SOURCE';
+    public const TOKEN_JSON = 'JSON';
+    public const TOKEN_REGEX = 'REGEX';
     public const TOKEN_UNKNOWN = 'UNKNOWN';
     public const TOKEN_COMMENT = 'COMMENT';
 
@@ -113,9 +146,10 @@ final readonly class Lexer
      */
     private function matchDirective(string $s, int $lineNum): array
     {
-        // Type takes one quoted argument; only the quoted run is consumed
-        // so a trailing Sleep / comment stays on the line for the next pass.
-        if (preg_match('/^Type\s+([\'"])(.*?)\1/s', $s, $m)) {
+        // Type takes one quoted argument — all three upstream quote kinds;
+        // only the quoted run is consumed so a trailing Sleep / comment
+        // stays on the line for the next pass.
+        if (preg_match('/^Type\s+([\'"`])(.*?)\1/s', $s, $m)) {
             return [new Token(self::TOKEN_TYPE, $m[2], $lineNum), strlen($m[0])];
         }
 
@@ -150,10 +184,23 @@ final readonly class Lexer
             return [new Token($type, $keyword, $lineNum), strlen($keyword)];
         }
 
-        // Argument directives take free-form values and run to end of line;
-        // they always stand alone, so consuming the remainder is correct.
-        if (preg_match('/^Set\s+(\S+)\s+(.*)$/', $s, $m)) {
-            return [new Token(self::TOKEN_SET, $m[1] . "\x00" . $m[2], $lineNum), strlen($m[0])];
+        // `Set key <value>`: a `{` value is a JSON literal and a `/…/` value
+        // is a regex literal — each ends AT ITS CLOSER, so a directive or
+        // comment after it stays live on the same line (upstream's measured
+        // delimiter behaviour). Anything else keeps the free-form
+        // run-to-end-of-line value.
+        if (preg_match('/^Set\s+(\S+)(\s+)/', $s, $m)) {
+            $prefixLen = strlen($m[0]);
+            $tail = substr($s, $prefixLen);
+            if ($this->startsValueToken($tail, '{')) {
+                [$value, $len] = $this->readJson($tail);
+                return [new Token(self::TOKEN_SET, $m[1] . "\x00" . $value, $lineNum), $prefixLen + $len];
+            }
+            if ($this->startsValueToken($tail, '/')) {
+                [$value, $len] = $this->readRegex($tail);
+                return [new Token(self::TOKEN_SET, $m[1] . "\x00" . $value, $lineNum), $prefixLen + $len];
+            }
+            return [new Token(self::TOKEN_SET, $m[1] . "\x00" . $tail, $lineNum), strlen($s)];
         }
 
         if (preg_match('/^Env\s+(\S+)\s+["\'](.*?)["\']\s*$/', $s, $m)) {
@@ -177,11 +224,163 @@ final readonly class Lexer
             return [new Token(self::TOKEN_SOURCE, trim($m[1]), $lineNum), strlen($m[0])];
         }
 
+        // `Wait /re/` / `Wait {json}`: upstream opens the value token wherever
+        // a token starts, and the duration arm above already declined, so peel
+        // the keyword and emit the VALUE token by kind. candy-vcr has no
+        // pattern-wait AST directive yet — the Parser's kind gate drops these
+        // instead of the old TOKEN_UNKNOWN swallow hiding them.
+        if (preg_match('/^Wait\s+/', $s, $m)) {
+            $tail = substr($s, strlen($m[0]));
+            if ($this->startsValueToken($tail, '{')) {
+                [$value, $len] = $this->readJson($tail);
+                return [new Token(self::TOKEN_JSON, $value, $lineNum), strlen($m[0]) + $len];
+            }
+            if ($this->startsValueToken($tail, '/')) {
+                [$value, $len] = $this->readRegex($tail);
+                return [new Token(self::TOKEN_REGEX, $value, $lineNum), strlen($m[0]) + $len];
+            }
+        }
+
+        // Value tokens stand wherever a token starts, not only behind the
+        // keywords that happen to read them upstream (`Set WaitPattern /re/`
+        // and a line-initial regex are the same token). Reaching these arms
+        // means no keyword matched, so a bare JSON/REGEX token is emitted
+        // and the Parser's kind gate drops it.
+        if ($this->startsValueToken($s, '{')) {
+            [$value, $len] = $this->readJson($s);
+            return [new Token(self::TOKEN_JSON, $value, $lineNum), $len];
+        }
+        if ($this->startsValueToken($s, '/')) {
+            [$value, $len] = $this->readRegex($s);
+            return [new Token(self::TOKEN_REGEX, $value, $lineNum), $len];
+        }
+
         return [null, 0];
     }
 
     /**
-     * Convert a tape duration + unit to seconds.
+     * Does $s open a value token of this delimiter that legitimately ENDS the
+     * token — i.e. the closer is followed by whitespace / line-end? That
+     * boundary gate is what keeps an identifier-run-class `/` (a `/` mid-run
+     * never opens a regex upstream) from splitting `/bin/sh` into `/bin/` +
+     * `sh`. Checked by scanning with the same terminator rules as the
+     * reader, so synthesized-closer forms (`{` to EOL) pass too.
+     */
+    private function startsValueToken(string $s, string $open): bool
+    {
+        if (!str_starts_with($s, $open)) {
+            return false;
+        }
+        if ($open === '{') {
+            // JSON: either depth closes on a `}` (boundary-checked) or the
+            // run reaches end-of-line and the closer is synthesized.
+            $depth = 0;
+            $len = strlen($s);
+            for ($i = 0; $i < $len; $i++) {
+                $c = $s[$i];
+                if ($c === '"') {
+                    for ($i++; $i < $len; $i++) {
+                        if ($s[$i] === '\\') {
+                            $i++;
+                            continue;
+                        }
+                        if ($s[$i] === '"') {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                if ($c === '{') {
+                    $depth++;
+                    continue;
+                }
+                if ($c === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        return $i === $len - 1 || ctype_space($s[$i + 1]);
+                    }
+                }
+            }
+            return true; // EOF: synthesized closer
+        }
+        // Regex: closer `/` not escaped by a backslash, then boundary or EOL.
+        $len = strlen($s);
+        for ($i = 1; $i < $len; $i++) {
+            if ($s[$i] === '\\') {
+                $i++;
+                continue;
+            }
+            if ($s[$i] === '/') {
+                return $i === $len - 1 || ctype_space($s[$i + 1]);
+            }
+        }
+        return true; // EOF: run simply ends at the line end
+    }
+
+    /**
+     * Read a brace-balanced JSON literal at the front of $s (which starts
+     * with `{`). `#` is literal inside the braces — only the balanced `}`
+     * ends it — and a run with no closer consumes the rest of the line and
+     * gets its closers synthesized (mirrors upstream `readJSON`).
+     *
+     * @return array{0: string, 1: int} the JSON text and bytes consumed.
+     */
+    private function readJson(string $s): array
+    {
+        $depth = 0;
+        $len = strlen($s);
+        for ($i = 0; $i < $len; $i++) {
+            $c = $s[$i];
+            if ($c === '"') {
+                for ($i++; $i < $len; $i++) {
+                    if ($s[$i] === '\\') {
+                        $i++;
+                        continue;
+                    }
+                    if ($s[$i] === '"') {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if ($c === '{') {
+                $depth++;
+                continue;
+            }
+            if ($c === '}' && --$depth === 0) {
+                return [substr($s, 0, $i + 1), $i + 1];
+            }
+        }
+        return [substr($s, 0, $len) . str_repeat('}', $depth), $len];
+    }
+
+    /**
+     * Read a `/…/` regex literal at the front of $s. All three quote kinds are
+     * literal inside it; only an unescaped closing `/` ends the token. An
+     * unterminated run consumes the rest of the line unchanged (no closer is
+     * synthesized — that courtesy belongs to the JSON reader only).
+     *
+     * @return array{0: string, 1: int} the literal (slashes kept) and bytes consumed.
+     */
+    private function readRegex(string $s): array
+    {
+        $len = strlen($s);
+        for ($i = 1; $i < $len; $i++) {
+            if ($s[$i] === '\\') {
+                $i++;
+                continue;
+            }
+            if ($s[$i] === '/') {
+                return [substr($s, 0, $i + 1), $i + 1];
+            }
+        }
+        return [$s, $len];
+    }
+
+    /**
+     * Convert a tape duration + unit to seconds. The three upstream time
+     * units are `s`, `ms`, `m` — anything else never reaches here (the
+     * keyword regexes gate it).
      */
     private function durationSeconds(float $duration, string $unit): float
     {
