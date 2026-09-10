@@ -79,6 +79,9 @@ final class Renderer
     private readonly bool $tableWrap;
     private readonly bool $inlineTableLinks;
     private readonly bool $tableColumnBudget;
+
+    /** E43 step 1 (fence half): clip rendered fence lines at the available width. */
+    private readonly bool $fenceColumnBudget;
     private readonly bool $preservedNewLines;
     private readonly bool $expandEmoji;
     private readonly bool $sanitize;
@@ -102,6 +105,7 @@ final class Renderer
         bool $preservedNewLines = false,
         bool $expandEmoji = false,
         bool $sanitize = true,
+        bool $fenceColumnBudget = false,
     ) {
         $this->theme = $theme ?? Theme::ansi();
         $this->wrapWidth = ($wrapWidth !== null && $wrapWidth > 0) ? $wrapWidth : null;
@@ -113,6 +117,7 @@ final class Renderer
         $this->preservedNewLines = $preservedNewLines;
         $this->expandEmoji = $expandEmoji;
         $this->sanitize = $sanitize;
+        $this->fenceColumnBudget = $fenceColumnBudget;
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
     }
 
@@ -259,6 +264,25 @@ final class Renderer
     }
 
     /**
+     * Clip fenced-code lines to the renderer's word-wrap width (E43 step 1,
+     * fence half). {@see withTableColumnBudget()} bounds the one block kind
+     * whose geometry it can shrink by redistributing columns; a fence has no
+     * columns to shrink, so its long lines simply overflow the pane today.
+     * This is the block-clip that proposal left for fences: with the option
+     * on (default OFF — every existing byte snapshot holds), each rendered
+     * fence line is {@see Width::truncateAnsi()}-clipped at the current
+     * block stack's available width, on both the plain code-block and the
+     * syntax-highlighted paths. Content clipped here is the consumer's
+     * scroll/pager territory, exactly the bounded-geometry-now /
+     * full-content-later trade E49 made for tables. Indented code blocks are
+     * NOT touched — the entry scopes the FENCED half only.
+     */
+    public function withFenceColumnBudget(bool $on = true): self
+    {
+        return $this->copy(fenceColumnBudget: $on);
+    }
+
+    /**
      * Preserve consecutive blank lines in source markdown. By default
      * CommonMark collapses runs of blank lines; with this on, every
      * `\n\n+` in the source survives into the output. Mirrors glamour's
@@ -330,6 +354,8 @@ final class Renderer
     public function tableWrap(bool $on = true): self     { return $this->withTableWrap($on); }
     public function inlineTableLinks(bool $on = true): self { return $this->withInlineTableLinks($on); }
     public function tableColumnBudget(bool $on = true): self { return $this->withTableColumnBudget($on); }
+
+    public function fenceColumnBudget(bool $on = true): self { return $this->withFenceColumnBudget($on); }
     public function preservedNewLines(bool $on = true): self { return $this->withPreservedNewLines($on); }
     public function emoji(bool $on = true): self         { return $this->withEmoji($on); }
     public function standardStyle(string $name): self    { return $this->withStandardStyle($name); }
@@ -346,6 +372,7 @@ final class Renderer
         ?bool $preservedNewLines = null,
         ?bool $expandEmoji = null,
         ?bool $sanitize = null,
+        ?bool $fenceColumnBudget = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -358,6 +385,7 @@ final class Renderer
             $preservedNewLines ?? $this->preservedNewLines,
             $expandEmoji      ?? $this->expandEmoji,
             $sanitize         ?? $this->sanitize,
+            $fenceColumnBudget ?? $this->fenceColumnBudget,
         );
     }
 
@@ -705,10 +733,29 @@ final class Renderer
         // No language hint → emit as plain code-block. With a hint,
         // route through the syntax highlighter; unknown languages
         // also fall through to the plain code-block style.
-        if ($lang === '') {
-            return $this->theme->codeBlock->render($body);
+        $rendered = $lang === ''
+            ? $this->theme->codeBlock->render($body)
+            : SyntaxHighlighter::highlight($body, $lang, $this->theme);
+
+        return $this->clipFenceToWidth($rendered);
+    }
+
+    /**
+     * E43 fence half: with the option on, every physical line of a rendered
+     * fence — plain or highlighted, theme decoration included — is clipped
+     * so no line exceeds the available width. Off (default) is identity.
+     */
+    private function clipFenceToWidth(string $rendered): string
+    {
+        if (!$this->fenceColumnBudget || $this->wrapWidth === null) {
+            return $rendered;
         }
-        return SyntaxHighlighter::highlight($body, $lang, $this->theme);
+        $avail = $this->blockStack->availableWidth($this->wrapWidth);
+
+        return implode("\n", array_map(
+            static fn (string $line): string => Width::truncateAnsi($line, $avail),
+            explode("\n", $rendered),
+        ));
     }
 
     private function renderHeading(Heading $h): string
