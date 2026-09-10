@@ -57,8 +57,10 @@ at a round boundary to ask whether to continue.** Concretely:
    and reported as seams) to keep cherry-pick merges clean.
 2. Route ALL implementation through the Task tool with subagent_type `coder` (bash-capable). Read-only
    probes may use the explore agent via delegate.
-3. Blank/truncated agent response is NOT failure: resume the SAME task_id repeatedly until it answers —
-   it may take 10+ resumes; never change the prompt or restart the work.
+3. Blank/truncated agent response → ALWAYS resume the same task_id and keep resuming until it answers; a blank
+   usually means the agent died, but when it merely returned early while still running, resuming is harmless —
+   it continues and the real final response arrives. Never diagnose before resuming, never change the prompt,
+   never restart the work. May take 10+ resumes.
 4. Agents sometimes fabricate GREEN reports (round 61: a fixer looped 5 identical fabricated reports
    after its commit already landed; another died with work complete). Land-verify every claim against
    `git log` / read-only forensic probes; trust probes over reports.
@@ -66,7 +68,8 @@ at a round boundary to ask whether to continue.** Concretely:
    file's cadence) — including new rules learned mid-round like these.
 6. Round-62 lane ledger (running as of this writing): E (E652/E653/E656 wiring+docs), G (E655 flake
    forensics), H (E657/E658 citation sweep), I (E37/E1/E30/E124 roster+README integrity), J (E29/E115
-   measurements), K (E49 candy-shine — launching as slots free). All sandboxes
+   measurements), K (E49 candy-shine — launching as slots free) · P (parallelization probe, user special project)
+   · M (file-map — DONE 8f75e7965). All sandboxes
    `/home/sites/crush-lane-{e,g,h,i,j,k}` @`0549736d4` or `5afe24380`.
 
 ### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
