@@ -94,31 +94,41 @@ final class ProcessUniqueTempNameTest extends TestCase
      * with no row fails and must be argued or fixed. A deferral is a claim
      * about the tree, so the tree is asked.
      *
-     * THE COUNT IS EXACT AND THAT IS DELIBERATE. A range would let a sixth site
-     * arrive unremarked in a file that already has five.
-     *
-     * WHAT THIS ROSTER SAID: it was called ARGUMENTLESS_INVENTORY and held one
-     * row, because the scanner beside it asked "does this call take no
-     * arguments". WHAT IS TRUE NOW: a constant literal prefix is not an entropy
-     * source — `uniqid($p)` is `$p` followed by the SAME 13-hex microtime
-     * suffix the bare call returns — so four `src/` sites carrying one were
-     * spared by a guard whose own stated subject describes them exactly, and
-     * ONE OF THEM BUILDS A SubAgent ID IN THE SAME SHAPE the WorkflowEngine row
-     * below spends six hundred words on. The predicate is now "no more-entropy
-     * flag" and those four were rostered.
-     *
-     * AND THEN THEY WERE FIXED (E329), which is why four rows are gone from
-     * here rather than rewritten: `src/Agents/AgentManager.php`,
-     * `src/App/App.php`, `src/Hooks/ScriptHook.php` and
-     * `src/Providers/ClaudeCodeProvider.php` now spell the call with the pid in
-     * the prefix and the more-entropy flag set, so the scanner spares them on
-     * their own tokens and a row for any of them would fail
-     * {@see testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims()}.
-     * The WorkflowEngine row is deliberately left standing — it is E324, a
-     * different entry with a different argument — and it keeps this channel's
-     * real-tree walk honest. A fixture row below now SHARES that duty, so
-     * fixing E324's five cannot blind the channel when their row goes: the
-     * StaticTempPathWalkControl precedent, applied to this scanner (E349).
+      * THE COUNT IS EXACT AND THAT IS DELIBERATE. A range would let one more
+      * site arrive unremarked in a file that already has sites.
+      *
+      * WHAT THIS ROSTER SAID: it was called ARGUMENTLESS_INVENTORY and held one
+      * row, because the scanner beside it asked "does this call take no
+      * arguments". WHAT IS TRUE NOW: a constant literal prefix is not an entropy
+      * source — `uniqid($p)` is `$p` followed by the SAME 13-hex microtime
+      * suffix the bare call returns — so four `src/` sites carrying one were
+      * spared by a guard whose own stated subject describes them exactly, and
+      * ONE OF THEM BUILDS A SubAgent ID IN THE SAME SHAPE the WorkflowEngine row
+      * once spent six hundred words on. The predicate is now "no more-entropy
+      * flag" and those four were rostered.
+      *
+      * AND THEN THEY WERE FIXED (E329), which is why four rows are gone from
+      * here rather than rewritten: `src/Agents/AgentManager.php`,
+      * `src/App/App.php`, `src/Hooks/ScriptHook.php` and
+      * `src/Providers/ClaudeCodeProvider.php` now spell the call with the pid in
+      * the prefix and the more-entropy flag set, so the scanner spares them on
+      * their own tokens and a row for any of them would fail
+      * {@see testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims()}.
+      *
+      * AND THEN SO WAS THE FIFTH (E324, this round): `src/Workflows/
+      * WorkflowEngine.php` now spells all five of its SubAgent-id calls in the
+      * E329 house form — pid in the prefix, more-entropy flag set — so its
+      * row is deleted rather than rewritten, exactly as the four above were.
+      * The row's six hundred words argued those five were CONTAINED, not
+      * unique: their SubAgent ids reach disk only under `makeResultDirPath()`,
+      * whose directory name already carries a pid and 64 bits, so no two
+      * processes could meet on the path whatever the id spelled. That was a
+      * property of the enclosing directory, one edit away from untrue; the
+      * new spelling supplies the per-call uniqueness directly instead.
+      * The channel's real-tree walk honesty, which that row carried, now lives
+      * in the fixture row below (E349) — the StaticTempPathWalkControl
+      * precedent, so the census survives the last improvement to the code it
+      * censuses.
      *
      * WHY THE ROSTER STILL EARNS ITS PLACE UNCHANGED IN FORM: the argument that
      * a site is safe is a claim about the tree, and the tree is still asked in
@@ -127,38 +137,20 @@ final class ProcessUniqueTempNameTest extends TestCase
      * @var array<string,array{sites:int,why:string}>
      */
     private const NO_ENTROPY_FLAG_INVENTORY = [
-        'src/Workflows/WorkflowEngine.php' => [
-            'sites' => 5,
-            'why' =>
-                'THE ID BUILT HERE DOES REACH A FILE PATH, AND IT IS STILL NOT A CROSS-PROCESS '
-                . 'HAZARD — measured, not assumed. Each of the five builds a SubAgent id as '
-                . '`<stage>-` . the call. That id reaches disk through '
-                . 'AgentWorkerPool::resultFile()/progressFile(), which are '
-                . '`$this->resultDir . "/" . hash("sha256", $agentId)`. But `$resultDir` is '
-                . 'makeResultDirPath(), which is `sys_get_temp_dir() . "/sc_pool_" . getmypid() '
-                . '. "_" . bin2hex(random_bytes(8))` — the DIRECTORY already carries a pid and '
-                . '64 bits of entropy, so no two processes can meet on that path whatever the '
-                . 'id is. What is left is intra-process uniqueness, which the argument-less '
-                . 'call does guarantee: PHP sleeps to advance the microtime, measured on PHP '
-                . '8.3.6 as 200 calls in one process yielding 200 distinct values. '
-                . 'FIXING THEM ANYWAY IS STILL WORTH A ROUND: the guarantee is a property of '
-                . 'the enclosing directory rather than of these call sites, so it is one edit '
-                . 'to makeResultDirPath() away from being untrue. That edit is out of this '
-                . 'lane (tests only) and is recorded as a deferred finding rather than done '
-                . 'here.',
-        ],
         'tests/Support/Fixtures/EntropylessUniqidWalkControl.php' => [
             'sites' => 1,
             'why' =>
                 'THIS ROW IS NOT AN EXEMPTION. It is this scanner\'s real-tree control, and the '
                 . 'file exists for no other reason: nothing calls it, the class is abstract so '
                 . 'it cannot be instantiated and its one method is private, and the body spells '
-                . 'the exact offender shape — a prefix standing in front of a flagless call. '
-                . 'IT EXISTS SO THIS CHANNEL SURVIVES ITS OWN SUCCESS: the WorkflowEngine row '
-                . 'above was the only flagless site left in the tree, so fixing E324 would '
-                . 'otherwise close the channel\'s last real-tree positive, and rule 15 says an '
-                . 'absence census with no positive input is a dead instrument waiting to be '
-                . 'mistaken for a clean tree. The sibling census walked into exactly this and '
+                . 'the exact offender shape — a constant literal prefix standing in front of a '
+                . 'flagless call. '
+                . 'IT EXISTS SO THIS CHANNEL SURVIVES ITS OWN SUCCESS: the five '
+                . '`src/Workflows/WorkflowEngine.php` sites were the only flagless calls left '
+                . 'when E329 took the four, and fixing them (E324) would otherwise have closed '
+                . 'the channel\'s last real-tree positive — rule 15: an absence census with no '
+                . 'positive input is a dead instrument waiting to be mistaken for a clean tree. '
+                . 'The sibling census walked into exactly this and '
                 . 'answers it the same way — {@see STATIC_TEMP_PATH_INVENTORY}\'s row on '
                 . 'tests/Support/Fixtures/StaticTempPathWalkControl.php. DELETING OR "FIXING" '
                 . 'THE FIXTURE IS NOT A FIX FOR ANYTHING: the synthetic known-answer strings in '

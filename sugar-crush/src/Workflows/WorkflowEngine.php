@@ -1064,7 +1064,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $subAgent = new SubAgent(
-            id: $stageName . '-' . uniqid(),
+            id: $stageName . '-' . uniqid(getmypid() . '_', true),
             agent: $agent,
             task: $interpolatedPrompt,
             timeout: $task->timeout ?? 300,
@@ -1176,7 +1176,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
 
             $subAgent = new SubAgent(
-                id: $stageName . '-' . $nestedStageName . '-' . uniqid(),
+                id: $stageName . '-' . $nestedStageName . '-' . uniqid(getmypid() . '_', true),
                 agent: $agent,
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? 300,
@@ -1279,7 +1279,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $taskSubAgent = new SubAgent(
-            id: $stageName . '-task-' . uniqid(),
+            id: $stageName . '-task-' . uniqid(getmypid() . '_', true),
             agent: $taskAgent,
             task: $taskPrompt,
             timeout: $task->timeout ?? 300,
@@ -1322,7 +1322,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $verifierSubAgent = new SubAgent(
-            id: $stageName . '-verifier-' . uniqid(),
+            id: $stageName . '-verifier-' . uniqid(getmypid() . '_', true),
             agent: $verifierAgent,
             task: $verifierPrompt,
             timeout: $verifier->timeout ?? 300,
@@ -1481,7 +1481,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
 
             $subAgents[] = new SubAgent(
-                id: $stageName . '-' . $agentIndex . '-' . uniqid(),
+                id: $stageName . '-' . $agentIndex . '-' . uniqid(getmypid() . '_', true),
                 agent: $agent,
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? 300,
