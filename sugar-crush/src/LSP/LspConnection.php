@@ -1255,14 +1255,18 @@ final class LspConnection implements LspConnectionInterface
      *  3. every iteration of {@see readResponse()}, including passes answered
      *     entirely from the buffer, which never reach (2);
      *  4. once in {@see stopProcess()}, before the signal ladder; and
-     *  5. ON DEMAND from the owner process between exchanges, via
-     *     {@see pumpStderr()} — the seam E537's own STEP asks the dispatch
-     *     layer to call, since only it knows when no forked call is in flight.
+     *  5. ON DEMAND at a point between exchanges, from the owner process only
+     *     WHILE the dispatch layer actually calls {@see pumpStderr()} — the
+     *     seam E537's own STEP asks that layer to run, since only it knows
+     *     when no forked call is in flight. (1)–(4) are what an ACTIVE
+     *     exchange guarantees; (5) is an offered pass, not a standing drain.
      *
-     * What REMAINS open by design, and is not reopened here: the idle gap in a
-     * process that is neither pumping nor calling {@see pumpStderr()}. No drain
-     * INSIDE this class can close that safely under fork-per-tool-call; closing
-     * it is a `Chat`/`Runtime` change, which is a different lane's file.
+     * What REMAINS open by design, and is not reopened here: the LONG idle
+     * window — a process that is neither pumping nor calling
+     * {@see pumpStderr()}, where (5)'s on-demand pass simply never runs. No
+     * drain INSIDE this class can close that safely under fork-per-tool-call;
+     * covering it is the dispatch layer's concern per E537 — a `Chat`/
+     * `Runtime` change, which is a different lane's file.
      */
     private function drainStderr(): void
     {
@@ -1310,9 +1314,21 @@ final class LspConnection implements LspConnectionInterface
     }
 
     /**
-     * TICK THE STDERR DRAIN OUTSIDE AN EXCHANGE: one bounded, non-blocking
+     * TICK THE STDERR DRAIN BETWEEN EXCHANGES: one bounded, non-blocking
      * read of fd 2, for the process that owns this connection, AT A MOMENT
      * WHEN IT HAS NO CALL IN FLIGHT.
+     *
+     * WHAT THIS COVERS, STATED NARROWLY (round-62 review found the bare
+     * between-exchanges wording too strong a claim on idle windows): the
+     * drain an ACTIVE exchange guarantees is the internal cadence on
+     * {@see drainStderr()} — every {@see writeMessage()}, {@see refill()} and
+     * {@see readResponse()} read iteration, plus the {@see stopProcess()}
+     * entry. This method adds the on-demand between-exchanges pass: one
+     * call, one bounded drain, nothing more. A LONG idle window is therefore
+     * drained only at the instants the owner chooses to call — owning that
+     * rhythm, or accepting E503's stall (freed ~20 ms into the very next
+     * exchange, a stall not a deadlock), is the DISPATCH layer's concern per
+     * E537, not this method's.
      *
      * WHY THIS IS A CALLER-PUMPED SEAM AND NOT A TIMER. This class owns no
      * loop handle — {@see __construct()} takes a server path and argv and
