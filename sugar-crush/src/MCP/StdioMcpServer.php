@@ -656,17 +656,28 @@ final class StdioMcpServer implements McpServer
      * private primitive (exercised directly via reflection): returns the decoded
      * response array, or [] when the process is down / no response arrives.
      *
+     * E483 THREADS THE BUDGET THROUGH IT. WHAT WAS SAID: nothing — the method
+     * simply called `writeLine($json)` and `readLine(null)`, so any caller got
+     * the UNBOUNDED end of both loops, the one shape every other exchange in
+     * this class has been measured to need a guard against. WHAT IS TRUE NOW:
+     * the optional `$deadline` is forwarded to both legs, and the derived
+     * roster in {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerWriteBoundsTest}
+     * can no longer be satisfied by leaving this conduit dark. WHY IT EARNS
+     * ITS PLACE: a default-null keeps both reflection exercises byte-identical
+     * in behaviour while a future caller inherits the handshake budget instead
+     * of the deadlock.
+     *
      * @param array<mixed> $message
      * @return array<mixed>
      */
-    private function send(array $message): array
+    private function send(array $message, ?float $deadline = null): array
     {
         $json = json_encode($message);
-        if ($json === false || !$this->writeLine($json)) {
+        if ($json === false || !$this->writeLine($json, $deadline)) {
             return [];
         }
 
-        $line = $this->readLine(null);
+        $line = $this->readLine($deadline);
         if ($line === null) {
             return [];
         }

@@ -173,21 +173,79 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
      * a weak instrument on its own; it is here because the alternative is no
      * instrument, and it is paired with the tripwire below that reds when the
      * behaviour BECOMES reachable.
+     *
+     * E483 — THE ROSTER IS DERIVED, NOT RESTATED. WHAT WAS SAID: the method list
+     * was a literal `['request','notify','writeLine','readLine','readResponse']`,
+     * so a NEW method that touches the same fd-0/1/2 primitives shipped without
+     * ever being asked for a deadline, because nothing noticed it existed. WHAT
+     * IS TRUE NOW: the scanner below walks the class's own tokens (comments
+     * stripped, so prose about `stream_select` cannot nominate a method) and
+     * every method whose BODY touches a pipe primitive must either take
+     * $deadline or stand in ACCOUNTED below with a reason the reader can judge.
+     * WHY IT EARNS ITS PLACE: the scanner is the same shape for the whole file,
+     * and its known-positive fixture row proves it is alive — an empty derived
+     * roster is exactly as red as a missing one.
      */
     public function testTheHandshakeDeadlineReachesTheWriteAndNotOnlyTheRead(): void
     {
+        // Methods that touch a stream primitive by DESIGN and carry no deadline,
+        // with the reason each one may. Adding to this map is a judgement call;
+        // adding a primitive-touching method WITHOUT a deadline and WITHOUT a row
+        // here is what the scanner turns red for.
+        $accounted = [
+            'absorbStderr' => 'bounded non-blocking drain (single 8192 fread, MAX_STDERR_BYTES '
+                . 'tail cap), reached only behind a readiness gate by its callers — by design no '
+                . 'deadline (E440/E442).',
+            'pumpStderr' => 'the E440 idle pump: 16 bounded passes over the SAME deadline-less '
+                . 'drain above, documented no-op on closed pipes — a budget here would bound '
+                . 'a loop that cannot already block (start() sets fd 2 non-blocking, re-asserted '
+                . 'locally).',
+        ];
+
+        $derived = $this->methodsTouchingStreamPrimitives(StdioMcpServer::class);
+
+        // THE NON-DEGENERACY FLOOR: the scanner must still SEE the original five.
+        // Without this row, a scanner silently broken to "matches nothing" would
+        // green the loop below — the roster being empty is the failure mode of
+        // derived instruments, so it gets its own assertion.
         foreach (['request', 'notify', 'writeLine', 'readLine', 'readResponse'] as $method) {
+            $this->assertArrayHasKey(
+                $method,
+                $derived,
+                "the scanner no longer finds $method() among the stream-primitive methods, "
+                . 'which means either the primitive needles drifted or the class stopped '
+                . 'reading its pipes where this instrument expects',
+            );
+        }
+
+        // THE KNOWN POSITIVE, same code path, so the loop below is never proven
+        // vacuous: a deadline-less fwrite into $this->pipes exists in THIS test
+        // class and must be flagged there (and must not be, on StdioMcpServer —
+        // it lives in no other class either, so no cross-class false positive).
+        $selfScan = $this->methodsTouchingStreamPrimitives(self::class);
+        $this->assertArrayHasKey(
+            'knownPositiveDeadlineFixture',
+            $selfScan,
+            'the scanner did not flag its own deliberate positive — the derivation is dead',
+        );
+
+        foreach ($derived as $method => $needles) {
+            if (isset($accounted[$method])) {
+                continue;
+            }
+
             $reflected = new \ReflectionMethod(StdioMcpServer::class, $method);
             $names = array_map(static fn (\ReflectionParameter $p): string => $p->getName(), $reflected->getParameters());
 
             $this->assertContains(
                 'deadline',
                 $names,
-                "$method() has no \$deadline parameter, so the handshake budget stops somewhere "
-                . 'short of it',
+                "$method() touches " . implode(', ', $needles) . ' but has no $deadline parameter, '
+                . 'so the handshake budget stops somewhere short of it — thread the budget or '
+                . 'account for the exception in the roster above',
             );
         }
-
+ 
         // FLATTENED, not raw: both needles below are single lines today, and a
         // reformat that wrapped either argument list would have reddened this row
         // without anything having broken. Collapsing runs of whitespace keeps the
@@ -208,6 +266,124 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             . 'sits unbounded between two bounded exchanges',
         );
     }
+
+    /**
+     * Never executed. Exists so the scanner has a POSITIVE to find on a file
+     * where it is allowed to miss nothing: a deadline-less write into
+     * `$this->pipes`, exactly the shape the derivation hunts for. If a future
+     * edit ever makes the scanner blind to this, the derived-roster row above
+     * reds — which is the entire point of Rule 15's known positive.
+     */
+    private function knownPositiveDeadlineFixture(): void
+    {
+        \fwrite($this->pipes, 'x');
+    }
+
+    /** Deliberately untyped-looking on purpose: the fixture's fwrite needs A property. */
+    private mixed $pipes = null;
+
+    /**
+     * Walk a class's tokens and return every method whose BODY (comments
+     * stripped — prose about a primitive must not nominate its author) contains
+     * one of the fd-reading/writing needles. => method name => matched needles.
+     *
+     * Flat classes only (brace depth returns to 0 at every method end, and the
+     * target files declare no nested class bodies or T_FN primitives over the
+     * needles); the failure mode of the simplification is a MISSED method, and
+     * the non-degeneracy floor above is what catches that.
+     *
+     * @return array<string, list<string>>
+     */
+    private function methodsTouchingStreamPrimitives(string $className): array
+    {
+        $file = (new \ReflectionClass($className))->getFileName();
+        $this->assertIsString($file, "no source file for {$className}");
+
+        // Direct fd use AND the conduit calls that reach it: a method one hop
+        // from the pipe without a budget is the same hole, and it is exactly the
+        // shape (send()) this derivation was written to catch.
+        $needles = [
+            'stream_select(', 'fwrite($this->pipes', 'fread($this->pipes', 'fflush($this->pipes',
+            '$this->writeLine(', '$this->readLine(', '$this->readResponse(', '$this->absorbStderr(',
+        ];
+
+        $tokens = token_get_all((string) file_get_contents($file));
+        $methods = [];
+        $current = null;
+        $depth = 0;
+        $opened = false;
+        $awaitingName = false;
+        $body = '';
+
+        foreach ($tokens as $token) {
+            if (is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
+                continue; // THE POINT OF WALKING TOKENS rather than text.
+            }
+
+            $text = is_array($token) ? $token[1] : $token;
+
+            if ($awaitingName) {
+                if (is_array($token) && $token[0] === T_WHITESPACE) {
+                    continue;
+                }
+                if (is_array($token) && $token[0] === T_STRING) {
+                    $current = $token[1];
+                    $body = '';
+                    $depth = 0;
+                    $opened = false;
+                }
+                // Anything else (`(` for a closure, `&` for by-ref returns
+                // already consumed): abandon the nomination.
+                $awaitingName = false;
+
+                continue;
+            }
+
+            if (is_array($token) && $token[0] === T_FUNCTION) {
+                $awaitingName = true;
+
+                continue;
+            }
+
+            if ($current === null) {
+                continue;
+            }
+
+            if ($text === '{') {
+                $depth++;
+                $opened = true;
+
+                continue;
+            }
+
+            if ($text === '}') {
+                $depth--;
+                if ($opened && $depth === 0) {
+                    $hits = [];
+                    foreach ($needles as $needle) {
+                        if (str_contains($body, $needle)) {
+                            $hits[] = $needle;
+                        }
+                    }
+                    if ($hits !== []) {
+                        $methods[$current] = $hits;
+                    }
+                    $current = null;
+                }
+
+                continue;
+            }
+
+            if (is_array($token) && $token[0] === T_WHITESPACE) {
+                continue; // Flatten as we go; needles contain no whitespace.
+            }
+
+            $body .= $text;
+        }
+
+        return $methods;
+    }
+
 
     /**
      * THE TRIPWIRE, and the reason this file does not simply repeat the finding's
