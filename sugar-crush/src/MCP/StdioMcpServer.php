@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Support\ProcessReaper;
 
 final class StdioMcpServer implements McpServer
 {
@@ -17,16 +18,6 @@ final class StdioMcpServer implements McpServer
 
     /** @var array{0: resource, 1: resource, 2: resource}|null */
     private $pipes = null;
-
-    /**
-     * Shutdown escalation budgets, matching
-     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend}'s: one second
-     * for a well-behaved child to honour SIGTERM, one more after signal 9, and a
-     * 5ms poll so a prompt exit is not rounded up to the whole budget.
-     */
-    private const TERMINATE_GRACE_SECONDS = 1.0;
-    private const KILL_GRACE_SECONDS = 1.0;
-    private const POLL_INTERVAL_US = 5000;
 
     /** Monotonic JSON-RPC request id — avoids collisions that `time()` causes. */
     private int $nextId = 0;
@@ -429,21 +420,15 @@ final class StdioMcpServer implements McpServer
             // drain here would collect bytes nothing can ever read.
             $this->closePipes();
 
-            proc_terminate($this->process);
-
-            if (!self::waitForExit($this->process, self::TERMINATE_GRACE_SECONDS)) {
-                // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant:
-                // that constant is defined by ext-pcntl, and naming an optional
-                // extension's symbol on a shutdown path would make the shutdown
-                // path itself fatal where the extension is absent.
-                proc_terminate($this->process, 9);
-                // Unchecked on purpose: after signal 9 the only way to still be
-                // running is an uninterruptible kernel wait, and `proc_close()`
-                // below is then the least-bad option left.
-                self::waitForExit($this->process, self::KILL_GRACE_SECONDS);
-            }
-
-            proc_close($this->process);
+            // THE LADDER IS SHARED, NOT RE-INLINED — E407. The escalate-and-reap
+            // this method used to hand-roll (proc_terminate, a private
+            // waitForExit, signal 9, proc_close, plus private copies of the
+            // grace budgets) now lives once in ProcessReaper, whose class
+            // docblock carries the MEASURED proc_close-waits hazard that made
+            // the escalation necessary. The closePipes()-first guarantee above
+            // stays local: it is this server's reason-to-exit, not a property
+            // of the ladder.
+            ProcessReaper::terminateAndClose($this->process);
         }
         // Unconditional, because {@see stop()} above only reaches its own call
         // when the process handle is live: a connection torn down some other way
@@ -475,28 +460,6 @@ final class StdioMcpServer implements McpServer
                 fclose($pipe);
             }
         }
-    }
-
-    /**
-     * Poll `proc_get_status()` until the child is gone or the budget runs out;
-     * true if it exited. A bounded poll rather than a blocking wait, for the
-     * reason {@see stop()} exists at all: an unflagged wait is precisely the
-     * thing being replaced.
-     *
-     * @param resource $process
-     */
-    private static function waitForExit($process, float $budgetSeconds): bool
-    {
-        $deadline = microtime(true) + $budgetSeconds;
-
-        do {
-            if (!proc_get_status($process)['running']) {
-                return true;
-            }
-            usleep(self::POLL_INTERVAL_US);
-        } while (microtime(true) < $deadline);
-
-        return !proc_get_status($process)['running'];
     }
 
     /**

@@ -849,7 +849,10 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
 
     private function terminateGraceSeconds(): float
     {
-        return (float) (new \ReflectionClass(StdioMcpServer::class))->getConstant('TERMINATE_GRACE_SECONDS');
+        // The grace budget moved to the shared ladder with E407 — the server
+        // no longer owns a copy, and this bound is asserted against whatever
+        // stop() actually pays, which is now ProcessReaper's constant.
+        return (float) (new \ReflectionClass(\SugarCraft\Crush\Support\ProcessReaper::class))->getConstant('TERMINATE_GRACE_SECONDS');
     }
 
     /**

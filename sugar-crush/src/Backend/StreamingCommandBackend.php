@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
  * Streaming-capable backend that shells out to an external command and calls
@@ -126,26 +127,6 @@ final class StreamingCommandBackend implements Backend
      * rather than truncated; it fires only on silence.
      */
     private const POST_EXIT_GRACE_SECONDS = 2.0;
-
-    /**
-     * Seconds a SIGTERMed child gets to exit on its own before it is sent
-     * signal 9.
-     *
-     * `proc_close()` WAITS, so without this escalation a child that ignores
-     * SIGTERM holds the expiry path open for as long as it likes. MEASURED on
-     * this tree with the command string `"trap '' TERM; cat > /dev/null; sleep
-     * 8"` and `$idleTimeout = 1`: 8.00s to return without the escalation,
-     * 2.01s with it (the deadline, then this grace, then signal 9).
-     *
-     * The trap has to be in the DIRECT child for that: the same trap written
-     * inside a *script file* does not reproduce it, because `proc_open`'s
-     * direct child is then the `sh -c` that runs the script and `sh` does not
-     * ignore the signal — it dies in ~50ms and orphans the script.
-     */
-    private const TERMINATE_GRACE_SECONDS = 1.0;
-
-    /** Seconds to wait for a signal-9'd child before calling `proc_close()` anyway. */
-    private const KILL_GRACE_SECONDS = 1.0;
 
     /**
      * @param string|list<string> $command Command + args. Pass a
@@ -521,55 +502,37 @@ final class StreamingCommandBackend implements Backend
     }
 
     /**
-     * SIGTERM the child, wait a BOUNDED moment, then signal 9 — so the expiry
-     * path returns in bounded time even though `proc_close()` blocks.
+     * Escalate the child to exit — TERM, bounded grace, signal 9 — WITHOUT
+     * closing the handle: {@see finish()} `proc_close()`s it itself (on both
+     * the expired and the completed path) and reads the child's exit status
+     * from that call, which the shared reaper's closing variant would consume.
      *
-     * Signal 9 as an integer literal, not `SIGKILL`: that constant is defined
-     * by ext-pcntl, and naming it would put an optional extension's symbol on
-     * an error path that must not itself fatal. Same reason the SIGTERM above
-     * is `proc_terminate()`'s own default rather than a named 15.
+     * E407 FOLDED THIS ONTO ProcessReaper. The ladder used to live here with
+     * private grace budgets; MEASURED on this tree at the time, with the
+     * command string `"trap '' TERM; cat > /dev/null; sleep 8"` and
+     * `$idleTimeout = 1`: 8.00s to return without escalation, 2.01s with it
+     * (the deadline, then the TERM grace, then signal 9) — those numbers still
+     * hold through the shared implementation, whose own docblocks carry why an
+     * unbounded `proc_close()` wait is the hazard. The budgets now read
+     * `ProcessReaper::TERMINATE_GRACE_SECONDS` + `KILL_GRACE_SECONDS`, and
+     * signal 9 stays an integer literal there for the ext-pcntl reason stated
+     * there. The one behavioural difference the fold introduces is an
+     * improvement: a child that already exited is no longer signalled at all
+     * (ProcessReaper checks liveness first), matching the class contract that
+     * a normal completion pays no signal.
      *
-     * This signals only the DIRECT child. A string command's direct child is
-     * the shell, so its own children are ORPHANED rather than killed — the
-     * grandchildren of `sh -c 'curl … | jq …'` keep running and, if they
-     * inherited the pipes, keep them open. Nothing here kills a process tree;
-     * what it guarantees is that this method returns.
+     * What the fold did NOT change: this signals only the DIRECT child. A
+     * string command's direct child is the shell, so its own children are
+     * ORPHANED rather than killed — the grandchildren of
+     * `sh -c 'curl … | jq …'` keep running and, if they inherited the pipes,
+     * keep them open. Nothing here kills a process tree; what it guarantees is
+     * that this method returns.
+     *
+     * @param resource $proc
      */
     private static function terminateAndReap($proc): void
     {
-        proc_terminate($proc);
-
-        if (self::waitForExit($proc, self::TERMINATE_GRACE_SECONDS)) {
-            return;
-        }
-
-        proc_terminate($proc, 9);
-        // Unchecked on purpose: after signal 9 the only way to still be running
-        // is an uninterruptible kernel wait, and `proc_close()` below is then
-        // the least-bad option left — there is no non-blocking reap available
-        // without ext-pcntl, and leaking the handle would leak the zombie the
-        // reap exists to prevent.
-        self::waitForExit($proc, self::KILL_GRACE_SECONDS);
-    }
-
-    /**
-     * Poll `proc_get_status()` until the child is gone or the budget runs out;
-     * true if it exited. A bounded poll rather than a blocking wait, for the
-     * same reason {@see \SugarCraft\Crush\Runtime::reapKilled()} uses `WNOHANG`:
-     * an unflagged wait hands the caller's deadline to the child.
-     */
-    private static function waitForExit($proc, float $budgetSeconds): bool
-    {
-        $deadline = microtime(true) + $budgetSeconds;
-
-        do {
-            if (!proc_get_status($proc)['running']) {
-                return true;
-            }
-            usleep(self::POLL_INTERVAL_US);
-        } while (microtime(true) < $deadline);
-
-        return !proc_get_status($proc)['running'];
+        ProcessReaper::terminateAndAwaitExit($proc);
     }
 
     /**
@@ -609,7 +572,8 @@ final class StreamingCommandBackend implements Backend
      * ONE BOUNDED EXCEPTION TO "NEVER BLOCKS", stated rather than glossed:
      * {@see finish()} on the EXPIRED path calls {@see terminateAndReap()},
      * which polls with `usleep` for at most
-     * TERMINATE_GRACE_SECONDS + KILL_GRACE_SECONDS. That is a teardown of a
+     * ProcessReaper::TERMINATE_GRACE_SECONDS + KILL_GRACE_SECONDS (the budgets
+     * moved to the shared reaper with E407). That is a teardown of a
      * child that has already stopped answering, on a turn that has already
      * failed, and only when a caller opted into `$idleTimeout` at all — not the
      * completion path this method exists to unblock.

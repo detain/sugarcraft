@@ -24,11 +24,14 @@ namespace SugarCraft\Crush\Support;
  * with the poll interval or the grace budget subtly different, so the ladder
  * lives here once.
  *
- * THE TWO EXISTING COPIES ARE NOT MIGRATED IN THIS CHANGE — they are in files
- * this lane does not own, and both are already correct and already tested
- * ({@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerShutdownTest}). Their
- * migration is recorded as a follow-up rather than done half-way, because a
- * partially-migrated ladder is worse than two documented copies.
+ * THE TWO EXISTING COPIES ARE MIGRATED — E407 folded both
+ * {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} and
+ * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()}
+ * onto the ladder here (their private `waitForExit()`s and grace constants are
+ * gone; the budgets they documented are THIS class's constants now), alongside
+ * E366's newer consumers. StdioMcpServer takes {@see terminateAndClose()};
+ * StreamingCommandBackend takes {@see terminateAndAwaitExit()}, because its
+ * caller reaps the handle itself to read the child's exit status.
  *
  * WHAT THIS DELIBERATELY IS NOT: a detached-watchdog spawner. The suite's
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushDispatchTest} arms an
@@ -45,11 +48,10 @@ namespace SugarCraft\Crush\Support;
 final class ProcessReaper
 {
     /**
-     * Shutdown escalation budgets, matching
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s and
-     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend}'s: one second for
-     * a well-behaved child to honour SIGTERM, one more after signal 9, and a 5ms
-     * poll so a prompt exit is not rounded up to the whole budget.
+     * Shutdown escalation budgets — since E407 the ONLY copies in the package
+     * (the two earlier private sets these matched are deleted): one second for
+     * a well-behaved child to honour SIGTERM, one more after signal 9, and a
+     * 5ms poll so a prompt exit is not rounded up to the whole budget.
      */
     public const TERMINATE_GRACE_SECONDS = 1.0;
     public const KILL_GRACE_SECONDS = 1.0;
@@ -75,25 +77,57 @@ final class ProcessReaper
             return null;
         }
 
-        // Already exited on its own — the overwhelmingly common case. Skip
-        // straight to the reap so a normal completion pays no signal at all
-        // and no part of the escalation budget.
-        if (self::isRunning($process)) {
-            \proc_terminate($process);
-
-            if (!self::waitForExit($process, self::TERMINATE_GRACE_SECONDS)) {
-                // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant:
-                // that constant is defined by ext-pcntl, and naming an optional
-                // extension's symbol on a shutdown path would make the shutdown
-                // path itself fatal where the extension is absent.
-                \proc_terminate($process, 9);
-                // Unchecked on purpose — see the class docblock for what is left
-                // after signal 9 and why `proc_close()` is the answer to it.
-                self::waitForExit($process, self::KILL_GRACE_SECONDS);
-            }
-        }
+        self::terminateAndAwaitExit($process);
 
         return \proc_close($process);
+    }
+
+    /**
+     * SIGTERM, poll, signal 9, poll — and STOP THERE: never `proc_close()`.
+     *
+     * THE VARIANT FOR THE CALLER THAT REAPS ITSELF.
+     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::finish()} closes
+     * the handle on BOTH the expired and the completed path and reads the exit
+     * status out of `proc_close()`'s return; giving it {@see terminateAndClose()}
+     * would double-close (a TypeError on the consumed resource) and hide the
+     * status. So the escalation lives here and the reap stays there.
+     *
+     * Returns whether the child is gone by the end of the budgets — true also
+     * for a non-resource argument, which is "nothing is running" rather than
+     * "nothing matched", keeping the idempotent-teardown contract of
+     * {@see terminateAndClose()} intact underneath it.
+     *
+     * @param mixed $process the value a `proc_open()` call returned
+     */
+    public static function terminateAndAwaitExit(mixed $process): bool
+    {
+        if (!\is_resource($process)) {
+            return true;
+        }
+
+        // Already exited on its own — the overwhelmingly common case. Skip
+        // straight out so a normal completion pays no signal at all
+        // and no part of the escalation budget.
+        if (!self::isRunning($process)) {
+            return true;
+        }
+
+        \proc_terminate($process);
+
+        if (self::waitForExit($process, self::TERMINATE_GRACE_SECONDS)) {
+            return true;
+        }
+
+        // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant:
+        // that constant is defined by ext-pcntl, and naming an optional
+        // extension's symbol on a shutdown path would make the shutdown
+        // path itself fatal where the extension is absent.
+        \proc_terminate($process, 9);
+        // The result is reported, not acted on — after signal 9 the only way
+        // to still be running is an uninterruptible kernel wait, and each
+        // caller's reap is then the least-bad option left (see the class
+        // docblock for why no watchdog covers this).
+        return self::waitForExit($process, self::KILL_GRACE_SECONDS);
     }
 
     /**
