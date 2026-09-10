@@ -618,27 +618,26 @@ final class AgentManager
                 // values. Runtime cannot do that because its $onToken sink is
                 // append-only and there is no un-emit.
                 //
-                // WHAT DOES NOT ROLL BACK, stated because a rollback claim that
-                // over-reaches is worse than none. An attempt also runs
-                // evaluateToolCalls(), which is not a read: it calls
-                // PermissionGate::evaluate() — `decide($call, commitAutoStrikes:
-                // true)`, which advances the Auto-mode circuit-breaker counters
-                // — and then the $permissionApprover, which is a BLOCKING
-                // USER-FACING PROMPT. Neither is undoable, and neither is
-                // undone. Measured: one Write call plus a 503 mid-stream shows
-                // the user 2 approval prompts for the same tool call and
-                // double-commits its strikes.
-                //
-                // So this is the same append-only argument that stops Runtime
-                // from retrying mid-stream, applied to a different channel and
-                // reaching the opposite answer — which is defensible only
-                // because the seam has no production caller yet (backlog E28
-                // carries the measurement and the severity). The fix, when the
-                // seam is wired, is to hoist tool evaluation out of the retried
-                // region or make it idempotent per call id; it is NOT to widen
-                // this comment.
+                // THE SAME PULL ARGUMENT DOES NOT HOLD FOR PERMISSIONS, and
+                // this is why evaluateToolCalls() is NOT called inside the
+                // retried region. A gate evaluation is not a read: it commits
+                // Auto-mode circuit-breaker strikes through
+                // PermissionGate::evaluate() and can block on the
+                // $permissionApprover — a USER-FACING PROMPT with no un-emit,
+                // exactly Runtime's append-only objection applied to a channel
+                // this loop cannot roll back. So each attempt COLLECTS its tool
+                // calls and the accepted attempt's collection is evaluated once
+                // after the loop (E28: before this hoist, a 503 landing after
+                // one Write's tool_calls priced at two prompts and two strikes
+                // for the same call). A discarded attempt now costs the gate
+                // nothing it can see.
                 for ($attempt = 1; $attempt <= TransientFailure::MAX_ATTEMPTS; $attempt++) {
                     $lastAttempt = $attempt === TransientFailure::MAX_ATTEMPTS;
+
+                    // Per-attempt: a rollback rewinds this alongside the
+                    // output, so only the ACCEPTED attempt's calls are ever
+                    // seen by the gate or the approver.
+                    $streamedToolCalls = [];
 
                     // Snapshot rather than zero: a SubAgent may already carry
                     // output and usage from before this call, and a retry must
@@ -652,19 +651,20 @@ final class AgentManager
 
                     try {
                         foreach ($this->provider->completeStream($request) as $response) {
-                            // Evaluate tool calls through the permission gate if set.
-                            // A denial throws from in here, and is classified
-                            // permanent by TransientFailure's allow-list - which is
-                            // the whole reason that classifier is an allow-list and
-                            // not a deny-list.
-                            // NO LONGER GATED ON `permissionGate !== null`: the
-                            // agent's own tool grant is enforced in there too
-                            // ({@see refuseCallOutsideGrant()}), and a
+                            // COLLECT, do not evaluate (E28). These calls reach
+                            // the gate and the approver only once this attempt
+                            // is accepted — {@see the post-loop evaluation}.
+                            // evaluateToolCalls() itself is unchanged in kind:
+                            // it is no longer gated on `permissionGate !== null`
+                            // because the agent's own grant is enforced in
+                            // there too ({@see refuseCallOutsideGrant()}), and a
                             // declaration does not stop being the agent's
                             // statement about itself because the caller
                             // attached no gate.
                             if ($response->toolCalls !== null) {
-                                $this->evaluateToolCalls($response->toolCalls, $subAgent);
+                                foreach ($response->toolCalls as $toolCall) {
+                                    $streamedToolCalls[] = $toolCall;
+                                }
                             }
 
                             // Accumulated per chunk so a mid-flight sub-agent already
@@ -699,7 +699,17 @@ final class AgentManager
                     $subAgent->output = $outputBefore;
                     $subAgent->tokensUsed = $tokensBefore;
                     $subAgent->costUsd = $costBefore;
+                    $streamedToolCalls = [];
                     TransientFailure::backoff($attempt);
+                }
+
+                // E28: one evaluation, for the ACCEPTED attempt only. A denial
+                // still ends the sub-agent — it just throws after the stream
+                // has settled rather than mid-stream, which the pull-snapshot
+                // readers of SubAgent::$output cannot distinguish beyond one
+                // streamed chunk that had already arrived anyway.
+                if ($streamedToolCalls !== []) {
+                    $this->evaluateToolCalls($streamedToolCalls, $subAgent);
                 }
             } else {
                 $response = null;
@@ -1409,6 +1419,7 @@ final class AgentManager
         // settleAbandoned() exists to close.
         try {
             $toolGrants = $this->resolveBatchGrants($agents);
+            $systemPrompts = $this->resolveBatchSystemPrompts($agents, $request->systemPrompt);
         } catch (\RuntimeException $failure) {
             $this->settleAbandoned(
                 $batch,
@@ -1433,8 +1444,28 @@ final class AgentManager
                 return $toolGrants[$agent->id];
             };
 
+        // E654: per-agent system prompt, resolved BEFORE dispatch for the same
+        // reason the grants are — a batch member with an unresolvable skill
+        // must stop the whole batch rather than run under a spliced-together
+        // lie. Null map means "nothing declared anything", and the pool then
+        // forwards the shared prompt verbatim.
+        $systemPromptResolver = $systemPrompts === null
+            ? null
+            : static function (SubAgent $agent) use ($systemPrompts): ?string {
+                if (!array_key_exists($agent->id, $systemPrompts)) {
+                    throw new \RuntimeException(sprintf(
+                        'SubAgent "%s" reached the worker pool without a resolved system prompt; every batch member '
+                        . 'must speak with its own declaration, so it runs under nobody\'s rather than '
+                        . 'a sibling\'s.',
+                        $agent->id,
+                    ));
+                }
+
+                return $systemPrompts[$agent->id];
+            };
+
         try {
-            yield from $this->drain($pool->executeAll($agents, $request, $toolGrantResolver));
+            yield from $this->drain($pool->executeAll($agents, $request, $toolGrantResolver, $systemPromptResolver));
         } finally {
             // The pool yields a result for every sub-agent it RAN, and none for
             // the ones it did not: withStopOnFirstFailure() empties the queue on
@@ -1519,6 +1550,79 @@ final class AgentManager
             $subAgent->completedAt ??= new \DateTimeImmutable();
             $subAgent->error ??= $reason;
         }
+    }
+
+    /**
+     * Every batch member's own system prompt, keyed by SubAgent id — or null
+     * when no member declares anything, in which case the caller's shared
+     * prompt forwards verbatim through the pool (E654).
+     *
+     * WHY THIS EXISTS. The pool's dispatch loop rebuilt each member's
+     * CompleteRequest from the caller's shared one, including `systemPrompt`
+     * — so the per-agent prompts {@see executeSubAgent()} builds from the
+     * agent's declaration never reached the batch path. Two members with
+     * different roles ran with whichever prompt the request-carrier wrote,
+     * the same sibling-governance defect the tool-grant resolver above
+     * exists to end, one field over.
+     *
+     * THE MERGE IS ADDITIVE, BY DECISION. executeSubAgent() has no shared
+     * prompt to honour — it owns the request end to end — but executeAll's
+     * callers (Chat's batch turn, a workflow stage) carry session context in
+     * that field that nothing else re-supplies. Dropping it would trade one
+     * wrong prompt for a whole class of contextless runs. So a declaring
+     * agent gets `shared . own + skills` and a silent member keeps the
+     * shared prompt byte-for-byte as before.
+     *
+     * FAILS CLOSED, BEFORE DISPATCH, LIKE THE GRANTS. A granted-but-missing
+     * skill refuses the batch with the name in hand — the E643 severity
+     * choice applied at batch scale, for the E643 reason: a prompt that
+     * advertises a skill body nobody will deliver is a prompt that lies.
+     *
+     * @param SubAgent[] $agents
+     * @return ?array<string, ?string>
+     * @throws \RuntimeException When a member's granted skill does not
+     *         resolve, before the pool has forked anything.
+     */
+    private function resolveBatchSystemPrompts(array $agents, ?string $sharedPrompt): ?array
+    {
+        $prompts = [];
+        $anyDeclared = false;
+
+        foreach ($agents as $agent) {
+            // DECLARED is answered from the RAW prompt (or a skill), never
+            // from the composed systemPrompt(): that method also builds the
+            // <env> block, so it is never empty for any agent and a `$own
+            // === ''` test here would silently classify every member as a
+            // declarer. Pinned by the reaching E654 test.
+            if ($agent->agent->prompt === '' && $agent->agent->skillNames === []) {
+                $prompts[$agent->id] = $sharedPrompt;
+                continue;
+            }
+
+            $anyDeclared = true;
+            $own = $agent->agent->systemPrompt();
+
+            foreach ($agent->agent->skillNames as $skillName) {
+                $skill = $this->skillRegistry->get($skillName);
+                if ($skill === null) {
+                    throw new \RuntimeException(sprintf(
+                        'Agent "%s" is granted the skill "%s", which this session\'s SkillRegistry does '
+                        . 'not resolve. The whole batch is refused before dispatch: a member running with '
+                        . 'a prompt that advertises a skill it will never receive is the lie E643 exists to end.',
+                        $agent->agent->name,
+                        $skillName,
+                    ));
+                }
+
+                $own .= $skill->systemPromptContribution();
+            }
+
+            $prompts[$agent->id] = ($sharedPrompt === null || $sharedPrompt === '')
+                ? $own
+                : $sharedPrompt . "\n\n" . $own;
+        }
+
+        return $anyDeclared ? $prompts : null;
     }
 
     /**

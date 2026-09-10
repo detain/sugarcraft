@@ -628,6 +628,220 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(40, $manager->elapsedSeconds('pool-agent'));
     }
 
+    /**
+     * E28: a transient failure mid-stream used to re-run evaluateToolCalls()
+     * on the retry, because the evaluation lived INSIDE the retried region.
+     * The user-visible price measured at the entry: one Write plus a 503
+     * showed TWO approval prompts for the same tool call. The hoist moved
+     * collection into the attempt and evaluation after the accepted
+     * attempt — so exactly one prompt, on a stream that still really
+     * retried (both half-assertions below; either one alone is satisfiable
+     * by a provider that never retried at all).
+     */
+    public function testAMidStreamRetryApprovesEachToolCallExactlyOnce(): void
+    {
+        $prompts = 0;
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: static fn(\SugarCraft\Crush\Permissions\PermissionMode $mode)
+                => new \SugarCraft\Crush\Permissions\PermissionGate($mode),
+            permissionApprover: static function () use (&$prompts): bool {
+                $prompts++;
+
+                return true;
+            },
+        );
+        $manager->register(new Agent(
+            name: 'retry-gate-agent',
+            description: 'retry-gate-agent description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['Write'],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
+        $subAgent = $manager->createSubAgent(
+            'retry-gate-agent',
+            'Gate retry',
+            \SugarCraft\Crush\Permissions\PermissionMode::Default,
+        );
+
+        $call = new \SugarCraft\Crush\ToolCall(name: 'Write', arguments: ['path' => 'x.txt'], id: 'call-1');
+
+        $this->provider->method('supportsStreaming')->willReturn(true);
+        $attempt = 0;
+        $this->provider->method('completeStream')->willReturnCallback(
+            function () use (&$attempt, $call): \Generator {
+                $attempt++;
+                yield new CompleteResponse(content: 'partial', toolCalls: [$call]);
+                if ($attempt === 1) {
+                    yield new CompleteResponse(content: '', isError: true, errorTransient: true);
+
+                    return;
+                }
+                yield new CompleteResponse(content: ' done');
+            },
+        );
+
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(2, $attempt, 'the transient error must still have driven exactly one retry');
+        $this->assertSame(1, $prompts, 'a rolled-back attempt must not ask the user about a discarded tool call');
+        $this->assertSame('partial done', $subAgent->output);
+    }
+
+    /**
+     * E654: executeAll() forwarded the CALLER's shared systemPrompt to every
+     * batch member, so a member whose declaration carried its own prompt ran
+     * under a sibling's words — the sibling-governance defect the tool-grant
+     * resolver already ends one field over. A member that declares NOTHING
+     * still gets the shared prompt byte-identical (the left assertion is the
+     * control the right one is measured against), and a granted-but-missing
+     * skill refuses the WHOLE batch before the pool dispatches anything.
+     */
+    public function testExecuteAllSpeaksEachMemberOwnSystemPrompt(): void
+    {
+        $captured = [];
+        $capture = function (SubAgent $agent, CompleteRequest $request) use (&$captured): AgentResult {
+            $captured[$agent->id] = $request->systemPrompt;
+
+            return new AgentResult(
+                agentId: $agent->id,
+                status: AgentStatus::Completed,
+                output: 'ok',
+                tokensUsed: 1,
+                costUsd: 0.0,
+            );
+        };
+        $executor = new class($capture) implements ExecutorInterface {
+            /** @param \Closure(SubAgent, CompleteRequest): AgentResult $onExecute */
+            public function __construct(private \Closure $onExecute) {}
+
+            public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                return ($this->onExecute)($agent, $request);
+            }
+
+            public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+
+            public function cancelAll(): void {}
+        };
+
+        $manager = new AgentManager(
+            $this->provider,
+            $this->skillRegistry,
+            new AgentWorkerPool(2, $executor),
+        );
+        $agentA = $this->createAgent(name: 'own-prompt-agent', prompt: 'A-OWN');
+        $manager->register($agentA);
+        $manager->register($this->createAgent(name: 'silent-prompt-agent', prompt: ''));
+        $declaring = $manager->createSubAgent('own-prompt-agent', 'task a');
+        $silent = $manager->createSubAgent('silent-prompt-agent', 'task b');
+
+        iterator_to_array($manager->executeAll(
+            [$declaring, $silent],
+            new CompleteRequest(model: 'test-model', messages: [], systemPrompt: 'SHARED'),
+        ));
+
+        // The agent's own prompt is what systemPrompt() composes — including
+        // the <env> block executeSubAgent() sends — so the expectation is
+        // built from the same call rather than from the bare prompt string.
+        $this->assertSame(
+            "SHARED\n\n" . $agentA->systemPrompt(),
+            $captured[$declaring->id],
+            'a declaring agent keeps the session prompt AND speaks its own',
+        );
+        $this->assertSame(
+            'SHARED',
+            $captured[$silent->id],
+            'a silent member forwards the shared prompt verbatim',
+        );
+    }
+
+    /**
+     * E654, the fail-closed half: an unresolvable granted skill stops the
+     * whole batch BEFORE dispatch — no member runs with a prompt advertising
+     * a body it will never receive (the E643 severity choice at batch scale).
+     */
+    public function testExecuteAllRefusesTheWholeBatchOnAMissingGrantedSkill(): void
+    {
+        $dispatched = 0;
+        $counter = function (SubAgent $agent) use (&$dispatched): void {
+            $dispatched++;
+        };
+        $executor = new class($counter) implements ExecutorInterface {
+            /** @param \Closure(SubAgent): void $onDispatch */
+            public function __construct(private \Closure $onDispatch) {}
+
+            public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                ($this->onDispatch)($agent);
+
+                return new AgentResult(
+                    agentId: $agent->id,
+                    status: AgentStatus::Completed,
+                    output: 'ok',
+                    tokensUsed: 1,
+                    costUsd: 0.0,
+                );
+            }
+
+            public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+
+            public function cancelAll(): void {}
+        };
+
+        $manager = new AgentManager(
+            $this->provider,
+            $this->skillRegistry,
+            new AgentWorkerPool(2, $executor),
+        );
+        $manager->register($this->createAgent(name: 'clean-member', prompt: 'fine'));
+        $manager->register(new Agent(
+            name: 'bad-skill-agent',
+            description: 'bad-skill-agent description',
+            prompt: 'I advertise a skill I do not have',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: ['skill-that-does-not-exist-' . uniqid('', true)],
+            hooks: [],
+            isActive: true,
+        ));
+        $clean = $manager->createSubAgent('clean-member', 'task c');
+        $bad = $manager->createSubAgent('bad-skill-agent', 'task d');
+
+        try {
+            iterator_to_array($manager->executeAll(
+                [$clean, $bad],
+                new CompleteRequest(model: 'test-model', messages: [], systemPrompt: 'SHARED'),
+            ));
+            $this->fail('a batch member with an unresolvable granted skill must not run');
+        } catch (\RuntimeException $caught) {
+            $this->assertStringContainsString('skill-that-does-not-exist', $caught->getMessage());
+        }
+
+        $this->assertSame(0, $dispatched, 'the refusal lands before the pool dispatches ANY member');
+        $this->assertSame(
+            \SugarCraft\Crush\Agents\SubAgent::STATUS_STOPPED,
+            $clean->status,
+            'the never-dispatched sibling is settled (stop-shape) with the reason, not left pending-forever',
+        );
+    }
+
     public function testStoppingASubAgentFreezesElapsedSeconds(): void
     {
         $this->agentManager->register($this->createAgent(name: 'stop-agent'));
