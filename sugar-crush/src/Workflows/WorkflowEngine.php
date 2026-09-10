@@ -239,7 +239,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *           correct DORMANT value, not as enforcement: the only code that
      *           reads `SubAgent::$permissionGate` is inside
      *           {@see AgentManager::executeSubAgent()}'s streaming-provider
-     * path inside `AgentManager::executeSubAgent()`, and this engine
+     *           path, and this engine
      *           never enters it — every dispatch here goes through
      *           `AgentWorkerPool::executeOne()` or `executeAll()`, and the
      *           manager's `executeAll()` drains the pool without touching the

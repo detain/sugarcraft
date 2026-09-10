@@ -857,11 +857,11 @@ final class Runtime
      *     class, plus the `Cli/Bootstrap::agentManager()` roster loop, `App::dispatchSkill()` and the
      *     last-resort fallback inside `Agents\Agent::systemPrompt()` itself.
      *     THE SYMBOL IS THE CITATION FOR THAT THIRD ONE and the line number
-     *     is only a direction (`Agents/Agent.php:985`, MEASURED in this merge
-     *     with `/usr/bin/grep -n 'EnvironmentBlock::capture(' src/Agents/Agent.php`
-     *     — the one hit that is a STATEMENT rather than doc-block prose; that
-     *     command returns EIGHT hits in `Agents/Agent.php` and the other seven
-     *     are prose mentions of the name, a domain spelled out here because
+     *     is only a direction (the last-resort STATEMENT inside
+     *     `Agent::systemPrompt()` — the symbol is the citation; MEASURED with
+     *     `/usr/bin/grep -n 'EnvironmentBlock::capture(' src/Agents/Agent.php`
+     *     — that command returns exactly one STATEMENT hit and every other hit is a
+     *     prose mention of the name whose count grows with this file itself, a domain spelled out here because
      *     this paragraph pins a different eight below),
      *     because this is the figure in this paragraph that has already
      *     rotted: it read `Agent.php:417`, which was exactly that statement

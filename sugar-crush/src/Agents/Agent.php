@@ -581,8 +581,8 @@ final readonly class Agent
      * reasoned about:
      *
      *   - `WorkflowEngine::executePipelineStage()`'s `foreach ($nestedStages as $nestedStage)`
-     * encloses that stage's `CompleteRequest` render - ONE RENDER PER NESTED PIPELINE
-     *     STAGE.
+     *     encloses that stage's `CompleteRequest` render - ONE RENDER PER NESTED
+     *     PIPELINE STAGE.
      *   - `WorkflowEngine::executeVerificationStage()` renders TWICE,
      * straight-line (the task agent first, then the
      * verifier), the verifier after the task's sub-agent has already run.
