@@ -912,8 +912,9 @@ final class AgentManager
      * WHAT IT DOES NOW, once `$toolUniverse` is supplied: an unresolved
      * declaration gets a second look against the unfiltered ceiling. A match
      * there means the shortfall is the SESSION's own narrowing — the grant
-     * SURVIVES, narrowed: the declaration is marked resolved and contributes no
-     * tool, because the operator removed that tool from every model in the
+     * SURVIVES, narrowed: the declaration drops out of the unresolved set
+     * (minusSessionNarrowing, not the registry's $matched marks) and contributes
+     * no tool, because the operator removed that tool from every model in the
      * session and re-widening a sub-agent past `disabledTools` is the exact
      * fail-open this bundle exists to close. No match anywhere means the name
      * never existed: refused, loudly, because a typo'd `Reed` must not silently
