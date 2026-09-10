@@ -14,8 +14,8 @@ use SugarCraft\Crush\ToolResult;
  * namespace, one `use` away from colliding with the `SugarCraft\Crush\Tools\Tool`
  * interface every live tool implements. Moving it into a distinct namespace
  * makes that collision unconstructible; nothing was deleted. The result type
- * stays the root-namespace pair (`SugarCraft\Crush\ToolResult`) the registry
- * has always spoken — see `ToolRegistry::execute()`.
+ * stays in the root namespace — `SugarCraft\Crush\ToolResult`, the type the
+ * registry has always spoken — see `ToolRegistry::execute()`.
  *
  * @readonly
  * @immutable

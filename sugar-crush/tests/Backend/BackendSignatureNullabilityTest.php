@@ -717,9 +717,10 @@ final class BackendSignatureNullabilityTest extends TestCase
      * back as `<unparsed>` (the guard reddening CORRECT code, and telling its
      * reader to add a question mark that is already there), and
      * `#[Foo] ?callable $a = null, callable $b = null` never reported `$b` at
-     * all (a real offender invisible). `src/ToolRegistry.php` carries
-     * `#[\SensitiveParameter]` today, so this was not hypothetical: it is what
-     * a widened scan would have hit first.
+     * all (a real offender invisible). `src/ToolRegistry.php` carried
+     * `#[\SensitiveParameter]` at measurement time (the attribute now lives on
+     * the moved `src/Registry/Tool.php` after E14), so this was not
+     * hypothetical: it is what a widened scan would have hit first.
      *
      * @dataProvider attributedSpellings
      */

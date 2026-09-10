@@ -188,10 +188,20 @@ final class ToolRegistryTest extends TestCase
     }
 
     /**
-     * E14 regression pin: the registry pair no longer lives in the root
-     * namespace, so a bare `SugarCraft\Crush\Tool` can never be declared
-     * again — that phantom name was one `use` away from colliding with the
-     * `SugarCraft\Crush\Tools\Tool` interface every live tool implements.
+     * E14 regression pin: the phantom bare `SugarCraft\Crush\Tool` — once a
+     * side declaration of `src/ToolRegistry.php`, one `use` away from
+     * colliding with the `SugarCraft\Crush\Tools\Tool` interface every live
+     * tool implements — must not be declared in this process.
+     * `class_exists(..., false)` observes in-process state only, which is
+     * exactly the in-scope vector: this suite drives `ToolRegistry`, so its
+     * file is already loaded, and re-adding the side class there would
+     * declare the name before this assertion runs. It deliberately does NOT
+     * claim the name can never be declared anywhere else.
+     * `autoload=true` is not used on purpose: an `*_exists()` call with
+     * autoloading is a resolution probe, banned by the
+     * `classifyFilePsr4Symbol()` token-gate doctrine (resolution consults
+     * `declaredTypes()`, never the autoloader — probing a mis-namespaced
+     * file makes Composer re-include it and the whole process dies rc 255).
      */
     public function testTheRootNamespaceDeclaresNoBareToolSymbol(): void
     {
