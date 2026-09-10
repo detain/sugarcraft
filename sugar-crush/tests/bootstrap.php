@@ -556,25 +556,33 @@ if (!stream_isatty(\STDIN)) {
  * green twice. Same binary, different terminal, different verdict; that is a
  * flake no reordering can fix, only hermeticity can.
  *
- * Pinning the documented fallback HERE, before the first test event, means
- * the probe never runs at all. 200x60 is deliberately the SAME viewport
- * `getTerminalSize()` already answers for a non-tty STDOUT, so nothing that
- * passes today sees a change; what changes is that a tty runner can no
- * longer feed its window into a snapshot. Tests that want a specific
+ * Pinning the documented fallback HERE, before the first test event, means no
+ * size-agnostic render upstream of the first later `resetSizeCache()` can
+ * reach the probe. That holds through the entire victims' window: the classes
+ * that reset after this point live in `tests/Tui/*` and `tests/Workflows/`,
+ * which path-sort after both victims. 200x60 is deliberately the SAME
+ * viewport `getTerminalSize()` already answers for a non-tty STDOUT, so
+ * nothing that passes today sees a change; what changes is that a tty runner
+ * can no longer feed its window into a snapshot. Tests that want a specific
  * viewport still call `setSize()` themselves and are unaffected.
  *
- * The other half of the fix lives in `tests/App/AppModelTest.php` and
- * `tests/App/SlashMenuTabCompletionTest.php` — the only size-touching classes
- * that run BEFORE the two victims: their tearDowns re-pin to this default
- * instead of calling `resetSizeCache()`, because a reset hands the next
- * size-agnostic `view()` straight back to `Tty(STDOUT)` — which is the whole
- * hole. `tests/Tui/RendererTest.php` still exercises the null-cache fallback
+ * The other half of the fix lives in `tests/App/AppModelTest.php`,
+ * `tests/App/SlashMenuTabCompletionTest.php` and
+ * `tests/App/HostedFrameReadsThePaneTest.php` — the size-touching classes
+ * that run BEFORE the two victims: they re-pin to this default instead of
+ * calling `resetSizeCache()`, because a reset hands the next size-agnostic
+ * `view()` straight back to `Tty(STDOUT)` — which is the whole hole.
+ * `tests/Tui/RendererTest.php` still exercises the null-cache fallback
  * explicitly; that probe path is its subject, taken in isolation, and it is
  * downstream of everything pinned here.
  *
  * `tests/TerminalSizeFallbackIsolationTest.php` pins this contract: it drives
  * the exact sequence — pinned default, size-agnostic render, forced small
- * ambient viewport — and a re-introduced null handoff fails as a clipped
- * transcript, not as a silent re-base.
+ * ambient viewport. State the reach honestly: the pinned-default polarity
+ * catches a re-introduced null handoff DETERMINISTICALLY ON TTY RUNNERS (the
+ * published shape that went red), while on a pipe runner a reintroduced NULL
+ * answers the same 60x200 fallback and stays silently green — the same
+ * asymmetry as the original flake. That is why the same file also asserts the
+ * fallback constant directly, with the probe armed by an explicit reset.
  */
 TuiRenderer::setSize(200, 60);

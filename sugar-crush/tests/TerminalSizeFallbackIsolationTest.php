@@ -120,6 +120,37 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
     }
 
     /**
+     * The keystone the pin rests on: with the probe ARMED (an explicit reset)
+     * and STDOUT not a tty, `getTerminalSize()` answers exactly the documented
+     * 60x200 default. bootstrap pins to that same viewport, which is what
+     * makes the tests/App re-pins no-ops for every test that passes today —
+     * if this constant ever moves, the pin silently changes the suite.
+     *
+     * Guarded, not skipped: a tty runner legitimately answers with its own
+     * window (the exact shape this whole lane is about), so only the
+     * probe-sanity half is assertable there; and the suite's skip roster
+     * (`SuiteSkipRoster`, exactly one skip by name) must not move because
+     * someone attached a terminal.
+     */
+    public function testTheDocumentedFallbackIsExactlySixtyRowsByTwoHundredCols(): void
+    {
+        if (stream_isatty(\STDOUT)) {
+            $size = TuiRenderer::getTerminalSize();
+            self::assertGreaterThan(0, $size['rows'], 'a tty answers its own window — probe-sanity half only');
+
+            return;
+        }
+
+        TuiRenderer::resetSizeCache();
+
+        self::assertSame(
+            ['rows' => 60, 'cols' => 200],
+            TuiRenderer::getTerminalSize(),
+            'the fallback bootstrap pins to is the documented 60x200 default',
+        );
+    }
+
+    /**
      * The compact victim's shape: five exchanges, a `/compact` draft submitted
      * with a summarizer standing by — history untouched yet, so the ONLY thing
      * that can hide `question 1` is the viewport.
