@@ -16,6 +16,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Tools\Tool;
 
 /**
  * Tests for ProcessExecutor - process-based agent executor.
@@ -969,6 +970,20 @@ final class ProcessExecutorTest extends TestCase
             'the frame no longer says which tools the parent believed it was granting',
         );
 
+        // E647: alongside the roster, the ADDITIVE toolSpecs key carries the
+        // advertiseable half (name+description+schema) the child rehydrates.
+        // The string/array shapes cross as name-only specs — the child fails
+        // loud on those rather than advertising schemaless tools — and the
+        // stdClass is described nowhere, exactly as the roster already says.
+        $this->assertSame(
+            [
+                ['name' => 'grep', 'description' => null, 'inputSchema' => null],
+                ['name' => 'sed', 'description' => null, 'inputSchema' => null],
+            ],
+            $startup['request']['toolSpecs'] ?? null,
+            'the frame no longer carries the schemas a grant needs to cross the wire',
+        );
+
         // And the fields the same frame is the only record of.
         $this->assertSame(
             [['role' => 'user', 'content' => 'WIRE-CONVERSATION']],
@@ -1498,5 +1513,390 @@ final class ProcessExecutorTest extends TestCase
         // A positive claim about the population, so an empty walk fails too.
         $this->assertGreaterThan(200, $files, 'the src/ walk found almost nothing — the scan is not running');
         $this->assertSame([], $offenders, 'production code must not select the fabricating worker');
+    }
+
+    // -------------------------------------------------------------------------
+    // R61 lane B — E650 dead child, E646 heartbeat lease, E647 grant over the wire
+    // -------------------------------------------------------------------------
+
+    /**
+     * A fake worker binary in a private temp dir. `$body` is the script; the
+     * exec bit is set and the path returned for `binaryPath:`.
+     */
+    private function fakeWorkerBinary(string $body): array
+    {
+        $dir = sys_get_temp_dir() . '/sc_r61_dead_' . uniqid((string) getmypid(), true);
+        $this->assertTrue(mkdir($dir, 0o700, true));
+        $binary = $dir . '/fake-php';
+        file_put_contents($binary, "#!/bin/sh\n" . $body);
+        $this->assertTrue(chmod($binary, 0o700));
+
+        return [$dir, $binary];
+    }
+
+    /**
+     * Run a closure with an error handler that counts every warning the
+     * language would have raised UNLESS suppressed by `@` — the E650 contract
+     * is "the condition arrives as an AgentResult, never as a surfaced
+     * diagnostic". (Suppressed-by-@ hits are returned separately so the
+     * last-resort race backstop stays visible in the failure message.)
+     *
+     * @template T
+     * @param callable(): T $run
+     * @return array{result: T, surfaced: list<string>, suppressed: list<string>}
+     */
+    private function capturingWarnings(callable $run): array
+    {
+        $surfaced = [];
+        $suppressed = [];
+
+        set_error_handler(
+            /** @return bool */
+            static function (int $no, string $str) use (&$surfaced, &$suppressed): bool {
+                if ((error_reporting() & $no) === 0) {
+                    $suppressed[] = $str;
+                } else {
+                    $surfaced[] = $str;
+                }
+
+                return false;
+            },
+        );
+
+        try {
+            $result = $run();
+        } finally {
+            restore_error_handler();
+        }
+
+        return ['result' => $result, 'surfaced' => $surfaced, 'suppressed' => $suppressed];
+    }
+
+    /**
+     * E650: a child that dies before/during the handshake must arrive as a
+     * failed AgentResult, not as an E_WARNING from fwrite into a closed pipe.
+     * With failOnWarning=true a surfaced warning reddens the suite for the
+     * transport while the real condition — the child died — reports nothing.
+     *
+     * `exit 9` dies so fast the startup write itself races the pipe closing;
+     * both detection points (write failure, handshake liveness probe) funnel
+     * into the same fatal descriptor, so the test pins the outcome and the
+     * silence, not which guard won.
+     */
+    public function testADeadChildIsReportedAsAFailedAgentResultAndNotAPipeWarning(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary("exit 9\n");
+
+        try {
+            $executor = new ProcessExecutor(
+                binaryPath: $binary,
+                timeoutSeconds: 30,
+                workerProvider: ['type' => 'echo'],
+            );
+
+            $captured = $this->capturingWarnings(
+                fn (): AgentResult => $executor->execute($this->agent, $this->request),
+            );
+
+            $result = $captured['result'];
+            $this->assertSame(AgentStatus::Failed, $result->status);
+            $this->assertNotNull($result->error);
+            $this->assertStringContainsString('died', (string) $result->error->getMessage());
+            $this->assertSame([], $captured['surfaced'], 'a dead child surfaced a PHP warning instead of an AgentResult');
+            $this->assertSame(
+                [],
+                (new \ReflectionProperty(ProcessExecutor::class, 'processes'))->getValue($executor),
+                'the dead child was left registered for cancel()/cancelAll() to find',
+            );
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * E650, second write: a child that swallows the startup frame and dies
+     * before the ready handshake must not be written `execute` blindly.
+     */
+    public function testAChildThatDiesMidHandshakeIsReapedBeforeTheExecuteFrame(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary("read -r _startup\nexit 7\n");
+
+        try {
+            $executor = new ProcessExecutor(
+                binaryPath: $binary,
+                timeoutSeconds: 30,
+                workerProvider: ['type' => 'echo'],
+            );
+
+            $captured = $this->capturingWarnings(
+                fn (): AgentResult => $executor->execute($this->agent, $this->request),
+            );
+
+            $result = $captured['result'];
+            $this->assertSame(AgentStatus::Failed, $result->status);
+            // Which guard wins is a race the design deliberately leaves open —
+            // proc_get_status may still report a just-exited child as running,
+            // in which case the execute write itself detects the closed pipe.
+            // Both funnels are dead-child reports; neither is a warning.
+            $this->assertMatchesRegularExpression(
+                '/died (during the ready handshake|before its execute frame could be written)/',
+                (string) $result->error?->getMessage(),
+            );
+            $this->assertSame([], $captured['surfaced']);
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * E650 on the streaming side: the generator yields exactly one failed
+     * result and never warns.
+     */
+    public function testTheStreamPathReportsADeadChildAsOneFailedResult(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary("exit 9\n");
+
+        try {
+            $executor = new ProcessExecutor(
+                binaryPath: $binary,
+                timeoutSeconds: 30,
+                workerProvider: ['type' => 'echo'],
+            );
+
+            $captured = $this->capturingWarnings(
+                fn (): array => iterator_to_array($executor->executeStream($this->agent, $this->request), false),
+            );
+
+            $this->assertCount(1, $captured['result']);
+            $this->assertSame(AgentStatus::Failed, $captured['result'][0]->status);
+            $this->assertStringContainsString('died', (string) $captured['result'][0]->error?->getMessage());
+            $this->assertSame([], $captured['surfaced']);
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * E646, polarity one: a worker that LEASES the heartbeat window — the
+     * live script's non-streaming branch cannot heartbeat while blocked —
+     * survives well past the 15s window while it is alive. The alternative
+     * fix (capping the request) is forbidden; the lease bounds PARENT-side
+     * reaping, never the provider call.
+     *
+     * Real clock: the fake worker sleeps 18s — three seconds past the plain
+     * window — then completes. Without the lease it would be SIGKILLed at ~15s.
+     */
+    public function testALeasedWorkerSurvivesPastTheHeartbeatWindowWhileAlive(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary(
+            "printf '{\"type\":\"ready\"}\\n'\n"
+            . "read -r _startup\nread -r _execute\n"
+            . "printf '{\"type\":\"lease\",\"seconds\":60}\\n'\n"
+            . "sleep 18\n"
+            . "printf '{\"type\":\"complete\",\"status\":\"completed\",\"output\":\"LEASED-OK\",\"tokensUsed\":0,\"costUsd\":0}\\n'\n"
+        );
+
+        try {
+            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: 120);
+
+            $started = microtime(true);
+            $result = $executor->execute($this->agent, $this->request);
+
+            $this->assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
+            $this->assertSame('LEASED-OK', $result->output);
+            $this->assertGreaterThanOrEqual(15.0, microtime(true) - $started, 'the test proved nothing if it finished inside the heartbeat window');
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * E646, polarity two: a LIVE-but-SILENT worker holds no lease and is
+     * still reaped at the plain heartbeat window.
+     */
+    public function testASilentUnleasedWorkerIsStillReapedNearTheHeartbeatTimeout(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary(
+            "printf '{\"type\":\"ready\"}\\n'\n"
+            . "read -r _startup\nread -r _execute\n"
+            . "exec sleep 60\n"
+        );
+
+        try {
+            // timeoutSeconds: null so the heartbeat window is the only ceiling.
+            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: null);
+
+            $started = microtime(true);
+            $result = $executor->execute($this->agent, $this->request);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame(AgentStatus::Failed, $result->status);
+            $this->assertStringContainsString('heartbeat timeout', (string) $result->error?->getMessage());
+            $this->assertLessThan(30.0, $elapsed, 'the silent worker was not reaped near the heartbeat window');
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * E646, the lease is not a resurrection permit: a worker that dies while
+     * holding a 3600s lease is reaped on pipe EOF within seconds, because
+     * death is detected on the read side, not by the heartbeat clock.
+     */
+    public function testAWorkerThatDiesWhileHoldingALeaseIsReapedImmediately(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary(
+            "printf '{\"type\":\"ready\"}\\n'\n"
+            . "read -r _startup\nread -r _execute\n"
+            . "printf '{\"type\":\"lease\",\"seconds\":3600}\\n'\n"
+            . "exit 5\n"
+        );
+
+        try {
+            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: null);
+
+            $started = microtime(true);
+            $result = $executor->execute($this->agent, $this->request);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertSame(AgentStatus::Failed, $result->status);
+            $this->assertStringContainsString('code 5', (string) $result->error?->getMessage());
+            $this->assertLessThan(10.0, $elapsed, 'a dead lease-holder was not reaped promptly');
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * E646 at the frame level: the live worker script emits the lease
+     * exactly on the non-streaming branch, before the blocking call.
+     */
+    public function testTheLiveWorkerSignsALeaseBeforeTheBlockingComplete(): void
+    {
+        $script = (new \ReflectionMethod(ProcessExecutor::class, 'createLiveWorkerScript'))
+            ->invoke(new ProcessExecutor());
+
+        $this->assertStringContainsString("'type' => 'lease'", $script);
+        $leaseAt = strpos($script, "'type' => 'lease'");
+        $blockingAt = strpos($script, '$provider->complete($request)');
+        $streamingAt = strpos($script, '$provider->completeStream($request)');
+        $this->assertIsInt($leaseAt);
+        $this->assertIsInt($blockingAt);
+        $this->assertIsInt($streamingAt);
+        $this->assertLessThan($blockingAt, $leaseAt, 'the lease must be signed before the blocking call it covers');
+        $this->assertLessThan(
+            $leaseAt,
+            $streamingAt,
+            'the lease sits in the non-streaming branch (textually after the streaming loop); the streaming path heartbeats between chunks instead',
+        );
+    }
+
+    /**
+     * E647: a data-only grant round-trips parent → wire → child.
+     */
+    public function testRehydrateToolsRebuildsCompleteSpecsAsDataOnlyGrants(): void
+    {
+        $tools = ProcessExecutor::rehydrateTools([
+            ['name' => 'grep', 'description' => 'search files', 'inputSchema' => ['type' => 'object', 'properties' => ['pattern' => ['type' => 'string']]]],
+            ['name' => 'sed', 'description' => '', 'inputSchema' => []],
+        ]);
+
+        $this->assertIsArray($tools);
+        $this->assertCount(2, $tools);
+        $this->assertContainsOnlyInstancesOf(Tool::class, $tools);
+        $this->assertSame('grep', $tools[0]->name());
+        $this->assertSame('search files', $tools[0]->description());
+        $this->assertSame(['type' => 'object', 'properties' => ['pattern' => ['type' => 'string']]], $tools[0]->inputSchema());
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('execution is a parent-side act');
+        $tools[0]->execute([]);
+    }
+
+    /**
+     * E647: a half-parsed grant throws rather than advertising a tool the
+     * parent only partly described — name-only specs included.
+     */
+    public function testRehydrateToolsRefusesHalfParsedGrants(): void
+    {
+        $this->assertNull(ProcessExecutor::rehydrateTools(null));
+        $this->assertNull(ProcessExecutor::rehydrateTools([]));
+
+        foreach ([
+            'non-array entry' => [['name' => 'ok', 'description' => 'd', 'inputSchema' => []], 'sed'],
+            'name without description' => [['name' => 'Reed', 'inputSchema' => []]],
+            'name without schema' => [['name' => 'grep', 'description' => 'd']],
+            'empty name' => [['name' => '', 'description' => 'd', 'inputSchema' => []]],
+        ] as $label => $specs) {
+            try {
+                ProcessExecutor::rehydrateTools($specs);
+                $this->fail("rehydrateTools accepted a half-parsed grant: {$label}");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertNotEmpty($e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * E647 end-to-end in a real child: a complete spec grant is accepted —
+     * the worker builds its provider request with the rehydrated tools and
+     * still completes through EchoProvider.
+     */
+    public function testTheChildAcceptsACompleteToolGrant(): void
+    {
+        $frames = $this->driveLiveWorker([
+            'type' => 'startup',
+            'autoload' => (string) $this->reflectAutoloadPath(),
+            'provider' => ['type' => 'echo'],
+            'agent' => ['id' => 'a', 'name' => 'A', 'model' => 'm', 'prompt' => null],
+            'task' => '',
+            'request' => [
+                'model' => 'm',
+                'messages' => [(new UserMessage('ping'))->toArray()],
+                'tools' => ['grep'],
+                'toolSpecs' => [['name' => 'grep', 'description' => 'search', 'inputSchema' => ['type' => 'object']]],
+                'systemPrompt' => null,
+                'temperature' => null,
+                'maxTokens' => null,
+            ],
+        ], sendExecute: true);
+
+        $terminal = $this->terminalFrame($frames);
+        $this->assertSame('complete', $terminal['type'] ?? null, 'the child refused a grant it should accept: ' . var_export($frames, true));
+    }
+
+    /**
+     * E647, the other polarity: a spec missing its schema ends in an error
+     * frame naming the unusable grant — never a tool offered to the model
+     * with no defined arguments, and never a silently toolless run.
+     */
+    public function testTheChildRefusesAToolGrantThatCrossedWithoutItsSchema(): void
+    {
+        $frames = $this->driveLiveWorker([
+            'type' => 'startup',
+            'autoload' => (string) $this->reflectAutoloadPath(),
+            'provider' => ['type' => 'echo'],
+            'agent' => ['id' => 'a', 'name' => 'A', 'model' => 'm', 'prompt' => null],
+            'task' => '',
+            'request' => [
+                'model' => 'm',
+                'messages' => [(new UserMessage('ping'))->toArray()],
+                'tools' => ['Reed'],
+                'toolSpecs' => [['name' => 'Reed', 'description' => null, 'inputSchema' => null]],
+                'systemPrompt' => null,
+                'temperature' => null,
+                'maxTokens' => null,
+            ],
+        ], sendExecute: true);
+
+        $terminal = $this->terminalFrame($frames);
+        $this->assertSame('error', $terminal['type'] ?? null);
+        $this->assertStringContainsString('tool grant is unusable', (string) ($terminal['message'] ?? ''));
     }
 }

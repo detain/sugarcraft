@@ -26,6 +26,20 @@ final class ProcessExecutor implements ExecutorInterface
     /** @var array<string, int> agentId -> last heartbeat timestamp (Unix time) */
     private array $lastHeartbeat = [];
 
+    /**
+     * agentId -> Unix time until which the worker has leased the heartbeat
+     * window (E646). A `lease` frame extends the effective heartbeat deadline
+     * past {@see HEARTBEAT_TIMEOUT_SECS} without capping the provider call:
+     * the lease is the worker's signed promise that it is working on a
+     * request it cannot speak during — see createLiveWorkerScript()'s
+     * non-streaming branch. A dead worker still closes stdout and is reaped
+     * on EOF immediately, lease or none; a wedged lease-holder is reaped when
+     * the lease expires.
+     *
+     * @var array<string, int>
+     */
+    private array $heartbeatLeaseUntil = [];
+
     /** Heartbeat interval the worker sends messages at (seconds). */
     private const HEARTBEAT_INTERVAL_SECS = 5;
 
@@ -61,6 +75,32 @@ final class ProcessExecutor implements ExecutorInterface
          * this straight into the startup line, and a provider object does not
          * survive `json_encode()` any better than a Message does
          * ({@see encodeMessages()}).
+         *
+         * ## E649 — NOTHING IN `src/` SUPPLIES IT YET, AND THAT IS THE FINDING
+         *
+         * WHAT THIS PARAMETER CLAIMS to be is the provider the worker consults.
+         * WHAT IS TRUE NOW: no construction site in `src/` passes one —
+         * `AgentPoolConfig` has no provider field, `Chat`'s fallback pool
+         * (`Chat.php`, `new ProcessExecutor(timeoutSeconds: ...)` — a provider
+         * arg does not exist there), and `Bootstrap` builds no worker spec — so
+         * on every shipped path a sub-agent worker reaches
+         * {@see createLiveWorkerScript()}'s provider check, refuses, and the
+         * pool reports a FAILED agent. `/workflow run` returning FAILED where
+         * it once "Completed" with fabricated text is that refusal, and it
+         * shipped as a deliberate behavior change (an honest failure beats an
+         * indistinguishable lie — see the parameter's own null paragraph and
+         * the E59 notes on the simulation). WHY THIS NOTE EARNS ITS PLACE:
+         * the refusal is correct but the PATH TO A CONFIGURED WORKER is one
+         * lane-A-side edit per site, and without this paragraph the seam is
+         * invisible — the exact signature the supervisor must land at merge is
+         * `AgentPoolConfig: public readonly ?array $workerProvider = null` +
+         * `withWorkerProvider()`, threaded into Chat's fallback
+         * `new ProcessExecutor(timeoutSeconds: ..., workerProvider: ...)` and
+         * `new AgentWorkerPool(..., workerProvider: ...)`, fed from the
+         * session's ProviderFactory config; {@see workerProvider()} reads the
+         * answer back off a configured executor, and
+         * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
+         * already carries a pool's provider across stage-pool rebuilds.
          */
         private readonly ?array $workerProvider = null,
         /**
@@ -78,6 +118,24 @@ final class ProcessExecutor implements ExecutorInterface
     ) {}
 
     /**
+     * The worker-provider spec this executor hands to every child, or null
+     * when none was configured (E649 — the shipped default today; see the
+     * constructor's E649 paragraph for the seam that closes it).
+     *
+     * Introspection, not mutation: the pool's stage-pool rebuilds and any
+     * future `withWorkerProvider()` caller need to READ which provider a
+     * prebuilt executor carries — `AgentWorkerPool::workerProvider()` answers
+     * for the POOL's parameter only, and an executor configured directly is
+     * invisible to it.
+     *
+     * @return ?array<string, mixed>
+     */
+    public function workerProvider(): ?array
+    {
+        return $this->workerProvider;
+    }
+
+    /**
      * Execute a single agent to completion and return the result.
      *
      * Spawns a worker process, sends the agent configuration, and waits for
@@ -89,6 +147,19 @@ final class ProcessExecutor implements ExecutorInterface
         $this->checkBackpressure();
 
         $process = $this->spawnWorker($agent, $request);
+
+        // E650: the child died during spawn/handshake; the pipes are already
+        // reaped and the condition arrives as a failed AgentResult, never as
+        // a warning.
+        if (isset($process['fatal'])) {
+            return new AgentResult(
+                agentId: $agent->id,
+                status: AgentStatus::Failed,
+                error: new \RuntimeException($process['fatal']),
+                startedAt: new \DateTimeImmutable(),
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
 
         $buffer = '';
         $startTime = new \DateTimeImmutable();
@@ -103,7 +174,7 @@ final class ProcessExecutor implements ExecutorInterface
 
         // Read until we get a complete or error message
         while (!feof($process['stdout'])) {
-            $heartbeatDeadline = $this->lastHeartbeat[$agent->id] + self::HEARTBEAT_TIMEOUT_SECS;
+            $heartbeatDeadline = $this->effectiveHeartbeatDeadline($agent->id);
             $checkDeadline = $timeoutDeadline !== null
                 ? min($heartbeatDeadline, $timeoutDeadline)
                 : $heartbeatDeadline;
@@ -117,7 +188,7 @@ final class ProcessExecutor implements ExecutorInterface
 
             if ($changed === false) {
                 $this->closeProcess($process);
-                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                $this->stopTracking($agent->id);
                 return new AgentResult(
                     agentId: $agent->id,
                     status: AgentStatus::Failed,
@@ -133,7 +204,7 @@ final class ProcessExecutor implements ExecutorInterface
                 if ($timeoutDeadline !== null && $now >= $timeoutDeadline) {
                     $this->escalateAndKill($process['process'], $agent->id);
                     $this->closeProcess($process);
-                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    $this->stopTracking($agent->id);
                     return new AgentResult(
                         agentId: $agent->id,
                         status: AgentStatus::Failed,
@@ -147,7 +218,7 @@ final class ProcessExecutor implements ExecutorInterface
                 if ($now >= $heartbeatDeadline) {
                     $this->escalateAndKill($process['process'], $agent->id);
                     $this->closeProcess($process);
-                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    $this->stopTracking($agent->id);
                     return new AgentResult(
                         agentId: $agent->id,
                         status: AgentStatus::Failed,
@@ -175,7 +246,7 @@ final class ProcessExecutor implements ExecutorInterface
                         if ($timeoutDeadline !== null && time() >= $timeoutDeadline) {
                             $this->escalateAndKill($process['process'], $agent->id);
                             $this->closeProcess($process);
-                            unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                            $this->stopTracking($agent->id);
                             return new AgentResult(
                                 agentId: $agent->id,
                                 status: AgentStatus::Failed,
@@ -188,15 +259,27 @@ final class ProcessExecutor implements ExecutorInterface
                         continue;
                     }
 
+                    if (($message['type'] ?? '') === 'lease') {
+                        // E646: the worker's promise that a provider call it
+                        // cannot speak during is in flight. The heartbeat
+                        // deadline moves out to the lease; the provider call
+                        // itself is NOT capped by anything here.
+                        $leaseSeconds = (int) ($message['seconds'] ?? 0);
+                        if ($leaseSeconds > 0) {
+                            $this->heartbeatLeaseUntil[$agent->id] = time() + $leaseSeconds;
+                        }
+                        continue;
+                    }
+
                     if (($message['type'] ?? '') === 'complete') {
                         $this->closeProcess($process);
-                        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                        $this->stopTracking($agent->id);
                         return $this->buildResult($message, $agent->id, $startTime);
                     }
 
                     if (($message['type'] ?? '') === 'error') {
                         $this->closeProcess($process);
-                        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                        $this->stopTracking($agent->id);
                         return new AgentResult(
                             agentId: $agent->id,
                             status: AgentStatus::Failed,
@@ -212,7 +295,7 @@ final class ProcessExecutor implements ExecutorInterface
         // Worker exited without complete/error — check for crash exit code
         $exitCode = $this->getExitCode($process['process']);
         $this->closeProcess($process);
-        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+        $this->stopTracking($agent->id);
 
         if ($exitCode !== 0) {
             return new AgentResult(
@@ -246,6 +329,21 @@ final class ProcessExecutor implements ExecutorInterface
         $this->checkBackpressure();
 
         $process = $this->spawnWorker($agent, $request);
+
+        // E650: same dead-child contract as execute() — a failed AgentResult
+        // through the generator, never a warning at the pipe.
+        if (isset($process['fatal'])) {
+            yield new AgentResult(
+                agentId: $agent->id,
+                status: AgentStatus::Failed,
+                error: new \RuntimeException($process['fatal']),
+                startedAt: new \DateTimeImmutable(),
+                completedAt: new \DateTimeImmutable(),
+            );
+
+            return;
+        }
+
         $startTime = new \DateTimeImmutable();
         $this->lastHeartbeat[$agent->id] = time();
 
@@ -257,7 +355,7 @@ final class ProcessExecutor implements ExecutorInterface
             : null;
 
         while (!feof($process['stdout'])) {
-            $heartbeatDeadline = $this->lastHeartbeat[$agent->id] + self::HEARTBEAT_TIMEOUT_SECS;
+            $heartbeatDeadline = $this->effectiveHeartbeatDeadline($agent->id);
             $checkDeadline = $timeoutDeadline !== null
                 ? min($heartbeatDeadline, $timeoutDeadline)
                 : $heartbeatDeadline;
@@ -274,7 +372,7 @@ final class ProcessExecutor implements ExecutorInterface
                 if ($timeoutDeadline !== null && $now >= $timeoutDeadline) {
                     $this->escalateAndKill($process['process'], $agent->id);
                     $this->closeProcess($process);
-                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    $this->stopTracking($agent->id);
                     yield new AgentResult(
                         agentId: $agent->id,
                         status: AgentStatus::Failed,
@@ -288,7 +386,7 @@ final class ProcessExecutor implements ExecutorInterface
                 if ($now >= $heartbeatDeadline) {
                     $this->escalateAndKill($process['process'], $agent->id);
                     $this->closeProcess($process);
-                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    $this->stopTracking($agent->id);
                     yield new AgentResult(
                         agentId: $agent->id,
                         status: AgentStatus::Failed,
@@ -306,7 +404,7 @@ final class ProcessExecutor implements ExecutorInterface
 
                 // stream_select returned false (error)
                 $this->closeProcess($process);
-                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                $this->stopTracking($agent->id);
                 yield new AgentResult(
                     agentId: $agent->id,
                     status: AgentStatus::Failed,
@@ -335,7 +433,7 @@ final class ProcessExecutor implements ExecutorInterface
                 if ($timeoutDeadline !== null && time() >= $timeoutDeadline) {
                     $this->escalateAndKill($process['process'], $agent->id);
                     $this->closeProcess($process);
-                    unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                    $this->stopTracking($agent->id);
                     yield new AgentResult(
                         agentId: $agent->id,
                         status: AgentStatus::Failed,
@@ -358,16 +456,25 @@ final class ProcessExecutor implements ExecutorInterface
                 continue;
             }
 
+            if ($type === 'lease') {
+                // E646: same lease contract as execute()'s read loop.
+                $leaseSeconds = (int) ($message['seconds'] ?? 0);
+                if ($leaseSeconds > 0) {
+                    $this->heartbeatLeaseUntil[$agent->id] = time() + $leaseSeconds;
+                }
+                continue;
+            }
+
             if ($type === 'complete') {
                 $this->closeProcess($process);
-                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                $this->stopTracking($agent->id);
                 yield $this->buildResult($message, $agent->id, $startTime);
                 return;
             }
 
             if ($type === 'error') {
                 $this->closeProcess($process);
-                unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+                $this->stopTracking($agent->id);
                 yield new AgentResult(
                     agentId: $agent->id,
                     status: AgentStatus::Failed,
@@ -381,7 +488,7 @@ final class ProcessExecutor implements ExecutorInterface
 
         $exitCode = $this->getExitCode($process['process']);
         $this->closeProcess($process);
-        unset($this->lastHeartbeat[$agent->id], $this->processes[$agent->id]);
+        $this->stopTracking($agent->id);
 
         if ($exitCode !== 0) {
             yield new AgentResult(
@@ -477,6 +584,7 @@ final class ProcessExecutor implements ExecutorInterface
                 'model' => $request->model,
                 'messages' => self::encodeMessages($request->messages),
                 'tools' => self::encodeTools($request->tools),
+                'toolSpecs' => self::encodeToolSpecs($request->tools),
                 'systemPrompt' => $request->systemPrompt,
                 'temperature' => $request->temperature,
                 'maxTokens' => $request->maxTokens,
@@ -515,15 +623,42 @@ final class ProcessExecutor implements ExecutorInterface
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
 
+        $processDescriptor = [
+            'process' => $process,
+            'stdin' => $pipes[0],
+            'stdout' => $pipes[1],
+            'stderr' => $pipes[2],
+        ];
+
         // Send the startup message built above, before the spawn.
-        fwrite($pipes[0], $startupMessage);
-        fflush($pipes[0]);
+        //
+        // E650: every write into the child below is liveness-guarded, and a
+        // failed write is a DEAD CHILD, not a transport error to raise. A bare
+        // `fwrite()` into a pipe whose read end has closed emits an E_WARNING
+        // ("Broken pipe") that PHPUnit's failOnWarning converts into a red
+        // suite blaming the transport, while the actual condition — the worker
+        // died — arrives nowhere at all. Detection comes BEFORE the write
+        // where cheap (proc_get_status during the handshake wait) and AT the
+        // write where not (a short write means the reader is gone); either
+        // way the outcome is the same honest shape: the pipes are reaped and
+        // spawnWorker returns a `fatal` descriptor that {@see execute()} and
+        // {@see executeStream()} translate into a failed AgentResult naming
+        // the death. No warning surfaces; the condition is reported.
+        if (!self::writeFrame($pipes[0], $startupMessage)) {
+            return self::deadWorker($processDescriptor, 'before its startup frame could be written');
+        }
 
         // Wait for ready message
         $ready = false;
         $deadline = time() + 5;
         while (!$ready && time() < $deadline) {
             if (feof($pipes[1])) {
+                break;
+            }
+            if (!self::childIsAlive($process)) {
+                // Died between the startup write and the handshake: stop
+                // waiting on a corpse. The execute write below then fails its
+                // own guard and reports the death at the right granularity.
                 break;
             }
             $line = fgets($pipes[1]);
@@ -535,21 +670,130 @@ final class ProcessExecutor implements ExecutorInterface
             }
         }
 
+        if (!$ready) {
+            // Either the 5s handshake expired or the child died mid-wait. A
+            // dead child must not be written `execute` blindly: that is the
+            // exact fwrite-into-a-closed-pipe the doc above refuses to let
+            // happen silently. The liveness probe distinguishes the two — a
+            // live-but-silent child still gets its instruction frame (and its
+            // own 'Timeout waiting for execute' error frame back), a dead one
+            // is reaped here.
+            if (!self::childIsAlive($process)) {
+                return self::deadWorker($processDescriptor, 'during the ready handshake, before it ever reported ready');
+            }
+        }
+
         // Send execute message
         $executeMessage = json_encode(['type' => 'execute']) . "\n";
-        fwrite($pipes[0], $executeMessage);
-        fflush($pipes[0]);
-
-        $processDescriptor = [
-            'process' => $process,
-            'stdin' => $pipes[0],
-            'stdout' => $pipes[1],
-            'stderr' => $pipes[2],
-        ];
+        if (!self::writeFrame($pipes[0], $executeMessage)) {
+            return self::deadWorker($processDescriptor, 'before its execute frame could be written');
+        }
 
         $this->processes[$agent->id] = $processDescriptor;
 
         return $processDescriptor;
+    }
+
+    /**
+     * The moment the parent will declare this agent's worker dead: the plain
+     * heartbeat window, moved out by any lease the worker has signed (E646).
+     */
+    private function effectiveHeartbeatDeadline(string $agentId): int
+    {
+        return max(
+            ($this->lastHeartbeat[$agentId] ?? time()) + self::HEARTBEAT_TIMEOUT_SECS,
+            $this->heartbeatLeaseUntil[$agentId] ?? 0,
+        );
+    }
+
+    /**
+     * Drop every per-agent liveness record: heartbeat clock, process
+     * descriptor, lease. The three are armed together at spawn and must be
+     * cleared together at every terminal — a stale lease keyed to an id a
+     * later agent reuses would silently extend that one's grace.
+     */
+    private function stopTracking(string $agentId): void
+    {
+        unset($this->lastHeartbeat[$agentId], $this->processes[$agentId], $this->heartbeatLeaseUntil[$agentId]);
+    }
+
+    /**
+     * Write exactly one frame into the child's stdin, reporting delivery.
+     *
+     * `@fwrite` suppresses the broken-pipe warning ONLY as the last resort of
+     * a race the liveness probes cannot close — a child killed in the
+     * microseconds between `proc_get_status()` and the write. The short-write
+     * comparison is the actual detection; suppression just keeps the honest
+     * failure an AgentResult can carry from degrading into an E_WARNING that
+     * reddens the suite for the wrong reason (E650).
+     *
+     * @param resource $stdin
+     */
+    private static function writeFrame($stdin, string $frame): bool
+    {
+        $written = @fwrite($stdin, $frame);
+
+        return $written === strlen($frame) && @fflush($stdin);
+    }
+
+    /**
+     * Whether the worker process is still running, defensively.
+     *
+     * proc_get_status() reports `running => false` for both exited and
+     * never-waitable states, which is exactly the answer the E650 guards want;
+     * a non-resource handle (already closed) is not alive either.
+     *
+     * @param resource|false $process
+     */
+    private static function childIsAlive($process): bool
+    {
+        return is_resource($process) && (bool) (proc_get_status($process)['running'] ?? false);
+    }
+
+    /**
+     * The spawn-failed-halway descriptor: reap everything, mark it fatal.
+     *
+     * `spawnWorker()` cannot return an AgentResult itself — it serves both
+     * {@see execute()} and {@see executeStream()} — so a dead child comes back
+     * as a descriptor carrying a `fatal` message and no live resources: the
+     * pipes are closed and the process reaped HERE, so the leak this prevents
+     * (a registered-but-dead entry cancel()/cancelAll() could never clean)
+     * cannot re-form at either caller. The descriptor is deliberately absent
+     * from {@see $processes}: there is nothing left to cancel.
+     *
+     * @param array{process: resource, stdin: resource, stdout: resource, stderr: resource} $processDescriptor
+     * @return array{fatal: string}
+     */
+    private static function deadWorker(array $processDescriptor, string $stage): array
+    {
+        self::closeProcessStatic($processDescriptor);
+
+        return [
+            'fatal' => sprintf(
+                'Worker process died %s: the child exited before it could be instructed to run, '
+                . 'so the agent cannot report anything further.',
+                $stage,
+            ),
+        ];
+    }
+
+    /**
+     * closeProcess() as a static — the method body touches no instance state,
+     * and the dead-child path runs inside static helpers.
+     *
+     * @param array<string, mixed> $processDescriptor
+     */
+    private static function closeProcessStatic(array $processDescriptor): void
+    {
+        foreach (['stdin', 'stdout', 'stderr'] as $pipe) {
+            if (isset($processDescriptor[$pipe]) && is_resource($processDescriptor[$pipe])) {
+                fclose($processDescriptor[$pipe]);
+            }
+        }
+
+        if (isset($processDescriptor['process']) && is_resource($processDescriptor['process'])) {
+            proc_close($processDescriptor['process']);
+        }
     }
 
     /**
@@ -700,8 +944,18 @@ final class ProcessExecutor implements ExecutorInterface
      * ({@see \SugarCraft\Crush\Tests\Agents\ProcessExecutorTest}), which is
      * what makes the paragraph above falsifiable rather than decorative.
      *
-     * The gap itself — a sub-agent worker runs WITHOUT TOOLS — is recorded as
-     * a deferred finding in `docs/plans/crush_code_hardening_backlog.md`.
+     * The gap this paragraph deferred — a sub-agent worker runs WITHOUT
+     * TOOLS — has since been closed from the provider's side (E647): the
+     * same startup frame now also carries `toolSpecs` (name+description+
+     * inputSchema, {@see encodeToolSpecs()}), and the live worker rehydrates
+     * those into data-only {@see Tool} grants for its provider request
+     * ({@see rehydrateTools()}). WHAT IS TRUE NOW of this roster: it remains
+     * the frame's human-readable record — every grant, including the shapes
+     * `toolSpecs` cannot carry (the `<unencodable X>` entries), is named
+     * here — while `toolSpecs` is the machine-usable sibling. The half that
+     * still does not cross is `execute()`, deliberately: tool execution is a
+     * parent-side act and the rehydrated object throws if anything in the
+     * child asks it for one.
      *
      * @param ?array<mixed> $tools
      * @return ?list<string>
@@ -736,6 +990,189 @@ final class ProcessExecutor implements ExecutorInterface
         }
 
         return $names;
+    }
+
+    /**
+     * Serialize a tool grant into the shape a child can rehydrate (E647).
+     *
+     * THE DECISION THIS RECORDS, taken when the brief offered two wire
+     * formats: (i) serialize name+schema and rehydrate child-side, versus
+     * (ii) RPC to the parent for resolution. (i) won because the half of a
+     * {@see Tool} a provider request consumes — name, description, input
+     * schema — is static at spawn time and the startup frame already exists,
+     * while an RPC would need a second duplex channel and parent-side server
+     * plumbing inside a stream_select loop that cannot block, trading the
+     * frame's spawn-time determinism for a runtime dependency on the parent
+     * answering mid-call. The half that CANNOT cross — `execute()` — stays
+     * parent-side in either design; the rehydrated object refuses to run it
+     * loudly ({@see rehydrateTools()}).
+     *
+     * The `tools` name roster ({@see encodeTools()}) stays exactly as the
+     * frame test pins it: this key is ADDITIVE, and it answers the roster's
+     * open question ("which tools did the parent believe it was granting?")
+     * with the machine-usable half. An entry too strange to describe — the
+     * `<unencodable X>` cases — gets no spec but keeps its roster slot, so
+     * the frame still names what the parent saw; the child fails loud on
+     * whatever spec it cannot parse, never on a name it was only told about.
+     *
+     * Absent-or-empty grants travel as null, never as `[]` — the same
+     * normalization {@see \SugarCraft\Crush\Workflows\WorkflowEngine::resolveRequestTools()}
+     * pins parent-side: every provider gates its tool block on `!== null`,
+     * so `[]` is a different request than none, and the wire keeps that fact
+     * out of existence.
+     *
+     * @param ?array<mixed> $tools
+     * @return ?list<array{name: ?string, description: ?string, inputSchema: ?array}>
+     */
+    private static function encodeToolSpecs(?array $tools): ?array
+    {
+        if ($tools === null || $tools === []) {
+            return null;
+        }
+
+        $specs = [];
+
+        foreach ($tools as $tool) {
+            if ($tool instanceof Tool) {
+                $specs[] = [
+                    'name' => $tool->name(),
+                    'description' => $tool->description(),
+                    'inputSchema' => $tool->inputSchema(),
+                ];
+                continue;
+            }
+
+            if (is_array($tool) && is_string($tool['name'] ?? null)) {
+                $specs[] = [
+                    'name' => $tool['name'],
+                    'description' => is_string($tool['description'] ?? null) ? $tool['description'] : null,
+                    'inputSchema' => is_array($tool['inputSchema'] ?? $tool['input_schema'] ?? null)
+                        ? ($tool['inputSchema'] ?? $tool['input_schema'])
+                        : null,
+                ];
+                continue;
+            }
+
+            if (is_string($tool)) {
+                // A bare name carries no schema to ship; the child's
+                // completeness rule (rehydrateTools) is what decides whether
+                // such a grant can be honored.
+                $specs[] = ['name' => $tool, 'description' => null, 'inputSchema' => null];
+                continue;
+            }
+
+            // Unencodable entries are the roster's to name and not the
+            // schema's to invent; skipped here by design, see the doc above.
+        }
+
+        return $specs === [] ? null : $specs;
+    }
+
+    /**
+     * Rebuild the child-side view of a parent's tool grant (E647).
+     *
+     * PUBLIC STATIC because its only caller is the forked worker: the live
+     * script (`createLiveWorkerScript()`) requires the application autoloader
+     * before it calls this, so the child constructs real typed grants with
+     * zero extra protocol. Each result is a DATA-ONLY {@see Tool}: name,
+     * description and inputSchema answer the provider's advertise path
+     * (`formatTools()`, `->name()`); `execute()` throws, because a tool's
+     * implementation — registry, session, permissions, path jail — never
+     * crossed the pipe and never will. Tool execution stays parent-side.
+     *
+     * FAILS LOUD ON EVERYTHING HALF-PARSED. A spec missing its description
+     * or schema throws rather than advertising a schema-less tool: the model
+     * would see a callable with no defined arguments, which is the same
+     * "roster smaller or stranger than the parent believed" defect E641
+     * closed, wearing the wire's clothes.
+     *
+     * @param ?list<array<string, mixed>> $specs the startup frame's `toolSpecs`;
+     *        null and `[]` both mean "no grant travelled" (the parent's own
+     *        normalization guarantees `[]` never crosses).
+     * @return ?list<Tool> null when nothing was granted; otherwise one data Tool
+     *         per spec, in wire order (the parent's registry order).
+     * @throws \InvalidArgumentException when the list holds a non-array entry,
+     *         or an entry whose name, description or inputSchema is missing
+     *         or of the wrong type.
+     */
+    public static function rehydrateTools(?array $specs): ?array
+    {
+        if ($specs === null || $specs === []) {
+            return null;
+        }
+
+        $tools = [];
+
+        foreach ($specs as $index => $spec) {
+            if (!is_array($spec)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'toolSpecs entry #%d is %s, expected a tool spec array.',
+                    $index,
+                    get_debug_type($spec),
+                ));
+            }
+
+            $name = $spec['name'] ?? null;
+            $description = $spec['description'] ?? null;
+            $inputSchema = $spec['inputSchema'] ?? null;
+
+            if (!is_string($name) || $name === '') {
+                throw new \InvalidArgumentException(sprintf(
+                    'toolSpecs entry #%d carries no non-empty name; a tool grant must be complete.',
+                    $index,
+                ));
+            }
+
+            if (!is_string($description)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Tool grant "%s" crossed the wire without its description; refusing to advertise a tool the parent only half-described.',
+                    $name,
+                ));
+            }
+
+            if (!is_array($inputSchema)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Tool grant "%s" crossed the wire without its input schema; refusing to advertise a tool with no defined arguments.',
+                    $name,
+                ));
+            }
+
+            $tools[] = new class ($name, $description, $inputSchema) implements Tool {
+                /** @param array<mixed> $schema */
+                public function __construct(
+                    private readonly string $wireName,
+                    private readonly string $wireDescription,
+                    private readonly array $wireSchema,
+                ) {}
+
+                public function name(): string
+                {
+                    return $this->wireName;
+                }
+
+                public function description(): string
+                {
+                    return $this->wireDescription;
+                }
+
+                /** @return array<mixed> */
+                public function inputSchema(): array
+                {
+                    return $this->wireSchema;
+                }
+
+                public function execute(array $args): \SugarCraft\Crush\Tools\ToolResult
+                {
+                    throw new \LogicException(sprintf(
+                        'The worker rehydrated tool "%s" for the provider request only; '
+                        . 'tool execution is a parent-side act and was never sent across the wire.',
+                        $this->wireName,
+                    ));
+                }
+            };
+        }
+
+        return $tools;
     }
 
     /**
@@ -978,11 +1415,26 @@ if ($messages === [] && $task !== '') {
     $messages[] = new SugarCraft\Crush\Messages\UserMessage($task);
 }
 
+// E647: the grant crosses the wire as name+description+schema (the parent's
+// encodeToolSpecs()) and is rebuilt here as data-only Tools the provider can
+// advertise. A frame without the toolSpecs key is a PRE-E647 parent: the
+// child keeps running toolless exactly as it did, so the protocol widens
+// without breaking either side. A HALF-PARSED grant fails loud — a tool the
+// parent only partly described must not reach the model at all.
+$tools = null;
+if (array_key_exists('toolSpecs', $requestSpec)) {
+    try {
+        $tools = SugarCraft\Crush\Agents\ProcessExecutor::rehydrateTools($requestSpec['toolSpecs']);
+    } catch (Throwable $e) {
+        $fail('Worker tool grant is unusable: ' . $e->getMessage());
+    }
+}
+
 $request = new SugarCraft\Crush\Providers\CompleteRequest(
     model: (string) ($requestSpec['model'] ?? ($agentConfig['model'] ?? '')),
-    // Deliberately null: the parent sends tool NAMES, not tools. See
-    // ProcessExecutor::encodeTools() for why a Tool does not cross a fork.
-    tools: null,
+    // Tool EXECUTION stays parent-side — rehydrateTools() says why an
+    // implementation cannot cross a fork; this is the advertiseable half.
+    tools: $tools,
     messages: $messages,
     systemPrompt: $requestSpec['systemPrompt'] ?? ($agentConfig['prompt'] ?? null),
     temperature: isset($requestSpec['temperature']) ? (float) $requestSpec['temperature'] : null,
@@ -991,8 +1443,8 @@ $request = new SugarCraft\Crush\Providers\CompleteRequest(
 
 // One heartbeat before the call, so the parent's 15s heartbeat deadline is
 // measured from the moment the provider work actually starts rather than from
-// spawn. See the DEFERRED note on ProcessExecutor::createLiveWorkerScript()
-// about the non-streaming path, which cannot heartbeat at all while blocked.
+// spawn. The non-streaming path below cannot heartbeat while blocked, so it
+// signs a lease instead — E646, resolved here rather than deferred.
 $emit(['type' => 'heartbeat']);
 
 $output = '';
@@ -1018,6 +1470,17 @@ try {
             }
         }
     } else {
+        // E646: a non-streaming complete() gives this process no chance to
+        // speak while the provider call runs — the parent's 15s heartbeat
+        // window would SIGKILL a healthy worker mid-completion. The fix is a
+        // bounded LEASE, not a capped request: completions may legitimately
+        // run for tens of minutes and no total-request timeout is imposed
+        // here or by the parent. The lease says "alive, blocked, working";
+        // a worker that dies holding it still closes STDOUT and is reaped on
+        // EOF immediately, and a lease that expires without the call
+        // finishing reaps a wedged child on the old terms. 3600s bounds the
+        // worst case between the two polarities.
+        $emit(['type' => 'lease', 'seconds' => 3600]);
         $response = $provider->complete($request);
         if ($response->isError) {
             $fail('Provider reported an error: ' . ($response->errorMessage ?? 'unknown'));
@@ -1292,15 +1755,7 @@ PHP;
      */
     private function closeProcess(array $processDescriptor): void
     {
-        foreach (['stdin', 'stdout', 'stderr'] as $pipe) {
-            if (isset($processDescriptor[$pipe]) && is_resource($processDescriptor[$pipe])) {
-                fclose($processDescriptor[$pipe]);
-            }
-        }
-
-        if (isset($processDescriptor['process']) && is_resource($processDescriptor['process'])) {
-            proc_close($processDescriptor['process']);
-        }
+        self::closeProcessStatic($processDescriptor);
     }
 
     /**
