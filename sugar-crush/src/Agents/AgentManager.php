@@ -1230,8 +1230,24 @@ final class AgentManager
      * accessors above reported zeros for real work (crush_feat.md 5E item 6).
      * Omit it to fall back to the manager's own pool.
      *
+     * EVERY BATCH MEMBER IS GOVERNED BY ITS OWN GRANT (E644). This used to be
+     * the fail-open this bundle's sequential sibling already closed: one
+     * caller-built request carried one `tools` field, the pool forwarded it to
+     * every agent, and `WorkflowEngine` builds that field from the stage's
+     * FIRST task — so agents 2..n of a mixed batch ran under a sibling's
+     * declaration. Each declaration is now resolved up-front against the
+     * session registry and handed to the pool as a per-agent resolver.
+     * Resolving BEFORE the pool dispatches anything is deliberate: a grant
+     * that cannot resolve throws here, without a single sibling forked, the
+     * same fail-before-dispatch the workflow stage applies to denylisted
+     * tasks. With no registry the manager cannot resolve anything and the
+     * caller's shared request forwards verbatim — the constructor's documented
+     * escape hatch, not an accident of this path.
+     *
      * @param SubAgent[] $agents
      * @return \Generator<AgentResult>
+     * @throws \RuntimeException When a batch member's grant cannot be
+     *         resolved — BEFORE the pool dispatches anything.
      * @see P1.S10 for wiring AgentWorkerPool into Chat; callers migrating from Agent[] must now pass SubAgent[]
      */
     public function executeAll(array $agents, CompleteRequest $request, ?AgentWorkerPool $pool = null): \Generator
@@ -1249,8 +1265,40 @@ final class AgentManager
             $batch[] = $agent->id;
         }
 
+        // Keys the resolved roster by SubAgent id — null means "no registry,
+        // no resolver", NOT "grant nothing". A failure here fails the WHOLE
+        // batch before the pool forks anything; the members registered above
+        // are settled with the reason that actually stopped them rather than
+        // left pending-forever for isWorking(), which is the same hazard
+        // settleAbandoned() exists to close.
         try {
-            yield from $this->drain($pool->executeAll($agents, $request));
+            $toolGrants = $this->resolveBatchGrants($agents);
+        } catch (\RuntimeException $failure) {
+            $this->settleAbandoned(
+                $batch,
+                'Not dispatched: ' . rtrim($failure->getMessage(), '.') . '.',
+            );
+
+            throw $failure;
+        }
+
+        $toolGrantResolver = $toolGrants === null
+            ? null
+            : static function (SubAgent $agent) use ($toolGrants): ?array {
+                if (!array_key_exists($agent->id, $toolGrants)) {
+                    throw new \RuntimeException(sprintf(
+                        'SubAgent "%s" reached the worker pool without a resolved grant; every batch member '
+                        . 'must be governed by its own declaration, so it runs under nobody\'s rather than '
+                        . 'a sibling\'s.',
+                        $agent->id,
+                    ));
+                }
+
+                return $toolGrants[$agent->id];
+            };
+
+        try {
+            yield from $this->drain($pool->executeAll($agents, $request, $toolGrantResolver));
         } finally {
             // The pool yields a result for every sub-agent it RAN, and none for
             // the ones it did not: withStopOnFirstFailure() empties the queue on
@@ -1317,8 +1365,13 @@ final class AgentManager
      * counts against wall-clock forever.
      *
      * @param list<string> $batch
+     * @param string $reason what the settling claims; the default is the
+     *        cancellation wording every abandoned generator wants, and a
+     *        caller stopping a batch for another reason (a grant that could
+     *        not resolve) says its own rather than letting the members it
+     *        never dispatched read as if the user had killed them.
      */
-    private function settleAbandoned(array $batch): void
+    private function settleAbandoned(array $batch, string $reason = 'Cancelled before completion.'): void
     {
         foreach ($batch as $id) {
             $subAgent = $this->subAgents[$id] ?? null;
@@ -1328,8 +1381,39 @@ final class AgentManager
 
             $subAgent->status = SubAgent::STATUS_STOPPED;
             $subAgent->completedAt ??= new \DateTimeImmutable();
-            $subAgent->error ??= 'Cancelled before completion.';
+            $subAgent->error ??= $reason;
         }
+    }
+
+    /**
+     * Every batch member's own resolved grant, keyed by SubAgent id — or null
+     * when this manager holds no registry and so has nothing to resolve
+     * against (the caller's shared request then forwards verbatim, per
+     * {@see executeAll()}).
+     *
+     * Split out so {@see executeAll()} can fail the batch BEFORE the pool
+     * forks anything: iterating lazily inside the generator would fork the
+     * siblings that came first and throw only after, stranding a partial
+     * dispatch under a dead grant.
+     *
+     * @param SubAgent[] $agents
+     * @return ?array<string, ?list<Tool>>
+     * @throws \RuntimeException on any member's unresolvable declaration —
+     *         straight from {@see resolveGrantedTools()}, whose message names
+     *         the offending agent.
+     */
+    private function resolveBatchGrants(array $agents): ?array
+    {
+        if ($this->toolRegistry === null) {
+            return null;
+        }
+
+        $grants = [];
+        foreach ($agents as $agent) {
+            $grants[$agent->id] = $this->resolveGrantedTools($agent->agent);
+        }
+
+        return $grants;
     }
 
     /**

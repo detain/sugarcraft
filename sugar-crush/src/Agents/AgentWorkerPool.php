@@ -328,9 +328,22 @@ final class AgentWorkerPool
      * The $request parameter supplies shared fields (model, tools, systemPrompt,
      * temperature, maxTokens) that are common across all agents in the pool.
      *
+     * `tools` is the one shared field that is NOT actually common: a tool grant
+     * belongs to the AGENT that declared it, and copying one request's roster
+     * onto every agent let whichever caller built the shared request govern the
+     * whole batch (E644). A caller that knows the per-agent grants — the only
+     * one that does is {@see AgentManager::executeAll()}, which resolves each
+     * declaration against the session registry — supplies `$toolGrantResolver`
+     * and each per-agent request then carries THAT agent's own grant. Null,
+     * the default, forwards `$request->tools` verbatim: every direct pool
+     * caller (a hand-driven pool, a workflow stage whose manager is detached)
+     * keeps exactly the behaviour it has today.
+     *
+     * @param ?\Closure(SubAgent): (?list<\SugarCraft\Crush\Tools\Tool>) $toolGrantResolver
+     *
      * @return \Generator<AgentResult>
      */
-    public function executeAll(array $agents, CompleteRequest $request): \Generator
+    public function executeAll(array $agents, CompleteRequest $request, ?\Closure $toolGrantResolver = null): \Generator
     {
         // Straggler children an earlier teardown ran out of reap budget on are
         // collected BEFORE the early returns below, never after: cancelAll()
@@ -402,12 +415,24 @@ final class AgentWorkerPool
                 // a future executor that uses $request->messages directly (rather
                 // than the agent's task field) would otherwise receive only the
                 // first task's prompt for all agents.
+                //
+                // `tools` gets the SAME per-agent treatment, and for a sharper
+                // reason than prompt fidelity: a grant is a statement about the
+                // agent that declared it, so forwarding one shared roster let
+                // whichever agent the caller built the request from govern the
+                // whole batch (E644). With a resolver the batch is governed
+                // agent by agent; without one the shared field forwards
+                // verbatim, which is what every direct pool caller has today.
+                $agentTools = $toolGrantResolver === null
+                    ? $request->tools
+                    : $toolGrantResolver($agent);
+
                 $agentRequest = new CompleteRequest(
                     model: $request->model,
                     messages: [
                         ['role' => 'user', 'content' => $agent->task],
                     ],
-                    tools: $request->tools,
+                    tools: $agentTools,
                     systemPrompt: $request->systemPrompt,
                     temperature: $request->temperature,
                     maxTokens: $request->maxTokens,

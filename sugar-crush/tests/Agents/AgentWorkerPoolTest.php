@@ -366,6 +366,92 @@ final class AgentWorkerPoolTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // The per-agent tool-grant resolver (E644).
+    //
+    // The pool cannot know which grants are true — that is AgentManager's
+    // knowledge — but it OWNS the per-agent request seam, so the seam now
+    // accepts a resolver and these two tests pin its contract independent of
+    // any manager: with one, the resolver answers for `tools` once per agent
+    // and its value lands on that agent's request; without one, the shared
+    // field forwards byte-identically, which is what every direct caller has
+    // always received.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executor that records the COMPLETE per-agent request (not just the id)
+     * so a test can assert on the tools field the dispatch layer actually saw.
+     */
+    private function requestRecordingExecutor(): ExecutorInterface
+    {
+        return new class implements ExecutorInterface {
+            /** @var array<string, CompleteRequest> */
+            public array $requests = [];
+
+            public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
+            {
+                $this->requests[$agent->id] = $request;
+
+                return new AgentResult(
+                    agentId: $agent->id,
+                    status: AgentStatus::Completed,
+                    output: 'ok',
+                );
+            }
+
+            public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+
+            public function cancelAll(): void {}
+        };
+    }
+
+    public function testTheGrantResolverAnswersForToolsOncePerAgentAndItsValueReachesTheRequest(): void
+    {
+        $recorder = $this->requestRecordingExecutor();
+        $pool = new AgentWorkerPool(maxConcurrent: 2, executor: $recorder);
+        $agents = [$this->makeAgent('grant-a'), $this->makeAgent('grant-b')];
+
+        $asked = [];
+        $resolver = static function (SubAgent $agent) use (&$asked): ?array {
+            $asked[] = $agent->id;
+
+            return [$agent->id];
+        };
+
+        $shared = new CompleteRequest(
+            model: 'test-model',
+            messages: [['role' => 'user', 'content' => 'Hello!']],
+            tools: ['SHARED-MUST-NOT-LEAK'],
+        );
+        iterator_to_array($pool->executeAll($agents, $shared, $resolver));
+
+        $this->assertSame(['grant-a', 'grant-b'], $asked, 'exactly one resolution per dispatched agent');
+        $this->assertSame(['grant-a'], $recorder->requests['grant-a']->tools);
+        $this->assertSame(['grant-b'], $recorder->requests['grant-b']->tools);
+    }
+
+    public function testAnOmittedResolverForwardsTheSharedToolsByteIdentically(): void
+    {
+        $recorder = $this->requestRecordingExecutor();
+        $pool = new AgentWorkerPool(maxConcurrent: 2, executor: $recorder);
+        $agents = [$this->makeAgent('passthru-a'), $this->makeAgent('passthru-b')];
+
+        $shared = new CompleteRequest(
+            model: 'test-model',
+            messages: [['role' => 'user', 'content' => 'Hello!']],
+            tools: ['SHARED'],
+        );
+        iterator_to_array($pool->executeAll($agents, $shared));
+
+        $this->assertSame(['SHARED'], $recorder->requests['passthru-a']->tools);
+        $this->assertSame(['SHARED'], $recorder->requests['passthru-b']->tools);
+    }
+
+    // -------------------------------------------------------------------------
     // testExecuteAllRespectsMaxConcurrent
     // -------------------------------------------------------------------------
 

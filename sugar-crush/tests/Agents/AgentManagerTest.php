@@ -3226,6 +3226,209 @@ final class AgentManagerTest extends TestCase
         $this->assertStringContainsString('Tool universe entry', $caught->getMessage());
     }
 
+    // -------------------------------------------------------------------------
+    // Per-agent grants on the LIVE PARALLEL PATH (E644).
+    //
+    // executeAll() is the path Chat and WorkflowEngine actually take, and it
+    // used to forward ONE caller-built CompleteRequest through the pool: the
+    // pool copied its `tools` field onto every per-agent request, so each
+    // agent ran under whichever declaration the caller built the shared
+    // request from — WorkflowEngine builds it from the stage's FIRST task, so
+    // agents 2..n were governed by a sibling. These tests observe the requests
+    // at the executor seam, the same "the provider actually received it"
+    // standard the sequential tests above hold: an assertion that stops at a
+    // copied field proves the copy, not the grant.
+    // -------------------------------------------------------------------------
+
+    /**
+     * An executor that RECORDS the per-agent request and completes.
+     *
+     * The injected-executor path runs synchronously in the parent, so the
+     * captured CompleteRequests (and the Tool objects inside them) survive
+     * into assertions. Return type is deliberately untyped: the test needs
+     * ->requests, which is not on ExecutorInterface.
+     */
+    private function recordingPoolExecutor()
+    {
+        return new class implements \SugarCraft\Crush\Agents\ExecutorInterface {
+            /** @var array<string, \SugarCraft\Crush\Providers\CompleteRequest> */
+            public array $requests = [];
+
+            public function execute(SubAgent $agent, CompleteRequest $request): \SugarCraft\Crush\Agents\AgentResult
+            {
+                $this->requests[$agent->id] = $request;
+
+                return new \SugarCraft\Crush\Agents\AgentResult(
+                    agentId: $agent->id,
+                    status: \SugarCraft\Crush\Agents\AgentStatus::Completed,
+                    output: 'ok',
+                );
+            }
+
+            public function executeStream(SubAgent $agent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($agent, $request);
+            }
+
+            public function cancel(string $agentId): void {}
+
+            public function cancelAll(): void {}
+        };
+    }
+
+    private function agentDeclaring(string $name, array $tools): Agent
+    {
+        return new Agent(
+            name: $name,
+            description: "$name description",
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $tools,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        );
+    }
+
+    /**
+     * THE HEADLINE. Two agents, DISJOINT grants, one shared request carrying
+     * agent 1's roster — the exact shape WorkflowEngine hands this method.
+     * Agent 2 declaring a tool agent 1 lacks must RECEIVE it (resolved per its
+     * own declaration), and agent 1 must not receive agent 2's.
+     */
+    public function testEachParallelAgentIsGovernedByItsOwnGrant(): void
+    {
+        $registry = $this->fakeRegistry('Bash', 'Read');
+        $recorder = $this->recordingPoolExecutor();
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: new \SugarCraft\Crush\Agents\AgentWorkerPool(executor: $recorder),
+            toolRegistry: $registry,
+        );
+
+        $first = new SubAgent(id: 'sub-a', agent: $this->agentDeclaring('reader', ['Read']), task: 'read it');
+        $second = new SubAgent(id: 'sub-b', agent: $this->agentDeclaring('sheller', ['Bash']), task: 'run it');
+
+        // Agent 1's RESOLVED roster as the shared field — the exact value
+        // WorkflowEngine's first-task request stands in for. Built directly;
+        // the pool rebuilds messages, only the tools field is the fixture.
+        $sharedRequest = new CompleteRequest(
+            model: 'test-model',
+            messages: [['role' => 'user', 'content' => 'ignored — the pool rebuilds this']],
+            tools: array_values(array_filter(
+                $registry,
+                static fn(\SugarCraft\Crush\Tools\Tool $t): bool => $t->name() === 'Read',
+            )),
+        );
+
+        iterator_to_array($manager->executeAll([$first, $second], $sharedRequest));
+
+        $this->assertSame(['Read'], self::toolNames($recorder->requests['sub-a']->tools ?? null));
+        $this->assertSame(
+            ['Bash'],
+            self::toolNames($recorder->requests['sub-b']->tools ?? null),
+            'agent 2 runs under its OWN declaration, not the shared request\'s',
+        );
+    }
+
+    /**
+     * THE RESTRICTION on the same path: a sibling's grant does not leak INTO
+     * an agent that never declared the tool — the assertion the headline test
+     * would fail if the implementation resolved agent 1 for everyone, or
+     * merged. Silent-skip is also caught here: agent `quiet` declares nothing,
+     * and declaring nothing means null tools, not the batch's union and not
+     * the first agent's roster.
+     */
+    public function testAParallelAgentThatDeclaredNothingRunsToollessBesideAGrantedSibling(): void
+    {
+        $recorder = $this->recordingPoolExecutor();
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: new \SugarCraft\Crush\Agents\AgentWorkerPool(executor: $recorder),
+            toolRegistry: $this->fakeRegistry('Bash', 'Read'),
+        );
+
+        $speaker = new SubAgent(id: 'sub-loud', agent: $this->agentDeclaring('reader', ['Read']), task: 'read it');
+        $quiet = new SubAgent(id: 'sub-quiet', agent: $this->agentDeclaring('plain', []), task: 'chat');
+
+        iterator_to_array($manager->executeAll([$speaker, $quiet], new CompleteRequest(model: 'test-model', messages: [])));
+
+        $this->assertSame(['Read'], self::toolNames($recorder->requests['sub-loud']->tools ?? null));
+        $this->assertNull(
+            $recorder->requests['sub-quiet']->tools,
+            'no declaration is not the shared roster — nor the sibling\'s',
+        );
+    }
+
+    /**
+     * FAIL BEFORE DISPATCH. A typo'd grant in batch position 2 must throw with
+     * NOTHING executed — the pre-fix shape of this path forked the healthy
+     * siblings first and threw (or didn't) only afterwards — and the already
+     * registered members must settle STOPPED with the reason that actually
+     * stopped them, not haunt isWorking() as pending-forever, and not read as
+     * if the user cancelled them.
+     */
+    public function testAnUnresolvableParallelGrantFailsTheBatchBeforeDispatch(): void
+    {
+        $recorder = $this->recordingPoolExecutor();
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: new \SugarCraft\Crush\Agents\AgentWorkerPool(executor: $recorder),
+            toolRegistry: $this->fakeRegistry('Bash', 'Read'),
+        );
+
+        $fine = new SubAgent(id: 'sub-fine', agent: $this->agentDeclaring('reader', ['Read']), task: 'read it');
+        $typo = new SubAgent(id: 'sub-typo', agent: $this->agentDeclaring('broken', ['Reed']), task: 'typo');
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeAll([$fine, $typo], new CompleteRequest(model: 'test-model', messages: [])));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'an unresolvable sibling must refuse the batch');
+        $this->assertStringContainsString('"Reed"', $caught->getMessage());
+        $this->assertSame([], $recorder->requests, 'nothing dispatches once any member cannot resolve');
+        $this->assertSame(SubAgent::STATUS_STOPPED, $fine->status);
+        $this->assertStringContainsString('Not dispatched', (string) $fine->error);
+        $this->assertStringContainsString('"Reed"', (string) $fine->error);
+    }
+
+    /**
+     * The escape hatch survives the fix: with no registry the manager has no
+     * truth to resolve against, so the caller's shared request forwards
+     * VERBATIM — the pre-existing behaviour, pinned per the constructor's
+     * doc-block, and NOT silently nulled agent by agent.
+     */
+    public function testWithNoRegistryTheParallelPathForwardsTheSharedRosterVerbatim(): void
+    {
+        $recorder = $this->recordingPoolExecutor();
+        $manager = new AgentManager(
+            provider: $this->provider,
+            skillRegistry: $this->skillRegistry,
+            workerPool: new \SugarCraft\Crush\Agents\AgentWorkerPool(executor: $recorder),
+        );
+
+        $one = new SubAgent(id: 'sub-1', agent: $this->agentDeclaring('reader', ['Read']), task: 'a');
+        $two = new SubAgent(id: 'sub-2', agent: $this->agentDeclaring('sheller', ['Bash']), task: 'b');
+        $shared = $this->fakeRegistry('Bash', 'Read');
+
+        iterator_to_array($manager->executeAll([$one, $two], new CompleteRequest(
+            model: 'test-model',
+            messages: [],
+            tools: $shared,
+        )));
+
+        $this->assertSame(['Bash', 'Read'], self::toolNames($recorder->requests['sub-1']->tools ?? null));
+        $this->assertSame(['Bash', 'Read'], self::toolNames($recorder->requests['sub-2']->tools ?? null));
+    }
+
     private function createAgent(
         string $name = 'test-agent',
         string $prompt = 'Test prompt',
