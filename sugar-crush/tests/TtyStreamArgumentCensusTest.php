@@ -279,7 +279,14 @@ final class TtyStreamArgumentCensusTest extends TestCase
         // asserted rather than their shape, which means a new one has to be
         // looked at by a person exactly once.
         self::assertSame(
-            ['src/Tui/Renderer.php: constant:STDOUT'],
+            [
+                'src/Tui/Renderer.php: constant:STDOUT',
+                // lane-G's fallback-isolation keystone probes the LIVE window:
+                // `new Tty(STDOUT)` at tests/TerminalSizeFallbackIsolationTest.php
+                // is reached only past a `stream_isatty(STDOUT)` early-return, so
+                // at the construction site STDOUT is a real stream, never null.
+                'tests/TerminalSizeFallbackIsolationTest.php: constant:STDOUT',
+            ],
             $constants,
             'a Tty is built with a CONSTANT as its stream, and a constant can be null. Check that this one '
                 . 'is a real stream, then add it here',
