@@ -112,9 +112,16 @@ final readonly class Parser
 
             // E15 grammar port classified JSON/REGEX values by the lexer (so
             // they can never hide the directive behind them). E668 gave REGEX
-            // its directive — the lexer's `Wait /re/` arm strips the keyword,
-            // so a statement-position regex IS the condition wait. JSON still
-            // drops by KIND (no consumer), never by text sniff.
+            // its directive. TOKEN_REGEX arrives from BOTH lexer arms that
+            // emit it: the `Wait /re/` arm (which strips the keyword) and the
+            // generic value arm, which starts a line-initial bare `/re/` on
+            // the same footing as a keyword-led one. At statement position a
+            // regex can spell nothing but the condition wait, so both arms
+            // compile to one. The bare path used to fall to the silent `null`
+            // drops below; promoting a token no consumer ever read into what
+            // it reads as is the truthful mapping, not a restriction — an
+            // intentional strictness gain, pinned by no old-drop expectation.
+            // JSON still drops by KIND (no consumer), never by text sniff.
             Lexer::TOKEN_JSON  => null,
             Lexer::TOKEN_REGEX => new WaitDirective(0.0, $token->value),
 
