@@ -245,7 +245,7 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
                 . 'account for the exception in the roster above',
             );
         }
- 
+
         // FLATTENED, not raw: both needles below are single lines today, and a
         // reformat that wrapped either argument list would have reddened this row
         // without anything having broken. Collapsing runs of whitespace keeps the

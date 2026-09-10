@@ -1020,9 +1020,10 @@ final readonly class ScriptHook implements BoundedHookInterface
      * true if it exited.
      *
      * The same bounded poll as
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::waitForExit()} and
-     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::waitForExit()},
-     * differing only in that those two take a BUDGET while this one takes the
+     * {@see \SugarCraft\Crush\Support\ProcessReaper::waitForExit()} — and its
+     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndAwaitExit()}
+     * for the term-then-await case — differing only in that those take a BUDGET
+     * while this one takes the
      * absolute deadline the whole run already has to share: an unflagged wait
      * is the thing being removed, and there is no portable way to wait for a
      * `proc_open()` child with a deadline in PHP.
