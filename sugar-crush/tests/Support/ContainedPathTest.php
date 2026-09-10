@@ -209,12 +209,16 @@ final class ContainedPathTest extends TestCase
      * reference to another path, it is a second name for the same inode, and
      * there is no "original" to resolve to.
      *
-     * OUT OF THE THREAT MODEL every caller here is written against, which is a
-     * CLONED REPOSITORY: git can neither represent nor commit a hard link, so no
-     * `git clone` produces one. Asserted as the CURRENT answer, not as a
-     * desirable one — if a future caller's threat model includes a local user
-     * with write access inside the checkout, this is the assertion that will
-     * have to change and it will say so by failing.
+     * OUT OF SCOPE, and since E40 the class doc-block says so on two grounds
+     * rather than inherited: a CLONE cannot deliver a hard link (git can neither
+     * represent nor commit one), which decides every clone-reading caller; and
+     * the one caller whose writer set is NOT just a clone — Bootstrap's
+     * `.mcp.json` grant, reachable by co-resident writers and prior-session
+     * `Write`/`Bash` — gains nothing from a link, because the same actor can
+     * write the config bytes in place, and the trust gate, not containment, is
+     * what stops servers starting. Asserted as the CURRENT answer, not as a
+     * desirable one — if that calculus changes, this is the assertion that will
+     * have to move, and it will say so by failing.
      */
     public function testAHardLinkIsNotSeenByEitherQuestion(): void
     {

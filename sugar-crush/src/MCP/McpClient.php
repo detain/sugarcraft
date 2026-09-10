@@ -346,6 +346,22 @@ final class McpClient
         return new McpRouter($this->servers, $this->denyPatterns);
     }
 
+    /**
+     * Read the config whose PATH this method never judged.
+     *
+     * Containment and trust are decided at the grant site, {@see
+     * \SugarCraft\Crush\Cli\Bootstrap::mcpConfigDecision()}, which is what put
+     * `$configPath` into this client; this method re-reads rather than
+     * re-adjudicates. That is {@see \SugarCraft\Crush\Support\ContainedPath}'s
+     * house rule stated where the window lives (E40(a)): between the grant's
+     * `is_file()` + `within()` and this `file_get_contents()` the bytes under the
+     * granted path can change, and nothing here narrows the window, because a
+     * co-resident writer that could swap the file after the grant could have
+     * written it before it. The residual is a config that names servers nobody
+     * approved between two stats — answered by the trust gate upstream, not by a
+     * second containment here. The hard-link limit of that grant is qualified at
+     * {@see \SugarCraft\Crush\Support\ContainedPath}'s threat-model paragraph.
+     */
     private function loadConfig(): array
     {
         if (!file_exists($this->configPath)) {

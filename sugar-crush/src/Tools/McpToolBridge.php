@@ -101,30 +101,28 @@ final class McpToolBridge implements Tool
      * The model-facing name: `mcp__<server>__<tool>`, both segments passed
      * through {@see sanitize()}.
      *
-     * `__` IS THE SEPARATOR AND ALSO A LEGAL CHARACTER IN BOTH SEGMENTS, which
-     * makes this name AMBIGUOUS rather than merely collision-prone, and the
-     * ambiguity needs no substitution at all to fire:
+     * THE JOIN IS INJECTIVE, which is what the escape in {@see sanitize()} buys.
+     * `__` is the separator, and it used to be a legal character in both segments
+     * too, so server `a__b` + tool `c` and server `a` + tool `b__c` composed one
+     * name for two different tools with nothing rewritten, and the
+     * second-registered one was unaddressable through
+     * {@see \SugarCraft\Crush\Runtime}'s first-match `findTool()`. Sanitising an
+     * underscore to `_5F` means no segment can contain `__` — an underscore on the
+     * wire is only ever an escape lead-in followed by two hex digits — so the
+     * separator cannot be imitated and no two distinct pairs share a name
+     * (E42(a), landed pre-1.0 as its own change, which is the only reason the
+     * spelling churn is acceptable here).
      *
-     *     server `a__b` + tool `c`   ->  mcp__a__b__c
-     *     server `a`    + tool `b__c` ->  mcp__a__b__c
+     * WHAT A PERMISSION RULE MATCHES is this spelling, not the `.mcp.json` key as
+     * typed: see {@see sanitize()} for the worked example. Surfacing wire names
+     * unprompted (the `/mcp` listing half of E42(b)) is still on the backlog;
+     * the collision half that lived here is fixed.
      *
-     * Nothing here is rewritten in either case; two DIFFERENT tools on two
-     * DIFFERENT servers simply have one name, and {@see \SugarCraft\Crush\Runtime}'s
-     * `findTool()` returns the first match, so the model loses the ability to
-     * ADDRESS the second one. That is the same cost {@see sanitize()} describes
-     * for a substituted character, from a source that note did not mention.
-     *
-     * WHAT IT IS NOT is a misrouted call: {@see execute()} addresses
+     * NAMING HAS NEVER BEEN THE ROUTING KEY: {@see execute()} addresses
      * `$this->descriptor->serverName` and the unsanitized server-side tool name,
      * so a bridge that IS reached always reaches the tool it speaks for. The
-     * failure is "unreachable", never "reached the wrong server".
-     *
-     * NOT FIXED HERE, deliberately. Escaping the underscore on the way in — so a
-     * literal `_` in a key can never be read as part of the separator — is what
-     * would make this injective, at the cost of rewriting every name the model and
-     * every user-written permission rule have already learned. That is a change
-     * with its own migration, and it is on the hardening backlog (E42) rather than
-     * folded into the change-set that merely made these names reachable.
+     * failure the old ambiguity could cause was "unreachable", never "reached the
+     * wrong server".
      */
     public function name(): string
     {
@@ -135,10 +133,31 @@ final class McpToolBridge implements Tool
     }
 
     /**
+     * One segment of the wire name rewritten so every provider accepts it AND so
+     * it cannot imitate the separator.
+     *
      * Provider tool names are constrained (`^[a-zA-Z0-9_-]+$` for the OpenAI-shaped
      * APIs every provider here speaks), and an `.mcp.json` server key is free text
-     * — `my server`, `github.com/foo` are both plausible. Anything outside the
-     * allowed set becomes `_` so the whole request is not rejected over one name.
+     * — `my server`, `github.com/foo` are both plausible. Every byte outside
+     * `[A-Za-z0-9-]` becomes `_` plus that byte's two uppercase hex digits:
+     * space → `_20`, `.` → `_2E`, `/` → `_2F`, and the underscore ITSELF → `_5F`.
+     *
+     * WHY THE UNDERSCORE IS ESCAPED, which is the whole point rather than a
+     * side-effect. This rule used to map every disallowed character to a bare `_`
+     * and leave literal underscores alone, and that had TWO collision sources:
+     * `a.b` aliased with `a_b` because a substitution and a literal were the same
+     * byte, and `a__b`/`c` aliased with `a`/`b__c` because `__` was BOTH the
+     * segment separator of {@see name()} and a legal character in both segments —
+     * the latter needing no substitution at all to fire (E42(a)). With an
+     * underscore that can only ever appear as an escape lead-in followed by two
+     * hex digits, no segment can contain `__` at all, the separator is unique
+     * inside the whole name, and the mapping is injective byte-for-byte on both
+     * segments — two distinct (server, tool) pairs cannot share one wire name.
+     * The cost is churn: a key or tool that spells `_` now reads `_5F` on the
+     * wire. That price is paid here rather than carried as a migration because
+     * nothing named by this class has shipped to a user's permission rules yet
+     * (pre-1.0), which is exactly the condition E42's step set for landing the
+     * escape.
      *
      * THE HYPHEN IS IN THE KEPT SET DELIBERATELY, and it is load-bearing rather
      * than tidy: hyphens are ubiquitous in real server keys
@@ -147,32 +166,24 @@ final class McpToolBridge implements Tool
      * name to an underscore — silently, since nothing about the resulting name
      * looks wrong.
      *
-     * TWO COLLISION SOURCES, AND THIS IS ONE OF THEM. Two servers whose keys
-     * differ only in a substituted character produce the same wire name, and
-     * {@see \SugarCraft\Crush\Runtime}'s `findTool()` returns the FIRST match, so
-     * the model loses the ability to ADDRESS the second one. An earlier version
-     * of this note attributed collisions SOLELY to substitution, which made the
-     * other source — `__` being the segment separator and a legal character in
-     * both segments, so `a__b`/`c` and `a`/`b__c` collide with no substitution
-     * whatever — the one source the docblock did not mention. It is stated at
-     * {@see name()}, where the separator is composed, along with why neither
-     * source can misroute a call.
-     *
      * A USER-WRITTEN PERMISSION RULE MUST USE THE SANITISED NAME, and that is the
-     * part of this substitution a reader is most likely to get wrong. A
-     * `.mcp.json` key of `github.com/foo` is `mcp__github_com_foo__*` to
+     * part of this escape a reader is most likely to get wrong. A `.mcp.json` key
+     * of `github.com/foo` is `github_2Ecom_2Ffoo` inside the wire name to
      * {@see \SugarCraft\Crush\Permissions\PermissionRule}; an `allow` written
      * against the key as spelled — `mcp__github.com/foo__*` — matches nothing,
      * and the tool sits behind an Ask forever with the rule looking correct. The
-     * name IS discoverable: nothing lists the wire names up front, but the
-     * permission prompt names the tool it is asking about, so the sanitised
-     * spelling is in front of the user at the moment they decide to write a rule
-     * for it. A `/mcp` listing that surfaced them without being asked is on the
-     * hardening backlog (E42), not here.
+     * name IS discoverable at the moment of decision: the permission prompt names
+     * the tool it is asking about, in exactly this spelling. Surfacing the wire
+     * names unprompted in a `/mcp` listing is the OTHER half of E42 and stays on
+     * the backlog — this method closes the naming half only.
      */
     private static function sanitize(string $segment): string
     {
-        return (string) preg_replace('/[^A-Za-z0-9_-]/', '_', $segment);
+        return (string) preg_replace_callback(
+            '/[^A-Za-z0-9-]/',
+            static fn(array $match): string => '_' . strtoupper(bin2hex($match[0])),
+            $segment,
+        );
     }
 
     /**

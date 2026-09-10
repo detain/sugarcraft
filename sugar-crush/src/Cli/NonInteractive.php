@@ -386,6 +386,17 @@ final class NonInteractive
      * here, so a tier added to {@see Bootstrap::backend()} cannot leave this
      * notice claiming nothing was configured on a run that configured
      * something — which is what a second copy of the list would have done.
+     *
+     * DECISION STAMP (E78c, round 62): the raw `fwrite(STDERR, …)` is the
+     * INTENTIONAL route, not an unmigrated one. The launch-notice seam cannot
+     * reach this path by design — `Bootstrap::launchNotices()` is read only by
+     * `Bootstrap::chat()`/`app()`, which are TUI entries; a one-shot run has no
+     * alt-screen, no transcript for a row to survive into, and no later paint
+     * that could swallow the line, so stderr IS the user-facing channel and it is
+     * still the stream that is not the result under `--output-format json`.
+     * Plumbing the notice into the model's prompt for symmetry with the TUI was
+     * considered and declined: nothing is dropped where the user sees neither,
+     * and the process exits after the answer. Recorded on the NO-FIX ledger.
      */
     private static function noticeOfflineDefault(): void
     {
@@ -784,6 +795,16 @@ final class NonInteractive
      * would: a caller passing its own handle that has since been closed.
      * `null` is the answer because it is already this method's no-answer
      * value for every caller.
+     *
+     * DECISION STAMP (E78c, round 62): the truncation notice is a raw
+     * `fwrite(\STDERR, …)` INTENTIONALLY, for the route reasons stamped at
+     * {@see noticeOfflineDefault()} — one-shot has no alt-screen and no
+     * transcript; stderr reaches the caller, and under `--output-format json`
+     * stdout stays machine-clean. What the write does NOT do is tell the MODEL it
+     * is answering half a question. That gap is recorded, not news: closing it
+     * means appending a note onto the outgoing one-shot prompt — a different
+     * mechanism with a different blast radius, which E78c itself declined to
+     * assume. Left on the NO-FIX ledger pending that prompt-level decision.
      *
      * @param resource|null $stream the stream to read, or null for
      *   {@see stdinDefault()}

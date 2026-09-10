@@ -253,12 +253,31 @@ namespace SugarCraft\Crush\Support;
  * answers `within = true, below = true`, and `file_get_contents()` on it returns
  * the outside file's bytes. That is `realpath()` behaving correctly — a hard
  * link is not a reference to another path, it is a second name for the same
- * inode, and there is no "original" for a resolver to find. It is out of the
- * threat model every caller here is written against, which is a CLONED
- * REPOSITORY: git cannot represent or commit a hard link, so no `git clone`
- * produces one. It is in scope for nothing this package currently does, and it
- * is written down so the next reviewer measures it once rather than
- * rediscovering it.
+ * inode, and there is no "original" for a resolver to find. No extra
+ * `realpath()` or `resolve()` guard changes that: the escape does not go
+ * through any path component a resolver canonicalises.
+ *
+ * WHAT WAS ARGUED, AND WHAT ACTUALLY HOLDS. This paragraph used to dismiss hard
+ * links as out of "the threat model every caller here is written against, which
+ * is a CLONED REPOSITORY: git cannot represent or commit a hard link, so no
+ * `git clone` produces one." For every caller that reads CLONED content that is
+ * true and decisive — a clone cannot deliver a hard link, so containment there
+ * has no such adversary. It was WRONG to let {@see
+ * \SugarCraft\Crush\Cli\Bootstrap::mcpConfigDecision()}'s `.mcp.json` caller
+ * inherit it: that file's writer set is not just a clone but any co-resident
+ * process and any prior session's `Write`/`Bash`, and those CAN `ln(1)` one into
+ * place, yielding a repo-local config whose bytes live outside the repo and whose
+ * presence `git status` cannot see. What carries the exemption for THAT caller is
+ * not the clone argument but an escalation argument: creating a hard link inside
+ * the tree requires write-executant footing inside the tree, and the same actor
+ * can simply WRITE the `.mcp.json` bytes directly — a plainly written config is
+ * visible to `git status` where the hard linked one is not, so the link trades
+ * detection for nothing, and adds no capability containment ever claimed to
+ * provide. Symlinks are the case containment DOES police here, because git can
+ * carry one, and the primary control on this path is the trust gate: an untrusted
+ * root starts nothing whatever inode its config's name points at. Out of scope
+ * remains the verdict; this is the argument the verdict actually rests on, written
+ * so the next reviewer measures it once rather than rediscovering it.
  */
 final class ContainedPath
 {

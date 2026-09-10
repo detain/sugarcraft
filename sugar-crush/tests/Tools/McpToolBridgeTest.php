@@ -41,33 +41,36 @@ final class McpToolBridgeTest extends TestCase
     {
         $bridge = new McpToolBridge($this->clientWith(), $this->descriptor(server: 'github', name: 'create_issue'));
 
-        $this->assertSame('mcp__github__create_issue', $bridge->name());
+        // The underscore in the TOOL name is escaped (E42(a)): `_5F`, never a
+        // bare `_`, because a bare `_` inside a segment could be read as part of
+        // the separator. The server key is clean and passes through untouched.
+        $this->assertSame('mcp__github__create_5Fissue', $bridge->name());
     }
 
     /**
      * A server key is free text in `.mcp.json`, and provider tool names are not.
-     * The substitution is what stops one badly-named server rejecting the WHOLE
-     * `chat/completions` request.
+     * The escape is what stops one badly-named server rejecting the WHOLE
+     * `chat/completions` request, while staying distinct from a key that spells
+     * the underscore itself (`a_b` → `a_5Fb`, never equal to `a.b` → `a_2Eb`).
      */
-    public function testCharactersAProviderWouldRejectAreSubstituted(): void
+    public function testCharactersAProviderWouldRejectAreEscapedAsHex(): void
     {
         $bridge = new McpToolBridge(
             $this->clientWith(),
             $this->descriptor(server: 'my server.v2', name: 'do/thing'),
         );
 
-        $this->assertSame('mcp__my_server_v2__do_thing', $bridge->name());
+        $this->assertSame('mcp__my_20server_2Ev2__do_2Fthing', $bridge->name());
         $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]+$/', $bridge->name());
     }
 
     /**
-     * A HYPHEN IS NOT SUBSTITUTED, and this is the assertion the character class
+     * A HYPHEN IS NOT ESCAPED, and this is the assertion the character class
      * needs: hyphens are legal in every provider's tool-name grammar and
      * ubiquitous in real MCP server keys (`sequential-thinking`, `brave-search`),
-     * so dropping `-` from the kept set would rewrite those names to underscores
-     * silently — nothing about `mcp__sequential_thinking__foo` looks wrong. The
-     * substitution test above passes either way, because none of its inputs
-     * contain one.
+     * so dropping `-` from the kept set would rewrite those names silently —
+     * nothing about an underscored name looks wrong. The escape test above passes
+     * either way, because none of its inputs contain a hyphen.
      */
     public function testHyphensSurviveInBothTheServerKeyAndTheToolName(): void
     {
@@ -80,29 +83,56 @@ final class McpToolBridgeTest extends TestCase
     }
 
     /**
-     * THE COLLISION THAT NEEDS NO SUBSTITUTION, measured rather than asserted in
-     * prose: `__` is the separator AND a legal character in both segments, so two
-     * different tools on two different servers have one wire name with nothing
-     * rewritten. {@see McpToolBridge::sanitize()}'s note used to attribute
-     * collisions solely to a substituted character, which made this the one source
-     * it did not mention.
-     *
-     * Pinned rather than fixed — escaping the separator would rewrite every name
-     * the model and every user-written permission rule already know, which is a
-     * migration and is on the hardening backlog (E42). What this test does is stop
-     * the docblock's claim and the code from drifting apart again.
+     * THE COLLISION THAT NEEDED NO SUBSTITUTION IS CLOSED (E42(a)). `__` used to
+     * be both the separator and a legal character in both segments, so
+     * `a__b`/`c` and `a`/`b__c` shared one wire name with nothing rewritten, and
+     * the second-registered tool was unaddressable through Runtime's
+     * first-match `findTool()`. Escaping every underscore (`_5F`) means a segment
+     * cannot contain `__` at all, so the separator is unique and the two names
+     * below differ. This replaces the former test that PINNED the collision as
+     * "deliberately not fixed" while it sat on the backlog.
      */
-    public function testTheSeparatorIsAlsoALegalCharacterSoTwoDistinctToolsCanShareOneName(): void
+    public function testTheSeparatorCannotBeImitatedSoTwoDistinctToolsGetTwoNames(): void
     {
         $left = new McpToolBridge($this->clientWith(), $this->descriptor(server: 'a__b', name: 'c'));
         $right = new McpToolBridge($this->clientWith(), $this->descriptor(server: 'a', name: 'b__c'));
 
-        $this->assertSame('mcp__a__b__c', $left->name());
-        $this->assertSame($left->name(), $right->name());
-        // ...and no character was substituted in either: this is not the
-        // sanitisation collision the doc-block used to describe.
+        $this->assertSame('mcp__a_5F_5Fb__c', $left->name());
+        $this->assertSame('mcp__a__b_5F_5Fc', $right->name());
+        $this->assertNotSame($left->name(), $right->name());
+        // ...and the descriptors are untouched: the escape is wire-name-only,
+        // execute() still addresses the real server and tool names.
         $this->assertSame('a__b', $left->descriptor()->serverName);
         $this->assertSame('b__c', $right->descriptor()->name);
+    }
+
+    /**
+     * INJECTIVITY ACROSS BOTH FORMER COLLISION SOURCES, as one census: keys that
+     * used to alias — substitution-vs-literal (`a.b` vs `a_b`) and
+     * separator-imitation (`a__b`/`c` vs `a`/`b__c` vs `a`/`__bc` vs `a_`/`_bc`) —
+     * now produce all-distinct wire names, every one of them inside the provider
+     * grammar `^[A-Za-z0-9_-]+$`.
+     */
+    public function testDistinctServerToolPairsNeverShareAWireName(): void
+    {
+        $pairs = [
+            ['a.b', 'c'],
+            ['a_b', 'c'],
+            ['a__b', 'c'],
+            ['a', 'b__c'],
+            ['a', '__bc'],
+            ['a_', '_bc'],
+            ['a-b', 'c'],
+        ];
+
+        $names = [];
+        foreach ($pairs as [$server, $tool]) {
+            $name = (new McpToolBridge($this->clientWith(), $this->descriptor(server: $server, name: $tool)))->name();
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]+$/', $name);
+            $names[] = $name;
+        }
+
+        $this->assertCount(\count($pairs), array_unique($names));
     }
 
     /**
