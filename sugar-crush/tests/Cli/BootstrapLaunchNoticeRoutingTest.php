@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Crush\Skills\SkillLoader;
 
 /**
  * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
@@ -227,7 +228,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         );
 
         self::assertCount(1, $notices);
-        self::assertStringContainsString('2 skill files could not be read and were skipped', $notices[0]);
+        self::assertStringContainsString(
+            sprintf(Bootstrap::SKILL_SKIP_NOTICE_FORMAT, 2, 's', 'were', SkillLoader::DEBUG_SKIPS_ENV, 'them'),
+            $notices[0],
+        );
         self::assertSame(1, substr_count($stderr, 'could not be read'));
     }
 
@@ -286,7 +290,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         self::assertCount(25, $notices, '24 notices plus one overflow row');
         self::assertStringContainsString("permissionRules[23] ('Bogus23')", $notices[23]);
         self::assertSame(
-            '…and 6 more launch warnings this transcript could not fit; the full list is on stderr',
+            sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
             $notices[24],
         );
 
@@ -311,7 +315,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         );
 
         self::assertCount(25, $history);
-        self::assertStringContainsString('…and 6 more launch warnings', $history[24]);
+        self::assertStringContainsString(
+            sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            $history[24],
+        );
     }
 
     /**
@@ -427,7 +434,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         // really appears once.
         self::assertSame(
             1,
-            substr_count(implode("\n", $viaApp), 'more launch warnings this transcript could not fit'),
+            substr_count(
+                implode("\n", $viaApp),
+                sprintf(Bootstrap::LAUNCH_NOTICE_OVERFLOW_FORMAT, 6, 's'),
+            ),
             'the overflow row must appear exactly once in the hosted transcript',
         );
     }
@@ -529,12 +539,15 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         );
 
         self::assertSame(
-            ['retention removed 2 unnamed sessions untouched for 30+ days (ids on stderr)'],
+            [sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 2, 'sessions', 30)],
             $notices,
             'the transcript must carry exactly one aggregate row for the prune',
         );
         self::assertStringContainsString(
-            "sugarcrush: retention removed 2 unnamed sessions untouched for 30+ days (ids on stderr).\n",
+            sprintf(
+                Bootstrap::STDERR_LINE_FORMAT,
+                sprintf(Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT, 2, 'sessions', 30),
+            ),
             $stderr,
             'the stderr half of the seam must still say it',
         );
@@ -544,8 +557,20 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         // assertSame above already implies — kept for the day that assertSame
         // is loosened, and labelled as such in the doc-block rather than sold
         // as a second measurement.
-        foreach (['gone-one', 'gone-two'] as $id) {
-            self::assertStringContainsString($id . ' (last used 2020-01-01 00:00:00 UTC,', $stderr);
+        // The fixture above gave `gone-one` one message and left `gone-two`
+        // empty, so the two rows take different plural forms — a hand-typed
+        // identical needle for both would miss a plural bug either way.
+        foreach (['gone-one' => 1, 'gone-two' => 0] as $id => $messages) {
+            self::assertStringContainsString(
+                sprintf(
+                    Bootstrap::SESSION_RETENTION_DETAIL_FORMAT,
+                    $id,
+                    '2020-01-01 00:00:00',
+                    $messages,
+                    $messages === 1 ? 'message' : 'messages',
+                ),
+                $stderr,
+            );
             self::assertStringNotContainsString($id, $notices[0]);
         }
     }
