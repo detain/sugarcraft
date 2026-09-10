@@ -531,18 +531,33 @@ final class SkillRegistry
      * FASTER, INCIDENTALLY, WHICH MATTERS BECAUSE THIS IS ON A TOOL-CALL PATH:
      * {@see SkillPathNudge} runs this per pattern per path, and a
      * {@see \SugarCraft\Crush\Tools\BuiltIn\Glob} hands over a whole match
-     * list. GENERATOR, so the figure can be re-taken: 5 patterns
-     * (`**\/*.php`, `src/**\/*.php`, `a/**\/b/**\/c/**\/d`, `docs/**\/*.md`,
-     * `**\/node_modules/**`) x 40 paths of the form `src/` + 8 path segments
-     * + a filename, 200 trials = 40,000 pairs, no randomness, PHP 8.3.6.
-     * RE-TAKEN at the commit that closed the three narrowing families, three
-     * runs: old 0.0269s / 0.0277s / 0.0274s, new 0.0087s / 0.0087s / 0.0087s —
-     * 0.31x-0.33x, one cached `preg_match` where the old path ran up to four
-     * `fnmatch()` calls plus three `str_replace()` rewrites. An earlier take on
-     * this same box read 0.033s / 0.0095s = 0.29x; the RATIO is stable to
-     * within the box's own drift and the absolute times are not, so quote the
-     * ratio and re-take the rest. /s and the class-body walk cost nothing here
-     * — the walk happens once per pattern, at compile.
+     * list. WHAT THE FIGURE USED TO SAY: 5 patterns x 40 paths of the form
+     * `src/` + 8 path segments + a filename, 40,000 pairs, 0.31x-0.33x — but
+     * the segments' CONTENT was never spelled out, so the corpus could not be
+     * re-taken honestly, and the band inherited whatever the first generator
+     * happened to build (backlog E115). WHAT IS MEASURED NOW: the same five
+     * patterns (`**\/*.php`, `src/**\/*.php`, `a/**\/b/**\/c/**\/d`,
+     * `docs/**\/*.md`, `**\/node_modules/**`) x 40 deterministic `src/` paths
+     * — 8 segments plus a filename cycling `.php`/`.md`/`.js`/`.json` — with
+     * segment LENGTHS stated as three classes: 1-char (rotating single
+     * letters), 12-char and 24-char (phonetic-alphabet bases truncated/padded;
+     * every 9th path carries a `node_modules`-derived segment), so the shape
+     * matches the original claim while its content is finally pinned. 1,400
+     * pair-calls per timed run per class, 7 repeats, medians, no randomness,
+     * both routes over the identical grid. Domain: 2026-09-10, PHP 8.3.6,
+     * 64-core AMD Eng-Sample devbox, monorepo sandbox in linked mode. New vs
+     * old: 0.35ms / 2.01ms = 0.175x at 1-char, 0.66ms / 2.91ms = 0.225x at
+     * 12-char, 0.91ms / 3.99ms = 0.229x at 24-char, 0.213x aggregate — a
+     * ~0.18x-0.23x band, i.e. the compiled route is FURTHER ahead than the
+     * unspecified corpus had recorded: one cached `preg_match` where the old
+     * path ran up to four `fnmatch()` calls plus three `str_replace()`
+     * rewrites, and the rewrites grow with the pattern. Both routes agreed on
+     * every pair of this grid. WHY THE PARAGRAPH EARNS ITS PLACE: on a
+     * per-tool-call fan-out the constant factor is what the user waits for,
+     * and the RATIO — never the absolute milliseconds, which track box drift
+     * — is the portable claim; re-take it with the corpus spelled out above.
+     * /s and the class-body walk cost nothing here — the walk happens once
+     * per pattern, at compile.
      *
      * A deliberately pathological case (three globstars against a
      * 60-segment non-matching path) ran 2,000 times in 0.0004s: the leading
