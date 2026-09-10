@@ -219,9 +219,13 @@ final class WorkflowToolsHandoffTest extends TestCase
                 ->build(),
         );
 
-        $this->mockExecutor->expects($this->never())->method('execute');
-
         $result = $engine->run('unknown-not-first', []);
+
+        // Not `expects($this->never())->method('execute')`: setUp already configured a permissive
+        // ->method('execute') stub and PHPUnit resolves the FIRST matching configuration, so a
+        // second never() expectation is shadowed — a dispatch would pass this test vacuously.
+        // The winning stub records every dispatch, so an empty capture is the real non-dispatch proof.
+        $this->assertSame([], $this->capturedRequests, 'the refused stage must dispatch nothing — not even the healthy first task');
 
         $this->assertFalse($result->isSuccess());
         $this->assertSame(WorkflowStatus::Failed, $result->status);
@@ -248,9 +252,11 @@ final class WorkflowToolsHandoffTest extends TestCase
 
         // The refusal fires while the stage builds its request — nothing is
         // dispatched, so no provider (and no `->name()` fatal) ever sees it.
-        $this->mockExecutor->expects($this->never())->method('execute');
-
         $result = $engine->run('unknown-tool', []);
+
+        // Enforced via the recorded dispatches, not a never()-expect shadowed by setUp's
+        // permissive ->method('execute') stub (PHPUnit is first-match-wins).
+        $this->assertSame([], $this->capturedRequests, 'the unknown-name stage must dispatch nothing');
 
         $this->assertFalse($result->isSuccess());
         $this->assertSame(WorkflowStatus::Failed, $result->status);
