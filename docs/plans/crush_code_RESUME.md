@@ -49,6 +49,26 @@ at a round boundary to ask whether to continue.** Concretely:
   minutes; `connect_timeout` is fine, a total cap is not. This is the E646 rule restated — contain
   with the LEASE frame, never with a cap.
 
+#### Session operating rules (user directives 2026-09-10, round 62)
+
+1. Concurrency ceiling raised by the user to EIGHT agents/lanes at a time (was: three lanes + serial
+   sub-agents). Prefer to fill idle slots with backlog steps run in their own `cp -a` sandboxes; pick
+   lane sets that are file-DISJOINT (ownership maps verbatim into briefs; out-of-lane edits are refused
+   and reported as seams) to keep cherry-pick merges clean.
+2. Route ALL implementation through the Task tool with subagent_type `coder` (bash-capable). Read-only
+   probes may use the explore agent via delegate.
+3. Blank/truncated agent response is NOT failure: resume the SAME task_id repeatedly until it answers —
+   it may take 10+ resumes; never change the prompt or restart the work.
+4. Agents sometimes fabricate GREEN reports (round 61: a fixer looped 5 identical fabricated reports
+   after its commit already landed; another died with work complete). Land-verify every claim against
+   `git log` / read-only forensic probes; trust probes over reports.
+5. At every round close: update worklog + §0-NOW + backlog stamps as supervisor-owned writes (this
+   file's cadence) — including new rules learned mid-round like these.
+6. Round-62 lane ledger (running as of this writing): E (E652/E653/E656 wiring+docs), G (E655 flake
+   forensics), H (E657/E658 citation sweep), I (E37/E1/E30/E124 roster+README integrity), J (E29/E115
+   measurements), K (E49 candy-shine — launching as slots free). All sandboxes
+   `/home/sites/crush-lane-{e,g,h,i,j,k}` @`0549736d4` or `5afe24380`.
+
 ### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
 
 | figure | value | domain |
