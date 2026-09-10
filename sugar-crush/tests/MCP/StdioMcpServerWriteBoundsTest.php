@@ -356,6 +356,22 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
                 continue;
             }
 
+            // String interpolation opens a brace WITHOUT a literal '{' token:
+            // "{$x}" emits T_CURLY_OPEN and "${x}" emits
+            // T_DOLLAR_OPEN_CURLY_BRACES, while their closer arrives later as a
+            // plain '}'. Ignoring the implicit openers loses a depth level for
+            // every interpolated string and closes the method at the wrong brace
+            // — the exact defect InterpolationOpenerTokenTest walks the whole
+            // tree for, and the reason both names appear here.
+            if (is_array($token)
+                && ($token[0] === T_CURLY_OPEN || $token[0] === T_DOLLAR_OPEN_CURLY_BRACES)
+            ) {
+                $depth++;
+                $opened = true;
+
+                continue;
+            }
+
             if ($text === '}') {
                 $depth--;
                 if ($opened && $depth === 0) {
