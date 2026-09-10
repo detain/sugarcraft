@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tools;
 
 // Fixture driver executed as a SUBPROCESS by
-// {@see BuiltInToolCorpusTest::testTheScannerSurvivesAMisnamespacedFileUnderTheRealComposerAutoloader()}
+// {@see BuiltInToolCorpusTest::testTheScannerClassifiesAMisnamespacedFileUnderTheRealComposerAutoloader()}
 // and the wired-directory test beside it. Never by PHPUnit directly: no `Test`
 // suffix, so it is not collected.
 //

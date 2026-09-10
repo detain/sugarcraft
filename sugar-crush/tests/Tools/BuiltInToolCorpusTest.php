@@ -1869,6 +1869,249 @@ final class BuiltInToolCorpusTest extends TestCase
     }
 
     /**
+     * THE SYNTHETIC PAIR ABOVE COULD NOT SEE THE DEFECT THEY PINDLE AROUND
+     * (finding E631): this suite's probe autoloader is `require_once`, while
+     * COMPOSER's is a plain `include` — so under the real loader, the old
+     * `class_exists()`+`interface_exists()`+`trait_exists()` gate re-executed a
+     * mis-namespaced file up to three times, and the second pass hit PHP's
+     * "Cannot declare class … name is already in use" fatal while still
+     * evaluating the condition. rc 255, no test results, no red to triage.
+     * MEASURED at this base before the fix, via the driver these two tests
+     * spawn (transcript kept in the lane evidence; the driver's header says
+     * why only a subprocess can show this): stdout stopped after
+     * `PHASE A:classNames`, stderr carried the Ghost redeclare, exit 255.
+     *
+     * So the mis-namespaced shape is ALSO driven against the real composer
+     * autoloader, in a throwaway subprocess over temp trees registered on it.
+     * This test is the regression pin for the PROCESS-LEVEL failure: if the
+     * token gate in BuiltInToolCorpus::classNames() is ever replaced by engine
+     * probes again, this subprocess dies exactly like the old suite did and
+     * there is nothing to assert — the rc-0 assertion below is the whole point,
+     * and its message carries the transcript. The marker assertions are the
+     * liveness half (rule 15): rc 0 from a driver that scanned nothing would
+     * otherwise pass. `A_CLASSES` is the good sibling found anyway;
+     * `A_EXEMPT` is the skip REPORTED, not swallowed; `C_KINDS` runs the
+     * REFLECTION census's own classifier over the poisoned tree — E636's
+     * hazard was that the census, declared above the token-balance test, took
+     * the runner down before the balance could speak, and `none,concrete`
+     * arriving alive is the mechanical proof that ordering is now moot.
+     */
+    public function testTheScannerClassifiesAMisnamespacedFileUnderTheRealComposerAutoloader(): void
+    {
+        [$rc, $out] = $this->runRealAutoloaderDriver();
+
+        $this->assertSame(
+            0,
+            $rc,
+            "the corpus scanner took the WHOLE PROCESS down (rc {$rc}) — that is the E631 shape: "
+            . "composer's includeFile() is a plain include, so a *_exists() probe of a name the "
+            . "file does not declare re-executes it and PHP fatals on the redeclaration before "
+            . "any assertion exists. Pre-fix at this base this transcript ended after "
+            . "'PHASE A:classNames'. Resolution must read the token stream, not the engine. "
+            . "Transcript:\n{$out}",
+        );
+
+        $this->assertStringContainsString(
+            'RESULT A_CLASSES=CorpusRealAutoloadProbeA\\Tools\\BuiltIn\\Anchor',
+            $out,
+            "a well-formed tool must still be found beside a mis-namespaced sibling:\n{$out}",
+        );
+        $this->assertStringContainsString(
+            'RESULT A_EXEMPT=Support/Ghost.php',
+            $out,
+            "the mis-namespaced file outside the wired directory must be REPORTED as exempt:\n{$out}",
+        );
+        $this->assertStringContainsString(
+            'RESULT C_KINDS=Support/Ghost.php:none,Tools/BuiltIn/Anchor.php:concrete',
+            $out,
+            "the reflection census must classify the poisoned tree to completion — `none` for the "
+            . "mis-namespaced file WITHOUT a fatal, `concrete` for the good one (E636 proof):\n{$out}",
+        );
+        $this->assertStringNotContainsString('Fatal error', $out, "no engine-level fatal may occur:\n{$out}");
+    }
+
+    /**
+     * The wired-directory polarity under the real loader: a mis-namespaced file
+     * in `src/Tools/BuiltIn/` must raise the NAMED RuntimeException — a red
+     * test with a filename in it — rather than the rc-255 process death the
+     * engine probe produced. Same driver, same subprocess contract, one
+     * assertion per failure mode so a regression names which promise broke.
+     */
+    public function testAMisnamespacedWiredToolRaisesANamedRuntimeExceptionNotAProcessFatalUnderTheRealAutoloader(): void
+    {
+        [$rc, $out] = $this->runRealAutoloaderDriver();
+
+        $this->assertSame(0, $rc, "the scanner must SURVIVE to throw, not die mid-probe:\n{$out}");
+        $this->assertStringContainsString(
+            'RESULT B_THROW=src/Tools/BuiltIn/Ghost.php does not declare '
+            . 'CorpusRealAutoloadProbeB\\Tools\\BuiltIn\\Ghost; the built-in tool namespace and '
+            . 'directory must agree',
+            $out,
+            "the wired-directory disagreement must arrive as the documented named exception:\n{$out}",
+        );
+        $this->assertStringContainsString('PHASE DONE', $out, "the driver must reach the end marker:\n{$out}");
+    }
+
+    /**
+     * Spawn the real-composer-autoloader fixture driver. Its trees land under
+     * the per-test probeDir, which tearDown removes; output is captured
+     * merged (stdout+stderr) because the point of comparison includes PHP's
+     * fatal text, which has no business being green.
+     *
+     * @return array{0: int, 1: string} exit code and merged transcript
+     */
+    private function runRealAutoloaderDriver(): array
+    {
+        $scratch = $this->probeDir . '/real_autoload';
+        if (!is_dir($scratch)) {
+            mkdir($scratch, 0o777, true);
+        }
+
+        exec(
+            \escapeshellarg(\PHP_BINARY) . ' '
+            . \escapeshellarg(__DIR__ . '/corpus-real-autoloader-driver.php') . ' '
+            . \escapeshellarg($scratch) . ' 2>&1',
+            $lines,
+            $rc,
+        );
+
+        return [(int) $rc, implode("\n", $lines)];
+    }
+
+    /**
+     * E637, pinned BOTH ways (rules 14/15). A type declared inside a
+     * conditional — `if (…) { class … }` — sits at depth > 0 and is invisible
+     * to BuiltInToolCorpus::declaredTypes(), which since E631 is not merely
+     * the census's instrument but the RESOLUTION GATE's too. That is POLICY,
+     * and the policy lives in the scanner's doc-block; this test is its
+     * generator at both polarities.
+     *
+     * POSITIVE (the instrument is not blind): the UNCONDITIONAL secondary Tool
+     * in the same file IS found — the walk sees depth zero fine. NEGATIVE (the
+     * miss is real and by design): its conditional sibling is absent from the
+     * corpus, absent from declaredTypes, and the census classifier answers
+     * `none` for it WITHOUT an engine probe — which also means the driver's
+     * whole reason for existing (the plain-include re-execution) cannot fire
+     * here either. One note on the miss being SILENT: `nonClassSources()`
+     * stays `[]`, because the file's primary resolves — that is exactly what
+     * the bound paragraph in BuiltInToolCorpus::declaredTypes() promises, and
+     * why it is written there instead of being left to be rediscovered.
+     *
+     * (The `getenv()` branch is never taken: the env var exists nowhere in the
+     * suite, so PHP itself has not defined the class either — the miss is not
+     * an artefact of reading source for a runtime question.)
+     */
+    public function testAConditionallyDeclaredToolIsMissedByDesignAndAnUnconditionalOneIsNot(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Support/Host.php', <<<'PHP'
+            namespace CorpusProbe\Support;
+
+            use SugarCraft\Crush\Tools\Tool;
+            use SugarCraft\Crush\Tools\ToolResult;
+
+            final class Host
+            {
+            }
+
+            final class UnconditionalTool implements Tool
+            {
+                public function name(): string
+                {
+                    return 'unconditional';
+                }
+
+                public function description(): string
+                {
+                    return 'seen by the walk';
+                }
+
+                public function inputSchema(): array
+                {
+                    return [];
+                }
+
+                public function execute(array $args): ToolResult
+                {
+                    return ToolResult::error('unconditional');
+                }
+            }
+
+            if (getenv('CORPUS_PROBE_BRANCH_NEVER_TAKEN') !== false) {
+                final class ConditionalTool implements Tool
+                {
+                    public function name(): string
+                    {
+                        return 'conditional';
+                    }
+
+                    public function description(): string
+                    {
+                        return 'invisible to the walk';
+                    }
+
+                    public function inputSchema(): array
+                    {
+                        return [];
+                    }
+
+                    public function execute(array $args): ToolResult
+                    {
+                        return ToolResult::error('conditional');
+                    }
+                }
+            }
+            PHP);
+
+        $file = $this->probeDir . '/Support/Host.php';
+
+        $this->assertSame(
+            ['CorpusProbe\\Support\\Host', 'CorpusProbe\\Support\\UnconditionalTool'],
+            BuiltInToolCorpus::declaredTypes($file),
+            'depth-zero declarations, in file order — no third entry for the conditional one',
+        );
+        $this->assertSame(
+            ['CorpusProbe\\Support\\UnconditionalTool', 'CorpusProbe\\Tools\\BuiltIn\\Anchor'],
+            $this->scanProbe(),
+            'the unconditional secondary IS in the corpus; the conditional sibling is missed by design',
+        );
+        $this->assertSame(
+            [],
+            BuiltInToolCorpus::nonClassSources($this->probeDir, self::PROBE_PREFIX),
+            'the miss is SILENT here — the file resolves at its own name; this assertion is the '
+            . 'bound paragraph in BuiltInToolCorpus::declaredTypes() earning its place',
+        );
+        $this->assertSame('none', self::classifyFilePsr4Symbol($file, 'CorpusProbe\\Support\\ConditionalTool'));
+    }
+
+    /**
+     * The same bound from the OTHER end: a file whose ONLY declaration is
+     * conditional fails the token gate, so it is never silent — outside the
+     * wired directory it is REPORTED as exempt (this test), and inside it the
+     * gate throws the named mismatch. "Out of scope" means the instrument
+     * declines to see it, reported by name — not that the tree forgets it.
+     */
+    public function testAFileWhoseOnlyDeclarationIsConditionalIsReportedExemptNotSilentlyIgnored(): void
+    {
+        $this->writeOneRealTool();
+        $this->writeProbe('Support/Gated.php', <<<'PHP'
+            namespace CorpusProbe\Support;
+
+            if (getenv('CORPUS_PROBE_BRANCH_NEVER_TAKEN') !== false) {
+                final class Only
+                {
+                }
+            }
+            PHP);
+
+        $this->assertSame(['CorpusProbe\\Tools\\BuiltIn\\Anchor'], $this->scanProbe());
+        $this->assertSame(
+            ['Support/Gated.php'],
+            BuiltInToolCorpus::nonClassSources($this->probeDir, self::PROBE_PREFIX),
+        );
+    }
+
+    /**
      * TWO EMPTINESSES, and telling them apart is what stops
      * {@see BuiltInToolCorpus::nonClassSources()} passing vacuously. An empty
      * DIRECTORY means nothing was scanned; a scanned tree with no tools in it
