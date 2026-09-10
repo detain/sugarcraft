@@ -681,8 +681,9 @@ final class Runtime
      * THIS PARAGRAPH. Its first draft cited `$environmentBlock` at `:400` and
      * `App::mutate()` at `:1264`. Both were wrong: `:400` was that parameter's
      * line in the file BEFORE this doc-block grew, and it had moved by the
-     * time the sentence shipped; `App.php:1264` is the bare `{` between the
-     * declaration and the `new self(`. A paragraph whose whole subject is "the
+     * time the sentence shipped; `App.php:1264` sat at the time between
+     * `App::mutate()`'s declaration and its `new self(` - a position that has since
+     * rotted to a `return`, exactly the failure mode this paragraph argues. A paragraph whose whole subject is "the
      * reason given was wrong" carrying two fresh wrong citations is §16.8 rule
      * 7 arriving inside its own correction. The repair is not a third set of
      * line numbers: the three field names and the two method names are
@@ -853,7 +854,7 @@ final class Runtime
      *     silently. `EnvironmentBlock` has FOUR production construction sites;
      *     this step reaches ONE. MEASURED with
      *     `/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/ bin/`: this
-     *     class, plus `Cli/Bootstrap.php:1463`, `App/App.php:553` and the
+     *     class, plus the `Cli/Bootstrap::agentManager()` roster loop, `App::dispatchSkill()` and the
      *     last-resort fallback inside `Agents\Agent::systemPrompt()` itself.
      *     THE SYMBOL IS THE CITATION FOR THAT THIRD ONE and the line number
      *     is only a direction (`Agents/Agent.php:985`, MEASURED in this merge
@@ -983,8 +984,8 @@ final class Runtime
      *     found, instead of as a sentence nobody re-measures; and
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}
      *     pins the ROSTER those numbers are counted from, so a site that moves
-     *     between files without changing the total still reds. `Bootstrap.php:1463`
-     *     memoises the CAPTURE onto each agent, which costs nothing: capture()
+     *     between files without changing the total still reds. The `Bootstrap::agentManager()` roster memo
+     * memoises the CAPTURE onto each agent, which costs nothing: capture()
      *     runs ZERO subprocesses (MEASURED with a logging `git` shim: ten
      *     captures with no render, 0 invocations) and `render()` pays the bill
      *     on every call. The gap is

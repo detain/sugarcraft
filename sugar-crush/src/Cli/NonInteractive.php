@@ -19,7 +19,7 @@ use SugarCraft\Crush\Permissions\ToolRefusal;
  * synchronous backend, print the result, and exit with a Unix-style status
  * code — no TUI, no alt-screen, no render loop.
  *
- * `EngineBackend::complete()` (src/Backend/EngineBackend.php:130) already
+ * `EngineBackend::complete()` already
  * runs the full bounded agentic loop synchronously and returns a finished
  * `Message` with no `Program`/`Chat` involved — this class is purely the
  * argv/stdin/stdout/exit-code plumbing wrapped around that existing

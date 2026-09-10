@@ -2232,8 +2232,8 @@ final class Chat implements Model
         // is this round's own rule seen from the other side. Under row 4 the ask
         // is dropped, so the turn is left NOT in flight; the refusing sets assert
         // exactly `!inFlight`, so they pass VACUOUSLY on a prompt that never
-        // appeared. Measured: the "y" set fails at ChatTest.php:3756 on
-        // `assertSame(false, !$answered->inFlight)`. Domain of both
+        // appeared. Measured: the "y" set fails on `!$answered->inFlight` in
+        // `ChatTest::testPermissionKeysDecideThePrompt()`. Domain of both
         // figures: tests/ChatTest.php alone at 215 tests, mutated at
         // requestPermission()'s guard (the site this comment sits above) in a
         // sandbox copy of this lib, PHP 8.3.6. Counts go stale; the eleven names
@@ -11102,7 +11102,7 @@ final class Chat implements Model
      * 'agent'), and `MemoryBlock` folds ONLY the project scope into the
      * prompt — its own docblock lists user/agent scope under "WHAT IS
      * DELIBERATELY NOT HERE" (src/Context/MemoryBlock.php:73-80) and
-     * `capture()` reads exactly `list(MemoryScope::Project)` (:203). No
+     * `capture()` reads exactly `list(MemoryScope::Project)` (the `capture()` body). No
      * number of imported entries can therefore crowd the 12-entry prompt
      * block, and agent scope is the point, not an oversight: the provenance-
      * badge attack story in {@see ForeignMemoryImporter}'s class docblock
@@ -13174,7 +13174,7 @@ final class Chat implements Model
      * The third line is ruling P8.S5-R6, verbatim: "§4.23's breaker stops a FUTILE
      * refill loop; a rescued dispatch (truncateOversizedExchange path, E18) is NOT
      * futile — each rescue truncates further and the turn goes out, which is the
-     * shipped, pinned P4.S4 UX (ContextCompactorTest:1339 'an exchange that cannot
+     * shipped, pinned P4.S4 UX (ContextCompactorTest::testAnOversizedExchangeStopsBeingRefusedAndTheWireReallyGetsShorter() 'an exchange that cannot
      * fit must be truncated, not re-refused'). Therefore: a compaction attempt whose
      * outcome is a rescued dispatch carries the counter UNCHANGED on BOTH routes
      * (parked-landing rescue + sync rescue branches). The breaker keeps authority

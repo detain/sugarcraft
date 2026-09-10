@@ -117,20 +117,21 @@ use SugarCraft\Crush\Tui\Pane;
  * CONSTRUCTED AND THAT `Chat::executeAgents()` IS THE ONE PRODUCTION ROUTE
  * INTO `AgentManager::executeAll()`. BOTH WERE TRUE WHEN WRITTEN AND BOTH ARE
  * NOW FALSE. crush_code.md Phase 2 item 3 landed
- * `Bootstrap::workflowEngine()` (`Cli/Bootstrap.php:718`, constructed at
- * `:770`) and passes it to `Bootstrap::chat()` alongside the manager
- * (`:607`, `:621`); `Chat::__construct()` links the two; and
+ * `Bootstrap::workflowEngine()` and
+     * `Bootstrap::agentManager()`, wired side by side into `Bootstrap::chat()`'s
+     * `new Chat(` as the `workflowEngine:` and `agentManager:` arguments;
+     * `Chat::__construct()` links the two; and
  * `WorkflowEngine::executeParallelStage()` calls
- * `AgentManager::executeAll()` (`Workflows/WorkflowEngine.php:1296`), which
- * files every `SubAgent` under the manager's SUB-AGENT map
- * (`Agents/AgentManager.php:681`) and streams onto its `output`.
+     * `AgentManager::executeAll()` (from `WorkflowEngine::executeParallelStage()`), which
+     * files every `SubAgent` under the manager's SUB-AGENT map
+     * in `AgentManager::executeAll()` and streams onto its `output`.
  *
  * ⚠️ AND THAT STILL DOES NOT POPULATE THIS STRIP — a first correction of this
  * paragraph claimed it did, and the claim was measured false.
  * `renderAgentView()` below reads `AgentManager::active()`, which iterates the
  * REGISTERED map (`AgentManager::$agents`, written only by `register()`).
  * `executeParallelStage()` never registers: it builds ad-hoc `Agent`s named
- * `$task->name ?? $task->agentType` (`WorkflowEngine.php:1254`) and passes the
+     * `$task->name ?? $task->agentType` in `executeParallelStage()` and passes the
  * `SubAgent`s straight to `executeAll()`. Neither shipped workflow names a
  * parallel task after a roster agent — `examples/workflows/lint-then-fix.yaml`
  * names `style-fixer`/`correctness-fixer`, `workflows/deep-research.php` names

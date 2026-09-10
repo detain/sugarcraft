@@ -1652,8 +1652,8 @@ final readonly class VertexProvider implements ProviderInterface
      * allows short of a live call): the vendored protobuf class
      * `Google\Cloud\AIPlatform\V1\GenerateContentResponse\UsageMetadata`
      * defines `cachedContentTokenCount`, and its own field comment -
-     * MEASURED at vendor/google/cloud-ai-platform/src/V1/
-     * GenerateContentResponse/UsageMetadata.php:234-245 - reads "Number of
+     * MEASURED at the vendored
+     * `GenerateContentResponse\UsageMetadata::getCachedContentTokenCount()` comment - reads "Number of
      * tokens in the cached part in the input (the cached content)". That
      * makes it a SUBSET of `promptTokenCount`, not a third disjoint side, so
      * this arm takes the subtraction path the OpenAI-family parses use
@@ -1851,14 +1851,14 @@ final readonly class VertexProvider implements ProviderInterface
      * {@see defaultPredictor()}'s non-`rawPredict` branch builds its
      * `PredictRequest` with `->setEndpoint()` and
      * `->setInstances(...)` only and never calls `setParameters()`
-     * (VertexProvider.php:1276-1282), so the sampling knobs are dropped
+     * (inside `defaultPredictor()`), so the sampling knobs are dropped
      * before the request is sent. This is a SEPARATE defect from the one this
      * method's `context` hoist fixes, it predates that fix, and repairing it
      * is a different step (1.10: reported, not repaired).
      *
      * THE `context` HOIST IS UNAFFECTED, and that is why this note is a note
      * and not a blocker: `context` lives INSIDE `instances`, and
-     * {@see toProtobufValues()} (VertexProvider.php:1554-1565) merges each
+     * {@see toProtobufValues()} merges each
      * instance from arbitrary JSON via `mergeFromJsonString()`, so any key
      * added to the instance - `context` included - does survive to the wire.
      * Epistemic status: the `setParameters()` absence is MEASURED by reading
