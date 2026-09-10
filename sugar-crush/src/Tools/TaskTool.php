@@ -32,7 +32,7 @@ use SugarCraft\Crush\Providers\CompleteRequest;
  * resolution settles its members with the reason and fails loud here rather
  * than forking anything.
  *
- * FAIL-CLOSED IN THREE PLACES, because a delegation tool that fabricates is
+ * FAIL-CLOSED IN FOUR PLACES, because a delegation tool that fabricates is
  * worse than no delegation tool at all:
  *  - unbound (no session {@see AgentManager} wired in) → refusal naming the
  *    missing wiring; the corpus builds this instance standalone, and the one
