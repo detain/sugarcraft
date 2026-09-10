@@ -1177,6 +1177,27 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             self::pagesQuoting('was 100% warm', $percent),
         );
 
+        // E217: ADJACENT CONVERSIONS. `'%s%s ran'` carries no literal between
+        // its two fields, so their wildcards sit back to back — but the SECOND
+        // field still owes the page a run before the tail literal. The old
+        // empty-neighbour skip emitted NO wildcard there, compiling the format
+        // down to its bare `' ran'`, which nominates any page that merely
+        // contains the word. Both directions are pinned: the tail alone is not
+        // a quotation (the OLD pattern matched it, so this assert is the fix's
+        // negative polarity), and a rendered pair still is.
+        $adjacent = self::shapePatternFor('%s%s ran');
+        self::assertSame(
+            0,
+            \preg_match($adjacent, ' ran away'),
+            'adjacent conversions compile without a field wildcard, so the format degenerates to its tail '
+            . 'literal and any page merely CONTAINING the word is nominated as a reader',
+        );
+        self::assertSame(
+            1,
+            \preg_match($adjacent, 'alpha beta ran away'),
+            'the adjacent-conversion pattern no longer matches a real rendered quotation',
+        );
+
         // AND A PAGE THE MATCHER CANNOT PARSE GOES RED, NEVER QUIET. This is
         // the arm a `=== 1` test cannot have: `preg_match()` on a `/u` pattern
         // answers `false` for a subject that is not valid UTF-8, and `false`
@@ -1878,8 +1899,24 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $parts = array_map(static fn(string $p): string => str_replace("\0", '%', $p), $parts);
 
         $pattern = '';
+        $last = \count($parts) - 1;
         foreach ($parts as $i => $part) {
-            if ($i > 0 && $part !== '' && $parts[$i - 1] !== '') {
+            // E217. The wildcard represents the RENDERED FIELD of the
+            // conversion that sits immediately before `$part`, so the question
+            // is whether that conversion is interior — not whether the literal
+            // spans beside it happen to be empty. Skipping on an empty NEIGHBOUR
+            // was right at the two edges of a format and wrong in the middle:
+            // `'%s%s ran'` compiled with no wildcard at all between the second
+            // `%s` and its `' ran'`, collapsing the two interpolated runs into
+            // one slot and asking a page for text no rendering of the format
+            // can produce. LEADING (`i === 1` with an empty head — the format
+            // opens on a conversion) and TRAILING (empty tail at the last
+            // boundary — the format closes on one) still contribute nothing, as
+            // before.
+            $interior = $i > 0
+                && !($i === 1 && $parts[0] === '')
+                && !($part === '' && $i === $last);
+            if ($interior) {
                 $pattern .= '.{1,' . self::PAGE_QUOTE_FIELD_BYTES . '}?';
             }
             $pattern .= preg_quote($part, '/');
