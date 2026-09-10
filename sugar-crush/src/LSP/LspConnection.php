@@ -1001,6 +1001,18 @@ final class LspConnection implements LspConnectionInterface
     private function readResponse(string $id, float $deadline): LspResponse
     {
         while (microtime(true) < $deadline) {
+            // ONE DRAIN PER PUMP ITERATION, not merely per refill pass.
+            // {@see readMessage()} can return a WHOLE message from
+            // {@see $readBuffer} without touching any pipe — header and body
+            // both satisfied by what an earlier refill had already pulled — and
+            // on such a pass the drain inside {@see refill()} never runs. This
+            // line is what makes the cadence rule literal: every pass of the
+            // message pump reads fd 2, buffered output or not. See the DRAIN
+            // CADENCE note on {@see drainStderr()} for the mechanism this is
+            // one clause of, and {@see pumpStderr()} for the half that runs
+            // when no pump is turning at all.
+            $this->drainStderr();
+
             $message = $this->readMessage();
             if ($message === null) {
                 // No complete message available yet, check if process is still alive.
@@ -1221,6 +1233,36 @@ final class LspConnection implements LspConnectionInterface
      * {@see isConnected()} goes on reporting true, because the process is alive
      * and the handle is a resource. A `rust-analyzer`/`gopls`/`jdtls` log storm
      * is an ordinary amount of stderr, not a pathological one.
+     *
+     * DRAIN CADENCE — WHICH PASSES RUN THIS, AND WHY NOTHING RUNS IT ON A TIMER.
+     * E475 filed the gap; E503 measured it (a server flooding fd 2 while the
+     * parent idles blocks, and the very next exchange frees it ~20 ms in —
+     * a stall, not a deadlock). WHAT WAS CLAIMED as the fix: "fd 2 on the
+     * ReactPHP loop". WHAT IS TRUE (E537, measured against this tree's actual
+     * dispatch): `Chat`'s parallel tool dispatch FORKS ONE CHILD PER CALL and
+     * the parent's loop services callbacks every 50 ms while that child sits
+     * inside an exchange on INHERITED fds — mounting fd 2 on the parent's loop
+     * would put two processes on one pipe simultaneously, and `read(2)` is
+     * destructive: the reported tail would silently lose exactly the lines the
+     * other process happened to consume. A worse defect than the stall, and a
+     * silent one. Hence the cadence, and only the cadence, that a synchronous
+     * class owning NO loop handle can run safely:
+     *
+     *  1. every pass of {@see writeMessage()}'s partial-write loop (before the
+     *     select, so a server parked in `write(2)` is released to read stdin);
+     *  2. every {@see refill()} pass of the read pump (before stdout is
+     *     touched);
+     *  3. every iteration of {@see readResponse()}, including passes answered
+     *     entirely from the buffer, which never reach (2);
+     *  4. once in {@see stopProcess()}, before the signal ladder; and
+     *  5. ON DEMAND from the owner process between exchanges, via
+     *     {@see pumpStderr()} — the seam E537's own STEP asks the dispatch
+     *     layer to call, since only it knows when no forked call is in flight.
+     *
+     * What REMAINS open by design, and is not reopened here: the idle gap in a
+     * process that is neither pumping nor calling {@see pumpStderr()}. No drain
+     * INSIDE this class can close that safely under fork-per-tool-call; closing
+     * it is a `Chat`/`Runtime` change, which is a different lane's file.
      */
     private function drainStderr(): void
     {
@@ -1265,6 +1307,47 @@ final class LspConnection implements LspConnectionInterface
     public function stderrTail(): string
     {
         return $this->stderrTail;
+    }
+
+    /**
+     * TICK THE STDERR DRAIN OUTSIDE AN EXCHANGE: one bounded, non-blocking
+     * read of fd 2, for the process that owns this connection, AT A MOMENT
+     * WHEN IT HAS NO CALL IN FLIGHT.
+     *
+     * WHY THIS IS A CALLER-PUMPED SEAM AND NOT A TIMER. This class owns no
+     * loop handle — {@see __construct()} takes a server path and argv and
+     * nothing else — and the loop-mount remedy E475/E503 once named was
+     * measured (E537) to be WRONG for this tree: `Chat` forks one child per
+     * tool call, a forked child runs exchanges on the inherited pipes while
+     * the parent's loop turns every 50 ms, and an fd-2 reader on that loop
+     * means two processes destructively reading one pipe. The bytes land in
+     * whichever wins; the diagnostic tail each process reports is then missing
+     * the other's lines, silently. So the class does not schedule its own
+     * idle drain; it offers one, and the DISPATCH layer — the only code that
+     * knows no forked call is in flight, e.g. the parent between turns —
+     * decides when to call it. That is E537's STEP, delivered from this side:
+     * the seam lives here, the judgement of WHEN lives there.
+     *
+     * THE CONTRACT, stated exactly because a violation is the silent defect
+     * above rather than a loud one:
+     *
+     *  - call it only from the process that ran {@see connect()} (or a fork
+     *    whose PARENT has parked itself out of the pipes for the duration);
+     *  - never call it from a loop/timer callback that can fire WHILE another
+     *    process is inside {@see sendRequest()}, {@see sendNotification()} or
+     *    {@see initialize()} on the same server;
+     *  - one call absorbs up to 16 × 8192 = 131072 bytes, the same bounded
+     *    pass every in-pump drain takes; a server that logged past that needs
+     *    the call again on a later tick. {@see $stderrTail} stays capped at
+     *     {@see MAX_STDERR_BYTES} regardless.
+     *
+     * A NO-OP before {@see connect()} and after {@see disconnect()} — the
+     * guards inside {@see drainStderr()} answer for it, so teardown races
+     * cannot make this throw.
+     */
+    public function pumpStderr(): void
+    {
+        $this->drainStderr();
     }
 
     /**
