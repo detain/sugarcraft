@@ -1500,9 +1500,46 @@ final class WorkflowEngineTest extends TestCase
      * If this test starts failing because the pool grew per-agent tools, that is
      * a fix: update {@see WorkflowEngine}'s constructor docblock, which
      * currently states this behaviour as fact.
+     *
+     * E641 reshaped what "handed" means: a CompleteRequest carries resolved
+     * {@see \SugarCraft\Crush\Tools\Tool} objects, never the declared name
+     * strings, so this runs against an engine WITH a registry and compares by
+     * name(). The advisory property under test is unchanged — it is about
+     * WHICH list crosses to the second agent (the first task's), not the
+     * element type.
      */
     public function testAParallelAgentIsHandedTheFirstTasksToolsNotItsOwn(): void
     {
+        $fakeTool = static fn (string $name): \SugarCraft\Crush\Tools\Tool => new class ($name) implements \SugarCraft\Crush\Tools\Tool {
+            public function __construct(private readonly string $toolName) {}
+
+            public function name(): string
+            {
+                return $this->toolName;
+            }
+
+            public function description(): string
+            {
+                return 'fake ' . $this->toolName;
+            }
+
+            public function inputSchema(): array
+            {
+                return ['type' => 'object', 'properties' => []];
+            }
+
+            public function execute(array $args): \SugarCraft\Crush\Tools\ToolResult
+            {
+                throw new \LogicException('never executed');
+            }
+        };
+
+        $engine = new WorkflowEngine(
+            $this->registry,
+            $this->pool,
+            toolRegistry: [$fakeTool('Read'), $fakeTool('Grep'), $fakeTool('Glob')],
+        );
+
         $this->registry->register(
             (new WorkflowBuilder())
                 ->name('advisory-tools')
@@ -1516,16 +1553,21 @@ final class WorkflowEngineTest extends TestCase
 
         [$agents, $requests] = $this->captureDispatches();
 
-        $this->assertTrue($this->engine->run('advisory-tools', [])->isSuccess());
+        $this->assertTrue($engine->run('advisory-tools', [])->isSuccess());
         $this->assertCount(2, $agents);
 
         $this->assertSame(['Read', 'Grep'], $agents[0]->agent->tools);
         $this->assertSame(['Glob'], $agents[1]->agent->tools, 'each SubAgent does carry its own declaration');
 
-        $this->assertSame(['Read', 'Grep'], $requests[0]->tools);
+        $toNames = static fn (array $tools): array => array_map(
+            static fn (\SugarCraft\Crush\Tools\Tool $t): string => $t->name(),
+            $tools,
+        );
+
+        $this->assertSame(['Read', 'Grep'], $toNames((array) $requests[0]->tools));
         $this->assertSame(
             ['Read', 'Grep'],
-            $requests[1]->tools,
+            $toNames((array) $requests[1]->tools),
             'the second agent is handed the FIRST task\'s tools — the declared list is advisory',
         );
     }

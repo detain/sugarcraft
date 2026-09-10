@@ -15,6 +15,7 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\ToolDeclaration;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Tools\Tool;
 
 /**
  * Executes workflows sequentially, stage by stage.
@@ -309,6 +310,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
         private readonly string $provider = 'anthropic',
         private readonly ?PermissionGate $permissionGate = null,
         private readonly ?string $environmentRoot = null,
+        /**
+         * The session's model-facing tool set — {@see Tool} instances, the
+         * same `list<Tool>` {@see AgentManager} receives as its `$toolRegistry`
+         * and for the same reason: a {@see CompleteRequest::$tools} entry must
+         * be an OBJECT (every provider calls `->name()` or type-hints the
+         * closure parameter as `Tool`), while a workflow task's `tools` is a
+         * list of NAMES. {@see resolveRequestTools()} is the seam that turns
+         * one into the other; without a registry the turn cannot be made, and
+         * the request goes out with `tools: null` rather than with strings
+         * that would fatal at the provider (E641).
+         *
+         * NULL, THE DEFAULT, IS NOT AN EMPTY REGISTRY — it mirrors the exact
+         * semantics {@see AgentManager::__construct()} documents: null means
+         * "the caller has no tool set" (every pre-wiring construction site,
+         * test doubles included) and stages run toolless as they do today; an
+         * empty array means "a registry exists and offers nothing", so any
+         * declaration at all is unresolvable and refused loudly.
+         */
+        private readonly ?array $toolRegistry = null,
     ) {}
 
     /**
@@ -1059,7 +1079,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             messages: [
                 ['role' => 'user', 'content' => $interpolatedPrompt],
             ],
-            tools: $task->tools,
+            tools: $this->resolveRequestTools($task->tools),
             systemPrompt: $agent->systemPrompt(),
         );
 
@@ -1170,7 +1190,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 messages: [
                     ['role' => 'user', 'content' => $interpolatedPrompt],
                 ],
-                tools: $task->tools,
+                tools: $this->resolveRequestTools($task->tools),
                 systemPrompt: $agent->systemPrompt(),
             );
 
@@ -1271,7 +1291,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $taskRequest = new CompleteRequest(
             model: $taskAgent->model,
             messages: [['role' => 'user', 'content' => $taskPrompt]],
-            tools: $task->tools,
+            tools: $this->resolveRequestTools($task->tools),
             systemPrompt: $taskAgent->systemPrompt(),
         );
 
@@ -1314,7 +1334,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $verifierRequest = new CompleteRequest(
             model: $verifierAgent->model,
             messages: [['role' => 'user', 'content' => $verifierPrompt]],
-            tools: $verifier->tools,
+            tools: $this->resolveRequestTools($verifier->tools),
             systemPrompt: $verifierAgent->systemPrompt(),
         );
 
@@ -1418,7 +1438,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             messages: [
                 ['role' => 'user', 'content' => $firstInterpolated],
             ],
-            tools: $firstTask->tools,
+            tools: $this->resolveRequestTools($firstTask->tools),
             systemPrompt: $firstAgent->systemPrompt(),
         );
 
@@ -1520,6 +1540,120 @@ final class WorkflowEngine implements WorkflowEngineInterface
             startedAt: $firstResult?->startedAt ?? $stageStartedAt,
             completedAt: $firstResult?->completedAt ?? new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * Turn a task's declared tool NAMES into the typed `?list<Tool>` a
+     * {@see CompleteRequest} carries to a provider.
+     *
+     * ## THE DEFECT THIS ENDS (E641)
+     *
+     * Every `tools:` handoff into a CompleteRequest used to pass
+     * {@see WorkflowTask::$tools} straight through — a `list<string>` of
+     * names. That is the correct shape for {@see Agent::$tools} (a carrier of
+     * declarations, resolved later by {@see AgentManager::resolveGrantedTools()}
+     * or not at all) and the wrong shape for a provider request: every
+     * provider either type-hints its `formatTools()` closure parameter as
+     * {@see Tool} ({@see \SugarCraft\Crush\Providers\OpenAIProvider}) or calls
+     * `->name()` on each entry ({@see \SugarCraft\Crush\Providers\ClaudeCodeProvider}).
+     * A string reaching either is a fatal TypeError/`BadMethodCall`, and it
+     * was latent only because the worker on this path never consulted a
+     * provider. Resolving HERE, at the one boundary both shapes meet, makes
+     * the illegal state unrepresentable downstream: after this method a
+     * `CompleteRequest::$tools` is either null or a list of verified Tools.
+     *
+     * ## `[]` AND NULL MEAN THE SAME THING, AND `[]` NEVER TRAVELS
+     *
+     * {@see WorkflowTask::$tools} defaults to `[]`, so "task declares no
+     * tools" arrives here as the empty list — far more often than as the
+     * deliberate "grant exactly nothing" an empty array would otherwise read
+     * as. How providers branch settles the question: every one of them gates
+     * its tool block on `$request->tools !== null`, so a literal `[]` passes
+     * the gate and goes on the wire as an empty `tools` parameter — a
+     * different request than one with no `tools` at all (OpenAI rejects
+     * `tools: []` outright; {@see \SugarCraft\Crush\Providers\SglangProvider::defaultTopP()}
+     * reads the two the same, but it is the only provider that does). This
+     * engine therefore normalizes the empty declaration to null, the same
+     * reading {@see AgentManager::resolveGrantedTools()} documents for the
+     * delegation path ("NO DECLARATION IS NOT AN EMPTY GRANT") — the two
+     * seams now answer the question identically.
+     *
+     * ## REGISTRY-ORDER, EXACT-NAME, FAIL-LOUD
+     *
+     * Selection iterates the REGISTRY, not the declaration list: registry
+     * order is the documented wire order (`Bootstrap::tools()`), and iterating
+     * it dedupes `['Bash','Bash']` by construction. Unlike
+     * {@see AgentManager::resolveGrantedTools()} this takes EXACT names, not
+     * PermissionRule patterns: a workflow declaration is parsed by
+     * {@see WorkflowRegistry::requireToolList()} as plain names, and a
+     * `Bash(git *)`-style pattern cannot select a Tool here — argument-scoped
+     * grants are enforced per call, one layer down, where arguments exist. So
+     * a pattern-shaped declaration resolves to nothing and throws, which is
+     * the loud answer; the quiet one (skipping it) is this same bug wearing
+     * the typo's hat: the model would be offered a smaller roster than the
+     * stage's prompt claims. An unresolved name throws rather than degrading,
+     * and {@see runFromWorkflow()}'s per-stage catch already turns a
+     * \Throwable into that stage's failed StageResult — same delivery shape
+     * as {@see refuseDeniedTools()}.
+     *
+     * @return ?list<Tool> null when nothing is declared or nothing can be
+     *                      resolved (no registry wired); otherwise one Tool
+     *                      per declared name, in registry order.
+     * @throws \RuntimeException When a declaration is not a non-empty string,
+     *         names no tool in the registry, or the registry holds a non-{@see Tool}.
+     */
+    private function resolveRequestTools(array $taskTools): ?array
+    {
+        if ($taskTools === []) {
+            return null;
+        }
+
+        if ($this->toolRegistry === null) {
+            // No registry supplied at all: the names cannot be typed, and the
+            // alternative — shipping the raw strings — is the E641 fatal.
+            // Toolless is the documented AgentManager reading of this state.
+            return null;
+        }
+
+        $declared = [];
+        foreach ($taskTools as $tool) {
+            if (!is_string($tool) || $tool === '') {
+                throw new \RuntimeException(sprintf(
+                    'A workflow task declares a tool that is not a non-empty tool name (%s); it cannot be resolved against the tool registry.',
+                    get_debug_type($tool),
+                ));
+            }
+
+            $declared[$tool] = true;
+        }
+
+        $resolved = [];
+        $matched = [];
+        foreach ($this->toolRegistry as $tool) {
+            if (!$tool instanceof Tool) {
+                throw new \RuntimeException(sprintf(
+                    'The tool registry holds a non-%s entry (%s); a workflow tool grant cannot be built from it.',
+                    Tool::class,
+                    get_debug_type($tool),
+                ));
+            }
+
+            if (isset($declared[$tool->name()])) {
+                $resolved[] = $tool;
+                $matched[$tool->name()] = true;
+            }
+        }
+
+        foreach (array_keys($declared) as $name) {
+            if (!isset($matched[$name])) {
+                throw new \RuntimeException(sprintf(
+                    'A workflow task declares tool "%s", which this session\'s tool registry does not contain. The stage cannot be dispatched with a smaller roster than its prompt describes.',
+                    $name,
+                ));
+            }
+        }
+
+        return $resolved;
     }
 
     /**
