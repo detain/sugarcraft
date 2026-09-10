@@ -936,6 +936,59 @@ final class AgentWorkerPoolTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // E295: child drain of inherited output buffers - parent-observable polarity
+    // -------------------------------------------------------------------------
+
+    /**
+     * MINOR-2 (round-63 review): the drain lines in startAgent()'s child branch
+     * (storeResult -> ob_end_clean loop -> exit(0)) had no test asserting their
+     * observable contract - the real-fork suites walk the path but pin nothing
+     * about buffers. The forked child shares the parent's stdout AND inherits
+     * the parent's live ob_* stack, so the difference between "discard" and
+     * "flush" is only visible from outside the child when fd 1 is capturable:
+     * this drives the whole scenario in an isolated proc_open'd script
+     * (assets/e295-inherited-buffer-drain.php) that opens its own output
+     * buffer, echoes a session marker into it, dispatches one agent through
+     * the REAL fork path, then flushes its own buffer.
+     *
+     * substr_count === 1 pins BOTH polarities in one assertion: 2 would mean
+     * the child flushed its inherited copy at exit (the E229-class
+     * double-print the drain exists to prevent); 0 would mean the parent-side
+     * buffered session output was lost. Not a duplicate of the fork-failure
+     * seam control - that test proves the seam, this one proves the drain.
+     */
+    public function testForkedWorkerDrainsInheritedOutputBufferWithoutDoublePrintingOrLosingParentOutput(): void
+    {
+        if (!function_exists('pcntl_fork') || !function_exists('proc_open')) {
+            $this->markTestSkipped('pcntl_fork()/proc_open() are not available in this environment.');
+        }
+
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $pipes = [];
+        $scenario = proc_open([PHP_BINARY, __DIR__ . '/assets/e295-inherited-buffer-drain.php'], $descriptors, $pipes);
+        $this->assertIsResource($scenario);
+
+        // Small bounded output; no pipe-full deadlock, and proc_close after
+        // both reads so a hung scenario surfaces via the exit assertion.
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($scenario);
+
+        $this->assertSame(0, $exit, 'E295 drain scenario script exited non-zero; stderr: ' . $stderr);
+        $this->assertStringContainsString('DONE:Completed', $stderr);
+        $this->assertSame(
+            1,
+            substr_count($stdout, 'SCENARIO-PARENT-OUTPUT'),
+            'The session marker must reach the shared stdout EXACTLY once: twice means the '
+                . 'forked child flushed its inherited output buffer at exit (the E295 double-print '
+                . 'the ob_end_clean drain prevents); zero means the parent-side buffered output '
+                . 'was lost.',
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // R14a: sequential-fallback warning when pcntl_fork() is unavailable
     // -------------------------------------------------------------------------
 
