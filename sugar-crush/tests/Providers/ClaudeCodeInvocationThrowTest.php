@@ -96,18 +96,54 @@ final class ClaudeCodeInvocationThrowTest extends TestCase
         );
     }
 
-    public function testTheSpawnFailureShapeKeepsTheRuntimeExceptionContract(): void
+    /**
+     * Drives the REAL spawn-failure branch — execute()'s `!is_resource($process)`
+     * guard over an ARGV-form proc_open(). `claudePath` is argv[0], so a binary
+     * the kernel cannot launch makes proc_open() emit an E_WARNING and return
+     * false (verified on PHP 8.3/Linux; the string form would instead exec a
+     * shell and always yield a resource). A test-local error handler swallows
+     * that warning — PHPUnit's own warning-to-exception conversion would fire
+     * before the branch throws — and restore_error_handler() runs in `finally`.
+     * No assertion sits inside the try (capture-outside-try idiom,
+     * {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}).
+     *
+     * Unlike a hand-constructed ProviderException, this pins production's own
+     * throw: reverting the branch to a bare \RuntimeException reddens the
+     * instanceof pin. The full shape is asserted on the caught instance —
+     * typed class, null exitCode (child never spawned), code 0 (a spawn failure
+     * is not an HTTP status), no previous, exact message.
+     */
+    public function testTheSpawnFailureThrowsTheTypedProviderExceptionFromTheRealBranch(): void
     {
-        // The kernel-reachable spawn-failure branch (proc_open returning false)
-        // is not reproducible without tripping PHPUnit's warning-to-error
-        // handler, so the SHAPE it throws is pinned directly, mirroring how
-        // TransientFailureTest pins the provider sites: null exitCode means the
-        // child never spawned, and the class must stay a \RuntimeException so
-        // the broad catches around the providers keep working.
-        $spawnFailure = new ProviderException('Failed to start Claude Code process');
+        $invocation = new ClaudeCodeInvocation(
+            claudePath: $this->tempDir . '/no-such-claude-binary',
+            configDir: $this->tempDir,
+        );
 
-        $this->assertInstanceOf(\RuntimeException::class, $spawnFailure);
-        $this->assertNull($spawnFailure->exitCode, 'null exitCode means spawn failure, never "exit 0"');
-        $this->assertSame(0, $spawnFailure->getCode());
+        $caught = null;
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $invocation->execute(['-p', 'hi']);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertNotNull($caught, 'an unlaunchable claudePath must throw');
+        $this->assertInstanceOf(
+            ProviderException::class,
+            $caught,
+            'the spawn-failure branch must throw the typed provider exception, not a bare \\RuntimeException',
+        );
+        $this->assertSame(
+            'Failed to start Claude Code process',
+            $caught->getMessage(),
+            'the message is the shared contract with the provider site lane Q retyped',
+        );
+        $this->assertNull($caught->exitCode, 'null exitCode means spawn failure, never "exit 0"');
+        $this->assertSame(0, $caught->getCode());
+        $this->assertNull($caught->getPrevious(), 'the branch throws causeless — nothing hidden to misread downstream');
     }
 }
