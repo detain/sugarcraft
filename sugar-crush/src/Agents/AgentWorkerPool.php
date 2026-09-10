@@ -179,9 +179,10 @@ final class AgentWorkerPool
          * Chat path THIS parameter is read only via {@see workerProvider()}
          * and {@see createDefaultExecutor()}, not consulted for the fork. The
          * site that does consult it is a pool built WITHOUT an injected
-         * executor — today the `WorkflowEngine` default pool, which
-         * `Bootstrap::workflowEngine()` still constructs spec-less (the seam
-         * named in `docs/WORKFLOWS.md`), and this pool's own fork-path tests,
+         * executor — the `WorkflowEngine` default pool, fed since E663 by
+         * `Bootstrap::workflowEngine()` building it through `agentPoolConfig()`
+         * and passing it as `pool:` (the seam formerly named in
+         * `docs/WORKFLOWS.md` is closed), and this pool's own fork-path tests,
          * which use it to get a worker that actually answers. WHY THE NOTE
          * EARNS ITS PLACE: two parameters, two dispatch paths — reading the
          * wrong one as the live feed is the silent half-wiring this family
@@ -1551,15 +1552,16 @@ final class AgentWorkerPool
      * `src/` does yet. WHAT IS TRUE NOW (E652): `Chat::executeAgents()`'s
      * fallback pool is built with this spec from
      * {@see AgentPoolConfig::$workerProvider}, and the read-back is proven by
-     * the fork round-trip in `AgentWorkerPoolTest`. The engine-side consumer
-     * — {@see \SugarCraft\Crush\Workflows\WorkflowEngine} rebuilding a stage
-     * pool from this accessor — is still fed a null answer, because
-     * `Bootstrap::workflowEngine()` constructs the engine without a `pool:`;
-     * that seam is named exactly in `docs/WORKFLOWS.md`. WHY THIS EARNS ITS
-     * PLACE: the reconstruction path reads THIS accessor, so whoever lands the
-     * engine `pool:` argument inherits its provider only if this read-back
-     * stayed honest — fixed at the same time as the seam rather than left for
-     * whoever first wires it to discover.
+     * the fork round-trip in `AgentWorkerPoolTest`. WHAT THIS SAID (E652): the
+     * engine-side consumer — {@see \SugarCraft\Crush\Workflows\WorkflowEngine}
+     * rebuilding a stage pool from this accessor — was still fed a null
+     * answer, because `Bootstrap::workflowEngine()` constructed the engine
+     * without a `pool:`. WHAT IS TRUE NOW (E663): it passes `pool:`, so the
+     * reconstruction inherits the launch's spec and that seam is closed. WHY
+     * THIS EARNS ITS PLACE: the reconstruction path reads THIS accessor, so
+     * both feeds inherit their provider only while this read-back stays
+     * honest — a live guarantee now, not one left for whoever wires it to
+     * discover.
      *
      * @return ?array<string, mixed>
      */

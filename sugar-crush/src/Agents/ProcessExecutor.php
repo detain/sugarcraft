@@ -80,7 +80,7 @@ final class ProcessExecutor implements ExecutorInterface
          * ({@see encodeMessages()}).
          *
          * ## E649 — WHAT SAID: NOTHING IN `src/` SUPPLIES IT YET. E652 CLOSED
-         * THE CHAT PATH; THE WORKFLOW-ENGINE PATH IS THE SEAM THAT REMAINS.
+         * THE CHAT PATH; E663 CLOSED THE WORKFLOW-ENGINE SEAM.
          *
          * WHAT THIS PARAMETER CLAIMS to be is the provider the worker consults.
          * WHAT THIS SAID: no construction site in `src/` passed one, so on
@@ -92,21 +92,22 @@ final class ProcessExecutor implements ExecutorInterface
          * session's serializable provider spec into Chat's fallback pool via
          * `new ProcessExecutor(timeoutSeconds: ..., workerProvider: ...)` and
          * `new AgentWorkerPool(..., workerProvider: ...)` — that construction
-         * site IS `src/`, and the Chat sub-agent path is live. THE SEAM THAT
-         * REMAINS, NAMED EXACTLY: {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()}
-         * builds its `WorkflowEngine` without a `pool:` argument, so the
-         * engine's promoted default `AgentWorkerPool` carries no spec and
-         * every `/workflow run` stage still reaches this refusal — see
-         * `docs/WORKFLOWS.md` ("Running one") for the operator-facing wording.
-         * WHY THIS NOTE EARNS ITS PLACE: the refusal is still correct for the
-         * engine path and a reader who concluded E652 made `/workflow run`
-         * live would be wrong exactly where it matters; an honest failure
-         * beats an indistinguishable lie (see the parameter's own null
-         * paragraph and the E59 notes on the simulation), and
-         * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
-         * already carries whatever spec its stage pool holds across rebuilds —
-         * so the remaining edit is one `pool:` argument at the Bootstrap call
-         * site, not a new mechanism.
+         * site IS `src/`, and the Chat sub-agent path is live. WHAT THIS SAID
+         * (E652): {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()}
+         * built its `WorkflowEngine` without a `pool:` argument, so the
+         * engine's default `AgentWorkerPool` carried no spec and every
+         * `/workflow run` stage still reached this refusal. WHAT IS TRUE NOW
+         * (E663): the same method builds the pool through `agentPoolConfig()`
+         * and hands it to the engine as `pool:`, so engine-dispatched
+         * sub-agents consult the launch's provider — the seam is closed and
+         * the operator-facing wording lives in `docs/WORKFLOWS.md` ("Running
+         * one"). WHY THIS NOTE EARNS ITS PLACE: a null spec still means
+         * refusal, and an honest failure beats an indistinguishable lie (see
+         * the parameter's own null paragraph and the E59 notes on the
+         * simulation); {@see
+         * \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
+         * carries whatever spec its stage pool holds across rebuilds, so both
+         * feeds are live code paths now, not mechanisms in waiting.
          */
         private readonly ?array $workerProvider = null,
         /**
@@ -1206,7 +1207,7 @@ final class ProcessExecutor implements ExecutorInterface
      * comment, whereas a fallback produces a plausible answer that no caller,
      * test or transcript can distinguish from a real one.
      *
-     * ## WHAT THE SHIPPED PATHS ACTUALLY DO TODAY (E652 REWRITE)
+     * ## WHAT THE SHIPPED PATHS ACTUALLY DO TODAY (E652/E663 REWRITE)
      *
      * WHAT THIS SAID: nothing in `src/` passes `workerProvider`, so on the
      * shipped paths this script reaches its provider check, refuses, and the
@@ -1215,11 +1216,13 @@ final class ProcessExecutor implements ExecutorInterface
      * session's provider spec through `Chat::executeAgents()`'s fallback pool
      * ({@see \SugarCraft\Crush\Agents\AgentPoolConfig::$workerProvider}), so a
      * configured launch's forked worker constructs its provider child-side and
-     * answers. On the `/workflow run` path the check still fires:
-     * `Bootstrap::workflowEngine()` passes no `pool:`, so the engine's default
-     * pool carries no spec and every stage refuses FAILED — the open seam
-     * named in {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()} and in
-     * `docs/WORKFLOWS.md`. WHY THE SENTENCE EARNS ITS PLACE: the second half
+     * answers. WHAT THIS SAID (E652): on the `/workflow run` path the check
+     * still fired — `Bootstrap::workflowEngine()` passed no `pool:`. WHAT IS
+     * TRUE NOW (E663): the same method builds the pool through
+     * `agentPoolConfig()` and passes it as `pool:`, closing the seam named in
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()} and
+     * `docs/WORKFLOWS.md`; absence still refuses FAILED on both paths. WHY
+     * THE SENTENCE EARNS ITS PLACE: the second half
      * is why the refusal was minted — an honest failure beats an
      * indistinguishable lie — and the claim "this sub-agent's prompt reached a
      * model" stays falsifiable on both paths: before, neither could be tested
