@@ -1073,7 +1073,7 @@ records them as **survivors**.
   into the surviving docblock. Two-line edit.
 - **Blocked on** Nothing.
 
-### E12 [OPEN] — trackers #83/#85 (palette sense): Ctrl+P opens a palette the shell never paints
+### E12 [CLOSED — stood down; composite route spun off] — trackers #83/#85 (palette sense): Ctrl+P opens a palette the shell never paints
 
 - **What** `Ctrl+P` (and `Ctrl+K`, which translates to it) opens a hosted-`Chat`
   palette that the shell's full-pane agent dashboard never paints and never
@@ -1093,6 +1093,21 @@ records them as **survivors**.
   should be sized as one.
 - **Blocked on** Phase 4's `/model` work touches the adjacent chord — sequence
   after it.
+- **Resolved (round-62 lane W, stand-down route)** The chord stays claimed by
+  `Chat` (yielding rebinds it to `/model`), but delivery is withheld while a
+  keyboard-owning shell view is up: `Tui\KeyboardHandler::paletteStandsDown()`,
+  enforced at `App\App::delegateToChat()` — the one choke point both doors (the
+  live `Ctrl+P`, and `Ctrl+K` re-synthesized by `CommandPaletteCmd`) share. In
+  `Pane::Agents`, under the F10 menu, or over an open skill picker the chord is
+  now a true no-op: nothing opens and nothing waits to be revealed on exit.
+  `Renderer` layout untouched. `KeyboardHandlerTest::testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives`
+  was flipped in-step from pinning the ghost to pinning the stand-down.
+- **Follow-up (its own future item)** The COMPOSITE route — the shell painting
+  the hosted overlay over its full-pane views, so `Ctrl+P` becomes LIVE (not
+  merely inert) inside the agent dashboard — remains open. It is the layout
+  change this entry warned to size as one (`renderAgentDashboard()` replaces
+  the whole content band and drops the chat's zones); track it separately from
+  the now-closed dead-key defect.
 
 ### E13 [CLOSED] — tracker #61: the unsearchable-directory tests assert a throw root does not produce
 

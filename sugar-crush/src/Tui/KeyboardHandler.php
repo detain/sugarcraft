@@ -345,6 +345,42 @@ final class KeyboardHandler
     }
 
     /**
+     * Does the hosted chat's command palette stand down while one of the
+     * shell's own views owns the keyboard?
+     *
+     * The palette's opening chord (`Ctrl+P` — and `Ctrl+K`, which
+     * `App::consumeShellCmd()` feeds through as the same keystroke) stays
+     * CLAIMED by {@see chatOwns()}: yielding it is measured to be worse,
+     * rebinding the chord to `/model` exactly where an overlay cannot be
+     * seen. But every state {@see shellOwnsKeyboard()} covers either paints
+     * no hosted overlay at all (the Agents dashboard replaces the whole
+     * content band) or paints one it does not drive (arrows and Enter go to
+     * the menu, or to the skill picker), so delivering the chord there
+     * produced the trackers #83/#85 ghost — an invisible-or-undrivable modal
+     * revealed the moment the user left the state.
+     *
+     * This is the stand-down half of the E12 fix: while such a view owns the
+     * keyboard, the chord is a true no-op — nothing opens, and nothing waits
+     * on the other side of the exit. {@see \SugarCraft\Crush\App\App::delegateToChat()}
+     * enforces it at the one delivery choke point BOTH doors share. The
+     * composite half — the shell painting a hosted overlay over its full-pane
+     * views — stays open as a layout item, recorded as the E12 follow-up in
+     * `docs/plans/crush_code_hardening_backlog.md`.
+     *
+     * The rune test mirrors `Chat`'s opening arm exactly (`Char`, `ctrl`,
+     * `p`, no alt/shift qualifier on either side), so wherever `Chat` would
+     * have opened the palette, it stands down instead; everywhere else this
+     * method stays out of the way.
+     */
+    public static function paletteStandsDown(KeyMsg $msg, App $app): bool
+    {
+        return $msg->type === KeyType::Char
+            && $msg->ctrl
+            && $msg->rune === 'p'
+            && self::shellOwnsKeyboard($app);
+    }
+
+    /**
      * Process a keypress and return updated App and optional command.
      *
      * Takes the string key label the pane layer has always used. The live

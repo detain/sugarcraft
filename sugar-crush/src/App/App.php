@@ -1140,6 +1140,18 @@ final class App implements Model
             return [$this, null];
         }
 
+        // Trackers #83/#85 (E12, stand-down route): the palette chord is
+        // Chat's and stays claimed — yielding it measures WORSE (`/model`
+        // instead of nothing; see KeyBindingRegistry) — but delivery is
+        // withheld while one of the shell's own views owns the keyboard,
+        // because those views never paint the overlay (Agents) or never
+        // drive it (F10 menu, skill picker). Both doors pass through here:
+        // the live chord via handleKey()'s fall-through, and the synthesized
+        // one via feedChat()/CommandPaletteCmd.
+        if ($msg instanceof KeyMsg && KeyboardHandler::paletteStandsDown($msg, $this)) {
+            return [$this, null];
+        }
+
         [$next, $cmd] = $this->chat->update($msg);
 
         if (!$next instanceof Chat || $next === $this->chat) {

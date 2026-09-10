@@ -1608,20 +1608,28 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     /**
-     * The gap condition 2 deliberately leaves open, pinned as the CURRENT
-     * behaviour rather than as the desired one — tracker #85.
+     * Trackers #83/#85 (E12): the agent view STANDS THE PALETTE DOWN.
      *
-     * `Ctrl+P` meets condition 1 of the yield criterion and fails condition 2,
-     * so it keeps reaching Chat from `Pane::Agents`, where the dashboard
-     * replaces the whole content band: the palette opens, nothing paints it,
-     * and `↑`/`↓`/`Enter` drive the dashboard. Leaving the pane reveals it.
-     * Routing here is unchanged from before the claim sets were derived from
-     * {@see KeyBindingRegistry} — this is not a regression, it is the state the
-     * criterion's own first half condemns and which yielding the chord would
-     * make worse (`ProviderSelectCmd`, i.e. `/model`, instead of a no-op).
+     * `Ctrl+P` fails condition 2 of the yield criterion — yielding it answers
+     * `ProviderSelectCmd`, i.e. `/model`, instead of a no-op — so the chord
+     * stays claimed by Chat. What used to follow from that was the ghost:
+     * from `Pane::Agents` the dashboard replaces the whole content band, the
+     * palette opened anyway, nothing painted it, `↑`/`↓`/`Enter` drove the
+     * dashboard, and leaving the pane revealed what had been open all along.
      *
-     * When the shell learns to composite or stand down for a hosted overlay,
-     * THIS is the test that says the gap is closed.
+     * The fixed contract, enforced at {@see \SugarCraft\Crush\App\App::delegateToChat()}
+     * through {@see KeyboardHandler::paletteStandsDown()}: while a
+     * keyboard-owning shell view is up, the chord is a true no-op — BOTH doors
+     * (`Ctrl+P` itself, and `Ctrl+K` feeding the same keystroke through
+     * `CommandPaletteCmd`) — and the other keyboard-owning states (F10 menu)
+     * stand down too. Leaving the pane reveals nothing, because nothing is
+     * waiting; and from the chat pane the chord still opens what it always
+     * painted there.
+     *
+     * This is the stand-down route, not the composite one: the chord is live
+     * in the agent view only once the shell learns to paint a hosted overlay
+     * over its full-pane views — the E12 follow-up in
+     * docs/plans/crush_code_hardening_backlog.md.
      */
     public function testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives(): void
     {
@@ -1634,26 +1642,43 @@ final class KeyboardHandlerTest extends TestCase
             ->withPane(Pane::Agents)
             ->update(new WindowSizeMsg(100, 30));
 
-        [$open] = $app->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
-        $this->assertNotNull($open->chat?->palette(), 'Ctrl+P still reaches the hosted Chat here');
+        [$held] = $app->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertSame($held, $app, 'Ctrl+P is consumed as a no-op while the dashboard owns the pane');
+        $this->assertNull($held->chat?->palette(), 'the palette stands down — nothing opens to be unseen');
         // renderPalette()'s query line is the palette's own signature; the
         // dashboard frame carries no part of the hosted chat's frame at all.
-        $this->assertStringNotContainsString('🔍', self::body($open), 'and nothing paints it');
+        $this->assertStringNotContainsString('🔍', self::body($held), 'and nothing is painted');
 
-        [$down] = $open->update(new KeyMsg(KeyType::Down));
-        $this->assertSame(
-            0,
-            $down->chat?->palette()?->selectedIndex,
-            'Down cannot move a palette the dashboard is driving',
-        );
-        $this->assertSame(0, $down->selectedAgentIndex, 'it moves the dashboard selection instead');
+        // The other door: Ctrl+K is the shell's and reaches Chat only as a
+        // synthesized Ctrl+P through CommandPaletteCmd — same choke point,
+        // same stand-down.
+        [$viaK] = $app->update(new KeyMsg(KeyType::Char, 'k', ctrl: true));
+        $this->assertNull($viaK->chat?->palette(), 'the Ctrl+K door stands down alike');
 
-        // The one way out: leaving the pane reveals the palette that was open
-        // all along. Escape first drops the dashboard selection, then leaves.
+        [$down] = $held->update(new KeyMsg(KeyType::Down));
+        $this->assertSame(0, $down->selectedAgentIndex, 'Down keeps driving the dashboard');
+
+        // Nothing waits on the other side of the exit. Escape first drops the
+        // dashboard selection, then leaves.
         [$escaped] = $down->update(new KeyMsg(KeyType::Escape));
         [$escaped] = $escaped->update(new KeyMsg(KeyType::Escape));
         $this->assertSame(Pane::Chat, $escaped->pane);
-        $this->assertStringContainsString('🔍', self::body($escaped));
+        $this->assertNull($escaped->chat?->palette(), 'leaving reveals nothing, because nothing opened');
+        $this->assertStringNotContainsString('🔍', self::body($escaped));
+
+        // The chord is intact wherever it was drivable: from the chat pane it
+        // opens what the chat pane paints.
+        [$opened] = $escaped->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNotNull($opened->chat?->palette(), 'Ctrl+P still opens from Pane::Chat');
+        $this->assertStringContainsString('🔍', self::body($opened));
+
+        // And the third keyboard-owning state stands down too: with the F10
+        // menu open from the chat pane, the chord is inert — the menu neither
+        // paints nor drives a hosted overlay.
+        MenuBar::openMenu(1);
+        [$underMenu] = $escaped->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        $this->assertNull($underMenu->chat?->palette(), 'the chord is inert under the F10 menu as well');
+        $this->resetMenuBarState();
     }
 
     private static function body(App $app): string

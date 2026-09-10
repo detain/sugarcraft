@@ -205,31 +205,34 @@ final class KeyBindingRegistry
      * makes condition 2 a property of the derived set rather than a claim
      * about one row.
      *
-     * ── the gap this leaves open (tracker #85) ────────────────────────────
+     * ── the ghost this left open (trackers #83/#85, E12) — now stood down ──
      *
-     * Condition 1 DOES hold for `Ctrl+P`, so refusing to yield it is not the
-     * same as there being nothing wrong. Measured at 100×30, with the palette
-     * opened by `Ctrl+P` — or by `Ctrl+K`, which the shell translates into the
-     * same keystroke, so both doors lead to the same room and neither is a way
-     * out of it:
+     * Condition 1 DID hold for `Ctrl+P`, which is why the chord being
+     * un-yielded was never the same as nothing being wrong. Measured at
+     * 100×30 with the palette opened by `Ctrl+P` — or by `Ctrl+K`, which the
+     * shell translates into the same keystroke, so both doors led to the same
+     * room and neither was a way out of it: `Pane::Agents` set
+     * `Chat::palette()` while painting NO palette
+     * (`Tui\Renderer::renderAgentDashboard()` replaces the whole content
+     * band, so the hosted chat's frame — overlay and all — is not drawn) and
+     * `Down` moved the dashboard selection; an open skill picker or F10 menu
+     * DID paint the palette, but `Down` drove the picker's highlight or the
+     * menu instead. The chord left a ghost behind — invisible AND undrivable
+     * in the agent view, painted-but-undrivable behind the other two states,
+     * revealed the moment the user left.
      *
-     * - `Pane::Agents` — `Chat::palette()` is set, the frame paints NO palette
-     *   (`Tui\Renderer::renderAgentDashboard()` replaces the whole content
-     *   band, so the hosted chat's frame — overlay and all — is not drawn),
-     *   and `Down` moves the dashboard selection;
-     * - an open skill picker — the palette IS painted, but `Down` moves the
-     *   picker's highlight;
-     * - an open F10 menu — the palette IS painted, but `Down` goes to the menu.
-     *
-     * So in the agent view `Ctrl+P` opens a palette that is invisible AND
-     * undrivable until the user leaves the pane, which reveals it. Closing
-     * that wants the shell either to composite a hosted overlay over its
-     * full-pane views or to stand them down while one is open: a routing and
-     * layout change, not a claim-set change — the claim-set change makes it
-     * worse, as measured above.
+     * The ghost is closed by the STAND-DOWN route, not by a claim-set change
+     * (which measures worse, as above):
+     * {@see \SugarCraft\Crush\Tui\KeyboardHandler::paletteStandsDown()} makes
+     * the chord a true no-op while the keyboard-owning shell views are up —
+     * nothing opens, and nothing waits on the other side of the exit — and
+     * {@see \SugarCraft\Crush\App\App::delegateToChat()} enforces it at the
+     * one delivery choke point both doors share. The COMPOSITE route — the
+     * shell painting a hosted overlay over its full-pane views, so the chord
+     * becomes live there — remains open as its own layout item, recorded on
+     * the E12 entry in docs/plans/crush_code_hardening_backlog.md.
      * {@see \SugarCraft\Crush\Tests\Tui\KeyboardHandlerTest::testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives()}
-     * pins the current behaviour, so the day it is fixed that test is what
-     * says so.
+     * pinned the ghost; it now pins the stand-down.
      *
      * @return list<string>
      */
