@@ -270,7 +270,10 @@ final class ForeignAgentPresetRegistryTest extends TestCase
      * value". All three shapes are valid YAML, so nothing before this line
      * fires. THE FINDING IS THEREFORE "untested", not "unreachable" — and
      * the standing rule is fix-or-wire, never delete, so the input arrives
-     * here rather than in a comment.
+     * here rather than in a comment. Each malformed file is then PAIRED with
+     * its own error line (skipping <path> ... invalid in: <path>) rather
+     * than merely sharing a log with it — otherwise any three files could
+     * satisfy the assertion by naming each other.
      */
     public function testFrontmatterThatParsesToANonArrayIsReportedInvalidByNameAndSkipped(): void
     {
@@ -294,10 +297,26 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         );
 
         $log = (string) file_get_contents($this->tempDir . '/error.log');
-        $this->assertStringContainsString('Invalid YAML frontmatter in: ', $log);
-        $this->assertStringContainsString('scalar.md', $log, 'the report names the file an operator has to fix');
-        $this->assertStringContainsString('comment-only.md', $log);
-        $this->assertStringContainsString('empty-block.md', $log);
+        $invalidLines = array_values(array_filter(
+            explode("\n", $log),
+            static fn (string $line): bool => str_contains($line, 'Invalid YAML frontmatter in: '),
+        ));
+        $this->assertCount(3, $invalidLines, 'exactly one invalid-frontmatter line per malformed fixture');
+
+        // Bind each fixture to ITS OWN line: the scan guard logs
+        // "skipping {path}: {message}", and the thrown message repeats the
+        // same path — so a correct line names the fixture on BOTH sides.
+        // Bare contains-checks would pass with any cross-referencing.
+        foreach (['scalar.md', 'comment-only.md', 'empty-block.md'] as $name) {
+            $pattern = '/skipping \S*' . preg_quote($name, '/') . ': Invalid YAML frontmatter in: \S*' . preg_quote($name, '/') . '(?!\S)/';
+            $matching = array_filter(
+                $invalidLines,
+                static fn (string $line): bool => preg_match($pattern, $line) === 1,
+            );
+            $this->assertCount(1, $matching, "the report names {$name} in the line that skips {$name}");
+        }
+
+        $this->assertStringNotContainsString('good.md', $log, 'the well-formed preset is never reported invalid');
     }
 
     // -------------------------------------------------------------------------
