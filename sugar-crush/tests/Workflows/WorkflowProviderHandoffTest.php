@@ -27,7 +27,14 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  */
 final class WorkflowProviderHandoffTest extends TestCase
 {
+    // E667 (PSR-12 properties-before-methods): the launch-pin pair sat below
+    // the test methods it serves. Zero behaviour change — declaration order of
+    // properties is semantically inert.
     private WorkflowRegistry $registry;
+
+    private string $launchRepo;
+
+    private string $launchHome;
 
     protected function setUp(): void
     {
@@ -153,10 +160,6 @@ final class WorkflowProviderHandoffTest extends TestCase
             $this->restoreLaunchEnvironment($restore);
         }
     }
-
-    private string $launchRepo;
-
-    private string $launchHome;
 
     /**
      * Redirects HOME (both spellings — Bootstrap reads getenv, ForeignSkill-

@@ -183,6 +183,13 @@ final readonly class BedrockProvider implements ProviderInterface
 
             return $this->parseResponse($data, $model);
         } catch (AwsException $e) {
+            // E664 sweep verdict: STAYS a bare \RuntimeException. This wraps an
+            // AWS HTTP failure, not a subprocess — no shell exit code to
+            // misread. TransientFailure::statusCode() walks the previous chain
+            // and AwsException::getStatusCode() is a genuine HTTP status, so
+            // the classification the retry path makes is already correct;
+            // retyping to ProviderException would only borrow its exit-code
+            // vocabulary for a dimension this site never carries.
             throw new \RuntimeException($this->failureMessage('completion', $model, $e), 0, $e);
         }
     }
@@ -230,6 +237,9 @@ final readonly class BedrockProvider implements ProviderInterface
                 yield $this->parseChunk(is_array($event) ? $event : [], $model);
             }
         } catch (AwsException $e) {
+            // E664 sweep verdict: same as the complete() site — HTTP-shaped
+            // failure, real status via the chained AwsException, no exit-code
+            // dimension; the bare throw stays.
             throw new \RuntimeException($this->failureMessage('streaming', $model, $e), 0, $e);
         }
     }

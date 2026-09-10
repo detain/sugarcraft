@@ -100,7 +100,9 @@ final readonly class ClaudeCodeInvocation
      *
      * @param array<string> $args
      * @param callable(string): void|null $onChunk Called for each chunk in streaming mode
-     * @throws \RuntimeException When process fails or exits with non-zero code
+     * @throws ProviderException when the child fails to start (null exitCode) or
+     *                           exits non-zero (exitCode carries the shell code).
+     *                           It IS-A \RuntimeException — see E664 below.
      */
     public function execute(array $args, ?callable $onChunk = null): string
     {
@@ -123,7 +125,11 @@ final readonly class ClaudeCodeInvocation
         );
 
         if (!is_resource($process)) {
-            throw new \RuntimeException('Failed to start Claude Code process');
+            // E664 (E27(a) family): this execute() is the SECOND Claude Code
+            // subprocess site — the provider owns the first two, since retyped
+            // in lane Q. Identical pattern: typed throw, exit code null = the
+            // child never spawned.
+            throw new ProviderException('Failed to start Claude Code process');
         }
 
         // Write stdin if needed
@@ -154,7 +160,14 @@ final readonly class ClaudeCodeInvocation
         $exitCode = proc_close($process);
 
         if ($exitCode !== 0 && $exitCode !== -1) {
-            throw new \RuntimeException("Claude Code exited with code $exitCode: $errors");
+            // E664: the shell exit code now rides as STRUCTURE on
+            // ProviderException::$exitCode, never as the exception code, so
+            // TransientFailure::statusCode() cannot misread a shell 429 or a
+            // 128+signal death as an HTTP status. The message is byte-stable
+            // and the class stays a \RuntimeException, so every existing
+            // catch keeps its contract; the per-code retry verdict remains
+            // with TransientFailure's allow-list (open half of E27(a)).
+            throw new ProviderException("Claude Code exited with code $exitCode: $errors", exitCode: $exitCode);
         }
 
         return $output;
