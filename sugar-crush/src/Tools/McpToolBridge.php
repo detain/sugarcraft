@@ -114,9 +114,11 @@ final class McpToolBridge implements Tool
      * spelling churn is acceptable here).
      *
      * WHAT A PERMISSION RULE MATCHES is this spelling, not the `.mcp.json` key as
-     * typed: see {@see sanitize()} for the worked example. Surfacing wire names
-     * unprompted (the `/mcp` listing half of E42(b)) is still on the backlog;
-     * the collision half that lived here is fixed.
+     * typed: see {@see sanitize()} for the worked example. The surfacing half of
+     * E42(b) now lives at the CLI: `crush mcp` names every server whose key is
+     * rewritten, via {@see wireServerPrefix()} (E665); the in-TUI `/mcp` panel
+     * still shows display names only (its renderer is outside this class).
+     * The collision half that lived here is fixed.
      *
      * NAMING HAS NEVER BEEN THE ROUTING KEY: {@see execute()} addresses
      * `$this->descriptor->serverName` and the unsanitized server-side tool name,
@@ -170,20 +172,44 @@ final class McpToolBridge implements Tool
      * part of this escape a reader is most likely to get wrong. A `.mcp.json` key
      * of `github.com/foo` is `github_2Ecom_2Ffoo` inside the wire name to
      * {@see \SugarCraft\Crush\Permissions\PermissionRule}; an `allow` written
-     * against the key as spelled — `mcp__github.com/foo__*` — matches nothing,
-     * and the tool sits behind an Ask forever with the rule looking correct. The
-     * name IS discoverable at the moment of decision: the permission prompt names
-     * the tool it is asking about, in exactly this spelling. Surfacing the wire
-     * names unprompted in a `/mcp` listing is the OTHER half of E42 and stays on
-     * the backlog — this method closes the naming half only.
+     * against the key as spelled — `mcp__github.com/foo__*` — matches nothing, and
+     * the tool sits behind an Ask forever with the rule looking correct. The name
+     * IS discoverable at the moment of decision: the permission prompt names the
+     * tool it is asking about, in exactly this spelling — and unprompted via
+     * `crush mcp`, which prints this rewrite for every key that needs one (E665,
+     * closing the surfacing half of E42 for the CLI arm; docs/SETTINGS.md carries
+     * the format).
+     *
+     * PUBLIC because a consumer that must predict or explain the wire name — the
+     * `crush mcp` listing, a settings doc — needs the SAME function the router
+     * used, not a paraphrase of it; one spelling rule, one implementation.
      */
-    private static function sanitize(string $segment): string
+    public static function sanitize(string $segment): string
     {
         return (string) preg_replace_callback(
             '/[^A-Za-z0-9-]/',
             static fn(array $match): string => '_' . strtoupper(bin2hex($match[0])),
             $segment,
         );
+    }
+
+    /**
+     * The wire-name prefix every tool of one server carries: `mcp__<sanitized>__`.
+     *
+     * WHAT IS SAID: callers that surface the wire spelling — the `crush mcp`
+     * notice for a rewritten key — need the server segment with its separators,
+     * not a guess at the full tool name (the tool segment is per-tool).
+     *
+     * TRUE NOW: composes exactly the leading part of {@see name()}, so a rule
+     * written as `prefix*` matches what the router will look up.
+     *
+     * WHY IT EARNS ITS PLACE: duplicating the `NAME_PREFIX . sanitize() . '__'`
+     * join in a CLI printer is a drift risk for the one property that matters —
+     * that the surfaced spelling equals the matched spelling.
+     */
+    public static function wireServerPrefix(string $server): string
+    {
+        return self::NAME_PREFIX . self::sanitize($server) . '__';
     }
 
     /**

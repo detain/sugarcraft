@@ -499,6 +499,15 @@ close it, at the cost of the use the key was admitted for (a checkout saying
 "there is no git server here, stop offering `mcp__git__*`"), and at the cost of
 a capability the *operator* granted rather than one an attacker took.
 
+**The server segment of an `mcp__` name is the sanitised spelling, not the key
+as typed in `.mcp.json`.** Every byte of the key outside `[A-Za-z0-9-]` is
+rewritten to `_` plus its two uppercase hex digits, so the key `github.com/foo`
+appears on the wire as `mcp__github_2Ecom_2Ffoo__*` — a `disabledTools` or
+permission pattern written against `mcp__github.com/foo__*` matches nothing and
+fails silently. `sugarcrush mcp list` prints this mapping for every server whose
+key is rewritten, and the permission prompt always names the tool in exactly the
+spelling that will match.
+
 Only the removals a project **actually made** are reported, which follows from
 the key-by-key merge above: if your own `disabledTools` displaced the project's
 list, the project removed nothing and nothing is said. Re-matching the

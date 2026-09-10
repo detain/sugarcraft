@@ -671,6 +671,27 @@ final class Subcommands
             \printf("%-{$width}s  %-5s  %s\n", $server['name'], $server['type'], $server['detail']);
         }
 
+        // E665 (E42(b) surfacing): a server key holding bytes outside
+        // [A-Za-z0-9-] is written differently ON THE WIRE — every dot, slash and
+        // space hex-escaped by McpToolBridge::sanitize() — and a permission rule
+        // matches the written form, not the typed one. Showing only the typed key
+        // would send the user to write `mcp__github.com/foo__*`, which matches
+        // nothing, with no hint of why the Ask never stops. Print the mapping for
+        // each rewritten key ONLY: an identity-spelled server adds no line, so the
+        // common `git`-style config stays as quiet as it was.
+        foreach ($inventory['servers'] as $server) {
+            $wirePrefix = \SugarCraft\Crush\Tools\McpToolBridge::wireServerPrefix($server['name']);
+            if ($wirePrefix === \SugarCraft\Crush\Tools\McpToolBridge::NAME_PREFIX . $server['name'] . '__') {
+                continue;
+            }
+            \printf(
+                "  server \"%s\" is written %s on the wire (permission rules match: %s<tool>)\n",
+                $server['name'],
+                $wirePrefix,
+                $wirePrefix,
+            );
+        }
+
         return NonInteractive::EXIT_OK;
     }
 
