@@ -698,17 +698,17 @@ final class Renderer
      *
      * The map is populated on a real launch. `/workflow run` reaches
      * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()},
-     * which hands its `SubAgent`s to `AgentManager::executeAll()`
-     * (`Workflows/WorkflowEngine.php:1296`); that files each one under the
-     * manager's sub-agent map (`Agents/AgentManager.php:681`), and
-     * `liveOutputs()` reads that map. (An earlier revision added "and settles
+     * which hands its `SubAgent`s to `AgentManager::executeAll()`; that files
+     * each one under the manager's sub-agent map, and `liveOutputs()` reads
+     * that map. (An earlier revision added "and settles
      * streamed text onto its `output`" here. It settles the FINAL text, on
      * completion — see "NOTHING TO PAINT" below, which is the whole reason
      * that distinction cost this pane a release.) It
      * did NOT before Phase 8 item 4's follow-up: `liveOutputs()` used to
      * iterate the REGISTERED map, and a workflow's agents are ad-hoc, named
-     * `$task->name ?? $task->agentType` (`WorkflowEngine.php:1254`) and never
-     * registered — with neither shipped workflow naming a parallel task after
+     * `$task->name ?? $task->agentType` in
+     * `WorkflowEngine::executeParallelStage()` and never registered — with
+     * neither shipped workflow naming a parallel task after
      * a roster entry, that map could never contain one.
      *
      * ## The frame, and the text to put in it
@@ -723,9 +723,9 @@ final class Renderer
      * (`Program.php:387`), so the tick could not fire until the whole workflow
      * was over. It now runs in a `\Fiber` that a timer on that same loop
      * steps, suspending at `AgentWorkerPool::idle()` — the one point where the
-     * PARENT is idle while workers run. (The blocking `stream_select()` at
-     * `ProcessExecutor.php:81`/`:235` is in the CHILD, and never was the
-     * obstacle it was described as here.)
+     * PARENT is idle while workers run. (The blocking `stream_select()`s in
+     * `ProcessExecutor::execute()`/`ProcessExecutor::executeStream()` are in
+     * the CHILD, and never were the obstacle they were described as here.)
      *
      * NOTHING TO PAINT. Even with a frame, this map was empty for the whole
      * of a run: on the pool path `SubAgent::$output` had exactly one writer,
@@ -739,8 +739,11 @@ final class Renderer
      *
      * ⚠️ This paragraph previously cited `Chat.php:6212` dispatched at
      * `:5480`, and "KNOWN GAP issue #79". All of it was stale: the call sites
-     * had drifted to `:6478`/`:6390`, and detain/sugarcraft #79 is a MERGED
-     * pull request about CandyMetrics telemetry. No open issue tracked this.
+     * had drifted to `:6478`/`:6390` — drifted again by the time you read
+     * this, hence symbols now: `Chat::workflowRun()`, dispatched from the
+     * 'run' arm of `Chat::handleWorkflowCommand()`. detain/sugarcraft #79 is
+     * a MERGED pull request about CandyMetrics telemetry. No open issue
+     * tracked this.
      *
      * The OTHER route that would populate this map, a Task/Agent tool
      * delegating from a model turn, still does not exist (crush_code.md #45).
