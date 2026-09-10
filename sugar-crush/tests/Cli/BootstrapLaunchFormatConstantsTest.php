@@ -1279,12 +1279,14 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * and the PROSE form, a figure followed by the word for what it counts.
      * Two things are deliberately allowed. A `Failures: <n>` counts the tests
      * that red, which is a property of the mutation rather than of the class,
-     * and survives a sibling landing beside it. And a prose figure ANCHORED in
-     * its own sentence — to a round, or to a backticked commit sha — is
-     * history rather than a claim about the tree, and no later commit can
-     * invalidate it. Naming the failing tests is still better and the
-     * doc-blocks above do, but a rule that reds on the honest form as well as
-     * the rotten one gets deleted rather than obeyed.
+     * and survives a sibling landing beside it. And a figure ANCHORED in its
+     * OWN sentence — to a round, or to a backticked commit sha — is history
+     * rather than a claim about the tree, and no later commit can invalidate
+     * it; since E214 that exemption covers the literal arm as squarely as the
+     * prose arm, on the sentence-window argument settled there. Naming the
+     * failing tests is still better and the doc-blocks above do, but a rule
+     * that reds on the honest form as well as the rotten one gets deleted
+     * rather than obeyed.
      *
      * THE PROSE SHAPE WAS ADDED AFTER THE HEADLINE ABOVE WAS ALREADY ABSOLUTE.
      * WHAT THIS GUARD CLAIMED when it landed: that no doc-block in this family
@@ -1296,11 +1298,16 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * class this whole file is about, and it was committed inside the fix for
      * it. The alphabet of a guard is part of its claim.
      *
-     * THE SCOPE IS THE TWO FILES THIS LANE OWNS, stated rather than widened: a
-     * historical figure taken at a NAMED COMMIT is a different animal from one
-     * taken at "the tree as it was", and deciding that for a file whose author
-     * is not here is not this guard's business. Widening it is a backlog item,
-     * not a silent reach.
+     * THE SCOPE IS STILL THE TWO FILES THIS LANE OWNS, and E214(b) is now
+     * MEASURED rather than deferred. The widened roster was run over every PHP
+     * file under `tests/` (a probe, not this guard: 503 files): the un-anchored
+     * figures reported are in the hundreds across roughly eighty files, prose
+     * the majority, and several are fixture DATA inside other guards' known-
+     * positive strings — files that would have to be edited in their prose, in
+     * their fixtures, or exempted with a shape the ban exists to catch. That is
+     * a repo-wide remediation with a repo-wide owner, and a file-disjoint lane
+     * silently taking it is the exact move the entry warned about; the roster
+     * stays, and the measurement rides with the entry it came from.
      *
      * THE FIXTURE IS THE POINT (rule 15). This asserts an ABSENCE, and an
      * absence proves nothing unless something in the same test shows the
@@ -1324,9 +1331,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // shape the flattening exists for, and the first draft got it wrong:
         // it wrapped between the two, where every token is still contiguous on
         // its own line, so deleting the flattening left the fixture GREEN.
+        // UNANCHORED since E214: an anchored positive would now prove only that
+        // the exemption fires, and the exemption has its own pins below.
         $tests = 'Tests';
         $assertions = 'Assertions';
-        $wrapped = "    /**\n     * measured at `06126017`: that mutation gives `{$tests}:\n"
+        $wrapped = "    /**\n     * that mutation gives `{$tests}:\n"
             . "     * 14, {$assertions}:\n     * 92, Failures: 1`, so it was not blind.\n     */\n";
         self::assertSame(
             [$tests . ': 14', $assertions . ': 92'],
@@ -1365,6 +1374,30 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             [],
             self::classTotalsIn("     * measured at `06126017`, {$twentySeven} assertions redded.\n"),
             'the scanner reds a sha-anchored historical figure',
+        );
+
+        // E214(a): THE LITERAL ARM TAKES THE SAME EXEMPTION NOW. Both anchor
+        // spellings, because the exemption is one predicate for two arms and a
+        // pin for only one of them would let a future edit fork them again.
+        self::assertSame(
+            [],
+            self::classTotalsIn("     * measured at `06126017`: `{$tests}: 14, {$assertions}: 92`.\n"),
+            'an anchored literal is excused by its own sentence, exactly as anchored prose is; this is the '
+            . 'shape E214 refused to settle for two rounds and the fixture that made the refusal visible',
+        );
+        self::assertSame(
+            [],
+            self::classTotalsIn("     * round 47 ran it: `{$tests}: 14, {$assertions}: 92`.\n"),
+            'the round-number anchor does not excuse the literal arm',
+        );
+        // AND THE SENTENCE IS STILL THE UNIT: an anchor in the PREVIOUS sentence
+        // is proximity, and now that the exemption reaches the literal arm, this
+        // is the pin that keeps it from dissolving into a paragraph-sized hole.
+        self::assertSame(
+            [$tests . ': 14'],
+            self::classTotalsIn("     * Recorded at `06126017`. The rerun gave `{$tests}: 14`.\n"),
+            'the literal arm anchors on more than its own sentence; a sha anywhere upstream now excuses '
+            . 'every runner-output paste in the paragraph',
         );
 
         // THE WINDOW IS THE SENTENCE, AND THAT IS THE HALF THAT ROTS QUIETLY.
@@ -1424,14 +1457,24 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * {@see testNoDocBlockInThisLanesFilesQuotesAPhpunitClassTotal()}'s
      * next-sentence fixture pins.
      *
-     * THE CARVE-OUT IS PROSE-ONLY, and that asymmetry is a decision rather than
-     * an oversight. PHPUnit's two literal forms are runner output: they read as
-     * a fresh measurement of the current tree whatever sentence they sit in,
-     * which is precisely how round 46 shipped three stale ones. Prose is how a
-     * sentence cites history. Whether an anchored LITERAL should also be
-     * allowed is a real question and not this guard's to settle — this file's
-     * own known-positive fixture is one, and the guard still refuses it, which
-     * is the behaviour the fixture depends on.
+     * THE CARVE-OUT WAS PROSE-ONLY; E214 SETTLED THAT IT SHOULD NOT BE. The
+     * asymmetry's defence was that PHPUnit's literal forms are runner output and
+     * read as a fresh measurement whatever sentence they sit in — true of the
+     * PASTED line, false of the PASTED LINE WITH A DATE ON IT — the worked
+     * example is the fixture below, assembled from parts for exactly the reason
+     * this file has always assembled them: an unwrapped literal in this
+     * doc-block, escaped-sha anchor and all, lands in the absence check the
+     * next edit runs, and a guard's own evidence must never be its own tripwire.
+     * A run that names its commit cannot rot, and no later commit can
+     * invalidate it — the prose arm's own argument word for word, now paid to
+     * the literal arm as well. Keeping the arms asymmetric meant keeping a rule that reds
+     * on the honest form to catch the rotten one — and this file's own doc-block
+     * above says what happens to rules like that. So BOTH arms now excuse only
+     * by their own sentence's anchor, and the sentence is still the unit of
+     * provenance for each: an anchor a sentence away excuses nothing, literal
+     * included. The known-positive fixtures lost their anchor when this landed,
+     * because with the decision made an anchored positive would have proved
+     * only that the exemption works.
      *
      * @return list<string>
      */
@@ -1441,11 +1484,18 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
 
         $found = [];
 
-        // PHPUnit's own output, in either form. Never excused by an anchor.
+        // PHPUnit's own output, in either form. E214 settled the question this
+        // scanner used to defer: an anchored figure is history whatever arm
+        // found it, so the literal arm takes the SAME sentence-window anchor as
+        // the prose arm — see the doc-block for why the asymmetry was a
+        // deferral that had hardened into doctrine, not a decision.
         preg_match_all(self::CLASS_TOTAL_LITERAL, $flat, $literals, PREG_OFFSET_CAPTURE);
         $spans = [];
         foreach ($literals[0] as [$hit, $offset]) {
             $spans[] = [$offset, $offset + \strlen($hit)];
+            if (preg_match(self::CLASS_TOTAL_ANCHOR, self::sentenceAround($flat, $offset)) === 1) {
+                continue;
+            }
             $found[$offset] = (string) preg_replace('/\s+/', ' ', $hit);
         }
 
