@@ -126,4 +126,41 @@ final class WorkflowTest extends TestCase
         $this->assertSame(2, $updated->maxConcurrent);
         $this->assertSame(500, $updated->timeout);
     }
+
+    /**
+     * E568: the field's whole point is the CHOICE, and `mutate()`'s old
+     * `?? $this->stopOnFirstFailure` could only ever express one half of it
+     * — passing false read as "change nothing" from a true base. The
+     * XSet sentinel (the shape Usage.php's counters use) makes false a
+     * first-class value; this test drives BOTH directions because a
+     * wither that only flips to true would pass the naive one.
+     */
+    public function testWithStopOnFirstFailureTurnsTheFieldBothWays(): void
+    {
+        $base = new Workflow(name: 'fan', description: 'd');
+        $this->assertFalse($base->stopOnFirstFailure, 'fixture: default is false');
+
+        $on = $base->withStopOnFirstFailure(true);
+        $this->assertTrue($on->stopOnFirstFailure);
+        $this->assertFalse($base->stopOnFirstFailure, 'the original is untouched');
+
+        $off = $on->withStopOnFirstFailure(false);
+        $this->assertFalse($off->stopOnFirstFailure, 'false must round-trip, not collapse into no-change');
+        $this->assertTrue($on->stopOnFirstFailure, 'and the previous instance is again untouched');
+    }
+
+    /**
+     * The other half of the sentinel: while `stopOnFirstFailureSet` is
+     * false, `mutate()` LEAVES the field alone — so an unrelated wither
+     * (`withStatus`) cannot silently reset a true back to false.
+     */
+    public function testStopOnFirstFailureSurvivesUnrelatedWithers(): void
+    {
+        $wf = (new Workflow(name: 'n', description: 'd'))->withStopOnFirstFailure(true);
+
+        $statused = $wf->withStatus(WorkflowStatus::Running);
+
+        $this->assertTrue($statused->stopOnFirstFailure, 'a mutate() without the sentinel keeps the field');
+        $this->assertSame(WorkflowStatus::Running, $statused->workflowStatus, 'fixture: the status DID change');
+    }
 }

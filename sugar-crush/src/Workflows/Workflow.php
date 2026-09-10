@@ -45,13 +45,35 @@ final readonly class Workflow
     }
 
     /**
+     * Returns a new Workflow instance that stops (or keeps running) a
+     * parallel stage after its first agent failure.
+     *
+     * Both directions are first-class: this field's whole point is the
+     * choice, and a wither that could only ever set `true` would strand
+     * half of it (E568 — see {@see mutate()}'s sentinel).
+     */
+    public function withStopOnFirstFailure(bool $stopOnFirstFailure): self
+    {
+        return $this->mutate(stopOnFirstFailure: $stopOnFirstFailure, stopOnFirstFailureSet: true);
+    }
+
+    /**
      * Clone-with-changes helper using named arguments.
      *
      * Mirrors charmbracelet/whalershark.Crunchy/mutate.
+     *
+     * `$stopOnFirstFailure` pairs with a `bool $stopOnFirstFailureSet`
+     * sentinel, the same shape Usage.php's nullable counters use: a plain
+     * `?? $this->stopOnFirstFailure` cannot tell "set it to false" from
+     * "change nothing", and for THIS field those are the two halves of the
+     * decision (E568). While the sentinel is unset the value is ignored
+     * even if passed; while set, a null value reaches the constructor's
+     * non-nullable bool and fails loudly there.
      */
     private function mutate(
         ?WorkflowStatus $workflowStatus = null,
         ?bool $stopOnFirstFailure = null,
+        bool $stopOnFirstFailureSet = false,
     ): self {
         return new self(
             name: $this->name,
@@ -60,7 +82,7 @@ final readonly class Workflow
             maxConcurrent: $this->maxConcurrent,
             timeout: $this->timeout,
             workflowStatus: $workflowStatus ?? $this->workflowStatus,
-            stopOnFirstFailure: $stopOnFirstFailure ?? $this->stopOnFirstFailure,
+            stopOnFirstFailure: $stopOnFirstFailureSet ? $stopOnFirstFailure : $this->stopOnFirstFailure,
         );
     }
 }
