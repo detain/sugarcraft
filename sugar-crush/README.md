@@ -1128,7 +1128,8 @@ cd sugar-crush && composer install && vendor/bin/phpunit
 
 **11,350 tests / 173,489 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
-`vendor/bin/phpunit` run on PHP 8.3.6, 8m22s. Measured 2026-09-10 at the
+`vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
+8m22s. Measured 2026-09-10 at the
 round-62 lane-I guard tip; the figure that stood here before, 7,276/76,239 in
 2m38s (2026-08-19), was behind the suite by some four thousand tests — rounds
 44 through 61 each shipped guards — and the figure before that, 6,424/51,767

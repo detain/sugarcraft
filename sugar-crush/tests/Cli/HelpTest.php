@@ -44,14 +44,20 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('--root', $screen);
 
         // The env vars the screen documents are guarded from the SOURCE, not
-        // from a hand-written list here: a prefix substring match cannot tell
-        // SUGARCRUSH_BACKEND_CMD from SUGARCRUSH_BACKEND_CMD_STREAM — that
-        // blindness is how the streaming block shipped unpinned — and a list
-        // of four names was exactly as blind to the next variable as the
-        // prefix was. The guards are
+        // from a hand-written list here — and from the ENTRY COLUMN, not by a
+        // substring anywhere in the section: the _STREAM block's prose names
+        // SUGARCRUSH_BACKEND_CMD on wrapped continuation lines, so a
+        // substring assert stayed green with the standalone entry deleted.
+        // That is the same blindness that let the streaming block ship
+        // unpinned, and it runs in both directions — prose-only coverage is
+        // not documentation. The guards are
         // testEveryRosterVariableIsDocumentedOnTheHelpScreenOrExcludedByName()
-        // (whole live roster) and
-        // testEveryBackendSelectionVariableIsDocumentedOnTheHelpScreen().
+        // (whole live roster, forward),
+        // testEveryBackendSelectionVariableIsDocumentedOnTheHelpScreen()
+        // (backend-selection subset, pinned to the selection methods' own
+        // bodies), and testEveryVariableTheScreenNamesIsOnTheLiveRoster()
+        // (reverse: a name dropped from src/ while the screen keeps its
+        // entry block reddens).
     }
 
     // =========================================================================
@@ -116,9 +122,10 @@ final class HelpTest extends TestCase
     }
 
     /**
-     * Every variable the code reads or exports is either named on the help
-     * screen's "Environment variables" section or excluded BY NAME above with
-     * a stated reason — and an exclusion must actually still be absent, or a
+     * Every variable the code reads or exports is either printed at an entry
+     * line of the help screen's "Environment variables" section or excluded
+     * BY NAME above with a stated reason — and an exclusion must actually
+     * still be absent, or a
      * later contributor who documents the variable leaves the roster row
      * silently winning and the guard measuring nothing.
      *
@@ -142,12 +149,20 @@ final class HelpTest extends TestCase
             return;
         }
 
-        $this->assertStringContainsString(
-            $var,
+        // Anchored to the entry column — every item of the section prints
+        // its name at exactly three spaces — not to `^ +`: the two shell-out
+        // blocks' prose wraps at 26 spaces and names the OTHER variable on
+        // its own line, so a loose anchor would let the _STREAM block vouch
+        // for the BACKEND_CMD entry whose deletion this pin exists to catch.
+        $pattern = '/^ {3}' . \preg_quote($var, '/') . '(?![A-Z0-9_])/m';
+
+        $this->assertMatchesRegularExpression(
+            $pattern,
             self::environmentSectionOfTheScreen(),
-            "the code reads or exports {$var} but neither the screen's \"Environment variables\" "
-            . 'section names it nor UNDOCUMENTED_ON_HELP_SCREEN excludes it by name with a why — '
-            . 'a user holding only --help cannot discover it',
+            "the code reads or exports {$var} but no entry of the screen's \"Environment variables\" "
+            . 'section names it at the entry column — a mention inside another entry\'s prose '
+            . 'does not document it — nor UNDOCUMENTED_ON_HELP_SCREEN excludes it by name with a '
+            . 'why; a user holding only --help cannot discover it',
         );
     }
 
@@ -160,6 +175,43 @@ final class HelpTest extends TestCase
             $stale,
             'UNDOCUMENTED_ON_HELP_SCREEN excludes names the code no longer reads — a retired alias '
             . 'roster row is a lie waiting for its reader; delete it',
+        );
+    }
+
+    /**
+     * The REVERSE direction, mirroring
+     * {@see EnvRosterDriftTest::testEveryVariableTheEnvironmentPageTabulatesIsOneTheCodeReads()}
+     * for docs/ENVIRONMENT.md: every line-anchored `SUGARCRUSH_*` the screen
+     * prints must be a name the code still reads or exports. Without this,
+     * a rename that drops a variable from `src/` while its help entry stays
+     * is invisible — the forward guard's provider list just shrinks and the
+     * screen goes on advertising a variable that does nothing.
+     *
+     * The scrape is whole-screen, not section-scoped: an example line
+     * (`SUGARCRUSH_PROVIDER=anthropic …`) is just as much an instruction a
+     * reader will follow as a definition. UNDOCUMENTED_ON_HELP_SCREEN adds
+     * nothing to the allowed set — both rows are on the live roster by
+     * {@see testEveryExcludedVariableIsStillOnTheLiveRoster()}, and neither
+     * spelling is nameable by this pattern anyway.
+     */
+    public function testEveryVariableTheScreenNamesIsOnTheLiveRoster(): void
+    {
+        \preg_match_all('/^ *(SUGARCRUSH_[A-Z0-9_]+)(?![A-Z0-9_])/m', Help::screen(), $found);
+        $screened = \array_values(\array_unique($found[1]));
+        \sort($screened);
+
+        // Vacuity half: the anchor really bites the entry lines, so the
+        // ghost census below cannot be quietly starved by an indent drift.
+        $this->assertContains('SUGARCRUSH_BACKEND_CMD', $screened, 'the screen scrape found no entry line at all — anchor shape drifted');
+        $this->assertContains('SUGARCRUSH_PROVIDER', $screened);
+
+        $ghosts = \array_values(\array_diff($screened, self::liveRoster()));
+        $this->assertSame(
+            [],
+            $ghosts,
+            'the --help screen names environment variables nothing in src/ reads or exports any '
+            . 'more — a user who sets them gets silence; delete the entry in the same change that '
+            . 'retires the read',
         );
     }
 
@@ -354,12 +406,20 @@ final class HelpTest extends TestCase
         // The variable has to be named in the ENVIRONMENT VARIABLES section, not
         // merely somewhere on the screen: the exit-code prose names
         // $SUGARCRUSH_PROVIDER too, and a variable documented only there is not
-        // documented as a variable.
-        $this->assertStringContainsString(
-            $var,
+        // documented as a variable. The anchor is the entry column (three
+        // spaces), not a substring and not a loose `^ +`: the _STREAM block's
+        // prose wraps at 26 spaces and names SUGARCRUSH_BACKEND_CMD itself,
+        // so anything looser lets that block stand in for the entry whose
+        // deletion E37 was filed about; `(?![A-Z0-9_])` stops the short name
+        // from matching through its own _STREAM sibling.
+        $pattern = '/^ {3}' . \preg_quote($var, '/') . '(?![A-Z0-9_])/m';
+
+        $this->assertMatchesRegularExpression(
+            $pattern,
             $section,
-            "Bootstrap's backend selection reads {$var} but Help::screen()'s"
-                . ' "Environment variables" section does not name it',
+            "Bootstrap's backend selection reads {$var} but no entry line of Help::screen()'s "
+                . '"Environment variables" section names it — prose inside the neighbouring '
+                . 'block is not documentation',
         );
     }
 
