@@ -62,6 +62,12 @@ final class WorkflowFailureReportingTest extends TestCase
         $this->assertStringContainsString("Stage 'shell-out'", $response);
         $this->assertStringContainsString('Bash', $response);
         $this->assertStringContainsString('dont-ask', $response);
+        // E8: the pre-flight's synthetic StageResult carries the refusal but
+        // nothing RAN - the count the transcript prints must say so. This is
+        // the assertion this file always lacked: `never()` on the executor
+        // proved the run dispatched nothing while the same reply still said
+        // "Stages completed: 1".
+        $this->assertStringContainsString('Stages completed: 0', $response);
     }
 
     /**
@@ -102,6 +108,10 @@ final class WorkflowFailureReportingTest extends TestCase
         $this->assertStringContainsString("**Workflow 'fine' completed**", $response);
         $this->assertStringContainsString('Status: completed', $response);
         $this->assertStringNotContainsString("Stage '", $response);
+        // The other polarity of E8: a stage that ran is COUNTED. Without this
+        // row the fixed line could report 0 for everything and the failure
+        // test above would stay green.
+        $this->assertStringContainsString('Stages completed: 1', $response);
     }
 
     /**

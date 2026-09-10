@@ -60,6 +60,7 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 use SugarCraft\Mouse\ZoneClickTracker;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Crush\Workflows\StageResult;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowEngineInterface;
 use SugarCraft\Crush\Workflows\WorkflowLoadException;
@@ -8400,6 +8401,29 @@ final class Chat implements Model
     }
 
     /**
+     * How many stages of a finished run actually RAN.
+     *
+     * `count($result->stageResults)` is not that number: the whole-workflow
+     * pre-flight in WorkflowEngine reports a refusal it caught before
+     * dispatch as one synthetic Failed StageResult whose own engine comment
+     * says "Nothing ran", so a run that dispatched nothing used to print
+     * "Stages completed: 1" (tracker #85 / E8). The synthetic entry and a
+     * per-stage declaration refusal that fired before the stage's first agent
+     * share the same nothing-ran shape - Failed, no agents, no tokens - so
+     * the rule is derived from that shape rather than from the pre-flight's
+     * file of origin: a stage counts when it completed or when it ran agents.
+     * A dispatch that threw before recording any agent is the same nothing
+     * the pre-flight is; the honest line says 0.
+     */
+    private static function countDispatchedStages(WorkflowResult $result): int
+    {
+        return count(array_filter(
+            $result->stageResults,
+            static fn(StageResult $stage): bool => $stage->isSuccess() || $stage->agents !== [],
+        ));
+    }
+
+    /**
      * Render a finished run as the assistant's reply.
      *
      * Static and split out of {@see workflowRun()} so the fiber body closes
@@ -8414,7 +8438,7 @@ final class Chat implements Model
             : "**Workflow '{$workflowName}' completed**\n\n";
         $response .= "ID: `{$result->workflowId}`\n";
         $response .= "Status: {$result->status->value}\n";
-        $response .= "Stages completed: " . count($result->stageResults) . "\n";
+        $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
         $response .= "Total tokens: {$result->totalTokens}\n";
         $response .= "Total cost: \${$result->totalCost}";
         // The failing stage's message, or the reason never reaches the
@@ -8572,7 +8596,7 @@ final class Chat implements Model
             $response = "**Workflow '{$workflowId}' resumed and completed**\n\n";
             $response .= "ID: `{$result->workflowId}`\n";
             $response .= "Status: {$result->status->value}\n";
-            $response .= "Stages completed: " . count($result->stageResults) . "\n";
+            $response .= "Stages completed: " . self::countDispatchedStages($result) . "\n";
             $response .= "Total tokens: {$result->totalTokens}\n";
             $response .= "Total cost: \${$result->totalCost}";
         } catch (WorkflowNotRunningException $e) {
