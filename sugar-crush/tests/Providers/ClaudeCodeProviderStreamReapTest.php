@@ -120,6 +120,15 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
         }
 
         $this->assertNotNull($caught, 'a non-zero exit must throw');
+        // E27(a): the throw is the typed ProviderException - still a
+        // \RuntimeException (the catch above is the proof existing callers are
+        // unaffected) - carrying the child's exit code as structure.
+        $this->assertInstanceOf(
+            \SugarCraft\Crush\Providers\ProviderException::class,
+            $caught,
+            'a non-zero exit must throw the typed provider exception',
+        );
+        $this->assertSame(3, $caught->exitCode, 'the exit code must ride as structure, not only prose');
         $this->assertStringContainsString('exited with code 3', $caught->getMessage());
         $this->assertStringContainsString(
             'ENOENT: model unavailable',

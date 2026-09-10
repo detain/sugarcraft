@@ -1849,6 +1849,9 @@ final class VertexProviderTest extends TestCase
         $this->assertStringContainsString("'write'", (string) $chunks[0]->errorMessage);
         $this->assertStringContainsString('tu', (string) $chunks[0]->errorMessage);
         $this->assertStringContainsString('{"path":"/etc/pas', (string) $chunks[0]->errorMessage);
+        // E27(b): an undecodable buffer is a stream cut short mid-tool-call -
+        // transport, and the retry seam must be able to see it as transient.
+        $this->assertTrue($chunks[0]->errorTransient, 'a truncated tool call must be classified transient');
     }
 
     public function testCompleteStreamRejectsToolArgumentsThatDecodeToANonObject(): void
@@ -1872,6 +1875,10 @@ final class VertexProviderTest extends TestCase
         $this->assertTrue($chunks[0]->isError);
         $this->assertNull($chunks[0]->toolCalls);
         $this->assertStringContainsString('decoded to null', (string) $chunks[0]->errorMessage);
+        // E27(b): decoded completely and malformed is NOT the truncated-stream
+        // shape - the verdict must be an explicit false, not the null of an
+        // unclassified response, or retry honesty is only accidental.
+        $this->assertFalse($chunks[0]->errorTransient, 'a cleanly-decoded non-object must never be retried');
     }
 
     public function testCompleteStreamStillYieldsAGenuinelyArgumentlessToolCall(): void

@@ -334,17 +334,26 @@ final class TransientFailureTest extends TestCase
 
     public function testAClaudeCodeSubprocessFailureIsNotTransientAndThatIsAKnownGap(): void
     {
-        // ClaudeCodeProvider throws bare \RuntimeExceptions carrying only prose
-        // ("Claude Code exited with code 1: ..."), so there is nothing to
-        // classify on and it is deliberately NOT retried rather than being
-        // classified by pattern-matching its message. Pinned so the gap is a
-        // recorded decision rather than an assumption.
+        // E27(a) vocabulary half landed: ClaudeCodeProvider now throws the
+        // typed ProviderException carrying the exit code instead of bare
+        // prose-only \RuntimeExceptions. The allow-list recognises neither
+        // shape yet, so neither is retried - the OPEN half is the per-code
+        // decision (a spawn failure is transient, a non-zero exit usually is
+        // not) inside TransientFailure, deliberately not taken here. Pinned
+        // so every verdict stays a recorded decision rather than an
+        // assumption.
         $this->assertFalse(TransientFailure::isTransient(
             new \RuntimeException('Claude Code exited with code 1: boom'),
         ));
         $this->assertFalse(TransientFailure::isTransient(
             new \RuntimeException('Failed to start Claude Code process'),
         ));
+        $this->assertFalse(TransientFailure::isTransient(
+            new \SugarCraft\Crush\Providers\ProviderException('Claude Code exited with code 1: boom', exitCode: 1),
+        ), 'the typed exception is not on the allow-list yet - the open half of E27(a)');
+        $this->assertFalse(TransientFailure::isTransient(
+            new \SugarCraft\Crush\Providers\ProviderException('Failed to start Claude Code process'),
+        ), 'a spawn failure stays unclassified until TransientFailure decides per code');
     }
 
     public function testACyclicCauseChainTerminates(): void

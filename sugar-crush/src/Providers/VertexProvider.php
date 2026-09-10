@@ -1100,22 +1100,35 @@ final readonly class VertexProvider implements ProviderInterface
             // document that decoded without error is an object iff it opens
             // with `{`.
             if (!is_array($arguments) || ($json !== '' && !str_starts_with(ltrim($json), '{'))) {
+                // E27(b): the two shapes this branch catches must not share one
+                // verdict. A document that will not DECODE is a stream cut short
+                // mid-tool-call - transport, and the retry can recover it. A
+                // document that decodes cleanly but is not an object was emitted
+                // COMPLETE and is malformed by construction - retrying cannot
+                // fix it and triples the cost. `json_last_error()` is exactly
+                // that discriminator, so the message and the transient flag are
+                // derived from one read of it.
+                $cutShortMidToolCall = json_last_error() !== JSON_ERROR_NONE;
+
                 return new CompleteResponse(
                     content: '',
                     isError: true,
                     errorMessage: sprintf(
                         'Vertex streamRawPredict: tool call %s (%s) streamed argument JSON that does '
-                        . 'not decode to an object (%s); the call was truncated, not argumentless. '
-                        . 'Buffered fragment: %s',
+                        . 'not decode to an object (%s); %s Buffered fragment: %s',
                         var_export($buffered['name'], true),
                         $buffered['id'] === '' ? 'no id' : $buffered['id'],
-                        json_last_error() === JSON_ERROR_NONE
+                        $cutShortMidToolCall
+                            ? json_last_error_msg()
                             // Reaching here WITH an array means it decoded to a
                             // list; get_debug_type() would just say "array".
-                            ? 'decoded to ' . (is_array($arguments) ? 'a JSON list' : get_debug_type($arguments))
-                            : json_last_error_msg(),
+                            : 'decoded to ' . (is_array($arguments) ? 'a JSON list' : get_debug_type($arguments)),
+                        $cutShortMidToolCall
+                            ? 'the call was truncated, not argumentless.'
+                            : 'the document decoded completely; the model emitted a malformed call, not a truncated one.',
                         var_export(self::truncate($json), true),
                     ),
+                    errorTransient: $cutShortMidToolCall,
                 );
             }
 

@@ -132,7 +132,8 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
         );
 
         if (!is_resource($process)) {
-            throw new \RuntimeException('Failed to start Claude Code process');
+            // E27(a): typed throw, exit code null = the child never spawned.
+            throw new ProviderException('Failed to start Claude Code process');
         }
 
         fclose($pipes[0]);
@@ -279,7 +280,15 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             // exit: callers catching `\RuntimeException` caught nothing, and the
             // one path where the child's stderr is the only diagnostic there is
             // reported a type error about a stream instead.
-            throw new \RuntimeException("Claude Code exited with code $exitCode: $errors");
+            //
+            // E27(a): the throw is now the typed {@see ProviderException}
+            // carrying the exit code as structure rather than prose, and stays
+            // a `\RuntimeException` so every existing catch keeps its contract.
+            // The per-code retry decision (a spawn failure is transient, a
+            // non-zero exit usually is not) is deliberately NOT taken here -
+            // it belongs to TransientFailure's allow-list, and the open half is
+            // pinned as a recorded decision in TransientFailureTest.
+            throw new ProviderException("Claude Code exited with code $exitCode: $errors", exitCode: $exitCode);
         }
     }
 
