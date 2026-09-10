@@ -11,7 +11,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Crush\Config\StatusLineCommand;
-use SugarCraft\Core\Util\Token;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Mosaic\ImageLayer;
@@ -2546,20 +2545,20 @@ final class Renderer
      * resumes partial repaints with — so "balanced" here means the same thing
      * it means there.
      *
-     * OSC 8 is tracked alongside it because `SgrState` does not: it looks only
-     * at `Token::CSI` with `final === 'm'`, and `Ansi::reset()` does NOT close
-     * a hyperlink. CandyShine renders a markdown link as OSC 8, so once the
-     * label became wrappable (which the width thread-through is what made
-     * happen) a row could open a link and end without closing it — measured at
-     * cols=60, row 3 opened `ESC]8;;https://example.com/x` and only row 4
-     * carried the close. Painted alone by the changed-rows-only diff, that row
-     * makes every later cell part of the link in iTerm2, WezTerm, VTE and
-     * Kitty. So the open URI is re-emitted in the next row's prefix and closed
-     * at the end of any row that ends inside a link.
-     *
-     * Known gap, deliberately not chased here: `SGR 58` (underline colour) is
-     * likewise untracked by `SgrState`, so a row that only sets 58 is not
-     * restored. Nothing in this renderer or in CandyShine emits it today.
+     * OSC 8 hyperlinks ride the same boundary: CandyShine renders a
+     * markdown link as OSC 8, so once the label became wrappable (which
+     * the width thread-through is what made happen) a row could open a
+     * link and end without closing it — measured at cols=60, row 3
+     * opened `ESC]8;;https://example.com/x` and only row 4 carried the
+     * close. Painted alone by the changed-rows-only diff, that row makes
+     * every later cell part of the link in iTerm2, WezTerm, VTE and
+     * Kitty. E667 closed the seam this used to work around: the open URI
+     * is re-emitted in the next row's prefix and closed at the end of
+     * any row that ends inside a link by {@see SgrState::rowOpen()} /
+     * {@see SgrState::rowClose()} — one contract owned by the same class
+     * the cell-diff resumes partial repaints with, and no private
+     * tracker here. SGR 58 (underline colour) is likewise tracked by
+     * SgrState since E50.
      *
      * A row that inherits nothing and leaves nothing open is returned
      * byte-identical — `toPrefix()` is empty in the default state and neither
@@ -2573,41 +2572,20 @@ final class Renderer
     {
         $parser = new Parser();
         $state = SgrState::initial();
-        $link = '';
         $out = [];
         foreach ($rows as $row) {
-            $prefix = $state->toPrefix() . ($link === '' ? '' : self::osc8($link));
+            $prefix = $state->rowOpen();
             foreach ($parser->parse($row) as $token) {
-                $state->applyCsi($token);
-                if ($token->type === Token::OSC && str_starts_with($token->data, '8;')) {
-                    // `8;<params>;<uri>`, and an EMPTY uri is the close - which
-                    // is why this reads the third field rather than testing for
-                    // a prefix.
-                    $link = explode(';', $token->data, 3)[2] ?? '';
-                }
+                $state->apply($token);
             }
-            $out[] = $prefix . $row
-                . ($state->isDefault() ? '' : Ansi::reset())
-                . ($link === '' ? '' : self::osc8(''));
+            $out[] = $prefix . $row . $state->rowClose();
         }
 
         return $out;
     }
 
     /**
-     * An OSC 8 hyperlink open (with $uri) or close (with ''), ST-terminated.
-     *
-     * ST (`ESC \`) rather than BEL: both terminate an OSC and candy-core's
-     * {@see Parser} accepts either, but BEL inside a frame is a byte a
-     * terminal may also ring.
-     */
-    private static function osc8(string $uri): string
-    {
-        return "\x1b]8;;" . $uri . "\x1b\\";
-    }
-
-    /**
-     * @param list<Message>       $history
+     * @param  list<Message>       $history
      * @param int                 $width     usable columns inside the shell's border +
      *                                       padding, so nested boxes (tool diffs) can
      *                                       truncate rather than wrap into a second row
