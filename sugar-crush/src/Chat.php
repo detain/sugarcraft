@@ -5476,12 +5476,23 @@ final class Chat implements Model
             }
             // Wire config fields inline: create executor with timeout, pass maxConcurrent
             // to constructor, and apply stopOnFirstFailure via the pool's fluent setter.
+            //
+            // E652: the config's provider spec goes to BOTH sides. The executor is
+            // what puts it on the forked worker's startup frame; the pool parameter
+            // is what a pool that builds its OWN default executor (no injected one)
+            // would carry. Feeding both keeps the two construction paths honest —
+            // neither can silently fork a worker with no provider while the other
+            // has one. A null spec stays null: the worker then FAILS naming the
+            // absence rather than fabricating, which is the point of E641-era
+            // fail-closed behaviour this wiring preserves.
             $executor = new \SugarCraft\Crush\Agents\ProcessExecutor(
                 timeoutSeconds: $this->agentPoolConfig->defaultTimeoutSeconds,
+                workerProvider: $this->agentPoolConfig->workerProvider,
             );
             $pool = (new \SugarCraft\Crush\Agents\AgentWorkerPool(
                 maxConcurrent: $this->agentPoolConfig->maxConcurrent,
                 executor: $executor,
+                workerProvider: $this->agentPoolConfig->workerProvider,
             ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
         }
 

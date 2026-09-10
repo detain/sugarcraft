@@ -63,6 +63,35 @@ final readonly class AgentPoolConfig
          * Hybrid: process pool for agents, async for coordination.
          */
         public ExecutorType $executorType = ExecutorType::Process,
+
+        /**
+         * THE PROVIDER SPEC FORKED SUB-AGENT WORKERS INHERIT (E652, closing the
+         * E649 seam lane B left open).
+         *
+         * This is the serialized provider CONFIG — the same
+         * `array<string, mixed>` shape {@see \SugarCraft\Crush\Providers\ProviderFactory::create()}
+         * accepts (`['type' => ..., 'model' => ..., ...]`), plus the one spelling
+         * the factory does not take that the live worker also honours:
+         * `['type' => 'echo']` for the shipped offline
+         * {@see \SugarCraft\Crush\Providers\EchoProvider}. `Chat::executeAgents()`
+         * feeds it to BOTH sides of the default pool it builds —
+         * `new ProcessExecutor(timeoutSeconds: ..., workerProvider: ...)` and
+         * `new AgentWorkerPool(maxConcurrent: ..., executor: ..., workerProvider: ...)`
+         * — and the executor puts it verbatim on the startup frame's `provider`
+         * key ({@see ProcessExecutor::spawnWorker()}), which the child parses in
+         * {@see ProcessExecutor::createLiveWorkerScript()}.
+         *
+         * NULL IS A VERDICT, NOT A DEFAULT LEFT ALONE: it means this session has
+         * no serializable provider for sub-agents, and the forked worker then
+         * refuses with FAILED naming the absence instead of inventing an answer.
+         * The wiring deliberately does NOT fall back to `echo` here — an echo
+         * sub-agent in production is exactly the silently-fabricated "Completed"
+         * the E641-era refusal replaced. Production derives the spec only from a
+         * configured provider; see {@see \SugarCraft\Crush\Cli\Bootstrap}.
+         *
+         * @var ?array<string, mixed>
+         */
+        public ?array $workerProvider = null,
     ) {}
 
     /**
@@ -76,6 +105,7 @@ final readonly class AgentPoolConfig
             maxRetries: $this->maxRetries,
             stopOnFirstFailure: $this->stopOnFirstFailure,
             executorType: $this->executorType,
+            workerProvider: $this->workerProvider,
         );
     }
 
@@ -90,6 +120,7 @@ final readonly class AgentPoolConfig
             maxRetries: $this->maxRetries,
             stopOnFirstFailure: $this->stopOnFirstFailure,
             executorType: $this->executorType,
+            workerProvider: $this->workerProvider,
         );
     }
 
@@ -104,6 +135,7 @@ final readonly class AgentPoolConfig
             maxRetries: $maxRetries,
             stopOnFirstFailure: $this->stopOnFirstFailure,
             executorType: $this->executorType,
+            workerProvider: $this->workerProvider,
         );
     }
 
@@ -118,6 +150,7 @@ final readonly class AgentPoolConfig
             maxRetries: $this->maxRetries,
             stopOnFirstFailure: $stopOnFirstFailure,
             executorType: $this->executorType,
+            workerProvider: $this->workerProvider,
         );
     }
 
@@ -132,6 +165,24 @@ final readonly class AgentPoolConfig
             maxRetries: $this->maxRetries,
             stopOnFirstFailure: $this->stopOnFirstFailure,
             executorType: $executorType,
+            workerProvider: $this->workerProvider,
+        );
+    }
+
+    /**
+     * Create a new config whose forked sub-agent workers inherit this provider
+     * spec (see the constructor's `$workerProvider` for what the array must
+     * look like and why null means "refuse", not "echo").
+     */
+    public function withWorkerProvider(?array $workerProvider): self
+    {
+        return new self(
+            maxConcurrent: $this->maxConcurrent,
+            defaultTimeoutSeconds: $this->defaultTimeoutSeconds,
+            maxRetries: $this->maxRetries,
+            stopOnFirstFailure: $this->stopOnFirstFailure,
+            executorType: $this->executorType,
+            workerProvider: $workerProvider,
         );
     }
 }

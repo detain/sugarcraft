@@ -129,6 +129,19 @@ vanishing.
 /workflow status <id>
 ```
 
+**2026-09-10 (E652, closing the E649 seam): what `/workflow run` reports for a
+sub-agent changed under you, and the change is on purpose.**
+*WHAT SAID:* before round 61 a stage whose forked sub-agent had no usable
+provider could still report **Completed** — the worker script fabricated a
+plausible text answer. *WHAT TRUE NOW:* a forked worker is handed the launch's
+serializable provider spec (the same selected-provider config the hosted chat
+runs on, plus the model override); with no spec derivable it **refuses**, and
+the sub-agent surfaces as **FAILED** naming the absence — a run that used to
+quietly "finish" now stops with a reason. A configured launch is unaffected
+except that its sub-agents now genuinely consult the model in the child.
+*WHY EARNS PLACE:* `/workflow status` is an operator's audit trail; "Completed"
+has to mean "a model saw this prompt", and pre-E652 it provably could not.
+
 Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted
 does not pause into a directory nobody vetted.

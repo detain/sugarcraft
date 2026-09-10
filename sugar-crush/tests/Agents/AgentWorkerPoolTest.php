@@ -2509,4 +2509,73 @@ final class AgentWorkerPoolTest extends TestCase
 
         return $pid;
     }
+
+    /**
+     * E652 end-to-end proof of the wiring, not an accessor check: a Chat with
+     * only an AgentPoolConfig carrying `workerProvider` must build a fallback
+     * pool whose FORKED child consults that provider and comes back Completed.
+     * The pair with the next test is what falsifies a silent regression: delete
+     * either feed in `Chat::executeAgents()` and exactly one of these two goes
+     * red (spec-carrying child refuses, or null-spec child fabricates — the
+     * second is the E641-era lie this lane exists to keep dead).
+     */
+    public function testChatFallbackPoolInheritsWorkerProviderToTheForkedChild(): void
+    {
+        $chat = (new \SugarCraft\Crush\Chat(
+            backend: new \SugarCraft\Crush\Backend\EchoBackend(),
+        ))->withAgentPoolConfig(new \SugarCraft\Crush\Agents\AgentPoolConfig(
+            maxConcurrent: 1,
+            workerProvider: ['type' => 'echo'],
+        ));
+
+        $agent = $this->makeAgent('inherited-provider');
+
+        $results = $this->underDeadline(120, function () use ($chat, $agent): array {
+            $collected = [];
+            foreach ($chat->executeAgents([$agent], $this->request) as $result) {
+                $collected[$result->agentId] = $result;
+            }
+
+            return $collected;
+        });
+
+        $this->assertCount(1, $results);
+        $this->assertSame(
+            AgentStatus::Completed,
+            reset($results)->status,
+            'E652: the pool Chat builds from AgentPoolConfig must carry the spec to the forked worker; a FAILED here means the executor/pool feed regressed to the fail-closed refusal.',
+        );
+    }
+
+    /**
+     * The other polarity of the same seam (E652): with NO spec on the config,
+     * the forked child must FAIL CLOSED naming the provider absence — never
+     * complete on an invented answer.
+     */
+    public function testChatFallbackPoolWithoutWorkerProviderFailsClosed(): void
+    {
+        $chat = (new \SugarCraft\Crush\Chat(
+            backend: new \SugarCraft\Crush\Backend\EchoBackend(),
+        ))->withAgentPoolConfig(new \SugarCraft\Crush\Agents\AgentPoolConfig(
+            maxConcurrent: 1,
+        ));
+
+        $agent = $this->makeAgent('no-provider');
+
+        $results = $this->underDeadline(120, function () use ($chat, $agent): array {
+            $collected = [];
+            foreach ($chat->executeAgents([$agent], $this->request) as $result) {
+                $collected[$result->agentId] = $result;
+            }
+
+            return $collected;
+        });
+
+        $this->assertCount(1, $results);
+        $this->assertSame(
+            AgentStatus::Failed,
+            reset($results)->status,
+            'E652 preserved fail-closed: a no-provider fallback pool must REFUSE in the child, not fabricate a Completed.',
+        );
+    }
 }

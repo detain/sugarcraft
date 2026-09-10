@@ -1112,6 +1112,13 @@ final class Bootstrap
             // tested, and unreachable — `Chat::handleAgentsCommand()` answered
             // "Agent manager not configured" on every real run.
             agentManager: self::agentManager($root, $skills),
+            // E652: closes the E649 seam — the session's serializable provider
+            // spec rides into Chat's fallback pool so FORKED sub-agent workers
+            // consult the same configured provider the hosted chat uses. When no
+            // provider is derivable the spec stays null and workers FAIL CLOSED
+            // naming the absence; this wiring never substitutes `echo` for an
+            // unconfigured production session.
+            agentPoolConfig: self::agentPoolConfig(),
             // crush_code.md Phase 2 item 3. `/workflow run|pause|resume|status|
             // list` answered "Workflow engine not configured" on every real run
             // because this argument was never passed — the 2,200-line
@@ -1211,7 +1218,18 @@ final class Bootstrap
         // and reading the property directly here would hand the transcript a
         // silently truncated list — the exact failure mode the cap was added
         // with a counter rather than as a bare array_slice().
-        return $chat->withLaunchNotices(self::launchNotices());
+        // E653: the narrowed-grant warnings the AgentManager can already compute
+        // (declared tool set cut to the launch ceiling — lane A's pull-only
+        // collector) join the SAME transcript seam as every other launch notice.
+        // Read here, at the one point the manager's registry and universe are
+        // both in hand and before Program takes the terminal, because on the
+        // TUI there is no stderr surface an operator sees — the alternate buffer
+        // paints over it. The collector is computed, not accumulated, so this
+        // drain cannot double-report on a re-read.
+        return $chat->withLaunchNotices([
+            ...self::launchNotices(),
+            ...($chat->agentManager()?->narrowedGrantWarnings() ?? []),
+        ]);
     }
 
     /**
@@ -2251,6 +2269,56 @@ final class Bootstrap
      *
      * @return array{0: ProviderInterface, 1: string}
      */
+    /**
+     * The pool configuration this launch hands {@see \SugarCraft\Crush\Chat}
+     * (E652). Everything else on {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
+     * keeps its documented default; this method exists to carry the ONE field
+     * only the launch can answer: which provider the forked workers inherit.
+     */
+    private static function agentPoolConfig(): \SugarCraft\Crush\Agents\AgentPoolConfig
+    {
+        return new \SugarCraft\Crush\Agents\AgentPoolConfig(
+            workerProvider: self::workerProviderSpec(),
+        );
+    }
+
+    /**
+     * The serializable provider SPEC (not an instance) forked sub-agent workers
+     * are handed at startup (E652), built from the SAME selection
+     * {@see provider()} uses for the hosted backend: the default config of the
+     * selected provider plus the launch's model override. The worker constructs
+     * its own provider child-side from this array — {@see ProviderFactory::create()}
+     * there, and `['type' => 'echo']` honoured as the one offline spelling.
+     *
+     * NULL means NO spec is derivable — no selected provider, or its config
+     * cannot be read. That is a verdict, not a shrug: the worker then refuses
+     * with a FAILED result naming the absence. It deliberately does NOT degrade
+     * to `echo` the way {@see provider()} does for the status-bar label, because
+     * an echo-backed sub-agent answering in the transcript is precisely the
+     * silently-fabricated "Completed" the E641-era refusal was minted to kill.
+     *
+     * @return ?array<string, mixed>
+     */
+    private static function workerProviderSpec(): ?array
+    {
+        $providerName = self::selectedProviderName();
+        if ($providerName === null) {
+            return null;
+        }
+
+        [, $model] = self::selectedProviderLabel();
+
+        try {
+            $factory = new ProviderFactory();
+            $config = $factory->defaultConfig($providerName);
+            $config['model'] = $model;
+
+            return $config;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public static function provider(): array
     {
         [$name, $model] = self::selectedProviderLabel();
