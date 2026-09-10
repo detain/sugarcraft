@@ -197,6 +197,39 @@ final class WorkflowToolsHandoffTest extends TestCase
         }
     }
 
+    /**
+     * E641 fixup: the build-loop resolution runs over EVERY parallel task,
+     * not just the one whose list becomes the stage's default request. An
+     * unresolvable name on task 2 is a refusal at build time, and "refused
+     * stages dispatch nothing" holds — the throw fires before executeAll()
+     * is reached, so even task 1, whose own grant is fine, never dispatches.
+     */
+    public function testAParallelTaskBeyondTheFirstWithAnUnresolvableNameRefusesTheWholeStage(): void
+    {
+        $engine = $this->engineWithRegistry($this->registryOf(['Read', 'Bash']));
+
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('unknown-not-first')
+                ->description('Task 1 resolves, task 2 names a tool the registry does not have')
+                ->parallel('fan', [
+                    Tasks::agent('coder')->name('fine')->prompt('Read')->tools(['Read']),
+                    Tasks::agent('coder')->name('broken')->prompt('Typo')->tools(['Reed']),
+                ])
+                ->build(),
+        );
+
+        $this->mockExecutor->expects($this->never())->method('execute');
+
+        $result = $engine->run('unknown-not-first', []);
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertSame(WorkflowStatus::Failed, $result->status);
+        $error = (string) $result->stageResults[0]->error;
+        $this->assertStringContainsString('Reed', $error);
+        $this->assertStringContainsString('does not contain', $error);
+    }
+
     // =========================================================================
     // Fail loud: an unknown name never reaches a provider
     // =========================================================================

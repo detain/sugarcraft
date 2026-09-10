@@ -1447,6 +1447,24 @@ final class WorkflowEngine implements WorkflowEngineInterface
         foreach ($tasks as $task) {
             /** @var WorkflowTask $task */
             $agentIndex++;
+
+            // E641 fixup — REFUSAL PARITY, result deliberately discarded.
+            // resolveRequestTools() is this engine's fail-loud gate on names
+            // the registry cannot type, and the $defaultRequest above only
+            // ran it over the FIRST task: tasks 2..N could name a tool that
+            // exists in no registry and reach the pool unnoticed (with no
+            // permission gate, refuseDeniedTools stays silent too). The
+            // typed per-agent grant each worker finally receives is lane A's
+            // AgentWorkerPool::executeAll() work — until that lands, every
+            // parallel agent runs on the first task's grant anyway, so this
+            // call's ONLY job is to throw here, at build time, before
+            // anything dispatches. If the discard starts looking redundant
+            // after per-agent grants exist, that is because the pool began
+            // calling this itself — at which point delete this line, do not
+            // double-resolve.
+            $unreachedGrant = $this->resolveRequestTools($task->tools);
+            unset($unreachedGrant);
+
             $interpolatedPrompt = $this->interpolateContext($task->prompt, $context);
 
             $agent = new Agent(
