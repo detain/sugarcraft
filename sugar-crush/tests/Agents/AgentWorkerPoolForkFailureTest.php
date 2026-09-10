@@ -220,6 +220,30 @@ final class AgentWorkerPoolForkFailureTest extends TestCase
         pcntl_waitpid($pid, $status);
     }
 
+    /**
+     * E261: the once-per-pool warning must not hide that the failures keep
+     * climbing. Two forced fork failures: ONE log line (the latch, pinned by
+     * the sibling above) and TWO counted events on forkFailureCount() — the
+     * counter is per event precisely because the latch is not.
+     */
+    public function testForkFailuresAreCountedEvenThoughOnlyTheFirstIsLogged(): void
+    {
+        $pool = new AgentWorkerPool(maxConcurrent: 3);
+        self::forceForkFailure($pool);
+
+        self::assertSame(0, $pool->forkFailureCount(), 'nothing has failed to fork yet');
+
+        $this->startAgent($pool, 'counted-a');
+        $this->startAgent($pool, 'counted-b');
+
+        self::assertSame(2, $pool->forkFailureCount());
+        self::assertSame(
+            1,
+            substr_count($this->logContents(), 'pcntl_fork() FAILED'),
+            'the log latch is unchanged by the counter',
+        );
+    }
+
     private function logContents(): string
     {
         return is_file($this->logFile) ? (string) file_get_contents($this->logFile) : '';

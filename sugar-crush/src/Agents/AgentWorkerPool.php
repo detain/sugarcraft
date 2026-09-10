@@ -352,10 +352,14 @@ final class AgentWorkerPool
      * keeps exactly the behaviour it has today.
      *
      * @param ?\Closure(SubAgent): (?list<\SugarCraft\Crush\Tools\Tool>) $toolGrantResolver
+     * @param ?\Closure(SubAgent): (?string) $systemPromptResolver per-agent
+     *        system prompt, resolved agent by agent like the grants; null
+     *        (the default) forwards `$request->systemPrompt` verbatim
+     *        (E654).
      *
      * @return \Generator<AgentResult>
      */
-    public function executeAll(array $agents, CompleteRequest $request, ?\Closure $toolGrantResolver = null): \Generator
+    public function executeAll(array $agents, CompleteRequest $request, ?\Closure $toolGrantResolver = null, ?\Closure $systemPromptResolver = null): \Generator
     {
         // Straggler children an earlier teardown ran out of reap budget on are
         // collected BEFORE the early returns below, never after: cancelAll()
@@ -439,13 +443,23 @@ final class AgentWorkerPool
                     ? $request->tools
                     : $toolGrantResolver($agent);
 
+                // E654, same discipline as the grant line above: a system
+                // prompt is a statement about the agent that declared it, and
+                // forwarding one shared prompt let whichever agent the caller
+                // built the request from SPEAK for the whole batch. Without a
+                // resolver the shared field forwards verbatim — every direct
+                // pool caller keeps exactly the behaviour it has today.
+                $agentSystemPrompt = $systemPromptResolver === null
+                    ? $request->systemPrompt
+                    : $systemPromptResolver($agent);
+
                 $agentRequest = new CompleteRequest(
                     model: $request->model,
                     messages: [
                         ['role' => 'user', 'content' => $agent->task],
                     ],
                     tools: $agentTools,
-                    systemPrompt: $request->systemPrompt,
+                    systemPrompt: $agentSystemPrompt,
                     temperature: $request->temperature,
                     maxTokens: $request->maxTokens,
                 );
@@ -704,15 +718,31 @@ final class AgentWorkerPool
         }
 
         if ($pid === 0) {
-            // Child process: execute and store result, then exit. A plain
-            // exit() is safe here (not ForkedChild::exitNow()) because the
-            // one thing that made a bare exit() dangerous - an inherited
-            // raw-mode Tty's destructor clobbering the real terminal on the
-            // way out - is now fixed at the ROOT in candy-core's
-            // PosixBackend::restore() (PID-aware; see #1406). This path is
-            // also currently unreachable from bin/sugarcrush's live path
-            // (Renderer.php's R20.fix docblock), so there is no live-TUI
-            // scenario this protects that candy-core doesn't already cover.
+            // Child process: execute, store the result, and leave. Three
+            // things bear on HOW it leaves (E295).
+            //
+            // 1. RAW TTY. An inherited raw-mode Tty's destructor clobbering
+            //    the real terminal on the way out is fixed at the ROOT in
+            //    candy-core's PosixBackend::restore() (PID-aware; see #1406).
+            // 2. EXIT STATUS. waitForCompletion() reports an agent from the
+            //    reap when no result file arrived, so the status IS read by
+            //    the parent — which is why a clean exit(0) after
+            //    storeResult() beats ForkedChild::exitNow()'s self-SIGKILL
+            //    here: the signal would describe a death on the success
+            //    path. (This comment used to claim the parent never reads
+            //    the exit code AND that the path was unreachable from
+            //    bin/sugarcrush; both halves went stale — the parent reaps,
+            //    and the pool fork path is wired. The old claim's own
+            //    lesson: a justification that names a reader which does not
+            //    exist, or denies one that does, prices the next fix wrong.)
+            // 3. OUTPUT BUFFERS. The child inherits the parent's ob_*
+            //    stack. At a normal exit(), shutdown FLUSHES those buffers —
+            //    and the child shares the parent's stdout, so a level still
+            //    holding the parent's un-emitted bytes would print them
+            //    again from the wrong process: the class of accident E229
+            //    closed for the runner. Drain the levels without flushing
+            //    (the BackgroundSessionRunner exitWorker() shape) before
+            //    exiting clean.
             //
             // Nothing here catches: ProcessExecutor::checkBackpressure() throws
             // at >=80% memory and spawnWorker() throws when proc_open() fails,
@@ -724,6 +754,11 @@ final class AgentWorkerPool
             // whatever the child fails to say for itself, the parent reports
             // from the exit status.
             $this->storeResult($agent->id, $this->runStreaming($executor, $agent, $request));
+
+            while (\ob_get_level() > 0) {
+                \ob_end_clean();
+            }
+
             exit(0);
         }
 
@@ -1354,6 +1389,21 @@ final class AgentWorkerPool
     }
 
     /**
+     * How many `pcntl_fork()` calls this pool has actually lost (E261).
+     *
+     * The once-per-pool warning answers "is this install degrading?"; this
+     * answers "how many dispatches did this pool lose its concurrency to?".
+     * The two events are different counts — a pool that forks into a wall of
+     * EAGAIN logs one line and reports N here.
+     */
+    public function forkFailureCount(): int
+    {
+        return $this->forkFailureCount;
+    }
+
+    private int $forkFailureCount = 0;
+
+    /**
      * Report, once per pool, that a `pcntl_fork()` actually FAILED.
      *
      * A FAILED FORK AND AN ABSENT `pcntl` ARE DIFFERENT EVENTS, and until this
@@ -1384,11 +1434,17 @@ final class AgentWorkerPool
      * alternative is one line per dispatched agent, and a pool that has run out
      * of processes is precisely the one about to dispatch many. The cost is
      * that a fork failure which clears and later recurs is logged only the
-     * first time; the count is not surfaced anywhere, which is recorded as a
-     * finding rather than fixed here.
+     * first time; the TOTAL is surfaced through {@see forkFailureCount()}
+     * rather than a second log line — a new error_log() site belongs to the
+     * stderr-emitter census this lane does not own, an accessor belongs to
+     * nobody but its caller (E261).
      */
     private function warnForkFailed(): void
     {
+        // Counted per event, BEFORE the once-per-pool latch (E261): the
+        // latch governs the log line, never the counter.
+        $this->forkFailureCount++;
+
         if ($this->forkFailureWarned) {
             return;
         }
