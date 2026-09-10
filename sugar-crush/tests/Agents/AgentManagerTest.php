@@ -1613,9 +1613,9 @@ final class AgentManagerTest extends TestCase
      *
      * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
      * builds ad-hoc `Agent`s named `$task->name ?? $task->agentType`
-     * (`WorkflowEngine.php:1254`) and hands the `SubAgent`s to
+     * and hands the `SubAgent`s to
      * {@see AgentManager::executeAll()}, whose first loop files them under
-     * `$subAgents` and nowhere else (`AgentManager.php:681`) — reproduced here
+     * `$subAgents` and nowhere else (`AgentManager::executeAll()`'s registration loop) — reproduced here
      * by that exact insertion. Neither shipped workflow names a parallel task
      * after a roster agent (`examples/workflows/lint-then-fix.yaml` names
      * `style-fixer`/`correctness-fixer`), so the registered map was the one
@@ -1711,7 +1711,7 @@ final class AgentManagerTest extends TestCase
     /**
      * File a SubAgent under the manager's sub-agent map exactly as
      * {@see AgentManager::executeAll()}'s first loop does
-     * (`AgentManager.php:681`), without a pool or a provider — the workflow
+     * (`AgentManager::executeAll()`'s registration loop), without a pool or a provider — the workflow
      * path's shape, minus its I/O.
      */
     private function fileSubAgent(SubAgent $subAgent): SubAgent
