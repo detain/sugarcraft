@@ -233,6 +233,20 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $ast);
         $this->assertInstanceOf(WaitDirective::class, $ast[0]);
         $this->assertSame(5.0, $ast[0]->seconds);
+        $this->assertSame('', $ast[0]->pattern, 'the duration form carries no pattern');
+    }
+
+    public function testWaitPatternDirective(): void
+    {
+        // E668: the lexer peels the keyword, so the statement-position regex
+        // IS the condition wait — delimited source verbatim, no timeout.
+        $tokens = (new Lexer())->tokenize('Wait /prompt$/');
+        $ast = $this->parser->parse($tokens);
+
+        $this->assertCount(1, $ast);
+        $this->assertInstanceOf(WaitDirective::class, $ast[0]);
+        $this->assertSame('/prompt$/', $ast[0]->pattern);
+        $this->assertSame(0.0, $ast[0]->seconds);
     }
 
     public function testFullTape(): void

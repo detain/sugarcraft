@@ -269,13 +269,49 @@ final class Compiler
             $node instanceof SpaceDirective => $this->emitInputBytes(' '),
             $node instanceof EscapeDirective => $this->emitInputBytes("\x1b"),
             $node instanceof SleepDirective => $this->currentTime += $node->seconds,
-            $node instanceof WaitDirective => $this->currentTime += $node->seconds,
+            $node instanceof WaitDirective => $this->compileWait($node),
             $node instanceof HideDirective => $this->emitEvent(EventKind::Hide, []),
             $node instanceof ShowDirective => $this->emitEvent(EventKind::Show, []),
             $node instanceof SourceDirective => $this->compileSource($node),
             $node instanceof ScreenshotDirective => $this->compileScreenshot($node),
             default => null,
         };
+    }
+
+    /**
+     * E668: `Wait <duration>` advances the recorder clock. `Wait /re/` is a
+     * CONDITION wait — upstream blocks the recorder until the output matches,
+     * but this compiler is the record-side clock with no live output stream to
+     * poll (the Player/Recorder render captured events; neither gates today).
+     * So the pattern compiles to no event and no time, and the mismatch is
+     * reported rather than swallowed: render-side condition matching is the
+     * filed seam.
+     */
+    private function compileWait(WaitDirective $node): void
+    {
+        if ($node->pattern === '') {
+            $this->currentTime += $node->seconds;
+
+            return;
+        }
+
+        $this->reportCompileProblem(
+            "Wait {$node->pattern} is a condition wait; the record-side compiler cannot match output, "
+            . 'so it emits no event and advances no clock (render-side pattern waiting is the open seam)',
+        );
+    }
+
+    /**
+     * Shared strict/non-strict gate for compile-time problems: strict mode
+     * throws (mirroring compile()'s handling of ParseError nodes), otherwise
+     * the message lands in {@see warnings()} and compilation continues.
+     */
+    private function reportCompileProblem(string $message): void
+    {
+        if ($this->strict) {
+            throw new \RuntimeException("Parse error: {$message}");
+        }
+        $this->warnings[] = $message;
     }
 
     private function compileSet(SetDirective $node): void
@@ -500,11 +536,7 @@ final class Compiler
      */
     private function reportSourceProblem(string $path, string $reason): void
     {
-        $message = "Source include {$reason}: {$path}";
-        if ($this->strict) {
-            throw new \RuntimeException("Parse error: {$message}");
-        }
-        $this->warnings[] = $message;
+        $this->reportCompileProblem("Source include {$reason}: {$path}");
     }
 
     private function compileSource(SourceDirective $node): void

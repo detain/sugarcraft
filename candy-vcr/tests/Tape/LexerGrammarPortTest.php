@@ -139,7 +139,14 @@ final class LexerGrammarPortTest extends TestCase
 
         self::assertSame(Lexer::TOKEN_REGEX, $tokens[0]->type);
         self::assertSame('/prompt$/', $tokens[0]->value);
-        self::assertNull($this->parseOne($tokens[0]), 'a pattern wait has no AST directive yet — dropped by kind');
+        $ast = $this->parseOne($tokens[0]);
+        self::assertInstanceOf(
+            \SugarCraft\Vcr\Tape\Ast\WaitDirective::class,
+            $ast,
+            'E668: the pattern wait has its AST directive now',
+        );
+        self::assertSame('/prompt$/', $ast->pattern, 'the delimited source rides verbatim');
+        self::assertSame(0.0, $ast->seconds, 'no timeout was spelled');
     }
 
     // ------------------------------------------------------- other ported facts

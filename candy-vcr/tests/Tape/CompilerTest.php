@@ -211,6 +211,39 @@ final class CompilerTest extends TestCase
         $this->assertGreaterThanOrEqual(1.0, $secondCharTime - $firstCharTime);
     }
 
+    public function testPatternWaitCompilesToWarningAndNoClock(): void
+    {
+        // E668: the condition form cannot be executed record-side (no live
+        // output stream), but it must not vanish — one warning, and the clock
+        // exactly where a tape without the wait line would put it.
+        $withWait = Compiler::parseSource("Type \"a\"\nWait /done/\nType \"b\"");
+        $cassette = $this->compiler->compile($withWait['ast'], '/test.tape');
+        $warnings = $this->compiler->warnings();
+
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('condition wait', $warnings[0]);
+        $this->assertStringContainsString('/done/', $warnings[0]);
+
+        $baseline = (new Compiler())->compile(
+            Compiler::parseSource("Type \"a\"\nType \"b\"")['ast'],
+            '/test.tape',
+        );
+        $this->assertSame(
+            $baseline->events[count($baseline->events) - 1]->t,
+            $cassette->events[count($cassette->events) - 1]->t,
+            'a pattern wait must not shift the clock',
+        );
+    }
+
+    public function testPatternWaitThrowsUnderStrictCompile(): void
+    {
+        $result = Compiler::parseSource('Wait /done/');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('condition wait');
+        (new Compiler())->compile($result['ast'], '/test.tape', true);
+    }
+
     public function testTypingSpeedDefaultIs50ms(): void
     {
         $result = Compiler::parseSource('Type "abc"');

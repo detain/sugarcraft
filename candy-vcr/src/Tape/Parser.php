@@ -110,13 +110,13 @@ final readonly class Parser
 
             Lexer::TOKEN_UNKNOWN => null,
 
-            // E15 grammar port: JSON/REGEX values are classified by the lexer
-            // (so they can never hide the directive behind them) but candy-vcr
-            // has no AST directive that consumes a bare value token yet — the
-            // Set composite carries JSON/regex text inside TOKEN_SET values,
-            // and a stray value token drops here by KIND, not by text sniff.
+            // E15 grammar port classified JSON/REGEX values by the lexer (so
+            // they can never hide the directive behind them). E668 gave REGEX
+            // its directive — the lexer's `Wait /re/` arm strips the keyword,
+            // so a statement-position regex IS the condition wait. JSON still
+            // drops by KIND (no consumer), never by text sniff.
             Lexer::TOKEN_JSON  => null,
-            Lexer::TOKEN_REGEX => null,
+            Lexer::TOKEN_REGEX => new WaitDirective(0.0, $token->value),
 
             default => null,
         };
