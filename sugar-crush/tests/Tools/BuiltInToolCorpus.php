@@ -492,7 +492,18 @@ final class BuiltInToolCorpus
      * brace depth, so EITHER conditional form makes a type invisible, and the
      * alt-syntax arm is pinned by the same both-polarity tests plus the
      * driver's tethered-alt tree (a conditional primary SHARED with an
-     * unconditional class — the exact redeclare payload).
+     * unconditional class — the exact redeclare payload). The two-word
+     * `else if (…):` is ACCOUNTED AS A CHAIN CONTINUATION, not a second
+     * opener: alternative syntax admits no such arm — `else` must be followed
+     * directly by `:` (`php -l` rejects the shape, MEASURED) — so it belongs
+     * to files that tokenize without parsing, and arming it would count two
+     * `:` against the chain's single `endif` and leave the walk stuck
+     * POSITIVE over the file's tail. The backstop refuses ALL unresolved
+     * walks by name: after the loop, a nonzero colon-scope balance on EITHER
+     * polarity (an unclosed `:` hiding the tail, or an excess `end*`) or any
+     * else-chain colon THROWS the file — never silently miscounted in either
+     * direction, the same by-name discipline as the bracketed-namespace bound
+     * below, and pinned by both-polarity imbalance fixtures.
      *
      * THIRD BOUND, bracketed namespaces — LOUD, and named because this
      * paragraph previously did not say it: a file in the braced form
@@ -539,10 +550,21 @@ final class BuiltInToolCorpus
         // too: a control keyword awaits its body opener, `:` opens a counted
         // scope, the matching `end*` closes it. `elseif`/`else` continue a
         // chain whose scope is already open from the `if`, so they are not
-        // openers of their own.
+        // openers of their own — and neither is the TWO-WORD `else if`, which
+        // alternative syntax does not even accept: `else` must be followed
+        // directly by `:` (MEASURED with `php -l`: `if ($a): else if ($b):
+        // endif;` fails with "unexpected token if, expecting ':'"), so an
+        // opener keyword right after `else` only ever occurs in a file that
+        // is tokenizable but broken. Arming such an `if` would count a second
+        // `:` against the chain's single `endif` and stick the walk POSITIVE,
+        // silently hiding every later depth-0 declaration; it is therefore
+        // tracked as a chain continuation whose colon marks the file
+        // UNRESOLVED for the imbalance backstop below, never as a scope.
         $altScopes = 0;
         $awaitingBodyOpener = false;
         $conditionParen = 0;
+        $elseChainContinuation = false;
+        $elseChainAltColons = 0;
 
         for ($i = 0, $n = \count($tokens); $i < $n; ++$i) {
             $token = $tokens[$i];
@@ -568,10 +590,20 @@ final class BuiltInToolCorpus
 
                 if ($conditionParen === 0) {
                     if (\is_string($token) && $token === ':') {
-                        ++$altScopes;
+                        // `else if(…):` continues the else branch: from the
+                        // walk's view the nested if has NO independent body
+                        // opener, its `:` belongs to the chain and the `end*`
+                        // that follows closes the OUTER scope. Counting it
+                        // would arm +2 against one `endif`.
+                        if ($elseChainContinuation) {
+                            ++$elseChainAltColons;
+                        } else {
+                            ++$altScopes;
+                        }
                     }
 
                     $awaitingBodyOpener = false;
+                    $elseChainContinuation = false;
 
                     if (\is_string($token) && $token === '{') {
                         ++$depth;
@@ -614,6 +646,18 @@ final class BuiltInToolCorpus
                 $awaitingBodyOpener = true;
                 $conditionParen = 0;
 
+                // The two-word `else if` (and any other opener glued to an
+                // `else`) continues the else branch rather than opening a
+                // scope of its own: alternative syntax has no two-word
+                // else-if arm at all — `else` must be followed directly by
+                // `:` — so a `:` meeting this arm can only come from a file
+                // that tokenizes but does not parse, and the imbalance
+                // backstop below reports such a file UNRESOLVED instead of
+                // letting the walk stick positive over its tail. A `{`
+                // meeting it is ordinary braced `else if`, handled exactly
+                // as before through the brace depth.
+                $elseChainContinuation = self::precededBy($tokens, $i, \T_ELSE);
+
                 continue;
             }
 
@@ -634,13 +678,7 @@ final class BuiltInToolCorpus
             }
 
             // `Foo::class` is a constant expression, not a declaration.
-            $previous = $i - 1;
-            while ($previous >= 0 && \is_array($tokens[$previous])
-                && \in_array($tokens[$previous][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
-            ) {
-                --$previous;
-            }
-            if ($previous >= 0 && \is_array($tokens[$previous]) && $tokens[$previous][0] === \T_DOUBLE_COLON) {
+            if (self::precededBy($tokens, $i, \T_DOUBLE_COLON)) {
                 continue;
             }
 
@@ -656,11 +694,52 @@ final class BuiltInToolCorpus
             }
         }
 
+        // THE IMBALANCE BACKSTOP. The loop above can only answer "inside a
+        // scope" or "outside one"; it cannot answer anything for a file whose
+        // colon scopes do not close. `endif; endif;` with one `:` — or any
+        // missing/excess `end*` — leaves $altScopes nonzero, and the guard at
+        // the declaration check would then treat the file's WHOLE TAIL as one
+        // open conditional: stuck positive, every later depth-0 declaration
+        // silently invisible (and a silently invisible PRIMARY is the E631
+        // re-arm this gate exists to refuse); negative is the same refusal in
+        // the other direction. A $elseChainAltColons count is the same class
+        // of input: an `else if(…):` colon, which `php -l` rejects outright.
+        // Neither is silently miscounted — the walk refuses the FILE BY NAME,
+        // loud on both polarities, the same discipline as the bracketed
+        // namespace bound below: never a quiet over- or under-count.
+        if ($altScopes !== 0 || $elseChainAltColons !== 0) {
+            throw new \RuntimeException(
+                "unresolved alternative-syntax walk in {$file}: {$altScopes} unclosed colon scope(s), "
+                . "{$elseChainAltColons} else-chain alt-syntax colon(s)",
+            );
+        }
+
         if ($primary !== '') {
             array_unshift($names, $primary);
         }
 
         return array_values(array_unique($names));
+    }
+
+    /**
+     * Is the nearest significant token before $tokens[$index] of type $type?
+     *
+     * "Significant" skips exactly whitespace and comments, which never
+     * separate a keyword from what it continues (`else`+`if`, `::`+`class`).
+     */
+    private static function precededBy(array $tokens, int $index, int $type): bool
+    {
+        for (--$index; $index >= 0; --$index) {
+            if (\is_array($tokens[$index])
+                && \in_array($tokens[$index][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
+                continue;
+            }
+
+            return \is_array($tokens[$index]) && $tokens[$index][0] === $type;
+        }
+
+        return false;
     }
 
     /**

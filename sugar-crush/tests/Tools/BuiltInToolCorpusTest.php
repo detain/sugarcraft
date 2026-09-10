@@ -1279,6 +1279,24 @@ final class BuiltInToolCorpusTest extends TestCase
                 "<?php\nnamespace N;\nfinal class A { public function f(\$b) { return \"{\$b}/x\"; } }\nfinal class B {}\n",
                 ['N\\A', 'N\\B'],
             ],
+            // THE ALTERNATIVE-SYNTAX TAIL (E631 review, second round). A
+            // depth-0 declaration AFTER a balanced colon chain is still seen:
+            // the walk closes the chain exactly, it does not wall off the tail.
+            'a class after a balanced elseif alt chain is still seen' => [
+                "<?php\nnamespace N;\nif(1): echo 'a'; elseif(2): echo 'b'; endif;\nfinal class A {}\n",
+                ['N\\A'],
+            ],
+            'a class after a balanced nested else-colon alt chain is still seen' => [
+                "<?php\nnamespace N;\nif(1): echo 'a'; else: if(2): echo 'b'; endif; endif;\nfinal class A {}\n",
+                ['N\\A'],
+            ],
+            // The everyday `else if (…)` in BRACE form must not read as the
+            // unparseable alt-syntax chain: its body opens with `{`, counted
+            // through the brace depth exactly as before.
+            'a braced else-if is a chain, not an alt-syntax suspect' => [
+                "<?php\nnamespace N;\nif(1) {} else if(2) {}\nfinal class A {}\n",
+                ['N\\A'],
+            ],
         ];
     }
 
@@ -1289,6 +1307,94 @@ final class BuiltInToolCorpusTest extends TestCase
         file_put_contents($path, $code);
 
         $this->assertSame($expected, BuiltInToolCorpus::declaredTypes($path));
+    }
+
+    /**
+     * The reviewer's stuck-positive shape (E631 review, round two): the
+     * two-word `else if (…):` inside a colon chain. THE INPUT VERDICT FIRST,
+     * MEASURED with `php -l` on PHP 8.3.6: alternative syntax has no two-word
+     * else-if arm at all — `else` must be followed DIRECTLY by `:` — so
+     * `if (1): else if (2): endif;` fails to parse ("unexpected token "if",
+     * expecting ":""), and so does the same chain carrying a second `endif`.
+     * The exact false-exempt is therefore UNREACHABLE from any parseable
+     * file. It stays reachable from the TOKEN stream, which is what the walk
+     * reads: `token_get_all()` does not parse, so a broken-but-tokenizable
+     * file on disk used to arm the inner `if`, count two `:` against the
+     * chain's single `endif`, and stick the walk POSITIVE over the whole
+     * tail — silently hiding (or, one `endif` out of balance, otherwise
+     * miscounting) every later depth-0 declaration, the primary among them.
+     * The walk now treats an opener glued to `else` as a CHAIN CONTINUATION
+     * and the imbalance backstop REFUSES such a file by name — with the
+     * suppressed colon in the report, so the refusal reads as the accounting
+     * decision it is: balance 0, one else-chain colon.
+     */
+    public function testTheUnparseableElseIfAltChainIsRefusedByNameRatherThanStickingTheWalkPositive(): void
+    {
+        $path = $this->probeDir . '/decl_elseif_alt.php';
+
+        foreach ([
+            // the reviewer's shape: one `endif` for two `:` arms
+            "<?php\nnamespace N;\nif(1): echo 'a'; else if(2): echo 'b'; endif;\nfinal class A {}\n",
+            // the same chain with its NESTED if also closed — the continuation
+            // now sits NEGATIVE, and the backstop is loud on both polarities
+            "<?php\nnamespace N;\nif(1): echo 'a'; else if(2): echo 'b'; endif; endif;\nfinal class A {}\n",
+        ] as $code) {
+            file_put_contents($path, $code);
+
+            try {
+                BuiltInToolCorpus::declaredTypes($path);
+                $this->fail('an else-if alt chain must end the walk UNRESOLVED, not silently miscounted');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString($path, $e->getMessage(), 'the refusal names the file');
+                $this->assertStringContainsString('1 else-chain alt-syntax colon(s)', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Both polarities of an unbalanced — but tokenizable — colon chain,
+     * pinned LOUD and by name rather than by the hiding they used to cause:
+     * stuck POSITIVE (a `:` whose `end*` never arrives) used to wall off the
+     * file's tail as one open conditional; a NEGATIVE balance (an `end*` with
+     * no `:`) is the same silent instrument error in the other direction, and
+     * "hides everything, fail-closed" was ASSERTED nowhere (E631 review).
+     * Both now throw with the signed imbalance in the message; the assertion
+     * on that integer is what tells the two refusals apart.
+     *
+     * @return array<string, array{0: string, 1: int}>
+     */
+    public static function unbalancedColonChainShapes(): array
+    {
+        return [
+            'stuck positive — an unclosed `:` walls off the tail' => [
+                "<?php\nnamespace N;\nif(1): if(2): echo 'b'; endif;\nfinal class A {}\n",
+                1,
+            ],
+            'stuck negative — a stray `endif` closes a scope that never opened' => [
+                "<?php\nnamespace N;\nif(1): echo 'a'; endif; endif;\nfinal class A {}\n",
+                -1,
+            ],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unbalancedColonChainShapes')]
+    public function testAnUnbalancedColonChainIsRefusedLoudlyByNameInBothPolarities(string $code, int $balance): void
+    {
+        $path = $this->probeDir . '/decl_unbal_' . md5($code) . '.php';
+        file_put_contents($path, $code);
+
+        try {
+            BuiltInToolCorpus::declaredTypes($path);
+            $this->fail('an unbalanced alt-syntax walk must THROW, not silently hide or count the tail');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString($path, $e->getMessage(), 'the refusal names the file');
+
+            if (1 !== preg_match('/(-?\d+) unclosed colon scope/', $e->getMessage(), $matches)) {
+                $this->fail('the refusal must report the signed imbalance: ' . $e->getMessage());
+            }
+
+            $this->assertSame($balance, (int) $matches[1], 'the reported balance IS the polarity');
+        }
     }
 
     public function testEveryCorpusInstanceIsATool(): void
