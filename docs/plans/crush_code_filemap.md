@@ -1,7 +1,7 @@
 # crush_code backlog — actionable file-map (lane-scheduling aid)
 
-Derived 2026-09-10 @ tip `eb9ce68e0540e975dde5db891aa76f9c107cceaa` — regenerate this file at every round-close.
-Purpose: map every actionable backlog id (OPEN/PARTIAL/STALE-CITATION/UNCERTAIN = 157) to the files it touches so the supervisor can schedule file-disjoint lanes. Tier/lane analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain` column below is a file-cluster bucket, and the `⚠` markers in the index are round-62 live-lane file ownership only.
+Derived 2026-09-10 @ tip `1a6ef5f60b3b148bcdd538a4e3702223aa216124` — regenerate this file at every round-close.
+Purpose: map every actionable backlog id (OPEN/PARTIAL/STALE-CITATION/UNCERTAIN = 144) to the files it touches so the supervisor can schedule file-disjoint lanes. Tier/lane analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain` column below is a file-cluster bucket, and round-62 `⚠` live-lane markers retired at this close (round-63 lanes AA–FF own via fresh briefs).
 
 ## Path normalization
 
@@ -18,37 +18,21 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 
 | id | stamp | conf | files | domain | size |
 |---|---|---|---|---|---|
-| E1 | OPEN | MED | sugar-crush/README.md;docs/plans/crush_code_RESUME.md | docs | M |
 | E2 | OPEN | HIGH | sugar-crush/src/Chat.php | chat-input | S |
 | E3 | OPEN | HIGH | sugar-crush/src/Chat.php;sugar-crush/src/Palette/PaletteState.php | chat-input | M |
 | E4 | OPEN | HIGH | sugar-crush/src/Chat.php | chat-input | S |
 | E5 | OPEN | HIGH | sugar-crush/src/Renderer.php | tui-render | S |
 | E8 | OPEN | HIGH | sugar-crush/src/Chat.php;sugar-crush/src/Workflows/WorkflowEngine.php | workflows | M |
 | E10 | OPEN | HIGH | sugar-crush/src/Tools/BuiltIn/Doctor.php;sugar-crush/tests/Tools/BuiltInToolTest.php | tools-skills | M |
-| E12 | OPEN | HIGH | sugar-crush/src/Commands/KeyBindingRegistry.php;sugar-crush/src/Tui/Renderer.php;sugar-crush/tests/Tui/KeyboardHandlerTest.php | tui-render | M |
-| E14 | OPEN | HIGH | sugar-crush/src/ToolRegistry.php | tools-skills | S |
-| E15 | OPEN | HIGH | candy-vcr/src/Tape/Lexer.php | sibling:candy-vcr | S |
 | E16 | OPEN | MED | sugar-crush/src/Runtime.php;sugar-crush/src/Hooks/HookManager.php | tools-skills | M |
 | E17 | OPEN | HIGH | sugar-crush/src/Providers/CompleteResponse.php;sugar-crush/src/Context/ContextCompactor.php;sugar-crush/src/Chat.php | providers | M |
 | E20 | OPEN | HIGH | sugar-crush/src/Chat.php;sugar-crush/src/Backend/EngineBackend.php | providers | M |
-| E27 | OPEN | HIGH | sugar-crush/src/Providers/ClaudeCodeProvider.php;sugar-crush/src/Providers/VertexProvider.php;sugar-crush/tests/Providers/TransientFailureTest.php | providers | M |
 | E28 | OPEN | HIGH | sugar-crush/src/Agents/AgentManager.php | agents | S |
-| E29 | OPEN | MED | docs/plans/crush_agent_rules.md;sugar-crush/tests/Cli/ | tests-harness | M |
-| E30 | OPEN | HIGH | crush_code.md | docs | S |
-| E37 | OPEN | HIGH | sugar-crush/src/Cli/Help.php;sugar-crush/tests/Cli/HelpTest.php | cli-config | M |
-| E40 | OPEN | MED | sugar-crush/src/Support/ContainedPath.php;sugar-crush/src/Cli/Bootstrap.php;sugar-crush/src/MCP/McpClient.php | lsp-mcp | M |
-| E42 | OPEN | HIGH | sugar-crush/src/Tools/McpToolBridge.php | lsp-mcp | S |
-| E43 | OPEN | HIGH | sugar-crush/src/Renderer.php | tui-render | S |
-| E47 | OPEN | HIGH | sugar-crush/src/Renderer.php;sugar-crush/tests/Renderer/PaneWidthInvariantTest.php | tui-render | M |
-| E48 | OPEN | HIGH | sugar-crush/src/Renderer.php | tui-render | S |
-| E49 | OPEN | HIGH | candy-shine/src/Renderer.php | sibling:candy-shine | S |
-| E50 | OPEN | HIGH | candy-core/src/SgrState.php | sibling:candy-core | S |
+| E42 | PARTIAL | HIGH | sugar-crush/src/Tools/McpToolBridge.php | lsp-mcp | S |
+| E43 | PARTIAL | HIGH | sugar-crush/src/Renderer.php | tui-render | S |
 | E78c | OPEN | MED | sugar-crush/src/Cli/NonInteractive.php;sugar-crush/src/Cli/Bootstrap.php | cli-config | M |
 | E93 | OPEN | MED | sugar-crush/src/Skills/SkillRegistry.php;sugar-crush/src/Util/PathGlob.php | tools-skills | M |
 | E107 | OPEN | LOW | UNKNOWN(re-derive) | other | S |
-| E115 | OPEN | MED | sugar-crush/src/Skills/SkillRegistry.php | tools-skills | S |
-| E116 | OPEN | MED | sugar-crush/README.md;sugar-crush/src/Cli/Subcommands.php;sugar-crush/src/Cli/NonInteractive.php | cli-config | M |
-| E124 | OPEN | MED | docs/_data/sugar-crush.body.html;sugar-crush/tests/Config/EnvRosterDriftTest.php | docs | M |
 | E127 | OPEN | HIGH | sugar-crush/tests/Config/Support/EnvReadScanner.php | tests-harness | S |
 | E136 | OPEN | HIGH | sugar-crush/src/Agents/Team.php | agents | S |
 | E137 | OPEN | HIGH | sugar-crush/src/Agents/TaskList.php;sugar-crush/src/Agents/WorktreeManager.php | agents | M |
@@ -106,7 +90,6 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 | E448 | OPEN | HIGH | sugar-crush/tests/Support/ChildLifetimeScanner.php;sugar-dash/src/Plugin/ExternalModule.php;sugar-reel/src/Decode/FfmpegDecoder.php;sugar-reel/src/AudioPlayer.php | sibling:sugar-reel | L |
 | E466 | OPEN | HIGH | candy-pty/src/Posix/PosixMasterPty.php | sibling:candy-pty | L |
 | E469 | OPEN | HIGH | sugar-crush/tests/SuiteSkipRosterTest.php | tests-harness | S |
-| E475 | OPEN | HIGH | sugar-crush/src/LSP/LspConnection.php | lsp-mcp | S |
 | E483 | OPEN | HIGH | sugar-crush/tests/MCP/StdioMcpServerWriteBoundsTest.php | lsp-mcp | S |
 | E486 | OPEN | HIGH | tools/;.github/workflows/ci.yml | ci-infra | M |
 | E493 | OPEN | HIGH | sugar-crush/src/Backend/EngineBackend.php;sugar-crush/src/Runtime.php | providers | M |
@@ -125,11 +108,8 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 | E616 | OPEN | HIGH | sugar-crush/tests/DenialPrefixRosterTest.php | tools-skills | S |
 | E617 | OPEN | HIGH | sugar-crush/tests/Support/AssertionSwallowingCatchTest.php | tests-harness | S |
 | E629 | OPEN | HIGH | tools/tests/CheckPathReposTest.php | ci-infra | S |
-| E652 | OPEN | HIGH | sugar-crush/src/Agents/AgentPoolConfig.php;sugar-crush/src/Chat.php;sugar-crush/src/Cli/Bootstrap.php;sugar-crush/docs/WORKFLOWS.md | agents | L |
-| E653 | OPEN | MED | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php;sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php;sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php;sugar-crush/tests/Cli/StderrEmitterCensusTest.php | agents | L |
+| E653 | PARTIAL | MED | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php;sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php;sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php;sugar-crush/tests/Cli/StderrEmitterCensusTest.php | agents | L |
 | E654 | OPEN | MED | sugar-crush/src/Agents/AgentManager.php | agents | S |
-| E655 | OPEN | MED | sugar-crush/tests/Chat/CompactModelSummaryTest.php;sugar-crush/tests/MouseModalGuardTest.php | tests-harness | M |
-| E656 | OPEN | MED | sugar-crush/tests/Agents/AgentManagerTest.php | agents | S |
 | E657 | OPEN | MED | sugar-crush/src/Providers/SglangProvider.php;sugar-crush/src/Providers/VertexProvider.php;sugar-crush/src/Runtime.php | providers | M |
 | E658 | OPEN | LOW | sugar-crush/tests/ | tests-harness | L |
 | E659 | OPEN | MED | sugar-crush/tests/Tools/BuiltInToolCorpusTest.php;sugar-crush/tests/Context/RepoMapBlockTest.php;sugar-crush/tests/SymbolCitationDriftTest.php | tests-harness | M |
@@ -172,11 +152,20 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 | E547 | PARTIAL | HIGH | sugar-crush/tests/Backend/StreamingCommandBackendTest.php | tests-harness | S |
 | E565 | PARTIAL | MED | sugar-crush/tests/Support/DuplicatedTestHelperDriftTest.php | tests-harness | S |
 | E633 | PARTIAL | HIGH | sugar-crush/src/Context/RepoMapBlock.php | other | S |
-| E649 | PARTIAL | HIGH | sugar-crush/src/Agents/AgentPoolConfig.php;sugar-crush/src/Chat.php;sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Workflows/WorkflowProviderHandoffTest.php | agents | M |
 | E9 | STALE-CITATION | MED | sugar-crush/README.md;docs/plans/crush_code_worklog.md | docs | M |
 | E36 | UNCERTAIN | LOW | sugar-crush/tests/Cli/BootstrapSkillSkipsTest.php | tests-harness | S |
+| E664 | OPEN | MED | sugar-crush/src/Providers/ClaudeCodeInvocation.php;sugar-crush/tests/Providers/TransientFailureTest.php | providers | M |
+| E665 | OPEN | MED | sugar-crush/src/Tools/McpToolBridge.php;sugar-crush/src/Cli/Bootstrap.php;sugar-crush/src/Cli/Subcommands.php | mcp | M |
+| E666 | OPEN | MED | sugar-crush/src/App.php;sugar-crush/src/Renderer.php;sugar-crush/tests/Renderer/PaneWidthInvariantTest.php | tui-render | M |
+| E667 | OPEN | LOW | candy-core/src/SgrState.php;sugar-crush/src/Renderer.php | sibling:candy-core | M |
+| E668 | OPEN | LOW | candy-vcr/src/Tape/Lexer.php;candy-vcr/src/Tape/ | sibling:candy-vcr | M |
+| E669 | OPEN | LOW | sugar-crush/README.md;sugar-crush/tests/Config/ | docs | M |
+| E670 | OPEN | LOW | sugar-crush/tests/Workflows/WorkflowProviderHandoffTest.php | workflows | S |
+| E671 | OPEN | MED | scripts/parallel-tests.sh;.github/workflows/ci.yml | test-infra | M |
 
 ## Domain → ids index (sorted by count)
+
+> Round-62 closeout re-derivation: 21 ids left actionable (CLOSED), E42/E43/E653 flipped to PARTIAL, E664–E671 added. The roster below is **HISTORICAL round-62 ownership** — for round 63 re-cut lanes AA–FF from `crush_code_RESUME.md` §0-NOW-64 §2.
 
 `⚠<lane>` = id shares at least one file with a LIVE round-62 lane's ownership set. Lane ownership (normalized):
 **E** = `sugar-crush/src/Agents/AgentPoolConfig.php`, `sugar-crush/src/Chat*.php`, `sugar-crush/src/Cli/Bootstrap.php`, `sugar-crush/tests/Agents/AgentManagerTest.php`, `sugar-crush/tests/Agents/AgentWorkerPoolTest.php`, `sugar-crush/tests/Workflows/`, `sugar-crush/docs/WORKFLOWS.md` ·

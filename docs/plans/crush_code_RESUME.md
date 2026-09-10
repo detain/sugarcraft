@@ -4,11 +4,121 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-63 BELOW. It carries the standing order, the current floor, the round-62 lanes
-E/G/H and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
+🔴 **START AT §0-NOW-64 BELOW. It carries the standing order, the current floor, the round-63 lanes
+AA–FF (+1 reserve) and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
 kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
 (counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
 them. Rules are durable; figures are not.
+
+---
+
+## 0-NOW-64. ROUND 62 CLOSED (linked floor 11,373 / 174,289; sharded K=8 in 74s) — ROUND 63 RUNS LANES AA–FF + 1 RESERVE
+
+**Written 2026-09-10 at `1a6ef5f60`. §0-NOW-63 below is superseded history — but its machinery SURVIVES
+and stays in force: §3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip
+table), §4b (the `cp -a` lane recipe), rules 59–62 plus everything the round-62 operating-rules
+subsection added. Only FIGURES and lane assignments are dead. Floors are MODE-DOMAIN: never quote a
+published figure into a linked brief or the other way.**
+
+### STANDING ORDER — run this plan to completion
+
+**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
+at a round boundary to ask whether to continue.** Concretely:
+
+1. Work §2's lanes **AA, BB, CC, DD, EE, FF** (+reserve) as round 63. Close it (worklog entry + a new
+   `0-NOW-65` section + backlog ledger stamps), then **immediately choose round 64** from what round 63
+   files, and keep going. `## 2. The loop` and `## 3. Sequencing rules` further down still carry the
+   per-bundle mechanics.
+2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
+   Not at the end of a session — at each close. If you are running out of context, doing that is
+   the last and highest-value thing you do.
+3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
+   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
+4. **Trust git, not reports.** Round 62 again produced 20+ agent deaths with the work landed, and a
+   fabricated-GREEN loop. Verify every claim against `git log` and the tree before bookkeeping;
+   demand evidence-to-files in every brief.
+
+**STOP AND ASK only for these:**
+
+- A decision of the **E639 class taken against the recommendation** (round 62 took the recommendation
+  every time — T's E42/E40 picks, V's E116 keep-kebab; a non-recommended pick asks first).
+- Anything that would **remove** unfinished, dormant, unwired or unreachable code. Standing rule:
+  *fix it or wire it, never delete it.* Move and consolidate are fine.
+- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
+  `prompt_expand.md`.
+- A **blanket total-request timeout on an LLM call.** Completions may legitimately run tens of
+  minutes; `connect_timeout` is fine, a total cap is not. This is the E646 rule restated — contain
+  with the LEASE frame, never with a cap.
+
+#### Session operating rules (user directives, amended at the round-62 close)
+
+1. Concurrency ceiling: EIGHT agents/lanes — **KEEP-FILLED**: keep ~8 slots alive with disjoint-lane
+   builders / read-only probes rather than idling between phases. Lane sets must be file-DISJOINT
+   (ownership maps verbatim into briefs; lanes refuse out-of-lane edits and report seams) — round 62
+   proved this mechanism: 15 lanes, 31 picks, **zero cross-lane file collisions**.
+2. Route ALL implementation through the Task tool with subagent_type `coder` (bash-capable). Read-only
+   probes may use the explore agent via delegate.
+3. Blank/truncated agent response → ALWAYS resume the same task_id and keep resuming until it answers.
+   Never diagnose before resuming, never change the prompt, never restart the work. May take 10+
+   resumes.
+4. Agents sometimes fabricate GREEN reports. Land-verify every claim against `git log` / read-only
+   forensic probes — **probes over reports**. Fabrication signature: 3 identical reports → abandon the
+   task and re-cut a fresh one.
+5. At every round close: update worklog + §0-NOW + backlog stamps as supervisor-owned writes, AND
+   regenerate `docs/plans/crush_code_filemap.md`; collision-check the filemap **before launching** any
+   lane set.
+6. **Census trio flips IN-STEP**: any change to a warn/write-site roster flips roster count + uppercase
+   anchor word + NUMBER_WORDS map in the same commit (round-62 lesson: the lone merge collide was
+   `TtyStreamArgumentCensus` prose, `b2790b1a2`).
+7. **"Expose X on the result/event" ⇒ enumerate the implied DTO(s) in the brief touch-list** — field
+   plumbing silently drags sibling files otherwise.
+8. Evidence-driven in-scope files must be NAMED BEFORE building (briefs that say "measure, then
+   decide" produce seams the merge inherits).
+9. LSP diagnostics on `/home/sites/sugarcraft` are cross-lane noise — verify in the lane's own
+   sandbox. Agent-internal cwd can reset mid-script — briefs demand absolute paths.
+10. Round-63 lane ledger: AA–FF + reserve (§2 below). Sandboxes cut FRESH per lane at `1a6ef5f60`;
+    evidence to `/home/sites/crush-r61-artifacts/<lane>/`. The round-62 sandboxes
+    `/home/sites/crush-lane-{e,g,h,i,j,n,o,q,r,s,t,v,w,x,y}` are deletable.
+
+### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-62 FINAL / NEW ANCHOR** | **11,373 / 174,289 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** | **LINKED, cwd = repo root, at `1a6ef5f60`** |
+| sharded same tree | K=8 wall 74s, 8/8 shards rc 0, sum 11,373 conserved | `scripts/parallel-tests.sh` + LPT manifest @`35d3d941f`; requires the lane-G size pin (ctty region); critical path = `ProcessExecutorTest` 65.8s |
+| published repo-root | E655 now pinned by `tests/bootstrap.php` 60x200 arm; lane G measured 11,326 / 172,823 / 1S / exit 0 at `d8efb147b` | stays in its own **published-domain** (§0-NOW-62 §4); pre-round published figures are dead |
+
+Pre-flight before believing any figure: `refresh-deps.php --status` (rule 62), name cwd + mode beside
+every number (rule 59).
+
+### 2. ROUND 63 — SIX FILE-DISJOINT LANES + 1 RESERVE (7 slots; ownership verbatim into briefs; refuse out-of-lane edits, report seams; evidence `/home/sites/crush-r61-artifacts/<lane>/`)
+
+| lane | scope | owns (excerpt) |
+|---|---|---|
+| **AA — Phase-9 layer-A containment** | re-derive design from `crush_code.md` Phase-9 + lane-Y residual: withLaunchNotices refusal as an optional PARAMETER not a 2nd tool, env STAY | `src/Tools/Concerns/CapturesProcessOutput.php`, exec-tool files (`src/Tools/BuiltIn/Bash*` et al.), their tests |
+| **BB — P8.13 model-callable Task tool** | `src/Agents/Task.php`, Tool-registry wiring; `src/Tui/Renderer.php:164-167` `createSubAgent` is unblocked post-E lanes. Name-collision rule: mirror upstream naming | `src/Agents/Task.php`, registry rows, `tests/Agents/` |
+| **CC — Providers + workflow-tests** | **E664** (`ClaudeCodeInvocation.php:126` bare throw → typed `ProviderException`), E670 nit (`WorkflowProviderHandoffTest.php:141` property order), TransientFailure family | `src/Providers/ClaudeCode*`, `tests/Providers/TransientFailureTest.php`, `tests/Workflows/WorkflowProviderHandoffTest.php` |
+| **DD — MCP bridge** | **E665** (E42b /mcp wire-name surfacing — producers `Bootstrap`/`Subcommands`), McpConfig residuals | `src/Mcp/`, `src/Cli/Bootstrap.php` (Mcp region only), `tests/MCP/`, `docs/SETTINGS.md` |
+| **EE — Sibling libs 2** | **E667** (`Renderer::balanceSgr` → `SgrState` delegation), **E668** (candy-vcr Wait-pattern AST for `/re/`), E43 candy-shine fence half. Interaction suite = exact-anchor discipline per lane X | `candy-core/`, `candy-vcr/`, `candy-shine/` (+ sugar-crush `Renderer` only for E667 seam) |
+| **FF — Guards + prose (restricted)** | **E669** README headline generator; E633-SLICE-1 qualitative claims **OUTSIDE** `src/Providers`,`src/Mcp`,`src/Agents`,`src/Tui`,`tests/Tui`,`tests/Providers`,`tests/MCP` (those belong AA–EE; FF re-cuts FIRST at merge to keep domains disjoint) | `README.md`, `tests/Config/` generators, misc prose |
+| **RESERVE** | **E666** (E12 composite follow-up + palette-opened-then-left-open leak, lane-W seam) if a slot survives AA–EE reality checks | `src/App.php`, `src/Renderer.php` composite region |
+
+CI adoption of the sharded harness is **NOT a lane** — it is supervisor decision **E671** (runner-ctty
+caveat; K=8 on ubuntu-latest).
+
+### 3. ROUND-64 CARRY LIST — record, do NOT schedule here
+
+**E633** full sweep (FF runs only SLICE-1) · **E653** operator drain half (withdrawn shape — re-derive) ·
+`crush_feat_plan.md`'s two human attestations unchanged (neither blocks anything) · mint `### E652+`
+headings in `crush_code_hardening_backlog.md` (debt; their one-word stamps also lag there).
+
+### 4. LEDGER AFTER ROUND 62
+
+656 → **665** entries: **22 CLOSED** (E1, E12, E14, E15, E27, E29-OBSOLETE, E30, E37, E40, E47, E48,
+E49, E50, E115, E116, E124, E475, E642 note, E649, E652, E655, E656, E663-born-closed — fix commits
+cited per row), **E42/E43/E653 → PARTIAL**, E537 re-stamped NO-FIX with retargeted STEP per lane Y,
+**E664–E671** filed (8). Actionable **157 → 144**. L137 closed outside the ledger (no such id exists
+in the tree — lane Y measured; pinned by `RuntimeInitialDispatchOrderTest` @`1e86b7785`).
 
 ---
 
