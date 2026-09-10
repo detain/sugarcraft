@@ -433,9 +433,14 @@ final class EnvRosterDriftTest extends TestCase
      * lands. The files there carry no extension (they are `#!/usr/bin/env php`
      * scripts), so the filter is "a file", not "a `.php` file".
      *
+     * PUBLIC AND STATIC SINCE ROUND 62 — {@see \SugarCraft\Crush\Tests\Cli\HelpTest}
+     * builds the same scanner over the same walk for the help-screen roster
+     * guard (E37). One walk, one source of truth for what `src/` and `bin/`
+     * are; a second copy would be a second census that can drift.
+     *
      * @return array<string, string> repo-relative label => source text
      */
-    private function sources(): array
+    public static function sources(): array
     {
         $root = realpath(__DIR__ . '/../..');
         self::assertIsString($root);
@@ -775,6 +780,22 @@ final class EnvRosterDriftTest extends TestCase
     }
 
     /**
+     * The monorepo's per-lib landing page, E124's fourth surface.
+     *
+     * OUTSIDE THE LIB — this is the one surface a split-repo clone does not
+     * have, and the assertion below is deliberately FAIL-CLOSED about that:
+     * a mention surface that cannot be located reddens rather than quietly
+     * leaving the census one page short. `docs/index.html` generates
+     * `docs/lib/sugar-crush.html` from exactly this file, so the prose that
+     * names `SUGARCRUSH_BACKEND_CMD`, `SUGARCRUSH_MODEL` and
+     * `SUGARCRUSH_PROVIDER` to every visitor of the public site was, until
+     * round 62, the one user-facing surface with no oracle over it — a name
+     * renamed in `src/` would have kept advertising on the website as a
+     * variable the reader could set to no effect.
+     */
+    private const BODY_HTML_DOC = __DIR__ . '/../../../docs/_data/sugar-crush.body.html';
+
+    /**
      * Every page that MENTIONS, keyed by its repo-relative path.
      *
      * The roster is EXCLUDED here rather than exempted inside the census, for
@@ -805,6 +826,15 @@ final class EnvRosterDriftTest extends TestCase
             }
             $surfaces[substr($path, \strlen($root) + 1)] = self::read($path);
         }
+
+        $body = realpath(self::BODY_HTML_DOC);
+        self::assertIsString(
+            $body,
+            'docs/_data/sugar-crush.body.html is not readable from here — the suite is running outside a '
+            . 'monorepo checkout, where the landing page does not live; run it from the monorepo, do not '
+            . 'delete the surface',
+        );
+        $surfaces['docs/_data/sugar-crush.body.html'] = self::read($body);
 
         return $surfaces;
     }
@@ -977,6 +1007,13 @@ final class EnvRosterDriftTest extends TestCase
             . 'its deliberate not-read prose into promises — see tabulatedNames()',
         );
         $this->assertArrayHasKey('README.md', $pages, 'README.md is not being scraped');
+        $this->assertArrayHasKey(
+            'docs/_data/sugar-crush.body.html',
+            $pages,
+            'the monorepo landing page is not being scraped — the E124 surface would silently vanish '
+            . 'from the census if its glob-shaped half were deleted, exactly how the docs/ half of '
+            . 'GlobFigureDriftTest went blind in round 43',
+        );
         $this->assertGreaterThan(
             3,
             \count($pages),
