@@ -1066,20 +1066,25 @@ final class PaneWidthInvariantTest extends TestCase
     }
 
     /**
-     * Two things about the overlay path, one of which is this file's own bug and
-     * one of which is out of scope but must not be silently unasserted.
+     * Two things about the overlay path, one of which was this file's own bug
+     * and one of which was an over-wide left out of scope: backlog E47 fixed
+     * the latter, so this method now COVERS the overlay width invariant.
      *
      * 1. An overlay row is NOT the status bar. {@see transcriptRows()} used to
      *    pop the last row unconditionally; with the palette open at cols=40 and
      *    rows=20 the last row is `│  Appearance …│· /exit or ^C to quit`, so
      *    the invariant was applied to one row fewer than the frame has.
-     * 2. The overlay path is over-wide at narrow terminals and this bundle does
-     *    NOT fix it: `renderView()`'s choke point holds `$body`, and the palette
-     *    box is composited by `Veil` afterwards at its own natural width. So the
-     *    behaviour is PINNED rather than exempted — swept, the palette fits from
-     *    cols=60 up (widest 60, then 77 from 80 up) and overflows below it
-     *    (cols=40 → 56). If a later change widens or narrows that, this fails
-     *    and someone decides deliberately.
+     * 2. `renderView()`'s body choke point holds `$body` only, and the palette
+     *    box is composited by `Veil` afterwards at its own natural width, so a
+     *    narrow terminal used to get over-wide overlay rows. E47 routes the
+     *    overlay through `clipOverlayToCols()` before compositing. Swept: from
+     *    cols=60 up the box fits untouched (widest 60, then 77 from 80 up) and
+     *    the guard's fast path leaves those frames byte-identical; below it the
+     *    composited rows are CUT to the pane (cols=40: the 56-cell box lands
+     *    exactly at 40), the same trade the hosted path's clipWidth() makes.
+     *    The exact-40 pin proves the CLIP FIRES rather than the box having
+     *    shrunk by some other route; if either changes, this fails and someone
+     *    decides deliberately.
      */
     public function testAnOverlayRowIsNeitherMistakenForTheStatusBarNorSilentlyUnmeasured(): void
     {
@@ -1110,19 +1115,21 @@ final class PaneWidthInvariantTest extends TestCase
             )), $cols);
         }
 
-        // (2b) And below it, the current width is pinned as the out-of-scope
-        // fact it is.
+        // (2b) And below it the invariant is COVERED: every row fits the pane,
+        // and the widest lands exactly ON it — the clip fired on the 56-cell
+        // box (E47), the right border cut rather than the frame desynced.
         $narrow = Renderer::render(new Chat(
             history: $history,
             rows: 40,
             cols: 40,
             palette: PaletteState::root(),
         ));
+        self::assertRowsFit($narrow, 40);
         self::assertSame(
-            56,
+            40,
             self::widestRow(implode("\n", self::transcriptRows($narrow))),
-            'the palette overlay width changed; it is over-wide at cols=40 by design of Veil, '
-            . 'not of fitToPane, and this bundle does not fix it',
+            'the clipped palette overlay no longer lands exactly on the pane at cols=40; '
+            . 'clipOverlayToCols() either stopped firing or the box changed shape',
         );
     }
 

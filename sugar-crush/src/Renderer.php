@@ -1180,6 +1180,12 @@ final class Renderer
         // the wheel turned, and the transcript can have shrunk since (/clear,
         // a session switch, a resize), which would otherwise slice past the
         // start of the content and show a short frame.
+        // The guard sees only $rows; the frame it produces is $available PLUS
+        // the unconditional status bar below, so the frame's floor is two rows:
+        // at rows=1 — a size withSize() accepts and WindowSizeMsg can report —
+        // the frame is deliberately 2, not 1. Backlog E48 took the floor as the
+        // answer rather than dropping the bar; renderStatusBar()'s docblock says
+        // why the bar is the row that survives.
         $rows = $chat->rows();
         $available = max(1, $rows - 1);
         $contentLines = explode("\n", $content);
@@ -1258,6 +1264,15 @@ final class Renderer
             $overlay = self::renderSessionPicker($chat, $theme);
         }
         if ($overlay !== '') {
+            // The width invariant does not stop at $body: a Veil box is built
+            // at its own natural width AFTER fitToPane()'s choke point (the
+            // palette measures 56 cells at cols=40), so its rows could reach
+            // the terminal over-wide — the absolute-cursorTo row collision
+            // fitToPane() exists to prevent, on the standalone path with no
+            // hosted clipWidth() net underneath. Clip before compositing
+            // (backlog E47); see clipOverlayToCols() for why this cuts rather
+            // than wraps.
+            $overlay = self::clipOverlayToCols($overlay, $chat->cols());
             // A fresh Veil per render call (rather than one persisted on
             // Chat) means its own frame-diffing never kicks in - fine here,
             // since Chat already does its own diffing at a higher level in
@@ -1289,6 +1304,19 @@ final class Renderer
      * plus a context-usage readout ({@see contextIndicator()}) so a user can
      * see how full the context window is without running /compact
      * speculatively.
+     *
+     * The bar is UNCONDITIONAL, and that is a frame-height decision, not a
+     * style one (backlog E48): renderView() appends it below
+     * `max(1, $rows - 1)` content lines, so the frame is never shorter than
+     * TWO rows — a rows=1 terminal gets a 2-row frame, which the terminal
+     * absorbs by scrolling one line. The alternative the entry recorded
+     * (reserve the bar out of $available so the frame can be 1) was declined:
+     * the bar is the ONLY announcement of a blocking permission prompt or a
+     * hidden keybinding reference ({@see KEY_HELP_TOO_SMALL},
+     * {@see KEY_HELP_OVER_PROMPT}), and a frame that dropped it to save a row
+     * would silently eat keystrokes — one scrollable row over the screen is
+     * survivable, the one row that says why keys do nothing is not. The floor
+     * is pinned by tests/Renderer/FrameHeightFloorTest.
      *
      * It is also where the two states in which the keybinding reference hides
      * something announce themselves — {@see KEY_HELP_TOO_SMALL} when the box
@@ -2422,6 +2450,43 @@ final class Renderer
         }
 
         return $cut;
+    }
+
+    /**
+     * Hold every row of an overlay block to $cols display cells by CUTTING.
+     *
+     * Deliberately not fitToPane(): that WRAPS, and a wrapped box row would
+     * add physical rows to a frame renderView() has already sized to $rows —
+     * re-opening the very row-collision this guard closes, one row lower. The
+     * trade mirrors the hosted path's clipWidth(): a cut row costs a too
+     * narrow terminal the overlay's right border; a wrapped row costs every
+     * row under the wrap its coordinates.
+     *
+     * Rows that already fit are returned byte-identical, so a terminal wide
+     * enough for the box sees no change at all. No balanceSgr() pass: this
+     * guard runs on every overlay frame and would rewrite bytes on rows it did
+     * not touch (fitToPane() balances because it wraps); a row hardFit() cuts
+     * may end with an open style — the same exposure that row had before this
+     * guard existed, and unchanged for every other row.
+     *
+     * The overlay strings carry no zone sentinels at this point (the palette's
+     * item zones are marked on the COMPOSITED frame, after this call), so
+     * hardFit() cannot clip a sentinel triple in half here.
+     */
+    private static function clipOverlayToCols(string $overlay, int $cols): string
+    {
+        if ($cols <= 0) {
+            return $overlay;
+        }
+
+        $rows = explode("\n", $overlay);
+        foreach ($rows as $index => $row) {
+            if (Width::of($row) > $cols) {
+                $rows[$index] = self::hardFit($row, $cols);
+            }
+        }
+
+        return implode("\n", $rows);
     }
 
     /** @param list<string> $rows */
