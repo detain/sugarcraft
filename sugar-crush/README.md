@@ -1126,11 +1126,13 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**7,276 tests / 76,239 assertions, 0 failures, 1 skipped** — the whole of
+**11,350 tests / 173,489 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
-`vendor/bin/phpunit` run on PHP 8.3.6, 2m38s. Measured 2026-08-19; the figure
-that stood here before, 6,424/51,767 in 1m52s, was behind the suite by 852 tests
-and 24,472 assertions. The
+`vendor/bin/phpunit` run on PHP 8.3.6, 8m22s. Measured 2026-09-10 at the
+round-62 lane-I guard tip; the figure that stood here before, 7,276/76,239 in
+2m38s (2026-08-19), was behind the suite by some four thousand tests — rounds
+44 through 61 each shipped guards — and the figure before that, 6,424/51,767
+in 1m52s, was behind the suite by 852 tests and 24,472 assertions. The
 skip is `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`,
 which `markTestSkipped`s itself with "would require mocking built-in functions"
 — reaching `loadConfig()`'s `file_get_contents` failure branch needs a
