@@ -549,6 +549,40 @@ final class TransientFailureTest extends TestCase
         );
     }
 
+    /**
+     * The one deliberate LITERAL assertion in this file, filed for by E30.
+     *
+     * DOMAIN: crush_code.md Phase 5 item 8 (line 810) quotes "500ms doubling,
+     * ~1.5s of backoff per provider call at the constants of the time" in
+     * prose, and every OTHER backoff assertion here is relational by design
+     * (derive, don't literal) — so the day BASE_BACKOFF_MICROSECONDS or
+     * MAX_ATTEMPTS moves, the suite stays green and the plan file silently
+     * starts lying. This test exists solely to fail first and point at the
+     * prose: when it reddens, update crush_code.md item 8 to the new figures
+     * (or to a by-name cite of {@see TransientFailure::totalBackoffMicroseconds()}
+     * the way the src/ docblocks already do). It pins the numbers no doc
+     * outside the repo-reading tests checks, which is exactly the rot E30
+     * recorded.
+     */
+    public function testTheProseFiguresInThePlanMatchTheConstantsTheyQuote(): void
+    {
+        $this->assertSame(
+            500_000,
+            TransientFailure::BASE_BACKOFF_MICROSECONDS,
+            'crush_code.md Phase 5 item 8 says "500ms doubling"; a different base makes that prose lie (E30)',
+        );
+        $this->assertSame(
+            3,
+            TransientFailure::MAX_ATTEMPTS,
+            'crush_code.md Phase 5 item 8 says "3 attempts TOTAL"; a different ceiling makes that prose lie (E30)',
+        );
+        $this->assertSame(
+            1_500_000,
+            TransientFailure::totalBackoffMicroseconds(),
+            'crush_code.md Phase 5 item 8 says "~1.5s of backoff per provider call"; a different total makes that prose lie (E30)',
+        );
+    }
+
     public function testBackoffActuallySleepsForTheScheduledDuration(): void
     {
         // Pins that backoff() honours the schedule rather than merely computing

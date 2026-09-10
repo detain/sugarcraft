@@ -407,7 +407,12 @@ not valid UTF-8 (they are substituted, not dropped along with the whole
 document). `error.type` is not the exit code renamed — `usage`,
 `provider_configuration` and `installation` are all `2`, `backend`,
 `encoding`, `not-found` and `mcp-config` are all `1` — it is how a consumer
-that kept the code tells apart the kinds of each.
+that kept the code tells apart the kinds of each. The set's spellings are
+mixed by history, not by mistake: five names are single words or
+`snake_case`, while `not-found` and `mcp-config` are the two `kebab-case`
+names `src/Cli/Subcommands.php` added when its subcommand errors joined the
+contract. Renaming them to `snake_case` was weighed and declined (E116);
+match exact strings, never an inferred alphabet.
 
 One key is **conditional**, and it is the only one: `refusals`. A turn that
 blocked a tool call — a permission ASK that nothing could answer, an explicit
