@@ -129,18 +129,25 @@ vanishing.
 /workflow status <id>
 ```
 
-**2026-09-10 (E652, closing the E649 seam): what `/workflow run` reports for a
-sub-agent changed under you, and the change is on purpose.**
-*WHAT SAID:* before round 61 a stage whose forked sub-agent had no usable
-provider could still report **Completed** — the worker script fabricated a
-plausible text answer. *WHAT TRUE NOW:* a forked worker is handed the launch's
-serializable provider spec (the same selected-provider config the hosted chat
-runs on, plus the model override); with no spec derivable it **refuses**, and
-the sub-agent surfaces as **FAILED** naming the absence — a run that used to
-quietly "finish" now stops with a reason. A configured launch is unaffected
-except that its sub-agents now genuinely consult the model in the child.
-*WHY EARNS PLACE:* `/workflow status` is an operator's audit trail; "Completed"
-has to mean "a model saw this prompt", and pre-E652 it provably could not.
+**2026-09-10 (E652/E649): what a forked sub-agent reports when it has no
+usable provider changed under you, and the change is on purpose.**
+*WHAT SAID:* before round 61 a sub-agent with no usable provider could still
+report **Completed** — the worker script fabricated a plausible text answer.
+*WHAT TRUE NOW:* the honest refusal is still what runs **on this path today.**
+E652 wired the *serializable provider spec* into **Chat's own sub-agent path**
+(`AgentPoolConfig::$workerProvider`, fed by `Bootstrap::agentPoolConfig()` and
+threaded into the fallback `ProcessExecutor`/`AgentWorkerPool`), so a Chat
+launch with a configured provider gives its forked workers a model to consult.
+`/workflow run` does **not** inherit that yet: `Bootstrap::workflowEngine()`
+constructs the engine without a `pool:` argument, so `WorkflowEngine`'s default
+pool is spec-less and every engine-dispatched sub-agent still **FAILS** naming
+the provider absence. That engine-pool feed is the open, named seam; until it
+lands, treat a FAILED `/workflow run` sub-agent as "no provider was threaded
+to this pool", not as "no provider exists". *WHY EARNS PLACE:* `/workflow
+status` is an operator's audit trail; "Completed" has to mean "a model saw
+this prompt" — and "FAILED" now has to be traceable to a *named* wiring gap
+rather than to the whole path being dark, which is exactly the distinction
+this paragraph draws.
 
 Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted

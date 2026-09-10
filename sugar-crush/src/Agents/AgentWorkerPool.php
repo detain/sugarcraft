@@ -171,10 +171,21 @@ final class AgentWorkerPool
          *
          * Null means the default worker has no provider and will refuse rather
          * than fabricate — see
-         * {@see ProcessExecutor::createLiveWorkerScript()}. Nothing in `src/`
-         * passes this yet, so that is the shipped behaviour; the parameter is
-         * the seam a production wiring uses, and the one the pool's own
-         * fork-path tests use to get a worker that actually answers.
+         * {@see ProcessExecutor::createLiveWorkerScript()}. WHAT THIS SAID:
+         * nothing in `src/` passes this yet. WHAT IS TRUE NOW (E652):
+         * `Chat::executeAgents()`'s fallback pool passes the spec from
+         * {@see AgentPoolConfig::$workerProvider} — but there it injects an
+         * `executor:` too, and that executor carries the spec, so on the
+         * Chat path THIS parameter is read only via {@see workerProvider()}
+         * and {@see createDefaultExecutor()}, not consulted for the fork. The
+         * site that does consult it is a pool built WITHOUT an injected
+         * executor — today the `WorkflowEngine` default pool, which
+         * `Bootstrap::workflowEngine()` still constructs spec-less (the seam
+         * named in `docs/WORKFLOWS.md`), and this pool's own fork-path tests,
+         * which use it to get a worker that actually answers. WHY THE NOTE
+         * EARNS ITS PLACE: two parameters, two dispatch paths — reading the
+         * wrong one as the live feed is the silent half-wiring this family
+         * exists to prevent.
          *
          * @var ?array<string, mixed>
          */
@@ -1536,9 +1547,19 @@ final class AgentWorkerPool
      * its sequential stages talked to one — a divergence with no error and no
      * log line, visible only as an agent that answers nothing.
      *
-     * Latent until something sets a provider, which nothing in `src/` does
-     * yet. Fixed at the same time as the seam it depends on rather than left
-     * for whoever first wires a real provider to discover.
+     * WHAT SAID: latent until something sets a provider, which nothing in
+     * `src/` does yet. WHAT IS TRUE NOW (E652): `Chat::executeAgents()`'s
+     * fallback pool is built with this spec from
+     * {@see AgentPoolConfig::$workerProvider}, and the read-back is proven by
+     * the fork round-trip in `AgentWorkerPoolTest`. The engine-side consumer
+     * — {@see \SugarCraft\Crush\Workflows\WorkflowEngine} rebuilding a stage
+     * pool from this accessor — is still fed a null answer, because
+     * `Bootstrap::workflowEngine()` constructs the engine without a `pool:`;
+     * that seam is named exactly in `docs/WORKFLOWS.md`. WHY THIS EARNS ITS
+     * PLACE: the reconstruction path reads THIS accessor, so whoever lands the
+     * engine `pool:` argument inherits its provider only if this read-back
+     * stayed honest — fixed at the same time as the seam rather than left for
+     * whoever first wires it to discover.
      *
      * @return ?array<string, mixed>
      */

@@ -79,31 +79,34 @@ final class ProcessExecutor implements ExecutorInterface
          * survive `json_encode()` any better than a Message does
          * ({@see encodeMessages()}).
          *
-         * ## E649 — NOTHING IN `src/` SUPPLIES IT YET, AND THAT IS THE FINDING
+         * ## E649 — WHAT SAID: NOTHING IN `src/` SUPPLIES IT YET. E652 CLOSED
+         * THE CHAT PATH; THE WORKFLOW-ENGINE PATH IS THE SEAM THAT REMAINS.
          *
          * WHAT THIS PARAMETER CLAIMS to be is the provider the worker consults.
-         * WHAT IS TRUE NOW: no construction site in `src/` passes one —
-         * `AgentPoolConfig` has no provider field, `Chat`'s fallback pool
-         * (`Chat.php`, `new ProcessExecutor(timeoutSeconds: ...)` — a provider
-         * arg does not exist there), and `Bootstrap` builds no worker spec — so
-         * on every shipped path a sub-agent worker reaches
-         * {@see createLiveWorkerScript()}'s provider check, refuses, and the
-         * pool reports a FAILED agent. `/workflow run` returning FAILED where
-         * it once "Completed" with fabricated text is that refusal, and it
-         * shipped as a deliberate behavior change (an honest failure beats an
-         * indistinguishable lie — see the parameter's own null paragraph and
-         * the E59 notes on the simulation). WHY THIS NOTE EARNS ITS PLACE:
-         * the refusal is correct but the PATH TO A CONFIGURED WORKER is one
-         * lane-A-side edit per site, and without this paragraph the seam is
-         * invisible — the exact signature the supervisor must land at merge is
-         * `AgentPoolConfig: public readonly ?array $workerProvider = null` +
-         * `withWorkerProvider()`, threaded into Chat's fallback
+         * WHAT THIS SAID: no construction site in `src/` passed one, so on
+         * every shipped path a sub-agent worker reached
+         * {@see createLiveWorkerScript()}'s provider check, refused, and the
+         * pool reported a FAILED agent. WHAT IS TRUE NOW (E652):
+         * `AgentPoolConfig::$workerProvider` + `withWorkerProvider()` exist;
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::agentPoolConfig()} feeds the
+         * session's serializable provider spec into Chat's fallback pool via
          * `new ProcessExecutor(timeoutSeconds: ..., workerProvider: ...)` and
-         * `new AgentWorkerPool(..., workerProvider: ...)`, fed from the
-         * session's ProviderFactory config; {@see workerProvider()} reads the
-         * answer back off a configured executor, and
+         * `new AgentWorkerPool(..., workerProvider: ...)` — that construction
+         * site IS `src/`, and the Chat sub-agent path is live. THE SEAM THAT
+         * REMAINS, NAMED EXACTLY: {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()}
+         * builds its `WorkflowEngine` without a `pool:` argument, so the
+         * engine's promoted default `AgentWorkerPool` carries no spec and
+         * every `/workflow run` stage still reaches this refusal — see
+         * `docs/WORKFLOWS.md` ("Running one") for the operator-facing wording.
+         * WHY THIS NOTE EARNS ITS PLACE: the refusal is still correct for the
+         * engine path and a reader who concluded E652 made `/workflow run`
+         * live would be wrong exactly where it matters; an honest failure
+         * beats an indistinguishable lie (see the parameter's own null
+         * paragraph and the E59 notes on the simulation), and
          * {@see \SugarCraft\Crush\Workflows\WorkflowEngine::executeParallelStage()}
-         * already carries a pool's provider across stage-pool rebuilds.
+         * already carries whatever spec its stage pool holds across rebuilds —
+         * so the remaining edit is one `pool:` argument at the Bootstrap call
+         * site, not a new mechanism.
          */
         private readonly ?array $workerProvider = null,
         /**
@@ -1203,15 +1206,24 @@ final class ProcessExecutor implements ExecutorInterface
      * comment, whereas a fallback produces a plausible answer that no caller,
      * test or transcript can distinguish from a real one.
      *
-     * ## WHAT THE SHIPPED DEFAULT ACTUALLY DOES TODAY
+     * ## WHAT THE SHIPPED PATHS ACTUALLY DO TODAY (E652 REWRITE)
      *
-     * Nothing in `src/` passes `workerProvider`, so on the shipped paths this
-     * script reaches its provider check, refuses, and the pool reports a
-     * FAILED agent naming the absence. **The production sub-agent path is
-     * therefore unexercised, and this change does not make it work — it makes
-     * it honest.** What it does buy is that the claim "this sub-agent's prompt
-     * reached a model" is now falsifiable: before, it could not be tested at
-     * all, because a green suite over a fabricating worker measures the
+     * WHAT THIS SAID: nothing in `src/` passes `workerProvider`, so on the
+     * shipped paths this script reaches its provider check, refuses, and the
+     * pool reports a FAILED agent naming the absence. WHAT IS TRUE NOW: on
+     * the CHAT sub-agent path `Bootstrap::agentPoolConfig()` supplies the
+     * session's provider spec through `Chat::executeAgents()`'s fallback pool
+     * ({@see \SugarCraft\Crush\Agents\AgentPoolConfig::$workerProvider}), so a
+     * configured launch's forked worker constructs its provider child-side and
+     * answers. On the `/workflow run` path the check still fires:
+     * `Bootstrap::workflowEngine()` passes no `pool:`, so the engine's default
+     * pool carries no spec and every stage refuses FAILED — the open seam
+     * named in {@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()} and in
+     * `docs/WORKFLOWS.md`. WHY THE SENTENCE EARNS ITS PLACE: the second half
+     * is why the refusal was minted — an honest failure beats an
+     * indistinguishable lie — and the claim "this sub-agent's prompt reached a
+     * model" stays falsifiable on both paths: before, neither could be tested
+     * at all, because a green suite over a fabricating worker measures the
      * fabrication.
      *
      * ## `['type' => 'echo']`

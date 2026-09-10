@@ -2331,6 +2331,32 @@ final class Bootstrap
             $config = $factory->defaultConfig($providerName);
             $config['model'] = $model;
 
+            // E652 review fix — never put a RESOLVED credential on the fork
+            // frame. defaultConfig() bakes getenv() output into apiKey (and
+            // openai's organization); the child re-resolves ${VAR} placeholders
+            // inside ProviderFactory::create() and inherits this process's
+            // environment whole (spawnWorker's proc_open passes null env), so
+            // the placeholder is functionally identical while the JSON startup
+            // frame stops carrying the secret in clear text. A value that is
+            // NOT exactly the env default is a file-configured credential, and
+            // the spec is the child's only copy of it — those stay.
+            $credentialEnvVars = match ($providerName) {
+                'openai' => ['apiKey' => 'OPENAI_API_KEY', 'organization' => 'OPENAI_ORG_ID'],
+                'anthropic' => ['apiKey' => 'ANTHROPIC_API_KEY'],
+                'sglang' => ['apiKey' => 'SGLANG_API_KEY'],
+                default => [],
+            };
+            foreach ($credentialEnvVars as $key => $var) {
+                if (
+                    \is_string($config[$key] ?? null)
+                    && $config[$key] !== ''
+                    && \getenv($var) !== false
+                    && $config[$key] === \getenv($var)
+                ) {
+                    $config[$key] = '${' . $var . '}';
+                }
+            }
+
             return $config;
         } catch (\Throwable) {
             return null;

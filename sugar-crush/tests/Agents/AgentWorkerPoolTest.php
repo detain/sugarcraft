@@ -2514,10 +2514,18 @@ final class AgentWorkerPoolTest extends TestCase
      * E652 end-to-end proof of the wiring, not an accessor check: a Chat with
      * only an AgentPoolConfig carrying `workerProvider` must build a fallback
      * pool whose FORKED child consults that provider and comes back Completed.
-     * The pair with the next test is what falsifies a silent regression: delete
-     * either feed in `Chat::executeAgents()` and exactly one of these two goes
-     * red (spec-carrying child refuses, or null-spec child fabricates — the
-     * second is the E641-era lie this lane exists to keep dead).
+     * WHAT THE PAIR ACTUALLY PINS, feed by feed — `Chat::executeAgents()`
+     * carries the spec on TWO parameters, and they are not redundant:
+     * (1) deleting the `ProcessExecutor` feed reddens this test, because Chat
+     * injects that executor and it is what puts the spec on the fork frame;
+     * (2) deleting the `AgentWorkerPool` feed would NOT be caught by the fork
+     * alone — with an executor injected, the pool's own `workerProvider`
+     * parameter is consulted only where the pool builds its DEFAULT executor
+     * ({@see AgentWorkerPool::createDefaultExecutor()}, the shape
+     * WorkflowEngine rebuilds per stage). That second feed is therefore pinned
+     * HERE by a read-back plus a default-executor round trip, not by this
+     * Chat-path fork; and the next test pins that a null spec FAILS CLOSED
+     * rather than fabricating — the E641-era lie this lane exists to keep dead.
      */
     public function testChatFallbackPoolInheritsWorkerProviderToTheForkedChild(): void
     {
@@ -2544,6 +2552,24 @@ final class AgentWorkerPoolTest extends TestCase
             AgentStatus::Completed,
             reset($results)->status,
             'E652: the pool Chat builds from AgentPoolConfig must carry the spec to the forked worker; a FAILED here means the executor/pool feed regressed to the fail-closed refusal.',
+        );
+
+        // Feed (2) of the pair's contract (see docblock): the pool's OWN
+        // workerProvider parameter, which the Chat path never consults while an
+        // executor is injected. Read-back, then the default-executor shape a
+        // WorkflowEngine stage rebuild uses — a pool with NO injected executor
+        // — must round-trip on the spec alone.
+        $specOnlyPool = new AgentWorkerPool(maxConcurrent: 1, workerProvider: ['type' => 'echo']);
+        $this->assertSame(['type' => 'echo'], $specOnlyPool->workerProvider());
+
+        $defaultExecutorResult = $this->underDeadline(
+            120,
+            fn (): AgentResult => $specOnlyPool->executeOne($this->makeAgent('default-executor-spec'), $this->request),
+        );
+        $this->assertSame(
+            AgentStatus::Completed,
+            $defaultExecutorResult->status,
+            'E652 feed (2): createDefaultExecutor() must inherit the pool spec; deleting the workerProvider argument at AgentWorkerPool would fail HERE, not on the Chat-path fork.',
         );
     }
 
