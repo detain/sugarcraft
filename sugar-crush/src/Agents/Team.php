@@ -111,8 +111,9 @@ final class Team
      *  3. Creates the worktree via WorktreeManager::createWorktree()
      *  4. Updates the Teammate's worktreePath via withWorktreePath()
      *
-     * If the task claim succeeds but worktree creation fails, the task claim
-     * is NOT rolled back (the task will be in 'in-progress' state).
+     * If the task claim succeeds but worktree creation fails, the claim is
+     * released (E136 — {@see \SugarCraft\Crush\Agents\TaskList::releaseTask()})
+     * and the worktree failure propagates, so the task stays claimable.
      *
      * @return bool true if both the task claim and worktree creation succeeded,
      *              false if the task was not claimable or the teammate was not found
@@ -130,11 +131,26 @@ final class Team
             return false;
         }
 
-        // Step 2: Cheap periodic sweep so stale worktrees actually get cleaned up
-        $wm->sweepIfDue();
+        // Steps 2-3, guarded (E136): everything that can fail AFTER the claim
+        // is on the table used to strand the task `in_progress` and assigned
+        // to a teammate with no worktree — unretryable, because
+        // TaskList::claimTask() only accepts Pending tasks, so the failure
+        // the caller saw as an exception became permanent bookkeeping. The
+        // claim is now released when these steps throw, leaving the task
+        // claimable again once the cause is fixed. The original failure is
+        // rethrown untouched: the rollback explains the bookkeeping, it does
+        // not replace the diagnosis.
+        try {
+            // Step 2: Cheap periodic sweep so stale worktrees actually get cleaned up
+            $wm->sweepIfDue();
 
-        // Step 3: Create the worktree
-        $worktreePath = $wm->createWorktree($teammateId);
+            // Step 3: Create the worktree
+            $worktreePath = $wm->createWorktree($teammateId);
+        } catch (\Throwable $failure) {
+            $this->taskList->releaseTask($taskId, $teammateId);
+
+            throw $failure;
+        }
 
         // Step 4: Wire the teammate to the worktree (immutable replacement)
         $updatedTeammate = $teammate->withWorktreePath($worktreePath);

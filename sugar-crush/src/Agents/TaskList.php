@@ -397,6 +397,57 @@ final class TaskList
     }
 
     /**
+     * Release a teammate's claim: put an in-progress, theirs-assigned task
+     * back to pending and unassigned.
+     *
+     * The inverse half of {@see claimTask()}, under the same per-task lock,
+     * and deliberately as narrow as possible: it succeeds only for exactly
+     * the state a claim left behind (Pending ← InProgress, and only for the
+     * teammate the task still names). E136 gives Team::claimTask()'s rollback
+     * a path that cannot touch a task some other teammate has since moved.
+     *
+     * @return bool true if this call released the claim; false when the task
+     *         is gone, no longer in progress, or no longer theirs — the
+     *         bookkeeping was someone else's to change by then.
+     */
+    public function releaseTask(string $taskId, string $teammateId): bool
+    {
+        $lockPath = $this->lockPathFor($taskId);
+        $lockFp = $this->acquireTaskLock($lockPath);
+
+        try {
+            $task = $this->getTaskWithoutLock($taskId);
+
+            if ($task === null
+                || $task->status !== TaskStatus::InProgress
+                || $task->assignedTo !== $teammateId
+            ) {
+                return false;
+            }
+
+            $handle = $this->openForWrite();
+
+            $stmt = $this->db->prepare(
+                <<<'SQL'
+                UPDATE tasks
+                SET status = :status, assigned_to = NULL, claimed_at = NULL
+                WHERE id = :id
+                SQL
+            );
+            $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+            $stmt->bindValue(':status', TaskStatus::Pending->value, \SQLITE3_TEXT);
+            $stmt->execute();
+            $stmt->close();
+
+            $this->closeForWrite($handle);
+
+            return true;
+        } finally {
+            $this->releaseTaskLock($lockFp);
+        }
+    }
+
+    /**
      * Add a dependency to a task.
      *
      * The dependent task will not be claimable until the dependency is completed.
@@ -492,9 +543,12 @@ final class TaskList
         if ($fp === false) {
             throw new \RuntimeException("Cannot open database file: {$this->dbPath}");
         }
-        if (!\flock($fp, \LOCK_EX)) {
+        try {
+            $this->flockTimed($fp, \LOCK_EX, $this->dbPath);
+        } catch (\RuntimeException $failure) {
             \fclose($fp);
-            throw new \RuntimeException("Cannot acquire lock on database file: {$this->dbPath}");
+
+            throw $failure;
         }
 
         return $fp;
@@ -649,12 +703,56 @@ final class TaskList
         if ($fp === false) {
             throw new \RuntimeException("Cannot open lock file: {$lockPath}");
         }
-        if (!\flock($fp, \LOCK_EX)) {
+        try {
+            $this->flockTimed($fp, \LOCK_EX, $lockPath);
+        } catch (\RuntimeException $failure) {
             \fclose($fp);
-            throw new \RuntimeException("Cannot acquire task lock: {$lockPath}");
+
+            throw $failure;
         }
 
         return $fp;
+    }
+
+    /**
+     * How long a flock() here may block before it fails diagnosably (E137).
+     *
+     * A bare flock() parks the calling process — and through it the TUI or
+     * the pool worker — for an unbounded wait on a lock another process may
+     * never release. Every site that used to call flock() blocking now calls
+     * this instead: LOCK_NB polled every 10ms against a deadline, default
+     * 5.0s to match the SQLite busyTimeout {@see getConnection()} already
+     * sets on the same handle, so the two lock layers wait the same amount
+     * for the same reason. A timeout throws with the contended PATH in the
+     * message — a hang that names itself is debuggable; a silent one is not.
+     */
+    private function flockTimed(mixed $fp, int $flags, string $what): void
+    {
+        $deadline = \microtime(true) + $this->lockWaitSeconds;
+
+        while (!@\flock($fp, $flags | \LOCK_NB)) {
+            if (\microtime(true) >= $deadline) {
+                throw new \RuntimeException(sprintf(
+                    'Timed out after %.1fs waiting for the %s lock on %s — another process holds it.',
+                    $this->lockWaitSeconds,
+                    ($flags & \LOCK_EX) === \LOCK_EX ? 'exclusive' : 'shared',
+                    $what,
+                ));
+            }
+
+            \usleep(10_000);
+        }
+    }
+
+    /** Default bounded-lock wait; matches the SQLite busyTimeout in ms (§ E137). */
+    private const DEFAULT_LOCK_WAIT_SECONDS = 5.0;
+
+    private float $lockWaitSeconds = self::DEFAULT_LOCK_WAIT_SECONDS;
+
+    /** Test seam: shrink the E137 wait so a timeout is fast to prove. */
+    public function setLockWaitSecondsForTesting(float $seconds): void
+    {
+        $this->lockWaitSeconds = $seconds;
     }
 
     /**

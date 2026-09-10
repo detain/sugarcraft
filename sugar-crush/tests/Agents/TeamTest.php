@@ -488,6 +488,67 @@ final class TeamTest extends TestCase
         $this->assertFalse($team->claimTask('task-1', 'nonexistent', $wm));
     }
 
+    /**
+     * E136: when the worktree steps of claimTask() die AFTER the claim
+     * committed, the task used to stay `in_progress` forever — unretryable,
+     * because TaskList::claimTask() only accepts Pending tasks. The rollback
+     * now releases exactly the failed claim and rethrows the original
+     * failure. The repro is the entry's own shape: a teammate that already
+     * has a worktree, so createWorktree() refuses the second dispatch.
+     */
+    public function testClaimTaskRollsBackTheClaimWhenWorktreeCreationFails(): void
+    {
+        $team = $this->createTeam('team-claim-rollback-' . uniqid((string) getmypid(), true));
+        $team->addTeammate($this->createTeammate('tm-rb', $team->id, 'Riley', AgentType::Coder));
+        $wm = $this->createRealWorktreeManager();
+
+        $mk = fn(string $n): \SugarCraft\Crush\Agents\Task => new \SugarCraft\Crush\Agents\Task(
+            id: $n . '-' . uniqid((string) getmypid(), true),
+            teamId: $team->id,
+            title: $n,
+            description: '',
+            prompt: 'do',
+            assignedTo: null,
+            status: \SugarCraft\Crush\Agents\TaskStatus::Pending,
+            result: null,
+            error: null,
+            createdAt: new \DateTimeImmutable(),
+            claimedAt: null,
+            completedAt: null,
+            dependsOn: [],
+            isContested: false,
+        );
+        $first = $mk('task-rb-1');
+        $second = $mk('task-rb-2');
+        $team->getTaskList()->addTask($first);
+        $team->getTaskList()->addTask($second);
+
+        $this->assertTrue($team->claimTask($first->id, 'tm-rb', $wm), 'first claim must succeed');
+
+        $failure = null;
+        try {
+            $team->claimTask($second->id, 'tm-rb', $wm);
+        } catch (\Throwable $caught) {
+            $failure = $caught;
+        }
+
+        $this->assertNotNull($failure, 'a teammate whose worktree already exists must fail, not silently double-wire');
+        $reloaded = $team->getTaskList()->getTask($second->id);
+        $this->assertNotNull($reloaded);
+        $this->assertSame(
+            \SugarCraft\Crush\Agents\TaskStatus::Pending,
+            $reloaded->status,
+            'E136: the failed claim is rolled back, not stranded in_progress',
+        );
+        $this->assertNull($reloaded->assignedTo, 'and the rollback unassigns, so any teammate may retry');
+
+        $this->assertSame(
+            \SugarCraft\Crush\Agents\TaskStatus::InProgress,
+            $team->getTaskList()->getTask($first->id)?->status,
+            'the rollback is scoped to the task whose worktree step failed',
+        );
+    }
+
     public function testClaimTaskReturnsFalseWhenTaskAlreadyClaimed(): void
     {
         $team = $this->createTeam('team-claim-taken-' . uniqid((string) getmypid(), true));

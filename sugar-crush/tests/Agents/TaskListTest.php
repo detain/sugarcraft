@@ -44,6 +44,88 @@ final class TaskListTest extends TestCase
     // addTask
     // -------------------------------------------------------------------------
 
+    /**
+     * E137: the flock() sites must fail a bounded wait diagnosably instead
+     * of parking the caller forever. A second handle holds the write lock;
+     * the guarded path times out with the CONTENDED PATH in the message —
+     * and once the holder lets go, the same lock acquires normally, which
+     * is the half that keeps this from being a test of "always throws".
+     */
+    public function testWriteLockTimeoutIsBoundedAndNamesTheContendedPath(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->setLockWaitSecondsForTesting(0.05);
+
+        $holder = fopen($this->dbPath, 'a');
+        $this->assertNotFalse($holder);
+        $this->assertTrue(flock($holder, LOCK_EX));
+
+        $failure = null;
+        $started = microtime(true);
+        try {
+            $list->addTask($this->makeTask('task-locked', 'team-a', 'Contended'));
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
+        }
+        $elapsed = microtime(true) - $started;
+
+        flock($holder, LOCK_UN);
+        fclose($holder);
+
+        $this->assertNotNull($failure, 'a contended exclusive lock must throw, not hang');
+        $this->assertStringContainsString('Timed out', $failure->getMessage());
+        $this->assertStringContainsString($this->dbPath, $failure->getMessage());
+        $this->assertLessThan(1.0, $elapsed, 'the wait is bounded by the (test-shrunk) deadline');
+
+        $this->assertSame(
+            'task-locked',
+            $list->addTask($this->makeTask('task-locked', 'team-a', 'Contended')),
+            'the lock primitive itself still works once uncontended',
+        );
+    }
+
+    /**
+     * E137 at the per-task claim lock, plus E136's releaseTask: the claim
+     * rollback half. releaseTask is as narrow as claimTask is broad — only
+     * an in-progress task the SAME teammate holds goes back to pending.
+     */
+    public function testClaimLockBoundedAndReleaseTaskReturnsTheClaimToPending(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('task-release', 'team-a', 'Release me'));
+
+        $lockPath = dirname($this->dbPath) . '/task_locks/' . hash('sha256', 'task-release') . '.lock';
+        $list->setLockWaitSecondsForTesting(0.05);
+        $holder = fopen($lockPath, 'a');
+        $this->assertNotFalse($holder);
+        $this->assertTrue(flock($holder, LOCK_EX));
+
+        $failure = null;
+        try {
+            $list->claimTask('task-release', 'tm-1');
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
+        }
+
+        flock($holder, LOCK_UN);
+        fclose($holder);
+
+        $this->assertNotNull($failure, 'a contended claim lock must throw, not hang');
+        $this->assertStringContainsString('Timed out', $failure->getMessage());
+
+        $list->setLockWaitSecondsForTesting(5.0);
+        $this->assertTrue($list->claimTask('task-release', 'tm-1'));
+        $this->assertTrue($list->releaseTask('task-release', 'tm-1'));
+
+        $reloaded = $list->getTask('task-release');
+        $this->assertSame(\SugarCraft\Crush\Agents\TaskStatus::Pending, $reloaded?->status);
+        $this->assertNull($reloaded?->assignedTo);
+
+        $this->assertFalse($list->releaseTask('task-release', 'tm-1'), 'a pending task holds no claim to release');
+        $this->assertTrue($list->claimTask('task-release', 'tm-2'));
+        $this->assertFalse($list->releaseTask('task-release', 'tm-1'), "a teammate cannot release another teammate's claim");
+    }
+
     public function testAddTaskReturnsTaskId(): void
     {
         $list = new TaskList($this->dbPath);

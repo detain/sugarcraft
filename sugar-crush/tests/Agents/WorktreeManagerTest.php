@@ -43,6 +43,82 @@ final class WorktreeManagerTest extends TestCase
         $this->manager = new WorktreeManager($config, $this->repoRoot);
     }
 
+    /**
+     * E137, registry side: the read (LOCK_SH) and write (LOCK_EX) registry
+     * waits are bounded, and a timeout FAILS LOUD rather than falling open
+     * to an empty in-memory registry — a silently-empty load followed by the
+     * next save would drop a live contender's entries, a lost update dressed
+     * as a read.
+     */
+    public function testRegistryReadLockContentionFailsLoudInsteadOfFailingOpen(): void
+    {
+        $registryPath = $this->tmpRoot . '/worktrees/.registry.json';
+        mkdir(dirname($registryPath), 0755, true);
+        file_put_contents($registryPath, '[]');
+
+        $holder = fopen($registryPath, 'a');
+        $this->assertNotFalse($holder);
+        $this->assertTrue(flock($holder, LOCK_EX));
+
+        $failure = null;
+        try {
+            // The constructor loads the registry — the LOCK_SH side. It cannot
+            // be shrunk before construction, so this one runs the REAL 5s
+            // deadline; that is itself the bound the entry asked to prove.
+            new WorktreeManager(
+                new WorktreeConfig(basePath: $this->tmpRoot . '/worktrees/'),
+                $this->repoRoot,
+            );
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
+        }
+
+        flock($holder, LOCK_UN);
+        fclose($holder);
+
+        $this->assertNotNull($failure, 'a contended registry read must throw, not hang and not read as empty');
+        $this->assertStringContainsString('Timed out', $failure->getMessage());
+        $this->assertStringContainsString('shared lock', $failure->getMessage());
+        $this->assertStringContainsString('.registry.json', $failure->getMessage());
+    }
+
+    public function testRegistryWriteLockContentionIsBoundedAndNamesThePath(): void
+    {
+        $registryPath = $this->tmpRoot . '/worktrees/.registry.json';
+        mkdir(dirname($registryPath), 0755, true);
+        // A ghost entry the loader keeps and listWorktrees() prunes — the
+        // orphan sync is the public path into saveRegistry()'s LOCK_EX.
+        file_put_contents($registryPath, json_encode(['ghost-e137' => ['branch' => 'ghost-' . uniqid('', true)]]));
+
+        $contended = new WorktreeManager(
+            new WorktreeConfig(basePath: $this->tmpRoot . '/worktrees/'),
+            $this->repoRoot,
+        );
+        $contended->setLockWaitSecondsForTesting(0.05);
+
+        $holder = fopen($registryPath, 'a');
+        $this->assertNotFalse($holder);
+        $this->assertTrue(flock($holder, LOCK_EX));
+
+        $failure = null;
+        $started = microtime(true);
+        try {
+            $contended->listWorktrees();
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
+        }
+        $elapsed = microtime(true) - $started;
+
+        flock($holder, LOCK_UN);
+        fclose($holder);
+
+        $this->assertNotNull($failure, 'a contended registry write must throw, not hang');
+        $this->assertStringContainsString('Timed out', $failure->getMessage());
+        $this->assertStringContainsString('exclusive lock', $failure->getMessage());
+        $this->assertStringContainsString('.registry.json', $failure->getMessage());
+        $this->assertLessThan(1.0, $elapsed, 'the wait is bounded by the (test-shrunk) deadline');
+    }
+
     protected function tearDown(): void
     {
         // Restored FIRST: an override left set would be read by the next

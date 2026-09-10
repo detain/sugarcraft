@@ -1239,7 +1239,16 @@ final class WorktreeManager
             return;
         }
 
-        flock($fp, LOCK_SH);
+        // E137: bounded, loud wait. Failing OPEN to an empty registry on a
+        // timeout would let the next saveRegistry() drop a live contender's
+        // entries — a lost update dressed as a read — so a timeout throws.
+        try {
+            $this->flockTimed($fp, LOCK_SH, $this->registryPath);
+        } catch (\RuntimeException $failure) {
+            fclose($fp);
+
+            throw $failure;
+        }
 
         // Read until EOF to avoid TOCTOU race between filesize() and fread()
         $content = '';
@@ -1278,16 +1287,70 @@ final class WorktreeManager
             mkdir($dir, 0755, true);
         }
 
-        $bytes = file_put_contents(
-            $this->registryPath,
-            json_encode($this->registry, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
-            LOCK_EX,
-        );
-
-        if ($bytes === false) {
+        // E137: the LOCK_EX flag on file_put_contents() is the same
+        // unbounded blocking flock() the read side just left, and it cannot
+        // be given a deadline. 'c' (create, do not truncate) + timed LOCK_EX
+        // + ftruncate keeps the exclusivity the flag was buying — the file is
+        // only ever emptied while the lock is held.
+        $fp = fopen($this->registryPath, 'c');
+        if ($fp === false) {
             throw new \RuntimeException(
                 sprintf('Failed to write registry to "%s".', $this->registryPath),
             );
         }
+
+        try {
+            $this->flockTimed($fp, LOCK_EX, $this->registryPath);
+
+            if (ftruncate($fp, 0) === false || fwrite($fp, json_encode($this->registry, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)) === false) {
+                throw new \RuntimeException(
+                    sprintf('Failed to write registry to "%s".', $this->registryPath),
+                );
+            }
+
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        } catch (\RuntimeException $failure) {
+            fclose($fp);
+
+            throw $failure;
+        }
+    }
+
+    /**
+     * How long a flock() here may block before it fails diagnosably (E137).
+     *
+     * Same discipline as {@see TaskList::flockTimed()} for the same reason:
+     * an unbounded LOCK_SH/LOCK_EX on the shared registry is a hang shaped
+     * like concurrency, and the message must name the contended path.
+     */
+    private function flockTimed(mixed $fp, int $flags, string $what): void
+    {
+        $deadline = \microtime(true) + $this->lockWaitSeconds;
+
+        while (!\flock($fp, $flags | LOCK_NB)) {
+            if (\microtime(true) >= $deadline) {
+                throw new \RuntimeException(sprintf(
+                    'Timed out after %.1fs waiting for the %s lock on %s — another process holds it.',
+                    $this->lockWaitSeconds,
+                    ($flags & LOCK_EX) === LOCK_EX ? 'exclusive' : 'shared',
+                    $what,
+                ));
+            }
+
+            usleep(10_000);
+        }
+    }
+
+    /** Default bounded-lock wait; matches TaskList's SQLite busyTimeout in ms. */
+    private const DEFAULT_LOCK_WAIT_SECONDS = 5.0;
+
+    private float $lockWaitSeconds = self::DEFAULT_LOCK_WAIT_SECONDS;
+
+    /** Test seam: shrink the E137 wait so a timeout is fast to prove. */
+    public function setLockWaitSecondsForTesting(float $seconds): void
+    {
+        $this->lockWaitSeconds = $seconds;
     }
 }
