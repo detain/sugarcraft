@@ -9,6 +9,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Tty;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Backend;
@@ -126,22 +127,42 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
      * makes the tests/App re-pins no-ops for every test that passes today —
      * if this constant ever moves, the pin silently changes the suite.
      *
-     * Guarded, not skipped: a tty runner legitimately answers with its own
-     * window (the exact shape this whole lane is about), so only the
-     * probe-sanity half is assertable there; and the suite's skip roster
-     * (`SuiteSkipRoster`, exactly one skip by name) must not move because
-     * someone attached a terminal.
+     * Guarded, not skipped: the suite's skip roster (`SuiteSkipRoster`,
+     * exactly one skip by name) must not move because someone attached a
+     * terminal. On a tty runner the same reset ARMS the probe and the
+     * assertion compares against ground truth — an independent fresh
+     * `Tty(STDOUT)` probe of the live window — so the tty half exercises the
+     * probe path too (the pinned cache would otherwise answer 60x200 and the
+     * window would never be touched), and only when that probe cannot answer
+     * does the documented fallback take the watch, mirroring
+     * `getTerminalSize()`'s own positive-size rule.
      */
     public function testTheDocumentedFallbackIsExactlySixtyRowsByTwoHundredCols(): void
     {
+        TuiRenderer::resetSizeCache();
+
         if (stream_isatty(\STDOUT)) {
-            $size = TuiRenderer::getTerminalSize();
-            self::assertGreaterThan(0, $size['rows'], 'a tty answers its own window — probe-sanity half only');
+            // Ground truth: an independent fresh probe of the same window,
+            // folded through the same positive-size rule the renderer applies
+            // in src/Tui/Renderer.php getTerminalSize().
+            try {
+                $probe = (new Tty(STDOUT))->size();
+            } catch (\Throwable) {
+                $probe = null;
+            }
+
+            $expected = ($probe !== null && $probe['rows'] > 0 && $probe['cols'] > 0)
+                ? ['rows' => $probe['rows'], 'cols' => $probe['cols']]
+                : ['rows' => 60, 'cols' => 200];
+
+            self::assertSame(
+                $expected,
+                TuiRenderer::getTerminalSize(),
+                'with the probe armed, a tty answers its own window — or the documented fallback when the probe cannot',
+            );
 
             return;
         }
-
-        TuiRenderer::resetSizeCache();
 
         self::assertSame(
             ['rows' => 60, 'cols' => 200],
