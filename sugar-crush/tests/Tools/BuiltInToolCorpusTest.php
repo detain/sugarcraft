@@ -1341,13 +1341,17 @@ final class BuiltInToolCorpusTest extends TestCase
         ] as $code) {
             file_put_contents($path, $code);
 
+            $caught = null;
+
             try {
                 BuiltInToolCorpus::declaredTypes($path);
-                $this->fail('an else-if alt chain must end the walk UNRESOLVED, not silently miscounted');
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString($path, $e->getMessage(), 'the refusal names the file');
-                $this->assertStringContainsString('1 else-chain alt-syntax colon(s)', $e->getMessage());
+                $caught = $e;
             }
+
+            $this->assertNotNull($caught, 'an else-if alt chain must end the walk UNRESOLVED, not silently miscounted');
+            $this->assertStringContainsString($path, $caught->getMessage(), 'the refusal names the file');
+            $this->assertStringContainsString('1 else-chain alt-syntax colon(s)', $caught->getMessage());
         }
     }
 
@@ -1383,18 +1387,22 @@ final class BuiltInToolCorpusTest extends TestCase
         $path = $this->probeDir . '/decl_unbal_' . md5($code) . '.php';
         file_put_contents($path, $code);
 
+        $caught = null;
+
         try {
             BuiltInToolCorpus::declaredTypes($path);
-            $this->fail('an unbalanced alt-syntax walk must THROW, not silently hide or count the tail');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString($path, $e->getMessage(), 'the refusal names the file');
-
-            if (1 !== preg_match('/(-?\d+) unclosed colon scope/', $e->getMessage(), $matches)) {
-                $this->fail('the refusal must report the signed imbalance: ' . $e->getMessage());
-            }
-
-            $this->assertSame($balance, (int) $matches[1], 'the reported balance IS the polarity');
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'an unbalanced alt-syntax walk must THROW, not silently hide or count the tail');
+        $this->assertStringContainsString($path, $caught->getMessage(), 'the refusal names the file');
+
+        if (1 !== preg_match('/(-?\d+) unclosed colon scope/', $caught->getMessage(), $matches)) {
+            $this->fail('the refusal must report the signed imbalance: ' . $caught->getMessage());
+        }
+
+        $this->assertSame($balance, (int) $matches[1], 'the reported balance IS the polarity');
     }
 
     public function testEveryCorpusInstanceIsATool(): void
