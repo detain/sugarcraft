@@ -1518,6 +1518,12 @@ final class Bootstrap
         // documented as intentional — into a hard crash for five of the six
         // built-in presets; E639's measured trap and the reason this wiring
         // is not the one-liner the backlog first called it.
+        //
+        // The filter here is the PURE PREDICATE, not the reporting wrapper:
+        // the session's launch notices for a removed or emptied set already
+        // fire at the model-facing call sites (app/backend/backendFor), and a
+        // manager that re-fired them would tell the operator twice what one
+        // config line means. Same array, same predicate, no second announcement.
         $toolUniverse = self::unfilteredTools($root, skills: $resolvedSkills);
 
         $manager = new AgentManager(
@@ -1542,7 +1548,7 @@ final class Bootstrap
                 "this agent preset's permissionMode",
             ),
             permissionApprover: $approver,
-            toolRegistry: self::filterToolSet($toolUniverse),
+            toolRegistry: self::toolSetUnder($toolUniverse, self::readUserConfig()),
             toolUniverse: $toolUniverse,
         );
 
@@ -1564,19 +1570,6 @@ final class Bootstrap
         // on, and capture() itself only stores three values.
         foreach (self::agentRoster($root, self::selectedProviderName() ?? 'echo', $model) as $agent) {
             $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)));
-        }
-
-        // E642 remainder, load half: a roster agent that names a tool THIS
-        // session narrowed away keeps its grant, narrowed — and the operator
-        // is told, through the same transcript channel every other
-        // permission-config notice on this launch already uses. A warning
-        // and not a refusal because `disabledTools` is documented intent;
-        // a name the ceiling never had is NOT announced here — its honest
-        // moment is the grant-time refusal (both polarities pinned by
-        // AgentManagerTest::testARosterName...). Drained AFTER registration
-        // because the collector reads the current roster.
-        foreach ($manager->narrowedGrantWarnings() as $narrowedGrantWarning) {
-            self::warnPermissionConfigInTranscript($narrowedGrantWarning);
         }
 
         return $manager;

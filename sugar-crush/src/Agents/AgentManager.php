@@ -119,7 +119,10 @@ final class AgentManager
      * those at the enforceable moment. Non-Tool entries in the universe are
      * likewise skipped here for the same reason; grant resolution throws on
      * them. With no registry or no universe there is nothing to compare, and
-     * nothing is claimed: an empty list.
+     * nothing is claimed: an empty list. An EMPTY registry is suppressed for
+     * the same reason in a louder shape: a toolless session has already been
+     * told so once, session-wide, at launch — echoing that verdict per agent
+     * per declaration is noise that would bury the notice it echoes.
      *
      * Pull-based like {@see \SugarCraft\Crush\Cli\Bootstrap}'s other
      * launch-notice collectors (refusedDirectories and friends): computed on
@@ -131,7 +134,7 @@ final class AgentManager
      */
     public function narrowedGrantWarnings(): array
     {
-        if ($this->toolRegistry === null || $this->toolUniverse === null) {
+        if ($this->toolRegistry === null || $this->toolRegistry === [] || $this->toolUniverse === null) {
             return [];
         }
 
@@ -1126,7 +1129,7 @@ final class AgentManager
      * back is what still has no explanation anywhere, and the caller refuses
      * exactly that set. The narrowing side of that split is not silent: the
      * same boundary an operator learns about a disabled tool at —
-     * {@see narrowedGrantWarnings()} — reports it once at load.
+     * {@see narrowedGrantWarnings()} — reports it on request.
      *
      * @param array<array-key, string> $unresolvedDeclarations validated
      *        declaration strings, keyed as {@see namePatterns()} keyed them

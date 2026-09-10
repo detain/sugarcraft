@@ -3610,6 +3610,29 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
+     * A toolless session was already told so, ONCE, session-wide, at launch —
+     * the launch-notice path that empties the registry owns that verdict. The
+     * per-agent echo would multiply it by every agent times every declaration
+     * and bury the notice it echoes, so an EMPTY registry suppresses here.
+     * (Null registry = nothing to compare; empty registry = compared, and the
+     * louder channel already spoke.)
+     */
+    public function testAToollessSessionIsNotEchoedAgentByAgent(): void
+    {
+        $manager = $this->managerWithGrants(
+            [],
+            $this->fakeRegistry('Read', 'Grep', 'Bash'),
+        );
+        $manager->register($this->agentDeclaring('coder', ['Read', 'Bash']));
+
+        $this->assertSame(
+            [],
+            $manager->narrowedGrantWarnings(),
+            'the session-wide toolless notice owns this case; per-agent echoes are noise',
+        );
+    }
+
+    /**
      * REPORTS, DOES NOT POLICE. A malformed declaration must not turn a
      * launch notice into a startup crash — the strict refusal already
      * exists at grant resolution — so this pass skips what it cannot parse
