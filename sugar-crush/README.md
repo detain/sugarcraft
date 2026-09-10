@@ -1131,11 +1131,11 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**11,350 tests / 173,489 assertions, 0 failures, 1 skipped** — the whole of
+**11,379 tests / 174,397 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-8m22s. Measured 2026-09-10 at the
-round-62 lane-I guard tip; the figure that stood here before, 7,276/76,239 in
+9m15s. Measured 2026-09-10; the
+figure that stood here before, 7,276/76,239 in
 2m38s (2026-08-19), was behind the suite by some four thousand tests — rounds
 44 through 61 each shipped guards — and the figure before that, 6,424/51,767
 in 1m52s, was behind the suite by 852 tests and 24,472 assertions. The
@@ -1145,16 +1145,23 @@ which `markTestSkipped`s itself with "would require mocking built-in functions"
 `.mcp.json` that `file_exists()` but cannot be read. It is the only skip, and
 `failOnWarning="true"` means the run is also warning-free.
 
-**That figure is a point-in-time measurement, and it is stale by
-construction** — any commit that adds a test invalidates it, and review found
-this one already behind the very commit that wrote it. It is
-recorded because reproducing a number is how you check it, not because it is
-maintained: **the command above is the authority, the figure is not.** An earlier
-revision of this paragraph promised the opposite — that the count "is re-measured
-whenever a change adds tests rather than left to age" — which is a guarantee no
-README can keep and which read as freshness for three rounds while the number
-drifted. For scale rather than for accuracy: the first figure to stand here,
-4,337/12,587, understated the suite by over 2,000 tests.
+**The tests figure above is pinned, not promised.** For three rounds this
+paragraph confessed the figure was "stale by construction" and rested on "the
+command above is the authority" — true, and it still let the number rot: the
+last figure was behind the suite the day it landed. Now
+{@see sugar-crush/tests/Config/ReadmeSuiteFigureDriftTest} re-enumerates the
+suite live on every run (`phpunit --list-tests`, about three seconds) and reds
+if this line's test count differs from what PHPUnit collects. The assertions
+figure cannot be re-derived without the full run — a guard that re-ran the
+suite inside itself could never see its own count — so it is a
+*junit-derived maintained artifact*
+(`tests/Config/Support/suite-figure.json`, regenerated with
+`tests/Config/Support/refresh-suite-figure.php` after
+`--log-junit`), kept from silent age by the same live recount: add a test
+without regenerating, and both the README pin and the artifact pin go red on
+the next run of anything. The figures for scale that used to open this
+paragraph — first revision 4,337/12,587, over 2,000 tests low — are history
+now, not an acceptable failure mode.
 
 Coverage spans every subsystem: typed messages + attachments, all 11 built-in
 tools (the whole of `src/Tools/BuiltIn/`, which is exactly the built-in half of

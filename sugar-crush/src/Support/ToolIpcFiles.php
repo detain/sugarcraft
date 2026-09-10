@@ -78,7 +78,11 @@ final class ToolIpcFiles
      * {@see \SugarCraft\Crush\Runtime}'s 90s group deadline,
      * {@see \SugarCraft\Crush\Chat}'s 30s tool timeout, and above both
      * `EngineBackend::COMPLETE_TIMEOUT_SECONDS` (120s of silence). An hour is
-     * ~30x the largest of those, so a file this old cannot belong to anything
+     * ~30x the largest of those — every figure in this sentence is
+     * re-derived from the live constants by
+     * {@see \SugarCraft\Crush\Tests\Config\DocFigureProseDriftTest::testStalePayloadCutoffProseSurvivesItsConstants()},
+     * so moving a budget without moving the prose reddens there. A file
+     * this old cannot belong to anything
      * still waiting for it, while nothing short of an hour is ever gained by
      * sweeping sooner — these are bytes in `/tmp`, not a resource under
      * contention.

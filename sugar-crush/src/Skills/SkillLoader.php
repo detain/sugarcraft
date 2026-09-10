@@ -181,9 +181,14 @@ final class SkillLoader
      *
      * Same reason as {@see MAX_DEPTH}, for breadth rather than depth: a
      * `skills/x -> /usr/share` link cost 8.29s on one measured launch and
-     * `-> /` is unbounded. A real skills tree is tens of directories, so this
-     * is two orders of magnitude of headroom and is only ever reached by
-     * something that is not a skills tree.
+     * `-> /` is unbounded. This cap is a runaway guard, not a sizing target:
+     * a walk that reaches it has followed a link out of any skills tree and is
+     * enumerating somebody's filesystem instead. The framing is pinned by
+     * {@see \SugarCraft\Crush\Tests\Config\DocFigureProseDriftTest::testSkillDirectoryCapIsFramedAsARunawayGuard()}
+     * — the sentence this replaces priced the headroom as a fixed magnitude
+     * above an unpinned estimate of a real tree's size, the E633 defect (a
+     * figure asserted, the conclusion resting on it never pinned, and not
+     * checkable from this file at all).
      */
     private const MAX_DIRECTORIES = 2000;
 

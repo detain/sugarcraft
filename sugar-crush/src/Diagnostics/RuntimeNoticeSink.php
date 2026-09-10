@@ -166,8 +166,10 @@ final class RuntimeNoticeSink
      * asserts both halves against the live parser, so the claim survives a
      * rewording and the digits do not have to.
      *
-     * Also keeps a notice comfortably inside one datagram — see this class's
-     * doc-block on why the transport is `SOCK_DGRAM`.
+     * Also keeps a notice inside one datagram with margin to spare — the
+     * margin is pinned live, not restated here; see
+     * {@see \SugarCraft\Crush\Tests\Config\DocFigureProseDriftTest::testNoticeWorstCaseFitsOneDatagramWithPinnedMargin()}
+     * and this class's doc-block on why the transport is `SOCK_DGRAM`.
      */
     public const MAX_CHARS = 400;
 
@@ -209,8 +211,15 @@ final class RuntimeNoticeSink
      * Read size for one datagram.
      *
      * A datagram longer than this would be TRUNCATED rather than queued, so it
-     * is deliberately an order of magnitude above {@see MAX_CHARS}' worst case
-     * (400 characters of 4-byte UTF-8 plus the suffix is under 1700 bytes).
+     * is deliberately above {@see MAX_CHARS}' worst case with margin to spare.
+     * No fixed multiplier is written here on purpose: the margin is two
+     * constants deep (worst-case UTF-8 width plus the overflow suffix) and it
+     * is recomputed from the live constants on every test run by
+     * {@see \SugarCraft\Crush\Tests\Config\DocFigureProseDriftTest::testNoticeWorstCaseFitsOneDatagramWithPinnedMargin()}.
+     * The sentence this replaces claimed a ten-times-plus margin
+     * over the very worst case its own parentheses spelled (under 1,700
+     * bytes against 8,192 — under five times), which is E633's exact shape
+     * and was caught by mutating the sentence, not the arithmetic.
      */
     private const DATAGRAM_BYTES = 8192;
 
