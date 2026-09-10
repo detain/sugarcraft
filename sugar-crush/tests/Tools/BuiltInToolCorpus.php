@@ -33,16 +33,24 @@ use SugarCraft\Crush\Tools\Tool;
  * exists, and it fails them until it is wired.
  *
  * "THE SOURCE TREE IS THE CORPUS" USED TO MEAN "ONE TYPE PER FILE", and `src/`
- * already ships nineteen counterexamples. The scan derived exactly one class per
+ * always shipped counterexamples. The scan derived exactly one class per
  * FILENAME, so a `Tool` implementor declared as a SECOND top-level symbol in a
  * file was invisible to all four consumers while {@see nonClassSources()} still
  * returned `[]` — silently, because the file's PRIMARY symbol does exist.
- * MEASURED with `token_get_all()` rather than `class_exists()`: 278 `.php` files
- * under `src/` declare 297 top-level types, 19 of them secondary, in 8 files.
- * `src/App/App.php` alone declares twelve (`Msg`, `Cmd`, `UserInputMsg`, …), and
- * `src/ToolRegistry.php` declares `SugarCraft\Crush\Tool` — one `use` away from
- * colliding with the tool interface, and `tests/ToolRegistryTest.php` already
- * imports it. {@see declaredTypes()} is what the scan reads now.
+ * MEASURED with `token_get_all()` rather than `class_exists()`. THE TREE TOTALS
+ * ARE NO LONGER SPELLED HERE: the file-and-type counts this paragraph used to
+ * carry were present-tense claims about a moving tree, and the per-file map
+ * that {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationMap()}
+ * pins BY NAME is the living record — a minority of files declare more than
+ * their PSR-4 symbol, in whatever numbers the current census yields. What does
+ * not rot is the argument itself: `src/App/App.php` alone declares twelve
+ * (`Msg`, `Cmd`, `UserInputMsg`, …), and `src/ToolRegistry.php` declares
+ * `SugarCraft\Crush\Tool` — one `use` away from colliding with the tool
+ * interface, and `tests/ToolRegistryTest.php` already imports it.
+ * {@see declaredTypes()} is what the scan reads now — and since finding E631
+ * what its RESOLUTION GATE reads too: resolution never asks the engine whether
+ * a symbol exists, because under Composer's plain-`include` autoloader the
+ * asking was itself process-fatal. {@see classNames()} carries the measurement.
  *
  * NOT a trait, and not a static in one of the test classes: three test files in
  * three namespaces need the same list, and a copy per file is the shape being
@@ -132,8 +140,8 @@ final class BuiltInToolCorpus
      * {@see \SugarCraft\Crush\Tests\Providers\ToolSchemaEncodingTest},
      * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest}).
      * IT IS NO LONGER LATENT, and that sentence used to say it was: MEASURED on
-     * this tree, 278 `.php` files under `src/` hold TWELVE concrete `Tool`
-     * implementors, eleven in `src/Tools/BuiltIn/` and one — {@see McpToolBridge},
+     * this tree, `src/` holds TWELVE concrete `Tool` implementors, eleven in
+     * `src/Tools/BuiltIn/` and one — {@see McpToolBridge},
      * the adapter that makes a project's MCP tools dispatchable — in
      * `src/Tools/`. Under the flat glob that twelfth would have been invisible to
      * all four consumers, which is verbatim the recurrence this corpus was written
@@ -162,16 +170,18 @@ final class BuiltInToolCorpus
      * says which of them `Bootstrap::tools()` cannot name as a literal.
      *
      * THE GUARD FIX BELOW IS A PREREQUISITE FOR THAT WIDENING, not a nicety
-     * beside it. Symbol kinds measured across the PRIMARY (PSR-4-named) symbol of
-     * each of 267 files — the tree AS IT WAS WHEN THIS PARAGRAPH WAS MEASURED,
-     * one symbol per file, which is the census's stated domain and NOT the same as
-     * the 286 top-level types those 267 files declared: 220 concrete classes, 25
-     * enums, 16 interfaces, 6 traits, **0 abstract classes**. The live figures
-     * move with the tree and are no longer pinned anywhere, deliberately: a
-     * literal per symbol kind is a count of the tree asserted against the tree.
+     * beside it — in TWO stages, because the first fix was itself a defect.
+     * Stage one, HISTORICAL: symbol kinds measured across the PRIMARY
+     * (PSR-4-named) symbol of each of 267 files — the tree AS IT WAS WHEN THAT
+     * PARAGRAPH WAS MEASURED, one symbol per file, which is the census's stated
+     * domain and NOT the same as the 286 top-level types those 267 files
+     * declared: 220 concrete classes, 25 enums, 16 interfaces, 6 traits,
+     * **0 abstract classes**. The live figures move with the tree and are no
+     * longer pinned anywhere, deliberately: a literal per symbol kind is a
+     * count of the tree asserted against the tree.
      * {@see BuiltInToolCorpusTest::testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
      * keeps the part of that census that was never arithmetic —
-     * what this paragraph is about is the ZERO, which is the whole argument and
+     * what that paragraph was about is the ZERO, which is the whole argument and
      * has held at every size since. So the
      * one shape the old `class_exists()`-only guard classified correctly is the
      * one shape that does not occur, and the files it would have thrown on are
@@ -184,8 +194,11 @@ final class BuiltInToolCorpus
      * {@see BuiltInToolCorpusTest::testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
      * asserts only that the count is NON-ZERO, which is the claim that keeps
      * the zero beside it honest without being a figure that rots. `src/LSP/` alone ships `LspCacheInterface` and
-     * `LspConnectionInterface`. Widening the scan without fixing the guard would
-     * have aborted suite construction on this very checkout.
+     * `LspConnectionInterface`. Widening the scan without the stage-one guard
+     * would have aborted suite construction on this very checkout — and the
+     * stage-one guard (the `*_exists()` triple) then carried stage two's defect
+     * instead: finding E631, documented at the guard itself below, where the
+     * triple has been replaced by a token gate that never asks the engine.
      *
      * Sorted, so a provider keyed off it names its cases the same way on every
      * machine — directory-iteration order is not a contract.
@@ -194,7 +207,13 @@ final class BuiltInToolCorpus
      * them: they exist so the interface/trait/mis-namespaced cases can be driven
      * against a SYNTHETIC tree. Driving them by writing probe files into the real
      * `src/` is what the first attempt did, and a probe that fatals leaves residue
-     * in a tree other suites are reading concurrently.
+     * in a tree other suites are reading concurrently. The mis-namespaced case
+     * needs one more thing a synthetic tree cannot give it — the REAL composer
+     * autoloader, whose plain-`include` loader is the other half of finding E631
+     * (a test-local `require_once` probe autoloader hid it for its entire life) —
+     * so it is ALSO driven as a subprocess over temp trees registered on that
+     * autoloader: `tests/Tools/corpus-real-autoloader-driver.php`, spawned by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest}.
      *
      * @return list<class-string<Tool>>
      */
@@ -206,36 +225,54 @@ final class BuiltInToolCorpus
         foreach (self::sourceFiles($srcDir) as $relative) {
             $class = $namespacePrefix . str_replace('/', '\\', substr($relative, 0, -4));
 
-            // `class_exists()` was the ONLY guard here, and the filter below
-            // carried a comment claiming it covered "interfaces, traits and
-            // abstract bases". MEASURED directly on PHP 8.3.6:
+            // THE RESOLUTION GATE, AND WHY IT NO LONGER ASKS THE ENGINE
+            // (finding E631 — a latent process-killer).
             //
-            //     class_exists(interface) = false
-            //     class_exists(trait)     = false
-            //     class_exists(abstract)  = true
+            // WHAT THE OLD TEXT SAID: this branch was reached by
+            // `!class_exists($class) && !interface_exists($class) &&
+            // !trait_exists($class)`, and the doc-block promised a file failing
+            // the probes would be REPORTED rather than THROWN ON.
             //
-            // so only `abstract` ever reached that filter, and an ordinary
-            // `NotifierInterface.php` next to the tools made the throw below fire
-            // during corpus CONSTRUCTION — `phpunit --list-tests` aborted before
-            // enumerating a single test.
+            // WHAT IS TRUE NOW: that promise held only inside the suite's
+            // SYNTHETIC probe tree, whose test-local autoloader is
+            // `require_once`. Under the REAL composer autoloader the three
+            // probes are three autoload ATTEMPTS FOR ONE NAME, and
+            // `Composer\Autoload\ClassLoader::includeFile()` is a plain
+            // `include`. A file that does not declare the probed name therefore
+            // EXECUTES AGAIN on the second probe, meets the class (or function)
+            // the first pass already declared, and PHP raises a REDECLARE FATAL
+            // while still evaluating the condition — before this branch is
+            // entered, before {@see nonClassSources()} can report anything,
+            // before a single test result exists. The whole runner dies at rc
+            // 255. ONE mis-namespaced `src/` file stopped the ENTIRE suite from
+            // existing. MEASURED pre-fix through
+            // `tests/Tools/corpus-real-autoloader-driver.php` (its header says
+            // why only a subprocess can show this), transcript kept beside this
+            // test suite's evidence: `PHASE A:classNames` printed, then
+            // `PHP Fatal error: Cannot declare class …\Ghost, because the name
+            // is already in use`, rc 255, no results.
             //
-            // WHAT WAS BROKEN WAS THE THROW, NOT THE FILTER, and the difference
-            // matters because the old comment claimed the reverse. Measured on
-            // PHP 8.3.6, `ReflectionClass` reflects interfaces and traits
-            // perfectly well, and the filter below already rejects every one of
-            // them without a clause of its own:
+            // THE GATE NOW READS THE FILE'S OWN TOKEN STREAM:
+            // {@see declaredTypes()} answers "does this file DECLARE the name its
+            // path promises?" at depth zero, with zero autoload attempts — so
+            // the mis-namespaced, functions-only and multi-symbol shapes skip,
+            // report, or throw EXACTLY as this method's prose has always
+            // claimed. The engine still gets asked about symbols, but only in
+            // {@see isDispatchableTool()}, and only for names the tokens have
+            // already seen declared in a file whose PRIMARY name matched: the
+            // first `class_exists()` of that list executes the file once, every
+            // later probe finds the symbol known, and no known name is ever
+            // autoloaded a second time. Kind discrimination (an interface is
+            // not a class) no longer needs a triple: a conditional- or
+            // mismatch-declaration is refused by the gate itself, and what the
+            // gate cannot see at all is bound in {@see declaredTypes()}.
             //
-            //     interface with >=1 method (own or inherited)  isAbstract = true
-            //     interface extending Tool (even if empty)      isAbstract = true
-            //     empty interface extending nothing             implementsInterface(Tool) = false
-            //     any trait                                     implementsInterface(Tool) = false
-            //
-            // So no "not a class" clause is added here: it would be unreachable,
-            // which is what the sentence it replaced already was. The three
-            // shapes are handled — one by this guard no longer throwing on them,
-            // two by the filter — and each is driven in
-            // {@see BuiltInToolCorpusTest}.
-            if (!class_exists($class) && !interface_exists($class) && !trait_exists($class)) {
+            // WHY THE NOTE EARNS ITS PLACE: the triple is the reflex repair for
+            // "the tokens say absent but the engine says present" — restore it
+            // here and the next merge that mis-namespaces one wired file takes
+            // the whole runner down again, with only this comment and the
+            // subprocess tests between it and reappearing.
+            if (!in_array($class, self::declaredTypes($srcDir . '/' . $relative), true)) {
                 if (str_starts_with($relative, self::WIRED_TOOL_DIR . '/')) {
                     throw new \RuntimeException(
                         "src/{$relative} does not declare {$class}; the built-in tool namespace and "
@@ -247,24 +284,31 @@ final class BuiltInToolCorpus
                 // defect, and it CANNOT be a dispatchable Tool either way. It is
                 // skipped rather than thrown on, precisely so the arrival of a
                 // functions-only or multi-symbol file cannot abort suite
-                // construction — and {@see nonClassSources()} keeps the skip
-                // visible instead of silent, asserted by
+                // construction — which is the promise the OLD gate made and
+                // E631 measured as false; it is true again only because reaching
+                // this line executes nothing — and {@see nonClassSources()}
+                // keeps the skip visible instead of silent, asserted by
                 // {@see BuiltInToolCorpusTest}.
                 continue;
             }
 
             // EVERY top-level type the file declares, not just the one its
-            // FILENAME names. The primary symbol is loaded by the guard above, so
-            // by this line PHP has executed the file and its secondary symbols
-            // are defined too — which is what makes them reflectable without a
-            // second `require`.
+            // FILENAME names. The gate above does not EXECUTE the file; the load
+            // happens on the FIRST probe below — declaredTypes() leads with the
+            // primary precisely so the first `class_exists()` autoloads this
+            // file and thereby defines its secondary symbols too, which is what
+            // makes them reflectable without a second `require`. A secondary
+            // whose PSR-4 path ALSO exists as another file is resolved by that
+            // other file first; `src/` ships no such name collision today.
             //
             // WHY IT IS NOT ENOUGH TO SCAN FILENAMES: the miss is SILENT. A
             // `Tool` implementor declared as a second type in a file whose
             // primary type exists is invisible to all four consumers while
             // {@see nonClassSources()} still reports `[]`, because nothing was
-            // exempt — the primary really is there. `src/` ships 19 such
-            // secondary declarations in 8 files today.
+            // exempt — the primary really is there. `src/` ships such files
+            // today; the map in
+            // {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationMap()}
+            // names every one and what it carries.
             foreach (self::declaredTypes($srcDir . '/' . $relative, $class) as $declared) {
                 if (!self::isDispatchableTool($declared)) {
                     continue;
@@ -418,12 +462,32 @@ final class BuiltInToolCorpus
      * class keeps its position, and it is included even when the token scan
      * cannot see it (a file whose declaration is inside a conditional).
      *
-     * THE BOUND, because this is an instrument and instruments here have to carry
-     * their domain: a secondary type is only REFLECTABLE once its file has been
-     * loaded, which happens as a side effect of the primary symbol autoloading.
-     * A file whose primary symbol does NOT exist is a PSR-4 exemption, is
-     * reported by {@see nonClassSources()}, and its secondary declarations are
-     * named here but will not reflect. `src/` has zero such files.
+     * THE BOUNDS — and since finding E631 this walk is not merely the census's
+     * instrument but the RESOLUTION GATE'S too (`classNames()` and
+     * {@see nonClassSources()} branch on its output), so its bounds are the
+     * scanner's bounds, and a guard has to state what it cannot see:
+     *
+     * A type declared inside ANY brace-delimited conditional — `if (…) { class
+     * … }`, a function body, a loop — sits at depth > 0 and is INVISIBLE here.
+     * That is POLICY, not oversight, and it is pinned BOTH ways by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest} (an
+     * unconditional decoy IS seen, a conditional sibling in the same file is
+     * NOT): whether PHP has even defined such a class depends on execution
+     * history, and an instrument that reads SOURCE without running it cannot
+     * inherit that question. A file whose PRIMARY declaration is conditional
+     * fails the gate and surfaces LOUDLY — reported by {@see nonClassSources()}
+     * as a PSR-4 exemption, or a named throw inside the wired directory — never
+     * silently; it is a conditional SECONDARY inside an otherwise-resolving
+     * file that is missed by design, exactly as it was before this gate existed
+     * (finding E637). `src/` ships zero conditional declarations, measured by
+     * this walk's own depth accounting.
+     *
+     * Independently: a secondary type is only REFLECTABLE once its file has
+     * been loaded, which happens as a side effect of the primary symbol
+     * autoloading under {@see classNames()}'s filter. A file whose primary
+     * symbol does NOT exist fails the token gate above, is reported by
+     * {@see nonClassSources()}, and its secondary declarations are named here
+     * but will not reflect. `src/` has zero such files.
      *
      * @return list<string>
      */
@@ -505,14 +569,22 @@ final class BuiltInToolCorpus
     /**
      * The `src/` files that declare no symbol at their PSR-4 name.
      *
-     * The visible half of {@see classNames()}'s one non-throwing skip. MEASURED
-     * on this tree: 0 of 278. Pinned at zero by
-     * {@see BuiltInToolCorpusTest::testEverySourceFileDeclaresItsPsr4Symbol()},
-     * so a file that becomes exempt turns ONE test red with its own name in the
-     * message rather than aborting the whole suite's construction.
+     * The visible half of {@see classNames()}'s one non-throwing skip, read
+     * through the SAME token gate — no `*_exists()` probe runs here either, and
+     * {@see classNames()} carries the measurement of why one does not belong
+     * (finding E631: under composer's plain-`include` autoloader these three
+     * probes were three re-inclusions of the exempt file, i.e. a redeclare
+     * fatal at the exact moment the file tried to get itself REPORTED).
+     * MEASURED on this tree: NONE — no file the current census enumerates is
+     * exempt, which is what
+     * {@see BuiltInToolCorpusTest::testEverySourceFileDeclaresItsPsr4Symbol()}
+     * pins by asserting the empty list itself, with no total beside it to rot.
+     * Pinned that way so a file that becomes exempt turns ONE test red with its
+     * own name in the message rather than aborting the whole suite's
+     * construction.
      *
-     * The "of 278" half is now load-bearing rather than decorative:
-     * {@see sourceFiles()} throws on an empty tree, so an empty result here can
+     * The empty result is load-bearing rather than decorative:
+     * {@see sourceFiles()} throws on an empty tree, so `[]` here can
      * no longer mean "nothing was scanned".
      *
      * @return list<string> paths relative to `src/`
@@ -525,7 +597,10 @@ final class BuiltInToolCorpus
         foreach (self::sourceFiles($srcDir) as $relative) {
             $class = $namespacePrefix . str_replace('/', '\\', substr($relative, 0, -4));
 
-            if (!class_exists($class) && !interface_exists($class) && !trait_exists($class)) {
+            // The gate is `declaredTypes()` membership — the token stream, not
+            // the engine — so a functions-only or mis-namespaced file gets
+            // REPORTED here without ever being included (see classNames()).
+            if (!in_array($class, self::declaredTypes($srcDir . '/' . $relative), true)) {
                 $skipped[] = $relative;
             }
         }

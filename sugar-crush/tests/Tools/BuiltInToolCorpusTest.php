@@ -41,9 +41,10 @@ final class BuiltInToolCorpusTest extends TestCase
         $this->probeDir = sys_get_temp_dir() . '/builtin_tool_corpus_probe_' . uniqid((string) getmypid(), true);
         mkdir($this->probeDir, 0o777, true);
 
-        // The scanner resolves a file to a class name and asks PHP whether that
-        // symbol exists, so a synthetic tree needs its own autoloader or every
-        // probe would read as "declares no symbol".
+        // The scanner still reflects probe symbols (its filter asks
+        // `class_exists()` of names the TOKEN gate already saw declared), so a
+        // synthetic tree needs its own autoloader or every probe would read as
+        // "not a Tool".
         $this->probeAutoloader = function (string $class): void {
             if (!str_starts_with($class, self::PROBE_PREFIX)) {
                 return;
@@ -52,11 +53,20 @@ final class BuiltInToolCorpusTest extends TestCase
             $file = $this->probeDir . '/'
                 . str_replace('\\', '/', substr($class, \strlen(self::PROBE_PREFIX))) . '.php';
 
-            // require_ONCE, and it is load-bearing: the mis-namespaced probe
-            // declares a symbol OTHER than the one asked for, so `class_exists()`
-            // comes back false and the scanner then asks `interface_exists()` and
-            // `trait_exists()` for the same name — three autoload attempts on one
-            // file, which a plain `require` turns into a redeclaration fatal.
+            // require_ONCE stays, with a changed WHY (finding E631). This
+            // comment used to justify it by the scanner's `class_exists()` +
+            // `interface_exists()` + `trait_exists()` triple re-including a
+            // mis-namespaced probe three times. The triple is gone — resolution
+            // is token-gated (see BuiltInToolCorpus::classNames()) — and the
+            // honest reading of that history is that this autoloader was the
+            // REASON the fatal stayed hidden in synthetic trees for so long.
+            // The scanner now probes each token-verified name once and the
+            // first load defines it, so `require` would suffice; `require_once`
+            // remains as cheap insurance for any future probe the scanner asks
+            // about twice. The case the autoloader could never express is the
+            // composer loader's plain `include` — that runs as a SUBPROCESS
+            // against the real autoloader instead, see
+            // corpus-real-autoloader-driver.php.
             if (is_file($file)) {
                 require_once $file;
             }
@@ -294,15 +304,17 @@ final class BuiltInToolCorpusTest extends TestCase
      * deliberately asserts NO cardinality over src/ … the claim wanted is the
      * invariant the count stood in for". WHAT IS TRUE NOW: that sentence is
      * correct about the BALANCE, which is where it belongs, and actively
-     * misleading here. This guard fires holding a number it read out of
-     * `RepoMapBlock`, so it tells the reader there is nothing to re-derive
-     * while showing them a digit; and its two real resolutions — delete the
-     * restatement, or reword an unrelated figure the tree has grown into — are
-     * neither of them "write the invariant instead". Rule 32: the failure text
-     * of a guard is read by someone resolving a merge, not debugging a test, so
-     * it has to name the resolution that is actually correct for THIS guard.
+     * misleading here. This guard fires holding a number it read out of one of
+     * its guarded documents, so it tells the reader there is nothing to
+     * re-derive while showing them a digit; and its two real resolutions —
+     * delete the restatement, or reword an unrelated figure the tree has grown
+     * into — are neither of them "write the invariant instead". Rule 32: the
+     * failure text of a guard is read by someone resolving a merge, not
+     * debugging a test, so it has to name the resolution that is actually
+     * correct for THIS guard.
      */
-    private const RESTATEMENT_RESOLUTION = 'no figure in RepoMapBlock may restate the census of src/. '
+    private const RESTATEMENT_RESOLUTION = 'no figure in a guarded document may restate the census of src/ '
+        . '(the guarded set is restatementGuardDomain()). '
         . 'If the integer named above is a restatement, delete it — the argument it supports is '
         . 'asserted from the live tree and needs no digit. If it is a COINCIDENCE (a byte figure, a '
         . 'constant, a historical quotation) that the tree has simply grown into, reword THAT figure '
@@ -343,11 +355,17 @@ final class BuiltInToolCorpusTest extends TestCase
      * history worth keeping; the argument it was making is the paragraph above.
      *
      * ⚠️ THE TWO ZEROS ARE AN ABSENCE, so on their own they are exactly what a
-     * DEAD classifier reports (rule 15/25). {@see classifyPsr4Symbol()} is a
-     * method rather than an inline `if` chain precisely so the fixture in
+     * DEAD classifier reports (rule 15/25). {@see classifyFilePsr4Symbol()} is
+     * a method rather than an inline `if` chain precisely so the fixture in
      * {@see testTheSymbolKindClassifierStillNamesEveryShapeIncludingTheTwoPinnedAtZero()}
      * can push a known abstract class and a known missing symbol through THE
-     * SAME instrument. The four `assertGreaterThan(0, ...)` calls below are the
+     * SAME instrument — and so the real-autoloader driver subprocess can reach
+     * it too, which is what proves this census survives a mis-namespaced file
+     * instead of becoming the process-killer beside the thing it measures
+     * (findings E631/E636; see
+     * {@see testTheScannerClassifiesAMisnamespacedFileUnderTheRealComposerAutoloader()}
+     * and the driver's `PHASE C`).
+     * The four `assertGreaterThan(0, ...)` calls below are the
      * second half of that: a classifier that answered `concrete` to everything
      * would satisfy both zeros and fail those.
      */
@@ -370,7 +388,7 @@ final class BuiltInToolCorpusTest extends TestCase
             $relative = substr($file->getPathname(), \strlen($this->srcDir) + 1);
             $class = 'SugarCraft\\Crush\\' . str_replace('/', '\\', substr($relative, 0, -4));
 
-            $kind = $this->classifyPsr4Symbol($class);
+            $kind = self::classifyFilePsr4Symbol($file->getPathname(), $class);
             ++$counts[$kind];
 
             if ($kind === 'abstract') {
@@ -433,24 +451,52 @@ final class BuiltInToolCorpusTest extends TestCase
         $this->writeProbe('Kinds/Seam.php', "namespace CorpusProbe\\Kinds;\n\ninterface Seam\n{\n}\n");
         $this->writeProbe('Kinds/Mixin.php', "namespace CorpusProbe\\Kinds;\n\ntrait Mixin\n{\n}\n");
 
-        $this->assertSame('concrete', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Solid'));
-        $this->assertSame('enum', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Shade'));
-        $this->assertSame('abstract', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Base'));
-        $this->assertSame('interface', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Seam'));
-        $this->assertSame('trait', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Mixin'));
+        $this->assertSame('concrete', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/Solid.php', 'CorpusProbe\\Kinds\\Solid'));
+        $this->assertSame('enum', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/Shade.php', 'CorpusProbe\\Kinds\\Shade'));
+        $this->assertSame('abstract', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/Base.php', 'CorpusProbe\\Kinds\\Base'));
+        $this->assertSame('interface', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/Seam.php', 'CorpusProbe\\Kinds\\Seam'));
+        $this->assertSame('trait', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/Mixin.php', 'CorpusProbe\\Kinds\\Mixin'));
 
-        // No file was written for this one, so the probe autoloader returns
-        // without declaring anything — the shape `none` names.
-        $this->assertSame('none', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Absent'));
+        // No file was written for this one — the shape `none` names, answered
+        // by the token gate's is_file() arm before any probe is attempted.
+        $this->assertSame('none', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/Absent.php', 'CorpusProbe\\Kinds\\Absent'));
+
+        // And the shape the gate exists for: a file that EXISTS but declares a
+        // DIFFERENT name. Mis-namespaced files used to reach the engine ladder
+        // here and redeclare-fatal under a plain-include autoloader; the gate
+        // answers `none` from the token stream alone.
+        $this->writeProbe('Kinds/WrongName.php', "namespace CorpusProbe\\Kinds;\n\nfinal class SomewhereElse\n{\n}\n");
+        $this->assertSame('none', self::classifyFilePsr4Symbol($this->probeDir . '/Kinds/WrongName.php', 'CorpusProbe\\Kinds\\WrongName'));
     }
 
     /**
-     * ONE instrument, shared by the tree census and by its fixture.
+     * THE KIND OF SYMBOL a file declares at the name its path promises — ONE
+     * instrument, shared by the tree census, by its fixture, and by the
+     * real-autoloader driver subprocess.
      *
      * Inline in the census this was six lines of `if` inside the walk, which is
      * where rule 15 bites: mutate those six lines to always answer `concrete`
      * and both of the census's zero assertions still pass, because `abstract`
      * and `none` are absences. A method can be pushed a known abstract class.
+     *
+     * WHAT THIS USED TO BE: a private ladder that went STRAIGHT to
+     * `class_exists() → interface_exists() → trait_exists()` on a bare name.
+     * That inherits the scanner's own defect (E631): under a plain-`include`
+     * autoloader, asking three times about a name one file does not declare
+     * executes that file three times — a REDECLARE FATAL mid-census, so the
+     * census was the process-killer beside the thing it measured, and being
+     * declared above the token-balance test it took the runner down before the
+     * balance could speak (E636). The ladder is now GATED: a name the file's
+     * own token stream does not show at depth zero answers `none` WITHOUT ever
+     * asking the engine, so the census goes RED by file name on a mis-namespaced
+     * or conditional file instead of killing the process.
+     *
+     * WHY IT STILL ASKS THE ENGINE AT ALL: the census's claims are about KIND,
+     * and tokens cannot tell an abstract class from a concrete one — reflection
+     * must, which needs the symbol loaded. For a token-verified name the first
+     * probe's include DEFINES it, every later probe finds the symbol known, and
+     * a known name is never autoloaded again: the fatal shape is unreachable by
+     * construction, not by comment.
      *
      * `class_exists()` is true for an enum and for an abstract class, so the
      * kind has to come off the reflection rather than off which `*_exists()`
@@ -459,19 +505,23 @@ final class BuiltInToolCorpusTest extends TestCase
      *
      * @return 'concrete'|'enum'|'abstract'|'interface'|'trait'|'none'
      */
-    private function classifyPsr4Symbol(string $class): string
+    public static function classifyFilePsr4Symbol(string $file, string $psr4Name): string
     {
-        if (class_exists($class)) {
-            $reflection = new \ReflectionClass($class);
+        if (!is_file($file) || !in_array($psr4Name, BuiltInToolCorpus::declaredTypes($file), true)) {
+            return 'none';
+        }
+
+        if (class_exists($psr4Name)) {
+            $reflection = new \ReflectionClass($psr4Name);
 
             return $reflection->isEnum() ? 'enum' : ($reflection->isAbstract() ? 'abstract' : 'concrete');
         }
 
-        if (interface_exists($class)) {
+        if (interface_exists($psr4Name)) {
             return 'interface';
         }
 
-        return trait_exists($class) ? 'trait' : 'none';
+        return trait_exists($psr4Name) ? 'trait' : 'none';
     }
 
     /**
@@ -569,9 +619,20 @@ final class BuiltInToolCorpusTest extends TestCase
      * PARAGRAPH STILL EARNS ITS PLACE: the corrected version is a better
      * argument for the balance than the wrong one was. The token stream is the
      * only instrument here that reads a source file WITHOUT asking PHP to load
-     * it, which is the whole of its independence — and on the real tree it is
-     * also the only one that can still report, because the reflection census is
-     * declared above it and takes the runner down first.
+     * it, which is the whole of its independence. WHAT THIS SENTENCE ALSO USED
+     * TO CLAIM (E636): that on the real tree the balance was "the only one that
+     * can still report, because the reflection census is declared above it and
+     * takes the runner down first" — survival by declaration ORDER, which is
+     * exactly the kind of guarantee that silently un-rewrites itself when
+     * someone moves a method. That hazard is CLOSED AT THE SOURCE rather than
+     * by shuffling this test above the census: the census's own classifier is
+     * now token-gated before it reflects, so a mis-namespaced file makes it
+     * answer `none` and go RED by name instead of fatal. Mechanically proven,
+     * not argued — the driver's `PHASE C` walks the poisoned tree through THE
+     * SAME public {@see classifyFilePsr4Symbol()} and still arrives at
+     * `PHASE DONE`. Declaration order is therefore moot here; if the gate is
+     * ever removed the hazard returns with it, and the driver test notices,
+     * because a rc-255 subprocess yields no markers at all.
      *
      * It replaces two `assertSame()` calls that spelled the declaration count
      * and the file count as literals — the same two numbers written down
@@ -885,17 +946,37 @@ final class BuiltInToolCorpusTest extends TestCase
      * to touch an unrelated constant. The two figures in the alphabet are the
      * two that are distinctive enough for this shape to carry; a component
      * small enough to collide needs a different instrument, not a longer list.
+     *
+     * THE DOMAIN, WHICH IS NOW WIDER THAN THE NAME (finding E632's closure).
+     * WHAT THIS COVERED: `RepoMapBlock` alone — and while it forbade that
+     * production doc-block to restate the census, the file that OWNS the
+     * instrument, `tests/Tools/BuiltInToolCorpus.php`, restated the same census
+     * as live present-tense truth at five sites and had rotted to a number the
+     * tree left behind twice over. A guard pointed everywhere except at itself.
+     * WHAT IT COVERS NOW: every document
+     * {@see restatementGuardDomain()} lists — `RepoMapBlock` AND the scanner —
+     * with the digits elided from the latter rather than corrected, and the
+     * ALPHABET unchanged above it (widening the alphabet was measured and
+     * rejected; widening the DOMAIN costs nothing, because neither figure
+     * appears in the scanner's remaining prose and the headroom test beside
+     * this one re-measures the distance over the same list). WHY THE NAME
+     * PREDATES THE DOMAIN: renaming this method would edit
+     * `tests/Context/RepoMapBlockTest.php`, whose doc-block cites it by name
+     * under the citation-drift guard — a seam reported to the orchestrator,
+     * not an edit for this lane. This paragraph is the authoritative
+     * statement of scope; the name is the historical one.
      */
     public function testRepoMapBlockNoLongerRestatesTheSourceCensus(): void
     {
         [$files, $declarations] = $this->declarationTotals($this->srcDir);
-        $block = (string) file_get_contents($this->srcDir . '/Context/RepoMapBlock.php');
 
-        $this->assertSame(
-            [],
-            $this->restatedFigures($block, [$files, $declarations]),
-            'RepoMapBlock restates a census of src/ again. ' . self::RESTATEMENT_RESOLUTION,
-        );
+        foreach ($this->restatementGuardDomain() as $name => $path) {
+            $this->assertSame(
+                [],
+                $this->restatedFigures((string) file_get_contents($path), [$files, $declarations]),
+                "{$name} restates a census of src/ again. " . self::RESTATEMENT_RESOLUTION,
+            );
+        }
 
         // The known POSITIVE (rule 15), built by concatenation so the offending
         // digits are never spelled in this file (rule 26).
@@ -924,6 +1005,29 @@ final class BuiltInToolCorpusTest extends TestCase
     }
 
     /**
+     * THE GUARDED DOMAIN: every document whose prose the restatement guard
+     * reads, keyed by the name it reports under. ONE list, shared by
+     * {@see testRepoMapBlockNoLongerRestatesTheSourceCensus()} and by
+     * {@see testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()} — the
+     * headroom is only an honest bound on the guard if it is measured over
+     * exactly the set the guard searches. A new guarded document joins HERE.
+     *
+     * `RepoMapBlock` was the first member (it restated the census, wrongly,
+     * three times); the scanner itself joined when finding E632 measured it
+     * carrying the same census as live truth at five sites while its own guard
+     * pointed somewhere else.
+     *
+     * @return non-empty-array<string, string> label => absolute path
+     */
+    private function restatementGuardDomain(): array
+    {
+        return [
+            'RepoMapBlock' => $this->srcDir . '/Context/RepoMapBlock.php',
+            'the corpus scanner' => __DIR__ . '/BuiltInToolCorpus.php',
+        ];
+    }
+
+    /**
      * THE RESIDUAL DOMAIN OF THE GUARD ABOVE, DERIVED INSTEAD OF PROMISED.
      *
      * WHY THIS IS A TEST AND NOT A SENTENCE. The guard's own doc-block used to
@@ -931,7 +1035,9 @@ final class BuiltInToolCorpusTest extends TestCase
      * it was closed by an arithmetic accident that held at six added source
      * files and no further, and prose cannot notice when an accident stops
      * holding. What the domain actually IS, exactly: the distance from each
-     * derived figure UP to the nearest integer literal in `RepoMapBlock`. That
+     * derived figure UP to the nearest integer literal in the guarded documents
+     * ({@see restatementGuardDomain()} — `RepoMapBlock` AND the scanner, the
+     * same list the guard reads). That
      * is a quantity, so it can be asserted, and once asserted the guard tells
      * you its bound is shrinking on the commit that shrinks it — instead of
      * telling a lane six additions later that it restated a census it never
@@ -953,9 +1059,11 @@ final class BuiltInToolCorpusTest extends TestCase
     public function testTheRestatementGuardHasRoomBeforeItsNextFalsePositive(): void
     {
         [$files, $declarations] = $this->declarationTotals($this->srcDir);
-        $literals = $this->standaloneIntegers(
-            (string) file_get_contents($this->srcDir . '/Context/RepoMapBlock.php'),
-        );
+
+        $literals = [];
+        foreach ($this->restatementGuardDomain() as $path) {
+            $literals = [...$literals, ...$this->standaloneIntegers((string) file_get_contents($path))];
+        }
 
         foreach (['file count' => $files, 'top-level declaration count' => $declarations] as $label => $figure) {
             $above = array_values(array_filter($literals, static fn (int $n): bool => $n > $figure));
@@ -963,9 +1071,9 @@ final class BuiltInToolCorpusTest extends TestCase
             $this->assertNotSame(
                 [],
                 $above,
-                "no integer literal in RepoMapBlock sits above src/'s {$label} — RepoMapBlock's own "
-                . 'caps are larger than that, so this means the scanner stopped answering, not that '
-                . 'the file changed',
+                "no integer literal in a guarded document sits above src/'s {$label} — the guarded "
+                . 'documents\' own caps are larger than that, so this means the scanner stopped '
+                . 'answering, not that the files changed',
             );
 
             $nearest = min($above);
@@ -973,10 +1081,11 @@ final class BuiltInToolCorpusTest extends TestCase
             $this->assertGreaterThan(
                 self::RESTATEMENT_HEADROOM,
                 $nearest - $figure,
-                "RepoMapBlock carries the integer {$nearest}, which is within "
+                "a guarded document carries the integer {$nearest}, which is within "
                 . self::RESTATEMENT_HEADROOM . " of src/'s {$label} ({$figure}) and above it. "
                 . 'testRepoMapBlockNoLongerRestatesTheSourceCensus() matches a standalone integer '
-                . 'ANYWHERE in that file, so the tree growing into that literal will be reported as '
+                . 'ANYWHERE in each document it guards, so the tree growing into that literal will '
+                . 'be reported as '
                 . 'a restatement it is not. ' . self::RESTATEMENT_RESOLUTION . ' A figure that must '
                 . 'keep its exact spelling is a deliberate decision to raise RESTATEMENT_HEADROOM, '
                 . 'in the same commit and with the reason written down. (Only literals ABOVE the '
