@@ -1340,8 +1340,26 @@ final class Bootstrap
         // at the model-facing call sites, and re-firing them here would tell
         // the operator twice what one config line means — the same reason
         // `agentManager()` states for itself.
+        // E663: the engine's pool gets the SAME launch-derived worker spec the
+        // chat sub-agent path was fed in E652 — reached through the same
+        // `agentPoolConfig()` so the selection logic lives in exactly one
+        // place and cannot drift. `/workflow run` stages now fork workers that
+        // genuinely consult the model. NO `executor:` is injected here, on
+        // purpose: an injected executor flips the pool onto the synchronous
+        // in-parent dispatch documented at AgentWorkerPool::__construct() and
+        // silently opts the engine out of the forking topology (and its live
+        // progress) that the pool's own `workerProvider` parameter is the
+        // production seam for. A null spec is a verdict, not a gap: the pool
+        // builds its default refusing worker and every stage surfaces FAILED
+        // naming the absence — this wiring deliberately never echo-degrades.
+        $poolConfig = self::agentPoolConfig();
+
         return new WorkflowEngine(
             $registry,
+            pool: (new \SugarCraft\Crush\Agents\AgentWorkerPool(
+                maxConcurrent: $poolConfig->maxConcurrent,
+                workerProvider: $poolConfig->workerProvider,
+            ))->withStopOnFirstFailure($poolConfig->stopOnFirstFailure),
             model: $model,
             provider: $provider,
             permissionGate: $gate,

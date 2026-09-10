@@ -13,14 +13,17 @@ use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowRegistry;
 
 /**
- * E649: nothing in src/ hands a sub-agent WORKER a provider, so `/workflow
- * run` reaches the live worker's refusal and reports a FAILED agent — the
- * deliberate behaviour change that replaced the fabricated "Completed". This
- * pins both directions of the seam that exists today: the refusal is honest
+ * E649: a sub-agent WORKER with no provider refuses and the stage reports a
+ * FAILED agent — the deliberate behaviour change that replaced the fabricated
+ * "Completed". This pins both directions of the seam: the refusal is honest
  * and provider-shaped, and configuring one through the constructor parameter
  * ProcessExecutor already exposes makes the stage complete via a REAL round
  * trip. A fabricating worker could pass the second test while failing the
  * first; the pair is what pins "no fabricated completion survives here".
+ * E663 added the launch half: the same two directions re-pinned against the
+ * engine `Bootstrap::chat()` actually hands the session, so the wiring that
+ * feeds the spec cannot silently vanish while the constructor seam still
+ * passes.
  */
 final class WorkflowProviderHandoffTest extends TestCase
 {
@@ -91,5 +94,154 @@ final class WorkflowProviderHandoffTest extends TestCase
 
         $shipped = new ProcessExecutor();
         $this->assertNull($shipped->workerProvider(), 'the shipped default must stay the documented refusal');
+    }
+
+    /**
+     * E663: the two tests above prove the ENGINE honours a spec handed to its
+     * constructor. They cannot prove the LAUNCH hands one — which is the seam
+     * this closes. This pair drives the real `Bootstrap::chat()` engine: with a
+     * selected provider the engine's pool carries the SAME spec
+     * `agentPoolConfig()` derives for the chat path (one selection site, two
+     * consumers), and with none the pool is spec-less and a stage run through
+     * that launched engine still ends FAILED naming the absence — the wiring
+     * must not have quietly reintroduced the fabricated completion it replaced.
+     */
+    public function testTheLaunchedEnginePoolCarriesTheConfiguredWorkerSpec(): void
+    {
+        $restore = $this->isolateLaunchEnvironment(['SUGARCRUSH_PROVIDER' => 'anthropic']);
+
+        try {
+            $engine = \SugarCraft\Crush\Cli\Bootstrap::chat($this->launchRepo)->workflowEngine();
+            $this->assertInstanceOf(WorkflowEngine::class, $engine);
+
+            $pool = $this->enginePool($engine);
+            $spec = $pool->workerProvider();
+
+            $this->assertNotNull(
+                $spec,
+                'E663: the launched engine lost the worker-provider feed — /workflow run stages '
+                . 'would fork refusing workers although the launch has a provider',
+            );
+            $this->assertSame('anthropic', $spec['type'], 'the pool spec must name the selected provider');
+            $this->assertArrayHasKey('model', $spec, 'the spec must carry the launch model, as workerProviderSpec documents');
+        } finally {
+            $this->restoreLaunchEnvironment($restore);
+        }
+    }
+
+    public function testTheLaunchedEngineWithoutAnyProviderStillFailsClosedOnARun(): void
+    {
+        $restore = $this->isolateLaunchEnvironment([]);
+
+        try {
+            $engine = \SugarCraft\Crush\Cli\Bootstrap::chat($this->launchRepo)->workflowEngine();
+            $this->assertInstanceOf(WorkflowEngine::class, $engine);
+
+            $this->assertNull(
+                $this->enginePool($engine)->workerProvider(),
+                'nothing derivable must mean NO spec — never an echo-degrade standing in for a model',
+            );
+
+            $this->registerOnLaunchedRegistry($engine, 'launched-no-provider', 'PROBE-LAUNCHED-REFUSAL');
+            $result = $engine->run('launched-no-provider', []);
+
+            $this->assertFalse($result->isSuccess());
+            $error = (string) $result->stageResults[0]->error;
+            $this->assertStringContainsString('No provider configured', $error);
+            $this->assertStringNotContainsString('Task finished', $error);
+        } finally {
+            $this->restoreLaunchEnvironment($restore);
+        }
+    }
+
+    private string $launchRepo;
+
+    private string $launchHome;
+
+    /**
+     * Redirects HOME (both spellings — Bootstrap reads getenv, ForeignSkill-
+     * Discovery reads $_SERVER) into a throwaway sandbox and pins the provider
+     * selection to the values given, absent meaning cleared. Returns the
+     * state {@see restoreLaunchEnvironment()} needs.
+     *
+     * @param array<string, string> $env
+     */
+    private function isolateLaunchEnvironment(array $env): array
+    {
+        $originals = [
+            'HOME' => getenv('HOME'),
+            'SERVER_HOME' => $_SERVER['HOME'] ?? null,
+        ];
+
+        $dir = sys_get_temp_dir() . '/crush_launch_pin_' . uniqid('', true);
+        $this->launchRepo = $dir . '/repo';
+        $this->launchHome = $dir . '/home';
+        mkdir($this->launchHome . '/.sugar-crush', 0o700, true);
+        mkdir($this->launchRepo, 0o755, true);
+
+        $home = 'HOME=' . $this->launchHome;
+        putenv($home);
+        $_SERVER['HOME'] = $this->launchHome;
+        $originals['DIR'] = $dir;
+
+        foreach (['SUGARCRUSH_PROVIDER', 'SUGARCRUSH_MODEL', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_BACKEND_CMD_STREAM'] as $name) {
+            $originals[$name] = getenv($name);
+            if (array_key_exists($name, $env)) {
+                putenv($name . '=' . $env[$name]);
+            } else {
+                putenv($name);
+            }
+        }
+
+        return $originals;
+    }
+
+    /**
+     * @param array<string, string|false|null> $originals
+     */
+    private function restoreLaunchEnvironment(array $originals): void
+    {
+        foreach (['SUGARCRUSH_PROVIDER', 'SUGARCRUSH_MODEL', 'SUGARCRUSH_BACKEND_CMD', 'SUGARCRUSH_BACKEND_CMD_STREAM'] as $name) {
+            if ($originals[$name] === false) {
+                putenv($name);
+            } elseif ($originals[$name] !== null) {
+                putenv($name . '=' . $originals[$name]);
+            }
+        }
+
+        if ($originals['HOME'] === false) {
+            putenv('HOME');
+        } else {
+            putenv('HOME=' . $originals['HOME']);
+        }
+
+        if ($originals['SERVER_HOME'] === null) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $originals['SERVER_HOME'];
+        }
+
+        exec('rm -rf ' . escapeshellarg((string) $originals['DIR']));
+    }
+
+    private function enginePool(WorkflowEngine $engine): AgentWorkerPool
+    {
+        /** @var AgentWorkerPool $pool */
+        $pool = (new \ReflectionProperty(WorkflowEngine::class, 'pool'))->getValue($engine);
+
+        return $pool;
+    }
+
+    private function registerOnLaunchedRegistry(WorkflowEngine $engine, string $name, string $task): void
+    {
+        /** @var WorkflowRegistry $registry */
+        $registry = (new \ReflectionProperty(WorkflowEngine::class, 'registry'))->getValue($engine);
+        $registry->register(
+            (new WorkflowBuilder())
+                ->name($name)
+                ->description("Launch wiring probe: {$name}")
+                ->stage('work', Tasks::agent('coder')->prompt($task))
+                ->build(),
+        );
     }
 }
