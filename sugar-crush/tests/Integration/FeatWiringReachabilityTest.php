@@ -26,6 +26,7 @@ use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Skills\SkillPathNudge;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
@@ -1080,6 +1081,56 @@ final class FeatWiringReachabilityTest extends TestCase
             WorkflowEngine::class,
             Bootstrap::app($this->tempDir . '/repo')->chat?->workflowEngine(),
         );
+    }
+
+    /**
+     * E641's feed: the launched engine must carry the session's tool REGISTRY,
+     * not merely exist. Without it `resolveRequestTools()` cannot turn a
+     * workflow task's tool NAME into the Tool OBJECT the provider boundary
+     * demands, and every `tools:` declaration a stage makes goes out as null —
+     * the exact seam lane B left for this merge step. Pinned against the
+     * LAUNCHED chat rather than a hand-built engine (which
+     * WorkflowToolsHandoffTest covers) because what can regress here is the
+     * wiring. An empty HOME config means `toolSetUnder()` is the identity, so
+     * the registry arrives as the full built-in universe — non-null, non-empty,
+     * all Tool instances.
+     */
+    public function testTheLaunchedWorkflowEngineCarriesTheSessionToolRegistry(): void
+    {
+        $engine = Bootstrap::chat($this->tempDir . '/repo')->workflowEngine();
+        $this->assertInstanceOf(WorkflowEngine::class, $engine);
+
+        $registry = $this->privateValue($engine, 'toolRegistry');
+
+        $this->assertIsArray(
+            $registry,
+            'the launch left the E641 seam null — a stage that declares tools cannot resolve them',
+        );
+        $this->assertNotSame([], $registry);
+        foreach ($registry as $tool) {
+            $this->assertInstanceOf(Tool::class, $tool);
+        }
+    }
+
+    /**
+     * The narrowing travels with the feed: `disabledTools: ["Bash"]` in the
+     * user config must come out of the engine's registry too, the same pure
+     * predicate `agentManager()` applies to its own `toolRegistry:`. This is
+     * the other half of the E639 distinction the seam documents — the registry
+     * is the session's narrowed set, so a workflow stage naming Bash is
+     * refused as narrowing rather than served a tool the operator removed.
+     */
+    public function testTheLaunchedWorkflowEngineRegistryIsNarrowedByDisabledTools(): void
+    {
+        $this->writeUserConfig(['disabledTools' => ['Bash']]);
+
+        $engine = Bootstrap::chat($this->tempDir . '/repo')->workflowEngine();
+        $registry = $this->privateValue($engine, 'toolRegistry');
+
+        $this->assertIsArray($registry);
+        $names = array_map(static fn (Tool $tool): string => $tool->name(), $registry);
+        $this->assertNotContains('Bash', $names, 'the operator removed Bash; the engine must not hand it to a stage');
+        $this->assertNotEmpty(array_diff($names, ['Bash']), 'narrowing must not empty an untouched universe');
     }
 
     /**

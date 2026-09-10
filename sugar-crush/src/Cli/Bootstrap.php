@@ -1125,7 +1125,7 @@ final class Bootstrap
             // it can only do that with both in hand. (Both are NAMED arguments
             // and both are evaluated before the constructor body runs, so the
             // order they appear in here is style, not mechanism.)
-            workflowEngine: self::workflowEngine($root, $permissionGate),
+            workflowEngine: self::workflowEngine($root, $permissionGate, $skills),
             // crush_code.md Phase 2 item 4. Until now nothing in src/ or bin/
             // constructed a CommandLoader at all, so `~/.sugar-crush/commands`
             // and `<root>/.sugar-crush/commands` were directories the loader
@@ -1256,8 +1256,12 @@ final class Bootstrap
      *        what that does and does not enforce today — it is narrower than
      *        "workflow tool calls are gated", and the difference is stated there
      *        rather than implied here.
+     * @param SkillRegistry|null $skills Pass the caller's registry so the
+     *        tool universe built for the engine's `toolRegistry:` resolves
+     *        skills the same way the session's own set does — the same sharing
+     *        {@see agentManager()} documents for itself. Null re-scans at $root.
      */
-    private static function workflowEngine(?string $root, PermissionGate $gate): WorkflowEngine
+    private static function workflowEngine(?string $root, PermissionGate $gate, ?SkillRegistry $skills = null): WorkflowEngine
     {
         [$provider, $model] = self::selectedProviderLabel();
 
@@ -1309,12 +1313,24 @@ final class Bootstrap
             self::$projectTierRefusals[$registry->workflowsPath()] = $userRefusal;
         }
 
+        // E641's Bootstrap-side seam: a workflow task declares tool NAMES, and
+        // resolveRequestTools() can only turn one into the Tool OBJECT every
+        // provider demands if the engine holds the session's registry. The
+        // value mirrors `agentManager()`'s `toolRegistry:` exactly — the same
+        // universe (threading $skills so a skill disabled in the user config
+        // is disabled for workflow sub-agents too) through the same PURE
+        // PREDICATE `toolSetUnder()`, deliberately not the reporting `tools()`
+        // wrapper: the launch notices for a removed or emptied set already fire
+        // at the model-facing call sites, and re-firing them here would tell
+        // the operator twice what one config line means — the same reason
+        // `agentManager()` states for itself.
         return new WorkflowEngine(
             $registry,
             model: $model,
             provider: $provider,
             permissionGate: $gate,
             environmentRoot: $root,
+            toolRegistry: self::toolSetUnder(self::unfilteredTools($root, skills: $skills), self::readUserConfig()),
         );
     }
 
