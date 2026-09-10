@@ -1559,11 +1559,14 @@ final class AgentManager
      *
      * WHY THIS EXISTS. The pool's dispatch loop rebuilt each member's
      * CompleteRequest from the caller's shared one, including `systemPrompt`
-     * — so the per-agent prompts {@see executeSubAgent()} builds from the
-     * agent's declaration never reached the batch path. Two members with
-     * different roles ran with whichever prompt the request-carrier wrote,
-     * the same sibling-governance defect the tool-grant resolver above
-     * exists to end, one field over.
+     * — so the per-agent prompts an agent declares never reached the batch
+     * path. Two members with different roles ran with whichever prompt the
+     * request-carrier wrote, the same sibling-governance defect the
+     * tool-grant resolver above exists to end, one field over. The splice
+     * mirrors executeSubAgent()'s — the declared prompt plus every granted
+     * skill — with the raw prompt rather than the composed systemPrompt(),
+     * because env is the session's voice and the shared prompt keeps it;
+     * see the DECLARED comment inside.
      *
      * THE MERGE IS ADDITIVE, BY DECISION. executeSubAgent() has no shared
      * prompt to honour — it owns the request end to end — but executeAll's
@@ -1589,18 +1592,21 @@ final class AgentManager
         $anyDeclared = false;
 
         foreach ($agents as $agent) {
-            // DECLARED is answered from the RAW prompt (or a skill), never
-            // from the composed systemPrompt(): that method also builds the
-            // <env> block, so it is never empty for any agent and a `$own
-            // === ''` test here would silently classify every member as a
-            // declarer. Pinned by the reaching E654 test.
+            // THE RAW prompt, not systemPrompt(). That method composes the
+            // session <env> block on top of the declaration — never empty,
+            // which would classify every member as a declarer — and the pool
+            // path has never carried env: its worker falls back to exactly
+            // this same raw `prompt`. E654 asks for the agent's OWN WORDS per
+            // member; the env block is the session's words, and the shared
+            // prompt the merge already keeps carries that side. Pinned by the
+            // reaching E654 tests.
             if ($agent->agent->prompt === '' && $agent->agent->skillNames === []) {
                 $prompts[$agent->id] = $sharedPrompt;
                 continue;
             }
 
             $anyDeclared = true;
-            $own = $agent->agent->systemPrompt();
+            $own = $agent->agent->prompt;
 
             foreach ($agent->agent->skillNames as $skillName) {
                 $skill = $this->skillRegistry->get($skillName);

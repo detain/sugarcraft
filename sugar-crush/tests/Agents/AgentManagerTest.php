@@ -751,11 +751,14 @@ final class AgentManagerTest extends TestCase
             new CompleteRequest(model: 'test-model', messages: [], systemPrompt: 'SHARED'),
         ));
 
-        // The agent's own prompt is what systemPrompt() composes — including
-        // the <env> block executeSubAgent() sends — so the expectation is
-        // built from the same call rather than from the bare prompt string.
+        // The RAW declared prompt, not systemPrompt()'s composed string: the
+        // pool path never carried the session <env> block, and E654 splices
+        // the member's own declaration onto the shared prompt. (The roster
+        // census in testEveryProductionCallSiteOfTheAgentAssemblerIsDerived
+        // AndAccountedFor is what keeps that choice honest — a second
+        // systemPrompt() call site here would move it.)
         $this->assertSame(
-            "SHARED\n\n" . $agentA->systemPrompt(),
+            "SHARED\n\nA-OWN",
             $captured[$declaring->id],
             'a declaring agent keeps the session prompt AND speaks its own',
         );
@@ -824,15 +827,21 @@ final class AgentManagerTest extends TestCase
         $clean = $manager->createSubAgent('clean-member', 'task c');
         $bad = $manager->createSubAgent('bad-skill-agent', 'task d');
 
+        // Capture-only catch (SwallowingCatchCensusTest): an assertion failure
+        // here would be a RuntimeException too, so nothing is asserted inside
+        // the handler — the message check lands after it, beside the others.
+        $refusal = null;
         try {
             iterator_to_array($manager->executeAll(
                 [$clean, $bad],
                 new CompleteRequest(model: 'test-model', messages: [], systemPrompt: 'SHARED'),
             ));
-            $this->fail('a batch member with an unresolvable granted skill must not run');
         } catch (\RuntimeException $caught) {
-            $this->assertStringContainsString('skill-that-does-not-exist', $caught->getMessage());
+            $refusal = $caught->getMessage();
         }
+
+        $this->assertNotNull($refusal, 'a batch member with an unresolvable granted skill must not run');
+        $this->assertStringContainsString('skill-that-does-not-exist', $refusal);
 
         $this->assertSame(0, $dispatched, 'the refusal lands before the pool dispatches ANY member');
         $this->assertSame(

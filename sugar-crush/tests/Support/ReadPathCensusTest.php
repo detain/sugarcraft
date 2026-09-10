@@ -187,6 +187,8 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Agents/WorktreeManager.php|fopen' => [
             'SELF_LOCATED — its own `.registry.json`, opened for a lock',
+            'SELF_LOCATED — the same path on the write side (E137): opened `c` for the timed '
+                . 'LOCK_EX, created by this manager itself and truncated only under the lock',
         ],
         'Agents/WorktreeManager.php|new RecursiveDirectoryIterator' => [
             'NAMES_ONLY — recursive pattern expansion, gated at the copy like the glob above',
