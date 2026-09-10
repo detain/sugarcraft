@@ -135,16 +135,64 @@ Environment variables:
                          groups non-mutating tools; this is the escape hatch.
                          Persist it as "parallelToolCalls": false in
                          ~/.sugar-crush/config.json.
-  SUGARCRUSH_PARALLEL_TOOL_DEADLINE
-                         Seconds one concurrent group may run before its
-                         stragglers are killed and reported as failed calls
-                         (default 90, must be 1-119; a fraction is truncated).
-                         Persist it as "parallelToolDeadlineSeconds".
-                         Precedence: this variable, then the persisted key,
-                         then the default. A value outside 1-119, or one that
-                         is not a number at all, does not count as set — it
-                         falls through to the next source rather than
-                         discarding it.
+   SUGARCRUSH_PARALLEL_TOOL_DEADLINE
+                          Seconds one concurrent group may run before its
+                          stragglers are killed and reported as failed calls
+                          (default 90, must be 1-119; a fraction is truncated).
+                          Persist it as "parallelToolDeadlineSeconds".
+                          Precedence: this variable, then the persisted key,
+                          then the default. A value outside 1-119, or one that
+                          is not a number at all, does not count as set — it
+                          falls through to the next source rather than
+                          discarding it.
+   SUGARCRUSH_TITLE_MODEL The cheap model used to auto-name a session after
+                          its first exchange; defaults to the provider's.
+   SUGARCRUSH_SUMMARY_MODEL
+                          The model that writes /compact's exchange
+                          summaries; defaults to the provider's.
+   SUGARCRUSH_MAX_COST    A spend ceiling for this launch, in US dollars
+                          (fractional allowed; a leading "$" is accepted).
+                          A turn that crosses the ceiling is refused.
+   SUGARCRUSH_CONNECT_TIMEOUT
+                          Connect-phase bound, in seconds (fractional
+                          allowed; default 15.0), for provider HTTP
+                          transports. It bounds establishing the connection
+                          only — it is not a total request timeout.
+   SUGARCRUSH_SEARCH_ENDPOINT
+                          Search API the built-in WebSearch tool queries.
+   SUGARCRUSH_SESSION_RETENTION_DAYS
+                          A positive whole number of days: each launch drops
+                          sessions untouched for at least that long.
+   SUGARCRUSH_SHARE_UPLOAD_URL
+                          Base URL /share uploads to; point it at a private
+                          host to keep transcripts off the public default.
+   SUGARCRUSH_WORKTREES_DIR
+                          Base directory under which per-teammate git
+                          worktrees are created.
+   SUGARCRUSH_DISABLE_MOUSE
+                          Any value other than empty or 0 turns mouse
+                          tracking off entirely.
+   SUGARCRUSH_DISABLE_MOUSE_CLICKS
+                          Any value other than empty or 0 ignores click
+                          gestures while keeping wheel scrolling.
+   SUGARCRUSH_DISABLE_PROMPT_CACHE
+                          Any value other than empty or 0 switches off the
+                          provider prompt-cache breakpoints.
+   SUGARCRUSH_BACKGROUND  light or dark — forces what the adaptive theme
+                          believes about the terminal background, skipping
+                          the OSC 11 probe and COLORFGBG.
+   SUGARCRUSH_DEBUG_SKILLS
+                          Any value other than empty or 0 puts SkillLoader's
+                          per-skip and per-refused-directory lines back on
+                          stderr.
+   SUGARCRUSH_DEBUG_COMMANDS
+                          Any value other than empty or 0 puts CommandLoader's
+                          discovery-refusal lines back on stderr.
+   SUGARCRUSH_DEBUG_RULES Any value other than empty or 0 puts RuleLoader's
+                          discovery-refusal lines back on stderr.
+
+   docs/ENVIRONMENT.md tabulates every variable this build reads, with its
+   full contract.
 
 Exit codes (one-shot mode and every subcommand):
   0                      The prompt ran and produced an answer, or the

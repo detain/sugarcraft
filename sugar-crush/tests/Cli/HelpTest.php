@@ -8,6 +8,8 @@ use Composer\InstalledVersions;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
+use SugarCraft\Crush\Tests\Config\EnvRosterDriftTest;
+use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
 
 final class HelpTest extends TestCase
 {
@@ -41,15 +43,141 @@ final class HelpTest extends TestCase
         // actually list every option ArgvParser accepts.
         $this->assertStringContainsString('--root', $screen);
 
-        // Env vars section. Kept for the smoke value, but NOT the guard: a
-        // prefix match cannot tell SUGARCRUSH_BACKEND_CMD from
-        // SUGARCRUSH_BACKEND_CMD_STREAM, which is how the latter's whole block
-        // shipped unpinned. See
+        // The env vars the screen documents are guarded from the SOURCE, not
+        // from a hand-written list here: a prefix substring match cannot tell
+        // SUGARCRUSH_BACKEND_CMD from SUGARCRUSH_BACKEND_CMD_STREAM — that
+        // blindness is how the streaming block shipped unpinned — and a list
+        // of four names was exactly as blind to the next variable as the
+        // prefix was. The guards are
+        // testEveryRosterVariableIsDocumentedOnTheHelpScreenOrExcludedByName()
+        // (whole live roster) and
         // testEveryBackendSelectionVariableIsDocumentedOnTheHelpScreen().
-        $this->assertStringContainsString('SUGARCRUSH_PROVIDER', $screen);
-        $this->assertStringContainsString('SUGARCRUSH_MODEL', $screen);
-        $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD', $screen);
-        $this->assertStringContainsString('SUGARCRUSH_BACKEND_CMD_STREAM', $screen);
+    }
+
+    // =========================================================================
+    // The whole-roster guard (E37)
+    // =========================================================================
+
+    /**
+     * Roster variables deliberately NOT on the help screen, each with its why.
+     *
+     * The screen is the one place a user who has only `--help` can look, and
+     * every canonical `SUGARCRUSH_*` the code reads is now on it. What remains
+     * here are the deprecated `SUGAR_CRUSH_*` spellings: they stay READABLE
+     * for one release line (removing a read is a breaking change this lane
+     * does not make), but advertising a second spelling of a documented
+     * variable on the screen only invites users to set the one that will
+     * eventually stop working. The screen documents the canonical name; the
+     * alias is excluded by name here, and
+     * {@see testEveryExcludedVariableIsStillOnTheLiveRoster()} reddens the
+     * day the alias stops being read and this row should be deleted.
+     */
+    private const UNDOCUMENTED_ON_HELP_SCREEN = [
+        'SUGAR_CRUSH_SHARE_UPLOAD_URL' => 'deprecated alias of the documented SUGARCRUSH_SHARE_UPLOAD_URL; kept readable, not advertised.',
+        'SUGAR_CRUSH_WORKTREES_DIR' => 'deprecated alias of the documented SUGARCRUSH_WORKTREES_DIR; kept readable, not advertised.',
+    ];
+
+    /**
+     * The live roster as the token scanner resolves it — the same oracle and
+     * the same walk {@see EnvRosterDriftTest()} uses for `docs/ENVIRONMENT.md`,
+     * which is why a name is not simply grepped out of the tree: a `grep -o
+     * 'SUGARCRUSH_[A-Z_]*'` over `src/ bin/` counts 27 "variables", of which
+     * three are concatenation fragments (`SUGARCRUSH_DEBUG_…`), and two —
+     * `SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT` — exist
+     * only in doc-blocks, read by nothing. Scrape-with-the-oracle, not
+     * scrape-with-the-alphabet: E37 asked to widen the guard's DOMAIN (four
+     * backend-selection methods → the whole roster) while keeping the
+     * scanner's ALPHABET, deprecated spelling included, because a census
+     * cannot find what its alphabet cannot spell.
+     *
+     * Fragments and unplaced occurrences are not re-asserted empty here —
+     * the roster test over this exact walk already reddens on them, so this
+     * census cannot be quietly starved.
+     *
+     * @return list<string>
+     */
+    private static function liveRoster(): array
+    {
+        $scanner = new EnvReadScanner(EnvRosterDriftTest::sources());
+
+        $names = array_merge(array_keys($scanner->reads()), array_keys($scanner->exported()));
+        $names = array_values(array_unique($names));
+        \sort($names);
+
+        return $names;
+    }
+
+    /** @return iterable<string, array{0: string}> */
+    public static function rosterVariables(): iterable
+    {
+        foreach (self::liveRoster() as $name) {
+            yield $name => [$name];
+        }
+    }
+
+    /**
+     * Every variable the code reads or exports is either named on the help
+     * screen's "Environment variables" section or excluded BY NAME above with
+     * a stated reason — and an exclusion must actually still be absent, or a
+     * later contributor who documents the variable leaves the roster row
+     * silently winning and the guard measuring nothing.
+     *
+     * @dataProvider rosterVariables
+     */
+    public function testEveryRosterVariableIsDocumentedOnTheHelpScreenOrExcludedByName(string $var): void
+    {
+        if (\array_key_exists($var, self::UNDOCUMENTED_ON_HELP_SCREEN)) {
+            $this->assertNotSame(
+                '',
+                self::UNDOCUMENTED_ON_HELP_SCREEN[$var],
+                "{$var} is excluded without a stated reason",
+            );
+            $this->assertStringNotContainsString(
+                $var,
+                self::environmentSectionOfTheScreen(),
+                "{$var} is on the screen AND in UNDOCUMENTED_ON_HELP_SCREEN — delete the roster row, "
+                . 'which otherwise excludes a documented variable in silence',
+            );
+
+            return;
+        }
+
+        $this->assertStringContainsString(
+            $var,
+            self::environmentSectionOfTheScreen(),
+            "the code reads or exports {$var} but neither the screen's \"Environment variables\" "
+            . 'section names it nor UNDOCUMENTED_ON_HELP_SCREEN excludes it by name with a why — '
+            . 'a user holding only --help cannot discover it',
+        );
+    }
+
+    public function testEveryExcludedVariableIsStillOnTheLiveRoster(): void
+    {
+        $stale = \array_values(\array_diff(\array_keys(self::UNDOCUMENTED_ON_HELP_SCREEN), self::liveRoster()));
+
+        $this->assertSame(
+            [],
+            $stale,
+            'UNDOCUMENTED_ON_HELP_SCREEN excludes names the code no longer reads — a retired alias '
+            . 'roster row is a lie waiting for its reader; delete it',
+        );
+    }
+
+    public function testTheRosterScrapeFoundTheKnownRoster(): void
+    {
+        // The vacuity guard, with its negative halves: the census must place
+        // the known reads AND refuse the two names that are prose-only and
+        // the fragments — that pair is what proves the oracle, not the
+        // alphabet, is doing the work.
+        $live = self::liveRoster();
+
+        $this->assertContains('SUGARCRUSH_PROVIDER', $live);
+        $this->assertContains('SUGARCRUSH_BACKEND_CMD_STREAM', $live);
+        $this->assertContains('SUGARCRUSH_MODEL', $live, 'the read set alone would drop the exported spelling');
+        $this->assertContains('SUGAR_CRUSH_WORKTREES_DIR', $live, 'the alphabet narrowed to the canonical prefix');
+        $this->assertNotContains('SUGARCRUSH_TOOL_CALL_PARSER', $live, 'a doc-block mention was counted as a read');
+        $this->assertNotContains('SUGARCRUSH_REASONING_EFFORT', $live, 'a doc-block mention was counted as a read');
+        $this->assertGreaterThan(20, \count($live), 'the roster collapsed toward empty; the scrape is not running');
     }
 
     /**
@@ -136,27 +264,19 @@ final class HelpTest extends TestCase
      * decide and label the tier, so a fifth variable added to any of them is
      * documented or red.
      *
-     * SCOPE, stated so it is not mistaken for more than it is. This guards the
-     * BACKEND-SELECTION variables only — the subset the help screen's own
-     * "Environment variables" section exists to cover for that purpose:
-     * `SUGARCRUSH_PROVIDER`, `SUGARCRUSH_MODEL`, `SUGARCRUSH_BACKEND_CMD` and
-     * `SUGARCRUSH_BACKEND_CMD_STREAM`. MEASURED on this tree: `src/` and `bin/`
-     * name 20 distinct `SUGARCRUSH_*` variables and `Help.php` documents 6 of
-     * them — the four above plus `SUGARCRUSH_DISABLE_PARALLEL_TOOL_CALLS` and
-     * `SUGARCRUSH_PARALLEL_TOOL_DEADLINE`. (Five before this bundle added the
-     * streaming variable, which is the figure the review that prompted this
-     * guard quotes.) The other 14 — `SUGARCRUSH_TITLE_MODEL`,
-     * `SUGARCRUSH_SUMMARY_MODEL`, `SUGARCRUSH_MAX_COST`,
-     * `SUGARCRUSH_PERMISSION_MODE`, `SUGARCRUSH_SEARCH_ENDPOINT`,
-     * `SUGARCRUSH_SESSION_RETENTION_DAYS`, `SUGARCRUSH_CONNECT_TIMEOUT`,
-     * `SUGARCRUSH_BACKGROUND`, `SUGARCRUSH_DEBUG_SKILLS`,
-     * `SUGARCRUSH_TOOL_CALL_PARSER`, `SUGARCRUSH_DISABLE_MOUSE`,
-     * `SUGARCRUSH_DISABLE_MOUSE_CLICKS`, `SUGARCRUSH_WORKTREES_DIR` and
-     * `SUGARCRUSH_SHARE_UPLOAD_URL` — are undocumented on this screen and are a
-     * KNOWN, separately tracked gap in the hardening backlog. Widening this
-     * scrape to all 20 would red immediately, which is that backlog item's job
-     * and not this guard's. `docs/ENVIRONMENT.md` is the page that does claim to
-     * cover all of them, and does: all 20 appear there.
+     * SCOPE. This guards the BACKEND-SELECTION subset — the variables the
+     * four tier-deciding methods read, scraped from their own bodies, so a
+     * fifth variable added to any of them is documented or red. Since round
+     * 62 it is NO LONGER the outer bound: the screen documents the whole live
+     * roster and {@see testEveryRosterVariableIsDocumentedOnTheHelpScreenOrExcludedByName()}
+     * enforces that from the token scanner's roster. What this narrower guard
+     * still adds over the wide one is the DOMAIN: it pins these names to the
+     * selection methods themselves, so a rename that moves the selection
+     * logic — and would leave the wide census indifferent — reddens here.
+     * The old "widening would red immediately, backlog's job" paragraph is
+     * retired with the widening it described (E37 closed); no figure is
+     * restated in its place, because a count over the tree is the shape of
+     * stale that this file's whole history keeps re-measuring.
      *
      * @return array<string, array{0: string}>
      */
