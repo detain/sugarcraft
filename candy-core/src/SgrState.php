@@ -22,11 +22,14 @@ use SugarCraft\Core\Util\Token;
  * previously lose: SGR 58 (underline colour) and OSC 8 hyperlinks. Read
  * it via {@see underlineColor()}, {@see linkUri()} and
  * {@see linkId()}; feed a full token stream through {@see apply()}.
- * Re-emission through {@see toPrefix()} is deliberately NOT extended in
- * this round — sugar-crush's Renderer::balanceSgr() still owns the
- * row-close contract, and silently duplicating it here would change
- * bytes under every existing snapshot. The general fix (balanceSgr
- * delegating to this class) is the filed follow-up seam.
+ *
+ * E667 moves the ROW-BOUNDARY contract here: {@see rowOpen()} and
+ * {@see rowClose()} are the balance bytes sugar-crush's
+ * Renderer::balanceSgr() used to compute with a private URI tracker, so
+ * the seam E50 filed is now closed and this class is the single home of
+ * the contract. {@see toPrefix()} itself stays byte-frozen — the extra
+ * bytes ride only on the row-boundary methods, so every existing
+ * prefix snapshot holds.
  *
  * Construct via {@see initial()} (no styling) and update via
  * {@see apply(Token)}; emit the equivalent prefix via
@@ -172,9 +175,9 @@ final class SgrState
     /**
      * Track an OSC 8 hyperlink token. The body is `8;params;URI`
      * (an empty URI closes the link — `OSC 8 ; ; ST`); any other OSC
-     * number is observed and ignored. The tracked state does NOT yet
-     * flow into {@see toPrefix()} — see the class docblock for the
-     * balanceSgr-delegation seam.
+     * number is observed and ignored. The tracked state flows into the
+     * row-boundary re-open/close of {@see rowOpen()} / {@see rowClose()},
+     * never into {@see toPrefix()} itself.
      */
     public function applyOsc(Token $t): void
     {
@@ -227,9 +230,10 @@ final class SgrState
      * Returns `''` when the state is already the default (nothing to
      * emit).
      *
-     * Deliberately unchanged by E50: underline colour and links are
-     * tracked but not re-emitted here, so every existing byte snapshot
-     * holds until balanceSgr() delegates (the filed seam).
+     * Deliberately unchanged by E50 and by E667: underline colour and
+     * links are tracked but not re-emitted here — the row-boundary
+     * bytes ride on {@see rowOpen()} / {@see rowClose()}, so every
+     * existing prefix snapshot holds.
      */
     public function toPrefix(): string
     {
@@ -276,5 +280,54 @@ final class SgrState
     public function isDefault(): bool
     {
         return $this->toPrefix() === '';
+    }
+
+    /**
+     * Bytes that must PRECEDE a row that a diff may repaint alone, so the
+     * row re-establishes the styling carried in from earlier rows: the SGR
+     * prefix plus an OSC 8 re-open while a hyperlink is still open.
+     *
+     * E667 — this is the contract sugar-crush's Renderer::balanceSgr()
+     * used to compute with a private URI tracker; the row-boundary half
+     * of the balance now lives here, next to the state it emits.
+     *
+     * The re-open deliberately omits the `id=` param even when
+     * {@see linkId()} tracked one: the byte contract of the delegating
+     * call site (and every golden pinned under it) predates id tracking,
+     * and an id would change those bytes. The URI itself round-trips.
+     */
+    public function rowOpen(): string
+    {
+        return $this->toPrefix() . ($this->hasOpenLink() ? self::osc8($this->linkUri) : '');
+    }
+
+    /**
+     * Bytes that must FOLLOW a row so it leaves nothing bleeding: an SGR
+     * reset unless the state is already default, plus an OSC 8 close
+     * while a hyperlink is open (CSI 0 m does not end a link on a real
+     * terminal — only the empty-URI OSC does).
+     *
+     * A row carrying a reset ENDS the observed link here, matching the
+     * E50 accessor semantics pinned by candy-core's own suite; sugar-crush
+     * measures its goldens to hold byte-identical under the delegation
+     * (no pinned row opens a link, resets mid-row, and ends inside the
+     * label).
+     */
+    public function rowClose(): string
+    {
+        return ($this->isDefault() ? '' : Ansi::reset())
+            . ($this->hasOpenLink() ? self::osc8('') : '');
+    }
+
+    /**
+     * An OSC 8 hyperlink open (with $uri) or close (with ''), ST-terminated.
+     *
+     * ST (`ESC \`) rather than BEL: both terminate an OSC and candy-core's
+     * {@see Parser} accepts either, but BEL inside a frame is a byte a
+     * terminal may also ring.
+     */
+    public static function osc8(string $uri): string
+    {
+        return "\x1b]8;;" . $uri . "\x1b\\";
     }
 }

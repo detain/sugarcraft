@@ -141,4 +141,70 @@ final class SgrStateTest extends TestCase
         $s->apply(new Token(Token::OSC, '8;;'));                    // canonical close
         $this->assertFalse($s->hasOpenLink());
     }
+
+    // ------------------------------------------------------------------
+    // E667: the row-boundary contract (rowOpen / rowClose)
+    // ------------------------------------------------------------------
+
+    public function testRowBoundariesOfDefaultStateAreEmpty(): void
+    {
+        $s = SgrState::initial();
+        foreach ((new Parser())->parse("\x1b[31m\x1b[0m") as $t) {
+            $s->apply($t);
+        }
+        $this->assertSame('', $s->rowOpen());
+        $this->assertSame('', $s->rowClose());
+    }
+
+    public function testRowOpenCarriesPrefixAndReOpensTheLinkWithoutId(): void
+    {
+        $s = SgrState::initial();
+        foreach ((new Parser())->parse("\x1b[1m") as $t) {
+            $s->apply($t);
+        }
+        $s->apply(new Token(Token::OSC, '8;id=2;https://example.com/x'));
+        // The id is deliberately NOT re-emitted — the byte contract of the
+        // delegating call site (sugar-crush balanceSgr) predates id tracking.
+        $this->assertSame("\x1b[0;1m\x1b]8;;https://example.com/x\x1b\\", $s->rowOpen());
+    }
+
+    public function testRowCloseResetsStyleAndEndsTheLink(): void
+    {
+        $s = SgrState::initial();
+        foreach ((new Parser())->parse("\x1b[1m") as $t) {
+            $s->apply($t);
+        }
+        $s->apply(new Token(Token::OSC, '8;;https://example.com'));
+        $this->assertSame("\x1b[0m\x1b]8;;\x1b\\", $s->rowClose());
+    }
+
+    public function testRowBoundaryBytesRoundTripASplitLinkRow(): void
+    {
+        // A link whose label spans two rows: row 1 opens it, row 2 closes it.
+        // Feeding row 1 through the state must make row 2's re-open carry the
+        // URI, so the repaintable-alone row is self-contained — and the close
+        // must land on any row that ENDS inside the link.
+        $row1 = "\x1b]8;;https://example.com/x\x1b\\long ";
+        $row2 = "label\x1b]8;;\x1b\\";
+
+        $s = SgrState::initial();
+        foreach ((new Parser())->parse($row1) as $t) {
+            $s->apply($t);
+        }
+        $closed1 = $s->rowClose();
+        $prefix2 = $s->rowOpen();
+        foreach ((new Parser())->parse($row2) as $t) {
+            $s->apply($t);
+        }
+
+        $this->assertSame("\x1b]8;;\x1b\\", $closed1, 'an unterminated link must be closed at the row end');
+        $this->assertSame("\x1b]8;;https://example.com/x\x1b\\", $prefix2, 'the next row must re-open it');
+        $this->assertSame('', $s->rowClose(), 'a row that closes its own link leaves nothing');
+    }
+
+    public function testOsc8FormatsOpenAndClose(): void
+    {
+        $this->assertSame("\x1b]8;;https://example.com\x1b\\", SgrState::osc8('https://example.com'));
+        $this->assertSame("\x1b]8;;\x1b\\", SgrState::osc8(''));
+    }
 }
