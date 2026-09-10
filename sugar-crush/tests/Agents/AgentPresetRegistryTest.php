@@ -172,6 +172,52 @@ YAML;
     // list() - returns array of presets
     // -------------------------------------------------------------------------
 
+    /**
+     * E661: the `!is_array()` guard of parsePresetFile() ("Invalid YAML
+     * frontmatter in:") is the local sibling of the branch E575 proved
+     * REACHED for the foreign registry — frontmatter that parses CLEANLY to
+     * a non-array. Frontmatter::parse() publishes exactly those shapes: NULL
+     * for an empty or comment-only block, a scalar for a bare value. No
+     * earlier guard fires on them, and THIS registry fails loud (the foreign
+     * one skips) naming the file. Each shape is its own fixture and its own
+     * assertion so only the file that broke can satisfy the message.
+     */
+    public function testFrontmatterThatParsesToAScalarThrowsNamingTheFile(): void
+    {
+        $dir = $this->tempDir . '/scalar-frontmatter';
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/scalar.md', "---\n42\n---\nBody.");
+
+        $failure = null;
+        try {
+            (new AgentPresetRegistry([$dir]))->load('scalar');
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
+        }
+
+        $this->assertNotNull($failure, 'a cleanly-parsing scalar frontmatter must not load');
+        $this->assertStringContainsString('Invalid YAML frontmatter in:', $failure->getMessage());
+        $this->assertStringContainsString('scalar.md', $failure->getMessage());
+    }
+
+    public function testCommentOnlyFrontmatterThrowsNamingTheFile(): void
+    {
+        $dir = $this->tempDir . '/comment-only-frontmatter';
+        mkdir($dir, 0777, true);
+        file_put_contents($dir . '/note.md', "---\n# just a note\n---\nBody.");
+
+        $failure = null;
+        try {
+            (new AgentPresetRegistry([$dir]))->load('note');
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
+        }
+
+        $this->assertNotNull($failure, 'a cleanly-parsing comment-only frontmatter must not load');
+        $this->assertStringContainsString('Invalid YAML frontmatter in:', $failure->getMessage());
+        $this->assertStringContainsString('note.md', $failure->getMessage());
+    }
+
     public function testListReturnsAllPresetsFromAllPaths(): void
     {
         $dir1 = $this->tempDir . '/list1';
