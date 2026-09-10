@@ -1798,6 +1798,46 @@ final class ProcessExecutorTest extends TestCase
     }
 
     /**
+     * E646 clamp: the lease frame's `seconds` arrives over an untrusted pipe,
+     * so a forged 999999 must not move the reaping deadline ~11 days out —
+     * that is a DoS on heartbeat reaping of a live-but-hung child. The fake
+     * worker signs the oversized lease then emits one streaming frame; the
+     * test parks the generator on that yield (lease accepted, nothing
+     * terminal yet) and reads the deadline the reaper itself would compare
+     * against. Clamped value ∈ (now+3000, now+3600]: above the floor proves
+     * the lease applied at all, below the ceiling proves the clamp did.
+     */
+    public function testAForgedOversizedLeaseIsClampedToTheReapingCeiling(): void
+    {
+        [$dir, $binary] = $this->fakeWorkerBinary(
+            "printf '{\"type\":\"ready\"}\\n'\n"
+            . "read -r _startup\nread -r _execute\n"
+            . "printf '{\"type\":\"lease\",\"seconds\":999999}\\n'\n"
+            . "printf '{\"type\":\"streaming\",\"content\":\"park\"}\\n'\n"
+            . "exit 0\n"
+        );
+
+        try {
+            // timeoutSeconds: null — the heartbeat/lease clock is the only ceiling under test.
+            $executor = new ProcessExecutor(binaryPath: $binary, timeoutSeconds: null);
+            $stream = $executor->executeStream($this->agent, $this->request);
+
+            $first = $stream->current();
+            $this->assertSame(AgentStatus::Streaming, $first?->status, 'the generator must park on the frame emitted after the lease');
+
+            $deadline = (new \ReflectionMethod(ProcessExecutor::class, 'effectiveHeartbeatDeadline'))
+                ->invoke($executor, $this->agent->id);
+            $this->assertGreaterThan(time() + 3000, $deadline, 'the forged lease was discarded instead of clamped');
+            $this->assertLessThanOrEqual(time() + 3600, $deadline, 'an oversized lease extended reaping past LEASE_MAX_SECS');
+
+            unset($stream); // destruct the parked generator; the fake child already exited.
+        } finally {
+            @unlink($binary);
+            @rmdir($dir);
+        }
+    }
+
+    /**
      * E647: a data-only grant round-trips parent → wire → child.
      */
     public function testRehydrateToolsRebuildsCompleteSpecsAsDataOnlyGrants(): void

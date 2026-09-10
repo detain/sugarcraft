@@ -46,6 +46,9 @@ final class ProcessExecutor implements ExecutorInterface
     /** How long the parent waits for a heartbeat before declaring worker dead (seconds). */
     private const HEARTBEAT_TIMEOUT_SECS = 15;
 
+    /** Ceiling on an accepted lease: a worker-supplied `seconds` is attack surface, and an unclamped value defers heartbeat reaping indefinitely. */
+    private const LEASE_MAX_SECS = 3600;
+
     /** Grace period between SIGTERM and SIGKILL (seconds). */
     private const SIGTERM_GRACE_SECS = 5;
 
@@ -266,7 +269,8 @@ final class ProcessExecutor implements ExecutorInterface
                         // itself is NOT capped by anything here.
                         $leaseSeconds = (int) ($message['seconds'] ?? 0);
                         if ($leaseSeconds > 0) {
-                            $this->heartbeatLeaseUntil[$agent->id] = time() + $leaseSeconds;
+                            // `seconds` arrives over an untrusted pipe: clamp it, a forged lease is a DoS on reaping.
+                            $this->heartbeatLeaseUntil[$agent->id] = time() + min($leaseSeconds, self::LEASE_MAX_SECS);
                         }
                         continue;
                     }
@@ -460,7 +464,8 @@ final class ProcessExecutor implements ExecutorInterface
                 // E646: same lease contract as execute()'s read loop.
                 $leaseSeconds = (int) ($message['seconds'] ?? 0);
                 if ($leaseSeconds > 0) {
-                    $this->heartbeatLeaseUntil[$agent->id] = time() + $leaseSeconds;
+                    // `seconds` arrives over an untrusted pipe: clamp it, a forged lease is a DoS on reaping.
+                    $this->heartbeatLeaseUntil[$agent->id] = time() + min($leaseSeconds, self::LEASE_MAX_SECS);
                 }
                 continue;
             }
