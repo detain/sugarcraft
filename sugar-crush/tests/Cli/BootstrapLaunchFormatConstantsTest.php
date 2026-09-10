@@ -1213,12 +1213,16 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * finding nothing on it, which is round 44's dead census wearing a
      * different hat.
      *
-     * THE THREE SHAPES ARE THE ONES THE OLD ALPHABET COULD NOT EXPRESS —
-     * a root page that is not `README.md`, a page nested under `docs/`, and a
-     * non-markdown file that must NOT be collected. The last is as load-bearing
-     * as the first two: a collector that takes everything would drag
-     * `docs/*.json` fixtures and any generated HTML into the sweep, and the
-     * roster would then have to grow a row per file rather than per page.
+     * THE SHAPES ARE THE ONES THE ALPHABET COULD NOT EXPRESS BEFORE EACH
+     * ROUND WIDENED IT — a root page that is not `README.md`, a page nested
+     * under `docs/`, a non-markdown file that must NOT be collected, and since
+     * E215 an upper-case extension and a dotfile page. The non-markdown negative
+     * is as load-bearing as the positives: a collector that takes everything
+     * would drag `docs/*.json` fixtures and any generated HTML into the sweep,
+     * and the roster would then have to grow a row per file rather than per
+     * page. The E215 positives are the negative-polarity pins for that
+     * widening: under the old case-sensitive alphabet the expected set below
+     * loses two members and this test reds.
      */
     public function testTheSweepCollectsPagesFromATreeWhoseAnswerIsKnown(): void
     {
@@ -1243,11 +1247,18 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             $write('docs/FLAT.md', 'a flat docs page');
             $write('docs/nested/DEEP.md', 'a nested docs page');
             $write('docs/nested/schema.json', '{}');
+            // E215's two shapes, which the old alphabet could not see: an upper-case
+            // extension (both case-sensitive glob and case-sensitive getExtension()
+            // dropped it) and a root dotfile (glob() skips dot-leading names; the
+            // docs iterator never did, so the pair of collectors DISAGREED about
+            // dotfiles — which is its own evidence the alphabet was accidental).
+            $write('docs/CASE.MD', 'an upper-case extension page');
+            $write('docs/.hidden.md', 'a dotfile page');
 
             $found = self::markdownPagesUnder($root);
 
             self::assertSame(
-                ['CHANGELOG.md', 'README.md', 'docs/FLAT.md', 'docs/nested/DEEP.md'],
+                ['CHANGELOG.md', 'README.md', 'docs/.hidden.md', 'docs/CASE.MD', 'docs/FLAT.md', 'docs/nested/DEEP.md'],
                 array_keys($found),
                 'the sweep no longer collects the pages it claims to reach; every set the roster asserts is '
                 . 'as large as the collector, and no larger',
@@ -1678,11 +1689,28 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * kind that can be adopted without renegotiating the roster, and it is
      * the reach, not the verdict, that was the hole.
      *
+     * THE MONOREPO ROOT IS OUT OF THIS GUARD'S REMIT, DECIDED (E215): a page
+     * outside the package is a citation of a citation — `sugar-crush` ships
+     * standalone and this sweep answers only for pages that SHIP with it. The
+     * decision costs nothing in reach either: the round-47 review ran the sweep
+     * over the whole monorepo under an alphabet roughly 360x wider than this
+     * one and found no doc-page miss outside the package that was not a
+     * `docs/plans/*` record or the known-coincidence class for the two
+     * near-degenerate formats. Widening the root would also make this guard
+     * reach fifty-one sibling libraries' documents, which is a different
+     * claim about a different package.
+     *
      * @return array<string, string> package-relative page path => flattened text
      */
     private static function docPages(): array
     {
         return self::flattenPages(self::markdownPagesUnder(\dirname(__DIR__, 2)));
+    }
+
+    /** A page is markdown when its name ends in `.md` in ANY casing (E215). */
+    private static function isMarkdownPage(string $name): bool
+    {
+        return \preg_match('/\.md$/i', $name) === 1;
     }
 
     /**
@@ -1702,13 +1730,23 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      */
     private static function markdownPagesUnder(string $root): array
     {
+        // E215: the extension is matched CASE-INSENSITIVELY and the root is read
+        // with `scandir()`, not `glob('*.md')`. The old alphabet was two
+        // case-sensitive spellings of the same claim, and each silently dropped
+        // a shape: `README.MD`, `NOTES.Md`, and at the root any dotfile page,
+        // because `glob()` skips dot-leading names while the docs walk never
+        // did. No such file existed in the package when this was measured, so
+        // no roster row moves — this closes the alphabet gap, not a live miss,
+        // and rule 11 says the alphabet is part of the claim either way.
         $paths = [];
-        $rootPages = glob($root . '/*.md');
-        if ($rootPages === false) {
-            throw new \RuntimeException('the root markdown glob failed; the sweep cannot answer for any page');
+        $rootEntries = @scandir($root);
+        if ($rootEntries === false) {
+            throw new \RuntimeException("the root {$root} could not be listed; the sweep cannot answer for any page");
         }
-        foreach ($rootPages as $page) {
-            $paths[] = basename($page);
+        foreach ($rootEntries as $entry) {
+            if ($entry !== '.' && $entry !== '..' && is_file($root . '/' . $entry) && self::isMarkdownPage($entry)) {
+                $paths[] = $entry;
+            }
         }
 
         if (is_dir($root . '/docs')) {
@@ -1716,7 +1754,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
                 new \RecursiveDirectoryIterator($root . '/docs', \FilesystemIterator::SKIP_DOTS),
             );
             foreach ($walk as $entry) {
-                if ($entry instanceof \SplFileInfo && $entry->isFile() && $entry->getExtension() === 'md') {
+                if ($entry instanceof \SplFileInfo && $entry->isFile() && self::isMarkdownPage($entry->getFilename())) {
                     $paths[] = substr($entry->getPathname(), \strlen($root) + 1);
                 }
             }
