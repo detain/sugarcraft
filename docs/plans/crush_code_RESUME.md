@@ -4,9 +4,428 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
+🔴 **START AT §0-NOW-62 BELOW. It carries the standing order, the current floor, the round-61 lane
+ranking and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
+kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
+(counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
+them. Rules are durable; figures are not.
+
 ---
 
-## 0-NOW-61. ROUND 60 CLOSED (floor 10351) — the `src/` census is decoupled, and the next thing to run is NOT this plan
+## 0-NOW-62. THE PROMPT PLAN IS DONE — ROUND 61 IS UNBLOCKED, AND EVERY FIGURE IN §0-NOW-61 IS DEAD
+
+**Written 2026-09-10 by a supervisor session that did no code work — it only measured. Nothing below
+is carried from §0-NOW-61 except where it says so.**
+
+⚠️ **TWO BASES, AND THE DIFFERENCE IS STATED RATHER THAN SMOOTHED.** This section was opened at
+`3bf356bd6` and the floor in §2 was measured there. **The user then committed `170bd49be` ("update")
+mid-session and pushed it** — caught by a triage agent reporting a HEAD that did not match its brief,
+not by the supervisor. MEASURED: `git diff 3bf356bd6..170bd49be` is **root `composer.lock` only,
+11 insertions / 11 deletions, nothing under `src/` or `tests/` in any package.** So the §2 floor and
+every triage verdict below hold at `170bd49be` as well. **Current base: `170bd49be`, clean, pushed.**
+Re-derive rather than trusting this paragraph if anything else has landed since — the user commits
+into this working copy directly, so local-vs-remote moves without the supervisor doing anything.
+
+### STANDING ORDER — run this plan to completion
+
+**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
+at a round boundary to ask whether to continue.** Concretely:
+
+1. Work §0-NOW-62 §6's ranked lanes as round 61. Close it (worklog entry + a new `0-NOW-63`
+   section + backlog id renumber), then **immediately choose round 62** from what round 61 files,
+   and keep going. This file's `## 2. The loop` and `## 3. Sequencing rules` further down carry the
+   per-bundle mechanics and are still current; **§8 of THIS section is what "the end" means.**
+2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
+   Not at the end of a session — at each close. If you are running out of context, doing that is
+   the last and highest-value thing you do.
+3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
+   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
+
+**STOP AND ASK only for these:**
+
+- The **E639 decision** in §7 below, if you are not willing to take the recommendation there.
+- Anything that would **remove** unfinished, dormant, unwired or unreachable code. The user's
+  standing rule is *fix it or wire it, never delete it*. Move and consolidate are fine.
+- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
+  `prompt_expand.md` — that plan is closed and this one does not own its files.
+- A **blanket total-request timeout on an LLM call.** Standing user rule: completions may
+  legitimately run tens of minutes. `connect_timeout` is fine; a total cap is not.
+
+### 1. WHAT CHANGED WHILE THIS PLAN WAS PARKED
+
+`prompt_plan.md` ran to completion and **is done: 65/65 steps + 6/6 authorized follow-ups merged**,
+final merge `e4416c32b`. §0-NOW-61's headline — *"the next thing to run is NOT this plan"* — is
+therefore **spent**. Round 61 is unblocked.
+
+- **MEASURED 2026-09-10:** `master` is `3bf356bd6`, working tree **clean**, and
+  `origin/master` is the same sha. The "PUSH AUTHORIZATION" item `prompt_resume.md` still lists as
+  awaiting the user **has been satisfied** — nothing is unpushed.
+- ⚠️ **The prompt program wrote into `docs/plans/crush_code_hardening_backlog.md` twice** —
+  `d22e2e2c4` and `de6c23dc1`, both on the `prompt/FU4` branch, annotating **E31** CLOSED-with-
+  variant-shape — despite declaring `docs/plans/crush_code_*.md` read-only to itself. So the backlog
+  moved under this plan. Nothing else in `docs/plans/crush_code_*` was touched.
+- **MEASURED:** `git worktree list` shows the main checkout only. `/home/sites/crush-lane-{a,b,c}`
+  **do not exist**, and neither do the `prompt-step-FU1/FU2/FU3/FU5/FU6` worktrees
+  `prompt_resume.md` records as "RETAINED DELIBERATELY". See §4b.
+
+### 2. THE FLOOR — OBSERVED at `3bf356bd6`, and READ §3 BEFORE QUOTING IT
+
+| package | floor | provenance |
+|---|---|---|
+| **sugar-crush** | **11,267 / 172,253 / 0F / 0E / 2 skipped / EXIT 0** | **OBSERVED 2026-09-10** at `3bf356bd6`, PHP 8.3.6, **cwd = repo root**, **vendor mode = `published` (0/18 symlinked)**: `php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null` |
+| tools/tests · candy-pty · candy-core · candy-flip · candy-mosaic | **NOT MEASURED at this base.** | §0-NOW-61's figures for these are now two programs old. An inference, not an observation. **If a lane touches one, it MEASURES it.** |
+
+`prompt_resume.md` records its own terminal floor as **11,267 / 172,237 / 0F / 0E / 2 skipped /
+EXIT 0** at `e4416c32b`, measured MASTER-DIRECT. Diffed against the observed row above:
+
+**TESTS MATCH EXACTLY — 11,267 both sides. ASSERTIONS DO NOT: +16 (172,237 → 172,253), AND THE
+MECHANISM IS UNKNOWN. Recorded, not explained.** The three commits between the two bases
+(`7a5631f5b`, `2ab5d4431`, `3bf356bd6`) touch **only** root-level `prompt_worklog.md` (+70),
+`prompt_plan.md` (+2) and `prompt_resume.md` (16 lines modified) — **nothing under `src/` or
+`tests/` at all**, so E634's "editing a `src/` doc-block moves the total via `GlobFigureDrift`'s
+per-paragraph census" does not explain it. Two unfalsified hypotheses, in order of prior:
+
+1. **Vendor mode.** This run is `published`; `prompt_resume.md` does not name its mode, and a guard
+   that walks `vendor/sugarcraft/*` would read a different tree under `linked`. This is the reason
+   §3 item 3 now demands the mode beside every figure.
+2. **A guard whose scope includes root-level markdown.** The 16-line modification to
+   `prompt_resume.md` and the +16 are the same number, which is either the answer or a coincidence
+   worth one command to rule out. E634's negative control proved `docs/plans/` is out of scope for
+   the `src/`-paragraph census; **the repo ROOT was never tested.**
+
+**The instrument that settles it is a per-test `--log-junit` diff between two complete runs** — the
+same one that localised round 60's unexplained `+1` to `GlobFigureDriftTest` and its per-paragraph
+census. Do that before the first round-61 merge reconciliation, or the +16 will be re-discovered as
+a mystery inside a lane's arithmetic where it is far more expensive. **Until it is localised, treat
+172,253 as the anchor and 172,237 as a figure from a differently-configured tree — not as evidence
+that anything regressed.** Nothing failed, nothing errored, and both runs are `EXIT 0`.
+
+🔴 **§0-NOW-61's `10351 / 160648` is dead. Do not let it into a brief.** Its own item 1 predicted
+exactly this and gave the reason it fails silently: *a floor paragraph is data to the script and an
+instruction to the agent, and no static check crosses that boundary.* Round 60 shipped round 58's
+floor to three lanes and `node --check`, nine rendered prompts and every dry-run passed over it.
+**Diff the new floor block against this table before launching. Every round.**
+
+### 3. 🔴 THE VENDOR CLOSURE WAS SILENTLY BROKEN, AND IT COST THIS SESSION A WHOLE SUITE RUN
+
+**MEASURED 2026-09-10, before any of the figures above were trusted.** `sugar-crush/vendor/sugarcraft/`
+held **14 entries where the manifest's closure needs 18**. `candy-forms`, `candy-focus` and
+`candy-kit` — all three named directly in `sugar-crush/composer.json`'s `require` — were **absent
+from vendor entirely**, and four more (`candy-fuzzy`, `candy-mouse`, `honey-bounce`, `sugar-veil`)
+were real Packagist directories where the other ten were monorepo symlinks. `refresh-deps.php
+--status` called that state **`mixed 10/14`**.
+
+A full suite run in that state returned **11,239 tests / 104,843 assertions / 1,619 errors /
+21 failures / 1 skipped**. **None of those numbers mean anything** — they are a report on a broken
+autoloader, not on this tree. The user then refreshed the libs and the closure became
+**`published 0/18`**: complete, all eighteen present, all resolved from Packagist `dev-master`.
+
+Three things follow, and the third is the one that will bite a future round:
+
+1. **`refresh-deps.php --status` is a PRE-FLIGHT, not a diagnostic.** Run it *before* the suite, every
+   round, in the supervisor tree and in every lane. This session ran it after a red and lost a
+   twelve-minute run. `CONTRIBUTING.md` and `AGENTS.md` both already say a bare `composer update`
+   swaps symlinks for Packagist copies; what neither says is that the closure can end up **short**,
+   with required packages missing outright, which is what happened here.
+2. **A red suite is not evidence of a defect until the closure is proven.** 1,619 errors looked like
+   catastrophe and was bookkeeping. Rule 18 already says derive a figure from a run; this adds:
+   **derive the run's validity from `--status` first.**
+3. ⚠️ **`published` and `linked` are DIFFERENT TREES and may give different figures.** §4b's lane
+   recipe verifies **18 symlinks**, i.e. `linked`. The supervisor tree is currently `published`.
+   Neither `prompt_resume.md`'s floor nor §0-NOW-61's names its mode. **So state the mode next to
+   every figure from now on, alongside the cwd** — and before comparing a lane's figure to the
+   supervisor's, confirm both are in the same mode. If they are not, the difference is not a finding.
+4. 🔴 **`candy-pty` IS IN THE SAME STATE, AND ITS LOCK WAS REGENERATED TODAY.** MEASURED
+   2026-09-10: `candy-pty` is `published 0/7` — zero symlinks, not the **7** §4b's recipe expects —
+   and `candy-pty/composer.lock` is 115,257 B dated **2026-09-10 02:08**, i.e. rewritten during this
+   session's dependency refresh. Backlog **E630** recorded that file at 113 KB / 2026-08-22 and warns
+   that regenerating it is the action that makes CI's path-repo injection a no-op. It is `.gitignore`d
+   (`candy-pty/.gitignore:1`), so this is **not** a policy breach and CI is unaffected — but any
+   `candy-pty` figure measured locally from here is a `published`-mode figure, and §0-NOW-61's carried
+   `644 / 1785 / 16 / 1 warning` predates all of it.
+
+### 4. THE SKIP-COUNT CANARY IS CWD-DEPENDENT, AND THAT WAS NEVER WRITTEN DOWN
+
+§0-NOW-61 predicted this canary would misfire and was right, but named the wrong mechanism. It is not
+that the prompt plan added a skip. It is that **the two programs measure from different working
+directories, and the skip count is a function of which one you use.**
+
+- The rule every round-45..60 lane brief hardcodes — *"the skip count must stay exactly 1"*, the one
+  skip being `tests/MCP/McpClientTest.php`, and *"a 2 means the vendor closure is gone and every
+  figure since is void"* — was always **cwd `sugar-crush/`**. It never said so.
+- `prompt_plan.md` measures **MASTER-DIRECT from the checkout root** and records **2 skipped** as its
+  steady state across sixty-five steps. That plan's own hard-won rule is: **EVERY SUITE FIGURE MUST
+  NAME THE CWD IT WAS MEASURED FROM** — it went five days on a red CI nobody saw for exactly this.
+  ✅ **CONFIRMED 2026-09-10 by this session's own green run**: cwd = repo root, `published`, gives
+  **2 skipped**. So both values are correct and neither is a fault — they are two different cwds.
+- ⚠️ **And per §3 the canary's stated MEANING is now known to be unreliable in the loose direction.**
+  This session's broken-closure run reported **1 skipped** — the "good" value — while three required
+  packages were missing. **A skip count is a canary for one specific vendor fault, not a closure
+  check.** `refresh-deps.php --status` is the closure check.
+- So: **state the cwd, the vendor mode, and the expected skip count for that pair, in every round-61
+  lane brief.** A brief that says "exactly 1" without naming `sugar-crush/` will send three lanes to
+  conclude their sandbox is broken when it is not. Confirm all three at your own base before writing
+  them.
+
+### 4b. THE LANES ARE GONE — RE-CUT FROM SCRATCH, THERE IS NOTHING TO REFRESH
+
+§0-NOW-61 says the three lane dirs are `cp -a` copies at `09139a807` and are "far behind". They are
+not behind; **they do not exist.** MEASURED 2026-09-10 — `git worktree list` shows the main checkout
+only, and `/home/sites/crush-lane-{a,b,c}` are absent, as are the `prompt-step-FU*` worktrees
+`prompt_resume.md` records as "RETAINED DELIBERATELY". Re-cut from `3bf356bd6`, then verify per lane
+before launch:
+
+```sh
+php scripts/refresh-deps.php --status | grep -E 'sugar-crush|candy-pty'   # RUN THIS FIRST, see section 3
+php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/sugar-crush/vendor/sugarcraft/*"),"is_link"))."\n";'  # expect 18
+php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-pty/vendor/sugarcraft/*"),"is_link"))."\n";'     # expect 7
+```
+
+⚠️ **The `18` is a COUNT OF SYMLINKS, and this session measured a tree with eighteen entries and
+ZERO symlinks that passes a naive count.** Assert both halves — eighteen entries AND eighteen links —
+or the check passes on a `published` tree. Do NOT settle it with `ls`: `ls -l | grep -c '^l'` has
+printed a correct-looking 18 twice while every entry was a real directory. **Never run
+`composer install`/`update` in a lane root.** Re-derive the two expected counts if a sibling dep was
+added; they are carried from §0-NOW-61 and the sugar-crush one is now independently confirmed at 18.
+
+### 5. LINE NUMBERS IN OPEN BACKLOG ENTRIES HAVE ROTTED — AND SO HAS `crush_code.md`'s OWN SCORECARD
+
+**The backlog half**, unchanged from §0-NOW-61 and now actually true rather than predicted: the
+prompt plan's phases 4, 8 and 9 rewrote `sugar-crush/src/Chat.php`, `src/Context/ContextCompactor.php`
+and `src/Tools/BuiltIn/Bash.php`, and it added ~11 files under `src/`. Open entries quote those files
+**with line numbers and inline code**. They did not go red; they went **stale**, which is worse.
+**Re-verify any entry against the tree before scheduling it.** Same for entries citing `src/Agents/*`
+and `src/App/App.php`, which round 60 rewrote itself.
+
+🔴 **The `crush_code.md` half is new, and it cuts the other way — the plan UNDER-states its own
+progress by twelve items.** `crush_code.md`'s Phase 0-9 checkmarks were last maintained around its
+round 32/40. **MEASURED 2026-09-10, agent-verified with file:line against the tree**, twelve items
+carrying no `✅` are in fact **DONE**:
+
+| item | evidence |
+|---|---|
+| P3.1 `Chat::$inputBuf` → candy-forms | `src/Chat.php:159` `public readonly TextArea $input` (`$inputBuf` kept as a read-only compat mirror, `:153`) |
+| P3.2 `Tui\Pane::next()` → `FocusRing` | `src/Tui/Pane.php:66-68` `FocusRing::ofStrict(...)`, reverse walk `:91`; landed `c47187812` |
+| P3.4 `candy-sprinkles\Table` | `src/Commands/TranscriptTable.php:10`, consumed by `AgentsCommand.php:137`, `McpAuthCommand.php:135` |
+| P3.5 `strlen()` padding | `src/Tui/SplitLayout.php:241-249` and `src/Tui/AgentViewPane.php:202,288-297` now use `Width::padRight()` |
+| P5.6 model-driven summarization | `src/Chat.php:9487-9499`; heuristic survives only as the no-provider fallback (`ContextCompactor.php:1325`). Backlog **E21 CLOSED** |
+| P5.10 EnvironmentBlock OS line | `src/Context/EnvironmentBlock.php:725,756-768`; the absent "additional working directories" line is a pinned decision (`:739`, test `:177-181`) |
+| P6.6 `--model` / `--permission-mode` | `src/Cli/ArgvParser.php:385,417,442`; `bin/sugarcrush:154,338-341` |
+| P7.6 `docs/ARCHITECTURE.md` | `sugar-crush/docs/ARCHITECTURE.md:132-142` — the "`App` WEARS TWO HATS" warning exists verbatim |
+| P8.4 split-pane compositor | WIRED: `src/Tui/Renderer.php:831` calls `AgentSplitColumn::render()` from live `renderView()`; decision recorded `src/Renderer.php:187-197` |
+| P8.8 repo-map | `src/Context/RepoMapBlock.php`, injected once per prompt at `src/Runtime.php:2637` |
+| P8.9 `Grep` instruction loader | `src/Tools/BuiltIn/Grep.php:41,101,114,400-417`; constructed with the loader at `src/Cli/Bootstrap.php:5687` |
+| P8.10 + P8.11 git-diff · monorepo-parent `loadRoot()` | `src/Context/EnvironmentBlock.php:1008-1010`; `src/Context/InstructionFileLoader.php:210` → `loadAncestorRoots()` `:394` |
+
+⚠️ **Two of those read OPEN to a careless re-checker and would send an agent to redo finished work.**
+`grep strlen src/Tui/AgentViewPane.php` still returns `:534` and `:550` — they are a four-byte emoji
+sequence test, not padding, so **P3.5 is done**. And **P6.5 is one item covering two unrelated
+features that landed asymmetrically**: `statusLine` shipped (`src/Config/StatusLineCommand.php`,
+user-tier-only per `LayeredSettings.php:216-241`); the **keybindings remap did not** —
+`KeyBindingRegistry` is still wholly static and `src/Config/`/`Bootstrap.php` have zero hits for
+`keybinding`/`remap`.
+
+**So the 82-item plan is ~76 done, not the 57 its `✅` marks imply.** The six genuinely open items
+are in §8. Do not re-derive this from the checkmarks; they are not maintained.
+
+**`crush_feat_plan.md` is CLOSED and needs no further work.** MEASURED 2026-09-10, step by step:
+**76/76** (W0.S1 + Waves 1-4; there is no Wave 5 — Wave 4 *is* the final wave). `W3.S6a`/`S6b` are the
+only SUPERSEDED rows and were correctly never run — an attempt at them deleted 3,504 lines and was
+reverted in `e995acf6`; the W3.M1-M4 pane-shell migration replaced them and shipped
+(`bin/sugarcrush:424` boots `Bootstrap::app()`, not bare `Chat`). Two soft process attestations
+remain and are carried in §8.
+🔴 **`.sugar-crush-build/feat-plan-progress.json` still reads `W2: in_progress, W3: not_started,
+W4: not_started`, frozen 2026-08-11. It is WRONG.** Hand it to an agent and it rebuilds finished
+work. Trust the tree.
+
+### 6. ROUND 61 — RANKED, THREE FILE-DISJOINT LANES
+
+Round 60 filed 21 entries as **E631-E651**. Ranked by *live fail-open first, suite-integrity second,
+prose last*. The three lanes below own disjoint file sets; the ownership map is the deliverable, so
+copy it into each brief verbatim and let the lane refuse anything outside it (that mechanism produced
+zero out-of-lane edits in round 59 and caught a mis-scoped brief — rule 51).
+
+**Lane a — the sub-agent grant family. The live fail-open cluster, and the round's headline.**
+
+| id | why it ranks here |
+|---|---|
+| **E644** | `AgentManager::executeAll()` — the **live parallel path**, two production callers (`Chat::executeAgents()`, `WorkflowEngine`'s parallel stages) — calls neither `resolveGrantedTools()` nor `refuseCallOutsideGrant()`. Agents 2..n of a mixed workflow stage are governed by **agent 1's declaration**. The correct shape is a per-agent `CompleteRequest` built inside the pool, which the pool already has a seam for. |
+| **E639** | Round 60 wired the grant but `Bootstrap::agentManager()` supplies no registry, so a launched sub-agent still reaches its provider with `tools: null`. **Gated on the §7 decision — read it before touching this.** |
+| **E643** | The sub-agent **skill** grant has the identical fail-open shape and was not fixed: a missing skill is silently skipped while the preset prompt still tells the model it was granted. |
+| **E645** | `ForeignAgentPresetRegistry` imports `Bash(git:*)` (Claude Code's prefix dialect) verbatim with no translation, producing a declaration that is well-formed, passes every check, and **matches nothing** — so after the grant lands, the tool is granted by name and every call refused by argument. |
+| **E642** (remainder) | Bare-name validation now covers the six built-ins only; a typo in a **user or foreign** preset is caught by nothing. Needs §7's decision first (a preset naming a tool the operator disabled must warn, not refuse). |
+
+Files owned: `sugar-crush/src/Agents/AgentManager.php` · `src/Agents/AgentWorkerPool.php` ·
+`src/Agents/AgentPresetRegistry.php` · `src/Agents/ForeignAgentPresetRegistry.php` ·
+`src/Cli/Bootstrap.php` · `tests/Agents/AgentManagerTest.php` ·
+`tests/Agents/AgentDefinitionTest.php` · `tests/Agents/AgentWorkerPoolTest.php` ·
+`tests/Agents/ForeignAgentPresetRegistryTest.php`.
+
+**Lane b — the worker/executor liveness family. One live crash, one guaranteed suite red.**
+
+| id | why it ranks here |
+|---|---|
+| **E641** | `WorkflowEngine` puts tool-name **STRINGS** into `CompleteRequest::$tools`, and every provider that reads that field calls `->name()` on the entries. This is a fatal on a shipped command, not a hygiene note. Fix in `WorkflowEngine` (resolve against the registry) rather than by loosening `CompleteRequest`. 🔴 **THE ENTRY UNDERSTATES ITS OWN SCOPE — MEASURED 2026-09-10.** It cites only the parallel-stage `$defaultRequest`, but `tools: $task->tools` reaches `CompleteRequest` at **seven** sites in `WorkflowEngine.php` (`:1039`, `:1062`, `:1151`, `:1254`, `:1409`, `:1421`, `:1438`), and `:1297`/`:1317` do the same with `$verifier->tools`. **Scope the lane to all of them, not to `executeParallelStage()`.** |
+| **E650** | The parent writes `execute` into a pipe whose child may already be gone → `fwrite(): Broken pipe`. `phpunit.xml` sets `failOnWarning="true"`, so **this reds the suite for the wrong reason** the moment a test provokes it. Cheap: detect the dead child and return the `AgentResult` the caller already expects. |
+| **E649** | Nothing in `src/` can give a sub-agent worker a provider — and the reachable case is the shipped `/workflow run`, which now returns a **FAILED** agent where it previously returned Completed carrying fabricated text. That behaviour change is live and is written down nowhere. ⚠️ **Record and name the seam; do NOT edit `AgentWorkerPool` — it is lane a's this round.** |
+| **E647** | A `ProcessExecutor` worker runs with `tools: null` and nothing surfaces it: the agent can reason but cannot act. Decide the wire format (name+schema rehydrated child-side, or RPC back to the parent) — this blocks lane a's grant ever reaching a worker. |
+| **E646** | The live worker cannot heartbeat through a **non-streaming** provider call; the 15s `HEARTBEAT_TIMEOUT_SECS` then SIGKILLs a correctly-working child. Latent (nothing configures a `workerProvider`) but it goes live with E649. 🔴 **Not to be "solved" by capping the request — standing user rule.** |
+
+Files owned: `src/Agents/ProcessExecutor.php` · `src/Workflows/WorkflowEngine.php` ·
+`src/Workflows/WorkflowTask.php` · `src/Providers/CompleteRequest.php` ·
+`tests/Agents/ProcessExecutorTest.php` · `tests/Workflows/`.
+
+**Lane c — corpus-scanner integrity. The plan's own instrument is unsound, and sixty rounds of green said nothing.**
+
+| id | why it ranks here |
+|---|---|
+| **E631** | A mis-namespaced file under `src/` takes the **whole PHPUnit process down rc 255** before any assertion runs — Composer's `includeFile()` is a plain `include`, so the triple `*_exists()` probe re-executes the file and PHP fatals on redeclaration. The doc-block claims the case is "reported rather than thrown on"; the synthetic probe tree is immunised with `require_once` and the real tree is not. **Reproduce the fatal as an acceptance test first**, then pick `token_get_all()` resolution (a) or a guarded `include_once` (b). |
+| **E636** | The only instrument that could still *report* E631's case — the `token_get_all()` balance — is declared **after** the reflection census, so it never runs. Subordinate to E631; if E631 defers again, move it above and pin the ordering with a comment (not `@depends` — they are not dependent, they are differently survivable). |
+| **E632** | `BuiltInToolCorpus.php`'s doc-block is the fifth restatement of the `src/` census, and at least two copies read as **live present-tense measurements**, stale by nineteen. ⚠️ **Sweep all of `tests/Tools/` BEFORE widening the no-restatement scanner's file domain**, or the widening lands red on prose that has nothing to do with `RepoMapBlock`. Widen the DOMAIN, never the ALPHABET (E635 measured that and rejected it — one row already collides). |
+| **E637** | `declaredTypes()` cannot see a conditionally-declared type, so a `Tool` implementor declared inside an `if` is invisible to **all three** instruments. Decide whether depth-zero is the policy or the limitation and pin it in **both polarities** — rule 14: a guard must be able to state what it cannot see. |
+
+Files owned: `tests/Tools/BuiltInToolCorpus.php` · `tests/Tools/BuiltInToolCorpusTest.php` · a
+read-and-elide sweep over `tests/Tools/`.
+
+**Supervisor, pre-round, by hand — do NOT give this to a lane.** **E651**: a doc-block in
+`src/Tui/Renderer.php` reasons about `ProcessExecutor` by line number (`:81`/`:235`) and round 60
+moved everything below that constructor. Rule 4: cite symbols. One file no lane owns; land it before
+cutting the sandboxes, the way round 48's `uniqid` sweep was. ⚠️ **NOT "trivial" — the entry's own
+word is wrong, MEASURED 2026-09-10.** The citation is not approximate, it is **false**:
+`Renderer.php:727` calls `:81`/`:235` blocking `stream_select()` calls; `:81` is now a doc-block line
+and `:235` a `return` tail. **The real calls are `:116` and `:270`.** A reader following that
+doc-block today is sent to two statements that do not block.
+
+**Deliberately NOT scheduled for round 61, with the reason:** **E633** (sweep for unpinned
+qualitative conclusions — real, but large and vaguely bounded; it also ate its own fix twice, so it
+wants a round of its own) · **E634** (a retraction, no code: **do not cite a constant for the
+per-file assertion delta** — fold that sentence into every brief instead) · **E635** (measured and
+rejected; no fix exists that is better than the narrow alphabet) · **E638** (no fix; re-measure the
+bounds table only if `MAX_SECTION_BYTES`/`MAX_SOURCE_FILES` moves, and treat a red as an instruction
+to rewrite `RepoMapBlock`'s design note, never to loosen the bound) · **E640** (needs a preset whose
+grant upper bound actually matters; none ships today) · **E648** (contained by the transport;
+revisit if the worker protocol gains a second writer).
+
+### 7. THE DECISION THAT GATES LANE A — E639, AND WHY THE "ONE-LINER" IS A TRAP
+
+E639's own text withdraws its first sentence, and this is the single most likely thing a future agent
+would act on without reading further. **The obvious fix —
+`toolRegistry: self::tools($root, ...)` — is a BREAKING CHANGE.** `resolveGrantedTools()` *refuses*
+a declaration matching no tool in the registry rather than intersecting, which is correct only while
+the registry is the UNFILTERED ceiling. `Bootstrap::tools()` returns `filterToolSet($tools)`, already
+narrowed by the operator's `allowedTools`/`disabledTools` — and `filterToolSet()`'s own doc-block
+states the opposite policy in as many words. MEASURED on PHP 8.3.6 against the eleven-tool ceiling:
+`disabledTools: ["Bash"]` makes **5 of 6** built-in presets throw; `disabledTools: ["*"]` makes 6 of 6.
+
+Three options, recorded in E639 and reproduced so the decision can be made from this file alone:
+
+1. **Intersect when the shortfall is the session's own narrowing; refuse when the tool never
+   existed.** Honest, and expensive — telling those apart needs the unfiltered set, which
+   `filterToolSet()` currently discards, so `Bootstrap` must pass both.
+2. **Keep the refusal, pass the unfiltered ceiling.** Cheap, but a sub-agent's roster then ignores
+   `disabledTools` — a widening, the exact shape round 60 was fixing.
+3. **Keep the refusal, pass the filtered set, accept the crash as the signal.** Only defensible with
+   a message naming `disabledTools`; today's message sends the reader hunting for a typo.
+
+**RECOMMENDATION: option 1.** It is the only one that neither widens the grant nor hard-fails a
+configuration this codebase documents as intentional. **If the user has not ruled otherwise by the
+time lane a reaches this, take option 1 and record the decision in `resolveGrantedTools()`'s
+doc-block** — that recording is part of the item, not optional.
+`AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo` is the tripwire and names
+this decision in its failure message.
+
+### 8. WHAT "COMPLETE" MEANS — THE PATH TO THE END
+
+Three things stand between here and done. Work them in this order.
+
+**(a) The backlog rounds.** ✅ **THE BACKLOG NOW HAS A DISPOSITION MARKER ON EVERY ENTRY.** The
+"no open/closed marker" problem is SOLVED. A 22-agent triage sweep on 2026-09-10 read all 645
+entries and re-verified each against the tree at `3bf356bd6`; every `### E<n>` heading now carries a
+bracketed stamp, and the evidence lives in two new files:
+
+- **`docs/plans/crush_code_backlog_triage.md`** — the ledger: disposition, confidence, file:line
+  evidence and a per-entry note, grouped by disposition. **Read the note column before acting on any
+  entry's Step.**
+- **`docs/plans/crush_code_backlog_triage_reconciliations.md`** — the cross-batch conflicts the
+  supervisor resolved, the duplicate entries that must be collapsed rather than scheduled twice, the
+  entries that must be scheduled TOGETHER, and the scheduling unlocks found along the way.
+
+| disposition | n | share |
+|---|---:|---:|
+| `CLOSED` | 334 | 52% |
+| `NO-FIX` | 143 | 22% |
+| `OPEN` | 122 | 19% |
+| `PARTIAL` | 37 | 6% |
+| `SUPERSEDED` | 7 | 1% |
+| `UNCERTAIN` | 1 | <1% |
+| `STALE-CITATION` | 1 | <1% |
+
+**161 actionable (`OPEN` + `PARTIAL` + `UNCERTAIN` + `STALE-CITATION`); 484 need nothing.** So the
+real remaining backlog is about a quarter of what its 645 entries implied.
+
+🔴 **THREE THINGS THAT SURVIVE THE STAMPING, and none of them is a count.**
+
+1. **A stamp says nothing about whether the entry's STEP is still correct — in EITHER direction.**
+   `CLOSED` often means "fixed, but not the way this entry says" (E219 would be a REGRESSION if its
+   Step were followed today; E7, E33, E120, E141, E178, E187, E211, E212, E239 share the shape), and
+   an `OPEN` entry can carry a refuted prescription too (E417's fix was MEASURED not to work in
+   round 54; E419's mechanism is corrected in the tree). **The note column is the authority, not the
+   stamp.**
+2. **The stamps were derived at `3bf356bd6` and rot the moment code lands.** Re-verify any entry
+   whose files a round has moved, per rule 60. They are a starting point, not a standing truth.
+3. **Structural defects in the file itself.** Headings are **not** in numeric order (`E333` sits
+   between `E303` and `E304`; `E364` between `E332` and `E334`), so a numeric scan is not a complete
+   scan. **`E57`-`E61` AND `E70`-`E72` are referenced with no heading — eight ids, not the three
+   §0-NOW-61 recorded.** `E78` carries two extra sub-entries stamped `E78b`/`E78c`.
+   **645 headings, 643 distinct ids, 651 ids referenced.**
+
+**(b) The six genuinely open `crush_code.md` plan items.** MEASURED 2026-09-10, agent-verified:
+
+| item | state |
+|---|---|
+| **Phase 9, entire phase** — interactive-prompt containment | **UNTOUCHED.** `src/Tools/Concerns/CapturesProcessOutput.php:82` is a bare `@proc_open(...)` — no env array, no `setsid`. Zero hits in `src/` for `GIT_TERMINAL_PROMPT`, `DEBIAN_FRONTEND`, `PAGER`, `SYSTEMD_PAGER`, `sudo -n`; the only `posix_setsid()` is the unrelated background-session daemon. No `interactive` param on `Bash.php`, no `candy-pty` on the tool path, no PTY regression test. **The design decisions were already settled in round 40 and stand: layered (A) detach always + (C) PTY opt-in, the opt-in an optional parameter and NOT a second tool, and no askpass — the interactive PTY does not accept secrets at all.** Use `Chat::withLaunchNotices()` for the refusal text rather than inventing a second seam: a detached child's refusal must reach a user who cannot see stderr, and a stderr warning was measured living only **0.47 s** before `\e[?1049h` takes the screen. |
+| **P8.13** — model-callable `Task` tool | `src/Tools/BuiltIn/` has no `Task.php`; `src/Renderer.php:164-167` states nothing in `src/`/`bin/` calls `createSubAgent()`/`executeSubAgent()` because no such tool exists. The `src/Agents/Task.php` name collision still stands. **Sequence this AFTER round 61's lane a and lane b** — it is the consumer of exactly the grant (E639/E644) and worker (E647/E649) seams they settle. |
+| **P2.9** — unified `crush-plugin.json` + `PluginLoader` | Zero hits anywhere in `src`/`bin`/`tests`/README. Deliberately sequenced last in the plan; keep it there. |
+| **P3.3** — `withClickOutsideDismiss()` on overlays | `Veil::withClickOutsideDismiss()`/`isClickOutside()` exist in `sugar-veil/src/Veil.php:195,297` and are used by nothing. `grep -rni clickoutside sugar-crush/src/` is empty; the one test that names it asserts a **no-op**. `Chat::mouseCaptureRefusal()` is adjacent work, not this item. |
+| **P6.5** (half) — keybindings remap table | `statusLine` shipped; the remap did not. `KeyBindingRegistry` is wholly static. |
+| **P8.15** — file-watching / stale-file signal | Standing flag, no fix ever proposed. `grep -n 'filemtime\|mtime\|stale' src/Tools/BuiltIn/{Read,Edit}.php` is empty. |
+
+**(c) Two process attestations inherited from the closed `crush_feat_plan.md`,** neither of which is
+code: **W4.S5**'s full-suite-vs-baseline confirmation has no *current* artifact (its recorded
+3,653-test green run predates ~30 rounds of later work — §2's observed floor supersedes it), and the
+plan's **manual real-terminal E2E pass** (kitty/iTerm2/sixel, mouse tab-switch, inline image,
+`/doctor` protocol report) has no recorded result. It was explicitly never gated by a review agent.
+Both need a human at a real terminal; neither blocks (a) or (b).
+
+### NEW STANDING RULES
+
+- **59 — name the cwd with every suite figure, and the skip count with it.** The prompt plan spent
+  five days on a CI red nobody saw because its figures were measured from `sugar-crush/` without
+  saying so. This plan's own skip canary carries the same unstated precondition. A figure without a
+  cwd is not a measurement.
+- **60 — a plan's own checkmarks are a claim, not a state.** `crush_code.md` under-stated its
+  progress by twelve items and `.sugar-crush-build/feat-plan-progress.json` over-stated its remaining
+  work by two whole waves, in the same tree, on the same day. Both were settled in minutes by
+  grepping the source. Re-derive before scheduling; never schedule from a marker.
+- **61 — a parked plan rots in its ENVIRONMENT, not only in its prose.** §0-NOW-61 correctly
+  predicted its floor and line numbers would rot. What it did not predict is that the sandboxes and
+  worktrees it described as merely stale would be **gone**. Before believing any environmental fact
+  in a resume section, run the check rather than reading the sentence.
+- **62 — prove the vendor closure BEFORE the suite, not after a red.** A tree can be short of
+  required packages entirely, not merely swapped to Packagist, and it still produces a plausible test
+  count and a "good" skip count. `refresh-deps.php --status` is the only instrument that sees it.
+  A figure whose closure was not checked first is not a floor.
+
+---
+
+## 0-NOW-61 (now superseded by 0-NOW-62). ROUND 60 CLOSED (floor 10351) — the `src/` census is decoupled, and the next thing to run is NOT this plan
+
+> ⚠️ **SUPERSEDED 2026-09-10 by §0-NOW-62 above. Read that first.** This section's *reasoning* is
+> intact and several of its predictions came true, so it is kept. Three things in it are now FALSE
+> and are corrected there: (1) its headline instruction *"the prompt plan runs next, do not launch a
+> crush_code round"* — that plan closed 65/65 + 6/6 at `e4416c32b` and round 61 is unblocked; (2) its
+> floor table; (3) its lane-sandbox description — the lanes do not exist at all. Its "WHAT IS
+> OUTSTANDING WHEN YOU PICK THIS UP" list below is spent except for items 4 and 5.
 
 **CLOSED at `09139a807`, base `88374be64`.** Run `wf_e28fe5ce-ce4`, 9 agents, zero errors.
 **The merge went GREEN first try** (third consecutive) and **both totals were exactly additive**.
@@ -4215,6 +4634,12 @@ already done and one names a class that does not exist:**
 
 ## 10. Current state and the queue
 
+> 🔴 **STALE — FROZEN 2026-08-19. Superseded by §0-NOW-62 §5 and §8.** Its "48 of 75 plan items,
+> 27 left" is wrong in both directions: the plan has 82 items, ~76 are done, and **six** are open.
+> Its instruction to read `crush_code.md`'s "Execution status" block is also spent — that block
+> froze at round 32/40 and under-states its own progress by twelve items, measured. Kept for the
+> `#N`-tracker reasoning below, which is still the right warning about totals.
+
 **Current state: see the "Execution status" block at the top of `crush_code.md`** for
 what is complete, and §11 below for what is next. Verify the suite yourself before
 believing any number written anywhere.
@@ -4933,6 +5358,11 @@ inside those two files were renamed too before assuming the item is half-done.
 
 
 ## 11. QUEUE — in order
+
+> 🔴 **STALE — FROZEN around round 35. This is NOT the queue.** The live queue is §0-NOW-62 §6
+> (round 61's three ranked lanes) and §8 (the path to completion). Every row below is either landed
+> or superseded by a backlog entry; kept for the per-bundle reasoning and the withdrawn-claim record,
+> which several later entries cite.
 
 - ~~**B1** Phase 5 items 4,5 — provider `contextWindow()` wiring + live 85%/95%
   compaction tiers.~~ **DONE `08cc1b6a`** (6931/71073/1, exit 0).

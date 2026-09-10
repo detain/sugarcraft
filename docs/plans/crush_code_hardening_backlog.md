@@ -7,6 +7,46 @@ compiled from `docs/plans/crush_code_worklog.md` (5855 lines), `crush_code.md`'s
 execution-status block, and `git log`/source verification at HEAD
 `cfc00909e47de9159e5af6517aa75c21c55b069d` (2026-08-18).
 
+## 🔴 DISPOSITION STAMPS — read this before using any entry
+
+**Every `### E<n>` heading now carries a bracketed disposition**, derived 2026-09-10 across
+`3bf356bd6`..`170bd49be` (which differ by root `composer.lock` only) by a 22-agent triage sweep that read each entry in full and re-verified its claim against the
+tree. Before this sweep only 33 of 645 entries carried any marker, and §0-NOW-62 of
+`crush_code_RESUME.md` warned that counting unmarked entries told you nothing. This replaces that.
+
+| stamp | means | schedulable? |
+|---|---|---|
+| `[CLOSED]` | the defect is fixed in the tree, with file:line evidence | no |
+| `[OPEN]` | the defect is still present | **yes** |
+| `[PARTIAL]` | some sub-claims fixed, others not — the evidence names which half | **yes, the open half** |
+| `[NO-FIX]` | the entry needs no code change: a retraction, a recorded measurement, an option measured-and-rejected, or a "re-measure if X moves" note | no |
+| `[SUPERSEDED]` | overtaken by a later entry or a design change | no — but check what superseded it |
+| `[STALE-CITATION]` | the concern may stand, but the entry's cited file:line no longer matches the tree, so it cannot be judged without re-derivation | **re-derive first** |
+| `[UNCERTAIN]` | not decidable from the tree alone; the companion ledger says what it would take | **settle first** |
+
+🔴 **A STAMP IS A TRIAGE VERDICT, NOT A LICENCE TO ACT.** Three cautions, all of them things this
+sweep actually found:
+
+1. **A STAMP SAYS NOTHING ABOUT WHETHER THE ENTRY'S *STEP* IS STILL CORRECT — and this cuts both
+   ways.** `[CLOSED]` often means "fixed, but NOT by the Step this entry prescribes." E219 is the
+   worst case: it was closed in `NonInteractive`'s refusal observer, and `Runtime`'s stderr silence
+   has since become a deliberate safety property (E244) — so implementing E219's Step literally
+   would introduce a regression. E7, E33, E120, E141, E178, E187, E211, E212 and E239 are the same
+   shape. **And an `[OPEN]` entry can carry a refuted prescription too:** E417's fix (name the fd in
+   the descriptor spec) was MEASURED not to work in round 54 — a row closes only by reaping in the
+   spawning function — and E419's stated mechanism is corrected in the tree at
+   `ChildLifetimeScanner.php:166-181`. Scheduling either off its own text does the wrong work.
+   **Read the companion ledger's note column before acting on ANY entry's Step, whatever its stamp.**
+2. **An entry's own prose can be wrong about the tree.** E87 states that raising `MAX_ENTRIES` 8→20
+   reds the ceiling guard; measured, 20 prices at 6,248 against an 8,192 cap and the real tipping
+   point is 27. E154's "38 `error_log()` sites" is now 23. E1's suite figures are stale twice over.
+3. **The stamps have a shelf life.** They were derived at `3bf356bd6`. A round that lands code
+   invalidates every stamp touching the files it moved — re-verify before scheduling, per rule 60.
+
+**Full evidence, confidence, and the per-entry notes live in
+`docs/plans/crush_code_backlog_triage.md`.** The stamp makes this file scannable; that ledger is
+what makes a stamp safe to act on.
+
 **The rule that produced it.** The user's instruction, verbatim (2026-08-17):
 
 > "security updates are to be held off till the end of the plan where possible…
@@ -819,7 +859,7 @@ records them as **survivors**.
 
 ## E. Deferred UX / correctness follow-ups (not security)
 
-### E1 — issue #88: the README's whole-suite figure
+### E1 [OPEN] — issue #88: the README's whole-suite figure
 
 - **What** `README.md` advertises a test/assertion count that is many commits
   stale.
@@ -843,7 +883,7 @@ records them as **survivors**.
   number so the figure carries its provenance.
 - **Blocked on** Everything else landing. It is the natural final commit.
 
-### E2 — `ESC b` / `ESC f` type a stray letter instead of moving by word
+### E2 [OPEN] — `ESC b` / `ESC f` type a stray letter instead of moving by word
 
 - **What** readline's Alt+B / Alt+F word motion, when a terminal sends it as
   `ESC b`/`ESC f`, decodes as `KeyMsg(Char "b", alt)` and is **typed** rather
@@ -864,7 +904,7 @@ records them as **survivors**.
   rather than part of moving the draft into the widget"*.
 - **Blocked on** Nothing.
 
-### E3 — the Ctrl+P palette has its own hand-rolled append-only query buffer
+### E3 [OPEN] — the Ctrl+P palette has its own hand-rolled append-only query buffer
 
 - **What** After the chat draft got a real cursor, the command palette's query is
   still a hand-rolled append/`dropLast` string — no cursor movement in it.
@@ -884,7 +924,7 @@ records them as **survivors**.
   touch the draft's ownership of completion or `↑` recall.
 - **Blocked on** Nothing.
 
-### E4 — the draft cursor position is not persisted in checkpoints
+### E4 [OPEN] — the draft cursor position is not persisted in checkpoints
 
 - **What** A restored checkpoint reseeds the draft with the cursor at the end
   rather than where it was.
@@ -904,7 +944,7 @@ records them as **survivors**.
   see"*), and restore it via `withInputCursor()` (`:6291`).
 - **Blocked on** Nothing.
 
-### E5 — combining marks splice onto the block cursor glyph
+### E5 [OPEN] — combining marks splice onto the block cursor glyph
 
 - **What** The block cursor `█` is spliced into the draft at a character offset,
   so a combining mark immediately after that offset composes onto the **cursor
@@ -927,7 +967,7 @@ records them as **survivors**.
   offset instead of splicing a glyph between clusters.
 - **Blocked on** Nothing.
 
-### E6 — the input box over-widens past the terminal at 40 columns
+### E6 [CLOSED] — the input box over-widens past the terminal at 40 columns
 
 - **What** `renderInput()` sets **no width** at all — the bordered box grows with
   its content, so a long single-line draft emits rows wider than the terminal.
@@ -948,7 +988,7 @@ records them as **survivors**.
   already receives `$chat`, so the width is available.
 - **Blocked on** Nothing. Highest user-visible value in group E.
 
-### E7 — tracker #79: `/workflow run` freezes the TUI
+### E7 [CLOSED] — tracker #79: `/workflow run` freezes the TUI
 
 - **What** A real `/workflow run` blocks the event loop for the duration of the
   run.
@@ -963,7 +1003,7 @@ records them as **survivors**.
   treatment and gates the same subsystem.
 - **Blocked on** Nothing to start; overlaps Phase 2's engine work.
 
-### E8 — tracker #85 (lane-D sense): "Stages completed" counts a synthetic pre-flight stage
+### E8 [OPEN] — tracker #85 (lane-D sense): "Stages completed" counts a synthetic pre-flight stage
 
 - **What** The workflow result line prints `count($result->stageResults)`, and the
   pre-flight builds **one synthetic `StageResult`** whose own comment says
@@ -986,7 +1026,7 @@ records them as **survivors**.
   been duplicated. Add the assertion the failure-reporting test lacks.
 - **Blocked on** Nothing.
 
-### E9 — tracker #86: the `README.md:272` half of lane D's F-3
+### E9 [STALE-CITATION] — tracker #86: the `README.md:272` half of lane D's F-3
 
 - **What** The second half of lane D round 5's F-3 was a `README.md` claim,
   deferred because `README.md` was owned by a concurrent lane.
@@ -1006,7 +1046,7 @@ records them as **survivors**.
   time on the line number. See *Unresolved references*.
 - **Blocked on** Reconstructing the finding.
 
-### E10 — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
+### E10 [OPEN] — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
 
 - **What** The tool-schema name is `'doctor'` while the other built-in tools are
   TitleCase.
@@ -1020,7 +1060,7 @@ records them as **survivors**.
   the model has been trained on prompts containing `doctor`.
 - **Blocked on** A tool-schema decision.
 
-### E11 — tracker #82: an orphaned docblock in `MenuBar`
+### E11 [CLOSED] — tracker #82: an orphaned docblock in `MenuBar`
 
 - **What** Two consecutive docblocks with no declaration between them, so the
   first documents nothing.
@@ -1033,7 +1073,7 @@ records them as **survivors**.
   into the surviving docblock. Two-line edit.
 - **Blocked on** Nothing.
 
-### E12 — trackers #83/#85 (palette sense): Ctrl+P opens a palette the shell never paints
+### E12 [OPEN] — trackers #83/#85 (palette sense): Ctrl+P opens a palette the shell never paints
 
 - **What** `Ctrl+P` (and `Ctrl+K`, which translates to it) opens a hosted-`Chat`
   palette that the shell's full-pane agent dashboard never paints and never
@@ -1054,7 +1094,7 @@ records them as **survivors**.
 - **Blocked on** Phase 4's `/model` work touches the adjacent chord — sequence
   after it.
 
-### E13 — tracker #61: the unsearchable-directory tests assert a throw root does not produce
+### E13 [CLOSED] — tracker #61: the unsearchable-directory tests assert a throw root does not produce
 
 - **What** Two tests assert an exception that a **root** user never triggers,
   because root can traverse a `chmod 0` directory. Fine on a uid-1000 dev host;
@@ -1073,7 +1113,7 @@ records them as **survivors**.
   already uses.
 - **Blocked on** Nothing.
 
-### E14 — `src/ToolRegistry.php` declares its own `SugarCraft\Crush\Tool`
+### E14 [OPEN] — `src/ToolRegistry.php` declares its own `SugarCraft\Crush\Tool`
 
 - **What** A second class literally named `Tool` in the root namespace, one `use`
   statement away from colliding with the tool **interface** every built-in tool
@@ -1093,7 +1133,7 @@ records them as **survivors**.
   decision to the human review it is already queued for.
 - **Blocked on** Nothing for the rename; the consolidation decision is separate.
 
-### E15 — tracker #81: port the vhs lexical grammar into `candy-vcr`
+### E15 [OPEN] — tracker #81: port the vhs lexical grammar into `candy-vcr`
 
 - **What** `candy-vcr/src/Tape/Lexer.php` has no JSON token and no regex token,
   so it does not implement upstream vhs's real grammar.
@@ -1110,7 +1150,7 @@ records them as **survivors**.
   — record it here only so it is not lost with the worklog.
 - **Blocked on** Nothing, but it belongs to `candy-vcr`, not this plan.
 
-### E16 — `HookManager::applyPreHooks()` and the `ToolStarted`/`ToolFinished` payloads
+### E16 [OPEN] — `HookManager::applyPreHooks()` and the `ToolStarted`/`ToolFinished` payloads
 
 - **What** Flagged by an early round as *"the same stale-`toolArgs` family as
   `HookDispatcher` was"*, with `ToolStarted`/`ToolFinished` still carrying the
@@ -1135,7 +1175,7 @@ records them as **survivors**.
 
 ---
 
-### E17 — the 95% blocking tier refuses a turn on an ESTIMATE, not a token count
+### E17 [OPEN] — the 95% blocking tier refuses a turn on an ESTIMATE, not a token count
 
 - **What** `Chat::submit()` now refuses to dispatch a turn when
   `ContextCompactor::shouldCompactForeground()` reports the history is still at
@@ -1194,7 +1234,7 @@ records them as **survivors**.
   reports the prompt half on its own, so the seam has a first consumer whether or
   not the other five are ever taught to split.
 
-### E18 — one exchange bigger than the tier is a permanent refusal; a big HISTORY is not
+### E18 [CLOSED] — one exchange bigger than the tier is a permanent refusal; a big HISTORY is not
 
 **Rewritten 2026-08-19.** The original entry said "a session of ten enormous
 exchanges is refused until `/clear`" and that "the refusal stands no matter how
@@ -1256,7 +1296,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **Blocked on** Nothing. Deferred only because functionality-before-hardening
   puts a working refusal ahead of a better one.
 
-### E19 — `BedrockProvider` flattens every `Role::System` turn to `user`, producing consecutive same-role turns
+### E19 [CLOSED] — `BedrockProvider` flattens every `Role::System` turn to `user`, producing consecutive same-role turns
 
 - **What** Chat's history legitimately contains mid-conversation `Role::System`
   messages — the 70% context reminder, the 85% compaction notice, and every
@@ -1309,7 +1349,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   `compactionChanges()`'s docblock so the next person to reach for "just move the
   notice" finds it first.
 
-### E20 — the spend cap can be overshot by one whole agentic turn, and the turn cannot be aborted
+### E20 [OPEN] — the spend cap can be overshot by one whole agentic turn, and the turn cannot be aborted
 
 - **What** `Chat::spendCapRefusal()` (Phase 5 item 7) refuses to START a turn once
   the reported spend has reached `$SUGARCRUSH_MAX_COST` / `/budget <n>`. It cannot
@@ -1376,7 +1416,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   the crossing happens inside a turn already under way, whereas here it happened in
   a previous `update()` and the app was electing to start a fresh chargeable turn.
 
-### E21 — the automatic 85% compaction tier uses the heuristic summarizer, never the model
+### E21 [CLOSED] — the automatic 85% compaction tier uses the heuristic summarizer, never the model
 
 - **What** Phase 5 item 6 gave `/compact` model-written exchange summaries. The
   AUTOMATIC 85% tier still uses the truncate-and-`[exchanged information]`
@@ -1418,7 +1458,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   appended per turn). The spend-cap bypass the first cut introduced is recorded in
   §E20's E21 amendment.
 
-### E22 — the transcript box is not wrapped to `cols()`, so a long message paints an over-wide row
+### E22 [CLOSED] — the transcript box is not wrapped to `cols()`, so a long message paints an over-wide row
 
 - **What** `Chat::view()` composes the transcript without bounding any message's
   rendered line to the terminal width. The diff renderer paints **one line per
@@ -1480,7 +1520,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   asking for it, so this entry now has an unattended caller as well as the
   `/compact`-and-long-reply ones. Role-agnostic, as this entry already records.
 
-### E23 — `ContextCompactor::exchangeKey()` collapses byte-identical exchanges, and the "harmless" clause is a judgement
+### E23 [CLOSED] — `ContextCompactor::exchangeKey()` collapses byte-identical exchanges, and the "harmless" clause is a judgement
 
 - **What** `exchangeKey()` keys an exchange by its CONTENT, so N byte-identical
   exchanges collapse onto one key. `Chat::parseExchangeSummaries()`'s `isset()`
@@ -1506,7 +1546,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   clause as unasserted. Do not leave a judgement standing as if it were measured.
 - **Blocked on** Nothing.
 
-### E24 — summing streamed usage is safe only because no current provider reports a running total
+### E24 [CLOSED] — summing streamed usage is safe only because no current provider reports a running total
 
 - **What** `Runtime::runStreaming()` SUMS `Usage::reported()` across chunks
   (`Usage::sum($usages)`), which is correct for a provider that reports per-chunk
@@ -1531,7 +1571,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E25 — project-scope memory entries are user-authored text folded into the system prompt
+### E25 [PARTIAL] — project-scope memory entries are user-authored text folded into the system prompt
 
 - **What** Since crush_code.md Phase 5 item 9, `Context/MemoryBlock` renders every
   PROJECT-scope `MemoryStore` entry into a `<project-memory>` fence inside the
@@ -1576,7 +1616,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E26 — `EnvironmentBlock` has no "additional working directories" line because there is no multi-root concept to describe
+### E26 [NO-FIX] — `EnvironmentBlock` has no "additional working directories" line because there is no multi-root concept to describe
 
 - **What** crush_code.md Phase 5 item 10a asks for an "additional working
   directories" line in the `<env>` block. It was deliberately NOT added. This
@@ -1610,7 +1650,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E27 — two provider failure shapes are deliberately left unclassified by the transient-failure retry
+### E27 [OPEN] — two provider failure shapes are deliberately left unclassified by the transient-failure retry
 
 - **What** crush_code.md Phase 5 item 8's retry classifies on an ALLOW-LIST
   (`Providers/TransientFailure`), so anything unrecognised is treated as
@@ -1648,7 +1688,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E28 — the sub-agent retry is only reachable through tests and embedders
+### E28 [OPEN] — the sub-agent retry is only reachable through tests and embedders
 
 - **What** `AgentManager::executeSubAgent()` carries the same transient-failure
   retry as `Runtime`'s two seams, including a mid-stream rollback the `Runtime`
@@ -1693,7 +1733,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E29 — `vendor/bin/phpunit tests/Cli` hangs, while the full configured run passes
+### E29 [OPEN] — `vendor/bin/phpunit tests/Cli` hangs, while the full configured run passes
 
 - **What** A directory-scoped run of `tests/Cli` does not finish. Measured over 4
   minutes and killed at 250s, while the full configured suite passes in ~2m26s and
@@ -1726,7 +1766,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E30 — three backoff figures are literals with no test reading them back
+### E30 [OPEN] — three backoff figures are literals with no test reading them back
 
 - **What** `TransientFailure::BASE_BACKOFF_MICROSECONDS`, `MAX_ATTEMPTS` and the
   derived total are described in prose in three places, and no test asserts any of
@@ -1757,7 +1797,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 - **Blocked on** Nothing. A choice about which of two rot-protection styles this
   repo wants for planning documents.
 
-### E31 — the parked tier's dormant spend-cap gate answers `null` where `/compact` answers with a notice
+### E31 [CLOSED] — the parked tier's dormant spend-cap gate answers `null` where `/compact` answers with a notice
 
 - **What** `Chat::scheduleParkedCompaction()` opens with
   `if ($this->spendCapReached()) { return null; }`, i.e. it downgrades a capped
@@ -1793,7 +1833,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   through the parked continuation, pinned at `AutomaticCompactionModelSummaryTest`
   :1572 (`testTheParkedTierTellsTheUserWhenTheCapStoppedTheModelAsk`).
 
-### E32 — a parked summarization cannot be cancelled at the provider, so a cancelled turn still pays for it
+### E32 [CLOSED] — a parked summarization cannot be cancelled at the provider, so a cancelled turn still pays for it
 
 - **What** During the 85% tier's parked window, double-Escape abandons the turn:
   the latch is released, the summaries are dropped when they land, and no turn is
@@ -1826,7 +1866,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   to cancel from — so the two routes need different cancel triggers for one shared
   call.
 
-### E33 — the 70% reminder is appended to PERMANENT history every turn, and compaction now keeps every copy
+### E33 [CLOSED] — the 70% reminder is appended to PERMANENT history every turn, and compaction now keeps every copy
 
 - **What** `Chat::dispatchTurn()` appends `contextReminderMessage()` to `history`
   on every turn once the estimate passes the reminder threshold. It is not a
@@ -1880,7 +1920,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E34 — a shell-out completion blocks the event loop, so `$onToken` fires and nothing can paint it
+### E34 [CLOSED] — a shell-out completion blocks the event loop, so `$onToken` fires and nothing can paint it
 
 - **What** Both shell-out tiers run the whole completion synchronously inside a
   `Loop::futureTick`, so the ReactPHP loop is blocked for its entire duration. The
@@ -1911,7 +1951,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E35 — cancellation cannot interrupt a shell-out completion
+### E35 [CLOSED] — cancellation cannot interrupt a shell-out completion
 
 - **What** `StreamingCommandBackend::completeAsync()` checks
   `$cancellation?->isCancelled()` exactly once, at `futureTick` entry, and never
@@ -1933,7 +1973,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E36 — `tests/Cli/BootstrapSkillSkipsTest.php` is rc=1 alone and green in the full suite
+### E36 [UNCERTAIN] — `tests/Cli/BootstrapSkillSkipsTest.php` is rc=1 alone and green in the full suite
 
 - **What** Run on its own against a clean tree the file exits 1 with
   `OK, but there were issues! Risky: 2`; in the full configured run it contributes
@@ -1952,7 +1992,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E37 — `--help` documents 6 of the 20 `SUGARCRUSH_*` variables the code reads
+### E37 [OPEN] — `--help` documents 6 of the 20 `SUGARCRUSH_*` variables the code reads
 
 - **What** `src/Cli/Help.php` names six environment variables; `src/` and `bin/` read
   twenty. (Five before bundle C1, which added the streaming variable — the heading said
@@ -1977,7 +2017,7 @@ fixture. What is left after the correction is a narrower but real dead end.
   variable as the current assertion was to the sixth.
 ---
 
-### E38 — a compaction folds the reminder's full text into a `[summary]` line the dedup can never match
+### E38 [CLOSED] — a compaction folds the reminder's full text into a `[summary]` line the dedup can never match
 
 - **What** Bundle E33 bounds the 70% reminder at one VERBATIM copy. It does not
   bound the summarized ones. `ContextCompactor`'s summarizer folds a rider into
@@ -2015,7 +2055,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E39 — a full-suite run stalls in the `tests/Cli` region, rarely, on an unchanged tree
+### E39 [NO-FIX] — a full-suite run stalls in the `tests/Cli` region, rarely, on an unchanged tree
 
 - **What** Two independent agents, in different bundles, hit a full
   `vendor/bin/phpunit` run that stopped making progress around the `tests/Cli`
@@ -2140,7 +2180,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E40 — `.mcp.json` TOCTOU, and a hard link escapes containment
+### E40 [OPEN] — `.mcp.json` TOCTOU, and a hard link escapes containment
 
 - **What** Two limits on the `.mcp.json` containment check, both low-severity but
   both attached to the one `ContainedPath` caller whose granted file causes
@@ -2175,7 +2215,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E41 — `McpClient` config-loading gaps: a lost config tail, and four silent broken shapes
+### E41 [PARTIAL] — `McpClient` config-loading gaps: a lost config tail, and four silent broken shapes
 
 - **What** Three defects in `McpClient`'s config handling, all pre-existing and all
   newly reachable now that something constructs the client. (a) `startServers()`
@@ -2213,7 +2253,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E42 — `mcp__` wire names: `__` is both delimiter and legal character, and user permission rules cannot match
+### E42 [OPEN] — `mcp__` wire names: `__` is both delimiter and legal character, and user permission rules cannot match
 
 - **What** Two naming defects in `McpToolBridge`'s `mcp__<server>__<tool>` scheme.
   (a) `__` is the delimiter AND a legal character, so server `a__b` + tool `c` and
@@ -2236,7 +2276,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E43 — code blocks and tables are reflowed because nothing can scroll them horizontally
+### E43 [OPEN] — code blocks and tables are reflowed because nothing can scroll them horizontally
 
 - **What** Bundle W1 makes the transcript honour the pane width, which it must —
   a row wider than the terminal breaks candy-core's one-logical-line-per-row model
@@ -2266,7 +2306,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E44 — a `composer update` silently moves the suite off the monorepo, and the only signal is a skip count
+### E44 [CLOSED] — a `composer update` silently moves the suite off the monorepo, and the only signal is a skip count
 
 - **What** `sugar-crush/vendor/sugarcraft/*` is symlinked to the sibling libs when
   path repos are injected, and replaced with real Packagist directories by any
@@ -2301,7 +2341,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E45 — two leftovers from C3's gate, both reported by the fix round and deliberately not changed
+### E45 [PARTIAL] — two leftovers from C3's gate, both reported by the fix round and deliberately not changed
 
 - **What** (a) `Bootstrap::mcpClient()`'s untrusted branch is guarded
   `$canonicalRoot === false || !projectMcpIsTrusted(…)`, and the `false` arm is
@@ -2401,7 +2441,7 @@ Recorded so they are not lost when the worklog stops being read.
 - **`#63`'s follow-up** — *"the timer bounds computing, not thrashing"*
   (worklog `:4863`). `enforceTimeLimit` landed in `4dbf5074`; the follow-up
   section was not read in full for this compilation.
-### E46 — candy-core: `Width::of()` and `Width::wrapAnsi()` disagree on grapheme clusters
+### E46 [CLOSED] — candy-core: `Width::of()` and `Width::wrapAnsi()` disagree on grapheme clusters
 
 **What.** The two measure the same string differently, so any caller that DECIDES with one and FITS with
 the other has a bound that is false. `Width::of()` counts `👍🏽` (emoji + skin-tone modifier) as **4**
@@ -2447,7 +2487,7 @@ re-measure and retry, which is what `Renderer::wrapToPane()` now does locally.
 each wrapped piece and truncate any that still overflows). Fixing upstream lets that local fallback be
 simplified, not removed — the fallback is also what protects against the NEXT such disagreement.
 
-### E47 — the overlay composite path has no width discipline
+### E47 [OPEN] — the overlay composite path has no width discipline
 
 **What.** W1's `fitToPane()` choke point covers `$body` only. The Veil composite that draws the palette,
 the session picker and the permission prompt emits rows wider than the terminal: measured
@@ -2466,7 +2506,7 @@ than a corrupted frame; on the standalone `Chat::view()` path there is no such n
 `PaneWidthInvariantTest`'s sweep to overlay states — W1 added an honest out-of-scope note there rather
 than a silent gap.
 
-### E48 — the frame is 2 rows tall at `rows=1`
+### E48 [OPEN] — the frame is 2 rows tall at `rows=1`
 
 **What.** `$available = max(1, $rows - 1)` plus the always-present status bar means a 1-row terminal gets
 a 2-line frame. Pre-existing.
@@ -2482,7 +2522,7 @@ that prose rather than leaving a claim its own sweep (8/20/40) would have refute
 **Step.** Either reserve the bar out of `$available` so the frame can be 1 row, or decide 2 is the floor
 and say so in `renderStatusBar()`'s docblock.
 
-### E49 — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can
+### E49 [OPEN] — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can
 
 **What.** `withTableWrap(true)` wraps each **cell** at the full `wrapWidth`, so a three-column table
 still renders roughly three times the pane wide. Measured at `wrapWidth: 60`: cells wrap to 67/49/56/23
@@ -2507,7 +2547,7 @@ reflow.
 
 **Blocked on.** It is a **candy-shine** change; W1 was scoped to sugar-crush.
 
-### E50 — `SgrState` does not track SGR 58 (underline colour) or OSC 8 hyperlinks
+### E50 [OPEN] — `SgrState` does not track SGR 58 (underline colour) or OSC 8 hyperlinks
 
 **What.** `SgrState` handles only `Token::CSI` with `final === 'm'`, and `Ansi::reset()` (CSI 0 m) does
 not close an OSC 8 hyperlink. Any row-wise re-emission of style state therefore loses underline colour
@@ -2538,7 +2578,7 @@ keeping its own URI tracking.
 Recorded, not fixed: each is either outside that lane's granted file set or outside the bundle's
 scope. Every figure below was re-measured in the lane before it was written down.
 
-### E51 — mouse clicks bypass the permission modal (`Chat::handleMouse()` has no modal guard)
+### E51 [CLOSED] — mouse clicks bypass the permission modal (`Chat::handleMouse()` has no modal guard)
 
 **What.** `Chat::update()` dispatches `MouseMsg` to `handleMouse()` **before** its
 `if (!$msg instanceof KeyMsg) { return [$this, null]; }` early return. Every modal guard in the class —
@@ -2635,7 +2675,7 @@ is sharper than either label: **the two input paths give opposite answers to the
 — and on `keyHelp !== null`, which the original step omits. The wheel-scroll question above still
 stands and is still a deliberate decision.
 
-### E52 — `CSI 1;5Z` loses the shift its final byte encodes
+### E52 [CLOSED] — `CSI 1;5Z` loses the shift its final byte encodes
 
 **What.** In `InputReader::decodeCsi()` the post-match rebuild replaces the **whole** `KeyMsg` from
 `$mods` whenever a `;<mod>` parameter was present. The new `'Z'` arm sets `shift: true`, but for a
@@ -2689,7 +2729,7 @@ rule): the `'Z'` arm's comment now records what it used to say, that the reasoni
 emitter and wrong about the size, and why the merge is the general fix.
 candy-core: 795 tests / 7181 assertions / 25 skipped / rc 0 (from 785 / 7134).
 
-### E53 — fast and slow width paths diverge on ZWJ sequences
+### E53 [CLOSED] — fast and slow width paths diverge on ZWJ sequences
 
 **What.** `AgentViewPane::visualWidth()` delegates to `Width::string()` and is **grapheme-aware over a
 whole string**, while `AgentViewPane::truncate()` still walks `preg_split('//u')` and sums
@@ -2758,7 +2798,7 @@ this project's recurring defect with the sign flipped. `charWidth()` is not dele
 longer sums it, but `joinsPrevious()` reads it for the one bit it needs (does this codepoint own a
 cell), and its docblock now says so.
 
-### E54 — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
+### E54 [PARTIAL] — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
 
 **What.** `render(..., $w, ...)` returns rows of **`$w + 4`** cells: `$w` is handed to `Style::width()`,
 which sizes the **content box**, and the rounded border (2 cells) plus `padding(0, 1)` (2 cells) are
@@ -2865,7 +2905,7 @@ byte-identical to the pre-CHROME_WIDTH tree. The 44 capture is kept and is the B
 `testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64()`, which asserts both that the strip is
 no longer those bytes and that it is exactly the new ones.*
 
-### E55 — `maxOutputBytes` no longer bounds `Grep`'s result
+### E55 [CLOSED] — `maxOutputBytes` no longer bounds `Grep`'s result
 
 **What.** P8.9 gave `Grep` the announce-once pair (`InstructionFileLoader` +
 `SkillPathNudge`). The instruction block is appended **after** the clip — a
@@ -2905,7 +2945,7 @@ instruction text, independent of `maxOutputBytes`, with its own marker — and
 apply it in `Read` at the same time, since both tools take the same exemption
 for the same reason.
 
-### E56 — `Glob` prepends instruction bodies BEFORE truncating, so the file list is what gets dropped
+### E56 [CLOSED] — `Glob` prepends instruction bodies BEFORE truncating, so the file list is what gets dropped
 
 **What.** `Glob` injects each matched file's instruction body into the list and
 then truncates the whole thing. With a small cap and a large `CLAUDE.md` the
@@ -3910,7 +3950,7 @@ bounded-only, sub-millisecond rendering fallback removed, spender cap raised to 
 forkable, `ScriptHook` stops being the only `BoundedHookInterface` implementor and the clip design
 acquires more callers.
 
-### E62 — an interactive PTY in the chat pane is a credential-entry surface driven by model output
+### E62 [NO-FIX] — an interactive PTY in the chat pane is a credential-entry surface driven by model output
 
 **Recorded 2026-08-21 while scoping Phase 9. The FIX is deferred; the FINDING is not.**
 
@@ -4016,7 +4056,7 @@ leak and adds no surface; it should ship regardless of when (C) is scheduled.
 
 ---
 
-### E63 — `ChatTest`'s stranded-payload detector attributes every writer's files to itself
+### E63 [CLOSED] — `ChatTest`'s stranded-payload detector attributes every writer's files to itself
 
 **Found by the round-38 `lsp` implement agent, then verified by the supervisor.** Not a security
 finding — a **measurement-integrity** one, which is why it is recorded here rather than left in a lane
@@ -4114,7 +4154,7 @@ deliberately strands a reserved payload → `Errors: 1`, naming that payload. Fi
 
 ---
 
-### E64 — `AgentViewPane::render()`'s `max(5, …)` operation floor over-runs the pane box on wide clusters
+### E64 [CLOSED] — `AgentViewPane::render()`'s `max(5, …)` operation floor over-runs the pane box on wide clusters
 
 **Recorded 2026-08-21 in the ROUND 38 lane, while making E54's `+4` claim true.** Pre-existing, not a
 regression of that change; measured on both trees.
@@ -4266,7 +4306,7 @@ measurement in two units, so the `+6` stands and the units are now spelled out w
 
 ---
 
-### E65 — any registered `ScriptHook` denies every tool call whose input exceeds ~128 KiB (FIXED, round 40 `cmd`)
+### E65 [CLOSED] — any registered `ScriptHook` denies every tool call whose input exceeds ~128 KiB (FIXED, round 40 `cmd`)
 
 **Found by the round-39 scout, measured.** Not a security finding — a **daily-driver blocker**, and it
 fails in the one direction that reads as someone else's bug.
@@ -4439,7 +4479,7 @@ Suite: **8837 / 99827 / 1 skipped / rc 0**.
 
 ---
 
-### E66 — `SkillPathNudge` is unbounded, and it is filed under a number that belongs to a different finding
+### E66 [CLOSED] — `SkillPathNudge` is unbounded, and it is filed under a number that belongs to a different finding
 
 **Two defects: the code one, and a tracker one that caused a supervisor to brief a lane wrongly.**
 
@@ -4598,7 +4638,7 @@ the cap on its own AND the nudge to be present, or it proves nothing. It now use
 
 ---
 
-### E67 — `SkillRegistry::register()` keys by array key, not by skill name
+### E67 [CLOSED] — `SkillRegistry::register()` keys by array key, not by skill name
 
 **Reasoned from reading, NOT verified against callers — recorded at that strength deliberately.**
 
@@ -4642,7 +4682,7 @@ Tests: `SkillRegistryTest::testRegisterKeysByTheSkillsOwnNameNotTheIncomingArray
 `::testASkillRegisteredFromAListCanStillBeDisabledByName`. **3** new tests.
 ---
 
-### E68 — `AgentDashboardPane` over-runs its caller's width on a single emoji
+### E68 [CLOSED] — `AgentDashboardPane` over-runs its caller's width on a single emoji
 
 **Recorded 2026-08-21 in the ROUND 39 `lsp` lane, by the reviewer of the E64 fix.** Pre-existing and
 **not fixed here** — it is a different pane from E64's and deserves an isolated diff.
@@ -4751,7 +4791,7 @@ correctness defect.
 
 ---
 
-### E69 — `Width::string()` scores a tab 0; `Style::render()` expands it to four spaces
+### E69 [CLOSED] — `Width::string()` scores a tab 0; `Style::render()` expands it to four spaces
 
 **Recorded 2026-08-21 in the ROUND 39 `lsp` lane, while qualifying E64's "fits by construction".**
 Foundation-level and **not fixed here**.
@@ -4852,7 +4892,7 @@ name, same default of 4, settable to any value >= 1 — a fourth tab-width autho
 
 ---
 
-### E73 — `Width::compute()`'s ZWJ state machine scores a Control-before-ZWJ sequence 0
+### E73 [CLOSED] — `Width::compute()`'s ZWJ state machine scores a Control-before-ZWJ sequence 0
 
 **Recorded 2026-08-22 by the round-40 `lsp` reviewer; supervisor-reproduced.** Split out of E69's
 residue, whose "0 unexplained" completeness claim it refutes (see the correction in the E69 stamp).
@@ -4912,7 +4952,7 @@ as a seam on its docblock plus a `phpstan.neon` `ignoreErrors` entry, following 
 
 candy-core: 799 tests / 7,210 assertions / 25 skipped / rc 0 (from 795 / 7,181). candy-sprinkles green.
 
-### E74 — `sugar-crush/README.md` repeats a project-tier claim the source records as measured FALSE
+### E74 [PARTIAL] — `sugar-crush/README.md` repeats a project-tier claim the source records as measured FALSE
 
 **Recorded 2026-08-22 by the round-41 lane-a reviewer.** Severity: **medium, and user-facing.**
 
@@ -5023,7 +5063,7 @@ PHP 8.3.6:
   end-to-end, so the Step's framing of the counterexample as *the* negated-class case understates it:
   no restriction on pattern shape could restore the retracted property.
 
-### E75 — `README.md` calls `config.json` "the deprecated name"; the source argues at length that it is not
+### E75 [CLOSED] — `README.md` calls `config.json` "the deprecated name"; the source argues at length that it is not
 
 **Recorded 2026-08-22 by the round-41 lane-a reviewer.** Severity: low, but actively misdirecting.
 
@@ -5042,7 +5082,7 @@ rather than against the other doc: `Bootstrap::writeUserConfig()` → `Bootstrap
 are on `Agents/PathJail` and `Chat::pool`'s alias — neither mentions `config.json`. Both halves are
 pinned by `tests/Config/ReadmeSettingsTierClaimTest`.
 
-### E76 — `Chat.php`'s pane-click docblock asserts the opposite of what `bin/sugarcrush` does
+### E76 [CLOSED] — `Chat.php`'s pane-click docblock asserts the opposite of what `bin/sugarcrush` does
 
 **Recorded 2026-08-22 by the round-41 lane-a reviewer; deliberately not fixed in-lane.**
 Severity: low (comment-only), but it is a **load-bearing argument** that a future reader would act on.
@@ -5140,7 +5180,7 @@ right-sidebar test asserted `assertNotSame($files, $skills)` and **survived** de
 `rightSidebar()`'s entire `Pane::Skills` arm. It now asserts the `╭ skills ` border title, and that
 mutation reds.
 
-### E77 — `nextCluster()`'s no-ext-intl fallback is now measurably wrong for real ZWJ sequences
+### E77 [NO-FIX] — `nextCluster()`'s no-ext-intl fallback is now measurably wrong for real ZWJ sequences
 
 **Recorded 2026-08-22 by the round-41 lane-b reviewer.** Severity: **latent — currently unreachable.**
 
@@ -5155,7 +5195,7 @@ cannot execute in any supported configuration. It is a seam, kept rather than re
 **Step.** None while the requirement stands. If anyone ever relaxes `ext-intl` to a suggestion, this
 becomes live and must be fixed in the same change — cross-reference this entry from the composer edit.
 
-### E78 — nothing ties the shipped `Bootstrap` tool caps to the skill-nudge floor
+### E78 [CLOSED] — nothing ties the shipped `Bootstrap` tool caps to the skill-nudge floor
 
 **Recorded 2026-08-22 by the round-41 lane-c reviewer; the file was held by another lane.**
 Severity: low today, medium if a cap ever moves.
@@ -5197,7 +5237,7 @@ sentence has a third error:**
 instructionLoader: ..., skillNudge: ...)` reds both tests (budget 128, under both 2,636 and 529);
 Read's budget argument -> `null` reds the roster assertion.
 
-### E78/round-42 follow-up — a repeat prune in one process prints its session ids under no header
+### E78 [NO-FIX]/round-42 follow-up — a repeat prune in one process prints its session ids under no header
 
 **Recorded 2026-08-22 by the round-42 lane-b agent.** Severity: cosmetic; stderr only.
 
@@ -5216,7 +5256,7 @@ by building two Chats in one process, which no shipped entry point does.
 **Step.** Leave it. If a second de-dup is ever wanted, key it on the report rows and not on the
 summary, and keep the rule that stderr never loses a row the transcript never carried.
 
-### E79 — the tab/Extend under-run family in `Width` is a rendering-semantics decision, not a bug
+### E79 [NO-FIX] — the tab/Extend under-run family in `Width` is a rendering-semantics decision, not a bug
 
 **Recorded 2026-08-22 by the round-41 lane-b reviewer.** Severity: low; **in the safe direction.**
 
@@ -5233,7 +5273,7 @@ radius well beyond this class. Under-counting also cannot corrupt a frame here �
 radius costed first. Its shape is already pinned by
 `StyleTest::testExpandingATabCanStillReclusterAFollowingCombiningMark`, so it cannot drift unnoticed.
 
-### E78/round-42 follow-up — two `NonInteractive` stderr writes are transcript-seam candidates the seam cannot reach
+### E78 [OPEN]/round-42 follow-up — two `NonInteractive` stderr writes are transcript-seam candidates the seam cannot reach
 
 **Recorded 2026-08-22 by the round-42 lane-b fix agent, after the round-42 review.** Severity: low;
 **functionality, not security** (RULE 14 records it rather than fixing it).
@@ -5273,7 +5313,7 @@ one-shot *prompt*, which is a different mechanism with a different blast radius.
 reads the list back, because today nothing on those paths does. The six writes that accompany a
 non-zero exit (`run()` x2, `failUsage()`, `failUnusableProvider()`, and both in `Subcommands`) need no
 decision: the process ends, and there is no transcript for a row to survive into.
-### E80 — `MultiAgentRefactorTest`'s forked claim race aborts at 60s under concurrent machine load
+### E80 [SUPERSEDED] — `MultiAgentRefactorTest`'s forked claim race aborts at 60s under concurrent machine load
 
 **Recorded 2026-08-22 by the round-42 lane-c implementer.** Severity: **CI flake, not a product
 defect** — but it turns a green suite red and it is not obvious from the failure text why.
@@ -5317,7 +5357,7 @@ re-running and hoping. Export `$attempts` at abort. Then decide between raising 
 raising the 60 s limit for this one test — and prefer the backoff, because a 60 s limit that is
 routinely brushed is a limit that has stopped meaning anything.
 
-### E81 — `LayeredSettings`' `provider` doc-block credits the palette and omits the command that actually writes it
+### E81 [CLOSED] — `LayeredSettings`' `provider` doc-block credits the palette and omits the command that actually writes it
 
 **Recorded 2026-08-22 by the round-42 lane-a implementer.** Severity: low, doc-only.
 
@@ -5331,7 +5371,7 @@ right — the same shape as E74.
 **Step.** Name both producers in the doc-block. Pin with a drift test in the family of
 `TrustKeyDocumentationDriftTest` if one can read that doc-block cheaply.
 
-### E82 — three-way drift on what a `settings.json` `theme` actually breaks
+### E82 [CLOSED] — three-way drift on what a `settings.json` `theme` actually breaks
 
 **Recorded 2026-08-22 by the round-42 lane-a implementer.** Severity: low, doc-only.
 
@@ -5347,7 +5387,7 @@ neither do `LayeredSettings` or `Bootstrap::reportProjectTierToolRemovals()`. No
 version-sensitive — `fnmatch()`'s negated-class support is not new — but an undated figure is how E68
 happened.
 
-### E83 — `README.md` prose is almost entirely unpinned by tests
+### E83 [CLOSED] — `README.md` prose is almost entirely unpinned by tests
 
 **Recorded 2026-08-22 by the round-42 lane-a implementer.** Severity: medium as a CLASS, low per claim.
 
@@ -5362,7 +5402,7 @@ the launch-report sample) and pin the ones with a cheap oracle. Prefer structura
 ±N-character windows — see round 42's mutation C, which survived because any window wide enough to
 reach the retraction also reached an unrelated "not".
 
-### E84 — the autoload guard leaves stdout empty under `--output-format json`
+### E84 [CLOSED] — the autoload guard leaves stdout empty under `--output-format json`
 
 **Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: low; pre-existing and deliberate.
 
@@ -5377,7 +5417,7 @@ contract that machine consumers are told to rely on.
 consumer parsing stdout cannot distinguish "empty because the binary died early" from "empty because
 there was nothing to say".
 
-### E85 — `SkillRegistry::getForPaths()` translates `**` with three hand-rolled `str_replace` calls
+### E85 [CLOSED] — `SkillRegistry::getForPaths()` translates `**` with three hand-rolled `str_replace` calls
 
 **Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: medium; pre-existing.
 
@@ -5390,7 +5430,7 @@ half of every path-scoping test that uses such a pattern.
 doc-block and refuse the rest loudly. ⚠️ Whatever lands must be mutation-tested against a pattern
 starting with `**`, since that is the case the current code silently mishandles.
 
-### E86 — the MCP failure notice goes to `error_log()`, whose destination the operator's ini decides
+### E86 [CLOSED] — the MCP failure notice goes to `error_log()`, whose destination the operator's ini decides
 
 **Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: medium; **functionality**.
 
@@ -5403,7 +5443,7 @@ assertability; it never weighed where the message actually lands.
 for "the session can no longer do something" — the rule round 42 used to move fifteen other warnings.
 This one qualifies plainly: tools are missing.
 
-### E87 — the `Grep`/`Glob` margin over the nudge ceiling is thin and is not a fixed relationship
+### E87 [CLOSED] — the `Grep`/`Glob` margin over the nudge ceiling is thin and is not a fixed relationship
 
 **Recorded 2026-08-22 by the round-42 lane-b implementer.** Severity: low, but it is a decision nobody
 has made.
@@ -5418,7 +5458,7 @@ unmade decision is what the resolution should be.
 or express the budget as a multiple of `maxBytes()` so the relationship cannot drift. Record which, and
 why, next to the constant.
 
-### E88 — `App\SelectPaneMsg` is a dormant seam with no producer
+### E88 [NO-FIX] — `App\SelectPaneMsg` is a dormant seam with no producer
 
 **Recorded 2026-08-22 by the round-42 lane-c implementer.** Severity: low. **Kept per the never-remove
 rule; recorded so it is not rediscovered as dead code.**
@@ -5433,7 +5473,7 @@ Round 42 documented it in the docblock and pinned it as *deliberately* dormant w
 **Step.** Decide whether pane clicks should route through it. Wiring is behavioural, not comment-only,
 so it needs its own item and its own tests — do not fold it into a doc round.
 
-### E89 — `RendererTest::testRenderWithDifferentPaneShowsCorrectLabel()` proves less than its name
+### E89 [CLOSED] — `RendererTest::testRenderWithDifferentPaneShowsCorrectLabel()` proves less than its name
 
 **Recorded 2026-08-22 by the round-42 lane-c implementer.** Severity: low, test-quality.
 
@@ -5446,7 +5486,7 @@ but the original assertion is still weaker than it reads.
 checks. A test whose name overstates its coverage is worse than no test, because it stops anyone
 looking.
 
-### E90 — `paths:` frontmatter now accepts a leading `**`, and no user-facing doc says so
+### E90 [CLOSED] — `paths:` frontmatter now accepts a leading `**`, and no user-facing doc says so
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, docs. **Behaviour change,
 user-visible, already shipped.**
@@ -5466,7 +5506,7 @@ semantics with `**` meaning zero-or-more directory levels at any position, inclu
 a single `*` crossing `/` (no `FNM_PATHNAME`). Mention that skills scoped with a leading `**` began
 firing on tree-root files as of E85.
 
-### E91 — `TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES` carries no pointer to the nudge ceiling it constrains
+### E91 [CLOSED] — `TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES` carries no pointer to the nudge ceiling it constrains
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, comment-only.
 
@@ -5481,7 +5521,7 @@ precisely to be cited from there. Not lane `a`'s file in round 43.
 `SkillPathNudge::smallestUnclippedCallerCap()` and at the margin guard, so the loop closes for a
 reader who arrives at the cap first.
 
-### E92 — ~~the `paths:` translation still does not implement POSIX character classes~~ FIXED in round 43; the escaped-`]` half remains
+### E92 [CLOSED] — ~~the `paths:` translation still does not implement POSIX character classes~~ FIXED in round 43; the escaped-`]` half remains
 
 **Recorded and then superseded 2026-08-22 by the round-43 lane-a fix agent.**
 
@@ -5516,7 +5556,7 @@ the never-remove rule leaves an unpinnable method behind. The 46x54 characterisa
 four-seed differential fuzz described in `SkillRegistry::pathMatches()` are the harness to prove no
 narrowing.
 
-### E93 — a `preg_match()` backtrack-limit hit is silently absorbed by the fallback
+### E93 [OPEN] — a `preg_match()` backtrack-limit hit is silently absorbed by the fallback
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, observability.
 
@@ -5532,7 +5572,7 @@ and `PREG_INTERNAL_ERROR` for the other — and count or log the backtrack case 
 ever gains a logging seam. Adding a logger dependency to a pure static matcher is a bigger design
 call than the finding warrants on its own.
 
-### E94 — `README.md`'s "exactly two exceptions" to the JSON contract is now one
+### E94 [CLOSED] — `README.md`'s "exactly two exceptions" to the JSON contract is now one
 
 **Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, documentation-correctness.
 **Not fixed here because `sugar-crush/README.md` belonged to lane `c` this round.**
@@ -5555,7 +5595,7 @@ the autoload guard hand-rolls the document and why the duplication is deliberate
 pinning the claim with a test the way `ReadmeSettingsTierClaimTest` pins its own, so the next divergence
 reds instead of waiting for a reader.
 
-### E95 — the MCP start-then-throw diagnostic now prints one unowned line into the suite's own output
+### E95 [NO-FIX] — the MCP start-then-throw diagnostic now prints one unowned line into the suite's own output
 
 **Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: cosmetic, test-hygiene. **Left as
 it is, deliberately; recorded so it is not rediscovered as an accident.**
@@ -5576,7 +5616,7 @@ unrelated and stops working silently the day the message is reworded. The reason
 test's doc-block; the line's CONTENT is asserted by
 `testAPartlyStartedMcpConfigReachesTheTranscriptAndNotOnlyTheErrorLog()`, which uses a child process.
 
-### E96 — `ParallelToolCallsTest::testACompletedGroupLeavesNoPayloadFilesBehind` globs the shared `/tmp`
+### E96 [CLOSED] — `ParallelToolCallsTest::testACompletedGroupLeavesNoPayloadFilesBehind` globs the shared `/tmp`
 
 **Recorded 2026-08-22 by the round-43 lane-b implementer.** Severity: low, test-isolation. **Not fixed
 here — `tests/Integration/ParallelToolCallsTest.php` was outside lane `b`'s file split.**
@@ -5591,7 +5631,7 @@ false red under any parallel or multi-checkout run, including two developers on 
 `ToolIpcFiles` at a per-run subdirectory under `sys_get_temp_dir()` and glob that. Do not "fix" it by
 widening the assertion; the leak-detection is the point.
 
-### E97 — the "fourteen call sites" seam count is stale in three places outside `Bootstrap.php`
+### E97 [CLOSED] — the "fourteen call sites" seam count is stale in three places outside `Bootstrap.php`
 
 **Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
 documentation-correctness. **Not fixed here — `sugar-crush/src/Chat.php` and
@@ -5614,7 +5654,7 @@ also appears 15 times in prose. Better still, assert it: a small test that token
 and compares the count against a constant these doc-blocks cite would make the next drift red rather
 than merely wrong.
 
-### E98 — `README.md` has a THIRD spot E84 falsified, beyond the two E94 names
+### E98 [CLOSED] — `README.md` has a THIRD spot E84 falsified, beyond the two E94 names
 
 **Recorded 2026-08-22 by the round-43 lane-b fix agent**, from that round's review. Severity: low,
 documentation-correctness. **Not fixed here — `sugar-crush/README.md` belonged to lane `c`.** Fold this
@@ -5631,7 +5671,7 @@ omits `installation` too.
 to `2`, alongside E94's two edits. `NonInteractive::emitErrorDocument()`'s doc-block already carries the
 full five-type table and is the source to copy from.
 
-### E99 — `SkillRegistry::$compiledPathPatterns` is an unbounded static cache
+### E99 [CLOSED] — `SkillRegistry::$compiledPathPatterns` is an unbounded static cache
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent** (reported, not filed by the lane). Severity: low.
 
@@ -5645,7 +5685,7 @@ patterns per request would grow it without limit. Round 43 at least pinned that 
 `paths:` filter, a `/skill` command that accepts a glob) does not discover this the hard way. If one
 lands, cap the cache or key it by a bounded identity.
 
-### E100 — the gain classifier's cause-discrimination has no isolating in-suite mutation
+### E100 [NO-FIX] — the gain classifier's cause-discrimination has no isolating in-suite mutation
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent** (review finding F5, residual). Severity: low,
 test-quality.
@@ -5661,7 +5701,7 @@ classifier alone. The offline table is in round 43's lane-a report.
 **Step.** A future round wanting an isolating mutation needs a widening that changes only a
 `**`-prefixed row. Until then the classifier is correct-by-inspection and pinned only jointly.
 
-### E101 — `nudgeSpendRoster()` discovers nudge-budget spenders by regex over each tool's source
+### E101 [CLOSED] — `nudgeSpendRoster()` discovers nudge-budget spenders by regex over each tool's source
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent** (review finding F3, residual). Severity: low.
 
@@ -5674,7 +5714,7 @@ roster. Narrow, because the three-name roster assertion catches a tool joining o
 `public const` on each tool. Not done in round 43 because `Bootstrap.php`'s tool construction was
 lane b's file. Related: E91.
 
-### E102 — two integration tests now spawn ~28 child PHP processes between them
+### E102 [NO-FIX] — two integration tests now spawn ~28 child PHP processes between them
 
 **Recorded 2026-08-22 by the round-43 lane-b fix agent** (reported, not filed by the lane). Severity:
 low, test-runtime. **Measured, and cheap today.**
@@ -5689,7 +5729,7 @@ the differential table is the natural place to add a row, and every row is anoth
 stdin and answers all rows, rather than one child per row. A **third** caller of `launchChatInChild()`
 should get a harness that starts one child and asks it several questions.
 
-### E103 — `Bootstrap::reportProjectTierToolRemovals()` still spells the stale glob length
+### E103 [CLOSED] — `Bootstrap::reportProjectTierToolRemovals()` still spells the stale glob length
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, doc-only. **Already has a
 failing-on-fix guard pointing at it.**
@@ -5704,7 +5744,7 @@ names none of the ten tools it removes. ⚠️ `GlobFigureDriftTest::testTheSett
 asserts the census equals exactly `['src/Cli/Bootstrap.php' => 1]`, so fixing this WILL red that test —
 by design. `docs/SETTINGS.md`'s "is the one remaining site" sentence must move in the same commit.
 
-### E104 — no test pins any launch-report line in `Bootstrap` other than the `disabledTools` one
+### E104 [CLOSED] — no test pins any launch-report line in `Bootstrap` other than the `disabledTools` one
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low.
 
@@ -5717,7 +5757,7 @@ exactly the non-coverage that finding established for this one.
 transcript tests can reference them **by name** instead of by source-text regex — then drop
 `bootstrapMethodSource()`/`soleMatch()` from `ReadmeRosterDriftTest`. Related: E101.
 
-### E105 — the E81 door census catches a new KEY, never a new DOOR
+### E105 [NO-FIX] — the E81 door census catches a new KEY, never a new DOOR
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, and it is a **stated limit**,
 not an oversight.
@@ -5730,7 +5770,7 @@ oracle for "every entry point into this method". Stated in the test's own doc-bl
 
 **Step.** No cheap fix. If `Chat` ever grows a command dispatch table, census that instead.
 
-### E106 — `Chat::withOnConfigChange()`'s doc-block repeats the `/model` omission E81 just fixed
+### E106 [CLOSED] — `Chat::withOnConfigChange()`'s doc-block repeats the `/model` omission E81 just fixed
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, doc-only. **One line.**
 
@@ -5741,7 +5781,7 @@ oracle for "every entry point into this method". Stated in the test's own doc-bl
 **Step.** One-line fix, and it now has a pinning pattern to copy:
 `testTheReadmeCounterfactualCreditsTheSlashCommandAndNotThePaletteAlone`.
 
-### E107 — eight of round 43's lane-c review mutations were never verified by anyone
+### E107 [OPEN] — eight of round 43's lane-c review mutations were never verified by anyone
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, process.
 
@@ -5754,7 +5794,7 @@ from `src/`, which is the shape that does work. Low risk, still unmeasured.
 
 **Step.** Re-run the eight when anything in `ReadmeRosterDriftTest` next changes.
 
-### E108 — `GlobFigureDriftTest`'s stale-figure census has a hand-written connector class
+### E108 [CLOSED] — `GlobFigureDriftTest`'s stale-figure census has a hand-written connector class
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, test-quality.
 
@@ -5765,7 +5805,7 @@ normaliser did not collapse, slips past.
 
 **Step.** Normalise Unicode dashes (and collapse intra-paragraph line breaks) before matching. Cheap.
 
-### E109 — the launch-sample regex accepts any non-space path
+### E109 [NO-FIX] — the launch-sample regex accepts any non-space path
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low. **Deliberate; recorded so
 nobody reads the guard as stronger than it is.**
@@ -5776,7 +5816,7 @@ shape would mean pinning an example value, which is why it was left.
 
 **Step.** None unless the sample's path becomes load-bearing.
 
-### E110 — the README Keys table is unpinned row by row, deliberately
+### E110 [NO-FIX] — the README Keys table is unpinned row by row, deliberately
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low. Unchanged from the
 implementer's own deferral.
@@ -5788,7 +5828,7 @@ itself go stale — the guard would become the thing needing a guard.
 **Step.** Give `KeyBinding` a canonical machine id per chord and match on that. Until then the table
 stays prose. Related: the `keybindings` L item, still DEFERred.
 
-### E111 — five `docs/SETTINGS.md` claim families still have no cheap oracle
+### E111 [PARTIAL] — five `docs/SETTINGS.md` claim families still have no cheap oracle
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, and it is the honest residue of
 E83 rather than a defect.
@@ -5800,7 +5840,7 @@ constants, but too volatile to pin without building a change-detector, which is 
 **Step.** Take them one at a time as each acquires a machine-readable source. The roster and preset
 lists are the two most likely to become checkable, since both are already enumerated in `src/`.
 
-### E112 — `bin/sugarcrush` carries a comment saying README.md is still wrong; it is not, as of round 44
+### E112 [CLOSED] — `bin/sugarcrush` carries a comment saying README.md is still wrong; it is not, as of round 44
 
 **Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, comment-correctness.
 **Not fixed at record time — `bin/sugarcrush` was read-only for that lane** (it is item 1's SOURCE, not
@@ -5820,7 +5860,7 @@ README.md was corrected in round 44 (commit `4547d07a`), and that the "this is n
 claim still earns its place because it is the load-bearing half. `ReadmeJsonErrorContractDriftTest`
 pins the README end of it; nothing pins this comment, and nothing needs to.
 
-### E113 — `ReadmeJsonErrorContractDriftTest` derives error types from two files by two different scans
+### E113 [CLOSED] — `ReadmeJsonErrorContractDriftTest` derives error types from two files by two different scans
 
 **Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: low, test-design. **Deliberate;
 recorded so the asymmetry is not mistaken for an oversight.**
@@ -5852,7 +5892,7 @@ guard now reds rather than being silently ignored. VERIFIED by mutation: a decoy
 earlier in the file and outside the guard is read by the old whole-file scan (proved standalone) and
 correctly ignored by the bounded one.
 
-### E114 — the round-44 lane scratchpad was shared between lanes and one lane's suite output overwrote another's
+### E114 [NO-FIX] — the round-44 lane scratchpad was shared between lanes and one lane's suite output overwrote another's
 
 **Recorded 2026-08-22 by the round-44 lane-b implementer.** Severity: process, not code.
 
@@ -5873,7 +5913,7 @@ exactly this; this is the first observation of it firing.
 it noticed), and fix E96 so a concurrent sibling suite cannot red a lane's run. The E96 fix is the
 load-bearing one: a lane that cannot trust `rc 0` cannot trust anything downstream of it.
 
-### E115 — `pathMatches()`'s own perf note has the generator gap that was just fixed one doc-block above it
+### E115 [OPEN] — `pathMatches()`'s own perf note has the generator gap that was just fixed one doc-block above it
 
 **Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, measurement-hygiene.
 **Not fixed here — deliberately scoped out**, recorded so it is not mistaken for having been checked.
@@ -5895,7 +5935,7 @@ class, so re-taking it is possible rather than archaeological.
 **Step.** Re-take with the segment content written down (measure at 1, 12 and 24 characters, three runs
 each, PHP version stated), and quote the band across those rather than a point. Related: E85, E99.
 
-### E116 — `not-found` and `mcp-config` are the only hyphenated `error.type` names in the contract
+### E116 [OPEN] — `not-found` and `mcp-config` are the only hyphenated `error.type` names in the contract
 
 **Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, API-consistency. **A contract
 decision, not a defect — recorded because the guard now makes either answer cheap and someone should
@@ -5914,7 +5954,7 @@ cannot read, so a rename would be caught either way.
 the derivation in `ReadmeJsonErrorContractDriftTest` will red until README.md is updated to match, which
 is the intended order. Pre-1.0, so no compatibility cost.
 
-### E117 — the memoisation and cap-cost TIMING figures are documented but not pinned
+### E117 [NO-FIX] — the memoisation and cap-cost TIMING figures are documented but not pinned
 
 **Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, coverage. **Deliberate;
 recorded so the gap is not read as an oversight the next time someone audits this file.**
@@ -5935,7 +5975,7 @@ their instrument now, which makes them re-takeable by hand, and that is the whol
 **Step.** If this ever matters enough, the shape that would work is a tolerance-banded benchmark test
 skipped unless an env var is set, so it is a tool someone runs deliberately rather than a suite member
 that reds on a busy CI runner. Do NOT add an unbanded assertion. Related: E87, E99.
-### E118 — promote the transcript-seam call-site count to a `public const` on `Bootstrap`
+### E118 [CLOSED] — promote the transcript-seam call-site count to a `public const` on `Bootstrap`
 
 **Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low.
 
@@ -5953,7 +5993,7 @@ PHP 8.3.6, so the paren test alone counts it as a call); a `grep`-shaped second 
 with it the day such a callable exists. Sibling of **E104** (extracting
 `Bootstrap`'s stderr `sprintf` formats to constants) — same file, same motive, worth one PR.
 
-### E119 — `Bootstrap.php` still says "eleven other sources" on the skill-skip seam call
+### E119 [CLOSED] — `Bootstrap.php` still says "eleven other sources" on the skill-skip seam call
 
 **Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low.
 
@@ -5981,7 +6021,7 @@ with `offset: 1` and **delete
 the same commit — that test asserts the sentence is STILL stale, precisely so this hole in the census
 cannot go quiet, and it will fail the moment this is fixed. Its failure message says the same thing.
 
-### E120 — the suite prints 62 unowned `sugarcrush:` stderr lines, and only one of them was ever argued for
+### E120 [CLOSED] — the suite prints 62 unowned `sugarcrush:` stderr lines, and only one of them was ever argued for
 
 **Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: low, but see the measurement trap.
 
@@ -6026,7 +6066,7 @@ known-answer control through the same command. **Do that first, always.**
 command, PHP version, and full-suite scope) so a 63rd line is visible. Then triage per warning — several
 are real diagnostics whose own tests assert they were emitted, so silencing is the wrong default.
 
-### E121 — the shared-`/tmp` before/after census: run, negative, and its residual
+### E121 [NO-FIX] — the shared-`/tmp` before/after census: run, negative, and its residual
 
 **Recorded 2026-08-22 by the round-44 lane-c implementer.** Severity: informational.
 
@@ -6074,7 +6114,7 @@ listing captured into a variable before an action and compared after it — whic
 sweep above to the argument-keyed one, since the one real instance it missed was missed on the
 argument.
 
-### E122 — the E81 four-doors guard has the same "satisfied by its own retraction" hole, currently masked by luck
+### E122 [CLOSED] — the E81 four-doors guard has the same "satisfied by its own retraction" hole, currently masked by luck
 
 **Recorded 2026-08-22 by the round-44 lane-c fix pass.** Severity: low, but it is a guard that can stop
 guarding without anything going red.
@@ -6102,7 +6142,7 @@ cannot pass by excluding nothing or by excluding the enumeration. Not done in ro
 `tests/Config/` was not this lane's; the change is ~15 lines and carries its own mutation (revert the
 live enumeration to the omitting form, keep the retraction, expect red).
 
-### E123 — `docs/*.md` and `README.md` name `SUGARCRUSH_*` variables that no oracle covers
+### E123 [CLOSED] — `docs/*.md` and `README.md` name `SUGARCRUSH_*` variables that no oracle covers
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, doc-coverage.
 
@@ -6116,7 +6156,7 @@ PROMISE from a prose MENTION, because `docs/ENVIRONMENT.md` deliberately discuss
 `SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT` in prose **precisely because nothing
 reads them** — a naive widening would red on the two sentences that exist to record that fact.
 
-### E124 — `docs/_data/sugar-crush.json` is a fourth documentation surface outside every oracle
+### E124 [OPEN] — `docs/_data/sugar-crush.json` is a fourth documentation surface outside every oracle
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
 **Monorepo-root scope — needs a supervisor decision before any lane can own it.**
@@ -6129,7 +6169,7 @@ on the `_data` sources, which live outside `sugar-crush/` — outside every lane
 **Step.** Decide whether the `_data` sources are in scope for the `sugar-crush` doc-drift guards at all.
 If they are, the guard belongs beside `tools/gen-docs.php`, not in `sugar-crush/tests/`.
 
-### E125 — the `paragraphs()` splitter exists in three independent copies
+### E125 [PARTIAL] — the `paragraphs()` splitter exists in three independent copies
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, test-quality.
 
@@ -6141,7 +6181,7 @@ paragraph-unit to all three**, so a claim hidden in either is invisible to every
 **Step.** Consolidate into one helper (`tests/Config/Support/` now exists, from `EnvReadScanner`), so the
 fenced-block question is answerable in one place instead of three. Related: E108, E129.
 
-### E126 — `SymbolCitationDriftTest` pins citations to TEST symbols only
+### E126 [NO-FIX] — `SymbolCitationDriftTest` pins citations to TEST symbols only
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, and it is a
 **stated limit**, not an oversight.
@@ -6156,7 +6196,7 @@ them — that is what makes the test half both cheap and uniquely rot-prone. The
 separate, larger instrument. The doc-block says so; this entry exists so the limit is not mistaken for
 coverage.
 
-### E127 — `EnvReadScanner`'s S3 forwarding resolves a callee by bare method name within one file
+### E127 [OPEN] — `EnvReadScanner`'s S3 forwarding resolves a callee by bare method name within one file
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
 **Inherited and re-confirmed in round 44, not introduced by it.**
@@ -6168,7 +6208,7 @@ first. No such case exists in `src/` today.
 **Step.** Resolve through the declaring scope rather than the file. Local fix; worth taking the next time
 the scanner is touched, not on its own.
 
-### E128 — `tabulatedNames()` scrapes the first table column only, deliberately
+### E128 [NO-FIX] — `tabulatedNames()` scrapes the first table column only, deliberately
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low. **A decision,
 recorded so a later round does not "fix" it in isolation.**
@@ -6181,7 +6221,7 @@ into a promise the code must keep.
 **Step.** None, unless widening — and if it is ever widened, the documented-but-unread direction has to
 be re-thought in the same commit or the guard starts reding on E123's two deliberate prose entries.
 
-### E129 — the stale-figure retraction exemption is still semantic, not an identity test
+### E129 [NO-FIX] — the stale-figure retraction exemption is still semantic, not an identity test
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, **known
 residual**.
@@ -6195,7 +6235,7 @@ genuine retractions.
 **Step.** None for now. The obvious alternative — a filename exemption list — is **precisely what went
 stale in round 43**, when a copy was fixed and its list entry was not. The trade is taken deliberately.
 
-### E130 — no glob / token / timing / memory claim from round 44 has been exercised on PHP 8.4
+### E130 [NO-FIX] — no glob / token / timing / memory claim from round 44 has been exercised on PHP 8.4
 
 **Recorded 2026-08-22 by the supervisor.** Severity: low, coverage. Severity rises if CI's 8.4 leg reds.
 
@@ -6208,7 +6248,7 @@ followed by lane b's `fnmatch` and allocator figures, which are deliberately unp
 **Step.** CI's 8.4 leg is the first thing to run any of it. Read that run before trusting a round-44
 token or timing figure on 8.4.
 
-### E131 — ~~`LayeredSettings`' 66/68 `strlen` census was stale on arrival at master~~ FIXED in round 44
+### E131 [CLOSED] — ~~`LayeredSettings`' 66/68 `strlen` census was stale on arrival at master~~ FIXED in round 44
 
 **Recorded and fixed 2026-08-22 by the supervisor**, at merge, from the round-44 digest.
 
@@ -6227,7 +6267,7 @@ WORKTREE IS INVALIDATED BY ANY SIBLING LANE'S MERGE.** Either re-take it at merg
 cardinality at all — ship the generator and the claim it supports. Same family as the assertion-count
 non-additivity measured at this merge (see the round-44 worklog entry).
 
-### E132 — `exitCodeAfter()` cannot read a ternary return, so the bare-`result` guard over-approximates
+### E132 [CLOSED] — `exitCodeAfter()` cannot read a ternary return, so the bare-`result` guard over-approximates
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-b report.** Severity: low.
 
@@ -6241,7 +6281,7 @@ unrelated later branch would satisfy it wrongly.
 
 **Step.** Teach `exitCodeAfter()` to read a ternary return.
 
-### E133 — the payload-mode probe still globs shared `/tmp`; only attribution moved
+### E133 [CLOSED] — the payload-mode probe still globs shared `/tmp`; only attribution moved
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-c report.** Severity: low, flake.
 **E96 is closed for the ASSERTION; this is what E96 did not close.**
@@ -6260,7 +6300,7 @@ resolves and **caches on first use** and does NOT honour a runtime `putenv('TMPD
 directly by lane c. A test therefore cannot isolate itself into a private temp directory after the fact,
 which is why attribution moved instead of the directory being narrowed.
 
-### E134 — a mutation harness must refuse a dirty tree, not merely revert
+### E134 [PARTIAL] — a mutation harness must refuse a dirty tree, not merely revert
 
 **Recorded 2026-08-22 by the supervisor.** Severity: low, process. **Round 44 produced two independent
 instances, in opposite directions.**
@@ -6276,7 +6316,7 @@ assertions).
 **refuses** rather than cleans, `git clean -fdq` alongside `git checkout -- .`, and a scratchpad backup
 of any file carrying uncommitted work **before** it is mutated.
 
-### E135 — round-44 lanes allocated overlapping backlog E-numbers, and the reports still cite the losers
+### E135 [CLOSED] — round-44 lanes allocated overlapping backlog E-numbers, and the reports still cite the losers
 
 **Recorded 2026-08-22 by the supervisor.** Severity: low, process. **Partially fixed at merge.**
 
@@ -6296,7 +6336,7 @@ of the merge step.
 (`Eb1`, `E144`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
 shared scratchpad but not this.
 
-### E136 — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
+### E136 [OPEN] — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: medium, correctness. **Measured, not inferred.**
 
@@ -6334,7 +6374,7 @@ makes `createWorktree()` throw (pre-creating the agent's worktree is enough — 
 `MultiAgentRefactorTest::testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild()`) and asserts
 the task is claimable again afterwards.
 
-### E137 — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
+### E137 [OPEN] — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low today, latent. **Source-verified, not observed.**
 
@@ -6357,7 +6397,7 @@ the path the backoff protects; the code comment now says so.
 `LOCK_NB` + a bounded retry with a diagnosable failure, or whether blocking is correct and the
 justification should just say so. `src/Session.php` uses `flock()` too and belongs in the same sweep.
 
-### E138 — nothing stops the next forked child in `tests/` from ending in a plain `exit()`
+### E138 [CLOSED] — nothing stops the next forked child in `tests/` from ending in a plain `exit()`
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low, process. **Mechanism measured.**
 
@@ -6388,7 +6428,7 @@ and it must assert **per occurrence, not a count** — a cardinality over `tests
 moment a sibling lane merges. It was left unwritten here for exactly that reason: it scans files three
 lanes were editing concurrently.
 
-### E139 — E133's recorded negative about `sys_get_temp_dir()` is right but understated
+### E139 [NO-FIX] — E133's recorded negative about `sys_get_temp_dir()` is right but understated
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: none, correction. **Re-measured as instructed.**
 
@@ -6407,7 +6447,7 @@ userland cannot move it at all.
 test cannot relocate itself into a private temp directory after the fact, so attribution has to move
 instead of the directory. `tests/bootstrap.php`'s `putenv('TMPDIR=…')` is not contradicted by this — it
 is documented there as working on **children** only, which is exactly what the measurement above shows.
-### E140 — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
+### E140 [OPEN] — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
 
 **Recorded 2026-08-22 by round-45 lane b (fix stage), from its own reviewer's finding.** Severity: low,
 documentation accuracy. **Source-verified.**
@@ -6428,7 +6468,7 @@ point stands): the collect-side unlink is still the normal lifecycle, the `final
 one for the abandonment path only, and neither reaches a child that is still running — which is the
 population `sweep()` is actually for, so the paragraph's conclusion is unchanged.
 
-### E141 — `rendezvousTool()` reports `max($seen, count(glob(...)))`, which overshoots whenever callers outnumber `peers`
+### E141 [CLOSED] — `rendezvousTool()` reports `max($seen, count(glob(...)))`, which overshoots whenever callers outnumber `peers`
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low, test-harness sharp edge. **Observed twice.**
 
@@ -6444,7 +6484,7 @@ own group directory, which is a convention nothing enforces.
 record callers per group and assert that `peers` equals that number, so a mismatched pair fails loudly
 at construction instead of flaking one run in fifty.
 
-### E142 — the suite's per-test time limit does not reach a forked child
+### E142 [CLOSED] — the suite's per-test time limit does not reach a forked child
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: medium for diagnosis, low for correctness.
 **Measured.**
@@ -6463,7 +6503,7 @@ rather than an edit.
 creates and SIGKILLs any survivor in `tearDown()`, which is inside the parent's control and needs no
 phpunit.xml change.
 
-### E143 — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
+### E143 [OPEN] — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
 
 **Recorded 2026-08-22 by round-45 lane b (fix stage).** Severity: low for correctness, HIGH for every
 future round's reporting. **Measured, with the generator below.**
@@ -6503,7 +6543,7 @@ over `assertIsInt()` for precisely this reason ("an assertion per call added ~34
 assertion count while pinning nothing") — and then reintroduced the same cost one call deeper.
 `tests/Config/GlobFigureDriftTest.php` belongs to another lane, hence a backlog entry rather than a fix.
 
-### E144 — a FOURTH `paragraphs()` copy carries the same blind spot and was not routed
+### E144 [OPEN] — a FOURTH `paragraphs()` copy carries the same blind spot and was not routed
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135 — the
 supervisor should renumber at merge.**
@@ -6537,7 +6577,7 @@ mutation as a fixture row. This file's own `DOORS` is a flat list of four door n
 conjunct, so it does not carry the defect today — it would acquire it the moment the per-key shape is
 transplanted. Transplant the repaired form, not the round-45 one.
 
-### E145 — the mention oracle has no way to record a variable another page deliberately says is unread
+### E145 [NO-FIX] — the mention oracle has no way to record a variable another page deliberately says is unread
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135.**
 
@@ -6568,7 +6608,7 @@ rather than a property of a rule.
 `DocumentParagraphs::of()` and make the exemption a property of the UNIT the name appears in — the
 `GlobFigureDriftTest` retraction pattern — so it is semantic rather than keyed to a path.
 
-### E146 — `exitCodeAfter()`'s red-on-ambiguity contract is dormant in `src/`
+### E146 [NO-FIX] — `exitCodeAfter()`'s red-on-ambiguity contract is dormant in `src/`
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: informational. **Lane-local provisional id.**
 
@@ -6585,7 +6625,7 @@ seam is the split between the two methods; the measured reason to keep it is tha
 document lands on a ternary branch, `shippedTypes()` needs a decision from a person rather than a
 silent `null`.
 
-### E147 — the Agents suites share `~/.sugar-crush/teams/` across lanes and go red on each other
+### E147 [CLOSED] — the Agents suites share `~/.sugar-crush/teams/` across lanes and go red on each other
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: medium, process + test hygiene. **Lane-local
 provisional id per E135.**
@@ -6612,7 +6652,7 @@ confined to `tests/Agents/*` as interference, re-run those files alone, and say 
 round-45 brief already asks for `/tmp`, extended to `$HOME`. Do NOT bulk-delete
 `~/.sugar-crush/teams/*` while sibling lanes are running.
 
-### E148 — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
+### E148 [OPEN] — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
 
 **Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id per
 E135.**
@@ -6635,7 +6675,7 @@ reason recorded there, and decide deliberately whether `SKILL.md` files are ment
 decided, the decision belongs in `mentionSurfaces()`' doc-block with the measurement, not in a filename
 list.
 
-### E149 — the mention scrape reads raw text, so a line-wrapped variable name is invisible
+### E149 [OPEN] — the mention scrape reads raw text, so a line-wrapped variable name is invisible
 
 **Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id.**
 
@@ -6651,7 +6691,7 @@ empty today.
 **Step.** Normalise the text through `DocumentParagraphs::of()` and scrape the units, which also brings
 the two censuses onto one window. Do it when a name first wraps, and pin it with a wrapped fixture.
 
-### E150 — a lane-c guard's span is anchored to a prose phrase on two read-side surfaces
+### E150 [NO-FIX] — a lane-c guard's span is anchored to a prose phrase on two read-side surfaces
 
 **Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: informational, merge hazard.
 
@@ -6665,7 +6705,7 @@ rather than silently, which is the right shape.
 someone else edited, not as a lane-c defect. Fix it by restoring the phrase or by moving the anchor,
 never by loosening the `assertCount(1, …)`.
 
-### E151 — the shared window is COARSER inside a fenced block, and that weakens a live exemption
+### E151 [NO-FIX] — the shared window is COARSER inside a fenced block, and that weakens a live exemption
 
 **Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Documented and pinned this
 round; NOT fixed.**
@@ -6687,7 +6727,7 @@ which direction it means.
 halves E125 removed. Scope the retraction exemption so that inside a fenced unit the retraction must be
 on the same LINE as, or adjacent to, the figure it exempts.
 
-### E152 — `ReadmeSettingsTierClaimTest` retypes the launch-report format instead of reading the constant
+### E152 [CLOSED] — `ReadmeSettingsTierClaimTest` retypes the launch-report format instead of reading the constant
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, drift. **Measured
 by mutation.**
@@ -6700,7 +6740,7 @@ format to a `public const` precisely so this retyping could stop.
 
 **Step.** Read `Bootstrap::PROJECT_TIER_TOOL_REMOVAL_FORMAT`. Was in no lane's ownership in round 45.
 
-### E153 — no behavioural assertion exists for `PROJECT_TIER_TOOL_REMOVAL_FORMAT`'s body, and none at all for the no-survivors branch
+### E153 [CLOSED] — no behavioural assertion exists for `PROJECT_TIER_TOOL_REMOVAL_FORMAT`'s body, and none at all for the no-survivors branch
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, coverage.
 **Measured by mutation.**
@@ -6714,7 +6754,7 @@ structurally, by `METHOD_LITERALS`.
 **Step.** Assert `disabled %d of the %d` against that same child stderr, and add a case where the
 project's globs remove EVERY tool, which gives the no-survivors constant the reader it lacks.
 
-### E154 — 38 `error_log()` call sites in `src/` write to the user's stderr, unprefixed and unrouted
+### E154 [PARTIAL] — 38 `error_log()` call sites in `src/` write to the user's stderr, unprefixed and unrouted
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, TUI corruption.
 **Measured on PHP 8.3.6, `ini_get('error_log')` empty on this box.**
@@ -6728,7 +6768,7 @@ lands on a frame the renderer believes it owns** — the render-invariant class 
 **Step.** Per-site triage: debug output (remove or gate) versus diagnostic (route onto the seam). Pinned
 per file by `StderrEmitterCensusTest`, so a 39th reds.
 
-### E155 — `HeadlessPermissionPrompt`'s four stderr shapes have never been examined against the seam rule
+### E155 [CLOSED] — `HeadlessPermissionPrompt`'s four stderr shapes have never been examined against the seam rule
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Pinned, unanalysed.**
 
@@ -6738,7 +6778,7 @@ channel 2 / channel 4 by `StderrEmitterCensusTest`, but never subjected to the r
 
 **Step.** Walk the four and decide, per shape, transcript seam versus stderr.
 
-### E156 — the 62 `sugarcrush:` lines a full run prints are a HARNESS property, not a `src/` one
+### E156 [OPEN] — the 62 `sugarcrush:` lines a full run prints are a HARNESS property, not a `src/` one
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, noise. **Measured;
 the supervisor reproduced the 62 independently in round 44.**
@@ -6752,7 +6792,7 @@ on the pipe the test already reads. Owning files: `BootstrapLaunchNoticeRoutingT
 **Step.** Per-spawn stderr redirection in the harness. 🔴 **Silencing at the source is the WRONG default —
 for most of these shapes the line IS the assertion.**
 
-### E157 — a zero from substring-grepping `tests/` is not proof that nothing asserts a shape
+### E157 [NO-FIX] — a zero from substring-grepping `tests/` is not proof that nothing asserts a shape
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: methodological.
 
@@ -6763,7 +6803,7 @@ Recorded so the zero is not shipped as a finding by a later round.
 
 **Step.** Confirm each by mutation before acting on it.
 
-### E158 — `BinSugarcrushAutoloadGuardTest`'s "is ELEVEN" census does not say which channel it counts
+### E158 [PARTIAL] — `BinSugarcrushAutoloadGuardTest`'s "is ELEVEN" census does not say which channel it counts
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, prose.
 
@@ -6772,7 +6812,7 @@ it is the first answer a reader finds to a question it does not answer, now that
 
 **Step.** Name the channel and cross-reference `StderrEmitterCensusTest` for the other four.
 
-### E159 — `StderrEmitterCensusTest`'s per-file rosters are cross-lane fragile by construction
+### E159 [NO-FIX] — `StderrEmitterCensusTest`'s per-file rosters are cross-lane fragile by construction
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: process note, not a defect.
 
@@ -6781,7 +6821,7 @@ reds this at merge. **That is the guard working.**
 
 **Step at merge.** Bump the roster AFTER deciding where the new write belongs. 🔴 **Never loosen the map.**
 
-### E160 — `flattened()` is implemented twice under `tests/Cli/`
+### E160 [CLOSED] — `flattened()` is implemented twice under `tests/Cli/`
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, duplication.
 
@@ -6792,7 +6832,7 @@ trait under `tests/`, outside the file set lane a could touch, so it was documen
 **Step.** One-file consolidation for whoever owns `tests/` support next. Keep both known-positive
 controls — see E125's four-copy history for what happens when a shared helper loses them.
 
-### E161 — `StderrEmitterCensusTest::argumentCount()` would go negative on a PHP attribute inside a call
+### E161 [CLOSED] — `StderrEmitterCensusTest::argumentCount()` would go negative on a PHP attribute inside a call
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, latent. **Measured as
 latent — no attribute appears inside any `error_log()` call in `src/` today.**
@@ -6803,7 +6843,7 @@ count returns early. Affects the "other" channel only.
 
 **Step.** Add `T_ATTRIBUTE` to the opener set and a fixture that carries one.
 
-### E162 — `sprintfCensus()`'s known-answer control is narrower than the scanner
+### E162 [CLOSED] — `sprintfCensus()`'s known-answer control is narrower than the scanner
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Latent.**
 
@@ -6815,7 +6855,7 @@ exists today.
 **Step.** Widen the control to the shapes the scanner can meet, per round 44's rule that a guard
 asserting an absence needs a known-positive through the same scanner.
 
-### E163 — `sprintfCensus()` cannot distinguish an interpolated format from a promoted constant
+### E163 [CLOSED] — `sprintfCensus()` cannot distinguish an interpolated format from a promoted constant
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low. **Latent.**
 
@@ -6826,7 +6866,7 @@ as "promoted"** — the classifier says the opposite of the truth in exactly the
 
 **Step.** Classify the three cases separately: literal, constant reference, interpolated.
 
-### E164 — E104's remaining scope: ten literal `sprintf()` formats in `Bootstrap.php` unwalked
+### E164 [CLOSED] — E104's remaining scope: ten literal `sprintf()` formats in `Bootstrap.php` unwalked
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** **Derived by
 `testTheLiteralFormatCensusHasAGenerator()`, deliberately not written into prose.**
@@ -6837,7 +6877,7 @@ promoted (E118).
 **Step.** Walk the other ten and ask, per format, whether an external reader exists. 🔴 **The promotion
 rule is external readership, not tidiness.**
 
-### E165 — the "84 assertions" historical figure's original tree is unidentified
+### E165 [OPEN] — the "84 assertions" historical figure's original tree is unidentified
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, provenance.
 
@@ -6851,7 +6891,7 @@ replaced the retyped literal with a source scrape.
 **Step.** Either identify the commit or drop the figure and keep the re-measurement. Prefer dropping —
 see E131 (ship the generator and the claim, not the count).
 
-### E166 — every round-45 lane-a mutation verdict is FILTERED, not full-suite
+### E166 [NO-FIX] — every round-45 lane-a mutation verdict is FILTERED, not full-suite
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: methodological.
 
@@ -6863,7 +6903,7 @@ which is a weaker claim than "survived the suite".
 **Step.** State the scope of every mutation verdict in the round's report. A filtered SURVIVED is not
 evidence that nothing in the suite catches it.
 
-### E167 — the suite floor must be measured at the commit the lanes branch from, not at the merge commit
+### E167 [NO-FIX] — the suite floor must be measured at the commit the lanes branch from, not at the merge commit
 
 **Recorded 2026-08-22 by the supervisor.** Severity: process, and it cost round 45 a disputed figure.
 **Measured; two lanes observed it independently.**
@@ -6881,7 +6921,7 @@ were right to say so.**
 not at the merge commit, and not before the round's own planning commits land. This is the same
 mechanism as E143 and E131 seen from the supervisor's side.
 
-### E168 — a mutation harness whose restore is a later step in the same agent does not survive the agent dying
+### E168 [NO-FIX] — a mutation harness whose restore is a later step in the same agent does not survive the agent dying
 
 **Recorded 2026-08-22 by the supervisor. E134's third instance, and the one that shows the structure.**
 Severity: medium, data loss. **Observed.**
@@ -6901,7 +6941,7 @@ dirty worktree before merging** — round 44's checklist only checked at the end
 model: refuses a dirty tree before mutating, exits 94 on a no-op, prints the actual `+`/`-` lines, and
 re-verifies clean after restoring.
 
-### E169 — the 58-vs-38 `error_log()` disagreement is settled: 38 calls, 20 comment mentions, 0 residue
+### E169 [NO-FIX] — the 58-vs-38 `error_log()` disagreement is settled: 38 calls, 20 comment mentions, 0 residue
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: none — **the brief's premise was resolved in the
 census's favour, and the finding is that the naive count was the wrong instrument.**
@@ -6925,7 +6965,7 @@ the full suite.**
 
 **Step.** None. Do not re-derive the 58 — it is not a count of anything.
 
-### E170 — the 18 tool-call-parser `error_log()` sites need a MID-SESSION notice sink, not a gate
+### E170 [CLOSED] — the 18 tool-call-parser `error_log()` sites need a MID-SESSION notice sink, not a gate
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, user-visible. **Not attempted: the fix needs
 files outside this lane's set.**
@@ -6947,7 +6987,7 @@ seam E171 names. Second best, and much cheaper: drop `readonly`, add a `degradat
 mirroring `SkillLoader::skipped()`, gate the `error_log()` behind `SUGARCRUSH_DEBUG_TOOLCALLS`, and update
 the two parser test files to set the flag. One lane, three src files plus two test files.
 
-### E171 — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one
+### E171 [CLOSED] — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, architectural. **Verified at the source.**
 
@@ -6972,7 +7012,7 @@ because nothing on their paths opens the alternate screen.
 **Step.** A `Chat`-side notice inbox reachable from a `Cmd`, or a process-wide sink `Chat` polls in
 `subscriptions()`. Design it once; the five classes above queue behind it.
 
-### E172 — three CommandLoader `error_log()` sites duplicate a message already on the seam
+### E172 [PARTIAL] — three CommandLoader `error_log()` sites duplicate a message already on the seam
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low. **Verified, not fixed.**
 
@@ -7001,7 +7041,7 @@ read" — of the shape `SkillLoader` already built, because the launch report pr
 `LAUNCH_NOTICE_LIMIT` bounds the transcript. Draining it raw would let a directory of twenty unparseable
 `*.md` files evict the capability warnings the seam exists for.
 
-### E173 — `--output-format json` never carries a permission refusal
+### E173 [CLOSED] — `--output-format json` never carries a permission refusal
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: medium, and it is Phase 9 step 1's constraint.
 
@@ -7014,7 +7054,7 @@ exit code"* — and that caller gets a turn that completed with a tool quietly n
 routing of those lines — see the E155 section of `HeadlessPermissionPrompt`'s docblock for why stderr is
 right for them.
 
-### E174 — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
+### E174 [PARTIAL] — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
 
 **Recorded 2026-08-22 by round-46 lane a; inherited from round 45's own deferred note.** Severity: low.
 
@@ -7028,7 +7068,7 @@ E161's array-token openers so it does not repeat that defect.
 **Step.** One `tests/Support/` trait holding `flattened()`, `significantTokens()` and the depth walk, in a
 round where that directory is in scope. Until then, every copy must carry the array-token openers.
 
-### E175 — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
+### E175 [OPEN] — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low, blocked. **Analysed and deliberately not done.**
 
@@ -7050,7 +7090,7 @@ have to rediscover it.
 decide whether anyone is told, never whether the turn survives), amend the integration test to set the
 flag, and add the row `EnvRosterDriftTest` will demand on `docs/ENVIRONMENT.md`. That last one is not
 optional: the page claims to list every variable `src/` reads and a guard enforces it.
-### E176 — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
+### E176 [PARTIAL] — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
 
 **Recorded 2026-08-22 by round-46 lane b.** Severity: process, and it redirected a whole lane item.
 **Measured at `62f4e5d1`, PHP 8.3.6, one file per `vendor/bin/phpunit <file>` run, counted with
@@ -7096,7 +7136,7 @@ change. Before that lands, point `ChildStderrCaptureScanner` at `tests/Cli/` by 
 `ChildStderrCaptureTest::SCOPE` to `''` and see whether ANY of the 62 is a spawn — this lane's answer for
 `tests/Integration/` is no.
 
-### E177 — `tests/Agents/MailboxTest.php`'s forked child ends in a plain `exit(0)` inside PHPUnit
+### E177 [CLOSED] — `tests/Agents/MailboxTest.php`'s forked child ends in a plain `exit(0)` inside PHPUnit
 
 **Recorded 2026-08-22 by round-46 lane b. Out of lane (`tests/Agents/`).** Severity: low today, latent.
 **Found by `ForkedChildExitScanner`; recorded in `ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT`
@@ -7110,7 +7150,7 @@ watcher — a property of what the test happens to do, not a reason.
 **Step.** `ForkedChild::exitNow(0)`, then delete the `Agents/MailboxTest.php` row from
 `ACCEPTED_BARE_EXIT` (`testEveryAcceptedBareExitFileStillHasOne()` will demand it).
 
-### E178 — `WorkflowEngine`'s interrupt handler leaves a forked child through a plain `exit()`
+### E178 [CLOSED] — `WorkflowEngine`'s interrupt handler leaves a forked child through a plain `exit()`
 
 **Recorded 2026-08-22 by round-46 lane b. Out of lane (`src/`).** Severity: medium. **Measured.**
 
@@ -7132,7 +7172,7 @@ over a path nothing had touched.
 convert the two sentinels and delete the `Integration/WorkflowResumptionTest.php` row. The parent-side
 assertions read `pcntl_wifexited()`/`wexitstatus()` and will need `wifsignaled()`/`wtermsig()` instead.
 
-### E179 — the reaper trait is adopted only under `tests/Integration/`
+### E179 [CLOSED] — the reaper trait is adopted only under `tests/Integration/`
 
 **Recorded 2026-08-22 by round-46 lane b. Out of lane.** Severity: low. **Derived, not listed.**
 
@@ -7167,7 +7207,7 @@ Each needs `use ReapsForkedChildrenTrait;`, `$this->forkTracked()` in place of `
 `$this->reapTrackedForkedChildren()` as the FIRST statement of `tearDown()` — before anything that
 removes a temp tree.
 
-### E180 — `tests/Agents/TaskListTest.php` forks twice with `\pcntl_fork()` and leaves both children through `exit(0)`
+### E180 [CLOSED] — `tests/Agents/TaskListTest.php` forks twice with `\pcntl_fork()` and leaves both children through `exit(0)`
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage), out of lane.** Severity: medium. **Measured.**
 
@@ -7186,7 +7226,7 @@ forks at all. The scanner now reads both token types and the file is recorded in
 `use ReapsForkedChildrenTrait;` at the same time — the loop forks up to `$childCount` sleepers whose only
 bound is a 2-second deadline the child enforces on itself.
 
-### E181 — `ReapsForkedChildrenTraitTest` will need an untracked-fork exemption when the reaper's scope widens
+### E181 [CLOSED] — `ReapsForkedChildrenTraitTest` will need an untracked-fork exemption when the reaper's scope widens
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured.**
 
@@ -7200,7 +7240,7 @@ ledger — routing it through `forkTracked()` would empty the ledger and delete 
 **Step.** When E179 widens `SCOPE` to `''`, add `Support/ReapsForkedChildrenTraitTest.php` to
 `UNTRACKED_FORKS_ALLOWED` with the count and the two reasons above. Do not "fix" either site.
 
-### E182 — two known limits in `ChildStderrCaptureScanner`, both documented and neither enforced
+### E182 [CLOSED] — two known limits in `ChildStderrCaptureScanner`, both documented and neither enforced
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured.**
 
@@ -7216,7 +7256,7 @@ doc-blocks so the next reader is not misled, neither closed:
    backward walk at the enclosing function's opening brace, which `ForkedChildExitScanner::functionRanges()`
    already computes for the other scanner.
 
-### E183 — the reaper's ext-pcntl-without-ext-posix branch is fixed but cannot be pinned on this box
+### E183 [NO-FIX] — the reaper's ext-pcntl-without-ext-posix branch is fixed but cannot be pinned on this box
 
 **Recorded 2026-08-22 by round-46 lane b (fix stage).** Severity: low. **Measured, and deliberately not
 closed.**
@@ -7238,7 +7278,7 @@ runs. The fix is committed on its argument, not on a green test, and this entry 
 **What would close it.** Either the seam above plus a subclass that reports "cannot signal" and asserts
 the reaper returns promptly with the pid absent from `$killed`, or a CI job on a build without ext-posix.
 Neither is worth a round on its own; fold it into whichever round next touches the trait.
-### E184 — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
+### E184 [OPEN] — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
 
 **Recorded 2026-08-22 by round-46 lane c. Not done because that file is outside lane c's ownership this
 round.** Severity: low. **Observed, measured.**
@@ -7257,7 +7297,7 @@ skipped-skills aggregate, the capped-fan-out overflow row (both the `assertSame(
 child renders from is a TAUTOLOGY with respect to the constant's TEXT — see E185. Keep exactly one
 independent copy per format, or keep the doc-page guard that already provides one.
 
-### E185 — rendering a test expectation from the constant under test cannot pin that constant's text
+### E185 [CLOSED] — rendering a test expectation from the constant under test cannot pin that constant's text
 
 **Recorded 2026-08-22 by round-46 lane c. Measured against round 46's own fix, which is the only
 acceptance test a fix gets.** Severity: medium, methodological. **Observed.**
@@ -7278,7 +7318,7 @@ The independent copy is best held by a second party that is not a test — READM
 test. The general form: **whenever a guard's expected and actual values are both derived from the code
 under test, name what the tautology costs before shipping it.**
 
-### E186 — some `sprintf()` formats in `Bootstrap.php` are inline on purpose; others only looked that way, and a mutation is what told them apart
+### E186 [NO-FIX] — some `sprintf()` formats in `Bootstrap.php` are inline on purpose; others only looked that way, and a mutation is what told them apart
 
 **Recorded 2026-08-22 by round-46 lane c.** Severity: informational. **Measured.**
 
@@ -7326,7 +7366,7 @@ are corrected in place rather than deleted, because the reasoning around them st
 rendered SENTENCE rather than a clause — a README sample, a `docs/*.md` code block, or an `assertSame()`
 on the line. That is the same test E164 applied.
 
-### E187 — nothing sweeps the doc pages for unguarded quotes of a promoted format
+### E187 [CLOSED] — nothing sweeps the doc pages for unguarded quotes of a promoted format
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent. The two instances the sweep found this round were
 both closed; the SWEEP itself is what is deferred.** Severity: low. **Observed, measured.**
@@ -7359,7 +7399,7 @@ guarded readers. New page quoting a format, or a newly promoted format some page
 with "this page quotes a format nothing checks" instead of going unnoticed. Formats whose longest span is
 below the length threshold must be listed as unsweepable rather than dropped.
 
-### E188 — a class-total figure in a doc-block is a cardinality over `tests/`, and round 46 shipped three stale ones
+### E188 [NO-FIX] — a class-total figure in a doc-block is a cardinality over `tests/`, and round 46 shipped three stale ones
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent, during the verification pass over the same round's own
 commits.** Severity: informational, but it recurred four times in three rounds. **Measured.**
@@ -7388,7 +7428,7 @@ mutation that reds NOTHING, say), say so qualitatively: "no test in that class r
 **Step.** No code change. When a doc-block cites a mutation verdict, cite the failing test names. Only the
 `Failures: 0` / "nothing red" case needs no name.
 
-### E189 — two guards whose failure message will misdescribe the failure
+### E189 [OPEN] — two guards whose failure message will misdescribe the failure
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent, from the review's NOTE 8 plus one found beside it.**
 Severity: low. **Observed.**
@@ -7408,7 +7448,7 @@ uses `assertStringContainsString` against the FLATTENED page, so its failure out
 both possibilities. For the second, narrow the haystack to the flattened paragraph containing `ignoring `
 before asserting, so a failure prints a sentence rather than a page.
 
-### E190 — on resume, a cached review's stated HEAD is stale if the killed fix agent committed before dying
+### E190 [NO-FIX] — on resume, a cached review's stated HEAD is stale if the killed fix agent committed before dying
 
 **Recorded 2026-08-22 by the supervisor, from round-46 lane c.** Severity: medium, wasted work and
 misread evidence. **Observed.**
@@ -7430,7 +7470,7 @@ a previous incarnation of you died after committing — verify them by mutation,
 so in your report.** Anyone re-reading such a review against its stated sha is reading a tree three or
 more commits behind.
 
-### E191 — the census-additivity rule is about a guard's PREDICATE, not its scan SCOPE
+### E191 [NO-FIX] — the census-additivity rule is about a guard's PREDICATE, not its scan SCOPE
 
 **Recorded 2026-08-22 by the supervisor.** Severity: process. **Measured; corrects an over-broad rule.**
 
@@ -7449,7 +7489,7 @@ a sibling's additions fall inside its PREDICATE, not merely inside its scan scop
 a lower bound, not an equality — but "walks a directory a sibling touches" is not sufficient reason to
 expect an overshoot, and predicting one and being wrong costs the prediction its credibility.
 
-### E192 — route the remaining three mid-session emitter classes onto the seam
+### E192 [CLOSED] — route the remaining three mid-session emitter classes onto the seam
 
 `SglangProvider` (3 sites), `AgentWorkerPool` (1) and `WorktreeManager` (4) are the emitters E171 names
 that round 47 lane a did not reach — all outside its file list. The seam, its `arm()`, its ownership
@@ -7465,7 +7505,7 @@ owns.
 **Step.** One PR per emitter class, in that order, each with its routing decision written into the class
 doc-block and its census bumps in the same commit.
 
-### E193 — a notice raised while no turn is in flight waits for the next Msg
+### E193 [CLOSED] — a notice raised while no turn is in flight waits for the next Msg
 
 `Chat::subscriptions()` declares the runtime-notice tick on `$this->inFlight || RuntimeNoticeSink::hasPending()`,
 and `hasPending()` is consulted only when `Program` reconciles, i.e. on the next Msg of any kind. For the
@@ -7480,7 +7520,7 @@ cover a case that does not yet exist is the wrong trade.
 **Step.** Land with `E192`, not before. The likely shape is a one-shot self-cancelling tick armed by
 whatever wakes the loop for a background worker, rather than a permanent one.
 
-### E194 — there is no PHPUnit-level reset for `RuntimeNoticeSink`
+### E194 [OPEN] — there is no PHPUnit-level reset for `RuntimeNoticeSink`
 
 Appointment (`Chat::drainsRuntimeNotices`) made the leak round 47 found unreachable, but the sink is
 still a process-wide static that any test can arm via `Bootstrap::chat()` and fill via a parser. A
@@ -7492,7 +7532,7 @@ which no round-47 lane was allowed to touch.
 mutate `RuntimeNoticeSink::record()` to append its calling test class to a file, run the full suite,
 `sort | uniq -c`. Round 47 measured 262 armed records across six classes.
 
-### E195 — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
+### E195 [OPEN] — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
 
 MEASURED on PHP 8.3.6 by running `StderrEmitterCensusTest::scan()` over a fixture per shape; each scans
 as **0** where the bare spelling scans as 1:
@@ -7515,13 +7555,13 @@ than mis-attributed, which is the shape rule 14 warns about.
 channels 1, 2 and 5. The variable-class-name and `call_user_func` cases need a different instrument and
 are probably not worth one until a site of that shape exists.
 
-### E196 — two copies of `flattened()`
+### E196 [CLOSED] — two copies of `flattened()`
 
 `tests/Cli/StderrEmitterCensusTest.php` and `tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php`
 each carry a private copy. The former already records this as a deferred finding; it is still open. A
 test-support trait is the home.
 
-### E197 — E172's premise is dead; retire or restate it
+### E197 [NO-FIX] — E172's premise is dead; retire or restate it
 
 E172 says three `CommandLoader` sites duplicate a message already on the seam. VERIFIED AT SOURCE, round
 47: `src/Commands/CommandLoader.php` has **one** `error_log()`, in the private `report()` funnel, gated
@@ -7532,7 +7572,7 @@ drained by `Bootstrap::reportProjectTierRefusals()` into `warnPermissionConfigIn
 
 **Step.** Supersede E172 rather than schedule it.
 
-### E198 — the `src/` census bumps in `BuiltInToolCorpusTest` collide across lanes
+### E198 [CLOSED] — the `src/` census bumps in `BuiltInToolCorpusTest` collide across lanes
 
 `tests/Tools/BuiltInToolCorpusTest.php` pins `290` files / `concrete 240` / `309` declarations, and
 `src/Context/RepoMapBlock.php` restates two of them. All three are cardinalities over `src/`, so any
@@ -7541,7 +7581,7 @@ sibling lane that added a `src/` file in the same round has bumped or must bump 
 **Step.** Supervisor re-derives at merge and takes neither side's number. Longer term this is E188's
 problem and wants the figures derived by the test rather than written into the constant.
 
-### E199 — the seam has no session-wide cap on the transport backend
+### E199 [OPEN] — the seam has no session-wide cap on the transport backend
 
 `RuntimeNoticeSink::record()` returns before it reaches `NOTICE_LIMIT` whenever the cross-fork transport
 exists — i.e. on every interactive launch. So `NOTICE_LIMIT` bounds the array backend's queue and
@@ -7559,7 +7599,7 @@ across a session rather than across a batch.
 synthesises one overflow row on crossing is the obvious shape; the open question is whether it resets per
 turn, per session, or never.
 
-### E200 — `RUNTIME_NOTICE_POLL_SECONDS` has no upper bound and cannot cheaply get one
+### E200 [NO-FIX] — `RUNTIME_NOTICE_POLL_SECONDS` has no upper bound and cannot cheaply get one
 
 Round 47 pinned the relation its doc-block argues for — the notice tick is slower than
 `TOOL_EVENT_POLL_SECONDS`, is non-zero, and is wired to the right constant (all three MEASURED by
@@ -7571,7 +7611,7 @@ operator.
 **Step.** If a ceiling is wanted, derive it from something real — e.g. the shortest turn the suite can
 produce — rather than picking a number. Otherwise leave it and keep the non-coverage stated in the
 test's doc-block, which it now is.
-### E201 — a plain `exit()` in a forked child does NOT re-run PHPUnit's after-test hooks
+### E201 [NO-FIX] — a plain `exit()` in a forked child does NOT re-run PHPUnit's after-test hooks
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process + doc accuracy. **Measured; falsifies
 sentences that were in the tree, in a lane brief, and in a salvaged commit message.**
@@ -7600,7 +7640,7 @@ fix was reverted.
 **Step.** When a brief or a review states a MECHANISM, the acceptance test is a probe, not a citation.
 This one cost four minutes and corrected four places at once.
 
-### E202 — `tests/Backend/EngineBackendReapTest.php` has four unreaped in-process forks
+### E202 [CLOSED] — `tests/Backend/EngineBackendReapTest.php` has four unreaped in-process forks
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: harness. **Derived, not enumerated.**
 
@@ -7618,7 +7658,7 @@ directory is clean and the row is still there, and
 `testNoDirectoryWithUnreapedForksIsUnaccountedFor()` fails if the row is deleted without widening
 `SCOPE`.
 
-### E203 — a `proc_open()` fd-2 entry behind a call is still read as a capture
+### E203 [CLOSED] — a `proc_open()` fd-2 entry behind a call is still read as a capture
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: guard hole. **Named limit, deliberately not
 closed this round.**
@@ -7638,7 +7678,7 @@ in `classifySpec()`, require fd 2's entry to be a literal array before answering
 out this round because it was not measured against the whole tree and rule 16 says a prescription is a
 hypothesis until it is.
 
-### E204 — three lanes share ONE scratchpad directory, and two of them collided in round 47
+### E204 [OPEN] — three lanes share ONE scratchpad directory, and two of them collided in round 47
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process. **Observed, cost one four-minute run.**
 
@@ -7670,7 +7710,7 @@ method that no longer exists under that name.
   mechanism E201 falsified — PHPUnit has no "shutdown sequence", and a child that plainly exits never
   re-enters the runner at all.
 
-### E205 — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
+### E205 [OPEN] — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low (no live occurrence). **Measured**, on
 `ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()` at lane-b HEAD, PHP 8.3.6.
@@ -7699,7 +7739,7 @@ right today. A real fix has to model fd 1's destination as it is reassigned, and
 this round (`exec("cmd 2>$err 2>/dev/null", …)` → `discarded`) is there to keep that composition honest.
 Whoever attempts it must re-run a tree-wide census before and after and report both tallies.
 
-### E206 — `tests/Chat/` and `tests/MCP/` are free to adopt into the stderr guard's SCOPE
+### E206 [CLOSED] — `tests/Chat/` and `tests/MCP/` are free to adopt into the stderr guard's SCOPE
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low. **Measured** with
 `ChildStderrCaptureScanner` over all of `tests/` at lane-b HEAD.
@@ -7720,7 +7760,7 @@ non-captured site, concentrated in `Context/`, `Tools/` and `Commands/`. Each ne
 real fix from its owning lane; `Commands/` is almost entirely `inherited` rather than `discarded`, which
 is the cheaper shape to close.
 
-### E207 — a team test writes into the REAL `~/.sugar-crush`, and concurrent lanes red each other
+### E207 [CLOSED] — a team test writes into the REAL `~/.sugar-crush`, and concurrent lanes red each other
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process + test isolation. **Out of lane.**
 
@@ -7741,7 +7781,7 @@ real isolation defect. The brief's `/tmp` prohibition does not cover `$HOME`, an
 the same class of collision for the scratchpad. **Step:** find the `throwing-*` team writer and sandbox
 its `HOME`, or serialise full-suite runs across lanes.
 
-### E208 — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
+### E208 [OPEN] — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low, forward-looking.
 
@@ -7755,7 +7795,7 @@ only PHP on the box. CI also runs 8.4, which lane b could not exercise. **Step:*
 token handling onto `TokenFunctionRanges`, and confirm the scanners' behaviour on 8.4 in CI before
 relying on either.
 
-### E209 — the reaper scanner's only real-tree known-positive requires `tests/Backend/` to stay broken
+### E209 [CLOSED] — the reaper scanner's only real-tree known-positive requires `tests/Backend/` to stay broken
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: merge hazard. Related to E202.
 
@@ -7774,7 +7814,7 @@ about the same predicate. (2) Emptying `OUT_OF_SCOPE` does not make this test *f
 reds the run, but only because this suite's `phpunit.xml` sets `failOnRisky="true"`; the guard that
 catches an emptied map on its own terms, with a message naming the file, is
 `testNoDirectoryWithUnreapedForksIsUnaccountedFor()`. Both halves measured by mutation.
-### E210 — a permission refusal and a hook DENY are indistinguishable by the time an event exists
+### E210 [CLOSED] — a permission refusal and a hook DENY are indistinguishable by the time an event exists
 
 **Recorded 2026-08-22 by round-47 lane c, while implementing E173.** Severity: low. **Measured.**
 
@@ -7789,7 +7829,7 @@ same string. Both belong in the array; only the sub-classification is missing.
 on `ToolResult` — and add a `kind` to each `refusals` entry. Files: `src/Runtime.php`,
 `src/Hooks/HookManager.php`, `src/Cli/NonInteractive.php`. Out of round-47 lane c's file list.
 
-### E211 — the denial prefixes have a roster and the PRODUCERS do not render from it
+### E211 [CLOSED] — the denial prefixes have a roster and the PRODUCERS do not render from it
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: low. **Observed.**
 
@@ -7804,7 +7844,7 @@ have not agreed to.
 and pin the obligation the way `BootstrapLaunchFormatConstantsTest` pins the launch formats. Files:
 `src/Runtime.php`, `src/Chat.php`. Out of lane.
 
-### E212 — every `NonInteractive::run()` test reads the real STDIN, and a stdin that never EOFs hangs the suite
+### E212 [CLOSED] — every `NonInteractive::run()` test reads the real STDIN, and a stdin that never EOFs hangs the suite
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: medium for CI, invisible locally. **Measured.**
 
@@ -7830,7 +7870,7 @@ closed stdin so the suite cannot depend on its runner's fd 0. The second is the 
 seam for its input stream although `readStdinIfPiped($stream = \STDIN)` already takes one, so add the
 parameter and thread it. Files: `src/Cli/NonInteractive.php`, `tests/Cli/NonInteractive*Test.php`.
 
-### E213 — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
+### E213 [OPEN] — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
 
 **Recorded 2026-08-22 by round-47 lane c, finishing E188.** Severity: informational.
 
@@ -7842,7 +7882,7 @@ these two were not re-measured this round because each costs a mutation run.
 **Step.** Mutate both `mcpClient()` messages outside `'could not be fully started'`, record the failing
 test names, and replace the two counts.
 
-### E214 — the class-total guard covers two files, and widening it needs a decision first
+### E214 [OPEN] — the class-total guard covers two files, and widening it needs a decision first
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational.
 
@@ -7868,7 +7908,7 @@ file's own known-positive fixture is one (`measured at \`06126017\`: … Tests: 
 guard still refuses it, which the fixture currently depends on. (b) Widen the roster past the two files
 lane c owns to all of `tests/`, and expect the prose arm to find instances.
 
-### E215 — the doc-page sweep still cannot see two page shapes
+### E215 [OPEN] — the doc-page sweep still cannot see two page shapes
 
 **Recorded 2026-08-22 by round-47 lane c, alongside E187.** Severity: informational. **Measured.**
 
@@ -7895,7 +7935,7 @@ No real doc-page miss, under an alphabet roughly 360x wider than the one that pr
 if so, extend the collector's root and expect the roster to grow. Separately, widen the extension test to
 be case-insensitive — cheap, and it closes (c) without any roster movement.
 
-### E216 — E187's own prescribed algorithm could not have covered the page E187 was written about
+### E216 [NO-FIX] — E187's own prescribed algorithm could not have covered the page E187 was written about
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription refuted.**
 
@@ -7912,7 +7952,7 @@ best ninth of it, and has no unsweepable set at all.
 **Step.** None; recorded so the span-plus-threshold design is not retried. It is the eighth reviewer or
 backlog prescription measured against the tree and found not to do what it was prescribed for.
 
-### E217 — the sweep emits no wildcard between two adjacent conversions
+### E217 [OPEN] — the sweep emits no wildcard between two adjacent conversions
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational. **Observed.**
 
@@ -7925,7 +7965,7 @@ this is a note rather than a fix.
 **Step.** Emit the wildcard whenever the conversion is interior, regardless of whether the neighbouring
 span is empty, and add the case to the fixture.
 
-### E218 — the three lanes share one scratchpad directory, and a generic filename is a cross-lane collision
+### E218 [SUPERSEDED] — the three lanes share one scratchpad directory, and a generic filename is a cross-lane collision
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Observed, first-hand.**
 
@@ -7940,7 +7980,7 @@ the scratchpad is the more likely collision because every lane reaches for the s
 **Step.** Say in the brief that each lane writes under `scratchpad/lane-<x>/`. Cheap, and it removes a
 whole class of void measurement.
 
-### E219 — a hook DENY reaches neither stderr nor `--output-format text`, and five places said otherwise
+### E219 [CLOSED] — a hook DENY reaches neither stderr nor `--output-format text`, and five places said otherwise
 
 **Recorded 2026-08-22 by round-47 lane c, at the fix stage.** Severity: medium (a silently-dropped
 refusal). **Measured. The prose is fixed; the behaviour is not.**
@@ -7964,7 +8004,7 @@ which is not the only caller of the engine. Then update the five sites (they nam
 failure message) in the same change. Files: `src/Runtime.php`, `src/Cli/NonInteractive.php`,
 `src/Cli/HeadlessPermissionPrompt.php`, `README.md`, `tests/Cli/NonInteractiveRefusalDocumentTest.php`.
 
-### E220 — the ninth reviewer prescription measured, and it named the wrong carve-out
+### E220 [NO-FIX] — the ninth reviewer prescription measured, and it named the wrong carve-out
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: process. **Measured. A prescription corrected.**
 
@@ -7986,7 +8026,7 @@ and only the second one still needs the finding acted on.
 prescription against the tree before implementing it.
 
 
-### E221 — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
+### E221 [CLOSED] — `AgentWorkerPool`'s `pcntl_fork() === -1` arm warns about nothing at all
 
 `src/Agents/AgentWorkerPool.php`'s `startAgent()` has TWO paths to sequential execution and only one of
 them says so. (This entry said `executeOne()`; that method is two lines — resolve the executor, call
@@ -8006,7 +8046,7 @@ still produces every result, but a fork ceiling reached mid-session will keep be
 model retrying a large parallel dispatch is exactly the behaviour a transcript row could change. Decide
 that with the rule, not by symmetry with the arm above it.
 
-### E222 — `removeWorktree()` cannot tell "removed" from "still on disk"
+### E222 [CLOSED] — `removeWorktree()` cannot tell "removed" from "still on disk"
 
 `src/Agents/WorktreeManager.php`'s `removeWorktree()` runs `removeDirectory($worktreePath)` when the
 directory survives git, then unconditionally drops the registry entry and saves. `removeDirectory()`'s
@@ -8024,7 +8064,7 @@ UNMEASURED — recorded from source.
 entry when it did not. A registry that lies about what exists is the thing to fix; the notice is
 secondary and would follow the E192 rule.
 
-### E223 — the seam has no reader in a hosted `Chat`
+### E223 [CLOSED] — the seam has no reader in a hosted `Chat`
 
 E193 gives the mid-session seam an edge-driven wake-up armed from `Chat::init()`. `init()` is called by
 `SugarCraft\Core\Program`, and only by it. A `Chat` driven by an embedder that never builds a `Program` —
@@ -8037,7 +8077,7 @@ written down anywhere in `src/`.
 seam's idle wake-up is a `Program` feature and a host that drives `update()` itself owns the pumping. Pin
 whichever is chosen; today neither is asserted.
 
-### E224 — E196's two `flattened()` copies have already drifted, in the prose
+### E224 [CLOSED] — E196's two `flattened()` copies have already drifted, in the prose
 
 MEASURED at round 48 by comparing the two declarations token by token with whitespace and comments
 dropped: `tests/Cli/StderrEmitterCensusTest.php`'s and
@@ -8055,7 +8095,7 @@ risk is unchanged while the indirection is added.
 **Step.** E196 as written, plus: the trait carries the implementation AND the union of both
 justifications, and EACH consuming test keeps its own known-positive control (E125).
 
-### E225 — E195's Step is wrong about channel 5
+### E225 [NO-FIX] — E195's Step is wrong about channel 5
 
 E195 says a `use`-statement resolver in `StderrEmitterCensusTest::scan()` "would close the alias case and
 would also strengthen channels 1, 2 and 5". MEASURED, PHP 8.3.6: the channel-5 half is false. Channel 5
@@ -8070,7 +8110,7 @@ for the write.
 
 **Step.** None — recorded so the count of wrong prescriptions stays honest. This is the eighth.
 
-### E226 — four stacked doc-comment pairs remain in `src/`, in files round 48 did not own
+### E226 [CLOSED] — four stacked doc-comment pairs remain in `src/`, in files round 48 did not own
 
 Round 48's `Chat::pumpRuntimeNotices()` had E193's reasoning landed as a SECOND doc-comment above the
 block already there. PHP attaches only the LAST doc-comment of a run, so the earlier one documents
@@ -8104,7 +8144,7 @@ mis-attributed block, fix them, then widen the existing guard from `Chat.php` to
 changes. The generator for the census is
 `stackedDocCommentLines()` in that test.
 
-### E227 — `SglangProvider`'s reachability was never asked, though `WorktreeManager`'s was
+### E227 [CLOSED] — `SglangProvider`'s reachability was never asked, though `WorktreeManager`'s was
 
 Round 48 routed six refusals onto the mid-session seam: four in `WorktreeManager` and two in
 `SglangProvider::decodeToolArguments()`. It then went to considerable length establishing that
@@ -8123,7 +8163,7 @@ factory shape — over `src/` and `bin/`, and over the provider registry's dispa
 provider is likelier to be reached through a name-keyed table than through a literal `new`. Then either
 pin the dormancy the way `WorktreeManager`'s is pinned, or state the live path in the doc-block.
 
-### E228 — the comment fixture that could not fail, and the class of fixture it belongs to
+### E228 [PARTIAL] — the comment fixture that could not fail, and the class of fixture it belongs to
 
 Round 48's first draft of `constructionSites()`'s guard asserted `0` over an all-comments source, with the
 message "constructionSites() reads comments, so it would red on prose about the constructor". That
@@ -8141,7 +8181,7 @@ its own independent hole.
 **Step.** Sweep the census tests for fixtures whose expected value is `0`, `[]` or `''` and ask, per
 fixture, what mutation of the instrument that fixture would survive. Where the answer is "all of them",
 give the fixture a positive component so the number it asserts is one only a live instrument produces.
-### E229 — a forked child's plain `exit()` republishes the parent's OUTPUT BUFFER
+### E229 [NO-FIX] — a forked child's plain `exit()` republishes the parent's OUTPUT BUFFER
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: harness. **Measured.** Extends E201; does not
 contradict it.
@@ -8186,7 +8226,7 @@ plain `php` subprocess so the demonstration's duplicate lands on a pipe rather t
 stdout, with the `exitNow()` control asserted FIRST (a count of 1 in both runs would otherwise read as a
 pass). The class doc-block's consequence list gained the third bullet.
 
-### E230 — E208's hazard does not reproduce, and its file count is wrong
+### E230 [NO-FIX] — E208's hazard does not reproduce, and its file count is wrong
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: doc accuracy. **Measured**, PHP 8.3.6.
 
@@ -8220,7 +8260,7 @@ the `${a}` row and the guard stayed green with a roster of one. Graceful shrinki
 behaviour for the day PHP removes the syntax, so it cannot be forbidden; the guard now asks the
 interpreter whether the constant is still defined and requires a spelling to still produce it if so.
 
-### E231 — E205's two false positives have ZERO occurrences, and the first census that said otherwise was a window artefact
+### E231 [NO-FIX] — E205's two false positives have ZERO occurrences, and the first census that said otherwise was a window artefact
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: informational. **Measured, twice, and the first
 measurement was wrong.**
@@ -8248,7 +8288,7 @@ reassigned, and there is nothing in the tree to verify it against. The per-site 
 harness the entry asks for now exists (`scratchpad/r48b/sites.php`): it prints
 `file line call shape` for every site under `tests/`, with four known-answer controls at the top.
 
-### E232 — a copied test helper drifted because only one copy was ever in a lane's file list
+### E232 [CLOSED] — a copied test helper drifted because only one copy was ever in a lane's file list
 
 **Recorded 2026-08-22 by round-48 lane b.** Severity: process. **Observed.**
 
@@ -8266,7 +8306,7 @@ adopting `Chat/` and `MCP/` for E206. The guard named the site.
 test directories whose bodies have diverged. Nothing checks for it today, and the lane split makes it
 likelier rather than less likely: a fix lands in whichever copy the round happened to own.
 
-### E233 — `tests/VhsTapeContractTest.php` is a live brace-walker gap in no lane's file list, and the row recording it is self-deleting
+### E233 [CLOSED] — `tests/VhsTapeContractTest.php` is a live brace-walker gap in no lane's file list, and the row recording it is self-deleting
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: harness / cross-lane coordination. **Measured**, PHP
 8.3.6, at the lane head that added `InterpolationOpenerTokenTest`.
@@ -8295,7 +8335,7 @@ and delete the `tests/VhsTapeContractTest.php` row from
 `tests/Support/InterpolationOpenerTokenTest.php::KNOWN_GAPS` in the same commit. Needs an owner assigned,
 since the two files were in different lanes' lists.
 
-### E234 — the child-stderr scanner called EVERY positional `proc_open()` descriptor spec `inherited`
+### E234 [CLOSED] — the child-stderr scanner called EVERY positional `proc_open()` descriptor spec `inherited`
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: harness correctness. **Measured**, PHP 8.3.6.
 **Fixed in the same round.**
@@ -8330,7 +8370,7 @@ cannot follow is `unclassified`. All five positional shapes are pinned in the un
 positional discard is the liveness helper's fourth discard path. Mutating `positionalShape()` back to the
 old always-`inherited` answer is killed by all five tests in the file.
 
-### E235 — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
+### E235 [PARTIAL] — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: cross-lane coordination. **Measured**, and the map
 is checked in both directions.
@@ -8362,7 +8402,7 @@ the partition. So a lane that fixes its directory must move the prefix in the sa
 in E233.
 ---
 
-### E236 — `Chat` has three hand-rolled denial-prefix producers, and E211's `NonInteractive` half is only half the roster problem
+### E236 [CLOSED] — `Chat` has three hand-rolled denial-prefix producers, and E211's `NonInteractive` half is only half the roster problem
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: correctness (silent misclassification). **Measured.**
 
@@ -8409,7 +8449,7 @@ against the roster rather than spelling a prefix themselves. All of this is meas
 
 ---
 
-### E237 — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
+### E237 [NO-FIX] — a scanner that reads only `T_CONSTANT_ENCAPSED_STRING` cannot see this tree's denial strings at all
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: process. **Measured; caught in my own new guard.**
 
@@ -8437,7 +8477,7 @@ starts from both token kinds.
 
 ---
 
-### E238 — `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` passes with the prefix deleted
+### E238 [CLOSED] — `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` passes with the prefix deleted
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: test-coverage. **Measured.**
 
@@ -8458,7 +8498,7 @@ this is a strengthening rather than a hole.
 
 ---
 
-### E239 — the denial roster lives on `Chat`, which is why the engine cannot read it
+### E239 [CLOSED] — the denial roster lives on `Chat`, which is why the engine cannot read it
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: design. **Measured.**
 
@@ -8477,7 +8517,7 @@ properly at the event rather than in the text). `Chat` and `Runtime` both re-exp
 
 ---
 
-### E240 — an ASK refused at a terminal now writes two stderr lines
+### E240 [NO-FIX] — an ASK refused at a terminal now writes two stderr lines
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: cosmetic. **Known and deliberate.**
 
@@ -8497,7 +8537,7 @@ no-tty refusal, the EOF line) all say things the observer cannot.
 
 ---
 
-### E241 — the background-session daemon gets no refusal notice
+### E241 [CLOSED] — the background-session daemon gets no refusal notice
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: observability. **Measured.**
 
@@ -8515,7 +8555,7 @@ out of lane c's file list.
 
 ---
 
-### E242 — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
+### E242 [OPEN] — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: test-infrastructure. **Observed, not fully diagnosed.**
 
@@ -8540,7 +8580,7 @@ holds, key the sandbox by uid **plus** the checkout's real path, which is the co
 distinguishes two lanes — and check what that does to the `ToolIpcFiles::sweepOnce()` reasoning in the
 same comment, which assumes one sandbox per uid. `tests/bootstrap.php` is shared infrastructure: a change
 there reds every lane at merge, so this wants its own round rather than a corner of one.
-### E243 — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
+### E243 [CLOSED] — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
 
 🟢 **CLOSED before round 50 started; marked here in round 51 by lane a (E311).** Option one of the Step
 below was taken and the entry was never updated. `HeadlessPermissionPrompt::__construct()` is
@@ -8576,7 +8616,7 @@ and the `fgets` warning was respected. Nothing further to do here.
 
 ---
 
-### E244 — `stderrWritesIn()` still cannot see a `proc_open()` descriptor spec
+### E244 [NO-FIX] — `stderrWritesIn()` still cannot see a `proc_open()` descriptor spec
 
 **Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: guard coverage. **Partly measured.**
 
@@ -8600,7 +8640,7 @@ whoever notices the guard stayed green.
 
 ---
 
-### E245 — `StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries
+### E245 [CLOSED] — `StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries
 
 **Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: cosmetic / rot. **Measured.** Lane a's file.
 
@@ -8619,7 +8659,7 @@ has no generator to catch it.
 
 ---
 
-### E246 — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
+### E246 [PARTIAL] — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: design (the remainder of E239). **Measured.**
 
@@ -8645,7 +8685,7 @@ spellings, not about the copy.
 
 ---
 
-### E247 — the denial vocabulary matches a string in `src/Agents/TaskBlockedException.php`
+### E247 [CLOSED] — the denial vocabulary matches a string in `src/Agents/TaskBlockedException.php`
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: guard scoping. **Measured, PHP 8.3.6.**
 
@@ -8669,7 +8709,7 @@ denial scan over `src/` does not have to re-derive it.
 
 ---
 
-### E248 — E238's mirror claim no longer reproduces
+### E248 [NO-FIX] — E238's mirror claim no longer reproduces
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process (backlog correction). **Measured.**
 
@@ -8692,7 +8732,7 @@ carries no sha.
 
 ---
 
-### E249 — E240's "at a terminal" is the smaller half; the no-tty arm doubles too
+### E249 [NO-FIX] — E240's "at a terminal" is the smaller half; the no-tty arm doubles too
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: cosmetic / decision recorded. **Measured, PHP 8.3.6.**
 
@@ -8719,7 +8759,7 @@ justification is rewritten in three-part form on `HeadlessPermissionPrompt`'s cl
 
 ---
 
-### E250 — `DenialKind` is a TYPE that nothing yet consumes as one
+### E250 [CLOSED] — `DenialKind` is a TYPE that nothing yet consumes as one
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: design (the rest of E210). **Not measured; structural.**
 
@@ -8738,7 +8778,7 @@ cost before doing it: the `refusals` array's shape is published and
 
 ---
 
-### E251 — `E245` names lane a as the owner of a file round 49 assigned to lane c
+### E251 [CLOSED] — `E245` names lane a as the owner of a file round 49 assigned to lane c
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Not a code defect.**
 
@@ -8752,7 +8792,7 @@ written into a backlog entry is round-specific and reads as durable — the seco
 entry has been skipped by the lane it names.
 
 ---
-### E252 — three `src/`-wide cardinalities are literals in a test nobody owns, and one is restated in `src/`
+### E252 [CLOSED] — three `src/`-wide cardinalities are literals in a test nobody owns, and one is restated in `src/`
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Measured; it fired.**
 
@@ -8782,7 +8822,7 @@ if that is wanted it should be a named-file roster (the shape round 49's `Denial
 the same reason) rather than a total.
 
 ---
-### E253 — E223's premise is wrong: the in-tree hosted shell already arms the seam
+### E253 [NO-FIX] — E223's premise is wrong: the in-tree hosted shell already arms the seam
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process (entry correction). **Measured.**
 
@@ -8814,7 +8854,7 @@ in it beside the two `init()`/`update()` obligations.
 
 ---
 
-### E254 — the denial-literal scanner's `^` anchor could not see this tree's own refusal note
+### E254 [CLOSED] — the denial-literal scanner's `^` anchor could not see this tree's own refusal note
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
 
@@ -8844,7 +8884,7 @@ cases already known, and the case it could not express was the one in the tree.
 
 ---
 
-### E255 — `RefusalStderrSurfaceTest`'s hook-DENY row asserted `''` with no instrument attached
+### E255 [CLOSED] — `RefusalStderrSurfaceTest`'s hook-DENY row asserted `''` with no instrument attached
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
 
@@ -8865,7 +8905,7 @@ returns on the DENY before `settleAsk()` is reached.
 
 ---
 
-### E256 — E240's byte/line figures live only in two doc-blocks and no test derives them
+### E256 [CLOSED] — E240's byte/line figures live only in two doc-blocks and no test derives them
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process. **Partly measured.**
 
@@ -8883,7 +8923,7 @@ observer's line".
 
 ---
 
-### E257 — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
+### E257 [PARTIAL] — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process (merge arithmetic). **Measured.**
 
@@ -8901,7 +8941,7 @@ cardinalities in `tests/Tools/BuiltInToolCorpusTest.php`, and two restated figur
 **Step.** Worth stating at the top of `BuiltInToolCorpusTest` alongside E252's option (a), so a lane
 adding a `src/` file learns the cost before a four-minute run tells it.
 
-### E258 — `constructionSites()` reports a false ZERO for any class built through a named static factory
+### E258 [OPEN] — `constructionSites()` reports a false ZERO for any class built through a named static factory
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: correctness of an INSTRUMENT. **Measured, PHP 8.3.6.**
 Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`).
@@ -8928,7 +8968,7 @@ a superset scanner because the shared one could not answer, which is drift in th
 
 ---
 
-### E259 — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
+### E259 [OPEN] — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: diagnosability. **Measured.** Lane b's file, deferred
 deliberately.
@@ -8952,7 +8992,7 @@ directory survives anyway.
 
 ---
 
-### E260 — `removeDirectory()` follows a directory SYMLINK and deletes the target's contents
+### E260 [CLOSED] — `removeDirectory()` follows a directory SYMLINK and deletes the target's contents
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: security / data loss. **Measured, PHP 8.3.6.**
 Lane b's file, deferred under "functionality before hardening".
@@ -8994,7 +9034,7 @@ back needs that, not just the CVE-shaped half.
 
 ---
 
-### E261 — `warnForkFailed()` reports the first fork failure per pool and never the count
+### E261 [OPEN] — `warnForkFailed()` reports the first fork failure per pool and never the count
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: cosmetic / observability. **Measured.** Lane b's file.
 
@@ -9011,7 +9051,7 @@ statistics.
 
 ---
 
-### E262 — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
+### E262 [OPEN] — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: test coverage. **Measured.** Lane b's file.
 
@@ -9031,7 +9071,7 @@ would be stale on the next merge; the generator is the point.
 
 ---
 
-### E263 — the stacked-doc-comment guard's unreadable-file arm has no fixture
+### E263 [CLOSED] — the stacked-doc-comment guard's unreadable-file arm has no fixture
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
 8.3.6.** Lane b's file (`tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`).
@@ -9067,7 +9107,7 @@ only writing the fixture showed it.
 
 ---
 
-### E264 — `removeDirectory()`'s `$emptied = false` on a failed `unlink()` is unkillable by construction
+### E264 [NO-FIX] — `removeDirectory()`'s `$emptied = false` on a failed `unlink()` is unkillable by construction
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: NOTE — recorded so the next reviewer
 does not spend the mutation on it. **Measured, PHP 8.3.6.**
@@ -9089,7 +9129,7 @@ handled, the shape is `!@unlink($itemPath) && file_exists($itemPath)` — and th
 
 ---
 
-### E265 — the process-unique-temp-name guard is blind to the fully-qualified call, which is the codebase's own style
+### E265 [CLOSED] — the process-unique-temp-name guard is blind to the fully-qualified call, which is the codebase's own style
 
 **Recorded 2026-08-24 by round-49 lane b's review pass. MUTATION-PROVEN.** Severity: an instrument that
 reports zero while the offender is present. **Measured, PHP 8.3.6.** Not any lane's file this round
@@ -9144,7 +9184,7 @@ one, for rule 26's reason.
 
 ---
 
-### E266 — that guard's SCOPE is `tests/` only, and `src/` has five argument-less sites
+### E266 [CLOSED] — that guard's SCOPE is `tests/` only, and `src/` has five argument-less sites
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: NOTE — an alphabet gap with low current
 exposure, recorded so the zero is not read as a clean bill. **Measured, PHP 8.3.6.** Same unowned file.
@@ -9164,7 +9204,7 @@ rule 11 — a census's scope is part of its coverage, and this one's is narrower
 
 ---
 
-### E267 — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
+### E267 [PARTIAL] — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
 8.3.6.** Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`), in flight this round.
@@ -9186,7 +9226,7 @@ with `is_file()` + `assertIsString()` arms — and route all eleven sites throug
 with `$root` (a directory: guaranteed to exist, guaranteed not to be a file, no chmod, no uid dependence,
 nothing left on disk). That is the shape `WorktreeRemovalReportingTest::sitesIn()` uses now and it can be
 lifted directly.
-### E268 — a `@dataProvider` row expecting `0` can never satisfy rule 15 literally
+### E268 [NO-FIX] — a `@dataProvider` row expecting `0` can never satisfy rule 15 literally
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process / structural. **Measured.**
 
@@ -9221,7 +9261,7 @@ the blanket textual pass rule 26 warns about.
 
 ---
 
-### E269 — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
+### E269 [OPEN] — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: cosmetic / rot. **Measured.** Lane c's own file.
 
@@ -9245,7 +9285,7 @@ the way the channels are, is what would make "two" a measurement.
 
 ---
 
-### E270 — a failure message's generator is the one part of a green suite that never runs
+### E270 [PARTIAL] — a failure message's generator is the one part of a green suite that never runs
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: low. **Measured, and fixed for one instance.**
 
@@ -9267,7 +9307,7 @@ a cheaper one is the habit of giving each such helper one known-input test.
 
 ---
 
-### E271 — E231 re-derived window-free: still zero, and the re-derivation's own harness had the bug first
+### E271 [NO-FIX] — E231 re-derived window-free: still zero, and the re-derivation's own harness had the bug first
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: informational. **Measured, PHP 8.3.6, deterministic
 across three runs.** Generator:
@@ -9297,7 +9337,7 @@ defect the measurement is about, and the second within E205/E231 specifically.
 
 ---
 
-### E272 — HANDOVER TO LANE `d`: the same-named-helper drift guard (E232's general shape)
+### E272 [PARTIAL] — HANDOVER TO LANE `d`: the same-named-helper drift guard (E232's general shape)
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process.
 
@@ -9319,7 +9359,7 @@ known-positive fixture must be two synthetic declarations that differ, run throu
 the same test.
 
 ---
-### E273 — the guard that pins every cardinality in a file is itself outside the machinery
+### E273 [CLOSED] — the guard that pins every cardinality in a file is itself outside the machinery
 
 **Recorded 2026-08-24 by round-49 lane c's review. FIXED in the same round** (`275d86a7`). Severity:
 structural. **Measured, PHP 8.3.6.**
@@ -9359,7 +9399,7 @@ guard is the one this round built: read the size back out of the doc-block and c
 
 ---
 
-### E274 — a figure measured mid-commit and never re-derived after the same commit moved its subject
+### E274 [CLOSED] — a figure measured mid-commit and never re-derived after the same commit moved its subject
 
 **Recorded 2026-08-24 by round-49 lane c's review. FIXED in the same round** (`f59885fb`). Severity: low,
 recurrence: high. **Measured, PHP 8.3.6.**
@@ -9390,7 +9430,7 @@ the total stands in for, and assert that instead.
 
 ---
 
-### E275 — a `@dataProvider` row's expected value is not enough to place it in a channel's coverage
+### E275 [NO-FIX] — a `@dataProvider` row's expected value is not enough to place it in a channel's coverage
 
 **Recorded 2026-08-24 by round-49 lane c's review.** Severity: informational. **Measured.** Not acted on.
 
@@ -9407,7 +9447,7 @@ holding silently the moment that scanner grows a mode.
 
 ---
 
-### E276 — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
+### E276 [OPEN] — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: harness correctness. **Measured**, PHP 8.3.6.
 **Recorded as `KNOWN_GAPS` rows, not fixed** — none of the three files is in any lane's list.
@@ -9460,7 +9500,7 @@ interpolation openers. The latency claim survived; the count did not. **A harnes
 the set it is measuring is measuring the hard-coded half** — rule 13, and the reason the row now ships the
 claim with no number in it at all.
 
-### E277 — the round-49 brief's stated floor does not reproduce, in both figures
+### E277 [NO-FIX] — the round-49 brief's stated floor does not reproduce, in both figures
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: process. **Measured** at `db90e768`, PHP 8.3.6.
 
@@ -9476,7 +9516,7 @@ of the same round quotes 9497, which is a third number and also not it.
 else, and it is what a reviewer checks a lane's delta against. A lane that trusts the brief and reports
 "+54 tests" has mis-stated its own change by an order of magnitude.
 
-### E278 — E232's live instance was already fixed, and the guard built for it had to find its own positive
+### E278 [NO-FIX] — E232's live instance was already fixed, and the guard built for it had to find its own positive
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
 
@@ -9495,7 +9535,7 @@ motivating instance will be gone and plan the synthetic positive from the start*
 ships with its known-positive slot filled by a case that is about to disappear, and the next round deletes
 it as stale.
 
-### E279 — `DuplicatedTestHelperDriftTest`'s bound is one token, and two is unexplored
+### E279 [CLOSED] — `DuplicatedTestHelperDriftTest`'s bound is one token, and two is unexplored
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: coverage. **Measured**, PHP 8.3.6.
 
@@ -9513,7 +9553,7 @@ its core size, sorted.
 of scope; a helper copied and RENAMED is out of reach by construction; and two classes in one file are
 never compared (measured: no file in `tests/` declares one private name twice today).
 
-### E280 — `awaitPromise()`'s two bounds are the one accepted divergence that is behavioural
+### E280 [NO-FIX] — `awaitPromise()`'s two bounds are the one accepted divergence that is behavioural
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
 
@@ -9529,7 +9569,7 @@ only place anybody would notice a fourth copy arriving with a fourth number.
 argument. No action is required today; the entry exists so the decision is made deliberately the next time
 a copy is added.
 
-### E281 — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
+### E281 [OPEN] — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: cross-lane harness. **Observed**, then reproduced by
 elimination.
@@ -9556,7 +9596,7 @@ the hazard this round's brief spends a paragraph on.
 
 ---
 
-### E282 — a TEXT-keyed brace walk makes its token-id disjunct dormant, and a spelling roster cannot tell
+### E282 [CLOSED] — a TEXT-keyed brace walk makes its token-id disjunct dormant, and a spelling roster cannot tell
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Measured**,
 PHP 8.3.6. **Fixed in the same round** for the one instance found; the shape is the entry.
@@ -9586,7 +9626,7 @@ pin the dormancy from the interpreter (assert the token's text) rather than leav
 as dead — and pin the deprecated opener behaviourally, since its truncation makes two drifted copies
 compare EQUAL, which reads as "no drift" rather than as an error.
 
-### E283 — a deferral keyed on the FILENAME is silent on a partial fix
+### E283 [PARTIAL] — a deferral keyed on the FILENAME is silent on a partial fix
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Fixed** for
 `InterpolationOpenerTokenTest::KNOWN_GAPS` in the same round; the shape is the entry.
@@ -9610,7 +9650,7 @@ this shape (`Context/`: "`git init` / `git config` fixture setup with `2>/dev/nu
 neither records a count — deliberately, per their own doc-blocks, because a count over `tests/` rots. The
 open question this entry leaves is what a rot-proof extent looks like for those two.
 
-### E284 — a harness that hard-codes half of the set it measures is measuring the hard-coded half
+### E284 [NO-FIX] — a harness that hard-codes half of the set it measures is measuring the hard-coded half
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: process. **Three figures retracted.**
 
@@ -9637,7 +9677,7 @@ the sub-case where the harness carries HALF the answer as a literal.** The revie
 and state the accessor used. A figure whose generator contains a literal list of the things being counted
 is not a measurement of them.
 
-### E285 — the drift guard compares BODIES, so a signature divergence is invisible
+### E285 [CLOSED] — the drift guard compares BODIES, so a signature divergence is invisible
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured**, PHP 8.3.6.
 **Documented, not fixed.**
@@ -9658,7 +9698,7 @@ conclusion E279 reaches for the bound itself, and probably the same round.
 
 ---
 
-### E286 — a reader that slices `file(__FILE__)` with reflection's line numbers, unchecked in both directions
+### E286 [CLOSED] — a reader that slices `file(__FILE__)` with reflection's line numbers, unchecked in both directions
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: correctness of an instrument.
 **FIXED**, with mutation proof in both halves.
@@ -9688,7 +9728,7 @@ synthetic nine-line source sliced at the wrong declaration.
 believed. When the diagnosis and the real cause differ, the message is worse than silence — so the reader
 must refuse states it cannot interpret rather than describe one it has not verified.
 
-### E287 — the drift guard's visibility alphabet was defended by a feeling
+### E287 [CLOSED] — the drift guard's visibility alphabet was defended by a feeling
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED** (measured, and the
 measurement is now derived by a test rather than written down).
@@ -9719,7 +9759,7 @@ doc-block first credited that comparison with catching a dead report — which
 `assertTheScannerIsAlive()` already owns three assertions earlier — and was corrected to the mechanism it
 really covers.
 
-### E288 — a partition guard with one direction, carried by a loop that runs zero times
+### E288 [CLOSED] — a partition guard with one direction, carried by a loop that runs zero times
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED.**
 
@@ -9742,7 +9782,7 @@ covers one order. Every `SCOPE`/`OUT_OF_SCOPE` pair in this tree should be read 
 `ChildStderrCaptureTest` grew it this round; the sibling had not, and the sentence recording that gap has
 been rewritten rather than deleted, because the mechanism it names is what both second loops are for.
 
-### E289 — the brace-walker predicate cannot express a `switch` or `match` depth counter
+### E289 [CLOSED] — the brace-walker predicate cannot express a `switch` or `match` depth counter
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured, not fixed.**
 
@@ -9767,7 +9807,7 @@ the currently-empty population with a synthetic known-positive in the same test 
 walker must be SELECTED and reported as missing `${`). Until then the doc-block's "nothing in the tree
 does that today" is true but unpinned — the first `switch`-based walker anyone writes lands unguarded.
 
-### E290 — E242's slowdown is a held-open descriptor 0 reaching spawned binaries, not concurrency
+### E290 [CLOSED] — E242's slowdown is a held-open descriptor 0 reaching spawned binaries, not concurrency
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: test-infrastructure. **Measured, PHP 8.3.6. Fixed
 this round** in `tests/bootstrap.php`, pinned by `tests/SuiteChildStdinIsolationTest.php`.
@@ -9859,7 +9899,7 @@ suite's hermeticity.
 
 ---
 
-### E291 — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
+### E291 [PARTIAL] — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: convention accuracy. **Measured, PHP 8.3.6.**
 
@@ -9891,7 +9931,7 @@ a comment) and for `exitWorker()` itself. Not done: the file is lane d's.
 
 ---
 
-### E292 — the refusal classifier is duplicated in two headless callers
+### E292 [CLOSED] — the refusal classifier is duplicated in two headless callers
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: drift risk, bounded. **Recorded only.**
 
@@ -9911,7 +9951,7 @@ both call sites move at once.
 
 ---
 
-### E293 — `ProcessUniqueTempNameTest`'s scope is `tests/`, and `src/` has five argument-less `uniqid` calls
+### E293 [CLOSED] — `ProcessUniqueTempNameTest`'s scope is `tests/`, and `src/` has five argument-less `uniqid` calls
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: latent. **Measured, PHP 8.3.6.**
 
@@ -9932,7 +9972,7 @@ guard rather than leaving the omission to be read as an oversight. Lane d's file
 
 ---
 
-### E294 — E244's example list is wrong about one of its two examples
+### E294 [NO-FIX] — E244's example list is wrong about one of its two examples
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: doc accuracy. **Measured.**
 
@@ -9950,7 +9990,7 @@ from the guarded file.
 
 ---
 
-### E295 — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
+### E295 [OPEN] — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: latent, live-code. **Out of lane —
 `src/Agents/AgentWorkerPool.php` is lane b's file this round.** Reported, not fixed.
@@ -9976,7 +10016,7 @@ one of two grounds.
 
 ---
 
-### E296 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
+### E296 [CLOSED] — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
 
 🟢 **CLOSED in round 51 by lane a.** Option (a) shipped: `tests/bootstrap.php` does `fclose(\STDIN)` plus a
 `/dev/null` handle on the freed fd, parked in `$GLOBALS`. Full suite after the bootstrap change alone:
@@ -10023,7 +10063,7 @@ stdin reach a spawned child, so the limit is a recorded fact rather than a gap. 
 
 ---
 
-### E297 — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
+### E297 [CLOSED] — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy. **Measured. Fixed this
 round** in `tests/bootstrap.php` and `tests/SuiteChildStdinIsolationTest.php`.
@@ -10038,7 +10078,7 @@ round brief; this is the third round to produce an instance.
 
 ---
 
-### E298 — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
+### E298 [CLOSED] — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
 
 🟢 **FIXED pre-round-50 by the supervisor.** The write half now runs at a pid+entropy path and the
 default is asserted as CONSTRUCTED rather than written. Probe validated against a known-answer control
@@ -10086,7 +10126,7 @@ not a `uniqid` hazard, and the guard as written cannot see this one. See also E2
 scope hole; this is the alphabet hole beside it.
 
 ---
-### E299 — PHPUnit includes `tests/bootstrap.php` inside a METHOD, so a bare local there is not a global
+### E299 [NO-FIX] — PHPUnit includes `tests/bootstrap.php` inside a METHOD, so a bare local there is not a global
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy on a load-bearing line.
 **Measured, PHP 8.3.6, PHPUnit 10.5.64. Fixed this round** in the same commit that found it.
@@ -10128,7 +10168,7 @@ scope" is an assumption about a HOST, and the host here is a method.
 
 ---
 
-### E300 — the daemon's refusal classifier reads `Chat::DENIED_ERROR_PREFIXES`, which E239 is moving
+### E300 [CLOSED] — the daemon's refusal classifier reads `Chat::DENIED_ERROR_PREFIXES`, which E239 is moving
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: merge-time coordination. **Inherited
 dependency, not a defect.**
@@ -10151,7 +10191,7 @@ which is loud.
 went. Do NOT copy the literals.
 
 ---
-### E301 — `new Tty(null, $injectedTermios)` writes O_NONBLOCK onto the RUNNER's descriptor 0
+### E301 [CLOSED] — `new Tty(null, $injectedTermios)` writes O_NONBLOCK onto the RUNNER's descriptor 0
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test cross-contamination, live.
 **Measured, PHP 8.3.6, three takes.** One of the sites fixed this round; the rest are out of lane.
@@ -10213,7 +10253,7 @@ at all — the combination means "drive this fd" and "wrap that stream", and the
 process's own descriptor 0 is the right answer to both.
 
 ---
-### E302 — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+### E302 [CLOSED] — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
 
 🟢 **FIXED at `1a2caebb`**, with `candy-mosaic/tests/PaletteCapabilityReferenceTest.php` as a SOURCE-SCAN
 guard plus a known-positive control. candy-mosaic: 451 tests, 7707 assertions, rc 0.
@@ -10253,7 +10293,7 @@ should carry a test that drives `autoFromPalette()` directly rather than through
 the throw is what made it unreachable for so long.
 
 ---
-### E303 — a `grep` for `new Tty(` cannot see `new \Fully\Qualified\Tty(`, and it cost a full suite run
+### E303 [NO-FIX] — a `grep` for `new Tty(` cannot see `new \Fully\Qualified\Tty(`, and it cost a full suite run
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: methodology, with a measured cost.
 **Fixed this round** by replacing the generator with a token-based census test.
@@ -10289,7 +10329,7 @@ believed on the strength of its output rather than on the strength of a known-an
 
 ---
 
-### E333 — two tests that spawn the real binary abort at 60s in ONE full-suite run and not the next
+### E333 [NO-FIX] — two tests that spawn the real binary abort at 60s in ONE full-suite run and not the next
 
 **Recorded 2026-08-24 by the supervisor at the round-50 merge.** Severity: test-infrastructure,
 **NOT reproduced on demand.** Cause UNKNOWN — this entry deliberately records evidence rather than a
@@ -10330,7 +10370,7 @@ re-run, and it must NOT be cited as evidence for any fd-0 hypothesis.
 
 ---
 
-### E304 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
+### E304 [CLOSED] — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
 
 `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED` and
 `Chat::DENIED_ERROR_PREFIXES` are now aliases that DERIVE from
@@ -10346,7 +10386,7 @@ attached, and this round's mandate was to remove the copies rather than to sched
 
 ---
 
-### E305 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
+### E305 [CLOSED] — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
 
 **Status: closed by the round-49 fix pass** (`DenialPrefixRosterTest::testTheRostersBackingValuesAreTheThreePublishedPrefixes()`).
 Kept rather than deleted because the mechanism is the useful part and the original entry got two things
@@ -10382,7 +10422,7 @@ reason.
 
 ---
 
-### E306 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
+### E306 [CLOSED] — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
 
 Round 49 gave every `refusals` entry in the `--output-format json` document a `kind` field
 (`hook` / `refused` / `unanswered`, from `DenialKind::token()`), which is the seam where the enum
@@ -10404,7 +10444,7 @@ the change is visible.
 
 ---
 
-### E307 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
+### E307 [CLOSED] — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
 
 `Permissions\ToolRefusal::fromEvent()` answers with a `DenialKind`. `NonInteractive::refusalFrom()`
 carries it out as the document's `kind`; `BackgroundSessionRunner::noticeRefusal()` takes `->tool` and
@@ -10420,7 +10460,7 @@ wants its own step rather than riding on a roster refactor.
 
 ---
 
-### E308 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
+### E308 [CLOSED] — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
 
 `Chat::invokeTool()`'s `catch (\Throwable $e)` returns
 `ToolResult::error($name, $e->getMessage(), $toolCall->id)` — the message VERBATIM, with no prefix of
@@ -10447,7 +10487,7 @@ wanting its own step and its own golden-file pass — and functionality comes be
 
 ---
 
-### E309 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
+### E309 [OPEN] — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
 
 Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
 pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
@@ -10472,7 +10512,7 @@ guard becomes "no raw error strings" rather than "no strings that look like deni
 tree-wide change and wants its own plan.
 ---
 
-### E310 — E296 OPTION (a) IS NOW AVAILABLE: the descriptor replacement costs THREE named assertions, not 107 errors
+### E310 [CLOSED] — E296 OPTION (a) IS NOW AVAILABLE: the descriptor replacement costs THREE named assertions, not 107 errors
 
 🟢 **IMPLEMENTED in round 51 by lane a, and this entry's measurement REPRODUCED EXACTLY.** The bootstrap
 change alone, against a green `9661 / 142165 / 1 skipped / rc 0` baseline at `a85fcfd6`: `9661 tests, 1
@@ -10552,7 +10592,7 @@ name, in another repository, fixed by a different lane, in the same round.
 
 ---
 
-### E311 — E243 was CLOSED before round 50 started, and two places still say "narrowed"
+### E311 [CLOSED] — E243 was CLOSED before round 50 started, and two places still say "narrowed"
 
 **Recorded 2026-08-24 by round-50 lane b. 🟢 DONE in round 51 by lane a** — E243 is marked above, its
 Step retired, and `tests/bootstrap.php`'s "E243 stays NARROWED" paragraph rewritten in three-part form.
@@ -10580,7 +10620,7 @@ paragraph said the terminal case was still live; it is not, because the default 
 
 ---
 
-### E312 — the `new Tty(null, …)` census's alphabet was ONE CLASS NAME, and the backend under it has the same constructor
+### E312 [CLOSED] — the `new Tty(null, …)` census's alphabet was ONE CLASS NAME, and the backend under it has the same constructor
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: guard coverage, latent. **Measured, PHP 8.3.6,
 three takes. FIXED this round** in `tests/TtyStreamArgumentCensusTest.php`.
@@ -10618,7 +10658,7 @@ both filtered to the single census method, so each is a claim about that guard a
 
 ---
 
-### E313 — the fd-0 reader roster nobody had, and the scanner that reported a confident false zero
+### E313 [CLOSED] — the fd-0 reader roster nobody had, and the scanner that reported a confident false zero
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: the missing input to E296. **Measured, PHP 8.3.6.
 FIXED this round** by `tests/StdinConstantReaderCensusTest.php`.
@@ -10659,7 +10699,7 @@ the other six by reading is exactly the reasoning-instead-of-measuring that kill
 
 ---
 
-### E314 — E296's PREPEND residual now executes, and option (a)'s viability is MEASURED rather than argued
+### E314 [CLOSED] — E296's PREPEND residual now executes, and option (a)'s viability is MEASURED rather than argued
 
 🟢 **The residual is CLOSED (round 51, lane a), and the test was INVERTED rather than deleted.** Its
 doc-block's own instruction was "delete it and record what closed it"; deleting it would have discarded the
@@ -10688,7 +10728,7 @@ means someone closed the prepend half, which is the outcome E296 wants.
 
 ---
 
-### E315 — the prepend residual is a data path from the runner's stdin to a model provider
+### E315 [CLOSED] — the prepend residual is a data path from the runner's stdin to a model provider
 
 🟢 **CLOSED for the SUITE in round 51 by lane a**, by the descriptor replacement E296 needed. NOT closed,
 and deliberately not, for a real `sugarcrush`: piped stdin reaching the prompt is that binary's documented
@@ -10711,7 +10751,7 @@ surprise.
 
 ---
 
-### E316 — E299 re-derived independently, and nothing else in `tests/bootstrap.php` assumes a local is a global
+### E316 [NO-FIX] — E299 re-derived independently, and nothing else in `tests/bootstrap.php` assumes a local is a global
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: informational, closing an open question.
 **Measured, PHP 8.3.6, PHPUnit 10.5.64, three takes.**
@@ -10737,7 +10777,7 @@ someone "tidies" it into `assertNotNull()`.
 
 ---
 
-### E317 — round 44's `grep` binary-detection trap reproduced live, on a PHPUnit log in this lane
+### E317 [NO-FIX] — round 44's `grep` binary-detection trap reproduced live, on a PHPUnit log in this lane
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: methodology, reproduced on demand.
 **Measured, GNU grep on this box.**
@@ -10760,7 +10800,7 @@ that looks like good news.
 
 ---
 
-### E318 — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
+### E318 [CLOSED] — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
 
 🟢 **FIXED in round 51 by lane a, in `candy-mosaic` (NOT candy-palette — see the round report).**
 `stdinFd()` answers null for a dead handle; `drainStdin()`/`readStdinTimed()` treat null as their existing
@@ -10791,7 +10831,7 @@ closed resource directly rather than through a thrown probe. Worth a candy-mosai
 
 ---
 
-### E319 — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
+### E319 [PARTIAL] — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: mechanism prose, tree-wide.
 **MEASURED, PHP 8.3.6, three takes**, reading `/proc/self/fdinfo/0` either side of the call with fd 0 a pipe:
@@ -10826,7 +10866,7 @@ re-reading — and the reader who "corrects" the code to match the prose deletes
 
 ---
 
-### E320 — four THIRD-PARTY vendor packages name descriptor 0, and one is inside PHPUnit's own tree
+### E320 [NO-FIX] — four THIRD-PARTY vendor packages name descriptor 0, and one is inside PHPUnit's own tree
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: E296 input, currently benign.
 **Generator:** `StdinConstantReaderCensusTest::fd0References()` (verbatim copy) over every
@@ -10857,7 +10897,7 @@ generator, instead.
 
 ---
 
-### E321 — the `?? STDIN` resolved ONE FRAME UP is invisible to the Tty census by construction
+### E321 [CLOSED] — the `?? STDIN` resolved ONE FRAME UP is invisible to the Tty census by construction
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: guard coverage, latent.
 **Partially FIXED this round**; the general case is not.
@@ -10884,7 +10924,7 @@ the headline is, rather than where the bucket is.
 
 ---
 
-### E322 — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
+### E322 [PARTIAL] — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: this is the round's transferable lesson.
 **Found by mutation, FIXED this round in `tests/TtyStreamArgumentCensusTest.php`.**
@@ -10914,7 +10954,7 @@ whose scanner is well-tested is where this hides, because the fixture table look
 
 ---
 
-### E323 — `SuiteChildStdinIsolationTest`'s failure message still prices option (a) at 107 errors
+### E323 [CLOSED] — `SuiteChildStdinIsolationTest`'s failure message still prices option (a) at 107 errors
 
 🟢 **DONE in round 51 by lane a.** Option (a) shipped, so the assertion was INVERTED rather than
 re-worded, with the three-part history in its doc-block: what it said, the re-measured price, and why the
@@ -10931,7 +10971,7 @@ rewrote. The assertion itself is correct and should stay; only its reason is sta
 
 **Step.** Rewrite the message in three-part form when that file is next touched. If option (a) ships, the
 assertion is inverted rather than deleted, with its reason.
-### E324 — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
+### E324 [OPEN] — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: none today, one edit away from real. **Measured,
 PHP 8.3.6.** Guard shipped; the `src/` fix deliberately not done (tests-only lane).
@@ -10957,7 +10997,7 @@ and the row must be deleted when they are fixed.
 
 ---
 
-### E325 — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
+### E325 [OPEN] — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: correctness of an instrument. **Measured**, PHP 8.3.6.
 Half fixed with a census; half deferred with the reason.
@@ -11002,7 +11042,7 @@ census.
 
 ---
 
-### E326 — three of round 49's own review findings were ALREADY FIXED at or in the round's base commit
+### E326 [NO-FIX] — three of round 49's own review findings were ALREADY FIXED at or in the round's base commit
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process. **Verified in the tree at `906fa666`.**
 **Corrected from "two" to "three" 2026-08-24:** E298's fix *is* `906fa666` itself, so it belongs in this
@@ -11023,7 +11063,7 @@ entry's own status line and the tree, and a fixed item is a mutation to run rath
 
 ---
 
-### E327 — E289's `match`-arm gate guards a shape the tree does not have, and the first prose describing it was inverted
+### E327 [CLOSED] — E289's `match`-arm gate guards a shape the tree does not have, and the first prose describing it was inverted
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: none (a widening). **Measured**, PHP 8.3.6. **Fixed.**
 
@@ -11043,7 +11083,7 @@ wrong. Both are corrected and the mutation is now killed.
 
 ---
 
-### E328 — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
+### E328 [CLOSED] — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
 
 **Recorded 2026-08-24 by round-49 lane c. FIXED at round 51. ITS RECORDED MECHANISM WAS WRONG AND IS
 REWRITTEN BELOW rather than deleted — E344 raised the objection, and round 49 lane b settled it against
@@ -11098,7 +11138,7 @@ it is a symlink, a non-directory, not owned by this euid, or reachable by anybod
 
 ---
 
-### E329 — four `src/` `uniqid()` calls carried a literal prefix and therefore no entropy at all
+### E329 [CLOSED] — four `src/` `uniqid()` calls carried a literal prefix and therefore no entropy at all
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: same family as
 `E324`. **Measured**, PHP 8.3.6.
@@ -11127,7 +11167,7 @@ inventory rows. It is a `src/` edit, out of a tests-only lane. Doing it with `E3
 
 ---
 
-### E330 — the static-path scanner's alphabet still cannot express four shapes, and now says so in a test
+### E330 [CLOSED] — the static-path scanner's alphabet still cannot express four shapes, and now says so in a test
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage.** Severity: stated bound. **Measured**, PHP 8.3.6.
 
@@ -11147,7 +11187,7 @@ resolution within the declaring file. Delete the corresponding row from the test
 
 ---
 
-### E331 — a fifth `significantTokens()` copy arrived in the round that widened the drift guard's bound
+### E331 [PARTIAL] — a fifth `significantTokens()` copy arrived in the round that widened the drift guard's bound
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: latent duplication.
 
@@ -11165,7 +11205,7 @@ reach this far. Extraction is the cheaper of the two and removes the question.
 
 ---
 
-### E332 — `readOrFail()` and its refusal test are now duplicated across three census files
+### E332 [CLOSED] — `readOrFail()` and its refusal test are now duplicated across three census files
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: latent duplication.
 
@@ -11181,7 +11221,7 @@ cannot read as a clean one, and three copies of that arm is three places for it 
 
 ---
 
-### E364 — the additive assertion LOWER BOUND is only a bound if the merge neither adds nor removes
+### E364 [NO-FIX] — the additive assertion LOWER BOUND is only a bound if the merge neither adds nor removes
 
 **Recorded 2026-08-24 by the supervisor at the round-51 merge.** Severity: process. **First violation of a
 bound that had held for nine rounds, and the cause is the supervisor's own merge-time edit.**
@@ -11209,7 +11249,7 @@ bound violation without first checking whether the merge itself removed assertio
 
 ---
 
-### E334 — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
+### E334 [NO-FIX] — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: brief accuracy, on the item's whole subject.
 **Measured by `find`.**
@@ -11234,7 +11274,7 @@ times, unchanged.
 
 ---
 
-### E335 — the flag repair produced two 60-second RISKY aborts in one full run of two, and the replacement produced none
+### E335 [NO-FIX] — the flag repair produced two 60-second RISKY aborts in one full run of two, and the replacement produced none
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: evidence, NOT mechanism. **Measured, PHP 8.3.6, two
 takes, and it did not reproduce.**
@@ -11263,7 +11303,7 @@ a rate.
 
 ---
 
-### E336 — `TtyDetect::isAtty()` casts a stream to `(int)` and treats the result as a file descriptor
+### E336 [CLOSED] — `TtyDetect::isAtty()` casts a stream to `(int)` and treats the result as a file descriptor
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: correctness, latent. **Measured, PHP 8.3.6.
 Out of lane — `candy-core/src/Util/TtyDetect.php` belongs to no lane this round. Reported, not fixed.**
@@ -11294,7 +11334,7 @@ on a closed resource, so an `is_resource()` guard has to come first — which `i
 
 ---
 
-### E337 — RETRACTED BEFORE IT SHIPPED: the two `composer.lock` files are NOT committed, and `ls` cannot tell
+### E337 [NO-FIX] — RETRACTED BEFORE IT SHIPPED: the two `composer.lock` files are NOT committed, and `ls` cannot tell
 
 **Recorded and refuted 2026-08-24 by round-51 lane a, in that order.** Severity: none — there is no defect.
 Kept as a methodology instance, because the refutation came from the entry's own stated generator.
@@ -11323,7 +11363,7 @@ feels obvious.
 
 ---
 
-### E338 — the fd-0 replacement made `NonInteractive::readStdinIfPiped()` a latent `TypeError`, and guarding only the call the reviewer named would move the throw rather than remove it
+### E338 [CLOSED] — the fd-0 replacement made `NonInteractive::readStdinIfPiped()` a latent `TypeError`, and guarding only the call the reviewer named would move the throw rather than remove it
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, latent — introduced by this
 lane's own change. **Measured, PHP 8.3.6. Out of lane — `sugar-crush/src/Cli/NonInteractive.php` is a `src/`
@@ -11355,7 +11395,7 @@ consumes it, so the null-answering shape needs its two callers checked, not just
 
 ---
 
-### E339 — `EnvDetect::isConsoleStdin()` is an unguarded `stream_isatty(STDIN)` with no caller anywhere
+### E339 [CLOSED] — `EnvDetect::isConsoleStdin()` is an unguarded `stream_isatty(STDIN)` with no caller anywhere
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, dormant. **Measured,
 PHP 8.3.6. Out of lane — `candy-core/src/Util/Tty/EnvDetect.php` belongs to no lane this round. Reported,
@@ -11377,7 +11417,7 @@ introduce a throw; or wire it, if the Windows console path is being taken up. Ei
 
 ---
 
-### E340 — `Program::runExec()`'s closed-stream guard now falls back to a closed stream
+### E340 [CLOSED] — `Program::runExec()`'s closed-stream guard now falls back to a closed stream
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, dormant. **Measured,
 PHP 8.3.6. Out of lane — `candy-core/src/Program.php` belongs to no lane this round. Reported, not fixed.**
@@ -11402,7 +11442,7 @@ constant whose liveness is exactly what the guard already doubted. The same reas
 
 ---
 
-### E341 — `Detect::stdinFd()` can now answer null into a `@param resource` at `candy-core`
+### E341 [CLOSED] — `Detect::stdinFd()` can now answer null into a `@param resource` at `candy-core`
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass), confirming the reviewer's NOTE.** Severity:
 documentation/type accuracy, not a defect. **Verified by symbol. Out of lane — `candy-core/src/Util/TtyDetect.php`.**
@@ -11419,7 +11459,7 @@ changed for a different reason; do both together.
 
 ---
 
-### E342 — E319's inverted `O_NONBLOCK` prose is live in three files, and the counts previously recorded for it were half right
+### E342 [OPEN] — E319's inverted `O_NONBLOCK` prose is live in three files, and the counts previously recorded for it were half right
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: documentation, misleading.
 **Counts re-derived by `grep -n O_NONBLOCK` per file at this lane's HEAD. Out of lane — none of the three
@@ -11456,7 +11496,7 @@ inside their own history paragraphs, and a pattern sweep cannot tell an offender
 
 ---
 
-### E343 — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
+### E343 [OPEN] — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass), found while refuting a doc-block claim.** Severity:
 guard sharpness, latent. **Measured by pushing known-answer sources through
@@ -11489,7 +11529,7 @@ be standing.
 **Step.** Either resolve class-constant and property specs too (they are as literal as a local), or have the
 `unclassified` failure message name the scope bound explicitly, so the reader is told why a spec they can
 plainly read came back unreadable.
-### E344 — E328's recorded mechanism does not reproduce: the hazard was reachability, not a race
+### E344 [NO-FIX] — E328's recorded mechanism does not reproduce: the hazard was reachability, not a race
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E328.** Severity: correction of a fixed entry.
 **Measured**, PHP 8.3.6, generator in the round's scratchpad (`probe_append.php`).
@@ -11530,7 +11570,7 @@ for locking, which was already there, and left the reachability untouched.
 
 ---
 
-### E345 — the hardened audit write fails SILENTLY, and the alternative costs one stderr write per tool call
+### E345 [CLOSED] — the hardened audit write fails SILENTLY, and the alternative costs one stderr write per tool call
 
 **Recorded 2026-08-24 by round-51 lane b.** Severity: observability. Not fixed, deliberately.
 
@@ -11560,7 +11600,7 @@ consumer — check before designing, it may have none.
 
 ---
 
-### E346 — E307 is still open: `BackgroundSessionRunner::noticeRefusal()` drops `->kind`, and it was out of lane
+### E346 [CLOSED] — E307 is still open: `BackgroundSessionRunner::noticeRefusal()` drops `->kind`, and it was out of lane
 
 **Recorded 2026-08-24 by round-51 lane b.** Severity: as E307. Not fixed — `src/Sessions/` was not in
 this lane's file list and the split was strict.
@@ -11581,7 +11621,7 @@ on the `[session:` prefix, so a token after the marker is safe against the line 
 
 ---
 
-### E347 — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
+### E347 [PARTIAL] — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
 
 **Recorded 2026-08-24 by round-51 lane b, which implemented E306.** Severity: premise correction.
 **Measured** — asserted by a test rather than argued.
@@ -11614,7 +11654,7 @@ line — a decision about the published vocabulary, not a formatting change.
 
 ---
 
-### E348 — E308 closed the catch; a tool callback returning a `ToolResult` can still assert a refusal
+### E348 [CLOSED] — E308 closed the catch; a tool callback returning a `ToolResult` can still assert a refusal
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E308.** Severity: stated bound, probably intended
 behaviour. Not fixed.
@@ -11636,7 +11676,7 @@ the reason), or a typed field on `ToolResult` so a refusal is declared rather th
 
 ---
 
-### E349 — E324's five sites are still argument-less, and there is now a measured collision figure for the family
+### E349 [OPEN] — E324's five sites are still argument-less, and there is now a measured collision figure for the family
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E329's four.** Severity: as E324. Not fixed —
 `src/Workflows/` was out of this lane's list and E324 is its own entry.
@@ -11656,7 +11696,7 @@ call sites.
 
 ---
 
-### E350 — two stated bounds on the new audit-log guard, both derived rather than narrated
+### E350 [NO-FIX] — two stated bounds on the new audit-log guard, both derived rather than narrated
 
 **Recorded 2026-08-24 by round-51 lane b.** Severity: stated bounds. No action wanted today.
 
@@ -11695,7 +11735,7 @@ everybody and a wrong one.
 
 ---
 
-### E351 — the suite creates and populates the REAL production audit directory, and nothing removes it
+### E351 [CLOSED] — the suite creates and populates the REAL production audit directory, and nothing removes it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 10.** Severity: cross-process
 hygiene. Not fixed — the fix is a wiring change on `HookManager::registerBuiltIns()`, out of this lane.
@@ -11721,7 +11761,7 @@ production directory is not created during a suite run.
 
 ---
 
-### E352 — `uniqid(…, true)` puts a `.` into a tool-call id that goes on the wire
+### E352 [CLOSED] — `uniqid(…, true)` puts a `.` into a tool-call id that goes on the wire
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 11.** Severity: stated bound,
 low risk. Not fixed.
@@ -11742,7 +11782,7 @@ gives the same entropy with no period.
 
 ---
 
-### E353 — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
+### E353 [OPEN] — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
 
@@ -11760,7 +11800,7 @@ built-in registration order).
 and still has the property the row claims — and not a golden-file comparison, which would red on every
 prose edit.
 
-### E354 — a per-file assertion in several censuses makes the suite's assertion total a function of the file COUNT
+### E354 [NO-FIX] — a per-file assertion in several censuses makes the suite's assertion total a function of the file COUNT
 
 **Recorded 2026-08-24 by round-49 lane c; CORRECTED the same day by the same lane after review.**
 Severity: measurement hygiene, and it voided this lane's own first baseline.
@@ -11810,7 +11850,7 @@ count.
 
 ---
 
-### E355 — three of `ReflectionLineSliceReaderCensusTest`'s offender arms were unpinned, and the sweep E322 asked for found them
+### E355 [CLOSED] — three of `ReflectionLineSliceReaderCensusTest`'s offender arms were unpinned, and the sweep E322 asked for found them
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: guard coverage. **Measured, PHP 8.3.6. FIXED this
 round.**
@@ -11845,7 +11885,7 @@ was not one.
 
 ---
 
-### E356 — consolidating a helper exposes which consumers were never testing half of it
+### E356 [PARTIAL] — consolidating a helper exposes which consumers were never testing half of it
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: the round's transferable lesson. **Measured, PHP
 8.3.6. FIXED this round.**
@@ -11873,7 +11913,7 @@ in a round that owns `tests/Config/`, or record the two shapes as deliberate and
 
 ---
 
-### E357 — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
+### E357 [OPEN] — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: latent, and a narrower version of E332.
 
@@ -11893,7 +11933,7 @@ edit hiding in a refactor.
 
 ---
 
-### E358 — E319's own figures are wrong in two places, derived rather than quoted
+### E358 [PARTIAL] — E319's own figures are wrong in two places, derived rather than quoted
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: entry accuracy. **Measured, PHP 8.3.6, by
 `tests/Support/NonBlockingVocabularyTest`, which derives it on every run.**
@@ -11925,7 +11965,7 @@ its rows deleted, in the same commit as the repair.
 
 ---
 
-### E359 — the static-path scanner's four stated holes are closed, and the residual is now five different shapes
+### E359 [CLOSED] — the static-path scanner's four stated holes are closed, and the residual is now five different shapes
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: coverage, closed. **Measured, PHP 8.3.6. FIXED this
 round** (E330).
@@ -11964,7 +12004,7 @@ a quantifier.
 
 ---
 
-### E360 — a known-answer table can have every row in one grammatical shape, and the shape it omits is the one the code gets backwards
+### E360 [CLOSED] — a known-answer table can have every row in one grammatical shape, and the shape it omits is the one the code gets backwards
 
 **Recorded 2026-08-24 by round-49 lane c, from its own reviewer's BLOCKING finding.** Severity:
 correctness of a guard. **FIXED this round.**
@@ -12005,7 +12045,7 @@ deletion of that file's `INVERTED_ROSTER` row. Either alone reds the census. Tha
 
 ---
 
-### E361 — a doc-block that NAMES a PHPUnit annotation IS that annotation, and it skipped the test written to stop skipping
+### E361 [CLOSED] — a doc-block that NAMES a PHPUnit annotation IS that annotation, and it skipped the test written to stop skipping
 
 **Recorded 2026-08-24 by round-49 lane c, against itself.** Severity: trap, cost about four minutes.
 **Measured, PHP 8.3.6, PHPUnit 10.5.64. FIXED before it shipped.**
@@ -12029,7 +12069,7 @@ this produced, and is derivable from PHPUnit's own result output rather than fro
 
 ---
 
-### E362 — `BootstrapSkillSkipsTest` goes RISKY, not red, under parallel-lane load, and the diff in flight gets the blame
+### E362 [CLOSED] — `BootstrapSkillSkipsTest` goes RISKY, not red, under parallel-lane load, and the diff in flight gets the blame
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: measurement hygiene / flake attribution.
 **Observed once in five runs of `tests/Support tests/Cli tests/Config` at PHP 8.3.6, with four sibling
@@ -12059,7 +12099,7 @@ to anything.**
 
 ---
 
-### E363 — a false-positive guard is unpinned by construction, and this suite has at least one
+### E363 [CLOSED] — a false-positive guard is unpinned by construction, and this suite has at least one
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: coverage. **FIXED this round for the one instance
 found; the rule is the deliverable.**
@@ -12084,7 +12124,7 @@ opposite responses.
 
 ---
 
-### E365 — a test's `php -S` server leaked once per test method and held the CALLER'S STDOUT, so `phpunit | anything` hung after a green run
+### E365 [CLOSED] — a test's `php -S` server leaked once per test method and held the CALLER'S STDOUT, so `phpunit | anything` hung after a green run
 
 **Recorded 2026-08-24.** Severity: measurement discipline (the fd half), hygiene (the process half).
 **FIXED + GUARDED this round in `candy-mosaic`.**
@@ -12160,7 +12200,7 @@ Anything that spawns a child which can outlive the call inherits phpunit's stdou
 
 ---
 
-### E366 — the `proc_open` sweep E365 asked for: the fd-inheritance half is monorepo-wide, the ORPHANING is not
+### E366 [PARTIAL] — the `proc_open` sweep E365 asked for: the fd-inheritance half is monorepo-wide, the ORPHANING is not
 
 **Recorded 2026-08-24.** Severity: hygiene, plus a handle-leak-into-third-party-subprocess concern.
 **FINDING ONLY — deliberately not fixed** (functionality before hardening; the finding is what must not
@@ -12243,7 +12283,7 @@ fixes.**
 
 ---
 
-### E367 — `ClaudeCodeProvider` reads `$pipes[2]` after fclosing it
+### E367 [CLOSED] — `ClaudeCodeProvider` reads `$pipes[2]` after fclosing it
 
 **Recorded 2026-08-24.** Severity: correctness (silent loss of a child's stderr).
 **FINDING ONLY — not fixed.** Found incidentally during E366's sweep, unrelated to descriptors.
@@ -12264,7 +12304,7 @@ there is.
 **Do not fix by reordering alone.** Establish first, by measurement, whether any caller currently depends
 on the empty-string result — a provider error path that has always returned `''` may have a test pinning
 that. Rule 15/25 applies: a fixture whose expected value is what a dead instrument returns proves nothing.
-### E368 — the resource-id-as-descriptor defect has SIX instances, not three, and one of them is not latent
+### E368 [CLOSED] — the resource-id-as-descriptor defect has SIX instances, not three, and one of them is not latent
 
 **Recorded 2026-08-24 by round-52 lane a; AMENDED the same day, after review, by the fix agent.**
 Severity: correctness — five latent, **one live on every `2>file` invocation**. Measured, PHP 8.3.6.
@@ -12383,7 +12423,7 @@ is the wrong number.
 
 ---
 
-### E369 — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
+### E369 [OPEN] — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: stale justification. **Out of lane —
 `sugar-crush/tests/StdinConstantReaderCensusTest.php` is on no lane's list this round. Reported, not
@@ -12408,7 +12448,7 @@ a row with no judgement is a row the next reader adds blind.
 
 ---
 
-### E370 — two family members degrade rather than throw, and nothing pins that they still do
+### E370 [OPEN] — two family members degrade rather than throw, and nothing pins that they still do
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: unpinned invariant. **Verified by symbol. Out of lane
 — `candy-core/src/Util/Tty.php` and `candy-core/src/Util/Tty/WindowsBackend.php`.**
@@ -12434,7 +12474,7 @@ operand order. Leave `WindowsBackend` unjudged for Windows on purpose and say so
 
 ---
 
-### E371 — `pgrep -f <pattern>` matches the shell that is running the measurement
+### E371 [NO-FIX] — `pgrep -f <pattern>` matches the shell that is running the measurement
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: methodology. **Measured, PHP 8.3.6 / bash, three
 takes.**
@@ -12476,7 +12516,7 @@ merge. No source file cites one — that is the standing rule, and it is what ma
 
 ---
 
-### E372 — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
+### E372 [NO-FIX] — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
 
 **Recorded 2026-08-24 by round-49 lane b, from a mutation of its own fix.** Severity: stated bound.
 **Measured**, PHP 8.3.6, Linux, local ext4. Not a defect; recorded because a surviving mutation that is
@@ -12501,7 +12541,7 @@ and a behavioural test becomes possible.
 
 ---
 
-### E373 — `RuntimeNoticeSink::drain()` de-duplicates, and a "how many notices" assertion measures that instead
+### E373 [CLOSED] — `RuntimeNoticeSink::drain()` de-duplicates, and a "how many notices" assertion measures that instead
 
 **Recorded 2026-08-24 by round-49 lane b, from a mutation of its own new test.** Severity: instrument
 trap, general. **Measured** — the mutation survived, then killed after the window was fixed.
@@ -12533,7 +12573,7 @@ unqualified verb is what makes a reader think a drain-per-stimulus test is expos
 
 ---
 
-### E374 — E346's "five sites each need the token inserted" is wrong: two do
+### E374 [NO-FIX] — E346's "five sites each need the token inserted" is wrong: two do
 
 **Recorded 2026-08-24 by round-49 lane b, which implemented E346.** Severity: premise correction, minor.
 **Measured** — by making the change and reading which tests went red.
@@ -12553,7 +12593,7 @@ was right and is confirmed by mutation: moving the token BEFORE the marker is ki
 
 ---
 
-### E375 — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
+### E375 [OPEN] — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: open design question. Verified, not implemented.
 
@@ -12575,7 +12615,7 @@ qualifier, then implement. Until then the two arms are deliberately indistinguis
 
 ---
 
-### E376 — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
+### E376 [OPEN] — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
 
 **Recorded 2026-08-24 by round-49 lane b, which caused it.** Severity: doc drift, no runtime effect.
 **Measured**, PHP 8.3.6. Not fixed — `src/Cli/HeadlessPermissionPrompt.php` was outside this lane.
@@ -12604,7 +12644,7 @@ review is (rule 16), and this one was measured against the file rather than coun
 
 ---
 
-### E377 — the one refusal arm whose remedy is invisible is the one whose remedy gets clipped first
+### E377 [NO-FIX] — the one refusal arm whose remedy is invisible is the one whose remedy gets clipped first
 
 **Recorded 2026-08-24 by round-49 lane b (fix pass), confirming a reviewer NOTE with its own measurement.**
 Severity: observability, not reachable at the production path. Not fixed.
@@ -12637,7 +12677,7 @@ spending the session's context), and `AuditHookRefusalNoticeTest` asserts the re
 
 ---
 
-### E378 — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
+### E378 [OPEN] — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
 
 **Recorded 2026-08-24 by round-49 lane b, which put the fork there.** Severity: future obligation, no hole
 today. Not fixed — `tests/Support/ForkedChildReaperAdoptionTest.php` is not this lane's file.
@@ -12657,7 +12697,7 @@ One word; the only fork in that directory already satisfies it, so it cannot red
 
 ---
 
-### E379 — observing the suite floor at a pre-pin commit writes the production audit path that E351 closed
+### E379 [NO-FIX] — observing the suite floor at a pre-pin commit writes the production audit path that E351 closed
 
 **Recorded 2026-08-24 by round-49 lane b (fix pass), having done it.** Severity: process, self-limiting.
 No code change wanted.
@@ -12681,7 +12721,7 @@ baseline is measured in has the same property, and a reader finding a grown prod
 **Step.** None on the code. When the lanes are merged, remove
 `/tmp/sugar-crush-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
 are still running suites at pre-pin commits, and no lane should glob-delete under `/tmp` in any case.
-### E380 — E362's mechanism is refuted: a killed child produces a RED, and the RISKY comes from PHPUnit's own per-test limit
+### E380 [NO-FIX] — E362's mechanism is refuted: a killed child produces a RED, and the RISKY comes from PHPUnit's own per-test limit
 
 **Recorded 2026-08-24 by round-52 lane c, against its own brief.** Severity: diagnosis.
 **Measured, PHP 8.3.6 / PHPUnit 10.5.64.**
@@ -12752,7 +12792,7 @@ abort into an arbitrary LATER test, with a message quoting sixty seconds and no 
 
 ---
 
-### E381 — two tests asserting an ABSENCE from a child's stderr passed on a child that never ran
+### E381 [CLOSED] — two tests asserting an ABSENCE from a child's stderr passed on a child that never ran
 
 **Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: rule-15 hole, live.
 
@@ -12783,7 +12823,7 @@ TO, not "was not killed by the one signal I thought of". `exec()` already return
 
 ---
 
-### E382 — a control table whose rows all wear ONE grammatical shape left a whole parser walk dead (E360, second instance)
+### E382 [CLOSED] — a control table whose rows all wear ONE grammatical shape left a whole parser walk dead (E360, second instance)
 
 **Recorded 2026-08-24 by round-52 lane c, against its own new guard.** Severity: coverage.
 **Measured, PHP 8.3.6. FIXED before it shipped.**
@@ -12801,7 +12841,7 @@ contained one.
 
 ---
 
-### E383 — `BuiltInToolCorpusTest` hard-codes `src/`'s FILE COUNT, so any lane adding a source file reds it
+### E383 [CLOSED] — `BuiltInToolCorpusTest` hard-codes `src/`'s FILE COUNT, so any lane adding a source file reds it
 
 **Recorded 2026-08-24 by round-52 lane c.** Severity: merge hazard, live this round.
 **Measured, PHP 8.3.6, at `b9abd2fb`.**
@@ -12824,7 +12864,7 @@ source file.
 
 ---
 
-### E384 — the per-file assertion cost, measured per census, and the grep that derived its population had the hole it warns about
+### E384 [NO-FIX] — the per-file assertion cost, measured per census, and the grep that derived its population had the hole it warns about
 
 **Recorded 2026-08-24 by round-52 lane c** as E354's step (a)/(b) made concrete. Severity: prediction.
 
@@ -12894,7 +12934,7 @@ four times as many censuses, adds a TEST as well as assertions, and reds a hard-
 past. A lane that predicts its merged floor by counting the tests it added will be wrong by ~53 per
 source file a sibling adds.
 
-### E385 — the E355 sweep over `tests/Cli/`'s two censuses: eight killed, two survivors, both E363's shape
+### E385 [CLOSED] — the E355 sweep over `tests/Cli/`'s two censuses: eight killed, two survivors, both E363's shape
 
 **Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: guard coverage.
 **Measured, PHP 8.3.6, each run filtered to the file under mutation — so each verdict is a claim about
@@ -12919,7 +12959,7 @@ loop gets written with an example in mind, and the one after the loop gets writt
 
 ---
 
-### E386 — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
+### E386 [OPEN] — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
 
 **Recorded 2026-08-24 by round-52 lane c.** Not actioned: `tests/Config/` is not this lane's.
 
@@ -12932,7 +12972,7 @@ fold the three into `RefusesAnUnreadableSourceTrait` and delete the `readOrFail`
 
 ---
 
-### E387 — a census population with no floor: "at least one file" let a 1-of-N walk report the whole tree clean
+### E387 [CLOSED] — a census population with no floor: "at least one file" let a 1-of-N walk report the whole tree clean
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: rule-15 hole, live.
 **Measured, PHP 8.3.6 / PHPUnit 10.5.64.**
@@ -12958,7 +12998,7 @@ population against an independently written enumeration, or anchor it on somethi
 
 ---
 
-### E388 — a rule-15 control that covers ONE component of four, in a comment claiming it is "the whole instrument"
+### E388 [CLOSED] — a rule-15 control that covers ONE component of four, in a comment claiming it is "the whole instrument"
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: rule-15 hole, live.
 
@@ -12981,7 +13021,7 @@ nobody has counted.
 
 ---
 
-### E389 — a known-answer table whose refusal rows all collapse to `assertIsString()`
+### E389 [CLOSED] — a known-answer table whose refusal rows all collapse to `assertIsString()`
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: instrument hole.
 
@@ -13002,7 +13042,7 @@ decoration and the table only proves the function returned the right TYPE.
 
 ---
 
-### E390 — the lane bounding child processes added an unbounded child process, in the same round
+### E390 [PARTIAL] — the lane bounding child processes added an unbounded child process, in the same round
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: hygiene, live.
 
@@ -13025,7 +13065,7 @@ cross-lane edit and the ceiling guard's home is not settled.
 
 ---
 
-### E391 — the provenance walk cannot see a test method INHERITED from a base class
+### E391 [OPEN] — the provenance walk cannot see a test method INHERITED from a base class
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer.** Severity: coverage gap, unpopulated today.
 
@@ -13046,7 +13086,7 @@ being unpopulated the first time someone writes an abstract test base.
 
 ---
 
-### E392 — the ten `timeout -s KILL 60` sites, RE-ARGUED under the corrected cost model
+### E392 [CLOSED] — the ten `timeout -s KILL 60` sites, RE-ARGUED under the corrected cost model
 
 **Recorded 2026-08-24 by round-52 lane c; supersedes the same lane's earlier deferred framing.**
 
@@ -13064,7 +13104,7 @@ up should weigh it as a diagnostics improvement across ten sites, not as closing
 to copy is `BootstrapSkillSkipsTest`'s: a named constant, a ceiling guard reading `phpunit.xml`, and an
 arm refusing every non-zero status rather than only the kill.
 
-### E393 — a stage that dies on an API fault can leave the WORK committed and only the REPORT missing
+### E393 [NO-FIX] — a stage that dies on an API fault can leave the WORK committed and only the REPORT missing
 
 **Recorded 2026-08-24.** Severity: process. **Cost this round: nearly a duplicated fix stage.**
 
@@ -13091,7 +13131,7 @@ and guard corrections adding no tests.
 
 ---
 
-### E394 — out-of-band supervisor work during a live round can collide with a lane's brief
+### E394 [NO-FIX] — out-of-band supervisor work during a live round can collide with a lane's brief
 
 **Recorded 2026-08-24.** Severity: process. **Real collision, cost one duplicated fix.**
 
@@ -13121,7 +13161,7 @@ claim, and the backlog should not record it as one.
 
 ---
 
-### E395 — E368's step for site 3 is not implementable as written, and the reason generalises
+### E395 [NO-FIX] — E368's step for site 3 is not implementable as written, and the reason generalises
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: prescription refuted. **Measured, PHP 8.3.6.**
 
@@ -13156,7 +13196,7 @@ throughout.
 
 ---
 
-### E396 — sites 2 and 4 are still open, and closing them is a constructor change
+### E396 [SUPERSEDED] — sites 2 and 4 are still open, and closing them is a constructor change
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: correctness, latent. **Deliberately deferred;
 judged in the census roster rather than left unrecorded.**
@@ -13180,7 +13220,7 @@ the classification changes to `VARIABLE` and the census fails until the judgemen
 
 ---
 
-### E397 — the `finally` that closes the `/dev/tty` descriptor is not behaviourally pinnable here
+### E397 [NO-FIX] — the `finally` that closes the `/dev/tty` descriptor is not behaviourally pinnable here
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: unpinned invariant. **Stated because the gap is
 structural, not because the guard was skipped.**
@@ -13205,7 +13245,7 @@ for a two-line `finally`.
 
 ---
 
-### E398 — `PosixBackendRestoreLastTest` asserts almost nothing, and one of its two tests is `assertTrue(true)`
+### E398 [CLOSED] — `PosixBackendRestoreLastTest` asserts almost nothing, and one of its two tests is `assertTrue(true)`
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: dead guard. **Verified by symbol. Not edited — the
 file is pre-existing and the new coverage was added alongside rather than folded into it.**
@@ -13229,7 +13269,7 @@ does not expose (`struct termios` is opaque there); `stty -F <pts> -a` is the av
 
 ---
 
-### E399 — a census's alphabet trap caught in the act, one level down
+### E399 [CLOSED] — a census's alphabet trap caught in the act, one level down
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: instrument. **Found while building the replacement
 census for E368, before it was ever trusted.**
@@ -13252,7 +13292,7 @@ removing them reds it (mutation M11).
 
 ---
 
-### E400 — E368's population re-derived tree-wide with the corrected instrument: closed but for sites 2 and 4
+### E400 [NO-FIX] — E368's population re-derived tree-wide with the corrected instrument: closed but for sites 2 and 4
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: measurement. **The generator is committed this time
 — that is the point of the entry.**
@@ -13308,7 +13348,7 @@ census would have looked at.
 
 ---
 
-### E401 — the replacement census had the alphabet trap AGAIN, one level further down
+### E401 [CLOSED] — the replacement census had the alphabet trap AGAIN, one level further down
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument. **Found and fixed
 this round; recorded because it is the third recurrence of one pattern inside work written to fix that
@@ -13362,7 +13402,7 @@ and the count includes the ones that are not in the classifier.
 
 ---
 
-### E402 — the census's absence assertion passed on its own against a dead scanner
+### E402 [CLOSED] — the census's absence assertion passed on its own against a dead scanner
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: dead-guard shape. **Fixed this
 round.**
@@ -13400,7 +13440,7 @@ kill it filtered to that one method.
 
 ---
 
-### E403 — a resource id is not a measurement, and this family's own older doc-block already said so
+### E403 [CLOSED] — a resource id is not a measurement, and this family's own older doc-block already said so
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: false precision in shipped
 prose. **Corrected this round in three places.**
@@ -13422,7 +13462,7 @@ invariant, name their harness, and explicitly tell the reader not to take an id 
 
 ---
 
-### E404 — the descriptor census is blind to the METHOD-CALL spelling of its own sinks
+### E404 [CLOSED] — the descriptor census is blind to the METHOD-CALL spelling of its own sinks
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument blind spot, **no
 defect behind it today**. **Deliberately deferred — see the merge hazard at the bottom.**
@@ -13502,7 +13542,7 @@ unstated correction is not re-derivable, which was the entire complaint against 
 
 ---
 
-### E405 — the census de-duplicated its own sites, so an unjudged one hid behind a judged one
+### E405 [CLOSED] — the census de-duplicated its own sites, so an unjudged one hid behind a judged one
 
 **Recorded 2026-08-24 by round-53 lane a (fix pass).** Severity: dead-guard shape in the one property the
 census exists to have. **Fixed this round.**
@@ -13539,7 +13579,7 @@ a colliding key does not announce itself — it silently produces the smaller, g
 
 ---
 
-### E406 — a test file's FFI gate tested for the extension being loaded, which is not the condition that matters
+### E406 [CLOSED] — a test file's FFI gate tested for the extension being loaded, which is not the condition that matters
 
 **Recorded 2026-08-24 by round-53 lane a (fix pass).** Severity: red tests for contributors, invisible in
 CI. **Fixed this round.**
@@ -13577,7 +13617,7 @@ true and is why the helper takes a device path.
 
 ---
 
-### E407 — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
+### E407 [OPEN] — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: medium (duplication, not a live defect).
 
@@ -13598,7 +13638,7 @@ confirm BOTH suites move. If only one does, a private copy survived the migratio
 
 ---
 
-### E408 — `spawnSession()`'s explicit launcher reap is legibility, not a leak fix, and its deletion survives
+### E408 [NO-FIX] — `spawnSession()`'s explicit launcher reap is legibility, not a leak fix, and its deletion survives
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: informational. **This is a recorded SURVIVING mutation,
 written down so nobody re-derives it as a hole.**
@@ -13620,7 +13660,7 @@ class doc-block says so out loud.
 
 ---
 
-### E409 — a `src/` file-count census is now load-bearing in two places and five lanes are editing `src/`
+### E409 [CLOSED] — a `src/` file-count census is now load-bearing in two places and five lanes are editing `src/`
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: process / merge hazard.
 
@@ -13644,7 +13684,7 @@ immune to the count. Consider whether the three literals earn their maintenance 
 
 ---
 
-### E410 — the copied-helper drift guard caught a defect inside the change that added the copies
+### E410 [NO-FIX] — the copied-helper drift guard caught a defect inside the change that added the copies
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: informational. **Evidence that the guard pays for itself.**
 
@@ -13662,7 +13702,7 @@ round 53 assigns to another lane, so it is deferred rather than declined.
 
 ---
 
-### E411 — `MCP/StdioMcpServer` has the identical undrained-stderr wedge, and is OUT OF LANE
+### E411 [CLOSED] — `MCP/StdioMcpServer` has the identical undrained-stderr wedge, and is OUT OF LANE
 
 **Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: functional, latent. **Reported, deliberately not fixed — the file belongs to another lane.**
 
@@ -13696,7 +13736,7 @@ arrived**, never that the call was quick; a timing bound is satisfied by the bro
 
 ---
 
-### E412 — `McpMessage::parse()` raises a TypeError on a JSON-RPC reply whose `result` is not an object
+### E412 [CLOSED] — `McpMessage::parse()` raises a TypeError on a JSON-RPC reply whose `result` is not an object
 
 **Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: robustness. **Found incidentally; `src/McpMessage.php` is out of lane.**
 
@@ -13716,7 +13756,7 @@ string, int, bool, null — plus the array case as the known-positive control.
 
 ---
 
-### E413 — `BackgroundSupervisorReapTest` moves the suite's skip count off 1 on any non-Linux runner
+### E413 [CLOSED] — `BackgroundSupervisorReapTest` moves the suite's skip count off 1 on any non-Linux runner
 
 **Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: CI hygiene. **Not a defect today; filed so a future runner change does not read as a regression.**
 
@@ -13730,7 +13770,7 @@ reason that is not a defect.
 No action while `sugar-crush` is Linux-only in CI. **Trigger:** if `sugar-crush` is ever added to
 `MACOS_LIBS` or `WINDOWS_LIBS` in `ci.yml`, the skip-count invariant must be expressed per-platform first.
 
-### E414 — E366's mechanical repair is built: a lifetime scanner over `proc_open()`, and it found E366's own HIGH by machine
+### E414 [CLOSED] — E366's mechanical repair is built: a lifetime scanner over `proc_open()`, and it found E366's own HIGH by machine
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: hygiene, mechanised. **BUILT + GUARDED this round.**
 Measured on PHP 8.3.6, `sugar-crush/src` only.
@@ -13753,7 +13793,7 @@ scanner cannot satisfy.
 
 ---
 
-### E415 — the textual presence of `proc_close()` is not evidence that a child was reaped
+### E415 [CLOSED] — the textual presence of `proc_close()` is not evidence that a child was reaped
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument correctness. **FOUND AGAINST THE TREE,
 AND IT WAS THE FIRST IMPLEMENTATION'S OWN DEFECT.**
@@ -13779,7 +13819,7 @@ Both shapes are pinned in `ChildLifetimeScannerFixtureTest`, each in its own rig
 
 ---
 
-### E416 — my brief and the round's ownership map disagree about who owns `ChildStderrCaptureScanner.php`
+### E416 [NO-FIX] — my brief and the round's ownership map disagree about who owns `ChildStderrCaptureScanner.php`
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: process / merge hazard. **NOT A CODE FINDING.**
 
@@ -13806,7 +13846,7 @@ other claimant is actually running before paying the cost of avoiding it.
 
 ---
 
-### E417 — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
+### E417 [OPEN] — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: handle-leak-into-subprocess. **FINDING ONLY —
 deliberately not fixed** (functionality before hardening; lane c changes no `src/`).
@@ -13823,7 +13863,7 @@ SIGKILL teardown.
 
 ---
 
-### E418 — DEFERRED: the guard's scope is `sugar-crush/src` and nothing else
+### E418 [CLOSED] — DEFERRED: the guard's scope is `sugar-crush/src` and nothing else
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: coverage. Named so a green run is not misread.
 
@@ -13836,7 +13876,7 @@ a sugar-crush test-support class so pointing another lib at it means promoting i
 
 ---
 
-### E419 — DEFERRED: the scanner will not follow a handle through an array member
+### E419 [OPEN] — DEFERRED: the scanner will not follow a handle through an array member
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument coverage. Reported, not hidden.
 
@@ -13854,7 +13894,7 @@ site in the tree at once, and the honest `unclassified` costs a roster row rathe
 
 ---
 
-### E420 — a MIXED `proc_open()` descriptor spec was answered `inherited`, and two of its three spellings put a pipe on fd 2
+### E420 [CLOSED] — a MIXED `proc_open()` descriptor spec was answered `inherited`, and two of its three spellings put a pipe on fd 2
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument correctness. **FIXED** in
 `tests/Support/ChildStderrCaptureScanner.php`.
@@ -13898,7 +13938,7 @@ pinned four positional spellings and one all-keyed spelling, and had no way to s
 
 ---
 
-### E421 — the scanner called a bounded reaper "nothing happens to this handle", and would have reddened the lane that added it
+### E421 [CLOSED] — the scanner called a bounded reaper "nothing happens to this handle", and would have reddened the lane that added it
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: invented finding / merge hazard. **FIXED** in
 `tests/Support/ChildLifetimeScanner.php`. **Cross-lane — read the merge instruction below.**
@@ -13964,7 +14004,7 @@ edit written down in advance.
 
 ---
 
-### E422 — a best-effort reaper was rostered as a close, and it deleted E366's own HIGH from the guard
+### E422 [CLOSED] — a best-effort reaper was rostered as a close, and it deleted E366's own HIGH from the guard
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: **BLOCKING — guard hole in the
 hiding polarity.** **FIXED** in `tests/Support/ChildLifetimeScanner.php`.
@@ -14000,7 +14040,7 @@ a reader to judge a method in another package from its name; a second list lets 
 
 ---
 
-### E423 — an exemption keyed by function was a licence for the function, not for the spawn
+### E423 [CLOSED] — an exemption keyed by function was a licence for the function, not for the spawn
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: **BLOCKING — the guard's headline
 invariant did not hold.** **FIXED** in `tests/Support/DescriptorInheritanceGuardTest.php`.
@@ -14028,7 +14068,7 @@ Staleness now compares counts rather than membership, so a row is wrong in both 
 
 ---
 
-### E424 — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
+### E424 [OPEN] — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: residual of E422. Reported, not
 hidden.
@@ -14057,7 +14097,7 @@ backwards.
 
 ---
 
-### E425 — DEFERRED: `exposedIn()` drops `LIFETIME_SHORT` silently, which is the entire attack surface of `CLOSING_HELPERS`
+### E425 [CLOSED] — DEFERRED: `exposedIn()` drops `LIFETIME_SHORT` silently, which is the entire attack surface of `CLOSING_HELPERS`
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: guard observability. Reported, not
 hidden.
@@ -14078,7 +14118,7 @@ Not done this round: it is a new assertion over `src/` in a round where two othe
 
 ---
 
-### E426 — DEFERRED: `ForkedChildExitScanner`'s roster may share E423's key-collision shape
+### E426 [CLOSED] — DEFERRED: `ForkedChildExitScanner`'s roster may share E423's key-collision shape
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: unknown, one grep to find out.
 Reported, not hidden.
@@ -14092,7 +14132,7 @@ with boolean membership? If so it has the same hole.
 **Step:** a defect found in one exemption roster is a question to ask of every exemption roster in the
 package, and the asking is cheap enough that not doing it needs a reason.
 
-### E427 — the lane scratchpads have been the SAME THREE DIRECTORIES since round 49
+### E427 [NO-FIX] — the lane scratchpads have been the SAME THREE DIRECTORIES since round 49
 
 **Recorded 2026-08-24 by the round-53 supervisor.** Severity: harness defect (rule 13). **Measured.**
 
@@ -14113,7 +14153,7 @@ artifacts in two hazardous classes:
 **STEP:** per-round directories, `r<ROUND><lane>`, and the round number already exists in the script as
 `ROUND`. Cheap and total. **Round 54 uses `r54a`/`r54b`/`r54c`.**
 
-### E428 — `pgrep -af 'php -S' | wc -l` reports 1 on a clean host, because it matches itself
+### E428 [NO-FIX] — `pgrep -af 'php -S' | wc -l` reports 1 on a clean host, because it matches itself
 
 **Recorded 2026-08-24 by the round-53 supervisor.** Severity: instrument defect. **Measured.**
 
@@ -14137,7 +14177,7 @@ suspicious reading it always was rather than the expected one.
 
 ## Round 54 — lane a (candy-core descriptor census). E429-E435.
 
-### E429 — E396 refuted: closing E368 sites 2 and 4 is NOT a constructor change
+### E429 [CLOSED] — E396 refuted: closing E368 sites 2 and 4 is NOT a constructor change
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: prescription refuted (and the fix shipped).
 **Measured, PHP 8.3.6.**
@@ -14186,7 +14226,7 @@ open. The lowest match is preferred and that preference is pinned (mutation m5 s
 
 ---
 
-### E430 — E404's population is 28, not 20, and the eight-site gap is its own alphabet again
+### E430 [CLOSED] — E404's population is 28, not 20, and the eight-site gap is its own alphabet again
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: measurement + instrument. **The generator is
 committed: `DescriptorSinkScanner::methodSinks()` / `sinksFromCdef()`.**
@@ -14229,7 +14269,7 @@ earning its keep for the second round running.
 
 ---
 
-### E431 — the descriptor walk needs `clearstatcache()`, and an in-process test of that is fragile
+### E431 [CLOSED] — the descriptor walk needs `clearstatcache()`, and an in-process test of that is fragile
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: correctness (fixed) + harness. **Measured,
 PHP 8.3.6.**
@@ -14259,7 +14299,7 @@ its own preconditions, and "it kills under `--filter`" is not the same claim as 
 
 ---
 
-### E432 — `PosixBackendTest`'s stty-fallback test is skipped, by a gate built on the very defect
+### E432 [CLOSED] — `PosixBackendTest`'s stty-fallback test is skipped, by a gate built on the very defect
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: dead guard. **DEFERRED — not fixed, see below.**
 
@@ -14300,7 +14340,7 @@ the next merge a flake. It needs a round that can watch it run twenty times.
 
 ---
 
-### E433 — the standing cross-lane census hazard is now wider than E400 recorded
+### E433 [NO-FIX] — the standing cross-lane census hazard is now wider than E400 recorded
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: merge hazard. **Stated, not fixable.**
 
@@ -14321,7 +14361,7 @@ resolving a merge and looking at a red package they never opened.
 
 ---
 
-### E434 — candy-pty's assertion count is not stable across takes
+### E434 [SUPERSEDED] — candy-pty's assertion count is not stable across takes
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: measurement hygiene.
 
@@ -14333,7 +14373,7 @@ The `+1` was not chased down; whichever test it is, it has an environment-depend
 
 ---
 
-### E435 — candy-pty's assertion wobble is ONE named test, and E434 understates it in two ways
+### E435 [CLOSED] — candy-pty's assertion wobble is ONE named test, and E434 understates it in two ways
 
 **Recorded 2026-08-25 by the round-54 lane-a recovery run.** Severity: measurement hygiene / merge-floor
 correctness. candy-pty is **not** edited by this lane; it is read by candy-core's descriptor census, and
@@ -14389,7 +14429,7 @@ three lanes share this box**, so a sibling lane's suite running concurrently is 
 would not reproduce in a quiet tree — which is consistent with both failures to reproduce.
 ## Round 54 — lane b (runtime bugs). E436-E444.
 
-### E436 — `McpClient::startServer()` catches `\RuntimeException`, so any other throw defeats its own stated purpose
+### E436 [CLOSED] — `McpClient::startServer()` catches `\RuntimeException`, so any other throw defeats its own stated purpose
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: real. **Measured.** Out of lane b's file list
 (`sugar-crush/src/MCP/McpClient.php`).
@@ -14406,7 +14446,7 @@ doc-block says so.
 **STEP:** widen to `catch (\Throwable)` at that one site, and pin it with a server fixture that throws
 something that is not a `RuntimeException` during the handshake.
 
-### E437 — `McpMessage` has no `resultSet` sentinel, so a legal `"result": null` reply is unparseable
+### E437 [CLOSED] — `McpMessage` has no `resultSet` sentinel, so a legal `"result": null` reply is unparseable
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, graceful. **Measured.**
 
@@ -14423,7 +14463,7 @@ deliberately NOT bolted on inside E412's fix — a half-threaded sentinel is wor
 rejection — and the rejection is now pinned with both polarities in
 `tests/MCP/McpMessageResultTypeTest::testANullResultIsRejectedWhileTheAdjacentFalseIsNot()`.
 
-### E438 — the "exactly 1 skipped" invariant is a LINUX figure, is asserted nowhere, and rests on far more than one file
+### E438 [CLOSED] — the "exactly 1 skipped" invariant is a LINUX figure, is asserted nowhere, and rests on far more than one file
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: plan-instrument defect. **Measured. This entry
 falsifies E413.**
@@ -14462,7 +14502,7 @@ in doc-block prose in `tests/bootstrap.php`, `tests/SuiteChildStdinIsolationTest
 `tests/SuiteChildStdinPrependResidualTest.php`. If it is load-bearing for the plan it should be derived
 (a PHPUnit extension counting skips, or a CI step asserting on the summary line), not restated.
 
-### E439 — `StdioMcpServer::writeLine()` is not covered by `start()`'s handshake deadline
+### E439 [CLOSED] — `StdioMcpServer::writeLine()` is not covered by `start()`'s handshake deadline
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: latent, pre-existing.
 
@@ -14475,7 +14515,7 @@ forever too — but the loop is now the obvious place to accept the deadline the
 **STEP:** give `writeLine()` an optional `?float $deadline` and pass `start()`'s through; leave
 `callTool()`'s path deadline-less, matching `readLine()`.
 
-### E440 — stderr is only drained while the parent is inside an exchange
+### E440 [OPEN] — stderr is only drained while the parent is inside an exchange
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, no longer a deadlock.
 
@@ -14489,7 +14529,7 @@ stopped for the whole gap.
 Recorded rather than done, because it is a shape change to a class that is currently synchronous by
 design.
 
-### E441 — `StdioMcpServer::stop()` does not `fclose()` the pipes before `proc_close()`
+### E441 [CLOSED] — `StdioMcpServer::stop()` does not `fclose()` the pipes before `proc_close()`
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor.
 
@@ -14498,7 +14538,7 @@ child, so the documented ordering is to close the pipes first. The SIGTERM→sig
 means the child is gone by then in practice, which is why this has never bitten — but the ordering is the
 one `ProcessReaper` and `ClaudeCodeProvider::completeStream()`'s `finally` both use explicitly.
 
-### E442 — the stderr-drain loop now exists in two places
+### E442 [NO-FIX] — the stderr-drain loop now exists in two places
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: hygiene.
 
@@ -14509,7 +14549,7 @@ loop-terminator vs tracked flag, bounded vs unbounded caller) — so this is exp
 "deduplicate them" step. It is a note that a third site must read those differences before copying
 either one, the way this round had to.
 
-### E443 — the undrained blocking stdin write exists in two more classes, OUT OF LANE b
+### E443 [CLOSED] — the undrained blocking stdin write exists in two more classes, OUT OF LANE b
 
 **Recorded 2026-08-24 by round 54 lane b (found by its reviewer).** Severity: `LspConnection` major,
 `ClaudeCodeMcpClient` minor. Neither file is in lane b's ownership list, so both are reported and not
@@ -14538,7 +14578,7 @@ sites, in the owning lane. Read `absorbStderr()`'s doc-block first: the three di
 E442 apply, and `LspConnection`'s framing is `Content-Length`, not newline, so its resync story on a
 short write differs from both.
 
-### E444 — `writeLine()`'s EINTR branch has no liveness check
+### E444 [CLOSED] — `writeLine()`'s EINTR branch has no liveness check
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, not reachable via any current caller.
 
@@ -14556,7 +14596,7 @@ this may be a documented seam rather than a guarded one.
 
 ## Round 54 — lane c (close the fd inheritance). E445-E449.
 
-### E445 — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
+### E445 [OPEN] — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: instrument granularity. **Measured, and it is NOT
 E423's shape.**
@@ -14587,7 +14627,7 @@ counts.
 **STEP:** re-key both rosters to `File.php::function` and keep the counts. Both files are outside lane
 c's ownership, which is why this is a step and not a commit.
 
-### E446 — the only spec-level fix for descriptor inheritance is a runtime enumeration, and it is worse than the disease
+### E446 [NO-FIX] — the only spec-level fix for descriptor inheritance is a runtime enumeration, and it is worse than the disease
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: finding, deliberately not implemented.
 
@@ -14613,7 +14653,7 @@ before each of the long-lived spawns. Against it, all measured or read off the c
 a socket pair open across a long-lived spawn — not at the seven spawn sites. Recorded so the next reader
 does not re-derive it.
 
-### E447 — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
+### E447 [OPEN] — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: blind spot, out of lane.
 
@@ -14631,7 +14671,7 @@ candy-core edit. Hence: not done, recorded.
 **STEP:** spell the spec where the call can see it, in candy-core, then widen
 `testNoDescriptorSpecInSrcIsUnreadable()` to `LIB_SCOPE` alongside the exposure arm.
 
-### E448 — three exposed spawns sit in libraries `sugar-crush` cannot reach
+### E448 [OPEN] — three exposed spawns sit in libraries `sugar-crush` cannot reach
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: finding. **Measured.**
 
@@ -14650,7 +14690,7 @@ Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8
 lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or
 copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that does not drift.
 
-### E449 — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
+### E449 [NO-FIX] — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
 
 **Recorded 2026-08-25 by round 54 lane c.** Severity: finding. **Measured.**
 
@@ -14688,7 +14728,7 @@ whoever next touches it.
 
 ## Round 54 — supervisor. E450-E452.
 
-### E450 — 🔴 WHEN A KILLED LANE IS RELAUNCHED, THE COMMITS IT MADE BEFORE DYING ARE REVIEWED BY NOBODY
+### E450 [NO-FIX] — 🔴 WHEN A KILLED LANE IS RELAUNCHED, THE COMMITS IT MADE BEFORE DYING ARE REVIEWED BY NOBODY
 
 **Recorded 2026-08-25 by the round-54 supervisor.** Severity: structural, and it will recur on every
 interruption. **Measured.** Found by lane c, unprompted, as the thing its recovery brief got wrong.
@@ -14717,7 +14757,7 @@ reviewing the M−N unreviewed commits as the FIRST task, ahead of the findings 
 re-run the review stage against the current HEAD rather than replaying the stale one — the review is
 cheap relative to a fix, and a stale review is worse than no review because it looks authoritative.
 
-### E451 — the orphaned-`php -S` invariant cannot be measured while any suite is running
+### E451 [NO-FIX] — the orphaned-`php -S` invariant cannot be measured while any suite is running
 
 **Recorded 2026-08-25 by the round-54 supervisor.** Severity: measurement hygiene. Sharpens `E428`.
 **Measured.**
@@ -14735,7 +14775,7 @@ check is written down, and take the reading after the last suite exits, not alon
 count ever appears on a quiet tree, `ps -o pid,etimes,args=` and filter on `etimes` — a genuine orphan
 outlives the run that made it, and that is the property worth asserting.
 
-### E452 — `resumeFromRunId` cannot resume a `pipeline()` run, and the failure mode is silent rework
+### E452 [NO-FIX] — `resumeFromRunId` cannot resume a `pipeline()` run, and the failure mode is silent rework
 
 **Recorded 2026-08-25 by the round-54 supervisor.** Severity: harness. **Measured.**
 
@@ -14756,7 +14796,7 @@ the cached stage results pulled out of `journal.jsonl`. That regenerates each pr
 verified this round at 53,445 and 51,840 chars — and lets exactly the missing agents be relaunched while
 completed lanes are left untouched. See `E450` for what such a brief must additionally say.
 
-### E453 — CI's path-repo policy job is RED on master, and has been for at least two pushes
+### E453 [CLOSED] — CI's path-repo policy job is RED on master, and has been for at least two pushes
 
 **Recorded 2026-08-25 by the round-54 supervisor.** Severity: real, and it is red on `master` right now.
 **Measured** from the GitHub Actions log of run `32779921676` (`492352ea`, a docs-only push, so this is
@@ -14786,7 +14826,7 @@ wiring than carrying a stale require.
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
 
-### E454 — `--fix --strict-closure` cannot restore the closure by itself, and re-running it UNDOES a manual repair
+### E454 [NO-FIX] — `--fix --strict-closure` cannot restore the closure by itself, and re-running it UNDOES a manual repair
 
 **Recorded 2026-08-25 by the round-54 supervisor.** Severity: procedural, and it silently voids figures.
 **Measured** during round 54's post-sweep closure restore.
@@ -14817,7 +14857,7 @@ LAST step, not after the tool** — the tool exiting 0 says nothing about `vendo
 
 ## User-reported (not from a round). E455.
 
-### E455 — 🔴 the chat input box never wraps: a long draft runs off the right edge instead of growing to multiple lines
+### E455 [CLOSED] — 🔴 the chat input box never wraps: a long draft runs off the right edge instead of growing to multiple lines
 
 **Reported 2026-08-25 by the user, typing normal space-separated words into the live TUI.** Severity:
 functional, user-visible, on the single most-used surface in the app. Not a round finding — this came
@@ -14889,7 +14929,7 @@ Specifics that matter:
 the input box (`Renderer.php:1078`) and was not examined here — check whether it constrains its own width
 before assuming this defect is a singleton.
 
-### E456 — 🔴 the 120s idle timer does not count reasoning as progress, so a long think block is killed as a hung provider
+### E456 [CLOSED] — 🔴 the 120s idle timer does not count reasoning as progress, so a long think block is killed as a hung provider
 
 **Reported 2026-08-25 by the user, mid-turn against a reasoning model.** Severity: functional, kills real
 work, and the failure message actively misleads. Second user-reported bug of the day; see [[E455]].
@@ -14962,7 +15002,7 @@ progress is the defect.**
   Per rule 16 the acceptance test is a mutation of THE FIX: re-gate the reasoning branch on
   `content !== ''` and the test must go red.
 
-### E457 — 🔴 `grep` in an agent shell is ugrep, not GNU grep, and `grep -qv` silently always answers "no"
+### E457 [SUPERSEDED] — 🔴 `grep` in an agent shell is ugrep, not GNU grep, and `grep -qv` silently always answers "no"
 
 **Measured 2026-08-25 by the round-55 supervisor,** after a monitor raised a false alarm about a lane
 agent that had in fact completed twenty minutes earlier. Severity: it makes a whole class of verification
@@ -15028,7 +15068,7 @@ the instrument's own self-test has to be capable of failing for the right reason
 reason. Both times today the wrong answer arrived as silence rather than as an error — see [[E451]].
 ## Round 55 — lane a (the instruments). E458 … E463.
 
-### E458 — E438 CLOSED: the "exactly 1 skipped" invariant is now asserted, by NAME, and it fails the run
+### E458 [CLOSED] — E438 CLOSED: the "exactly 1 skipped" invariant is now asserted, by NAME, and it fails the run
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: plan-instrument. **Fixed, mutation-checked.**
 
@@ -15059,7 +15099,7 @@ returns null; the shutdown `exit(1)` removed; `unexpectedSkips()` returns `[]`;
 `rosterWasFullyReached()` returns true) were all killed, and the harness was run against a known no-op
 and a known kill first.
 
-### E459 — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again
+### E459 [CLOSED] — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: measurement hygiene. **Fixed, mutation-checked.**
 
@@ -15080,7 +15120,7 @@ decoration: MEASURED, neutralising the reader's reporting arm SURVIVES the live 
 plus 8 JUnit-logged takes here, all rc 0, taking the running tally to **one red in 46**. All 9 takes were
 JUnit-logged precisely so a red would have named itself.
 
-### E460 — E432 CLOSED: the stty-fallback pin runs, and it found two real defects on its first execution
+### E460 [CLOSED] — E432 CLOSED: the stty-fallback pin runs, and it found two real defects on its first execution
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed, mutation-checked.**
 
@@ -15100,7 +15140,7 @@ The body now reads the device with `stty -a` through `SttyReading`'s whole-word 
 test, and asserts `TermiosFactory::which()` first so the test cannot become an FFI test under an stty
 name. 20 consecutive takes, all green, all `9 assertions`.
 
-### E461 — `PosixBackend::restore()` was a NO-OP under the stty backend
+### E461 [CLOSED] — `PosixBackend::restore()` was a NO-OP under the stty backend
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: real, user-visible. **Fixed.** Found by E460 on
 the pin's first-ever execution.
@@ -15120,7 +15160,7 @@ i.e. a program running without ext-ffi exits leaving the user's terminal raw and
 implement it correctly on a `current()` snapshot, so `$this->saved->restore()` is identical for the FFI
 path and correct for the fallback. `PosixBackendInjectedTermiosTest` followed the verb.
 
-### E462 — `PosixMasterPty::close()` leaked one `/dev/ptmx` descriptor per pty that had been used
+### E462 [CLOSED] — `PosixMasterPty::close()` leaked one `/dev/ptmx` descriptor per pty that had been used
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed.** Found by E460 as a cross-test
 failure: the newly-running pin drove one open/write/close cycle and the NEXT candy-core test's
@@ -15155,7 +15195,7 @@ anywhere would want a stable reference — only that no test notices; see E466.
 resolution** (rule 33). Its `descriptorBehind()` refuses to guess when two fds match one dev+inode; the
 right answer was to stop leaking, not to loosen the walk.
 
-### E463 — the round-55 lane map and the round-55 lane-a brief disagree about who owns what
+### E463 [NO-FIX] — the round-55 lane map and the round-55 lane-a brief disagree about who owns what
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: process. **Stated, not fixable by a lane.**
 
@@ -15165,7 +15205,7 @@ gives `sugar-crush/tests/` to lanes b and c; the brief's YOUR FILES section give
 E416 recurring in the round that rewrote the map to fix it. Work was done against YOUR FILES, widened
 where a guard or a real defect forced it, and every such edit is named at the top of the lane report.
 
-### E464 — the skip roster was blind to a skipped CLASS, the larger of the two silent re-bases
+### E464 [CLOSED] — the skip roster was blind to a skipped CLASS, the larger of the two silent re-bases
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: real, in the instrument. **Fixed.**
 
@@ -15200,7 +15240,7 @@ MEASURED: neutralising `recordSuiteSkip()` KILLED (2); removing the subscriber r
 runs ABOVE `$emitter->testPrepared()` in `TestCase::runBare()`, so a `--filter` selecting only a
 `#[Requires…]` test lands there, and a skipped class lands there by definition.
 
-### E465 — the roster's "a plain child arms nothing" safety property is false; the load-bearing one is the other
+### E465 [CLOSED] — the roster's "a plain child arms nothing" safety property is false; the load-bearing one is the other
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: false justification. **Fixed.**
 
@@ -15221,7 +15261,7 @@ stop happening, the doc-blocks are told rather than quietly vindicated. The `try
 registration still earns its place (a sealed facade, or a moved class, would otherwise be a fatal in every
 such child); it is simply not what makes them quiet.
 
-### E466 — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
+### E466 [OPEN] — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: open question, deliberately deferred. **Not done.**
 
@@ -15237,7 +15277,7 @@ a generator: a census of `PosixMasterPty::close()` callers across the monorepo (
 `candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the
 descriptor number across the call. Until then the block stays and the comment says what it does not know.
 
-### E467 — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
+### E467 [CLOSED] — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: right answer, wrong reason. **Fixed.**
 
@@ -15263,7 +15303,7 @@ wrong, not the mutation. The shipped assertion counts descriptors sharing the pr
 requires exactly one, which KILLS the revert (`[0]` vs `[0, 5]`). **Do not relax it back to a path
 compare.**
 
-### E468 — the torn-read fixture's alphabet could not express two of the three separators its reader accepts
+### E468 [CLOSED] — the torn-read fixture's alphabet could not express two of the three separators its reader accepts
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: coverage hole in a new instrument.
 **Fixed.**
@@ -15279,7 +15319,7 @@ match the cases already known. Bare-LF (raw, non-cooked master) and bare-CR (a c
 LF) rows added, plus a whitespace-padded row — the `trim()` arm had the identical hole and no row had ever
 needed trimming. MEASURED after: narrowing the split KILLED; removing `trim()` KILLED.
 
-### E469 — two roster arms are argued and neither is exercised end to end
+### E469 [OPEN] — two roster arms are argued and neither is exercised end to end
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: unpinned reasoning. **Not done.**
 
@@ -15298,7 +15338,7 @@ needed trimming. MEASURED after: narrowing the split KILLED; removing `trim()` K
    currently have.
 ## Round 55 — lane b (finish the stdio family). E470 … E477.
 
-### E470 — E439's reachability claim is FALSE: `start()` cannot fill a pipe
+### E470 [NO-FIX] — E439's reachability claim is FALSE: `start()` cannot fill a pipe
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: finding-instrument defect. **Measured. This
 entry falsifies E439.**
@@ -15316,7 +15356,7 @@ it is DEFENSIVE, not a live bug fix, and the file says so rather than repeating 
 than restating it, and reds the day someone grows the `capabilities` block — which is the day the
 finding becomes true.
 
-### E471 — the EINTR liveness check cannot fire, and it was written as the primary exit
+### E471 [NO-FIX] — the EINTR liveness check cannot fire, and it was written as the primary exit
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: dormancy, documented and pinned. **Measured, and
 this falsifies the fix's own first doc-block.**
@@ -15348,7 +15388,7 @@ exit that fires, and mutation kills it.
 slept 30s against a 45s bound, so the backstop row was ended by the FIXTURE'S OWN EXIT; and the
 dead-child row never reached the branch at all.
 
-### E472 — E441's severity is wrong: the pipe-close ordering is a SIGKILL, not hygiene
+### E472 [CLOSED] — E441's severity is wrong: the pipe-close ordering is a SIGKILL, not hygiene
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: real. **Measured. This entry falsifies E441.**
 
@@ -15373,7 +15413,7 @@ fd-leak assertion cannot see this defect at all — only the EOF timing can.
 Same defect and same fix in `LspConnection::stopProcess()`, where the close goes after the final
 `drainStderr()` and before `ProcessReaper::terminateAndClose()`.
 
-### E473 — `ClaudeCodeMcpClient::sendMessage()` is the LAST member of the E443 family, OUT OF LANE
+### E473 [CLOSED] — `ClaudeCodeMcpClient::sendMessage()` is the LAST member of the E443 family, OUT OF LANE
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor-but-terminal. Out of lane b's file list
 (`sugar-crush/src/ClaudeCodeMcpClient.php`).
@@ -15406,7 +15446,7 @@ this round: N=100000 M=200000 completes in 0.00s; N=200000 wedges. A fixture siz
 65536-byte pipe capacity — the figure the NDJSON sibling's tests use — is VACUOUS for this shape, and
 was, until mutation caught it.
 
-### E474 — `LspConnection::isConnected()` still reports true after the framing latch fires
+### E474 [CLOSED] — `LspConnection::isConnected()` still reports true after the framing latch fires
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor.
 
@@ -15419,7 +15459,7 @@ session that can never send again.
 **STEP:** decide whether `isConnected()` should mean "the process is up" or "this session can still be
 used", and say which in its doc-block either way. If the latter, the latch belongs in it.
 
-### E475 — E440's sibling: `LspConnection` also only drains stderr inside an exchange
+### E475 [OPEN] — E440's sibling: `LspConnection` also only drains stderr inside an exchange
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor, no longer a deadlock.
 
@@ -15432,7 +15472,7 @@ self-heals on the next exchange, so it is a stall rather than a deadlock, exactl
 **STEP:** the honest fix is the same one E440 names — fd 2 on the ReactPHP loop. Recorded rather than
 done, because it is a shape change to a class that is synchronous by design.
 
-### E476 — `StdioMcpServer` selects on pipes without an `is_resource()` guard; `LspConnection` guards
+### E476 [CLOSED] — `StdioMcpServer` selects on pipes without an `is_resource()` guard; `LspConnection` guards
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: latent. **Measured.**
 
@@ -15457,7 +15497,7 @@ reaches it — but the guard the sibling class documents as necessary is absent 
 **STEP:** add the `is_resource()` guard to both, or record why `pipes !== null` is sufficient. Note that
 this is also why the EINTR branch cannot be tested with a closed fd (E471).
 
-### E477 — E436 is still open and is the reason E437 mattered
+### E477 [CLOSED] — E436 is still open and is the reason E437 mattered
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: real. Out of lane b's file list
 (`sugar-crush/src/MCP/McpClient.php`).
@@ -15471,7 +15511,7 @@ for exactly this reason.
 **STEP:** widen to `catch (\Throwable)` and pin with a server fixture that throws something that is not
 a `RuntimeException` during the handshake.
 
-### E478 — the `parse()` widening reaches a SECOND consumer nobody discussed
+### E478 [NO-FIX] — the `parse()` widening reaches a SECOND consumer nobody discussed
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent, currently benign. **Measured.**
 
@@ -15489,7 +15529,7 @@ reads `->result` on a parsed message at all, so an extra null-result element cha
 result-reading path knows the null-result element already arrives, and does not re-derive the invariant
 from `StdioMcpServer` alone.
 
-### E479 — `McpMessage::toArray()` now emits a key that is not JSON-RPC
+### E479 [CLOSED] — `McpMessage::toArray()` now emits a key that is not JSON-RPC
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent.
 
@@ -15503,7 +15543,7 @@ frames outgoing messages and it does NOT emit the key, so the two have diverged 
 a wire serialiser (then drop `resultSet` from it and pin the absence). Do not "fix" it by copying
 `toJson()`'s shape without checking `parseTools()` still gets `result`.
 
-### E480 — `LspConnection::writeMessage()`'s null-deadline path is bounded only by the child's lifetime
+### E480 [CLOSED] — `LspConnection::writeMessage()`'s null-deadline path is bounded only by the child's lifetime
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent. **Measured.**
 
@@ -15522,7 +15562,7 @@ counts consecutive FAILURES and a timeout is not a failure.
 the unboundedness at the parameter rather than only in the pinning test. The dormancy itself is now
 pinned by `LspConnectionStdinWedgeTest::testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()`.
 
-### E481 — `DuplicatedTestHelperDriftTest`'s alphabet cannot see duplicated TESTS or duplicated CONSTS
+### E481 [PARTIAL] — `DuplicatedTestHelperDriftTest`'s alphabet cannot see duplicated TESTS or duplicated CONSTS
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real, instrument gap.
 
@@ -15538,7 +15578,7 @@ that its scope is deliberately private helpers and that duplicated fixtures/cons
 the first; the second at minimum, because the guard currently reads as though it covers duplication in
 general.
 
-### E482 — `Agents/TeamTest` asserts on the REAL `~/.sugar-crush`, so a concurrent lane reds it
+### E482 [SUPERSEDED] — `Agents/TeamTest` asserts on the REAL `~/.sugar-crush`, so a concurrent lane reds it
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real (CI/multi-lane flake). **Measured.**
 
@@ -15557,7 +15597,7 @@ test is one this test could have produced (name prefix / recorded ids), instead 
 listing is byte-identical. Do NOT resolve this by deleting the shared directory: three lanes run at once
 and a glob-delete there is the `/tmp` prohibition one directory over.
 
-### E483 — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
+### E483 [OPEN] — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: instrument gap. **Measured.**
 
@@ -15579,7 +15619,7 @@ that legitimately has no deadline (a bounded drain), so the check also needs an 
 `ACCOUNTED_FOR` row for `absorbStderr` carrying the reason, and — per rule 15 — push a known-positive
 fixture method through the SAME scanner in the same test, since the assertion is "nothing unrostered"
 and that is what a dead scanner also returns.
-### E484 — the descriptor guard's own horizon: `autoload` was never the right reachability question
+### E484 [CLOSED] — the descriptor guard's own horizon: `autoload` was never the right reachability question
 
 **Round 55, lane c.** RESOLVED in-lane; recorded because the SHAPE recurs.
 
@@ -15603,7 +15643,7 @@ the TEST does, while `libSourceFiles()` is a different walk. Any instrument with
 own scope has this hole. **Assert the generator's output against the roster, not the roster against the
 tree.**
 
-### E485 — E447's diagnosis was wrong: `runExec`'s spec is readable, and no arm was asking about siblings
+### E485 [CLOSED] — E447's diagnosis was wrong: `runExec`'s spec is readable, and no arm was asking about siblings
 
 **Round 55, lane c.** RESOLVED in-lane.
 
@@ -15625,7 +15665,7 @@ clause — and one corpus row disagreeing with what the spec plainly said. Measu
 was reported as complete** — a wrong answer, not a refusal, which then passes the readability arm as an
 ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
 
-### E486 — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
+### E486 [OPEN] — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
 
 **Round 55, lane c.** NOT DONE. Costed, and the cost is the finding.
 
@@ -15650,7 +15690,7 @@ three spec 0,1,2 only, and no guard anywhere sees them.
 live, it reaches 58/58 immediately, and it changes no package's dependencies. Cost: one script, one CI
 step. Out of lane c's file list, hence not done here.
 
-### E487 — E453: `--unused` is candidate-grade output wired in as a hard gate
+### E487 [CLOSED] — E453: `--unused` is candidate-grade output wired in as a hard gate
 
 **Round 55, lane c.** RESOLVED, with a forced out-of-lane edit to `tools/check-path-repos.php`.
 
@@ -15676,7 +15716,7 @@ was filed. Rewritten, not deleted.
 counterpart. `ManifestDependencyReachTest` closes the `--unused` one for `sugar-crush` only. Every other
 lib, and the closure and injection passes, remain checks the merge checklist cannot see.
 
-### E488 — the tool's `deferred-wiring` lookup never expires a row, for any of the other 57 libs
+### E488 [CLOSED] — the tool's `deferred-wiring` lookup never expires a row, for any of the other 57 libs
 
 Round 55's review found this in `sugar-crush`'s copy and it is fixed there; the same never-expires
 property is still live in `tools/check-path-repos.php`. Its `$deferredWiring` closure is consulted only
@@ -15698,7 +15738,7 @@ suppress a finding this run. `idleDeferrals()` is the reference implementation a
 distinguishes are the ones worth printing — a count cannot tell a wired dep from a package nobody
 requires. `tools/` was assigned to no lane in round 55, which is why this is filed rather than done.
 
-### E489 — `LIB_HORIZON`'s unwalked rows were unfalsifiable, and the roster's own promise was false
+### E489 [NO-FIX] — `LIB_HORIZON`'s unwalked rows were unfalsifiable, and the roster's own promise was false
 
 Recorded because the DEMONSTRATION is reusable, not because the defect is still open — it is fixed at
 round 55 lane c. `walked => true` rows were pinned in both polarities by a `mechanism` citation.
@@ -15726,7 +15766,7 @@ not look here" row should be checked for the same hole — the standard was alre
 
 ## Round 55 — supervisor. E490.
 
-### E490 — 🔴 candy-pty hung INDEFINITELY on the merged tree, once in two takes, and a hang is invisible to CI as anything but a timeout
+### E490 [SUPERSEDED] — 🔴 candy-pty hung INDEFINITELY on the merged tree, once in two takes, and a hang is invisible to CI as anything but a timeout
 
 **Observed 2026-08-25 by the round-55 supervisor** while measuring the merged floor at `b489405ba`.
 Severity: intermittent, unreproduced, and deliberately filed anyway — see rule 14.
@@ -15765,7 +15805,7 @@ is NOT evidence. One occurrence in two takes is not a diagnosis.
 4. Note for whoever runs step 1: `timeout` does not reliably kill a wedged PTY/FFI child. Spawn a
    watchdog that kills the ONE recorded pid and nothing else — a global `pkill` is prohibited here.
 
-### E491 — 🔴 `retryOnEintr()`'s EINTR detection could never be true, so candy-pty has NEVER retried an interrupted select
+### E491 [CLOSED] — 🔴 `retryOnEintr()`'s EINTR detection could never be true, so candy-pty has NEVER retried an interrupted select
 
 **Measured 2026-08-25 by the round-55 supervisor** while writing the first behavioural test the helper
 has ever had (see [[E490]]). Severity: a signal turns an ordinary wait into a thrown exception, in a
@@ -15823,7 +15863,7 @@ candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
 
-### E492 — 🔴 The round-56 script shipped ROUND 53's ownership map, three lanes read it, and none of them noticed
+### E492 [NO-FIX] — 🔴 The round-56 script shipped ROUND 53's ownership map, three lanes read it, and none of them noticed
 
 **Measured 2026-08-25 by the round-56 recovery supervisor**, from the three killed implementers'
 surviving transcripts. Severity: the map is the mechanism that keeps concurrent lanes from writing over
@@ -15870,7 +15910,7 @@ written. Re-read them at launch, not just the figures.
 
 *Provisional lane-prefixed ids (rule 20); the supervisor renumbers at merge.*
 
-### E493 — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
+### E493 [OPEN] — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
 
 **Recorded 2026-08-25 by lane a.** Severity: medium. This is the defect E456's implementer chose to
 record rather than half-fix, and it needed an id.
@@ -15894,7 +15934,7 @@ both interact with the reap bookkeeping in `self::$unreapedChildren`.
 resurrects the hang the constant exists to bound, and a blanket total-request timeout on an LLM call is
 prohibited outright — completions can legitimately run tens of minutes.
 
-### E494 — E456's channel reaches the parent process and nothing paints it
+### E494 [CLOSED] — E456's channel reaches the parent process and nothing paints it
 
 **Recorded 2026-08-25 by lane a.** Severity: medium, functionality. **OUT OF LANE and therefore not
 done**: closing it needs `src/Chat.php`, which no round-56 lane owned.
@@ -15931,7 +15971,7 @@ channel corrupts the CONVERSATION rather than the display.
 `ReasoningProgressTest::testAThoughtNeverEntersTheAssistantsOwnWords()` is the guard, and the mutation
 that routes reasoning into `$buffer` KILLS it.
 
-### E495 — `Backend`'s interface uses implicitly-nullable parameters, deprecated on the 8.4 leg CI runs
+### E495 [CLOSED] — `Backend`'s interface uses implicitly-nullable parameters, deprecated on the 8.4 leg CI runs
 
 **Recorded 2026-08-25 by lane a.** Severity: low, rising to high if the 8.4 leg starts failing on
 deprecations. **NOT MEASURED ON 8.4** — this box has only PHP 8.3.6 and rule 5 forbids pretending
@@ -15957,7 +15997,7 @@ own commit rather than a ride-along.
 surfaces it as a deprecation notice or as a failure depends on configuration nobody in this round could
 measure.
 
-### E496 — the idle-ceiling guard was a source-text scan, and a real clock harness now exists
+### E496 [CLOSED] — the idle-ceiling guard was a source-text scan, and a real clock harness now exists
 
 **Recorded 2026-08-25 by lane a.** Severity: low, coverage.
 
@@ -15978,7 +16018,7 @@ behavioural test does not, namely that the timer is armed in exactly ONE place. 
 behavioural arm for "an ordinary multi-step tool turn outlives the ceiling", which is the original §1 E1
 defect and is still pinned only by prose.
 
-### E497 — three test doubles hold generic names at the top level of a SHARED test namespace
+### E497 [CLOSED] — three test doubles hold generic names at the top level of a SHARED test namespace
 
 **Recorded 2026-08-25 by lane a, from its own review.** Severity: low, merge hygiene.
 
@@ -15997,7 +16037,7 @@ another lane may hold, and a rename conflict is worse than the risk it removes.
 **Provisional lane-prefixed ids per the brief; the supervisor renumbers at merge. None of them is cited
 from a source file.**
 
-### E498 — `SymbolCitationDriftTest`'s alphabet cannot see a backticked cite, or anything in `tests/`
+### E498 [CLOSED] — `SymbolCitationDriftTest`'s alphabet cannot see a backticked cite, or anything in `tests/`
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real, instrument gap. **Measured.** Out of lane
 (`sugar-crush/tests/SymbolCitationDriftTest.php`, plus two `src/` files it would newly flag).
@@ -16039,7 +16079,7 @@ and write it so the pattern never appears literally.
 guard's own file by path. Then fix the two `src/` cites above. The population figures here are provenance
 for this entry and must NOT be written into the test (rule 18) — the guard already asserts a floor.
 
-### E499 — E436's narrow catch has a live one-hop route, and the stdio half is closed
+### E499 [CLOSED] — E436's narrow catch has a live one-hop route, and the stdio half is closed
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real. **Measured end to end.** The remaining half
 is out of lane (`sugar-crush/src/MCP/McpClient.php`, `sugar-crush/src/MCP/HttpMcpServer.php`).
@@ -16081,7 +16121,7 @@ move E412's `TypeError` into `parseTools()`. (b) `HttpMcpServer::start()` wraps 
 `catch (\Exception)`, so a Guzzle `InvalidArgumentException` there is already converted to a
 `RuntimeException`; only `\Error` escapes it.
 
-### E500 — `readMessages()` dropped any reply that did not arrive whole in one call
+### E500 [CLOSED] — `readMessages()` dropped any reply that did not arrive whole in one call
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real. **Measured. Fixed this round.** In lane
 (`sugar-crush/src/ClaudeCodeMcpClient.php`).
@@ -16104,7 +16144,7 @@ It was written by editing the split offset to the end of the line, which left th
 write — so both arms crossed a boundary and the pair proved nothing. Caught only by running a
 known-answer case through it. Rule 13, in a probe built to check rule 13's subject.
 
-### E501 — E479's premise is false: `toArray()` was never a wire serialiser
+### E501 [CLOSED] — E479's premise is false: `toArray()` was never a wire serialiser
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: finding-instrument correction. **Measured.
 Resolved this round.** In lane (`sugar-crush/src/McpMessage.php`).
@@ -16124,7 +16164,7 @@ message shapes rather than from a hand-written key list.
 ClaudeCodeMcpClient suite in the tree — 394 tests, 1276 assertions, rc 0. Nothing pinned it anywhere. It
 now has a row, in both polarities, because an always-true sentinel resolves nothing.
 
-### E502 — E476's site list was short, and the exception's discriminator is "selectable", not "valid"
+### E502 [CLOSED] — E476's site list was short, and the exception's discriminator is "selectable", not "valid"
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: latent. **Measured. Fixed this round.** In lane
 (`sugar-crush/src/MCP/StdioMcpServer.php`).
@@ -16152,7 +16192,7 @@ companion and silently got the wrong polarity. Both doc-blocks corrected.
 `StdioMcpServer` is behind; on the between-exchange stderr drain (E440 / E475) the two are identical and
 BOTH still open. A change that made them merely agree would have closed one and not the other.
 
-### E503 — E475's severity claim holds, measured, and is now pinned
+### E503 [NO-FIX] — E475's severity claim holds, measured, and is now pinned
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: unchanged (minor, a stall). **Measured.** In lane.
 
@@ -16173,7 +16213,7 @@ the write loop alone leaves it green, and so does removing it from `refill()` al
 the child for a small request. Both removals together red it. That is the right scope, because the claim
 is about an EXCHANGE and an exchange is a write and a read.
 
-### E504 — `LspClient` carries pairs of character-identical method bodies
+### E504 [CLOSED] — `LspClient` carries pairs of character-identical method bodies
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: hygiene, with a measured cost to instruments. Out
 of lane (`sugar-crush/src/LSP/LspClient.php`).
@@ -16191,7 +16231,7 @@ verdict would have recorded a sound test as vacuous.
 **STEP:** either collapse the pairs onto one implementation, or leave them and note in the file that any
 mutation of one branch must be anchored, because the harness cannot tell them apart. Prefer the first.
 
-### E505 — a 60s fixture lifetime under a 60s `defaultTimeLimit` turns an assertion into an abort
+### E505 [PARTIAL] — a 60s fixture lifetime under a 60s `defaultTimeLimit` turns an assertion into an abort
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: test-shape, general. **Measured.** Fixed in this
 lane's own new file; the pattern is worth checking elsewhere.
@@ -16212,7 +16252,7 @@ row pins. `StdioMcpServerWriteBoundsTest`'s `DEAF_SERVER_LIFETIME_SECONDS = 90` 
 `LspConnectionStdinWedgeTest`'s `DEAF_SERVER` `sleep(30)` are both deliberate and both documented; the
 question is whether their rows fail by assertion or by abort under the mutation each names.
 
-### E506 — `$readBuffer` is persistent and uncapped in all three framing classes
+### E506 [CLOSED] — `$readBuffer` is persistent and uncapped in all three framing classes
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer's NOTE 12.** Severity: resource,
 family-wide, pre-existing. **Not this lane's defect** — the fix that made `ClaudeCodeMcpClient`'s
@@ -16236,7 +16276,7 @@ is a worse outcome than a refused one. Pin with a fixture emitting more than the
 and give the row a positive control (a frame just under the cap that still parses), or "the buffer stayed
 small" is satisfied by a reader that stopped reading.
 
-### E507 — the stacked-doc-comment guard scans `src/` only, and `tests/` has three instances
+### E507 [CLOSED] — the stacked-doc-comment guard scans `src/` only, and `tests/` has three instances
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage).** Severity: guard coverage. **Measured.** Out of
 lane; reported, not reached for.
@@ -16259,7 +16299,7 @@ pushed through the SAME scanner in the SAME test, expecting exactly 1 — the "n
 assertion is otherwise satisfied by a scanner that has stopped matching. Expect the two pre-existing
 `ClaudeCodeMcpClientShutdownTest` instances to red on the first run; they are real.
 
-### E508 — `writeAll()` is a synchronous up-to-15-second block on the caller's thread
+### E508 [CLOSED] — `writeAll()` is a synchronous up-to-15-second block on the caller's thread
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer.** Severity: latency shape, new
 this round. **Deliberate and better than what it replaced** — recorded because nothing measures or
@@ -16276,7 +16316,7 @@ whether the caller wants the bound threaded (as `LspConnection::writeMessage()` 
 inheriting the constant. Note the standing instruction against blanket total-request timeouts on LLM
 work — this is a PIPE write to a local child, not a completion, so the two are not the same question.
 
-### E509 — E498's widening needs a rule-15 fixture, and its own file must not spell the pattern
+### E509 [CLOSED] — E498's widening needs a rule-15 fixture, and its own file must not spell the pattern
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer.** Severity: instrument. A rider
 on E498, filed separately because it is the half most likely to be skipped.
@@ -16291,7 +16331,7 @@ PATH, and written so the backtick-cite pattern never appears literally in it —
 concatenation, never spell it in prose. Two separate incidents have had a sweep eat the file that
 documented the pattern it was sweeping.
 
-### E510 — `catch (\Throwable)` around a test body swallows PHPUnit's own assertion failures
+### E510 [CLOSED] — `catch (\Throwable)` around a test body swallows PHPUnit's own assertion failures
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage).** Severity: test-shape, general. **Measured**, and
 fixed in this lane's own file.
@@ -16316,7 +16356,7 @@ here because the shape is syntactic; it needs a known-positive fixture like anyt
 
 ---
 
-### E511 — 🔴 a test wrote 3 directories into the developer's REAL `~/.sugar-crush` on every suite run, and that is the cross-lane flake
+### E511 [CLOSED] — 🔴 a test wrote 3 directories into the developer's REAL `~/.sugar-crush` on every suite run, and that is the cross-lane flake
 
 **FIXED this round.** E482's premise was inverted. `Agents/TeamTest` does not "assert on the real
 `~/.sugar-crush`" in the sense meant: it sandboxes BOTH spellings of `HOME` and reads the real config dir
@@ -16345,7 +16385,7 @@ is the user's home directory and deleting from it was not asked for. Someone sho
 
 ---
 
-### E512 — 🔴 a test leaked a 5s timer onto the SHARED ReactPHP loop, and the next test's `Loop::run()` was ending on it
+### E512 [CLOSED] — 🔴 a test leaked a 5s timer onto the SHARED ReactPHP loop, and the next test's `Loop::run()` was ending on it
 
 **FIXED this round; a candidate mechanism for [[E490]] and offered as a candidate only.**
 
@@ -16376,7 +16416,7 @@ is gone — so any later observer truthfully finds a clean loop. The guard now l
 
 ---
 
-### E513 — the E490 watchdog inherited from a killed agent had two dead arms and one inverted mechanism claim
+### E513 [CLOSED] — the E490 watchdog inherited from a killed agent had two dead arms and one inverted mechanism claim
 
 **FIXED this round.** `ba9eb998c` was committed by the supervisor from a killed implementer's untracked
 files and reviewed by nobody. Two mutations of it SURVIVED `--filter HangWatchdog`:
@@ -16398,7 +16438,7 @@ with no summary line. Measured via a mutation that fired the watchdog unconditio
 
 ---
 
-### E514 — the drift guard's alphabet could not see a copied TEST, and one prose row was really a classifier
+### E514 [CLOSED] — the drift guard's alphabet could not see a copied TEST, and one prose row was really a classifier
 
 **FIXED this round (E481).** `DuplicatedTestHelperDriftTest` ran the `private` alphabet only; a test METHOD
 is public. Measured on PHP 8.3.6 over `tests/`, driving the real `driftReport()` by reflection:
@@ -16423,7 +16463,7 @@ reasoning rewritten into the classifier's doc-block, not deleted.
 
 ---
 
-### E515 — `deferred-wiring` was honoured in 58 libs and validated in one
+### E515 [CLOSED] — `deferred-wiring` was honoured in 58 libs and validated in one
 
 **FIXED this round (E488).** The brief's claim that the hatch "never expires a row" is **not true** —
 round 55's `ManifestDependencyReachTest` already retires one three ways, and its own doc-block records
@@ -16445,7 +16485,7 @@ for every lib, and reports `IDLE_DEFERRAL` naming which condition failed.
 
 ---
 
-### E516 — `grep` in an agent shell is ugrep: E457's headline is wrong, and the real divergence is `.gitignore`
+### E516 [NO-FIX] — `grep` in an agent shell is ugrep: E457's headline is wrong, and the real divergence is `.gitignore`
 
 **MEASURED, not fixed — there is nothing in the tree to fix.** Three claims, checked on this host
 (ugrep 7.8.4 via the Claude Code shell function; GNU grep 3.11; bash; PHP-irrelevant):
@@ -16475,7 +16515,7 @@ ignored files".** Use `/usr/bin/grep` for any census whose answer is load-bearin
 
 ---
 
-### E517 — 🔴 the HOME census's exemption could be bought with a sentence, and the fix's own comment bought it
+### E517 [CLOSED] — 🔴 the HOME census's exemption could be bought with a sentence, and the fix's own comment bought it
 
 **FIXED this round (review finding F1).** `OneSidedHomeSandboxTest` skipped any file whose source
 *contained* the string `HomeSandboxTrait`. `Integration/MultiAgentRefactorTest` — the file the guard was
@@ -16504,7 +16544,7 @@ moving only that has sandboxed nothing while appearing to try.
 
 ---
 
-### E518 — 🔴 the subject classifier excused the exact defect it claimed it could not
+### E518 [CLOSED] — 🔴 the subject classifier excused the exact defect it claimed it could not
 
 **FIXED this round (review finding F2).** `isSubjectSpelling()` cleared a pair when each side's differing
 token was a **prefix** of its own file's subject, and the doc-block asserted the opposite in so many
@@ -16527,7 +16567,7 @@ its liveness is asserted rather than assumed.
 
 ---
 
-### E519 — two guards in one file prescribed opposite actions for one edit
+### E519 [CLOSED] — two guards in one file prescribed opposite actions for one edit
 
 **FIXED this round (review finding F3).** `testNoCopiedTestMethodHasDriftedUnrecorded()` offers *"add the
 name to `ACCEPTED_DIVERGENCE`"* as a remedy, but `testEveryAcceptedDivergenceStillDescribesADriftedPair()`
@@ -16540,7 +16580,7 @@ with the union, **rc 1 — "Delete the row" — without it.**
 
 ---
 
-### E520 — 🔴 the E490 hang watchdog could SIGKILL a healthy run at bootstrap
+### E520 [CLOSED] — 🔴 the E490 hang watchdog could SIGKILL a healthy run at bootstrap
 
 **FIXED this round (review finding F4).** The state directory is
 `sys_get_temp_dir()/candy-pty-hang-watchdog-<pid>` — a pid and nothing else — and `install()` tolerated it
@@ -16565,7 +16605,7 @@ the next person tidying up.
 
 ---
 
-### E521 — the residue census gave a comfortable zero for the residue with the worst consequence
+### E521 [CLOSED] — the residue census gave a comfortable zero for the residue with the worst consequence
 
 **FIXED this round (review finding F6).** `SharedLoopResidue`'s doc-block says a guard must go red on what
 it cannot read, and applied that to an unknown loop **class** while leaving a known loop's unread
@@ -16586,7 +16626,7 @@ it for. The test now drains the queue's own `tick()` and touches nothing else.
 
 ---
 
-### E522 — a load-bearing justification was a number in prose with no generator
+### E522 [CLOSED] — a load-bearing justification was a number in prose with no generator
 
 **FIXED this round (review finding F7, rule 18).** The entire argument for running the drift guard over
 `test*` rather than the whole `public` alphabet was a doc-block sentence: *"the whole alphabet reads 8,556
@@ -16603,7 +16643,7 @@ for the classifier rather than weakening it.
 
 ---
 
-### E523 — the round that widened the duplicated-helper guard added a duplicate it cannot see
+### E523 [CLOSED] — the round that widened the duplicated-helper guard added a duplicate it cannot see
 
 **FIXED this round (review finding F13).** `OneSidedHomeSandboxTest::everyTestFile()` was a near-copy of
 `DuplicatedTestHelperDriftTest::everyTestFile()`, restructured just enough that the divergence is **20
@@ -16613,7 +16653,7 @@ the kind of helper that gets copied, and this guard's bound is tuned for one-tok
 
 ---
 
-### E524 — E493's heartbeat cannot be raised by a signal, and the measurement says what can
+### E524 [NO-FIX] — E493's heartbeat cannot be raised by a signal, and the measurement says what can
 
 **MEASURED, NOT BUILT.** Round 56 recorded a doubt beside E493's design — a heartbeat the child raises on
 a timer rather than on a chunk — that it "may not be reachable at all from inside `runCompleteInChild()`'s
@@ -16664,7 +16704,7 @@ constraint on both.
 
 ---
 
-### E525 — the retired idle-ceiling source scan survived a real mutation, and so did every other test
+### E525 [CLOSED] — the retired idle-ceiling source scan survived a real mutation, and so did every other test
 
 **Context for E496, filed because the general lesson outlives the fix.**
 `EngineBackendTest::testTheCompletionTimeoutIsReArmedOnEveryFrame()` asserted two things about
@@ -16686,7 +16726,7 @@ whose fixtures all take one branch cannot notice a guard that moved into that br
 
 ---
 
-### E526 — two more implicitly-nullable parameters live outside the Backend family
+### E526 [CLOSED] — two more implicitly-nullable parameters live outside the Backend family
 
 E495 fixed the eight in `src/Backend.php` and `src/Backend/`, and
 `tests/Backend/BackendSignatureNullabilityTest.php` pins that family. A token-level census of the whole of
@@ -16720,7 +16760,7 @@ reflection out of `tests/Backend/BackendSignatureNullabilityTest.php` over every
 
 ---
 
-### E527 — `Backend` cannot grow a parameter, and the reason should be written down once
+### E527 [NO-FIX] — `Backend` cannot grow a parameter, and the reason should be written down once
 
 Filed as a fact about this package that will otherwise be re-derived by whoever next wants to thread
 something new through a completion.
@@ -16742,7 +16782,7 @@ while declaring a signature that cannot receive it, and nothing would say so.
 
 ---
 
-### E528 — `runOnScaledClock` now exists twice
+### E528 [NO-FIX] — `runOnScaledClock` now exists twice
 
 `tests/Backend/EngineBackendTest.php` and `tests/Backend/ReasoningProgressTest.php` each carry a private
 helper of that name. They differ (one collects a reasoning channel the other has no use for) and merging
@@ -16753,7 +16793,7 @@ exactly the instrument that will otherwise find this later and at more cost.
 
 ---
 
-### E529 — `src/Context/RepoMapBlock.php` carries two `src/` cardinalities that NOTHING verifies
+### E529 [CLOSED] — `src/Context/RepoMapBlock.php` carries two `src/` cardinalities that NOTHING verifies
 
 **Not this lane's file — it needs an owner.** Round 57's lane a made a forced out-of-lane edit
 (`3d9496b46`) to keep `tests/Tools/BuiltInToolCorpusTest.php` green after two new source files, and bumped
@@ -16778,7 +16818,7 @@ order-hundreds file count; saying so does not rot, and saying `297` does.
 
 ---
 
-### E530 — the empty-delta drop exists twice and NO assertion can see either one go
+### E530 [CLOSED] — the empty-delta drop exists twice and NO assertion can see either one go
 
 `Chat::enqueueReasoning()` and the `$onReasoning` static closure in `Chat::scheduleBackendCompletion()` both
 return early on `''`. Round 57 added an agreement test for the two paths and mutated both drops away
@@ -16803,7 +16843,7 @@ assertions (`M12`, `M14`, `M15`) all KILLED, so the instrument was alive.
 
 ---
 
-### E531 — the nullability scanner's parameter alphabet is still not enumerated
+### E531 [CLOSED] — the nullability scanner's parameter alphabet is still not enumerated
 
 E526's fix taught `splitParams()`/`classifyParam()` about `T_ATTRIBUTE`, with both polarities and an
 unterminated-group fixture. That closed the case that actually appears in `src/` today, and the census now
@@ -16819,7 +16859,7 @@ is a fact about this tree and not about the scanner.
 
 ## Round 57 — lane b (MCP/LSP transport). E532 … E545.
 
-### E532 — E499 had a THIRD route, and it was the one the code called correct
+### E532 [CLOSED] — E499 had a THIRD route, and it was the one the code called correct
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: real, user-facing. **Measured. Fixed this round.**
 
@@ -16847,7 +16887,7 @@ Fixed by consolidating the type filter onto `McpTool::tryFromArray()` (moved, no
 doc-block calls the table a hand mirror of `McpTool`, and a second copy would have been a second
 hazard), and by moving the `match` inside `startServer()`'s guard.
 
-### E533 — 🔴 the first cut of E532's fix DELETED A WORKING DIAGNOSTIC, and the suite said so in four places
+### E533 [NO-FIX] — 🔴 the first cut of E532's fix DELETED A WORKING DIAGNOSTIC, and the suite said so in four places
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: process finding. **Measured. Corrected before it
 was committed as final.**
@@ -16866,7 +16906,7 @@ config-error report is deferred to `startServers()` until every entry has been a
 This is rule 33 one level out: the "exemption" on offer was not a roster row but a plausible-looking
 simplification, and taking it would have removed a guard that was doing real work.
 
-### E534 — E504 said three pairs; there are five, and the guard's first draft would not have caught any
+### E534 [CLOSED] — E504 said three pairs; there are five, and the guard's first draft would not have caught any
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: hygiene + instrument. **Measured. Fixed.**
 
@@ -16890,7 +16930,7 @@ normalised token streams, PHP 8.3.6:
 Threshold 40, in the middle of a 60-token gap. The 14 is not noise to tune away: those two are honestly
 parallel general implementations differing in the LSP method name and the fallback tag.
 
-### E535 — E506's caps, and a negative `Content-Length` that split the stream silently
+### E535 [CLOSED] — E506's caps, and a negative `Content-Length` that split the stream silently
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: resource (E506) plus one real correctness defect
 found beside it. **Measured. Fixed.**
@@ -16912,7 +16952,7 @@ last five bytes". The peer named a length and this side consumed a different one
 `Content-Length` framing has no resynchronisation point, that desynchronises **every message after it**,
 not just the one. The declared length now has a floor as well as a ceiling.
 
-### E536 — 🔴 E508's premise is false: payload size has nothing to do with it
+### E536 [NO-FIX] — 🔴 E508's premise is false: payload size has nothing to do with it
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: finding-instrument correction. **Measured, three
 takes. Documented, deliberately NOT changed.**
@@ -16942,7 +16982,7 @@ how often the second happens. Not taken unilaterally. The half that makes it ans
 `McpWriteBudgetShapeTest` shows an arbitrarily large payload to a healthy child costs nothing, so
 shortening the bound cannot break large tool calls.
 
-### E537 — 🔴 E503's prescribed fix is wrong for this tree, not merely expensive
+### E537 [NO-FIX] — 🔴 E503's prescribed fix is wrong for this tree, not merely expensive
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: closes an open question. **Verified in the tree.**
 
@@ -16967,7 +17007,7 @@ happen while no forked call is in flight — e.g. in the parent between turns �
 `Chat`/`Runtime` and should be filed against them. Do not reopen this against `StdioMcpServer` or
 `LspConnection`.
 
-### E538 — 🔴 RETRACTED AND RE-MEASURED: E510 has 28 asserting sites, not 2, and 6 of them are in `tests/MCP/`
+### E538 [CLOSED] — 🔴 RETRACTED AND RE-MEASURED: E510 has 28 asserting sites, not 2, and 6 of them are in `tests/MCP/`
 
 **Recorded 2026-08-25 by round 57 lane b. RETRACTED AND CORRECTED the same round, at the fix stage,
 after the reviewer refuted it and an independent census reproduced the refutation exactly.** Severity:
@@ -17050,7 +17090,7 @@ Generator kept at
 `/tmp/claude-1000/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/scratchpad/r57b/census_e510_wide2.php`;
 it carries a known-positive and a known-negative fixture pushed through the same `scan()`.
 
-### E539 — E505 has zero offenders in lane b, and its two named examples are correct by design
+### E539 [NO-FIX] — E505 has zero offenders in lane b, and its two named examples are correct by design
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: census correction. **Measured.**
 
@@ -17082,7 +17122,7 @@ above 60. It CANNOT express a lifetime built by arithmetic (`sleep(self::X * 2)`
 catches listed above; for E505, `tests/Integration/McpToolWiringTest.php` and
 `tests/Support/ReapsForkedChildrenTraitTest.php`.
 
-### E540 — 🔴 a `.mcp.json` value of the wrong JSON TYPE reaches a constructor, and a constructor answers with `TypeError`
+### E540 [CLOSED] — 🔴 a `.mcp.json` value of the wrong JSON TYPE reaches a constructor, and a constructor answers with `TypeError`
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: real, and the likeliest of all three E499 routes to
 be hit by an actual user. **Measured. Fixed and pinned this round.** Found by mutating the NEIGHBOUR of a
@@ -17112,7 +17152,7 @@ The first (`\Throwable` → `\RuntimeException` on the RUNTIME catch) was green 
 assertions, so route 3 had been "closed" by nothing at all. The second was one line away from it, looked
 equivalent for a defensible reason, and was the more serious of the two.
 
-### E541 — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
+### E541 [PARTIAL] — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: classifier false positive. **Measured.** Out of
 lane — `tests/DenialPrefixRosterTest.php` is at `tests/` root, which is lane c's this round. Reported,
@@ -17137,7 +17177,7 @@ literal that is an argument to a `new <Throwable>(…)` in a `throw`, verifiable
 without naming the file. As it stands the guard's own advice will push the next person into writing an
 exemption row for correct code, which is where the next real offender hides.
 
-### E542 — `T_DOLLAR_OPEN_CURLY_BRACES` truncated a brand-new token scanner, and a guard caught it
+### E542 [CLOSED] — `T_DOLLAR_OPEN_CURLY_BRACES` truncated a brand-new token scanner, and a guard caught it
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: instrument defect, in this round's own work.
 **Measured. Fixed.**
@@ -17164,7 +17204,7 @@ walkers in `tests/`, one of them failing OPEN, all three invisible to this guard
 alphabet was the set of files that already agreed with it". This round's scanner was the fourth. A
 brace-walking token scanner is apparently a shape this tree grows regularly and gets wrong by default.
 
-### E543 — 🔴 `LspConnection`'s frame cap was pinned by NOTHING, and the class calls itself the sharpest of the three
+### E543 [CLOSED] — 🔴 `LspConnection`'s frame cap was pinned by NOTHING, and the class calls itself the sharpest of the three
 
 **Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: real gap in this round's own
 work. **Measured full-suite. Fixed this round.**
@@ -17189,7 +17229,7 @@ Fixed with three rows mirroring the stdio shape — refusal at `cap + 1` (names 
 buffer dropped, `$pendingContentLength` reset), silence at exactly `cap`, and a third pinning the
 body-phase call site's DORMANCY, below.
 
-### E544 — the body-phase cap call is dormant by construction, and four pre-existing `tests/MCP/` swallowers
+### E544 [CLOSED] — the body-phase cap call is dormant by construction, and four pre-existing `tests/MCP/` swallowers
 
 **Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: two handoffs. **Measured.**
 
@@ -17213,7 +17253,7 @@ so it cannot go quietly reachable.
 All four still go red today, but on the fail/expectation message rather than on the cause. The fix is
 mechanical: move the `fail()` out of the `try` into an `assertNotNull($caught, …)` after it.
 
-### E545 — a compensating control was cited that did not exist
+### E545 [CLOSED] — a compensating control was cited that did not exist
 
 **Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: process finding. **Measured.
 Fixed this round.**
@@ -17232,7 +17272,7 @@ keeping as an entry because the failure mode is invisible by construction: a sur
 elsewhere is only as good as someone having read that elsewhere.
 
 
-### E546 — twenty-two swallowing `catch` clauses whose body asserts, and therefore cannot go silently green
+### E546 [CLOSED] — twenty-two swallowing `catch` clauses whose body asserts, and therefore cannot go silently green
 
 **DEFERRED (round 57, lane c).** `ExpectationFailedException` extends `AssertionFailedError` extends
 `PHPUnit\Framework\Exception` extends `\RuntimeException` (MEASURED, PHPUnit 10.5.64, and now asserted by
@@ -17265,7 +17305,7 @@ copy the counts above into a later round: re-derive them from that method.
 
 ---
 
-### E547 — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
+### E547 [PARTIAL] — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
 
 **DEFERRED (round 57, lane c).** `SymbolCitationDriftTest` now resolves a bare `{@see …()}` in a `tests/`
 file against the classes that file declares, but ONLY for a member spelled as a test method — the
@@ -17304,7 +17344,7 @@ shapes than the six the test-symbol census handles.
 
 ---
 
-### E548 — `CONTRIBUTING.md` still documents two of the `path-repo-check` commands
+### E548 [CLOSED] — `CONTRIBUTING.md` still documents two of the `path-repo-check` commands
 
 **DEFERRED (round 57, lane c) — out of lane, one file.** `tools/check-path-repos.php --help` now prints
 the exact commands the CI job runs, in order, with the `git checkout -- .` that must follow the
@@ -17318,7 +17358,7 @@ already written in `--help` and can be lifted.
 
 ---
 
-### E549 — `tools/gen-docs.php` has no guard, and it writes files nobody may hand-edit
+### E549 [CLOSED] — `tools/gen-docs.php` has no guard, and it writes files nobody may hand-edit
 
 **DEFERRED (round 57, lane c).** `tools/tests/` exists and is wired into CI now, but it holds exactly one
 test file and it is for `check-path-repos.php`. `tools/gen-docs.php` generates every page under
@@ -17330,7 +17370,7 @@ only signal is a reviewer noticing. A `--check` mode plus a CI step is the same 
 
 ---
 
-### E550 — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
+### E550 [NO-FIX] — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
 
 **MEASURED, round 57, lane c. A definite outcome, and it is not "closed".** Configuration, so the number
 means something (rule 3): PHP 8.3.6, this box, `candy-pty` at `1dea13c4f` (unchanged this round — the
@@ -17363,7 +17403,7 @@ one arm has reached ~230.
 
 ---
 
-### E551 — `tools/` is outside every doc-drift roster in the tree, and the split-repo boundary is why
+### E551 [CLOSED] — `tools/` is outside every doc-drift roster in the tree, and the split-repo boundary is why
 
 **DEFERRED (round 57, lane c) — with the measurement that decides it.** Round 57 shipped a stacked
 doc-comment pair into `tools/tests/CheckPathReposTest.php` in the same round whose subject was the
@@ -17386,7 +17426,7 @@ different mechanism. That is a round's scope decision, not a fix agent's. MEASUR
 
 ---
 
-### E552 — `setup-php`'s `tools: phpunit` is unpinned, so `path-repo-check` follows PHPUnit's latest major
+### E552 [CLOSED] — `setup-php`'s `tools: phpunit` is unpinned, so `path-repo-check` follows PHPUnit's latest major
 
 **DEFERRED (round 57, lane c) — one line.** The `path-repo-check` job installs a PHPUnit PHAR with
 `tools: phpunit`, which resolves to the newest major that supports the requested PHP. The job does no
@@ -17402,7 +17442,7 @@ verified in both its with- and without-`--bootstrap` shapes.
 
 ---
 
-### E553 — the `%d`-parametrised child budgets are REPORTED but never EVALUATED
+### E553 [CLOSED] — the `%d`-parametrised child budgets are REPORTED but never EVALUATED
 
 **DEFERRED (round 57, lane c) — deliberately, and the reason is the finding.**
 `ChildWallClockBudgetTest` reads every literal `timeout -s KILL <n>` in `tests/` and asserts each is under
@@ -17422,7 +17462,7 @@ from the list above.
 
 ## Round 57 — the merge. E554 … E555, filed by the supervisor.
 
-### E554 — 🔴 a thirty-line doc-block documented nothing, and only the MERGE could see it
+### E554 [CLOSED] — 🔴 a thirty-line doc-block documented nothing, and only the MERGE could see it
 
 **MEASURED at the round-57 merge. Fixed in the merge-fix commit.** Lane b's new
 `tests/MCP/StdioMcpServerToolListRobustnessTest.php` put a 31-line doc-block — "THE FILTER IS A HAND
@@ -17439,7 +17479,7 @@ Fixed by MOVING the block onto the method it names, not by merging the two block
 tests. **Attachment verified with `ReflectionMethod::getDocComment()`, not by eye** — the same check lane a
 used for E521's census block, and the only one that distinguishes "looks attached" from "is attached".
 
-### E555 — 🔴 the citation guard called a NAMESPACE a dangling class, and the classifier was the defect
+### E555 [CLOSED] — 🔴 the citation guard called a NAMESPACE a dangling class, and the classifier was the defect
 
 **MEASURED at the round-57 merge. Fixed and pinned in three directions.** Lane c's backtick widening
 (E498/E509) scraped `` `SugarCraft\Crush\Tests\Backend` `` out of the four test doubles lane a created —
@@ -17478,7 +17518,7 @@ sibling finding this entry sits beside, in the same run. **That is the guard pai
 intended, on the supervisor, one commit after it caught the lanes.**
 
 
-### E556 — 🔴 E529 IS FALSE AS FILED, and the figure it missed was hiding across a line break
+### E556 [CLOSED] — 🔴 E529 IS FALSE AS FILED, and the figure it missed was hiding across a line break
 
 **Round 58, lane a. MEASURED.** E529 says `src/Context/RepoMapBlock.php` carries two `src/`
 cardinalities (297 and 316) that nothing verifies, citing that `tests/Context/RepoMapBlockTest.php`
@@ -17511,7 +17551,7 @@ check in the same test. Mutation: making `capture()` read the two documents kill
 grep. Flatten `^\s*\*\s?` before searching for a restated number, or the search reports zero for the
 same reason the assertion would have.
 
-### E557 — the implicitly-nullable scanner was blind to TWO of PHP's own spellings
+### E557 [CLOSED] — the implicitly-nullable scanner was blind to TWO of PHP's own spellings
 
 **Round 58, lane a. E526/E531 closed.** E526's remaining two offenders were exactly where the class
 doc-block said — `src/Workflows/Workflow.php::mutate()` — and are fixed; the guard now WALKS all of
@@ -17536,7 +17576,7 @@ away, the `\null` fix, was **also** unpinned and also green when reverted. **Two
 commit, both found by mutating the fix rather than by reading it (rule 43), and the second only because
 the first was killed and its neighbours were mutated anyway.**
 
-### E558 — E528 is a SEAM, not a drift; the guard's silence was correct
+### E558 [NO-FIX] — E528 is a SEAM, not a drift; the guard's silence was correct
 
 **Round 58, lane a. Both halves of the finding refuted with measurements.** E528 asks for the two
 `runOnScaledClock()` copies to be consolidated, and warns that `DuplicatedTestHelperDriftTest` "exists to
@@ -17565,7 +17605,7 @@ doc-block first. `ScaledClockHelperSeamTest` is that trigger as a test, with the
 text in both directions, a token recogniser checked in both polarities, and the "these are two different
 helpers" claim keyed on parameter count rather than on either doc-block's prose (rule 40).
 
-### E559 — the brief's own E527 premise was inverted, and PHP is not symmetric here
+### E559 [NO-FIX] — the brief's own E527 premise was inverted, and PHP is not symmetric here
 
 **Round 58, lane a. RE-MEASURED independently on PHP 8.3.6**, after the killed lane-a agent's file
 recorded the same conclusion. The round brief states: *"PHP lets an implementation declare fewer
@@ -17588,7 +17628,7 @@ swallow the fifth argument with the suite green.
 What was missing was the measurement behind its "(measured; …)". That is now
 `tests/Backend/BackendContractWideningTest.php`.
 
-### E560 — three `catch (\Throwable)` sites in `tests/Backend/`, and what they actually cost
+### E560 [CLOSED] — three `catch (\Throwable)` sites in `tests/Backend/`, and what they actually cost
 
 **Round 58, lane a.** E546's family is lane b's this round and lane b is fenced out of `tests/Backend/`,
 so these three were reachable by nobody else. **They are NOT E546's shape** — no assertion runs inside
@@ -17607,7 +17647,7 @@ settle:
 Both red; only one names the problem. The two `CommandBackend` copies assert `instanceof RuntimeException`
 instead, where the real message is not quoted at all.
 
-### E561 — this round's ownership map and lane a's file list DISAGREE, again
+### E561 [NO-FIX] — this round's ownership map and lane a's file list DISAGREE, again
 
 **Round 58, lane a. Reported, not resolved.** The brief states the map and each lane's file list "were
 reconciled before launch, deliberately", so a disagreement is news. There is one:
@@ -17619,7 +17659,7 @@ Lane a followed the intersection and touched only `RepoMapBlockTest.php`, so not
 way. **This is the same shape round 57's lane b found (`src/MCP/`), one round after the reconciliation
 that was supposed to prevent it.** The rate of lanes checking the map is now 2/6 across two rounds.
 
-### E562 — a mutation harness that scored "No tests executed!" as a SURVIVAL
+### E562 [NO-FIX] — a mutation harness that scored "No tests executed!" as a SURVIVAL
 
 **Round 58, lane a, found in its own harness.** A `--filter` naming a method that does not exist makes
 PHPUnit print `No tests executed!` and **exit 0**, which the harness read as "the mutation survived". Two
@@ -17630,7 +17670,7 @@ The harness now refuses a run whose output contains `No tests executed`, and tha
 known-answer control. **Rule 14 applies to the mutation harness itself: a verdict it cannot compute must
 be a DISCARD, never a survival — and "survival" is the direction that silently retires a finding.**
 
-### E563 — the fourth `awaitPromise()` swallow, and it was the one that could go GREEN
+### E563 [CLOSED] — the fourth `awaitPromise()` swallow, and it was the one that could go GREEN
 
 **Round 58, lane a, fix stage. FIXED.** The review asked for a guard pinning the three narrowed
 `catch` arms E560 describes. Building it — over the whole of `tests/` rather than over the three
@@ -17655,7 +17695,7 @@ example (`catch (\Throwable)`), and the alphabet that mattered was "every supert
 `AssertionFailedError`". `AssertionSwallowingCatchTest` had already learned this a round earlier and
 its lesson had not travelled.
 
-### E564 — `RepoMapBlock`'s remaining unpinned figures, with the generator
+### E564 [OPEN] — `RepoMapBlock`'s remaining unpinned figures, with the generator
 
 **Round 58, lane a. RECORDED, deliberately not hand-corrected.** `src/Context/RepoMapBlock.php`'s
 `MAX_SECTION_BYTES` and `MAX_ENTRY_BYTES` doc-blocks restate this repository's package count, its
@@ -17686,7 +17726,7 @@ stands.
 The sentence claiming "the digits are gone rather than corrected" has been rewritten in rule-7 form —
 it was true of the census it retired and false read as a statement about the file.
 
-### E565 — `DuplicatedTestHelperDriftTest` carries the visibility hole lane a's guard just lost
+### E565 [PARTIAL] — `DuplicatedTestHelperDriftTest` carries the visibility hole lane a's guard just lost
 
 **Round 58, lane a. REPORTED, out of lane — `tests/Support/` is not lane a's this round.**
 `ScaledClockHelperSeamTest::declaresPrivateHelper()` required `T_PRIVATE`, so a third
@@ -17702,7 +17742,7 @@ so a test can vary it, and one test does (`protected` adds no pairs *today*). Th
 is whether "no pairs today" is the same claim as "the alphabet is right". Lane a's guard inherited its
 neighbour's blindness rather than a bug of its own, which is where rule 11 says alphabets come from.
 
-### E566 — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
+### E566 [OPEN] — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
 
 **Round 58, lane a. CENSUS ONLY — not audited, and mostly out of lane.** `BackendSignatureNullability
 Test` had `T_FN` missing from a guard whose entire subject is parameter spellings. Generator:
@@ -17721,7 +17761,7 @@ a reason. The ones worth reading are those asking about **parameter lists** or *
 callables**, where an arrow function declares parameters exactly like a `function` does. Do NOT resolve
 this with a blanket edit; rule 26 applies, and the file that documents the pattern is one of the hits.
 
-### E567 — `compileInFreshInterpreter()` deadlocked, and the proof is a hang rather than a red
+### E567 [CLOSED] — `compileInFreshInterpreter()` deadlocked, and the proof is a hang rather than a red
 
 **Round 58, lane a. FIXED, with a residual worth knowing.** The helper read stdout to EOF and only then
 stderr. Every probe in the file emits a few hundred bytes, so nothing there could reach it. Measured
@@ -17735,7 +17775,7 @@ hanging test in CI is worse than a failing one. Its doc-block says so in as many
 properly needs a wall-clock budget around the child, which is `HangWatchdog`'s territory in `candy-pty`
 and does not exist in this package.
 
-### E568 — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
+### E568 [OPEN] — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
 
 **Round 58, lane a. REPORTED, deliberately NOT fixed.** `src/Workflows/Workflow.php::mutate()` spells
 the field as `$stopOnFirstFailure ?? $this->stopOnFirstFailure`, so passing `false` is
@@ -17750,7 +17790,7 @@ edit to this exact file (E558's two characters). Whoever adds the first `withSto
 inherits the bug.
 
 
-### E569 — `src/ClaudeCodeMcpClient.php` still claims an inheritance nothing checks *for it*
+### E569 [CLOSED] — `src/ClaudeCodeMcpClient.php` still claims an inheritance nothing checks *for it*
 
 `FrameCapFamilyTest` (round 58) pins that all three `MAX_FRAME_BYTES` claimants agree with
 `EngineBackend::MAX_FRAME_BYTES`, and rewrote the doc-blocks in `src/LSP/LspConnection.php` and
@@ -17759,7 +17799,7 @@ carries the same stale sentence — "SIXTY-FOUR MEBIBYTES, inherited rather than
 round 58 lane b's file list**, so it was left alone. The class IS in `claimants()`, so the VALUE is pinned;
 only its prose still overstates. One paragraph, same three-part form as the other two.
 
-### E570 — the same E541 defect one word over: `required` reads an HTTP 401 as a denial
+### E570 [CLOSED] — the same E541 defect one word over: `required` reads an HTTP 401 as a denial
 
 E541 was fixed by narrowing `block(?:ed)?` to the verb forms. **`required` has the identical shape and was
 deliberately NOT narrowed**, because `Permission required:` is a live `DenialKind` case and the term is
@@ -17779,7 +17819,7 @@ files most likely to write one. There is no free narrowing here: the honest opti
 a preceding permission noun, or to accept the false positive and make the guard's failure text name
 "reword, do not add a row" as the resolution.
 
-### E571 — `EngineBackend::MAX_FRAME_BYTES` is `private`, so the family cannot name it
+### E571 [CLOSED] — `EngineBackend::MAX_FRAME_BYTES` is `private`, so the family cannot name it
 
 The reason `FrameCapFamilyTest` exists at all. PHP 8.3.6 cannot initialise a `const` from another class's
 private constant, so three classes spell `64 * 1024 * 1024` and a reflection-driven test holds them
@@ -17788,7 +17828,7 @@ together. **Promoting the engine's constant to `public` collapses all of it**: e
 fact. `FrameCapFamilyTest` already asserts the constant IS still private, with a failure message saying to
 do exactly this when that stops being true. `src/Backend/EngineBackend.php` is not lane b's file.
 
-### E572 — the swallowing-catch census's two stated blind spots
+### E572 [OPEN] — the swallowing-catch census's two stated blind spots
 
 `SwallowingCatchCensusTest` refuses a general-purpose exception type caught around an asserting try, and
 says in its own doc-block what it cannot see. Both remain open:
@@ -17803,7 +17843,7 @@ says in its own doc-block what it cannot see. Both remain open:
 Closing (1) needs a call-graph pass over test-local private methods, which is a real piece of work rather
 than a widening.
 
-### E573 — the round-58 ownership map names a lane-c file that does not exist
+### E573 [NO-FIX] — the round-58 ownership map names a lane-c file that does not exist
 
 The map's preamble states that every path in it "was verified to exist at `535d721ff` before this brief was
 written (E334)". `git ls-tree 535d721ff sugar-crush/tests/` has no `StackedDocCommentTest.php`, which the
@@ -17811,7 +17851,7 @@ map lists among lane c's four test-root files. Round 57's map/brief disagreement
 three; this round's was reconciled before launch and still carries one bad path. **The E334 check evidently
 does not cover the ownership block**, only the per-lane file lists.
 
-### E574 — the round-58 brief's E546 distribution was one short, in `Providers/`
+### E574 [NO-FIX] — the round-58 brief's E546 distribution was one short, in `Providers/`
 
 The brief states 22 sites: "test root ×4, `tests/Agents/` ×8, `tests/Cli/` ×2, `tests/MCP/` ×4,
 `tests/Providers/` ×3, `tests/Workflows/` ×1". Re-measured at `535d721ff` with round 57's own generator
@@ -17820,7 +17860,7 @@ being `Providers\ToolSchemaEncodingTest`'s `catch (\PHPUnit\Framework\AssertionF
 correct code and one of the four deliberate survivors. Every other bucket matched exactly. Harmless here
 because the missed row needed no fix, but a distribution used to decide "am I done" was wrong by one.
 
-### E575 — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
+### E575 [OPEN] — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
 
 `parsePresetFile()` throws `"Invalid YAML frontmatter in: {$filePath}"` when `Frontmatter::parse()` returns
 a non-array. MEASURED on PHP 8.3.6: malformed YAML never reaches it — `Frontmatter::parse()` raises
@@ -17829,7 +17869,7 @@ is reachable only for frontmatter that parses to a scalar, e.g. `---\nfoo\n---`.
 the wrong branch and asserted the filename appears in the message, which was red. Worth a test naming the
 scalar case, or a note saying which input reaches it.
 
-### E576 — `src/ClaudeCodeMcpClient.php`'s frame-cap prose was not corrected with the other two
+### E576 [CLOSED] — `src/ClaudeCodeMcpClient.php`'s frame-cap prose was not corrected with the other two
 
 Round 58's fix stage narrowed an over-broad scope claim in `src/LSP/LspConnection.php` and
 `src/MCP/StdioMcpServer.php` — both said raising the engine's cap desynchronises the family "while every
@@ -17843,7 +17883,7 @@ latter now derived from the declaration rather than a hand list. Only the prose 
 tells the reader to edit a roster that no longer exists. One paragraph, mechanical, no measurement needed
 beyond re-reading the other two.
 
-### E577 — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
+### E577 [OPEN] — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
 
 `AssertionSwallowingCatchTest::swallowingCatchesIn()` resolves each caught type through the import map and
 the file's namespace in order to DECIDE whether the catch swallows, then records the type in the row as the
@@ -17857,7 +17897,7 @@ The remaining consumer of `types` is a failure-message renderer, which is the co
 that the key is DISPLAY-ONLY and nothing says so at its definition: any future decision keyed on it repeats
 the defect exactly. Either add the resolved FQN as a second key, or name the existing one for what it is.
 
-### E578 — the census's resolver is deliberately more permissive than PHP, and that is unpinned
+### E578 [OPEN] — the census's resolver is deliberately more permissive than PHP, and that is unpinned
 
 `SwallowingCatchCensusTest::resolve()` tries the file's own namespace and then falls back to the global
 name. PHP does neither: an unqualified class name in a namespaced file resolves to the current namespace
@@ -17870,7 +17910,7 @@ asserting that the permissive fallback cannot produce a `safe` verdict for a typ
 load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `sugar-crush/tests`
 (463 files), so this is latent.
 
-### E579 — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
+### E579 [CLOSED] — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
 
 `sugar-crush/tests/Config/GlobFigureDriftTest.php`'s class doc-block repeats one line verbatim:
 
@@ -17890,7 +17930,7 @@ count — a figure someone will otherwise treat as unexplained noise.
 
 ---
 
-### E580 — a parametrised child budget was never 20, and nothing had re-read it in two rounds
+### E580 [CLOSED] — a parametrised child budget was never 20, and nothing had re-read it in two rounds
 
 `ChildWallClockBudgetTest`'s regex census could see that a budget went through a `%d` placeholder and not
 what it was, so the values rested on a doc-block sentence: *"those sites are at 20 by inspection, MEASURED
@@ -17916,7 +17956,7 @@ silence.** Four further mutations of the resolver (wrong conversion ordinal, `%%
 the rule-14 report silently dropped, only the first caller's value taken) were all killed, as was blinding
 the token census on all but one directory — which the two-instrument cross-check catches.
 
-### E581 — `tools/` joins a doc-drift roster, and BOTH halves of the prescribed shape were wrong
+### E581 [CLOSED] — `tools/` joins a doc-drift roster, and BOTH halves of the prescribed shape were wrong
 
 E551 said the fix was a guard in `tools/tests/` with "the token-stream scanner lifted somewhere both can
 reach", since copying it "is the shape `DuplicatedTestHelperDriftTest` exists to catch". **Measured, and
@@ -17943,7 +17983,7 @@ free and a behaviour change reds naming the file to port into. **Mutating the CA
 `sugar-crush` reds `tools/tests/` (M9, KILLED)**, which is the property that makes the copy defensible.
 A real stacked pair injected into `tools/gen-docs.php` also reds (M14).
 
-### E582 — rule 18 demonstrated on itself, inside one round
+### E582 [CLOSED] — rule 18 demonstrated on itself, inside one round
 
 Round 58's own first commit wrote two cardinalities into `CONTRIBUTING.md` prose. **Both were wrong within
 the hour**, one of them invalidated by this same round's other work:
@@ -17965,7 +18005,7 @@ was added. **52 was a mis-measurement, not staleness.** The causal clause is rem
 is making survives it: a figure no test derives rots whether or not anyone also mis-typed it, and the
 reason it is dropped rather than corrected is unchanged.
 
-### E583 — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
+### E583 [OPEN] — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
 
 E547 inherited "eight bare `{@see someMethod()}` citations name no method that exists". Re-censused with a
 generator, the answer depends entirely on the alphabet (rule 11):
@@ -17984,7 +18024,7 @@ Neither number is wrong; they answer different questions. **One was fixed** —
 reported rather than edited. **Widening the tree's guard to this alphabet would red twelve files across
 two other lanes**, so it is a decision for a round where one lane owns `tests/`.
 
-### E584 — a 🔴 "before anything else" instruction was skipped, and only the transcript recorded it
+### E584 [NO-FIX] — a 🔴 "before anything else" instruction was skipped, and only the transcript recorded it
 
 Round 58's first lane-c agent was told, in red, to start the E490 campaign in the background **before
 doing anything else**. Its transcript contains **zero** campaign calls across 43 tool uses; it went
@@ -17994,7 +18034,7 @@ but about the harness: a leading imperative in a long brief has no enforcement, 
 transcript would have revealed the omission. Same class as E492, where three lanes read a stale ownership
 map and none reported it. **The rate is the part worth keeping.**
 
-### E585 — a census that could express two shapes, under a doc-block saying "every"
+### E585 [CLOSED] — a census that could express two shapes, under a doc-block saying "every"
 
 `ChildWallClockBudgetTest::childBudgets()` scanned raw source for
 `/<wrapper> -s KILL (\d+|%d)/` and documented itself as "every literal child budget in `tests/`, and
@@ -18027,7 +18067,7 @@ with no whitespace at the literal's end (`'time' . 'out 5 sh'` — this file's o
 deliberate act anywhere else), and a budget assembled by `implode()`. Everything else lands in
 `unresolved`.
 
-### E586 — the mutation harness's uniqueness check was meaningless for exactly the anchors that need it
+### E586 [NO-FIX] — the mutation harness's uniqueness check was meaningless for exactly the anchors that need it
 
 Rule 13, self-inflicted and caught mid-run. The harness refused a mutation unless
 `/usr/bin/grep -cF -- "$OLD" "$FILE"` returned 1. **GNU `grep -F` treats a newline in the pattern as a
@@ -18041,7 +18081,7 @@ discard" and filed everything else non-zero as KILLED. Removing `resolveThroughP
 produced **rc 139 — SIGSEGV**, the runner dying rather than reporting, and it was filed as a clean kill. A
 signal death is neither a kill nor a survival and is now named as such.
 
-### E587 — a `--check` that did nothing satisfied the guard for `--check`
+### E587 [CLOSED] — a `--check` that did nothing satisfied the guard for `--check`
 
 `GenDocsTest::testCheckDoesNotWriteToTheTree()` asserted only that the bytes on disk were unchanged after
 `--check` ran over a hand-edited page. **That is also exactly what a `--check` which never ran leaves
@@ -18049,7 +18089,7 @@ behind** (rule 25). Proved by mutation rather than argued: with `gen-docs.php`'s
 `if (false)`, the test with the new `assertSame(1, $result['exit'])` **reds**, and the same mutation with
 that assertion reverted is **GREEN — 1 test, 2 assertions**. One line, and the exposure is closed.
 
-### E588 — repo-root `tools/` env vars are on no roster at all
+### E588 [CLOSED] — repo-root `tools/` env vars are on no roster at all
 
 `SUGARCRAFT_GEN_DOCS_ROOT` (added this round) and `SUGARCRAFT_CHECK_PATH_REPOS_ROOT` (pre-existing) are
 documented only in their own comments. `EnvRosterDriftTest`'s roster is `sugar-crush/src` +
@@ -18059,7 +18099,7 @@ regression, which is why it was left. **Not deferred for cost: deferred because 
 `sugar-crush`-rooted by design and reaching `tools/` from it is the same dependency inversion E581
 records.** A `tools/tests/` guard is the shape that would work, on the model of `StackedDocCommentTest`.
 
-### E589 — a manifest-policy CI job now reds on a test file's token stream
+### E589 [CLOSED] — a manifest-policy CI job now reds on a test file's token stream
 
 `path-repo-check` — a job about composer manifests — is the only job that runs `tools/tests/`, so it now
 goes red whenever `RuntimeNoticeSinkDeliveryTest::stackedDocCommentLines()` changes by one token. That is
@@ -18068,7 +18108,7 @@ file to port into), and it is the price of E581's dependency direction. **Stated
 lane editing that method will see a job whose NAME gives no hint of the reason.** Renaming the job, or
 splitting `tools/tests/` into its own, is the cheap improvement whenever someone is next in `ci.yml`.
 
-### E590 — three arms compute a line, one fixture pinned none of them, and one arm was wrong
+### E590 [CLOSED] — three arms compute a line, one fixture pinned none of them, and one arm was wrong
 
 Rule 41 three times in one file, and the third pass found a real defect rather than a gap.
 
@@ -18105,7 +18145,7 @@ excusing one does. Rule 41 is written for survivors; this is the same rule for k
 
 ## Round 58 — the merge. E591 … E592, filed by the supervisor.
 
-### E591 — 🔴 THE OWNERSHIP MECHANISM IS PROSE, AND THE STAGE THAT EDITS FILES IS NOT GIVEN IT AT ALL
+### E591 [CLOSED] — 🔴 THE OWNERSHIP MECHANISM IS PROSE, AND THE STAGE THAT EDITS FILES IS NOT GIVEN IT AT ALL
 
 > ⚠️ **THIS ENTRY WAS FILED WRONG AND IS CORRECTED IN PLACE. The correction is the finding.** As first
 > written it claimed the ownership map was mentioned by **0 of 3** lanes, and that lane a had *invented* a
@@ -18151,7 +18191,7 @@ the agent's caution was correct and correctly reported.
 3. **Force it through the structured-output schema**, which is enforced at the tool-call layer and cannot
    be skimmed past, rather than through prose, which demonstrably can.
 
-### E592 — 🔴 TWO OF THE SUPERVISOR'S OWN BRIEF ITEMS WERE WRONG, AND BOTH WERE CAUGHT BY MEASUREMENT
+### E592 [NO-FIX] — 🔴 TWO OF THE SUPERVISOR'S OWN BRIEF ITEMS WERE WRONG, AND BOTH WERE CAUGHT BY MEASUREMENT
 
 **MEASURED, round 58, by lane a.** One lane's five-item brief contained **two items that were false as
 written**, both authored by the supervisor:
@@ -18184,7 +18224,7 @@ and a brief carries more authority, because nothing downstream is asked to falsi
 
 ## Round 59 — the campaign completes. E593, filed by the supervisor.
 
-### E593 — 🔴 E490: 240 CLEAN TAKES. THE PRIOR RATE IS NOW EXCLUDED AT 95%, AND BY 0.075 PERCENTAGE POINTS.
+### E593 [NO-FIX] — 🔴 E490: 240 CLEAN TAKES. THE PRIOR RATE IS NOW EXCLUDED AT 95%, AND BY 0.075 PERCENTAGE POINTS.
 
 **MEASURED by the supervisor across rounds 58–59, complete.** The campaign begun at round 58's recovery
 launch ran to its target while nine agents worked alongside it.
@@ -18227,7 +18267,7 @@ to a lane as its first instruction, marked 🔴 and "before you do anything else
 1 (E584). The supervisor ran it instead and it completed while nine agents worked. **A three-hour
 background measurement does not belong to an agent with a context limit and thirteen competing items.**
 
-### E594 — the E562 audit: every standing SURVIVAL in this file, and what settles it
+### E594 [NO-FIX] — the E562 audit: every standing SURVIVAL in this file, and what settles it
 
 **Round 59, lane a (finisher). THE AUDIT E562 ASKED FOR.** E562 records a harness that scored
 `No tests executed!` (rc 0) as a SURVIVAL, and asks for every backlog SURVIVED verdict that could have
@@ -18285,7 +18325,7 @@ class or method that exists in the tree today. (2) One does not: `testAZeroBudge
 (E513) is now `HangWatchdogTest::testANonPositiveBudgetDeclinesToArm`. That is a rename, not a
 manufactured verdict — recorded so the next reader does not spend the same ten minutes on it.
 
-### E595 — 🔴 E562's TRIGGER IS NOT "A FILTER NAMING A METHOD THAT DOES NOT EXIST"
+### E595 [NO-FIX] — 🔴 E562's TRIGGER IS NOT "A FILTER NAMING A METHOD THAT DOES NOT EXIST"
 
 **Round 59, lane a. MEASURED, and it corrects E562's own mechanism statement.** E562 says a `--filter`
 naming a method that does not exist makes PHPUnit print `No tests executed!` and exit 0. **PHPUnit's
@@ -18308,7 +18348,7 @@ asking "does this method exist" is asking a question that does not decide the ca
 The only sound check is a harness that refuses `No tests executed`, which is what E562's fix did and what
 this round's harness carries.
 
-### E596 — E586 pinned in three polarities, including the anchor that appears nowhere
+### E596 [NO-FIX] — E586 pinned in three polarities, including the anchor that appears nowhere
 
 **Round 59, lane a.** E586 records that the mutation harness counted anchor uniqueness with
 `/usr/bin/grep -cF -- "$OLD" "$FILE"`, and that GNU `grep -F` treats a newline in the pattern as a pattern
@@ -18329,7 +18369,7 @@ twice, `beta line two` once and `gamma` once:
 Row 1 is the finding, row 3 is rule 15. The generator is `f59a_apply.py`, invoked by the harness rather
 than copied into it, so what the table pins is the code that runs.
 
-### E597 — E408's SURVIVAL re-measured at full-suite scope, and the entry records no scope at all
+### E597 [NO-FIX] — E408's SURVIVAL re-measured at full-suite scope, and the entry records no scope at all
 
 **Round 59, lane a. RE-RUN — this is the audit's one live measurement.** E408 records
 `M9-no-explicit-reap` — deleting `ProcessReaper::reapIfExited($proc)` from
@@ -18351,7 +18391,7 @@ survival in this file is a claim with an expiry date and no expiry check, and th
 settled decisions ("written down so nobody re-derives it") are the ones most likely to be believed
 unre-measured.
 
-### E598 — E566 audited: the census is 22/20, the idioms are three, and exactly one file was wrong
+### E598 [CLOSED] — E566 audited: the census is 22/20, the idioms are three, and exactly one file was wrong
 
 **Round 59, lane a. FIXED for the one file; the other nineteen deliberately untouched (rule 26).**
 Re-run at `e4c69b04e` with E566's own generator: **22 files under `tests/` name `T_FUNCTION`, of which
@@ -18395,7 +18435,7 @@ the only backwards walk to an enclosing callable in the twenty. Fixed and pinned
 detail in the round's E566 commit. **The transferable half: the idiom that is safe to ignore an arrow in
 is the one that needs a NAME, and the idiom that is not is the one that needs a SCOPE.**
 
-### E599 — E565 does not reproduce as filed, and the real hole is one level down
+### E599 [CLOSED] — E565 does not reproduce as filed, and the real hole is one level down
 
 **Round 59, lane a. MEASURED.** E565 asks whether `DuplicatedTestHelperDriftTest`'s `[\T_PRIVATE]`
 alphabet carries `ScaledClockHelperSeamTest`'s visibility hole. **It does not, and both halves are
@@ -18417,7 +18457,7 @@ as an unreadable declaration — **measured, 334 of them.** The name is read fir
 anonymous-function discriminator asks about EXPLICIT keywords only. That control ships as a test, and
 mutating the discriminator's `false` argument to `true` reds three tests.
 
-### E600 — E579 fixed, and the instrument's clean state is a true empty
+### E600 [CLOSED] — E579 fixed, and the instrument's clean state is a true empty
 
 **Round 59, lane a. FIXED.** `Tests\Config\GlobFigureDriftTest` repeated one line of its own argument
 verbatim directly under itself — in the tree's designated authority on figures without generators, and a
@@ -18433,7 +18473,7 @@ its fixtures are PHP source about PHP source. Reading `T_DOC_COMMENT` out of the
 and the nowdoc fixture reds on the line-filter spelling. Verified over the real population, not only
 synthetically: re-introducing the exact deleted line into `GlobFigureDriftTest` reds the census.
 
-### E601 — 🔴 the restart brief's inherited figure was a MUTATED, FAILING run's figure
+### E601 [NO-FIX] — 🔴 the restart brief's inherited figure was a MUTATED, FAILING run's figure
 
 **Round 59, lane a (finisher), reporting on its own predecessor's handoff. MEASURED.**
 
@@ -18454,7 +18494,7 @@ entry. (3) It also filed E408 under the number E520, which is a different entry 
 inside a document written to be read by the next agent.
 
 
-### E602 — two inherited prose claims in this round's own lane-a commits, one inverted and one a cardinality
+### E602 [CLOSED] — two inherited prose claims in this round's own lane-a commits, one inverted and one a cardinality
 
 **Round 59, lane a (finisher), reviewing its predecessor's six unreviewed commits. FIXED.** Rule 34: a
 commit above the review's sha is unreviewed code, and it is the finisher's first job. Both of these were
@@ -18485,7 +18525,7 @@ NON-empty starless line — `if ($trimmed !== '') { $previous = null; }`, a plau
 the file as its predecessor left it and is **KILLED** with the new rows. One mutation, both polarities,
 `--filter DuplicatedDocBlockLineTest` (scope: these guards, not the suite).
 
-### E603 — 🔴 a population floor that sat BELOW one of the two halves it was guarding
+### E603 [CLOSED] — 🔴 a population floor that sat BELOW one of the two halves it was guarding
 
 **Round 59, lane a (fix stage). FIXED.** `DuplicatedDocBlockLineTest`'s rule-15 population control was a
 single `assertGreaterThan(400, count($sources))` over `tests/` + `src/` + `bin/` at once. Measured on PHP
@@ -18510,7 +18550,7 @@ assertions, reddening at the first root that stops contributing).
 **NEXT CANDIDATE, not done:** `tests/Backend/BackendSignatureNullabilityTest` carries its own private
 `everySourceFile()` and its own population guard.
 
-### E604 — 🔴 a walk over `bin/` that had never read a file, under prose naming `bin/` as covered
+### E604 [CLOSED] — 🔴 a walk over `bin/` that had never read a file, under prose naming `bin/` as covered
 
 **Round 59, lane a. FIXED.** The same census walked `['src', 'bin']` and selected files by
 `str_ends_with($path, '.php')`. `sugar-crush/bin/` holds exactly one entry — `bin/sugarcrush`, 431 lines
@@ -18529,7 +18569,7 @@ turned a red into a second finding. The fix asks the FILE: `.php`, or a shebang 
 `workflows/` (1). Both are now walked. Both were measured clean BEFORE being added, so the widening
 changed no answer — the only kind of widening worth doing into files no lane owns.
 
-### E605 — 🔴 a name walk that could read one spelling of a method name, where PHP has three
+### E605 [CLOSED] — 🔴 a name walk that could read one spelling of a method name, where PHP has three
 
 **Round 59, lane a. FIXED.** `DuplicatedTestHelperDriftTest::declarationsIn()` read a declaration's name
 as "the first non-whitespace token after `function`, if it is a `T_STRING`". Two real spellings fall
@@ -18560,7 +18600,7 @@ lexer, per rule 6).
 the whole population — every `T_FUNCTION` in the package, tallied by what follows it — is what surfaced
 the reserved-word family, which is 30 sites against the ampersand's zero.
 
-### E606 — the unreadable-name branch had no pin in the silence direction
+### E606 [CLOSED] — the unreadable-name branch had no pin in the silence direction
 
 **Round 59, lane a. FIXED.** The review reported two survivals in `declarationsIn()`: collapsing the
 anonymous-function discriminator to a bare `if ($name === null) { continue; }`, and deleting the
@@ -18579,7 +18619,7 @@ unparseable (rule 14, safe), and implicitly-public it is silently dropped (unsaf
 case). One line in the skip list plus a fixture; left out to keep this diff to the population that
 exists.
 
-### E607 — 🔴 an argument walk that took an interpolation's closing brace and never took its opener
+### E607 [CLOSED] — 🔴 an argument walk that took an interpolation's closing brace and never took its opener
 
 **Round 59, lane a. FIXED.** `ChildWallClockBudgetTest::argumentSpans()` compared whole tokens —
 `in_array($token, ['(', '[', '{'], true)` — so an ARRAY token could never match an opener, while the `}`
@@ -18603,7 +18643,7 @@ when the walk was corrected. **This is a latent silent-wrong-answer closed, not 
 corrected**, and the distinction is the whole reason the sentence is here rather than a claim that a bug
 was fixed.
 
-### E608 — a helper that failed OPEN under a call-site comment promising it failed closed
+### E608 [CLOSED] — a helper that failed OPEN under a call-site comment promising it failed closed
 
 **Round 59, lane a. FIXED.** `ChildWallClockBudgetTest::shadowedByAnArrowFunction()` had two silent
 `continue`s: an arrow whose parameter list it could not find, and one whose list never closes. A `false`
@@ -18620,7 +18660,7 @@ a rule-25 negative half so that a helper stuck at "yes" cannot satisfy them.
 depends on.** The rule-14 sentence sat on the `if`, and the `if`'s own argument was computed by a
 function that broke the rule three lines away.
 
-### E609 — DEFERRED: two private source walkers, in the package that extracted a trait to stop exactly this
+### E609 [OPEN] — DEFERRED: two private source walkers, in the package that extracted a trait to stop exactly this
 
 **Round 59, lane a. NOT DONE — out of lane, and recorded so it does not need re-investigating.**
 `DuplicatedDocBlockLineTest::everySourceFile()` (added this round) and
@@ -18636,7 +18676,7 @@ correct and the duplication is real, and no instrument in the tree can hold both
 Blocked only by ownership — `tests/Backend/` was not in this lane's file list, and rule 23 permits a
 forced out-of-lane edit only where a guard demands one. No guard demands this one.
 
-### E610 — DEFERRED: a comment between `function` and a method name is still unread
+### E610 [OPEN] — DEFERRED: a comment between `function` and a method name is still unread
 
 **Round 59, lane a. MEASURED, NOT FIXED.** After E605 the name walk in
 `DuplicatedTestHelperDriftTest::declarationsIn()` skips whitespace, steps over `&` and accepts any
@@ -18649,7 +18689,7 @@ safe), and written implicitly-public it is **silently dropped** — the same uns
 by-reference case in E605. One line in the skip list plus a fixture. Left out deliberately to keep
 that diff to the population that exists rather than to the population that could.
 
-### E611 — two of lane b's five brief items commission edits to files lane b does not own
+### E611 [OPEN] — two of lane b's five brief items commission edits to files lane b does not own
 
 🔴 **The round's first finding, and it was visible before any work started.** Round 59's brief gives lane b
 five items. Items 1 and 2 (E572, E577, E578) are entirely about two files:
@@ -18672,7 +18712,7 @@ count. **The E334 path check verifies that paths EXIST. Nothing checks that a la
 its own file list**, which is the gap that produced this, and it is mechanically checkable: every file a
 brief item names should be run through that item's lane regex at prep time.
 
-### E612 — `SwallowingCatchCensusTest` does not model catch-clause ORDER, so it reports round 58's own repair shape as an offender
+### E612 [OPEN] — `SwallowingCatchCensusTest` does not model catch-clause ORDER, so it reports round 58's own repair shape as an offender
 
 🔴 MEASURED on PHP 8.3.6 / PHPUnit 10.5.64, by driving the SHIPPED `scanSource()` through reflection (not a
 copy of it). Two sources, identical but for one clause:
@@ -18702,7 +18742,7 @@ follows the named one** — which is the shape the repair produces. FIX: skip ev
 that already catches an `ExpectationFailedException`, and pin BOTH polarities (narrow-first → not reported;
 wide-first → reported).
 
-### E613 — E572 blind spot (1) closes at ZERO, and the four apparent offenders were round 58's own repairs
+### E613 [NO-FIX] — E572 blind spot (1) closes at ZERO, and the four apparent offenders were round 58's own repairs
 
 E572 records that the swallowing-catch census cannot see an assertion reached through a helper. It is now
 measured. Generator: `census_indirect_assert.php` (round 59 lane b scratchpad), PHP 8.3.6, run over
@@ -18723,7 +18763,7 @@ reporting four false alarms and gets answered with four exemption rows.
 ⚠️ Still not covered, and stated so the next reader does not inherit an overclaim: a helper declared in a
 PARENT class or a TRAIT is invisible to a same-file walk. Cross-file expansion was not built.
 
-### E614 — E572 blind spot (2) is latent: 11 `set_error_handler` sites, 10 restored in a `finally`, the 11th has zero callers
+### E614 [NO-FIX] — E572 blind spot (2) is latent: 11 `set_error_handler` sites, 10 restored in a `finally`, the 11th has zero callers
 
 Measured at `891b17ba7`, PHP 8.3.6, over 466 files. The mechanism is not what the blind-spot wording
 suggests: a PHPUnit assertion failure is a THROWN EXCEPTION and no error handler intercepts it. What an
@@ -18753,7 +18793,7 @@ invisible and `Support/RefusesAnUnreadableSourceTrait.php` was dropped entirely.
 diffing the scanner's answer against a plain `grep`. Any guard built from this must match both token kinds
 and pin each with its own fixture.
 
-### E615 — E578's prescribed fixture is FALSE as written; the resolver's real divergence is the other direction
+### E615 [OPEN] — E578's prescribed fixture is FALSE as written; the resolver's real divergence is the other direction
 
 E578 prescribes: *"A fixture asserting that the permissive fallback cannot produce a `safe` verdict for a
 type PHP would have failed to load would close it."* MEASURED against the shipped `scanSource()`, PHP 8.3.6,
@@ -18780,7 +18820,7 @@ sentence at `resolve()` saying the fallback answers for a name PHP would not hav
 describes the GLOBAL class and not the clause's real behaviour. Latent either way — zero bare-unimported
 catch types exist in `sugar-crush/tests`.
 
-### E616 — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
+### E616 [OPEN] — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
 
 Found while fixing E570 and deliberately not fixed with it, because it is not a `required` problem. The
 shape is `/(?<![A-Za-z])[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/`. A hyphen is not `[A-Za-z]`, so in
@@ -18794,7 +18834,7 @@ those false positives and simultaneously blinds the scan to a genuinely invented
 (`Auto-Approve denied:` → today frames as `Approve denied:` and is reported; with the hyphen excluded it is
 reported nowhere). Both directions need fixtures before either is chosen. No occurrence in `src/` today.
 
-### E617 — E577 was not addressed and was not re-measured; it is out of every lane's reach this round
+### E617 [OPEN] — E577 was not addressed and was not re-measured; it is out of every lane's reach this round
 
 `AssertionSwallowingCatchTest::swallowingCatchesIn()` lives in `sugar-crush/tests/Support/`, which is lane
 a's directory, and lane a's file list names four specific paths that do not include it. So E577 (the `types`
@@ -18803,7 +18843,7 @@ definition says it is display-only) is untouched, and this entry does NOT restat
 though it had been re-taken — per rule 47, it is recorded as unverified at this commit. It wants one
 sentence at the key's definition, or a second key carrying the resolved FQN, and it wants an owner.
 
-### E618 — a class constant naming another class's constant is evaluated LAZILY, so narrowing the source fails late
+### E618 [NO-FIX] — a class constant naming another class's constant is evaluated LAZILY, so narrowing the source fails late
 
 Recorded because two doc-blocks were written this round asserting the opposite and the mutation run caught
 it. MEASURED on PHP 8.3.6: with `Src::V` private and `class Dst { public const W = Src::V; }`,
@@ -18817,7 +18857,7 @@ fatal. Narrowing the engine's constant would leave all three framers loadable an
 framing path checked its bound first — in production, not at boot. That is precisely why
 `FrameCapFamilyTest::testTheConstantReaderIsAliveInBothPolarities()` still asserts the visibility.
 
-### E619 — a `token_get_all()` walk that reads a constant's name as the FIRST token after `const` is blind to four of PHP 8.3's five spellings
+### E619 [CLOSED] — a `token_get_all()` walk that reads a constant's name as the FIRST token after `const` is blind to four of PHP 8.3's five spellings
 
 **Fixed this round**, recorded because the SHAPE recurs and the failure mode is the dangerous one:
 the walk answered "no declaration here" rather than "I could not read this", so the loss was silent.
@@ -18845,7 +18885,7 @@ resume after the terminating bare `,`. MEASURED: `token_get_all()` emits the `,`
 same bare `,` token, so that rule reads `private const array A = [1, 2], X = ...` as a constant `A`
 initialised to `[1` followed by a member named `2`. Any walk over a declaration list must count brackets.
 
-### E620 — an initialiser reader that appends comment text lets a SENTENCE satisfy a derivation guard
+### E620 [CLOSED] — an initialiser reader that appends comment text lets a SENTENCE satisfy a derivation guard
 
 **Fixed this round.** The same reader appended the text of every token, comments included, so
 
@@ -18861,7 +18901,7 @@ comment, the author re-literalising a value is the one most likely to write the 
 `T_DOC_COMMENT` explicitly, and must pin both polarities** — a reader that drops the whole initialiser
 passes the negative fixture and fails the family.
 
-### E621 — the round-59 review's assertion attribution is wrong: the −8 is a TESTS effect, and nothing lost coverage
+### E621 [NO-FIX] — the round-59 review's assertion attribution is wrong: the −8 is a TESTS effect, and nothing lost coverage
 
 The review reported the round's +21 assertions as **prose +13, tests +16, code −8**, and made the −8 a
 MAJOR on the grounds that "the code change silently removed 8 assertions somewhere in the suite and
@@ -18905,7 +18945,7 @@ that treats such a class as a coverage signal will mis-attribute. `root()` would
 `realpath()` with a one-time assertion in `setUp()`, which would make the class's count stable — that file
 is in `tests/` root and belongs to no lane this round, so it is recorded rather than done.
 
-### E622 — `class_exists()` rejects two of the four kinds a class-like roster tracks
+### E622 [CLOSED] — `class_exists()` rejects two of the four kinds a class-like roster tracks
 
 **Fixed this round** in `FrameCapFamilyTest`, recorded because the pairing is easy to write anywhere.
 A scanner tracked `T_CLASS|T_INTERFACE|T_TRAIT|T_ENUM` and the assertion over its output gated on
@@ -18915,7 +18955,7 @@ message blaming the scanner for source it read perfectly well — correct code a
 failure, which is where an exemption row gets written for a defect that is really in the classifier.
 Pair all four: `class_exists() || interface_exists() || trait_exists() || enum_exists()`.
 
-### E623 — E490's campaign excludes the prior rate; pooled it is 60 takes short of excluding 1-in-200
+### E623 [NO-FIX] — E490's campaign excludes the prior rate; pooled it is 60 takes short of excluding 1-in-200
 
 **THIS ENTRY UNDERSTATED N BY 298 TAKES IN ITS FIRST VERSION.** It reported the supervisor's
 240-take campaign as though it were the only one. There are **two** completed E490 campaigns, both
@@ -18980,7 +19020,7 @@ campaign reported without its bound is an unearned closure — and a bound compu
 evidence is an unearned *non*-closure. State N, state where every take in N came from, state the
 bound, state the N you would need.
 
-### E624 — E585 was already fixed, and the brief promoted it as open
+### E624 [NO-FIX] — E585 was already fixed, and the brief promoted it as open
 
 Round 59's lane-c brief listed E585 as "the same shape still open". **It is not.** Measured in the
 tree at `e4c69b04e`: `ChildWallClockBudgetTest::wallClockWrappersIn()` already reads
@@ -18997,7 +19037,7 @@ brief named an already-closed item as its headline work. **The file is `sugar-cr
 which is lane a's this round**, so the brief additionally directed lane c at a file lane c may not
 touch.
 
-### E625 — no citation guard walked `tools/` or `candy-pty/`, and one of the two offenders was a refuted mechanism claim
+### E625 [CLOSED] — no citation guard walked `tools/` or `candy-pty/`, and one of the two offenders was a refuted mechanism claim
 
 E583 left the bare-citation alphabet question open for "a round where one lane owns `tests/`".
 **The alphabet was never the reachable half of it.** Every `.php` file under `tools/` and under
@@ -19087,7 +19127,7 @@ so a scanner matching the raw token text reports **zero** for it — an absence 
 a clean tree. The guard flattens the marker first and a wrapped fixture pins it; deleting the
 flattening reds.
 
-### E626 — an inherited figure disagreed with the brief's floor, and the brief was right
+### E626 [NO-FIX] — an inherited figure disagreed with the brief's floor, and the brief was right
 
 Round 59's killed lane-c agent recorded `tools/tests` at `29 / 137` for `e4c69b04e`; the brief said
 `28 / 136`. Settled by extracting the tree at that exact commit with `git archive` and running it:
@@ -19098,7 +19138,7 @@ brief is the thing that rots (rule 42, rule 47) and this is the converse: **a ha
 wrong as a brief. The `git archive` technique is cheap — under a minute — and settles it without a
 worktree.
 
-### E627 — a brace walk over `token_get_all()` fail-opened on an interpolation brace, and two drift pins rested on it
+### E627 [CLOSED] — a brace walk over `token_get_all()` fail-opened on an interpolation brace, and two drift pins rested on it
 
 **FIXED this round; recorded because the shape generalises and rule 49 named only half of it.**
 
@@ -19139,7 +19179,7 @@ terminates. Pin all four shapes; the fix carries a fixture for each.
 said so is rule 11 — the pre-existing fixture's alphabet was `if (true) { return 1; }`, both braces
 plain string tokens, under a comment naming this exact failure mode.
 
-### E628 — the `Environment:` row reader red-flagged ordinary wrapped prose and then prescribed damage
+### E628 [CLOSED] — the `Environment:` row reader red-flagged ordinary wrapped prose and then prescribed damage
 
 **FIXED this round; recorded because it is rule 33's shape with a measurement attached.**
 
@@ -19168,7 +19208,7 @@ the same block take their column from the intro and are read as nothing. That fa
 documented names every variable the script reads reports undocumented — and it is a fixture rather
 than a promise. It is where a future widening starts.
 
-### E629 — two guards under `tools/` still describe their own reach with unchecked artefacts
+### E629 [OPEN] — two guards under `tools/` still describe their own reach with unchecked artefacts
 
 **DEFERRED. Neither is a hole today; both are prose that no test can contradict.**
 
@@ -19183,14 +19223,14 @@ than a promise. It is where a future widening starts.
    but the failure text says "restore the edge" while the edge is present in another spelling, which
    sends the reader to add something that is already there. Low harm, non-zero confusion.
 
-### E630 — `candy-pty/composer.lock` exists on disk
+### E630 [NO-FIX] — `candy-pty/composer.lock` exists on disk
 
 **DEFERRED, informational.** 113 KB, dated 2026-08-22, gitignored via `candy-pty/.gitignore:1`, so
 not committed and not a policy breach. Recorded only because a per-lib lock makes CI's path-repo
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
 
-### E631 — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
+### E631 [OPEN] — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
 
 `tests/Tools/BuiltInToolCorpus.php`'s class doc-block and `classNames()`'s own comment both say a
 PSR-4 exemption elsewhere in the tree is *reported* by `nonClassSources()` rather than aborting suite
@@ -19234,7 +19274,7 @@ doc-block's "reported rather than thrown on" must be rewritten under rule 7 rath
 and `testAnExemptFileElsewhereIsReportedRatherThanThrownOn()` needs a sibling that drives the REAL
 autoloader, because the probe autoloader cannot express this case.
 
-### E632 — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
+### E632 [OPEN] — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
 
 Round 60 lane a retired every cardinality over `src/` from `BuiltInToolCorpusTest` and both restated
 figures from `src/Context/RepoMapBlock.php`. It did not touch the scanner's own doc-block, which is
@@ -19277,7 +19317,7 @@ whole of `tests/Tools/` before the scanner's domain is widened, or the widening 
 that has nothing to do with `RepoMapBlock`. And see E635: widening this scanner's ALPHABET is a
 different and much worse idea than widening its FILE domain.
 
-### E633 — a figure was asserted; the claim the figure supported was not, and it was false
+### E633 [PARTIAL] — a figure was asserted; the claim the figure supported was not, and it was false
 
 `RepoMapBlock`'s WHAT WAS DELIBERATELY NOT BUILT list argued that a per-class listing was rejected
 because at one line each it would be "several times this whole block's budget". The DIGIT in that
@@ -19317,7 +19357,7 @@ written BY a fix for this pattern, not found by looking for it, and both were ca
 sentence rather than by reading one. The sweep's acceptance test is a mutation of each conclusion,
 not of the figure underneath it.
 
-### E634 — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider (and its ASSERTION figure, as first filed, did not reproduce)
+### E634 [NO-FIX] — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider (and its ASSERTION figure, as first filed, did not reproduce)
 
 Round 60 lane a removed every ASSERTION that counts `src/`, and the acceptance test is green in both
 polarities. That does not make the suite's totals independent of the tree, and a supervisor predicting
@@ -19388,7 +19428,7 @@ the review's unexplained `+1`. Two consequences for anyone reconciling a merge: 
 not evidence that behaviour moved, and a lane that only rewrote comments still has a non-zero delta to
 account for. (Measured negative control, from the same pair of runs: `docs/plans/` is NOT in that
 census's scope — a commit adding ninety lines to THIS file left the suite's totals byte-identical.)
-### E635 — the no-restatement guard covers TWO of the census's components, and widening its alphabet is measurably worse than leaving it narrow
+### E635 [NO-FIX] — the no-restatement guard covers TWO of the census's components, and widening its alphabet is measurably worse than leaving it narrow
 
 `BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()` reports a derived figure
 appearing as a standalone integer in `RepoMapBlock.php`. Its alphabet is the FILE count and the
@@ -19424,7 +19464,7 @@ of the corpus scanner's symbols), which is a token-stream fact rather than a phr
 narrow alphabet is documented in the guard's own doc-block, with this measurement, rather than
 implied.
 
-### E636 — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
+### E636 [OPEN] — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
 
 E631 establishes that a mis-namespaced file under `src/` takes the runner down rc 255 through
 `classNames()`/`nonClassSources()`'s triple `*_exists()` probe. This entry is the consequence for
@@ -19448,7 +19488,7 @@ reflection census in the file, and pin the ordering with a comment stating why (
 wrong: they are not dependent, they are differently survivable). Cheap, and it is the difference
 between a named failure and a redeclaration fatal.
 
-### E637 — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
+### E637 [OPEN] — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
 
 MEASURED on PHP 8.3.6 at `204c9cf58`: `BuiltInToolCorpus::declaredTypes()` walks the token stream at
 brace depth zero, so a `class Hidden {}` nested inside an `if` block is invisible to it — the file
@@ -19469,7 +19509,7 @@ limitation for coverage — rule 14 says a guard must be able to state what it c
 limitation, the walk needs to record a conditional declaration as something other than absence.
 
 
-### E638 — `BuiltInToolCorpusTest` now carries THREE bounds with a finite horizon in tree size, and one of them is the binding constraint on adding source files
+### E638 [NO-FIX] — `BuiltInToolCorpusTest` now carries THREE bounds with a finite horizon in tree size, and one of them is the binding constraint on adding source files
 
 Round 60 removed the census literals; what replaced them are bounds, and three of those bounds are
 claims about today's tree that a large enough tree will legitimately falsify. This entry states where,
@@ -19507,7 +19547,7 @@ coupling nobody counted**; if a bound needs slack, the slack has to be argued fo
 **Step.** No fix. Re-measure the table if `MAX_SECTION_BYTES` or `MAX_SOURCE_FILES` moves, and treat
 any red in it as an instruction to rewrite `RepoMapBlock`'s design note, never to loosen the bound
 back toward a ratio.
-### E639 — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
+### E639 [OPEN] — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
 
 **DEFERRED, out of lane (`src/Cli/Bootstrap.php`).** Round 60 lane b made
 `AgentManager::executeSubAgent()` resolve `Agent::$tools` into the `CompleteRequest`'s `tools` field
@@ -19559,7 +19599,7 @@ Pinned by `AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromA
 that a policy-narrowed absence and a typo produce the byte-identical refusal. That test is the trap's
 tripwire: it names this entry's decision in its failure message.
 
-### E640 — `GRANT_PROBES` proves a grant CAN fire, never that it does not OVER-fire
+### E640 [NO-FIX] — `GRANT_PROBES` proves a grant CAN fire, never that it does not OVER-fire
 
 **RECORDED, not fixed — the guard's alphabet limit (rule 11).**
 `AgentDefinitionTest::declarationDefect()` calls a preset's argument-scoped declaration clean once
@@ -19574,7 +19614,7 @@ a judgement about what the preset meant. Worth doing when a preset ships a grant
 actually matters — today the only argument-scoped declaration in the built-in set is `Bash(git *)`,
 whose trailing space makes the over-fire case not arise.
 
-### E641 — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
+### E641 [OPEN] — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
 
 **DEFERRED, out of lane (`src/Workflows/WorkflowEngine.php`, `src/Workflows/WorkflowTask.php`).**
 Found while checking round 60's review MAJOR 4. `WorkflowEngine` builds its stage request as
@@ -19605,7 +19645,7 @@ Note this also makes the `[]`-vs-`null` distinction load-bearing on that path: `
 defaults to `[]`, NOT to `null`, so four of the six providers put a present-but-empty `tools` key on
 the wire for every workflow stage.
 
-### E642 — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
+### E642 [PARTIAL] — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
 
 **PARTIALLY CLOSED in round 60's fix stage.** `AgentDefinitionTest::declarationDefect()` returns
 `null` for any declaration with no argument half, on the grounds that the name half is matched
@@ -19622,7 +19662,7 @@ validated at load time. Closing it properly means validating at `AgentPresetRegi
 first, since a user preset naming a tool the operator disabled must warn rather than refuse. Related
 to E645, which is the argument-scoped half of the same gap.
 
-### E643 — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
+### E643 [OPEN] — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
 
 **DEFERRED. The FINDING, not the fix (rule 10).** `executeSubAgent()` applies skills with
 
@@ -19644,7 +19684,7 @@ REGISTRATION rather than at execution; (b) strip the skill's name from the promp
 resolve; (c) warn on stderr at construction. (b) is wrong on its own — it edits the model-facing
 prompt at runtime, which nothing else here does.
 
-### E644 — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
+### E644 [OPEN] — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
 
 **DEFERRED, and the more consequential half of §C7.** `executeSubAgent()` has no production caller;
 `executeAll()` has TWO — `Chat::executeAgents()` and `WorkflowEngine`'s parallel stages. MEASURED at
@@ -19661,7 +19701,7 @@ Not fixed in round 60 because the correct shape is a PER-AGENT request built ins
 already has: it builds a per-agent `CompleteRequest` from each agent's own `task`, so `tools` can be
 resolved there from `$agent->agent->tools` by the same method.
 
-### E645 — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
+### E645 [OPEN] — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
 
 **DEFERRED.** Round 60 lane b found `AgentDefinition::reviewer()` shipping `Bash(git:*)` — Claude
 Code's prefix dialect — where this project globs an argument half with `fnmatch()`. MEASURED on PHP
@@ -19677,7 +19717,7 @@ preset carrying `tools: Bash(git:*)` produces a declaration that is well-formed,
 and matches nothing — which after §C7 means the sub-agent is granted the `Bash` tool by the NAME half
 and then has every `Bash` call refused by the argument half. The durable fixes are a translation at
 import (`(x:*)` → `(x *)`) or a stderr warning naming the dialect; neither was taken.
-### E646 — the live worker cannot heartbeat through a non-streaming provider call
+### E646 [OPEN] — the live worker cannot heartbeat through a non-streaming provider call
 
 **DEFERRED FINDING, not a hole today.** `ProcessExecutor::createLiveWorkerScript()` emits one
 heartbeat before the provider call and then one every 5s *between relayed chunks*. On the
@@ -19696,7 +19736,7 @@ emit while blocked, e.g. an alarm signal, a `pcntl_fork()`ed heartbeat emitter, 
 Standing user rule: LLM calls may legitimately run for tens of minutes, so this must not be
 "solved" by capping the request.
 
-### E647 — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
+### E647 [OPEN] — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
 
 **DEFERRED FINDING.** `ProcessExecutor::encodeTools()` sends the request's tool NAMES across the
 startup line and `createLiveWorkerScript()` builds its `CompleteRequest` with `tools: null`. The
@@ -19722,7 +19762,7 @@ grant that path computes cannot reach a `ProcessExecutor` worker until this is a
 options are a name-plus-schema wire format the child rehydrates against a registry it rebuilds, or
 an RPC back to the parent for `execute()`.
 
-### E648 — `ProcessExecutor`'s live worker `require`s an autoloader path taken off the wire
+### E648 [NO-FIX] — `ProcessExecutor`'s live worker `require`s an autoloader path taken off the wire
 
 **DEFERRED FINDING, currently contained.** The child `require`s `$msg['autoload']`, which arrives in
 the startup JSON line. Classified `PROCESS_DERIVED` in `ReadPathCensusTest::READ_PATHS` because the
@@ -19744,7 +19784,7 @@ reading a spooled startup line off disk — the `require` becomes attacker-influ
 `is_file()` test does not bound it. `Sessions/BackgroundSupervisor.php|require` carries the same
 shape and the same exposure.
 
-### E649 — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
+### E649 [OPEN] — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
 
 **DEFERRED FINDING, and it is the reason the production sub-agent path is unexercised.**
 `Chat::executeAgents()` builds its executor from `AgentPoolConfig`, which carries `maxConcurrent`,
@@ -19776,7 +19816,7 @@ answer — but it is a behaviour change on a live command and it was not written
 Note also that `WorkflowEngine::$provider` is a provider NAME, not a config, so it is not a ready
 supplier for the seam either; the gap has the same shape at that site as at `AgentPoolConfig`.
 
-### E650 — the parent writes `execute` into a pipe whose child may already be gone
+### E650 [OPEN] — the parent writes `execute` into a pipe whose child may already be gone
 
 **DEFERRED FINDING, cosmetic today.** `spawnWorker()` writes its `execute` line with a bare
 `fwrite($pipes[0], ...)` after a bounded wait for `ready`. A child that exited during startup —
@@ -19792,7 +19832,7 @@ warning attributed to the executor rather than as a named failure, and `phpunit.
 detect the dead child (or guard the write) and turn it into the AgentResult the caller already
 expects.
 
-### E651 — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
+### E651 [OPEN] — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
 
 **DEFERRED, trivial.** A doc-block in `Renderer.php` reasons about the executor by LINE NUMBER. Both
 numbers were already approximate and this round moved everything below the constructor, so they now
