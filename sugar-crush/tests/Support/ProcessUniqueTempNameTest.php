@@ -115,8 +115,10 @@ final class ProcessUniqueTempNameTest extends TestCase
      * their own tokens and a row for any of them would fail
      * {@see testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims()}.
      * The WorkflowEngine row is deliberately left standing — it is E324, a
-     * different entry with a different argument, and it is also what keeps this
-     * channel's real-tree walk honest.
+     * different entry with a different argument — and it keeps this channel's
+     * real-tree walk honest. A fixture row below now SHARES that duty, so
+     * fixing E324's five cannot blind the channel when their row goes: the
+     * StaticTempPathWalkControl precedent, applied to this scanner (E349).
      *
      * WHY THE ROSTER STILL EARNS ITS PLACE UNCHANGED IN FORM: the argument that
      * a site is safe is a claim about the tree, and the tree is still asked in
@@ -144,6 +146,24 @@ final class ProcessUniqueTempNameTest extends TestCase
                 . 'to makeResultDirPath() away from being untrue. That edit is out of this '
                 . 'lane (tests only) and is recorded as a deferred finding rather than done '
                 . 'here.',
+        ],
+        'tests/Support/Fixtures/EntropylessUniqidWalkControl.php' => [
+            'sites' => 1,
+            'why' =>
+                'THIS ROW IS NOT AN EXEMPTION. It is this scanner\'s real-tree control, and the '
+                . 'file exists for no other reason: nothing calls it, the class is abstract so '
+                . 'it cannot be instantiated and its one method is private, and the body spells '
+                . 'the exact offender shape — a prefix standing in front of a flagless call. '
+                . 'IT EXISTS SO THIS CHANNEL SURVIVES ITS OWN SUCCESS: the WorkflowEngine row '
+                . 'above was the only flagless site left in the tree, so fixing E324 would '
+                . 'otherwise close the channel\'s last real-tree positive, and rule 15 says an '
+                . 'absence census with no positive input is a dead instrument waiting to be '
+                . 'mistaken for a clean tree. The sibling census walked into exactly this and '
+                . 'answers it the same way — {@see STATIC_TEMP_PATH_INVENTORY}\'s row on '
+                . 'tests/Support/Fixtures/StaticTempPathWalkControl.php. DELETING OR "FIXING" '
+                . 'THE FIXTURE IS NOT A FIX FOR ANYTHING: the synthetic known-answer strings in '
+                . 'assertTheUniqidScannerIsAlive() prove the MATCHER works and say nothing about '
+                . 'whether filesInScope() still enumerates anything.',
         ],
     ];
 
