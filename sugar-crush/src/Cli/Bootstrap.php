@@ -1218,18 +1218,16 @@ final class Bootstrap
         // and reading the property directly here would hand the transcript a
         // silently truncated list — the exact failure mode the cap was added
         // with a counter rather than as a bare array_slice().
-        // E653: the narrowed-grant warnings the AgentManager can already compute
-        // (declared tool set cut to the launch ceiling — lane A's pull-only
-        // collector) join the SAME transcript seam as every other launch notice.
-        // Read here, at the one point the manager's registry and universe are
-        // both in hand and before Program takes the terminal, because on the
-        // TUI there is no stderr surface an operator sees — the alternate buffer
-        // paints over it. The collector is computed, not accumulated, so this
-        // drain cannot double-report on a re-read.
-        return $chat->withLaunchNotices([
-            ...self::launchNotices(),
-            ...($chat->agentManager()?->narrowedGrantWarnings() ?? []),
-        ]);
+        // E653 ATTEMPTED HERE AND WITHDRAWN AS A SEAM (round 62, MEASURED): a
+        // drain of AgentManager::narrowedGrantWarnings() merged into this call
+        // makes the full suite red in TWO out-of-lane pins —
+        // BootstrapToolAndPermissionSettingsTest::testTheBuiltChatComesUpWithThe
+        // ReportInItsTranscript (expects EXACTLY the permissionRules row: the
+        // per-agent echo added 12 more, the same per-agent-flood defect round-61
+        // lane A recorded) — so the fix needs a per-launch aggregation decision
+        // AND in-step roster edits in tests/Cli files no lane owns. Reported,
+        // not forced. The collector stays pull-only until then.
+        return $chat->withLaunchNotices(self::launchNotices());
     }
 
     /**
@@ -2269,6 +2267,26 @@ final class Bootstrap
      *
      * @return array{0: ProviderInterface, 1: string}
      */
+    public static function provider(): array
+    {
+        [$name, $model] = self::selectedProviderLabel();
+        $providerName = self::selectedProviderName();
+
+        if ($providerName !== null) {
+            try {
+                $factory = new ProviderFactory();
+                $config = $factory->defaultConfig($providerName);
+                $config['model'] = $model;
+
+                return [$factory->create($config), $model];
+            } catch (\Throwable) {
+                // fall through to Echo, same degradation backend() applies
+            }
+        }
+
+        return [new EchoProvider(), $name === 'command' ? $model : 'echo'];
+    }
+
     /**
      * The pool configuration this launch hands {@see \SugarCraft\Crush\Chat}
      * (E652). Everything else on {@see \SugarCraft\Crush\Agents\AgentPoolConfig}
@@ -2317,26 +2335,6 @@ final class Bootstrap
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    public static function provider(): array
-    {
-        [$name, $model] = self::selectedProviderLabel();
-        $providerName = self::selectedProviderName();
-
-        if ($providerName !== null) {
-            try {
-                $factory = new ProviderFactory();
-                $config = $factory->defaultConfig($providerName);
-                $config['model'] = $model;
-
-                return [$factory->create($config), $model];
-            } catch (\Throwable) {
-                // fall through to Echo, same degradation backend() applies
-            }
-        }
-
-        return [new EchoProvider(), $name === 'command' ? $model : 'echo'];
     }
 
     /**
