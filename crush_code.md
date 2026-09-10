@@ -4,6 +4,8 @@ Comparative research: opencode ([anomalyco/opencode](https://github.com/anomalyc
 
 This is a **second, independent pass** — a prior 12-agent research effort already produced [`crush_feat.md`](./crush_feat.md) (~2000-line dossier) and [`crush_feat_plan.md`](./crush_feat_plan.md) (~870-line plan). That work is done, and six PRs landed against it on 2026-08-10 (slash-command popup, command palette, themes, layout, session persistence, and a parallel-tool-routing fix — "R14b"). Every agent in this pass was briefed to treat `crush_feat.md` as a fast-start reference **only** — to verify every claim against current source rather than trust it, and to explicitly flag where it's now stale (fixed) or, just as important, where it's *not* actually fixed despite looking closed. Several findings below are exactly that: a claim from the first pass that turned out to still be broken, or broken in a new way, on re-verification. Those are **not** excluded just because a prior plan or PR claimed to address the area — if a sibling agent found it again, it's in this plan.
 
+> **Current resume point: §0-NOW-65 (round 63 closed 2026-09-10 — round 64 NEXT).**
+
 ## How to read this doc
 
 The **Executive Summary** and **Implementation Plan** below are the actionable part — cross-cutting findings deduplicated across all 13 angles, organized into PR-sized phases. The **Appendix** contains all 13 full research dossiers, kept close to verbatim (file:line citations, code sketches, live-repro transcripts) so implementation work can be done directly against them. Plan items cite their source angle(s) as `(§N)`.
@@ -1079,7 +1081,7 @@ because `grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6** �
 **Put a PHP version on every width claim in this plan.** The fix removes the version-conditional path
 rather than picking a branch, and `candy-core` now declares `ext-intl`.
 
-**Phase 9 has NOT started.** Still sequenced after the remaining functional queue and before the deferred
+**Phase 9 is now PARTIAL** — layer A landed in round 63 (masters `b814d5e3a`+`4d68ee678`: spawn tool children detached at the runCaptured choke point, fail-fast env; the residuals are E672–E674; layer B/C (PTY opt-in param) remains, absent-pinned — see §0-NOW-65). Still sequenced after the remaining functional queue and before the deferred
 security pass, decisions unchanged: layered **(A) detach always + (C) PTY opt-in**, the opt-in an
 **optional parameter and not a second tool**, and **no askpass** — the interactive PTY does not accept
 secrets at all.

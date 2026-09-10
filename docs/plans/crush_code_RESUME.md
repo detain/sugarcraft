@@ -4,11 +4,155 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-64 BELOW. It carries the standing order, the current floor, the round-63 lanes
-AA–FF (+1 reserve) and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
+🔴 **START AT §0-NOW-65 BELOW. It carries the standing order, the current floor, the round-64 lanes
+α–ε — and STEP 1, the E671 CI adoption the user explicitly asked for — and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
 kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
 (counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
 them. Rules are durable; figures are not.
+
+---
+
+## 0-NOW-65. ROUND 63 CLOSED (linked floor 11,438 / 175,211; README headline now census-pinned) — ROUND 64 NEXT; CURRENT
+
+**Written 2026-09-10 at `8c52b26e5`. §0-NOW-64 below is superseded history — but its machinery SURVIVES
+and stays in force: §3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip
+table), §4b (the `cp -a` lane recipe), rules 59–62, and the operating rules restated below. Only
+FIGURES and lane assignments are dead. Floors are MODE-DOMAIN: never quote a published figure into a
+linked brief or the other way, and always name cwd + mode beside every number.**
+
+🔴 **STEP 1 FOR THE NEW SESSION — E671: adopt `scripts/parallel-tests.sh` in `.github/workflows/ci.yml`.**
+This is the user's explicit ask — DO IT FIRST, as its own bundle, before any lane launches. K=8 on
+ubuntu-latest; the manifest comes from junit durations via `scripts/parallel-tests-make-shards.php`;
+include the conservation check (sharded totals vs the serial floor 11,438 / 175,211). The ctty runners
+are safe now — the lane-G size pins merged in round 62. Whether the serial job stays as a fallback or
+is replaced is the reviewer's call at review time. (α may also carry E684, the stale Bootstrap
+`Tests:263` totals at :407/:449.)
+
+### STANDING ORDER — run this plan to completion
+
+**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
+at a round boundary to ask whether to continue.** Concretely:
+
+1. Land **E671** first (above), then work §2's lanes **α, β, γ, δ, ε** as round 64. Close it (worklog
+   entry + a new `0-NOW-66` section + backlog ledger stamps + filemap regen), then **immediately choose
+   round 65** from what round 64 files, and keep going — rounds continue until no actionable backlog
+   remains and all plan §8b items land.
+2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
+   Not at the end of a session — at each close. If you are running out of context, doing that is
+   the last and highest-value thing you do.
+3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
+   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
+4. **Trust git, not reports.** Round 63 landed 44 picks behind blank and fabricated reports alike —
+   verify every claim against `git log` and the tree before bookkeeping; demand evidence-to-files
+   in every brief.
+
+**STOP AND ASK only for these:**
+
+- A decision of the **E639 class taken against the recommendation** (rounds 62–63 took the
+  recommendation every time; a non-recommended pick asks first).
+- Anything that would **remove** unfinished, dormant, unwired or unreachable code. Standing rule:
+  *fix it or wire it, never delete it.* Move and consolidate are fine.
+- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
+  `prompt_expand.md`.
+- A **blanket total-request timeout on an LLM call.** Completions may legitimately run tens of
+  minutes; `connect_timeout` is fine, a total cap is not. This is the E646 rule restated — contain
+  with the LEASE frame, never with a cap.
+
+#### Session operating rules (user directives — ALL TEN inherited VERBATIM from §0-NOW-64, restated with round-63 evidence)
+
+1. Concurrency ceiling: EIGHT agents/lanes — **KEEP-FILLED**: keep ~8 slots alive with disjoint-lane
+   builders / read-only probes rather than idling between phases. Lane sets must be file-DISJOINT
+   (ownership maps verbatim into briefs; lanes refuse out-of-lane edits and report seams) — round 63
+   proved the mechanism again: 10 lanes, 44 picks, **zero conflicts**.
+2. Route ALL implementation through the Task tool with subagent_type `coder` (bash-capable) — **reviews
+   too** (the reviewer-agent hard-fails via task). Read-only probes may use the explore agent via
+   delegate.
+3. Blank/truncated agent response → ALWAYS resume the same task_id and keep resuming until it answers.
+   Never diagnose before resuming, never change the prompt, never restart the work. May take 10+
+   resumes. (Held through round 63.)
+4. Agents sometimes fabricate GREEN reports. Land-verify every claim against `git log` / read-only
+   forensic probes — **probes over reports**. Fabrication signature: 3 identical reports → abandon the
+   task and re-cut a fresh one. Round-63 proof of the pattern: one agent looped an identical fake
+   GREEN ×5; the forensic probe + fresh finisher closed it.
+5. At every round close: update worklog + §0-NOW + backlog stamps as supervisor-owned writes, AND
+   regenerate `docs/plans/crush_code_filemap.md`; collision-check the filemap **before launching**
+   any lane set.
+6. **Census trio flips IN-STEP**: any change to a warn/write-site roster flips roster count + uppercase
+   anchor word + NUMBER_WORDS map in the same commit. Round-63 extension: the pinned-README system makes
+   the trio a **quartet** — suite-figure.json + README headline + artifact must move together (the
+   `8c52b26e5` census fix is that lesson re-arming; a lane's OWN guard caught the stale merge figure).
+7. **"Expose X on the result/event" ⇒ enumerate the implied DTO(s) in the brief touch-list** — field
+   plumbing silently drags sibling files otherwise.
+8. Evidence-driven in-scope files must be NAMED BEFORE building (briefs that say "measure, then
+   decide" produce seams the merge inherits).
+9. LSP diagnostics on `/home/sites/sugarcraft` are cross-lane noise — verify in the lane's own
+   sandbox. Agent-internal cwd can reset mid-script — briefs demand absolute paths.
+10. Round-64 lane ledger: α–ε (§2) + the E671 STEP-1 bundle + E681 supervisor decision. Sandboxes cut
+    FRESH per lane at `8c52b26e5` and **verify the vendor links in each** (`refresh-deps.php --status`;
+    the `*** WANTED PUBLISHED ***` banner on linked libs at pre-flight is cosmetic — linked 18/18 + 7/7
+    is the gate). Evidence to `/home/sites/crush-r61-artifacts/<lane>/` — the artifacts root KEEPS its
+    round-61 name across rounds (round61/62/63 trees live under it). Round-63 sandboxes are deleted
+    (11 removed, 26G freed at this close).
+
+### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-63 FINAL / NEW ANCHOR** | **11,438 / 175,211 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (9m24s) | **LINKED, cwd = repo root, at `8c52b26e5`** — artifacts `merged-r63.{txt,xml}` |
+| README headline | **Pinned** by `ReadmeSuiteFigureDriftTest` at 11,438 / 175,211 | the suite-figure.json + README + artifact triple moves only in-step with a fresh green run |
+| sharded same-tree | K=8 harness `scripts/parallel-tests.sh` + LPT manifest; last measured K=8 wall 74s @round-62 tree, sum conserved exact | CI adoption is **STEP 1 (E671)**; ctty region safe post lane-G pins |
+
+Published-domain figures stay in their own domain (§0-NOW-62 §4); pre-round figures are dead.
+
+### 2. ROUND 64 — FIVE FILE-DISJOINT LANES α–ε (≤10 bundles, concurrency 8; ownership verbatim into briefs; refuse out-of-lane edits, report seams)
+
+| lane | scope | ids | owns (excerpt) |
+|---|---|---|---|
+| **α — CI adoption** | **E671 (STEP 1, own bundle)**: `scripts/parallel-tests.sh` + junit-duration manifest into `.github/workflows/ci.yml`, K=8 ubuntu-latest, conservation check; + **E684** Bootstrap totals prose | E671, E684 | `.github/workflows/ci.yml`, `scripts/`, `sugar-crush/src/Cli/Bootstrap.php` (prose lines :407/:449 only — ⚠ collides with β: coordinate or serialize) |
+| **β — TaskTool live-feed** | **E675** — makes P8.13 real: hoist agentManager ~:1114, bind at the three `self::tools` sites, flip `src/Tui/Renderer.php:163-167` docblock, move corpus file → `Tools/BuiltIn/` SAME commit | E675 | `sugar-crush/src/Tools/TaskTool.php`, `sugar-crush/src/Cli/Bootstrap.php`, `sugar-crush/src/Tui/Renderer.php`, `sugar-crush/tests/Tools/` |
+| **γ — containment sweep** | **E672/E673/E674** — route the measured spawn roster through detach choke points per-file; design terminate-with-container for E673 as cancellation appears; GPG_TTY env mitigation; PTY tests wherever a ctty-free harness exists | E672, E673, E674 | `sugar-crush/src/Hooks/ScriptHook.php`, `src/Agents/Process*`, `src/MCP/StdioMcpServer.php`, `src/Backend/`, `src/Sessions/`, `src/LSP/`, `src/Providers/ClaudeCode*`, `src/Config/StatusLineCommand.php`, `src/Workflows/WorkflowEngine.php` |
+| **δ — residuals batch** | **E676** (grace-ladder families → ProcessReaper), **E677** (mount pumpStderr at the dispatch caller), **E678** (/mcp panel + `crush mcp --json` rows), **E679** (flockTimed shared helper), **E680** (Session.php timed lock); E687 only if bundled with a stderr-site change | E676–E680 | `src/MCP/`, `src/Support/ProcessReaper.php`, `src/Commands/`/`src/Tui/` (mcp panel), `src/Agents/TaskList.php`, `src/Agents/WorktreeManager.php`, `src/Session.php` |
+| **ε — prose-integrity** | **E685** (E633 slice-2, src/Tools 9 claims), **E686** (figure campaign — scope a bounded tranche, not all 79 files), remaining stale citations: `tests/Agents/` :1616/:1618/:1714, `src/` `File.php:NNN` prose, ~20 test dirs (E657/E658/E659/E662 rounds-61/62 carry) | E685, E686, E657, E658, E659, E662 | `sugar-crush/src/Tools/`, `sugar-crush/tests/`, guard generators in `tests/Config/` |
+
+**E681 = DECISION REQUIRED — the supervisor takes it at kickoff** (E4's premise drifted: rewind restores
+the draft, but saveCheckpoint-after-submit-clear makes the saved draft always `''`, pinned at
+`RewindCommandTest:189`). Recommendation on record: **fix the save ORDER** — restore the draft on
+rewind and pin both polarities; the never-remove rule stays intact.
+
+### 3. ROUND-65 CARRY LIST — record, do NOT schedule here
+
+mint `### E652+` headings in `crush_code_hardening_backlog.md` (debt; E650/E651 stamps lag there) ·
+**E653** operator drain half (withdrawn shape — re-derive) · **E682/E683** (JJ composite + keybinding
+seams — bundle with any TUI lane) · Phase-9 layer B/C (the interactive PTY opt-in param — design
+settled round 40, layer A landed round 63) · `crush_feat_plan.md`'s two human attestations unchanged.
+
+### 4. LEDGER AFTER ROUND 63
+
+665 → **681** entries: **29 CLOSED** (E2, E8, E28, E41, E136, E137, E156, E184, E189, E213, E215, E217,
+E262, E276, E295, E324, E349, E407, E483, E568, E654, E660, E661, E664, E665, E666, E667, E668, E669 —
+fix commits cited per row), **E440/E214/E261 → PARTIAL**, E43/E633 re-annotated (still PARTIAL),
+**Phase9-L1 CLOSED / Phase 9 → PARTIAL**, **E672–E687 minted (16)**. Actionable **144 → 131**.
+E671 stays OPEN — it is STEP 1 above.
+
+### RESTART INSTRUCTIONS — the new-session startup recipe
+
+1. Read this §0-NOW-65, the worklog tail (`## ROUND 63` in `docs/plans/crush_code_worklog.md`), and
+   `docs/plans/crush_code_filemap.md`.
+2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the `*** WANTED
+   PUBLISHED ***` banner is cosmetic); `git status` clean at or above tip `8c52b26e5`; if the tree is
+   dirty or any figure is doubted, run the floor suite FIRST (serial 9m24s @repo-root, or sharded K=8
+   via `scripts/parallel-tests.sh`).
+3. **E671 FIRST as its own bundle** (STEP 1) — brief, implement via task+coder, review, merged-suite,
+   commit.
+4. Then lanes β–γ–δ–ε per the filemap ownership sets (α's E684 rides the CI bundle or β by coordination
+   — Bootstrap.php is shared).
+5. Per-bundle loop: implement (task+coder) → review (task+coder, verdict-first) → fix round →
+   merged-suite green → commit (author `Joe Huss <[EMAIL]>`). Never push standing.
+6. Close the round: worklog entry + triage stamps + hardening-backlog stamps + a new `§0-NOW-66` +
+   filemap regen + `crush_code.md` pointer flip.
+7. Honor rules 1–10 throughout. STOP only at the four stop-and-ask items above. Run the plan to
+   completion — rounds continue until no actionable backlog remains and all plan §8b items land;
+   **do not stop at round boundaries to ask.**
 
 ---
 

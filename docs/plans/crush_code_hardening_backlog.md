@@ -40,7 +40,7 @@ sweep actually found:
 2. **An entry's own prose can be wrong about the tree.** E87 states that raising `MAX_ENTRIES` 8→20
    reds the ceiling guard; measured, 20 prices at 6,248 against an 8,192 cap and the real tipping
    point is 27. E154's "38 `error_log()` sites" is now 23. E1's suite figures are stale twice over.
-3. **The stamps have a shelf life.** They were derived at `3bf356bd6`. A round that lands code
+3. **The stamps have a shelf life.** They were derived at `3bf356bd6`; the round-62 and round-63 closeouts (2026-09-10, `1a6ef5f60` / `8c52b26e5`) re-stamped every moved id — but the `### E652+` headings were never minted in this file and E650/E651's one-word stamps lag the companion ledger; for ids ≥ E652 the ledger is the only authority. A round that lands code
    invalidates every stamp touching the files it moved — re-verify before scheduling, per rule 60.
 
 **Full evidence, confidence, and the per-entry notes live in
@@ -883,7 +883,7 @@ records them as **survivors**.
   number so the figure carries its provenance.
 - **Blocked on** Everything else landing. It is the natural final commit.
 
-### E2 [OPEN] — `ESC b` / `ESC f` type a stray letter instead of moving by word
+### E2 [CLOSED] — `ESC b` / `ESC f` type a stray letter instead of moving by word
 
 - **What** readline's Alt+B / Alt+F word motion, when a terminal sends it as
   `ESC b`/`ESC f`, decodes as `KeyMsg(Char "b", alt)` and is **typed** rather
@@ -1003,7 +1003,7 @@ records them as **survivors**.
   treatment and gates the same subsystem.
 - **Blocked on** Nothing to start; overlaps Phase 2's engine work.
 
-### E8 [OPEN] — tracker #85 (lane-D sense): "Stages completed" counts a synthetic pre-flight stage
+### E8 [CLOSED] — tracker #85 (lane-D sense): "Stages completed" counts a synthetic pre-flight stage
 
 - **What** The workflow result line prints `count($result->stageResults)`, and the
   pre-flight builds **one synthetic `StageResult`** whose own comment says
@@ -1703,7 +1703,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E28 [OPEN] — the sub-agent retry is only reachable through tests and embedders
+### E28 [CLOSED] — the sub-agent retry is only reachable through tests and embedders
 
 - **What** `AgentManager::executeSubAgent()` carries the same transient-failure
   retry as `Runtime`'s two seams, including a mid-stream rollback the `Runtime`
@@ -2230,7 +2230,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E41 [PARTIAL] — `McpClient` config-loading gaps: a lost config tail, and four silent broken shapes
+### E41 [CLOSED] — `McpClient` config-loading gaps: a lost config tail, and four silent broken shapes
 
 - **What** Three defects in `McpClient`'s config handling, all pre-existing and all
   newly reachable now that something constructs the client. (a) `startServers()`
@@ -2291,7 +2291,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E43 [OPEN] — code blocks and tables are reflowed because nothing can scroll them horizontally
+### E43 [PARTIAL] — code blocks and tables are reflowed because nothing can scroll them horizontally
 
 - **What** Bundle W1 makes the transcript honour the pane width, which it must —
   a row wider than the terminal breaks candy-core's one-logical-line-per-row model
@@ -6351,7 +6351,7 @@ of the merge step.
 (`Eb1`, `E144`) renumbered once at merge with the report text rewritten at the same time. E114 covers the
 shared scratchpad but not this.
 
-### E136 [OPEN] — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
+### E136 [CLOSED] — `Team::claimTask()` leaves a task claimed when the worktree it also promised throws
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: medium, correctness. **Measured, not inferred.**
 
@@ -6389,7 +6389,7 @@ makes `createWorktree()` throw (pre-creating the agent's worktree is enough — 
 `MultiAgentRefactorTest::testAThrowInsideAForkedCoderCannotRunPhpunitsTeardownInTheChild()`) and asserts
 the task is claimable again afterwards.
 
-### E137 [OPEN] — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
+### E137 [CLOSED] — every `flock()` on the agents path is unbounded, and one stuck holder wedges the lot
 
 **Recorded 2026-08-22 by round-45 lane b.** Severity: low today, latent. **Source-verified, not observed.**
 
@@ -6793,7 +6793,7 @@ channel 2 / channel 4 by `StderrEmitterCensusTest`, but never subjected to the r
 
 **Step.** Walk the four and decide, per shape, transcript seam versus stderr.
 
-### E156 [OPEN] — the 62 `sugarcrush:` lines a full run prints are a HARNESS property, not a `src/` one
+### E156 [CLOSED] — the 62 `sugarcrush:` lines a full run prints are a HARNESS property, not a `src/` one
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, noise. **Measured;
 the supervisor reproduced the 62 independently in round 44.**
@@ -7293,7 +7293,7 @@ runs. The fix is committed on its argument, not on a green test, and this entry 
 **What would close it.** Either the seam above plus a subclass that reports "cannot signal" and asserts
 the reaper returns promptly with the pid absent from `$killed`, or a CI job on a build without ext-posix.
 Neither is worth a round on its own; fold it into whichever round next touches the trait.
-### E184 [OPEN] — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
+### E184 [CLOSED] — `BootstrapLaunchNoticeRoutingTest` still retypes four formats that now have names
 
 **Recorded 2026-08-22 by round-46 lane c. Not done because that file is outside lane c's ownership this
 round.** Severity: low. **Observed, measured.**
@@ -7443,7 +7443,7 @@ mutation that reds NOTHING, say), say so qualitatively: "no test in that class r
 **Step.** No code change. When a doc-block cites a mutation verdict, cite the failing test names. Only the
 `Failures: 0` / "nothing red" case needs no name.
 
-### E189 [OPEN] — two guards whose failure message will misdescribe the failure
+### E189 [CLOSED] — two guards whose failure message will misdescribe the failure
 
 **Recorded 2026-08-22 by round-46 lane c's fix agent, from the review's NOTE 8 plus one found beside it.**
 Severity: low. **Observed.**
@@ -7885,7 +7885,7 @@ closed stdin so the suite cannot depend on its runner's fd 0. The second is the 
 seam for its input stream although `readStdinIfPiped($stream = \STDIN)` already takes one, so add the
 parameter and thread it. Files: `src/Cli/NonInteractive.php`, `tests/Cli/NonInteractive*Test.php`.
 
-### E213 [OPEN] — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
+### E213 [CLOSED] — two `Failures: <n>` citations were left unmeasured beside the totals that were removed
 
 **Recorded 2026-08-22 by round-47 lane c, finishing E188.** Severity: informational.
 
@@ -7897,7 +7897,7 @@ these two were not re-measured this round because each costs a mutation run.
 **Step.** Mutate both `mcpClient()` messages outside `'could not be fully started'`, record the failing
 test names, and replace the two counts.
 
-### E214 [OPEN] — the class-total guard covers two files, and widening it needs a decision first
+### E214 [PARTIAL] — the class-total guard covers two files, and widening it needs a decision first
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational.
 
@@ -7923,7 +7923,7 @@ file's own known-positive fixture is one (`measured at \`06126017\`: … Tests: 
 guard still refuses it, which the fixture currently depends on. (b) Widen the roster past the two files
 lane c owns to all of `tests/`, and expect the prose arm to find instances.
 
-### E215 [OPEN] — the doc-page sweep still cannot see two page shapes
+### E215 [CLOSED] — the doc-page sweep still cannot see two page shapes
 
 **Recorded 2026-08-22 by round-47 lane c, alongside E187.** Severity: informational. **Measured.**
 
@@ -7967,7 +7967,7 @@ best ninth of it, and has no unsweepable set at all.
 **Step.** None; recorded so the span-plus-threshold design is not retried. It is the eighth reviewer or
 backlog prescription measured against the tree and found not to do what it was prescribed for.
 
-### E217 [OPEN] — the sweep emits no wildcard between two adjacent conversions
+### E217 [CLOSED] — the sweep emits no wildcard between two adjacent conversions
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational. **Observed.**
 
@@ -9049,7 +9049,7 @@ back needs that, not just the CVE-shaped half.
 
 ---
 
-### E261 [OPEN] — `warnForkFailed()` reports the first fork failure per pool and never the count
+### E261 [PARTIAL] — `warnForkFailed()` reports the first fork failure per pool and never the count
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: cosmetic / observability. **Measured.** Lane b's file.
 
@@ -9066,7 +9066,7 @@ statistics.
 
 ---
 
-### E262 [OPEN] — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
+### E262 [CLOSED] — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: test coverage. **Measured.** Lane b's file.
 
@@ -9462,7 +9462,7 @@ holding silently the moment that scanner grows a mode.
 
 ---
 
-### E276 [OPEN] — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
+### E276 [CLOSED] — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: harness correctness. **Measured**, PHP 8.3.6.
 **Recorded as `KNOWN_GAPS` rows, not fixed** — none of the three files is in any lane's list.
@@ -10005,7 +10005,7 @@ from the guarded file.
 
 ---
 
-### E295 [OPEN] — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
+### E295 [CLOSED] — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: latent, live-code. **Out of lane —
 `src/Agents/AgentWorkerPool.php` is lane b's file this round.** Reported, not fixed.
@@ -10986,7 +10986,7 @@ rewrote. The assertion itself is correct and should stay; only its reason is sta
 
 **Step.** Rewrite the message in three-part form when that file is next touched. If option (a) ships, the
 assertion is inverted rather than deleted, with its reason.
-### E324 [OPEN] — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
+### E324 [CLOSED] — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: none today, one edit away from real. **Measured,
 PHP 8.3.6.** Guard shipped; the `src/` fix deliberately not done (tests-only lane).
@@ -11691,7 +11691,7 @@ the reason), or a typed field on `ToolResult` so a refusal is declared rather th
 
 ---
 
-### E349 [OPEN] — E324's five sites are still argument-less, and there is now a measured collision figure for the family
+### E349 [CLOSED] — E324's five sites are still argument-less, and there is now a measured collision figure for the family
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E329's four.** Severity: as E324. Not fixed —
 `src/Workflows/` was out of this lane's list and E324 is its own entry.
@@ -13632,7 +13632,7 @@ true and is why the helper takes a device path.
 
 ---
 
-### E407 [OPEN] — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
+### E407 [CLOSED] — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: medium (duplication, not a live defect).
 
@@ -14530,7 +14530,7 @@ forever too — but the loop is now the obvious place to accept the deadline the
 **STEP:** give `writeLine()` an optional `?float $deadline` and pass `start()`'s through; leave
 `callTool()`'s path deadline-less, matching `readLine()`.
 
-### E440 [OPEN] — stderr is only drained while the parent is inside an exchange
+### E440 [PARTIAL] — stderr is only drained while the parent is inside an exchange
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, no longer a deadlock.
 
@@ -15612,7 +15612,7 @@ test is one this test could have produced (name prefix / recorded ids), instead 
 listing is byte-identical. Do NOT resolve this by deleting the shared directory: three lanes run at once
 and a glob-delete there is the `/tmp` prohibition one directory over.
 
-### E483 [OPEN] — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
+### E483 [CLOSED] — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: instrument gap. **Measured.**
 
@@ -17790,7 +17790,7 @@ hanging test in CI is worse than a failing one. Its doc-block says so in as many
 properly needs a wall-clock budget around the child, which is `HangWatchdog`'s territory in `candy-pty`
 and does not exist in this package.
 
-### E568 [OPEN] — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
+### E568 [CLOSED] — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
 
 **Round 58, lane a. REPORTED, deliberately NOT fixed.** `src/Workflows/Workflow.php::mutate()` spells
 the field as `$stopOnFirstFailure ?? $this->stopOnFirstFailure`, so passing `false` is
