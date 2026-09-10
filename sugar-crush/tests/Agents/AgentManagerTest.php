@@ -3524,6 +3524,111 @@ final class AgentManagerTest extends TestCase
         $this->assertStringContainsString('Audit checklist body', (string) $sink->request->systemPrompt);
     }
 
+    // -------------------------------------------------------------------------
+    // Load-time narrowing notices (E642 remainder).
+    //
+    // resolveGrantedTools() decides a narrowed grant SURVIVES; this is the
+    // half that says so out loud at load, against the same two sets, so an
+    // operator is not left inferring `disabledTools` from an absent tool.
+    // Both polarities of E642's decision are asserted: disabled-but-real
+    // WARNs (and still runs), never-existing stays SILENT here (it has no
+    // safe load-time answer) and refuses at grant resolution.
+    // -------------------------------------------------------------------------
+
+    private function managerWithGrants(array $registry, ?array $universe): AgentManager
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(content: 'ok'));
+
+        return new AgentManager(
+            provider: $provider,
+            skillRegistry: new SkillRegistry(),
+            toolRegistry: $registry,
+            toolUniverse: $universe,
+        );
+    }
+
+    public function testARosterNameTheSessionNarrowedAwayWarnsAtLoadWithoutRefusing(): void
+    {
+        $manager = $this->managerWithGrants(
+            $this->fakeRegistry('Read', 'Grep'),
+            $this->fakeRegistry('Read', 'Grep', 'Bash'),
+        );
+        $manager->register($this->agentDeclaring('coder', ['Read', 'Bash']));
+
+        $warnings = $manager->narrowedGrantWarnings();
+        $this->assertCount(1, $warnings, 'exactly the narrowed name is announced, once');
+        $this->assertStringContainsString('"coder"', $warnings[0]);
+        $this->assertStringContainsString('"Bash"', $warnings[0]);
+        $this->assertStringContainsString('narrowed', $warnings[0]);
+        $this->assertStringNotContainsString('"Read"', $warnings[0], 'a still-offered tool is not a narrowing');
+
+        // WARN, NOT REFUSE — the same roster runs, narrowed to Read.
+        $subAgent = $manager->createSubAgent('coder', 'do it');
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+    }
+
+    public function testARosterNameTheCeilingNeverHadIsSilentAtLoadAndRefusedAtGrant(): void
+    {
+        $manager = $this->managerWithGrants(
+            $this->fakeRegistry('Read'),
+            $this->fakeRegistry('Read', 'Grep', 'Bash'),
+        );
+        $manager->register($this->agentDeclaring('broken', ['Reed']));
+
+        $this->assertSame(
+            [],
+            $manager->narrowedGrantWarnings(),
+            'a typo gets no launch notice — its moment is grant resolution',
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($manager->createSubAgent('broken', 'x')->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'E639\'s refuse path owns the never-existing polarity');
+        $this->assertStringContainsString('"Reed"', $caught->getMessage());
+    }
+
+    /**
+     * No ceiling, no claim: the collector compares two sets and holds its
+     * tongue when either is missing — the same escape-hatch discipline the
+     * constructor documents, applied to the reporting half.
+     */
+    public function testNarrowedGrantWarningsStayEmptyWithoutTheCeiling(): void
+    {
+        $manager = $this->managerWithGrants($this->fakeRegistry('Read'), null);
+        $manager->register($this->agentDeclaring('coder', ['Read', 'Bash']));
+
+        $this->assertSame([], $manager->narrowedGrantWarnings());
+    }
+
+    /**
+     * REPORTS, DOES NOT POLICE. A malformed declaration must not turn a
+     * launch notice into a startup crash — the strict refusal already
+     * exists at grant resolution — so this pass skips what it cannot parse
+     * instead of throwing on it.
+     */
+    public function testNarrowedGrantWarningsSkipMalformedDeclarationsWithoutThrowing(): void
+    {
+        $manager = $this->managerWithGrants(
+            $this->fakeRegistry('Read'),
+            $this->fakeRegistry('Read', 'Bash'),
+        );
+        $manager->register($this->agentDeclaring('wonky', ['Bash(git *', 'Bash']));
+
+        $warnings = $manager->narrowedGrantWarnings();
+
+        $this->assertCount(1, $warnings, 'the parseable narrowed name warns; the malformed one is left to the strict path');
+        $this->assertStringContainsString('"Bash"', $warnings[0]);
+    }
+
     private function createAgent(
         string $name = 'test-agent',
         string $prompt = 'Test prompt',

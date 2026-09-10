@@ -95,6 +95,114 @@ final class AgentManager
     }
 
     /**
+     * Launch-time notices for roster agents that name a tool THIS session
+     * narrowed away — the operator-facing half of the E639 decision, and the
+     * E642-remainder answer for user and foreign presets.
+     *
+     * A WARNING, never a refusal. `disabledTools: ["Bash"]` is a documented
+     * configuration and a preset naming `Bash` is not the operator's mistake;
+     * {@see resolveGrantedTools()} lets such a grant SURVIVE, narrowed, and
+     * this method is what keeps the surviving-narrowing from being silent —
+     * an operator watching a coder sub-agent decline to run commands has to
+     * be able to learn why without reading the matcher source.
+     *
+     * The THIRD polarity is deliberately absent: a name the UNFILTERED
+     * ceiling never had gets no warning here. It has no safe load-time
+     * answer — the preset may never be run in this session — and its honest
+     * moment is grant resolution, where {@see resolveGrantedTools()} refuses
+     * it with the agent and the name in hand.
+     *
+     * Reports, does not police: malformed and non-string declarations are
+     * SKIPPED, not thrown, because a launch notice must not become a new
+     * startup crash class — the strict parse every real consumer runs
+     * (`resolveGrantedTools()`, `refuseCallOutsideGrant()`) still refuses
+     * those at the enforceable moment. Non-Tool entries in the universe are
+     * likewise skipped here for the same reason; grant resolution throws on
+     * them. With no registry or no universe there is nothing to compare, and
+     * nothing is claimed: an empty list.
+     *
+     * Pull-based like {@see \SugarCraft\Crush\Cli\Bootstrap}'s other
+     * launch-notice collectors (refusedDirectories and friends): computed on
+     * demand from the CURRENT roster rather than accumulated at register(),
+     * so late registrations are reported and no stale notice outlives a
+     * re-registered agent.
+     *
+     * @return list<string>
+     */
+    public function narrowedGrantWarnings(): array
+    {
+        if ($this->toolRegistry === null || $this->toolUniverse === null) {
+            return [];
+        }
+
+        $registryNames = [];
+        foreach ($this->toolRegistry as $tool) {
+            if ($tool instanceof Tool) {
+                $registryNames[] = $tool->name();
+            }
+        }
+
+        $ceilingNames = [];
+        foreach ($this->toolUniverse as $tool) {
+            if ($tool instanceof Tool) {
+                $ceilingNames[] = $tool->name();
+            }
+        }
+
+        $notices = [];
+        foreach ($this->agents as $agent) {
+            foreach (['tools' => $agent->tools, 'disallowedTools' => $agent->disallowedTools] as $field => $declarations) {
+                foreach ($declarations as $declaration) {
+                    if (!is_string($declaration)
+                        || PermissionRule::patternRejectionReason($declaration) !== null
+                    ) {
+                        continue; // the grant-time strict path owns those
+                    }
+
+                    if ($this->isNarrowedBySession($declaration, $registryNames, $ceilingNames)) {
+                        $notices[] = sprintf(
+                            'agent "%s" declares "%s" in %s, which this session\'s allowedTools/disabledTools '
+                            . 'removed from the model-facing tool set — the grant survives, narrowed; if that '
+                            . 'is not the configuration you meant, check disabledTools/allowedTools.',
+                            $agent->name,
+                            $declaration,
+                            $field,
+                        );
+                    }
+                }
+            }
+        }
+
+        return $notices;
+    }
+
+    /**
+     * Does this parsed-clean declaration name something the SESSION removed,
+     * rather than something that matched or never existed?
+     *
+     * @param list<string> $registryNames
+     * @param list<string> $ceilingNames
+     */
+    private function isNarrowedBySession(string $declaration, array $registryNames, array $ceilingNames): bool
+    {
+        $namePattern = (new PermissionRule($declaration, PermissionAction::Allow))->toolNamePattern();
+
+        foreach ($registryNames as $name) {
+            if (PermissionRule::matchesToolName($namePattern, $name)) {
+                return false; // the session still offers it — not narrowed
+            }
+        }
+
+        foreach ($ceilingNames as $name) {
+            if (PermissionRule::matchesToolName($namePattern, $name)) {
+                return true; // the ceiling had it; policy removed it
+            }
+        }
+
+        return false; // never existed — the grant-time refusal owns this one
+    }
+
+    /**
      * Get an agent by name.
      */
     public function get(string $name): ?Agent
@@ -1016,7 +1124,9 @@ final class AgentManager
      * `allowedTools`/`disabledTools` — a narrowing the operator asked for, not
      * a misspelling the preset author should hear about as a crash. What comes
      * back is what still has no explanation anywhere, and the caller refuses
-     * exactly that set.
+     * exactly that set. The narrowing side of that split is not silent: the
+     * same boundary an operator learns about a disabled tool at —
+     * {@see narrowedGrantWarnings()} — reports it once at load.
      *
      * @param array<array-key, string> $unresolvedDeclarations validated
      *        declaration strings, keyed as {@see namePatterns()} keyed them

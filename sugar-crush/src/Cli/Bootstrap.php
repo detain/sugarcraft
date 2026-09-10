@@ -1566,6 +1566,19 @@ final class Bootstrap
             $manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)));
         }
 
+        // E642 remainder, load half: a roster agent that names a tool THIS
+        // session narrowed away keeps its grant, narrowed — and the operator
+        // is told, through the same transcript channel every other
+        // permission-config notice on this launch already uses. A warning
+        // and not a refusal because `disabledTools` is documented intent;
+        // a name the ceiling never had is NOT announced here — its honest
+        // moment is the grant-time refusal (both polarities pinned by
+        // AgentManagerTest::testARosterName...). Drained AFTER registration
+        // because the collector reads the current roster.
+        foreach ($manager->narrowedGrantWarnings() as $narrowedGrantWarning) {
+            self::warnPermissionConfigInTranscript($narrowedGrantWarning);
+        }
+
         return $manager;
     }
 
