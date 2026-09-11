@@ -95,9 +95,22 @@ final class TaskListTest extends TestCase
         $list->addTask($this->makeTask('task-release', 'team-a', 'Release me'));
 
         $lockPath = dirname($this->dbPath) . '/task_locks/' . hash('sha256', 'task-release') . '.lock';
+        // This test impersonates the production lock-holder, so it must satisfy
+        // the same precondition acquireTaskLock() does: it creates the lock
+        // DIRECTORY before its fopen (TaskList.php:698-701), while a raw
+        // fopen('.../task_locks/<hash>.lock') needs the directory to already
+        // exist. What historically kept line :99 green was the previous run's
+        // leftover <tmp>/task_locks — shared, lazily created, never guaranteed.
+        // systemd-tmpfiles-clean aged that leftover out on 2026-09-11 and the
+        // latent trap fired in the merged full-suite run. Creating it here makes
+        // the test hermetic against the shared directory either way.
+        $lockDir = \dirname($lockPath);
+        if (!\is_dir($lockDir)) {
+            @\mkdir($lockDir, 0755, true);
+        }
         $list->setLockWaitSecondsForTesting(0.05);
         $holder = fopen($lockPath, 'a');
-        $this->assertNotFalse($holder);
+        $this->assertNotFalse($holder, "the lock holder must be openable once {$lockDir} exists");
         $this->assertTrue(flock($holder, LOCK_EX));
 
         $failure = null;
