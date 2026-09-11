@@ -3955,6 +3955,8 @@ DOC;
     public function testTheEngineLoopTestsReadTheirDispatchConfigFromASandboxHomeNotTheDevelopers(): void
     {
         $realHome = getenv('HOME');
+        self::assertNotFalse($realHome, 'HOME was already unset before this test ran — upstream poison (a test that cleared HOME without restoring it, e.g. snapshotting HomeSandboxTrait after unsetting it), not this sandbox');
+        self::assertNotSame('', $realHome, 'HOME was already empty before this test ran — upstream poison, not this sandbox');
 
         $home = $this->pinDispatchConfigToASandboxHome();
 

@@ -134,12 +134,22 @@ final class NonInteractiveProviderFailureTest extends TestCase
         mkdir($this->tempDir . '/home', 0700, true);
         mkdir($this->tempDir . '/repo', 0700, true);
 
+        // Snapshot BEFORE clearing: the trait remembers the first HOME it sees
+        // and restores exactly that, so calling it only AFTER the loop below
+        // unsets HOME made tearDown restore the UNSET value — poisoning
+        // getenv('HOME') for every test that runs later in the process.
+        // BOTH spellings -- see HomeSandboxTrait.
+        $this->useHomeSandbox($this->tempDir . '/home');
+
         foreach (self::ENV_KEYS as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);
         }
 
-        // BOTH spellings -- see HomeSandboxTrait.
+        // Re-arm the redirect the loop just cleared (it lists HOME). The trait
+        // keeps the pre-clear snapshot from the call above, so the body runs
+        // against the sandbox temp home exactly as before and tearDown still
+        // puts the real HOME back last.
         $this->useHomeSandbox($this->tempDir . '/home');
     }
 

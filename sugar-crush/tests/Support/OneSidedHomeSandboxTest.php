@@ -179,6 +179,71 @@ final class OneSidedHomeSandboxTest extends TestCase
             self::classify('<?php if ($_SERVER[' . "'HOME'" . '] != $dir) { return; }'),
             'an inequality test against the superglobal was counted as a write to it',
         );
+
+        // THE SECOND ARM: ORDER, not just which spellings. classify() asks WHAT
+        // a file writes; killsHomeBeforeTraitSnapshot() asks WHAT A TRAIT USER's
+        // snapshot SAW. A file applying {@see HomeSandboxTrait} is exempt from
+        // the one-sided census -- but if its setUp clears env HOME (directly, or
+        // via a loop over a constant that lists 'HOME') BEFORE the trait's first
+        // call, the snapshot captures the cleared value, tearDown faithfully
+        // restores the cleared value, and every test that runs later in the
+        // process inherits an unset HOME -- with all of this file's own tests
+        // green. `Cli/NonInteractiveProviderFailureTest` sat in exactly that
+        // shape for an audit round; the red surfaced pages later in RuntimeTest
+        // as "the sandbox did not come down", a message blaming the victim
+        // (E691-seam forensics, round 66). Concatenated like every fixture
+        // above: a literal direct-kill shape on disk would be visible to
+        // classify() and land this guard in its own one-sided census. The
+        // loop-kill fixture needs no splitting -- putenv($key) never spells
+        // HOME next to the call.
+        $trait = 'use Home' . 'SandboxTrait;';
+        $snap = '$this->useHomeSandbox($dir);';
+        $kill = 'putenv' . '(' . "'HOME'" . ');';
+        $emptyKill = 'putenv' . '(' . "'HOME='" . ');';
+        $set = 'putenv' . '(' . "'HOME='" . ' . $dir);';
+
+        $this->assertTrue(
+            self::killsHomeBeforeTraitSnapshot(
+                '<?php class A { ' . $trait . " const KEYS = ['HOME', 'X']; function setUp(): void { foreach (self::KEYS as \$key) { \$this->saved[\$key] = getenv(\$key); putenv(\$key); } " . $snap . ' } }',
+            ),
+            'the demonstrated shape was missed: setUp clears HOME through a constant loop '
+                . "that lists 'HOME', and the trait snapshots the corpse",
+        );
+        $this->assertTrue(
+            self::killsHomeBeforeTraitSnapshot('<?php class A { ' . $trait . ' function setUp(): void { ' . $kill . ' ' . $snap . ' } }'),
+            'a direct unset-form kill before the snapshot was missed',
+        );
+        $this->assertTrue(
+            self::killsHomeBeforeTraitSnapshot('<?php class A { ' . $trait . ' function setUp(): void { ' . $emptyKill . ' ' . $snap . ' } }'),
+            'an empty-string kill before the snapshot was missed',
+        );
+
+        $this->assertFalse(
+            self::killsHomeBeforeTraitSnapshot('<?php class A { ' . $trait . ' function setUp(): void { ' . $kill . ' ' . $set . ' ' . $snap . ' } }'),
+            'a KILL that HOME is re-set after, before the snapshot, was flagged anyway - the '
+                . 'snapshot sees a live HOME and restores it, which is no poison',
+        );
+        $this->assertFalse(
+            self::killsHomeBeforeTraitSnapshot('<?php class A { ' . $trait . " const KEYS = ['HOME', 'X']; function setUp(): void { " . $snap . ' foreach (self::KEYS as $key) { $this->saved[$key] = getenv($key); putenv($key); } ' . $snap . ' } }'),
+            'the healed shape was flagged: snapshot first, clear after, re-arm once more - '
+                . 'exactly what NonInteractiveProviderFailureTest now does',
+        );
+        $this->assertFalse(
+            self::killsHomeBeforeTraitSnapshot('<?php class A { ' . $trait . " function setUp(): void { \$this->saved = []; " . $snap . ' } }'),
+            'a setUp that never touches HOME was flagged',
+        );
+        $this->assertFalse(
+            self::killsHomeBeforeTraitSnapshot(
+                '<?php class A { ' . $trait . " const KEYS = ['PATH', 'X']; function setUp(): void { foreach (self::KEYS as \$key) { putenv(\$key); } " . $snap . ' } }',
+            ),
+            'a constant loop that does NOT list HOME was flagged - clearing PATH before a '
+                . "snapshot is nobody's poison",
+        );
+        $this->assertFalse(
+            self::killsHomeBeforeTraitSnapshot('<?php class A { function setUp(): void { ' . $kill . ' $this->useHomeSandbox($dir); } }'),
+            'a file that does not apply the trait was flagged by an arm that guards only '
+                . 'trait users - the roster owns everyone else',
+        );
     }
 
     /**
@@ -302,20 +367,40 @@ final class OneSidedHomeSandboxTest extends TestCase
                 . 'being concatenated - note that the putenv regex spans a concatenated '
                 . 'argument, so the CALL has to be split too',
         );
+
+        $this->assertFalse(
+            self::killsHomeBeforeTraitSnapshot($self),
+            'this guard now matches its own ordering arm - same fixture-concatenation '
+                . 'hazard as above, one arm further down',
+        );
     }
 
     /**
-     * THE ROSTER MATCHES THE TREE EXACTLY, in both directions.
+     * THE ROSTER MATCHES THE TREE EXACTLY, in both directions -- AND SO DOES
+     * THE ORDERING CENSUS OVER THE TRAIT USERS.
      */
     public function testNoTestFileSandboxesOnlyHalfOfHome(): void
     {
         $oneSided = [];
+        $lateSnapshot = [];
         foreach (self::everyTestFile() as $relative => $path) {
             $source = (string) file_get_contents($path);
             if ($source === '') {
                 $this->fail($relative . ' could not be read, so this census is void');
             }
             if (self::usesHomeSandboxTrait($source)) {
+                // Exempt from the one-sided census, NOT from the ORDER census:
+                // a trait user that clears env HOME in setUp() before the
+                // trait's first snapshot captures the cleared value, restores
+                // the cleared value, and poisons every later test in the
+                // process with all of its own tests green. Its liveness is
+                // pinned by the known-positive fixtures in
+                // {@see testTheScannerSeesBothPolarities()} - an absence
+                // guard with no positive is decoration.
+                if (self::killsHomeBeforeTraitSnapshot($source)) {
+                    $lateSnapshot[] = $relative;
+                }
+
                 continue;
             }
             $found = self::classify($source);
@@ -357,6 +442,18 @@ final class OneSidedHomeSandboxTest extends TestCase
                 . 'than adding a row - and note that a COMMENT naming the trait is not a use of '
                 . 'it and will not excuse the file. IF A FILE DISAPPEARED: it was fixed - delete '
                 . 'its row, because this list is a migration backlog and may only shrink.',
+        );
+
+        $this->assertSame(
+            [],
+            $lateSnapshot,
+            'a test file applying HomeSandboxTrait clears env HOME in setUp() BEFORE the trait '
+                . 'first looks at it, so the trait captures the cleared value and its '
+                . 'restoreHomeSandbox() re-clears HOME at tearDown - poisoning getenv(\'HOME\') '
+                . 'for every later test in the process while all of this file\'s OWN tests stay '
+                . 'green. Install the sandbox first (the trait snapshots once and may then be '
+                . 're-armed after the clear - that is exactly what NonInteractiveProviderFailure'
+                . 'Test now does), or clear HOME only via keys the trait does not own.',
         );
     }
 
@@ -479,5 +576,115 @@ final class OneSidedHomeSandboxTest extends TestCase
         }
 
         return false;
+    }
+
+    /**
+     * The body of $source's setUp() (brace-matched), or null when it has none.
+     */
+    private static function setUpBody(string $source): ?string
+    {
+        if (preg_match('/function\s+setUp\s*\([^)]*\)[^{]*\{/', $source, $m, PREG_OFFSET_CAPTURE) !== 1) {
+            return null;
+        }
+
+        $start = $m[0][1] + strlen($m[0][0]);
+        $depth = 1;
+        $length = strlen($source);
+
+        for ($i = $start; $i < $length; $i++) {
+            if ($source[$i] === '{') {
+                $depth++;
+            } elseif ($source[$i] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return substr($source, $start, $i - $start);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Does the array constant $name of $source list the string key 'HOME'?
+     */
+    private static function constantListsHome(string $source, string $name): bool
+    {
+        if (preg_match('/const\s+' . preg_quote($name, '/') . '\s*=\s*\[(.*?)\];/s', $source, $m) !== 1) {
+            return false;
+        }
+
+        return preg_match('/[\'"]HOME[\'"]/', $m[1]) === 1;
+    }
+
+    /**
+     * Does $source -- a {@see HomeSandboxTrait} user -- clear env HOME in
+     * setUp() before the trait's first snapshot sees it?
+     *
+     * Last-write-wins: the trait captures whatever the FINAL pre-call write to
+     * `HOME` left, so a kill counts only when nothing re-set HOME between it
+     * and the first `useHomeSandbox(` call in the method. Kills recognised: the
+     * unset form, the empty-string form, and a `foreach` over a class constant
+     * that lists `'HOME'` clearing via the loop variable -- the exact shapes
+     * the E691-seam forensics found. Writes through loop variables of constants
+     * that do NOT list HOME, clears outside setUp(), and kills that a later
+     * set-before-snapshot undoes are all deliberately not flagged: a snapshot
+     * of a live HOME restores a live HOME.
+     */
+    private static function killsHomeBeforeTraitSnapshot(string $source): bool
+    {
+        if (!self::usesHomeSandboxTrait($source)) {
+            return false;
+        }
+
+        $body = self::setUpBody($source);
+        if ($body === null) {
+            return false;
+        }
+
+        $snapshot = strpos($body, 'useHomeSandbox(');
+        if ($snapshot === false) {
+            return false;
+        }
+
+        $before = substr($body, 0, $snapshot);
+        $lastKill = -1;
+        $lastSet = -1;
+
+        foreach ([
+            '/putenv\s*\(\s*[\'"]HOME[\'"]\s*\)/',
+            '/putenv\s*\(\s*[\'"]HOME=[\'"]\s*(?:\.\s*[\'"][\'"]\s*)?\)/',
+        ] as $killPattern) {
+            if (preg_match_all($killPattern, $before, $hits, PREG_OFFSET_CAPTURE) >= 1) {
+                foreach ($hits[0] as $hit) {
+                    $lastKill = max($lastKill, $hit[1]);
+                }
+            }
+        }
+        if (preg_match_all('/putenv\s*\(\s*[\'"]HOME=[\'"]\s*\.\s*\$/', $before, $hits, PREG_OFFSET_CAPTURE) >= 1) {
+            foreach ($hits[0] as $hit) {
+                $lastSet = max($lastSet, $hit[1]);
+            }
+        }
+
+        if (preg_match_all('/foreach\s*\(\s*(?:self|static)::([A-Z][A-Z0-9_]*)\s+as\s+\$(\w+)\s*\)\s*\{([^{}]*)\}/s', $before, $loops, PREG_SET_ORDER) >= 1) {
+            foreach ($loops as $loop) {
+                $offset = strpos($before, $loop[0]);
+                $variable = preg_quote($loop[2], '/');
+                $clears = preg_match('/putenv\s*\(\s*\$' . $variable . '\s*\)/', $loop[3]) === 1
+                    || preg_match('/putenv\s*\(\s*\$' . $variable . '\s*\.\s*[\'"]=[\'"]\s*\)/', $loop[3]) === 1
+                    || preg_match('/putenv\s*\(\s*"\$' . $variable . '="\s*\)/', $loop[3]) === 1;
+                $restores = preg_match('/putenv\s*\(\s*\$' . $variable . '\s*\.\s*[\'"]=[\'"]\s*\.\s*\$/', $loop[3]) === 1;
+
+                if ($clears && self::constantListsHome($source, $loop[1])) {
+                    $lastKill = max($lastKill, (int) $offset);
+                }
+                if ($restores) {
+                    $lastSet = max($lastSet, (int) $offset);
+                }
+            }
+        }
+
+        return $lastKill > $lastSet;
     }
 }
