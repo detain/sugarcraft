@@ -449,7 +449,12 @@ final class RulePathScopingWiringTest extends TestCase
 
         self::assertSame(
             2,
-            preg_match_all('/self::backendFor\([^;]*\$rulesState\);/s', $source),
+            // E675 in-step: the pattern used to end at `$rulesState);` because
+            // rulesState was the LAST argument; the Task feed appended
+            // taskManager/taskPool after it, so the anchor is now "rulesState
+            // somewhere inside the delegation's arg list" — the property under
+            // test (both tiers forward the session set) is unchanged.
+            preg_match_all('/self::backendFor\([^;]*\$rulesState[^;]*\);/s', $source),
             'both provider tiers of backend() delegate to backendFor() — the env-var tier and the persisted tier each have to forward the set, or a launch that names a provider silently loses the gate',
         );
 

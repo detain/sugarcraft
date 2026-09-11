@@ -193,7 +193,11 @@ final class BuiltInToolCorpusTest extends TestCase
         sort($expected);
 
         $this->assertSame($expected, BuiltInToolCorpus::classNames());
-        $this->assertCount(11, $flat, 'eleven wired built-in tools on this tree');
+        // E675 in-step census flip 11→12: TaskTool moved from exempted (`src/Tools/`)
+        // to wired (`src/Tools/BuiltIn/`); the exemption row is deleted in the same
+        // commit, so flat grows by one and dynamic shrinks by one while the
+        // assertSame above holds its total at thirteen.
+        $this->assertCount(12, $flat, 'twelve wired built-in tools on this tree');
 
         // And the recorded exemptions must genuinely live OUTSIDE the wired
         // directory: an entry that has moved into `src/Tools/BuiltIn/` would be

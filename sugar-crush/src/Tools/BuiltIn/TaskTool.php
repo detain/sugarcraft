@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\Tools;
+namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Crush\Tools\ToolResult;
 
 /**
  * The model-callable Task tool: delegate one bounded task to a sub-agent from

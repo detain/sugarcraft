@@ -158,17 +158,24 @@ use SugarCraft\Crush\Tui\Pane;
  * No open issue ever tracked it. Cited here so the next reader does not go
  * looking for #79 again.
  *
- * What is also still missing is the OTHER route: nothing in `src/` or `bin/`
- * calls `createSubAgent()`/`executeSubAgent()` directly, because there is no
- * Task/Agent tool — crush_code.md #45. Delegation from a model turn, as
- * opposed to from a workflow, remains unavailable.
+ * The OTHER route opened with E675: `Tools\BuiltIn\TaskTool`
+ * (crush_code.md P8.13) is the model-turn delegation path —
+ * `Bootstrap::chat()` binds the session's one `AgentManager` into the tool
+ * feed, a `Task` call dispatches a roster agent through
+ * `AgentManager::executeAll()`, and that reaches `createSubAgent()` for the
+ * batch member. What still has no `src/` caller is `executeSubAgent()`'s
+ * in-process streaming path — the tool rides the pool path, not it — so the
+ * old sentence "there is no Task/Agent tool; delegation from a model turn
+ * remains unavailable" (crush_code.md #45) is false on its first half and
+ * true only on the in-process pair.
  *
  * What that does NOT mean is a permanent agent strip on every launch:
  * `Bootstrap::agentRoster()` registers its agents INACTIVE, and
  * `AgentManager::active()` promotes one only while it has a live sub-agent.
  * A session where nothing has been delegated still renders `''` here — the
- * same blank frame as before, now for the right reason, and with no live
- * delegation path yet (see above) that is every session. `handleAgentsCommand()`
+ * same blank frame as before, now for the right reason; with the Task feed
+ * live, a blank frame means "nothing delegated yet", no longer "delegation
+ * is impossible". `handleAgentsCommand()`
  * keeps its "not configured" degradation for embedders that construct a
  * `Chat` without a manager.
  *

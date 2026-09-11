@@ -7,11 +7,14 @@ namespace SugarCraft\Crush\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\BuiltIn\Edit;
@@ -194,12 +197,12 @@ final class BinSugarcrushWiringTest extends TestCase
             // Still a literal, and deliberately: this asserts the WIRE NAMES the
             // provider schema advertises, which the class names do not determine
             // (`SkillTool` announces itself as `Skill`) and which the model has
-            // learned. `doctor` is lower-case where the other ten are TitleCase —
+            // learned. `doctor` is lower-case where the other eleven are TitleCase —
             // asserted as it actually is rather than as it ought to be, since
             // renaming a tool the model already knows is not this test's business.
             // A NEW tool fails the scanned assertion above before it reaches here,
             // so this list cannot silently go stale.
-            ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
+            ['Bash', 'Edit', 'Glob', 'Grep', 'Lsp', 'Read', 'Skill', 'Task', 'WebFetch', 'WebSearch', 'Write', 'doctor'],
             $names,
         );
 
@@ -1177,7 +1180,12 @@ final class BinSugarcrushWiringTest extends TestCase
     private function toolsByClass(): array
     {
         $byClass = [];
-        foreach (Bootstrap::tools($this->tempDir . '/repo') as $tool) {
+        // E675: THE PRODUCTION SHAPE passes a manager — chat() always has one —
+        // so the scanned set this helper feeds is the launch set, Task included.
+        foreach (Bootstrap::tools($this->tempDir . '/repo', taskManager: new AgentManager(
+            $this->createMock(ProviderInterface::class),
+            new SkillRegistry(),
+        )) as $tool) {
             $byClass[$tool::class] = $tool;
         }
 

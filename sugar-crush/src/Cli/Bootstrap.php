@@ -60,6 +60,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\LspTool;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\SkillTool;
+use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
 use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Tools\BuiltIn\Write;
@@ -404,8 +405,10 @@ final class Bootstrap
      * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest} asserts
      * `'could not be fully started'`, which is a clause. MEASURED on PHP 8.3.6:
      * rewording `'; continuing without it.'` — a span no documented fragment
-     * covers — takes that file to `Tests: 263, Assertions: 1157, Failures: 3`.
-     * It pins THREE separate clauses of this line, because the point of that
+     * covers — takes that file to `Tests: 29, Assertions: 128, Failures: 3`.
+     * (E684 RE-MEASURED LIVE on this tree; E164's original `263 / 1157 / 3`
+     * had totals that drifted with the file while the failure count — the
+     * number the sentence actually leans on — did not.) It pins THREE separate clauses of this line, because the point of that
      * file's `testOnAnUnsetErrorLogBoxBothLinesReachStderrAndSayDifferentThings()`
      * is that this line and
      * {@see MCP_PARTIAL_START_NOTICE_FORMAT} must not collapse into each other.
@@ -446,7 +449,9 @@ final class Bootstrap
      * (E164). MEASURED: rewording `'this session has only the tools that did
      * load'` gives
      * {@see \SugarCraft\Crush\Tests\Integration\McpToolWiringTest}
-     * `Tests: 263, Assertions: 1164, Failures: 2`. That file's doc-block records
+     * `Tests: 29, Assertions: 135, Failures: 2` — the same E684 re-measurement
+     * as its sibling above: E164 recorded `263 / 1164 / 2`, and again only the
+     * totals moved. That file's doc-block records
      * a round where one of these two wordings was nested inside the other and
      * the guard went red; the shared clause `could not be fully started` is
      * deliberate, and what must differ is everything around it.
@@ -1047,7 +1052,17 @@ final class Bootstrap
         // tolerantly by design. So the junk is filtered HERE, up front, rather
         // than caught around it.
         $rulesState = RulesState::new(self::rulePacksToDisable($userConfig['disabledRules'] ?? null));
-        $backend = self::backend($root, $skills, $permissionGate, rulesState: $rulesState);
+
+        // E675: the manager and the pool config are HOISTED above the backend
+        // so ONE AgentManager instance serves both the tool feed (Task's
+        // delegation target) and the Chat (every `/agents` surface). Building
+        // a second one for the tool list would fork the roster: `@foo` from a
+        // model turn and `@foo` from the TUI would answer different questions.
+        $agentManager = self::agentManager($root, $skills);
+        $agentPoolConfig = self::agentPoolConfig();
+        $taskPool = self::taskWorkerPool($agentPoolConfig);
+
+        $backend = self::backend($root, $skills, $permissionGate, rulesState: $rulesState, taskManager: $agentManager, taskPool: $taskPool);
         if ($backend instanceof EngineBackend) {
             $backend = $backend->withRulesState($rulesState);
         }
@@ -1111,14 +1126,14 @@ final class Bootstrap
             // TeamManager/worktree stack downstream of them were built,
             // tested, and unreachable — `Chat::handleAgentsCommand()` answered
             // "Agent manager not configured" on every real run.
-            agentManager: self::agentManager($root, $skills),
+            agentManager: $agentManager,
             // E652: closes the E649 seam — the session's serializable provider
             // spec rides into Chat's fallback pool so FORKED sub-agent workers
             // consult the same configured provider the hosted chat uses. When no
             // provider is derivable the spec stays null and workers FAIL CLOSED
             // naming the absence; this wiring never substitutes `echo` for an
             // unconfigured production session.
-            agentPoolConfig: self::agentPoolConfig(),
+            agentPoolConfig: $agentPoolConfig,
             // crush_code.md Phase 2 item 3. `/workflow run|pause|resume|status|
             // list` answered "Workflow engine not configured" on every real run
             // because this argument was never passed — the 2,200-line
@@ -2240,6 +2255,11 @@ final class Bootstrap
             $skills,
             rgAvailable: self::capabilityPresent('rg'),
             fdAvailable: self::capabilityPresent('fd'),
+            // E675: the SAME manager the Chat runs on (accessor, not a fresh
+            // build — see chat()'s hoist note); the pool is a sibling built
+            // from the Chat's own config because Chat keeps its pool local.
+            taskManager: $chat->agentManager(),
+            taskPool: ($chatConfig = $chat->agentPoolConfig()) !== null ? self::taskWorkerPool($chatConfig) : null,
         );
 
         // THE DELTA, never the whole list. {@see Chat::withLaunchNotices()}
@@ -2464,7 +2484,7 @@ final class Bootstrap
      *        defaulted: a caller that holds no set — {@see NonInteractive}, the `-p`
      *        path — changes nothing, and the splice it builds never had a set either.
      */
-    public static function backend(?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false, ?RulesState $rulesState = null): Backend
+    public static function backend(?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false, ?RulesState $rulesState = null, ?AgentManager $taskManager = null, ?\SugarCraft\Crush\Agents\AgentWorkerPool $taskPool = null): Backend
     {
         // Same first-line refusal {@see chat()} makes, for the same ordering
         // reason: this method is the `-p` path's entry point, where nothing
@@ -2487,7 +2507,7 @@ final class Bootstrap
         $providerType = getenv('SUGARCRUSH_PROVIDER');
         if ($providerType !== false && $providerType !== '') {
             try {
-                return self::backendFor($providerType, $root, $skills, $gate, $consolePermissionPrompt, $rulesState);
+                return self::backendFor($providerType, $root, $skills, $gate, $consolePermissionPrompt, $rulesState, taskManager: $taskManager, taskPool: $taskPool);
             } catch (PermissionConfigException $e) {
                 // Not a provider problem, and not survivable by degrading:
                 // the echo fallback below builds the very same gate and would
@@ -2535,7 +2555,7 @@ final class Bootstrap
         $persisted = self::readUserConfig()['provider'] ?? null;
         if (is_string($persisted) && $persisted !== '') {
             try {
-                return self::backendFor($persisted, $root, $skills, $gate, $consolePermissionPrompt, $rulesState);
+                return self::backendFor($persisted, $root, $skills, $gate, $consolePermissionPrompt, $rulesState, taskManager: $taskManager, taskPool: $taskPool);
             } catch (PermissionConfigException $e) {
                 // See the env-var branch above: this arm exists to keep the
                 // `\Throwable` degrade-to-echo arm below from catching it.
@@ -2563,6 +2583,8 @@ final class Bootstrap
                 rgAvailable: self::capabilityPresent('rg'),
                 fdAvailable: self::capabilityPresent('fd'),
                 rulesState: $rulesState,
+                taskManager: $taskManager,
+                taskPool: $taskPool,
             ))
             ->withHooks(self::hooks(null, $root))
             // `??=`, not `??`, and INSIDE the chain rather than hoisted above
@@ -2621,7 +2643,7 @@ final class Bootstrap
      *
      * @throws \Throwable
      */
-    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false, ?RulesState $rulesState = null): Backend
+    public static function backendFor(string $providerName, ?string $root = null, ?SkillRegistry $skills = null, ?PermissionGate $gate = null, bool $consolePermissionPrompt = false, ?RulesState $rulesState = null, ?AgentManager $taskManager = null, ?\SugarCraft\Crush\Agents\AgentWorkerPool $taskPool = null): Backend
     {
         // See backend(): whichever of the two a run enters through, the sweep
         // happens once, and the config directory is named before any store or
@@ -2656,6 +2678,8 @@ final class Bootstrap
                 rgAvailable: self::capabilityPresent('rg'),
                 fdAvailable: self::capabilityPresent('fd'),
                 rulesState: $rulesState,
+                taskManager: $taskManager,
+                taskPool: $taskPool,
             ))
             ->withHooks(self::hooks(null, $root))
             // See backend(): `??=` in place, so the approver below can read the
@@ -5784,6 +5808,8 @@ final class Bootstrap
         bool $rgAvailable = false,
         bool $fdAvailable = false,
         ?RulesState $rulesState = null,
+        ?AgentManager $taskManager = null,
+        ?\SugarCraft\Crush\Agents\AgentWorkerPool $taskPool = null,
     ): array {
         // FILTERED HERE, NOT AT THE CALL SITES, and that is the load-bearing
         // part rather than tidiness: `withTools(self::tools(...))` appears
@@ -5800,7 +5826,7 @@ final class Bootstrap
         // downstream of this return receives an already-filtered set, including
         // `mcpTools()`'s appended bridges, which is what makes
         // `disabledTools: ["mcp__git__*"]` mean anything.
-        return self::filterToolSet(self::unfilteredTools(
+        $tools = self::filterToolSet(self::unfilteredTools(
             $root,
             $loader,
             $skills,
@@ -5809,6 +5835,53 @@ final class Bootstrap
             $fdAvailable,
             $rulesState,
         ));
+
+        // THE TASK FEED (E675). Appended AFTER the filter, on purpose: the
+        // gate on this tool is not a config key but the CALLER holding an
+        // AgentManager at all — a feed built without one (a bare unit-test
+        // harness, an embedder with no agents configured) ships no Task, and
+        // fail-closed is the wrong shape for a tool that cannot function.
+        // The instance gets the SAME manager the Chat runs on (threaded in
+        // from `chat()`), never a fresh one: two managers would mean two
+        // sub-agent rosters and two sets of grants, the split-state bug this
+        // seam exists to prevent. What the sub-agent may then do is bounded
+        // by the preset's grants inside `executeAll`, not by this list.
+        if ($taskManager !== null) {
+            $tools[] = new TaskTool($taskManager, $taskPool);
+        }
+
+        return $tools;
+    }
+
+    /**
+     * The governed worker pool for the Task feed (E675), built from the same
+     * {@see agentPoolConfig()} the Chat hands its workflow lanes so a `Task`
+     * dispatch honours the session's `maxConcurrent` / `stopOnFirstFailure` /
+     * worker-provider knobs.
+     *
+     * WHY THIS MIRRORS `Chat::executeAgents()` RATHER THAN REUSING IT: Chat
+     * owns that wiring and constructs the pool inline per fan-out; Bootstrap
+     * has no accessor to a live pool (Chat's is a local), so the feed builds
+     * a sibling from the same config. The duplication is deliberate and its
+     * drift risk is E675's documented seam — if Chat's inline shape changes
+     * (executor ctor args, clamp order), this method must follow in-step.
+     *
+     * @param \SugarCraft\Crush\Agents\AgentPoolConfig $config the session's pool config
+     *
+     * @return \SugarCraft\Crush\Agents\AgentWorkerPool the governed, stop-on-first-failure pool
+     */
+    private static function taskWorkerPool(\SugarCraft\Crush\Agents\AgentPoolConfig $config): \SugarCraft\Crush\Agents\AgentWorkerPool
+    {
+        $executor = new \SugarCraft\Crush\Agents\ProcessExecutor(
+            timeoutSeconds: $config->defaultTimeoutSeconds,
+            workerProvider: $config->workerProvider,
+        );
+
+        return (new \SugarCraft\Crush\Agents\AgentWorkerPool(
+            maxConcurrent: $config->maxConcurrent,
+            executor: $executor,
+            workerProvider: $config->workerProvider,
+        ))->withStopOnFirstFailure($config->stopOnFirstFailure);
     }
 
     /**

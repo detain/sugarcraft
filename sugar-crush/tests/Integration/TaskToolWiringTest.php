@@ -13,6 +13,7 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
@@ -25,21 +26,24 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
-use SugarCraft\Crush\Tools\TaskTool;
+use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
- * THE REACHABILITY EVIDENCE for {@see TaskTool}'s exemption from
- * `Bootstrap::tools()`' literal array
- * ({@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus::DYNAMIC_TOOL_CLASSES}):
- * a real model tool-call for `Task`, driven through a real
- * {@see Runtime}, reaches a real {@see AgentManager::executeAll()} and the
- * sub-agent's answer comes back as the tool result the model reads — and the
- * permission gate refuses the IDENTICAL call under Plan mode without the
- * executor ever running. Same shape as
- * {@see McpToolWiringTest} for the bridge; the exemption rule is a pair, not a
- * one-off.
+ * THE REACHABILITY EVIDENCE for `TaskTool`: a real model tool-call for `Task`,
+ * driven through a real {@see Runtime}, reaches a real
+ * {@see AgentManager::executeAll()} and the sub-agent's answer comes back as
+ * the tool result the model reads — and the permission gate refuses the
+ * IDENTICAL call under Plan mode without the executor ever running. Same shape
+ * as {@see McpToolWiringTest} for the bridge.
+ *
+ * IT USED TO BE THE EXEMPTION EVIDENCE, and the exemption is gone (E675): the
+ * tool was built and registered but never FED a manager in production, so
+ * `Bootstrap::tools()` could not name it as a literal and the corpus exempted
+ * it. The launch feed now builds the bound instance, which
+ * {@see testTheProductionLaunchFeedsTaskBoundToTheChatOwnManager()} pins as
+ * LIVE wiring — the registry shape alone was never the claim.
  *
  * WHY THE EXECUTOR IS INJECTED (a recording fake, not a forked worker): an
  * injected executor puts the pool on its synchronous in-parent dispatch, which
@@ -74,6 +78,43 @@ final class TaskToolWiringTest extends TestCase
         @rmdir($this->root);
         @rmdir($this->tempDir . '/home');
         @rmdir($this->tempDir);
+    }
+
+    /**
+     * E675's LIVE-FEED pin, not a registry shape: drive the real launch path
+     * (`Bootstrap::chat()`) in a sandboxed home and assert the backend that
+     * comes back actually carries a `Task` tool, bound to THE SAME
+     * `AgentManager` instance the Chat itself runs on. Break either half of
+     * the seam — drop the `taskManager:` from chat()'s backend feed, or build
+     * a second manager inside tools() — and this test reddens, which is the
+     * mutation the exemption-era tests structurally could not see: they built
+     * the bound tool BY HAND and so proved only that a hand-bound tool works.
+     */
+    public function testTheProductionLaunchFeedsTaskBoundToTheChatOwnManager(): void
+    {
+        $chat = Bootstrap::chat($this->root);
+        $backend = $chat->backend();
+
+        $feed = (new \ReflectionProperty($backend, 'tools'))->getValue($backend);
+
+        $taskTools = array_values(array_filter(
+            $feed,
+            static fn (object $tool): bool => $tool instanceof TaskTool,
+        ));
+        $this->assertCount(
+            1,
+            $taskTools,
+            'a production launch must ship exactly one bound Task tool — zero is the E675 bug, two is a split feed',
+        );
+
+        $boundManager = (new \ReflectionProperty(TaskTool::class, 'agentManager'))->getValue($taskTools[0]);
+        $this->assertSame(
+            $chat->agentManager(),
+            $boundManager,
+            'Task must delegate to the SAME AgentManager the Chat runs on; a second instance means the model turn '
+            . 'and the /agents panel answer from different rosters.',
+        );
+        self::assertNotNull($boundManager, 'the fed Task must not carry a null manager — that is the inert shape E675 removed');
     }
 
     public function testAModelTaskCallReachesTheAgentManagerAndTheSubAgentAnswerComesBack(): void
