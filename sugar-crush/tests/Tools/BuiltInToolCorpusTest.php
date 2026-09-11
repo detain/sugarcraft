@@ -272,7 +272,7 @@ final class BuiltInToolCorpusTest extends TestCase
      * CLAIM IS BOUNDED RATHER THAN ABSOLUTE, and an earlier version of this
      * sentence said it was "pinned in both polarities" when nothing in the tree
      * pinned either one. One assertion here is still a function of the count,
-     * indirectly: {@see testRepoMapBlockNoLongerRestatesTheSourceCensus()}
+     * indirectly: {@see testNoGuardedDocumentRestatesTheSourceCensus()}
      * reports a derived figure appearing as a bare integer in `RepoMapBlock`,
      * so a tree that GROWS INTO an unrelated literal in that file reds it. That
      * distance is the bound, it is asserted by
@@ -643,7 +643,7 @@ final class BuiltInToolCorpusTest extends TestCase
      * It replaces two `assertSame()` calls that spelled the declaration count
      * and the file count as literals — the same two numbers written down
      * instead of related. THE DIGITS ARE ELIDED HERE, and deliberately: they
-     * are exactly what {@see testRepoMapBlockNoLongerRestatesTheSourceCensus()}
+     * are exactly what {@see testNoGuardedDocumentRestatesTheSourceCensus()}
      * forbids `RepoMapBlock` to carry, and this file cannot ask a production
      * doc-block to stop spelling a census it spells itself nine lines from the
      * fixture it builds by concatenation to avoid spelling it (rules 17/26).
@@ -966,13 +966,18 @@ final class BuiltInToolCorpusTest extends TestCase
      * rejected; widening the DOMAIN costs nothing, because neither figure
      * appears in the scanner's remaining prose and the headroom test beside
      * this one re-measures the distance over the same list). WHY THE NAME
-     * PREDATES THE DOMAIN: renaming this method would edit
-     * `tests/Context/RepoMapBlockTest.php`, whose doc-block cites it by name
-     * under the citation-drift guard — a seam reported to the orchestrator,
-     * not an edit for this lane. This paragraph is the authoritative
-     * statement of scope; the name is the historical one.
+     * PREDATED THE DOMAIN - AND NO LONGER DOES: renaming this method was
+     * once deferred because it would edit `tests/Context/RepoMapBlockTest.php`,
+     * whose doc-block cites it by name under the citation-drift guard — a
+     * seam reported to the orchestrator, not an edit for that lane. Finding
+     * E659 closed the seam: this lane owns both files, the rename landed,
+     * and every citation rippled with it (the two FQN cites, the headroom
+     * message's literal, and this file's own `{@see}`s). The name now says
+     * the domain: NO guarded document - whatever {@see restatementGuardDomain()}
+     * lists tomorrow - restates the census, and this paragraph keeps the
+     * history of what the older name meant.
      */
-    public function testRepoMapBlockNoLongerRestatesTheSourceCensus(): void
+    public function testNoGuardedDocumentRestatesTheSourceCensus(): void
     {
         [$files, $declarations] = $this->declarationTotals($this->srcDir);
 
@@ -1013,7 +1018,7 @@ final class BuiltInToolCorpusTest extends TestCase
     /**
      * THE GUARDED DOMAIN: every document whose prose the restatement guard
      * reads, keyed by the name it reports under. ONE list, shared by
-     * {@see testRepoMapBlockNoLongerRestatesTheSourceCensus()} and by
+     * {@see testNoGuardedDocumentRestatesTheSourceCensus()} and by
      * {@see testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()} — the
      * headroom is only an honest bound on the guard if it is measured over
      * exactly the set the guard searches. A new guarded document joins HERE.
@@ -1089,7 +1094,7 @@ final class BuiltInToolCorpusTest extends TestCase
                 $nearest - $figure,
                 "a guarded document carries the integer {$nearest}, which is within "
                 . self::RESTATEMENT_HEADROOM . " of src/'s {$label} ({$figure}) and above it. "
-                . 'testRepoMapBlockNoLongerRestatesTheSourceCensus() matches a standalone integer '
+                . 'testNoGuardedDocumentRestatesTheSourceCensus() matches a standalone integer '
                 . 'ANYWHERE in each document it guards, so the tree growing into that literal will '
                 . 'be reported as '
                 . 'a restatement it is not. ' . self::RESTATEMENT_RESOLUTION . ' A figure that must '

@@ -338,7 +338,7 @@ final class GlobDialectDifferentialTest extends TestCase
             (int) str_replace(',', '', $docProduct),
             sprintf(
                 'the PathGlob doc-block pair-count has gone stale vs the derived corpus - '
-                . 're-measure and update PathGlob.php:51, which quotes %s pairs against the %d '
+                . 're-measure and update the class doc-block census in src/Util/PathGlob.php, which quotes %s pairs against the %d '
                 . 'the corpora actually derive (%d patterns x %d paths); a literal here would '
                 . 'only move the rot rather than end it',
                 $docProduct,

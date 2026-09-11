@@ -936,7 +936,7 @@ final class VertexProviderTest extends TestCase
         //
         // The method assertion is not decoration: completeStream() reaches
         // this body only by delegating to complete() for a non-Anthropic model
-        // (VertexProvider.php:290-298). Without it, a regression that stopped
+        // (the delegation arm of `VertexProvider::completeStream()`). Without it, a regression that stopped
         // delegating would leave $captured untouched from a seam that was
         // never called, and an assertArrayNotHasKey on a body nobody built
         // would pass for the wrong reason.
@@ -1013,7 +1013,7 @@ final class VertexProviderTest extends TestCase
         // produced two `role: user` turns carrying the instruction text.
         //
         // The Anthropic arm rejects exactly this input with a named
-        // InvalidArgumentException (VertexProvider.php:435-446), pinned by
+        // InvalidArgumentException (the guard at the top of `anthropicBody()`), pinned by
         // {@see testCompleteRejectsASystemOnlyTranscriptLocally()}. This arm
         // does not, matching the no-guard position
         // {@see testGoogleModelsStillAcceptAnEmptyTranscript()} already

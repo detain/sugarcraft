@@ -639,8 +639,8 @@ JSON;
     {
         // LIVE-PROBE payload by family: CustomProvider fronts any
         // OpenAI-compatible server - frequently, its own inline extra_body
-        // reasoning-flag comment (src/Providers/CustomProvider.php:141-142,
-        // inside complete()) says, exactly the sglang deployment probed
+        // reasoning-flag comment (`CustomProvider::complete()`'s
+        // `separate_reasoning` note) says, exactly the sglang deployment probed
         // above - so the probed body is the real-shaped fixture for it.
         $document = json_decode(self::SGLANG_PROBE_COLD, true, flags: JSON_THROW_ON_ERROR);
         $provider = $this->p4s2CustomRespondingWith(self::SGLANG_PROBE_COLD);
@@ -677,7 +677,7 @@ JSON;
     public function testP4S2CustomStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
     {
         // review-7 finding 1 (MAJOR): the branch's own parseUsage() docblock
-        // (src/Providers/CustomProvider.php:415-419) claims - verbatim in kind
+        // (`CustomProvider::parseUsage()`) claims - verbatim in kind
         // to the sglang claim fix-6 falsified - that "the `choices[0].delta`
         // gate in {@see completeStream()} drops the zero-choice terminal chunk
         // such a request would produce". Until this test that claim was
@@ -1410,7 +1410,7 @@ JSON;
      * numbers out of non-numeric wire values - measured: 'abc' counted 0, a
      * nested array counted 1. The helper's own docblock limits counting to
      * numerics, and Usage's refuse-what-you-cannot-read doctrine
-     * (src/Usage.php:417 refuses frames it did not write) says a bucket that
+     * (`Usage::fromArray()` refuses frames it did not write) says a bucket that
      * is neither null nor numeric is UNREPORTED, never a number. One drive
      * per parse seam, exact values.
      */

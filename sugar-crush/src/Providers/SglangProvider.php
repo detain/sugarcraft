@@ -2428,7 +2428,8 @@ final readonly class SglangProvider implements ProviderInterface
      * WHY: with `http_errors` on (the shipped default) every 4xx/5xx surfaces
      * as a Guzzle RequestException whose getMessage() is the request/status
      * line plus the RAW response body clipped to ~2KB, and Chat renders
-     * exactly that at Chat.php:7653-7662 - so before this extraction the user
+     * exactly that in {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()}'s
+     * rejection handler - so before this extraction the user
      * read `Client error: ... {"object":"error","message":"Unexpected...`
      * JSON garbage instead of the one sentence the server wrote for them.
      *

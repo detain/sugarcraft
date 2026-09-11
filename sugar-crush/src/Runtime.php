@@ -3321,8 +3321,15 @@ final class Runtime
      * `readonly`, so {@see EnvironmentBlock::withWriteSinceLastRender()}
      * returns a new instance and a naive re-derivation on every call would
      * break the per-Runtime memoisation §17.2 invariant 9 pins. That invariant
-     * names `SystemPromptWiringTest.php:168`, `MemoryPromptWiringTest.php:210`
-     * and `RepoMapBlockTest.php:~1170` — NOT the assertion below, which an
+     * names, by symbol — the plan corrected its own three line-number sites on
+     * 2026-08-30, and this sentence follows the corrected list: digits rot, the
+     * methods do not —
+     * `RuntimeTest::testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges()`
+     * for the environment block,
+     * `MemoryPromptWiringTest::testTheMemoryDirectoryIsReadOncePerRuntimeNotOncePerStep()`,
+     * and
+     * `RepoMapBlockTest::testTheSnapshotIsMemoizedSoARepositoryChangedMidTurnDoesNotAlterAlaterStep()`
+     * — NOT the assertion below, which an
      * earlier revision of this sentence cited as though it were invariant 9's
      * own pin. The one nearest to hand is
      * {@see \SugarCraft\Crush\Tests\RuntimeTest::testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns()},

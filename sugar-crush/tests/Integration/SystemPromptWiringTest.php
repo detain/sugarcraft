@@ -357,8 +357,8 @@ final class SystemPromptWiringTest extends TestCase
         // that failure as their own exit code rather than as an empty string:
         // `status`, `log`, and the two diffs, which go through `gitField()`
         // and `gitDiffSection()`. THE FIFTH DOES NOT. The branch line is a
-        // bare `shell_exec(... '2>/dev/null')` plus `trim()` at
-        // src/Context/EnvironmentBlock.php:853-855, with no exit-code check at
+        // bare `shell_exec(... '2>/dev/null')` plus `trim()` (the `$branch`
+        // ternary in `EnvironmentBlock::gitStatusSnapshot()`), with no exit-code check at
         // all, so on this fixture it renders an EMPTY `Current branch: ` line
         // and no marker. MEASURED by rendering
         // EnvironmentBlock::capture($d, 'stub')->render() against exactly this

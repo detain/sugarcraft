@@ -25,7 +25,7 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  * The stack trace was `WorkflowRegistry.php(241): require()`, reached in
  * production by `/workflow run <name>`
  * ({@see \SugarCraft\Crush\Cli\Bootstrap::workflowEngine()} ->
- * `Chat.php:3921 -> 4297`).
+ * `Chat::handleWorkflowCommand()` -> `Chat::workflowRun()`).
  *
  * NEITHER GATE CATCHES THE OTHER'S SPELLING, which is why both tests are here
  * and why one file's worth of assertions is not enough:

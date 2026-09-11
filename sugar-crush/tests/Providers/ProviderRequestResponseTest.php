@@ -49,26 +49,30 @@ final class ProviderRequestResponseTest extends TestCase
      * {@see \SugarCraft\Crush\Providers\ProviderInterface::completeStream()}.
      *
      * Three families: Bedrock (terminal metadata event's inputTokens +
-     * outputTokens, BedrockProvider.php:500-503) and Vertex (disjoint
-     * message_start input_tokens + message_delta output_tokens buckets,
-     * VertexProvider.php:1116-1144) carry usage the implementation MUST read:
+     * outputTokens, read by `BedrockProvider::parseChunk()`) and Vertex
+     * (disjoint message_start input_tokens + message_delta output_tokens
+     * buckets, emitted by `VertexProvider::parseAnthropicChunk()`) carry usage
+     * the implementation MUST read:
      * their tests assertSame() this total, and a provider that stops reading
      * the wire reds. Sglang/Custom/OpenAI currently hardcode tokensUsed: 0
-     * (SglangProvider.php:1271, CustomProvider.php:488, OpenAIProvider.php:357).
+     * (each one's `parseChunk()`).
      * Their fixtures lay the wire's cumulative total on EVERY chunk (10/20/30)
      * — a deliberately E24-hostile shape, not the real wire (the real
      * OpenAI-compatible stream is usage:null-per-chunk, captured live in
-     * SglangProviderStreamingTest.php:251-259) — and their tests assert the sum
-     * is in {0, 30}: 0 (current code, allowed as "nothing reported",
-     * ProviderInterface.php:53-54) or 30 (compliant terminal-once emission,
-     * ProviderInterface.php:49-52). Naive per-chunk accumulation of a
-     * cumulative wire (the E24 failure mode) sums 60 and reds.
+     * {@see SglangProviderStreamingTest::testCompleteStreamAccumulatesTwoParallelToolCallsFromACapturedLiveStream()})
+     * — and their tests assert the sum
+     * is in {0, 30}: 0 (current code, allowed as "nothing reported" by
+     * ProviderInterface's all-zero-chunks rule) or 30 (compliant
+     * terminal-once emission, same docblock). Naive per-chunk accumulation of
+     * a cumulative wire (the E24 failure mode) sums 60 and reds.
      *
      * ClaudeCode's stream-json wire carries no usage at all
-     * (ClaudeCodeProvider.php:374-393), so 0 is the only answer; its test
+     * (`ClaudeCodeProvider::parseChunk()`), so 0 is the only answer;
+     * its test
      * asserts assertSame(). EchoProvider is deliberately absent: it is a test
      * double with no usage concept — it echoes a blockquote in PHP with no
-     * tokensUsed/costUsd on any chunk (EchoProvider.php:84-91). See
+     * tokensUsed/costUsd on any chunk (its `echo()` and `completeStream()`).
+     * See
      * testEveryProviderImplementerHasAStreamedUsageContractFixture for the
      * derived-roster assertion that names this exemption.
      *
@@ -453,7 +457,7 @@ final class ProviderRequestResponseTest extends TestCase
     // discriminates (Bedrock's terminal metadata event, Vertex's disjoint
     // buckets), deliberately E24-hostile where it does not — Sglang/Custom/OpenAI
     // get the wire's cumulative total on EVERY chunk, because their real wire
-    // (usage:null-per-chunk, captured in SglangProviderStreamingTest.php:251-259)
+    // (usage:null-per-chunk, captured in `SglangProviderStreamingTest::testCompleteStreamAccumulatesTwoParallelToolCallsFromACapturedLiveStream()`)
     // cannot separate "reads nothing" from "reads the terminal total once".
     // Fixtures are real-shaped or deliberately so, never invented: provenance
     // is cited per fixture. Every expected total lives in
@@ -506,7 +510,7 @@ final class ProviderRequestResponseTest extends TestCase
             . 'contract fixture. EchoProvider is exempted WITH A NAMED REASON: it is a test '
             . 'double with no usage concept — it echoes a blockquote in PHP and its '
             . 'completeStream() yields CompleteResponse objects carrying no tokensUsed/costUsd '
-            . 'at all (EchoProvider.php:109-124, 84-91), mirroring the P1.S7 precedent for '
+            . 'at all (its echo() and completeStream()), mirroring the P1.S7 precedent for '
             . 'exempting a stub. A NEW provider must add a STREAMED_USAGE_CONTRACT entry AND a '
             . 'per-provider contract test.',
         );
@@ -524,7 +528,7 @@ final class ProviderRequestResponseTest extends TestCase
         // The fixture is a deliberately HYPOTHETICAL E24-hostile discriminating
         // shape, NOT the real server: the real OpenAI-compatible wire is
         // usage:null-per-chunk, captured live in
-        // SglangProviderStreamingTest.php:251-259 — the contract test's job is
+        // `SglangProviderStreamingTest::testCompleteStreamAccumulatesTwoParallelToolCallsFromACapturedLiveStream()` — the contract test's job is
         // to pin the contract, not the current server. The wire's cumulative
         // total (10, 20, 30) rides EVERY chunk.
         $sse = 'data: {"choices":[{"delta":{"content":"Hel"}}],"usage":{"total_tokens":10}}' . "\n"
@@ -542,10 +546,10 @@ final class ProviderRequestResponseTest extends TestCase
 
         $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
 
-        // parseChunk hardcodes tokensUsed: 0 (SglangProvider.php:1271), so the sum
+        // parseChunk hardcodes tokensUsed: 0 (`SglangProvider::parseChunk()`), so the sum
         // is 0 — allowed under the contract as "nothing reported"
-        // (ProviderInterface.php:53-54). A compliant terminal-once emission
-        // (ProviderInterface.php:49-52) yields 30 — also allowed. Naive
+        // (ProviderInterface's all-zero-chunks rule). A compliant
+        // terminal-once emission (same docblock) yields 30 — also allowed. Naive
         // per-chunk accumulation of a cumulative wire (the E24 failure mode)
         // yields 10+20+30=60, which must stay RED.
         $this->assertContains(
@@ -561,7 +565,7 @@ final class ProviderRequestResponseTest extends TestCase
         // The fixture is a deliberately HYPOTHETICAL E24-hostile discriminating
         // shape, NOT the real server: the real OpenAI-compatible wire is
         // usage:null-per-chunk, captured live in
-        // SglangProviderStreamingTest.php:251-259 — the contract test's job is
+        // `SglangProviderStreamingTest::testCompleteStreamAccumulatesTwoParallelToolCallsFromACapturedLiveStream()` — the contract test's job is
         // to pin the contract, not the current server. The wire's cumulative
         // total (10, 20, 30) rides EVERY chunk.
         $sse = 'data: {"choices":[{"delta":{"content":"Hel"}}],"usage":{"total_tokens":10}}' . "\n"
@@ -579,10 +583,10 @@ final class ProviderRequestResponseTest extends TestCase
 
         $sum = array_sum(array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks));
 
-        // parseChunk hardcodes tokensUsed: 0 (CustomProvider.php:488), so the sum
+        // parseChunk hardcodes tokensUsed: 0 (`CustomProvider::parseChunk()`), so the sum
         // is 0 — allowed under the contract as "nothing reported"
-        // (ProviderInterface.php:53-54). A compliant terminal-once emission
-        // (ProviderInterface.php:49-52) yields 30 — also allowed. Naive
+        // (ProviderInterface's all-zero-chunks rule). A compliant
+        // terminal-once emission (same docblock) yields 30 — also allowed. Naive
         // per-chunk accumulation of a cumulative wire (the E24 failure mode)
         // yields 10+20+30=60, which must stay RED.
         $this->assertContains(
@@ -597,10 +601,10 @@ final class ProviderRequestResponseTest extends TestCase
     {
         // parseChunk() takes the SDK's streamed chunk objects; build them with
         // the real openai-php factory so toArray() is byte-for-byte the SDK
-        // shape (the ReasoningExtractionTest.php:290 pattern). The fixture is a
+        // shape (the `ReasoningExtractionTest::testOpenAiProviderParseChunkStripsThinkTagsWhenWhollyContainedInOneChunk()` pattern). The fixture is a
         // deliberately HYPOTHETICAL E24-hostile discriminating shape, NOT the
         // real server: the real OpenAI-compatible wire is usage:null-per-chunk,
-        // captured live in SglangProviderStreamingTest.php:251-259 — the
+        // captured live in `SglangProviderStreamingTest::testCompleteStreamAccumulatesTwoParallelToolCallsFromACapturedLiveStream()` — the
         // contract test's job is to pin the contract, not the current server.
         // The wire's cumulative total rides EVERY chunk (10, 20, 30).
         $chunks = [
@@ -640,10 +644,10 @@ final class ProviderRequestResponseTest extends TestCase
             $sum += $method->invoke($provider, $chunk)->tokensUsed;
         }
 
-        // parseChunk hardcodes tokensUsed: 0 (OpenAIProvider.php:357), so the sum
+        // parseChunk hardcodes tokensUsed: 0 (`OpenAIProvider::parseChunk()`), so the sum
         // is 0 — allowed under the contract as "nothing reported"
-        // (ProviderInterface.php:53-54). A compliant terminal-once emission
-        // (ProviderInterface.php:49-52) yields 30 — also allowed. Naive
+        // (ProviderInterface's all-zero-chunks rule). A compliant
+        // terminal-once emission (same docblock) yields 30 — also allowed. Naive
         // per-chunk accumulation of a cumulative wire (the E24 failure mode)
         // yields 10+20+30=60, which must stay RED.
         $this->assertContains(
@@ -657,10 +661,10 @@ final class ProviderRequestResponseTest extends TestCase
     public function testBedrockStreamedUsageLandsOnceOnTheTerminalMetadataEvent(): void
     {
         // ConverseStream event arrays exactly as Aws' EventParsingIterator
-        // yields them (the BedrockProviderTest.php:562-568 shape): text arrives
+        // yields them (the `BedrockProviderTest::testCompleteStreamSendsAConverseStreamCommandAndYieldsDeltas()` shape): text arrives
         // as contentBlockDelta events, and usage lands once, on the terminal
         // metadata event — every earlier event genuinely has none to report
-        // (BedrockProvider.php:500-503).
+        // (read by `BedrockProvider::parseChunk()`).
         $events = [
             ['contentBlockDelta' => ['delta' => ['text' => 'Hel']]],
             ['contentBlockDelta' => ['delta' => ['text' => 'lo']]],
@@ -691,8 +695,9 @@ final class ProviderRequestResponseTest extends TestCase
 
     public function testVertexStreamedUsageIsSplitAcrossDisjointBucketEvents(): void
     {
-        // Anthropic-on-Vertex SSE events (VertexProvider.php:1116-1144;
-        // Usage.php:68-77): input tokens on message_start, output tokens on the
+        // Anthropic-on-Vertex SSE events (`VertexProvider::parseAnthropicChunk()`;
+        // the Usage class doc-block on the aggregation side): input tokens on
+        // message_start, output tokens on the
         // terminal message_delta — two usage-bearing chunks, disjoint buckets,
         // nothing repeated on every chunk.
         $events = [
@@ -728,9 +733,9 @@ final class ProviderRequestResponseTest extends TestCase
     public function testClaudeCodeStreamedUsageIsPerDeltaNotCumulative(): void
     {
         // The stream-json wire format carries NO usage at all, and parseChunk
-        // reads none (ClaudeCodeProvider.php:374-393): the only yieldable shape
+        // reads none (`ClaudeCodeProvider::parseChunk()`): the only yieldable shape
         // is event.delta.type = text_delta. completeStream() cannot be driven
-        // in a unit test — it spawns a child via proc_open (ClaudeCodeProvider.php:118-120) —
+        // in a unit test — it spawns a child via proc_open (`ClaudeCodeProvider::completeStream()`) —
         // so parseChunk is driven by reflection with the same wire sequence a
         // full stream would carry.
         $events = [
@@ -750,7 +755,7 @@ final class ProviderRequestResponseTest extends TestCase
 
         // The stream-json wire carries NO usage at all, so 0 — "nothing
         // reported" — is the only possible answer; there is no terminal total
-        // to emit once. parseChunk reports none (ClaudeCodeProvider.php:381-382),
+        // to emit once. parseChunk reports none (`ClaudeCodeProvider::parseChunk()`),
         // so the honest streamed total is "nothing reported" = 0. Red if the
         // provider ever starts fabricating or accumulating usage on this path
         // — the E24 failure mode.

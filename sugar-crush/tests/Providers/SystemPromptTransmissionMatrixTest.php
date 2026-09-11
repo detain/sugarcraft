@@ -63,8 +63,9 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * THAT HEADLINE WAS FALSE OF THIS MAP WHEN IT WAS WRITTEN, AND IS NOW
      * TRUE (rule 42: corrected, not deleted). MEASURED: OpenAI, Custom and
      * Bedrock each assemble their request body TWICE, inline, once per path -
-     * OpenAIProvider.php:79-95 and :115-129, CustomProvider.php:155-160 and
-     * :210-215, BedrockProvider.php:159-172 and :206-218 (Bedrock shares
+     * `OpenAIProvider::complete()` and `OpenAIProvider::completeStream()`,
+     * `CustomProvider::complete()` and `CustomProvider::completeStream()`,
+     * `BedrockProvider::complete()` and `BedrockProvider::completeStream()` (Bedrock shares
      * systemBlocks() for the hoist but not the surrounding body, and its two
      * `inferenceConfig` blocks genuinely differ) - yet each held ONE row. The
      * consequence was not cosmetic: {@see capturedBodyFor()} drives what the
@@ -114,11 +115,11 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * {@see testTheContractSlotSpellingsAreLoadBearing()} reds if the drive
      * table and that set stop agreeing, in BOTH directions. The numerator is
      * re-derived by opening the builder citations enumerated in the two
-     * paragraphs above - every one names a file and a line range - and
-     * counting how many rows have one builder each; the `3 of 6` half is the
-     * same count taken against `git show d34ce0297:<this file>`'s map, whose
-     * rows are gone but whose builders are all still in the tree at the same
-     * citations. The anchor is spelled as a SHA, not as `HEAD~1`: a relative
+     * paragraphs above - every one names a builder method by symbol, not by
+     * line number - and counting how many rows have one builder each; the
+     * `3 of 6` half is the same count taken against `git show
+     * d34ce0297:<this file>`'s map, whose rows are gone but whose builders
+     * are all still in the tree under the same names. The anchor is spelled as a SHA, not as `HEAD~1`: a relative
      * ref renames itself on the next commit, and this paragraph's first
      * draft said `HEAD~1` and was stale within one commit of being written.
      * Neither half is a count this file measures at runtime, so if you change
@@ -138,7 +139,8 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * WHAT THIS PARAGRAPH USED TO SAY. It said the row-per-class shape was
      * WHY the Vertex Google defect survived Phase 1: the map was
      * `array<class-string, string>`, VertexProvider builds TWO bodies chosen
-     * at call time by isAnthropicModel() (VertexProvider.php:231, :397-400),
+     * at call time by `VertexProvider::isAnthropicModel()` (consulted from
+     * both `complete()` and `completeStream()`),
      * and a single `VertexProvider::class => 'system'` row could not SAY that,
      * so "nothing here could notice that only one of them transmitted".
      *
@@ -175,22 +177,25 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * Four families (the `/` in a citation pair separates the `#complete`
      * builder from the `#stream` one):
      * - Sglang/Custom/OpenAI prepend an OpenAI-chat-shaped leading system
-     *   message into `messages` (SglangProvider.php:672-677,
-     *   CustomProvider.php:155-160 / :210-215, OpenAIProvider.php:90-95 /
-     *   :127-130);
+     *   message into `messages` (`SglangProvider::buildParams()` hoisting via
+     *   `formatMessages()`, shared by both Sglang paths,
+     *   `CustomProvider::complete()` / `CustomProvider::completeStream()`,
+     *   `OpenAIProvider::complete()` / `OpenAIProvider::completeStream()`);
      * - Bedrock hoists it into the Converse top-level `system` block list
-     *   (BedrockProvider.php:164-166 / :215-217 via systemBlocks() :337-343);
+     *   (`BedrockProvider::complete()` / `BedrockProvider::completeStream()`
+     *   via `systemBlocks()`);
      * - Vertex hoists it into the Anthropic body's top-level `system` string
-     *   (VertexProvider.php:455-458) or, for a `publishers/google` model, into
-     *   `instances[0].context` (VertexProvider.php:1137-1139) — both through
-     *   the one joiner, systemInstruction() :508;
+     *   (`VertexProvider::anthropicBody()`) or, for a `publishers/google`
+     *   model, into `instances[0].context` (`VertexProvider::googleBody()`)
+     *   — both through the one joiner, `systemInstruction()`;
      * - ClaudeCode turns it into a `--system-prompt` CLI argv pair
-     *   (ClaudeCodeProvider.php:80 / :105 ->
-     *   ClaudeCodeInvocation.php:75-78).
+     *   (`ClaudeCodeProvider::complete()` / `ClaudeCodeProvider::completeStream()` ->
+     *   `ClaudeCodeInvocation::printModeArgs()`).
      *
      * EchoProvider is deliberately absent: it is a test double with no wire —
      * it echoes a blockquote in PHP and never serializes a request payload
-     * (EchoProvider.php:18-23, 84-91). See
+     * (its class doc-block and `complete()`/`completeStream()` state the
+     * shape; both build a `CompleteResponse` straight from `echo()`). See
      * {@see testEveryProviderImplementerHasATransmissionContract} for the
      * derived-roster assertion that names this exemption.
      *
@@ -217,7 +222,8 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      *
      * `--system-prompt argv` is a CLI argument vector, not a JSON document:
      * ClaudeCodeProvider never serializes a request body at all, it shells out
-     * (ClaudeCodeProvider.php:80 / :105 -> ClaudeCodeInvocation.php:75-78).
+     * (`ClaudeCodeProvider::complete()` / `ClaudeCodeProvider::completeStream()`
+     * -> `ClaudeCodeInvocation::printModeArgs()`).
      * {@see resolveContractSlot()} walks bodies, so this row has no body to
      * walk; it is pinned instead by
      * {@see testClaudeCodeTransmitsSystemPromptAsASystemPromptArgvPairOnBothPaths()},
@@ -255,10 +261,11 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * is `Converse` with NO `inferenceConfig` key at all - re-derivable
      * without a probe, because {@see request()} supplies neither temperature
      * nor maxTokens and the unary path adds no defaults, so
-     * `inferenceConfig()` returns `[]` and the key is never set
-     * (BedrockProvider.php:169-172); streamed is `ConverseStream` with
-     * `{"maxTokens":4096,"temperature":0.7}`, because ConverseStream rejects
-     * an absent maxTokens (BedrockProvider.php:50-55, :206-212).
+     * `inferenceConfig()` returns `[]` and the key is never set (the
+     * key-setting arm of `BedrockProvider::complete()`); streamed is
+     * `ConverseStream` with `{"maxTokens":4096,"temperature":0.7}`, because
+     * ConverseStream rejects an absent maxTokens (`DEFAULT_STREAM_MAX_TOKENS`
+     * and its use on the `BedrockProvider::completeStream()` side).
      *
      * The single-builder rows (Sglang, all three Vertex arms) need no such
      * guard against the `#complete`/`#stream` conflation: they have only one
@@ -350,7 +357,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             'Every ProviderInterface implementer except EchoProvider must transmit '
             . 'CompleteRequest::$systemPrompt onto the wire. EchoProvider is exempted WITH A '
             . 'NAMED REASON: it is a test double with no wire — it echoes a blockquote in PHP '
-            . 'and never serializes a request payload (EchoProvider.php:18-23, 84-91). A NEW '
+            . 'and never serializes a request payload (its class doc-block and complete()/completeStream()). A NEW '
             . 'provider must add a TRANSMISSION_CONTRACT entry AND a per-provider transmission '
             . 'test.',
         );
@@ -681,7 +688,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
     // =========================================================================
     // Sglang — leading `messages[0]` system message, OpenAI chat/completions
-    // order (SglangProvider.php:672-677). Both paths share buildParams().
+    // order (`SglangProvider::buildParams()`, hoisting via `formatMessages()`). Both paths share buildParams().
     // =========================================================================
 
     public function testSglangTransmitsSystemPromptAsTheLeadingSystemMessageOnBothPaths(): void
@@ -713,8 +720,9 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     public function testSglangNullSystemPromptTransmitsNothing(): void
     {
         // The guard lives in the shared buildParams(), so one path pins both.
-        // '' is "unset" for this provider (SglangProvider.php:672), matching
-        // the optional-knob filter below it.
+        // '' is "unset" for this provider (the `!== ''` arm in
+        // `formatMessages()`), matching the optional-knob filter
+        // buildParams() applies below it.
         $provider = $this->sglangProvider();
         $provider->complete($this->request(null));
 
@@ -724,7 +732,8 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
     // =========================================================================
     // Custom — leading `messages[0]` system message, same OpenAI shape
-    // (CustomProvider.php:155-160 / :210-215). Both paths share the guard.
+    // (`CustomProvider::complete()` / `CustomProvider::completeStream()`).
+    // Both paths share the guard.
     // =========================================================================
 
     public function testCustomTransmitsSystemPromptAsTheLeadingSystemMessageOnBothPaths(): void
@@ -752,7 +761,8 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     public function testCustomNullSystemPromptTransmitsNothing(): void
     {
         // The guard lives in the shared message-prepend block, so one path
-        // pins both. '' is "unset" for this provider (CustomProvider.php:155).
+        // pins both. '' is "unset" for this provider (the paired guards in
+        // `CustomProvider::complete()` and `completeStream()`).
         $provider = $this->customProvider();
         $provider->complete($this->request(null));
 
@@ -761,7 +771,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
     // =========================================================================
     // OpenAI — leading `messages[0]` system message
-    // (OpenAIProvider.php:90-95 / :127-130). Driven through captured
+    // (`OpenAIProvider::complete()` / `OpenAIProvider::completeStream()`). Driven through captured
     // create()/createStreamed() params, the way OpenAIProviderTest drives it.
     // =========================================================================
 
@@ -796,7 +806,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     public function testOpenAiEmptyStringSystemPromptIsTransmittedBecauseTheGuardIsNotNullOnly(): void
     {
         // Measured guard difference: OpenAIProvider's guard is `!== null` only
-        // (OpenAIProvider.php:90, :127), so '' — which Sglang/Custom/Vertex
+        // (`OpenAIProvider::complete()` / `completeStream()`), so '' — which Sglang/Custom/Vertex
         // treat as "unset" — IS transmitted here. Pin the measured behaviour
         // so the guards cannot silently drift together.
         $captured = [];
@@ -809,7 +819,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
     // =========================================================================
     // Bedrock — Converse top-level `system` block list, never inside messages
-    // (BedrockProvider.php:164-166 / :215-217 via systemBlocks() :337-343).
+    // (`BedrockProvider::complete()` / `BedrockProvider::completeStream()` via `systemBlocks()`).
     // =========================================================================
 
     public function testBedrockTransmitsSystemPromptInTheConverseSystemBlockListOnBothPaths(): void
@@ -853,7 +863,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $provider->complete($this->request(null));
 
         // systemBlocks() returns [] when the prompt is null, and complete()
-        // only sets the key for a non-empty list (BedrockProvider.php:164-166).
+        // only sets the key for a non-empty list (the set-key guard in `BedrockProvider::complete()`).
         $this->assertArrayNotHasKey('system', $mock->getLastCommand()->toArray());
     }
 
@@ -883,11 +893,11 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     }
 
     // =========================================================================
-    // Vertex — TWO body builders, selected by isAnthropicModel()
-    // (VertexProvider.php:231). The Anthropic arm hoists into the body's
-    // top-level `system` string (VertexProvider.php:455-458): a `system` role
+    // Vertex — TWO body builders, selected by `VertexProvider::isAnthropicModel()`
+    // (consulted from both paths). The Anthropic arm hoists into the body's
+    // top-level `system` string (`VertexProvider::anthropicBody()`): a `system` role
     // inside messages is a 400 on the Anthropic API. The Google arm hoists
-    // into `instances[0].context` (VertexProvider.php:1137-1139): that
+    // into `instances[0].context` (`VertexProvider::googleBody()`): that
     // envelope has no system role at all, and formatMessages()'s
     // `default => 'user'` arm would otherwise deliver the prompt as an
     // ordinary user turn. Both arms go through the one joiner,
@@ -947,7 +957,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $provider->complete($this->request(null, 'claude-3-sonnet@20240229'));
 
         // systemInstruction() returns null when no part exists, and anthropicBody()
-        // only sets the key for a non-null value (VertexProvider.php:455-458).
+        // only sets the key for a non-null value (the set-key guard in `anthropicBody()`).
         $this->assertArrayNotHasKey('system', $captured['body']);
     }
 
@@ -993,7 +1003,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $this->assertSame(1, substr_count((string) json_encode($captured['body']), self::SENTINEL));
 
         // NOT the streamer seam: completeStream() yields complete() for a
-        // non-Anthropic model (VertexProvider.php:290-298), so the streaming
+        // non-Anthropic model (the delegation arm of `VertexProvider::completeStream()`), so the streaming
         // path is captured on the PREDICTOR. Asserting it separately is still
         // the point — complete() passing is not evidence about
         // completeStream(), which is exactly how the OpenAI arm hid this same
@@ -1110,7 +1120,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
     // =========================================================================
     // ClaudeCode — `--system-prompt` CLI argv pair
-    // (ClaudeCodeProvider.php:80 / :105 -> ClaudeCodeInvocation.php:75-78).
+    // (`ClaudeCodeProvider::complete()` / `ClaudeCodeProvider::completeStream()` -> `ClaudeCodeInvocation::printModeArgs()`).
     // The provider hands its invocation exactly the options below; the wire
     // shaper is printModeArgs(), driven the way ClaudeCodeProviderTest drives
     // it — the execute() step that would follow is proc_open and cannot run
@@ -1145,8 +1155,8 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     public function testClaudeCodeNullSystemPromptTransmitsNoFlag(): void
     {
         // The provider always passes 'systemPrompt' => $request->systemPrompt
-        // (ClaudeCodeProvider.php:80); printModeArgs() gates the pair on
-        // isset() (ClaudeCodeInvocation.php:75-78), so null -> no flag at all.
+        // (`ClaudeCodeProvider::complete()`); printModeArgs() gates the pair on
+        // isset() (`ClaudeCodeInvocation::printModeArgs()`), so null -> no flag at all.
         // (Note: '' would still emit the pair with an empty value — the same
         // `!== null`-only polarity as OpenAI/Bedrock, by a different idiom.)
         $invocation = new ClaudeCodeInvocation();

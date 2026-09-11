@@ -1176,9 +1176,8 @@ final readonly class VertexProvider implements ProviderInterface
         // input - a both-sided document handed to a whole-document price
         // would bill the same side twice across the summed turn. Today the
         // per-side split is unobservable through cost - Vertex's
-        // costPer1kTokens() is a placeholder 0.0
-        // (src/Providers/VertexProvider.php:262-266) - so the P4.S2 tests
-        // pin the tokensUsed side of it instead.
+        // costPer1kTokens() is a placeholder `return 0.0` - so the P4.S2
+        // tests pin the tokensUsed side of it instead.
         if ($type === 'message_start') {
             $usage = $this->parseAnthropicUsage(
                 is_array($event['message']['usage'] ?? null) ? $event['message']['usage'] : [],
@@ -1834,7 +1833,8 @@ final readonly class VertexProvider implements ProviderInterface
      * `{"instances":[{"messages":[],"context":"asm\n\nonly\n\nthis"}],"parameters":{...}}`.
      * BEFORE the dedup the same input produced two `role: user` turns carrying
      * the instruction text twice over. The Anthropic arm REJECTS this exact
-     * input with a named \InvalidArgumentException (VertexProvider.php:435-446,
+     * input with a named \InvalidArgumentException (the guard at the top of
+     * {@see anthropicBody()},
      * pinned by
      * `VertexProviderTest::testCompleteRejectsASystemOnlyTranscriptLocally`)
      * because the Messages API requires at least one turn. This arm does not,
@@ -1915,8 +1915,8 @@ final readonly class VertexProvider implements ProviderInterface
      * that would rot the same way.) The census stays green either way because
      * it only validates a
      * citation whose target contains `SugarCraft\Crush\Tests\` or whose class
-     * short-name ends in `Test` (`SymbolCitationDriftTest.php:343-354`, the
-     * `looksLikeATestSymbol()` alphabet) - and every `{@see}` in this
+     * short-name ends in `Test` (`SymbolCitationDriftTest::looksLikeATestSymbol()`,
+     * the alphabet) - and every `{@see}` in this
      * paragraph names a PRODUCTION symbol, which that file states is
      * deliberately out of its scope. So the drift guard here is this sentence
      * and a reader, not an instrument.

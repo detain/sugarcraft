@@ -334,7 +334,7 @@ final readonly class RepoMapBlock implements PromptSection
      *
      * NO FIGURE IN THIS FILE RESTATES `src/`'s CENSUS ANY MORE, and that
      * absence is itself asserted, by
-     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()}.
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testNoGuardedDocumentRestatesTheSourceCensus()}.
      *
      * WHAT THIS PARAGRAPH SAID: first a file count and a top-level-type count,
      * spelled out; then a correction naming WHERE the two live figures were and

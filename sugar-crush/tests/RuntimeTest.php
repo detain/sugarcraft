@@ -2664,7 +2664,8 @@ DOC;
         // the argument rests on: the reports are concentrated in this file,
         // which has to spell both phrases in order to search for them, plus one
         // unrelated and entirely legitimate "the same two branches in the
-        // opposite order" at `tests/Sessions/BackgroundSupervisorReapTest.php:438`
+        // opposite order" at
+        // {@see \SugarCraft\Crush\Tests\Sessions\BackgroundSupervisorReapTest::testTheCommandShapeScannerAnswersCorrectlyOnKnownInputs()}
         // - and three of them are on the CODE channel, two here and that one.
         //
         // AND THE CODE CHANNEL IS THE HALF THAT SETTLES IT. This pin's own
@@ -3727,7 +3728,7 @@ DOC;
         //
         // AND THAT GAP IS ITSELF WORTH REPORTING, in a file outside this
         // change-set's declared list: Runtime::MCP_TOOL_PREFIX reads
-        // McpToolBridge::NAME_PREFIX, while src/Permissions/PermissionGate.php:691
+        // McpToolBridge::NAME_PREFIX, while `PermissionGate::isWriteTool()`
         // hard-codes the same prefix. So a legitimate respelling at the authority
         // moves the runtime and NOT the gate, and it moves them apart in the
         // permissive direction - the gate would stop classifying MCP calls as

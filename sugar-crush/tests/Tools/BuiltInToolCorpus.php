@@ -324,6 +324,13 @@ final class BuiltInToolCorpus
             // makes them reflectable without a second `require`. A secondary
             // whose PSR-4 path ALSO exists as another file is resolved by that
             // other file first; `src/` ships no such name collision today.
+            // Finding E662 re-derived that "today" live: BOTH collision
+            // surfaces — a secondary whose own PSR-4 path exists as a separate
+            // file, and a secondary FQN that doubles as another file's primary
+            // — were walked over the whole tree and each came back with zero
+            // members, so the autoload-then-miss the prose warns about stays
+            // unreachable. If this gate ever reds on a name-shape, re-run that
+            // two-surface walk before believing the short list.
             //
             // WHY IT IS NOT ENOUGH TO SCAN FILENAMES: the miss is SILENT. A
             // `Tool` implementor declared as a second type in a file whose

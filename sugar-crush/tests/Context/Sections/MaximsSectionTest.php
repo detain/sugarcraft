@@ -57,8 +57,7 @@ use SugarCraft\Crush\Tools\Tool;
  *    for exactly this value), and because inventing a real cap here would be
  *    new behaviour this refactor step does not own.
  * 4. NOT HARMONISED WITH THE SUBAGENT PROMPTS.
- *    {@see \SugarCraft\Crush\Agents\AgentDefinition}::coder() (src/Agents/
- *    AgentDefinition.php:44-48) already tells a coder subagent to "match the
+ *    {@see \SugarCraft\Crush\Agents\AgentDefinition}::coder() already tells a coder subagent to "match the
  *    conventions already in the surrounding code" in its own compact voice.
  *    That prompt is a different channel with its own committed golden
  *    (tests/fixtures/prompt/golden-agent-prompt.txt, which this step must
@@ -73,7 +72,7 @@ use SugarCraft\Crush\Tools\Tool;
  *    reads as "blocks capture, sections speak", which is the real difference
  *    in kind. (Deviations are §5.7 of the step brief.)
  * 6. HEADING LEVEL. The section opens with `## Maxims` — an H2, not a fifth
- *    `# ` H1. REQUIRED_SECTIONS (BaseSystemPromptTest.php:50-55) and the
+ *    `# ` H1. REQUIRED_SECTIONS (the roster in tests/BaseSystemPromptTest.php) and the
  *    four-heading structural tests stay four, and `## ` is already the
  *    prompt's substructure alphabet ({@see \SugarCraft\Crush\Skills\Skill::systemPromptContribution()}
  *    opens `## Skill: `). The H1 absence is pinned below, not just claimed.

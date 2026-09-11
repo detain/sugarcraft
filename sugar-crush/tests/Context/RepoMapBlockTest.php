@@ -1207,7 +1207,7 @@ final class RepoMapBlockTest extends TestCase
      * what is checked now is the ARGUMENT each figure was supporting, by
      * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold()},
      * with their continued ABSENCE from the file asserted by
-     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()}.
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testNoGuardedDocumentRestatesTheSourceCensus()}.
      * This third one was asserted by nothing, and it wrapped across a doc-block
      * line, so it was invisible to a line-oriented search for the digits beside
      * the noun.

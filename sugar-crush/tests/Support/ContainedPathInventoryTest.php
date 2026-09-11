@@ -100,7 +100,7 @@ use SugarCraft\Crush\Support\ContainedPath;
  *      against the data provider: `)` was treated as a statement boundary, on the
  *      claim that a `)` reachable back from a class expression "can only be a
  *      control-structure header". `if (is_dir($dir) && !ContainedPath::below($dir,
- *      $root))` — src/Memory/ForeignMemoryImporter.php:224 — reaches back over `!`
+ *      $projectRoot))` — inside `ForeignMemoryImporter::importOpencode()` — reaches back over `!`
  *      and `&&` to the `)` of `is_dir($dir)`, so the statement was cut mid-condition
  *      and a live gate read as discarded. A `)` is now stepped over to its matching
  *      `(`.
@@ -467,7 +467,7 @@ final class ContainedPathInventoryTest extends TestCase
             'an absolute-path test' => ["str_starts_with(\$path, '/');", 0],
             'an option-flag test' => ["str_starts_with(\$token, '-');", 0],
             // The false positive a line regex produced on
-            // src/Hooks/BuiltIn/BashEscapeDenyHook.php:107 — a separator concat
+            // `BashEscapeDenyHook::lexicalResolve()` — a separator concat
             // that belongs to a DIFFERENT expression on the same line.
             'a separator concat outside the call' => [
                 "\$base = str_starts_with(\$token, '/') ? \$token : \$root . '/' . \$token;",
@@ -1094,8 +1094,8 @@ final class ContainedPathInventoryTest extends TestCase
             // back from a call's class expression can only be a control-structure
             // header — `if (…) X::within();` — since no PHP expression yields a
             // class name from a call", which forgets the operand case:
-            // `if (is_dir($dir) && !ContainedPath::below($dir, $root))`
-            // (src/Memory/ForeignMemoryImporter.php:224) reaches back over `!` and
+            // `if (is_dir($dir) && !ContainedPath::below($dir, $projectRoot))`
+            // (inside `ForeignMemoryImporter::importOpencode()`) reaches back over `!` and
             // `&&` to the `)` of `is_dir($dir)`, and cutting the statement there
             // left a prefix of `&& !` — no assignment, no keyword, balanced — i.e.
             // a real gate reported as a discarded call.
@@ -1295,7 +1295,7 @@ final class ContainedPathInventoryTest extends TestCase
      *
      * Parsed rather than pattern-matched, because a line regex cannot tell an
      * argument from the rest of the line: `$base = str_starts_with($token, '/')
-     * ? $token : $root . '/' . $token;` (src/Hooks/BuiltIn/BashEscapeDenyHook.php:107)
+     * ? $token : $root . '/' . $token;` (the opening statement of `BashEscapeDenyHook::lexicalResolve()`)
      * was counted as a containment compare by the previous instrument, and it is
      * not one.
      *
