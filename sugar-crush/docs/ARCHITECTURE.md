@@ -28,7 +28,7 @@ bin/sugarcrush                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              11 built-ins + MCP bridges
+                                         ├─ Tools\*              12 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -41,7 +41,9 @@ which is the whole of the next warning.
 
 ## `bin/sugarcrush` — pre-flight before anything attaches to the terminal
 
-219 lines, and the order in it is deliberate. `--help`, `--version` and the five
+The order in it is deliberate, and its size is whatever `wc -l bin/sugarcrush`
+says today — this sentence used to carry a line count and quotes none on
+purpose (E686: the figure rotted within rounds). `--help`, `--version` and the five
 subcommands (`doctor`, `models`, `session list|delete`, `mcp list`,
 `completion bash|zsh|fish`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them is a question about
@@ -68,7 +70,9 @@ over the terminal.
 
 ## `Cli\Bootstrap` — the wiring, all of it
 
-One class, 4,253 lines and 70 methods, every one of them static, and it is large on
+One class, thousands of lines, every one of its methods static (E686: the size and
+method-count figures this sentence carried had both rotted; the all-static
+property is the load-bearing claim and is pinned live), and it is large on
 purpose:
 every backend, tool, session store, memory store, instruction loader, hook
 manager, permission gate, skill registry, agent roster, workflow engine and MCP
