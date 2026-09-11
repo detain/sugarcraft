@@ -6,8 +6,12 @@
 #                             [--against-json <suite-figure.json>]
 #                             [--out <dir>] [--timeout <secs>] [--manifest] [--clover]
 #
-#   K            shard count (default: nproc; CI pins it explicitly — the
-#                GitHub-hosted ubuntu-latest runner is 2-4 vCPU, NOT nproc)
+#   K            shard count (default: min(nproc, 8) — K=8 is the measured
+#                local floor, see "Measured discipline" below; beyond K=8
+#                contention outpaces the gains, so more shards stop paying).
+#                CI pins K=min(nproc,4) explicitly — its GitHub-hosted
+#                ubuntu-latest runners are 2-4 vCPU and must not be
+#                oversubscribed.)
 #   --junit      baseline JUnit XML from a serial run — the duration source for
 #                the LPT manifest, and the conservation reference. Without it,
 #                --durations, or a previous <out>/durations.tsv, there is no
@@ -61,13 +65,17 @@
 #    size-pin (d8efb147b) landed on master 2026-09-10, so both shapes are now
 #    safe — keep the pin intact.
 #  * Conservation is asserted from per-shard junit roots vs the baseline junit
-#    root (tests/assertions/errors/failures/skipped) in a final table; the
-#    critical path floor on this box at K=8 was ProcessExecutorTest ~66s
-#    (serial full suite ~548s), i.e. <2min goal met at K=8.
+#    root (tests/assertions/errors/failures/skipped) in a final table.
+#  * MEASURED K-SCALING (11,566-test tree @56501908d, 64-core box): serial
+#    565s; K=4 159s; K=8 ~65-73s wall with the largest LPT bucket ~62s — one
+#    ProcessExecutorTest-class file is the hard floor below which no shard
+#    count can go, and beyond K=8 contention outpaces the gains. Hence the
+#    local default min(nproc, 8); CI stays at K=min(nproc, 4) because its
+#    runners are 2-4 vCPU.
 set -u
 
 usage() {
-	sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,47p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -76,6 +84,7 @@ REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
 }
 
 K=$(nproc)
+if [ "$K" -gt 8 ]; then K=8; fi
 OUT="${TMPDIR:-/tmp}/parallel-tests"
 BASE_JUNIT=""
 DURATIONS=""

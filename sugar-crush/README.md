@@ -1174,6 +1174,31 @@ the next run of anything. The figures for scale that used to open this
 paragraph — first revision 4,337/12,587, over 2,000 tests low — are history
 now, not an acceptable failure mode.
 
+**Sharded local runs.** The serial run above is ~9.4 minutes; from the
+monorepo root, `scripts/parallel-tests.sh` shards the same suite by committed
+per-file durations and gates on conservation — the per-shard JUnit sums must
+equal `tests/Config/Support/suite-figure.json` exactly:
+
+```bash
+bash scripts/parallel-tests.sh \
+  --durations scripts/parallel-tests-durations.tsv \
+  --against-json sugar-crush/tests/Config/Support/suite-figure.json
+```
+
+K defaults to min(nproc, 8): measured on this tree, serial 565s, K=4 159s,
+K=8 ~65-73s wall — the largest LPT bucket (~62s, one ProcessExecutorTest-class
+file) is the hard floor, so past K=8 more shards stop paying. CI pins
+K=min(nproc, 4) because its 2-4 vCPU runners must not be oversubscribed. The
+conservation gate is fail-closed by design: a test file added without a
+`scripts/parallel-tests-durations.tsv` row lands in zero shards, the shard sum
+falls short of the pinned figure, and the run goes RED. To refresh the
+manifest after adding tests, take one serial baseline with `--log-junit` and
+feed it back once — `bash scripts/parallel-tests.sh --junit <xml> --out <dir>`
+writes `<dir>/durations.tsv`; copy it over
+`scripts/parallel-tests-durations.tsv` and re-pin the figure with
+`tests/Config/Support/refresh-suite-figure.php`, in the same step as the
+README headline.
+
 Coverage spans every subsystem: typed messages + attachments, all 11 built-in
 tools (the whole of `src/Tools/BuiltIn/`, which is exactly the built-in half of
 the array `Bootstrap::tools()` hands the engine — the array itself is longer
