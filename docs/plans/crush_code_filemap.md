@@ -1,14 +1,19 @@
 # crush_code backlog — actionable file-map (lane-scheduling aid)
 
-Derived 2026-09-10 @ tip `8c52b26e5` (regenerated at the round-63 close; supersedes the round-62
-`1a6ef5f60` cut) — regenerate this file at every round-close.
-Purpose: map every actionable backlog id (OPEN/PARTIAL/STALE-CITATION/UNCERTAIN = 131) to the files it
-touches so the supervisor can schedule file-disjoint lanes. Tier/lane analysis lives in
-`docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain` column below is a
-file-cluster bucket. Round-63 `AA–JJ` ownership markers retired at this close; round-64 lanes α–ε
-(`crush_code_RESUME.md` §0-NOW-65 §2) own via fresh briefs — the `⚠α..⚠ε` markers below flag ids whose
-files collide with a PROPOSED lane's ownership set (α/β share `src/Cli/Bootstrap.php` — coordinate;
-γ/δ share the MCP/Sessions/ScriptHook region — δ items mount INTO files γ detaches, serialize by file).
+Derived 2026-09-11 @ tip `e028f142c` (rows re-synced at the round-64 close; supersedes the round-63
+`8c52b26e5` cut) — regenerate this file at every round-close.
+Purpose: map every actionable backlog id (OPEN/PARTIAL/STALE-CITATION/UNCERTAIN = **117** per
+§0-NOW-66 §3; CLOSED rows are RETAINED below with their stamps as the closeout record — a full regen
+prunes them) to the files it touches so the supervisor can schedule file-disjoint lanes. Tier/lane
+analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain` column
+below is a file-cluster bucket. Round-64 markers (`⚠α..⚠ε`) are retired history below. Round-65 lanes
+**ba–be** (`crush_code_RESUME.md` §0-NOW-66 §2) own via fresh briefs: **ba** owns the Tui-panel +
+MCP/LSP pump region (`src/Tui/`, `src/Cli/Subcommands.php`, `src/LSP/`, `src/MCP/`); **bb** owns
+`src/Renderer.php` + `src/App.php` + KeyBindingRegistry — serialize ba/bb at any Tui/Renderer boundary;
+**bc** (Phase-9 B/C) touches `src/Agents/` + `src/Backend/` — E692 sits at `EngineBackend.php:966`,
+coordinate with bc; **bd** owns Bootstrap.php again (E653 re-derive FIRST — shape withdrawn at r62);
+**be** is prose-campaign (tests/docs/README, disjoint from all). The domain index below still carries
+round-63 counts — refresh at the full regen (STEP 1, with the `### E652+` heading mint).
 
 ## Path normalization
 
@@ -139,23 +144,28 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 | E659 | OPEN | MED | sugar-crush/tests/Tools/BuiltInToolCorpusTest.php;sugar-crush/tests/Context/RepoMapBlockTest.php;sugar-crush/tests/SymbolCitationDriftTest.php⚠β⚠ε | tests-harness | M |
 | E662 | OPEN | LOW | sugar-crush/tests/Tools/BuiltInToolCorpus.php⚠β⚠ε | tests-harness | S |
 | E670 | OPEN | LOW | sugar-crush/tests/Workflows/WorkflowProviderHandoffTest.php⚠ε | workflows | S |
-| E671 | OPEN | MED | scripts/parallel-tests.sh;.github/workflows/ci.yml⚠α | test-infra | M |
-| E672 | OPEN | HIGH | sugar-crush/src/Hooks/ScriptHook.php;sugar-crush/src/Agents/ProcessExecutor.php;sugar-crush/src/Agents/AgentWorkerPool.php;sugar-crush/src/MCP/StdioMcpServer.php;sugar-crush/src/Backend/;sugar-crush/src/Sessions/;sugar-crush/src/Workflows/WorkflowEngine.php;sugar-crush/src/LSP/;sugar-crush/src/Providers/;sugar-crush/src/Config/StatusLineCommand.php;sugar-crush/src/Commands/⚠γ⚠δ | containment | L |
-| E673 | OPEN | MED | sugar-crush/src/Tools/Concerns/CapturesProcessOutput.php;sugar-crush/src/Support/ProcessReaper.php⚠δ⚠ε | containment | M |
-| E674 | OPEN | LOW | sugar-crush/src/Tools/Concerns/CapturesProcessOutput.php⚠ε | containment | S |
-| E675 | OPEN | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/src/Tools/TaskTool.php;sugar-crush/src/Tui/Renderer.php;sugar-crush/tests/Tools/⚠α⚠β⚠δ⚠ε | tools-skills | M |
-| E676 | OPEN | MED | sugar-crush/src/Hooks/ScriptHook.php;sugar-crush/src/Config/StatusLineCommand.php;sugar-crush/src/Sessions/BackgroundSessionRunner.php;sugar-crush/src/Support/ProcessReaper.php⚠γ⚠δ | containment | M |
-| E677 | OPEN | MED | sugar-crush/src/MCP/StdioMcpServer.php;sugar-crush/src/Backend/StreamingCommandBackend.php⚠γ⚠δ | lsp-mcp | M |
-| E678 | OPEN | MED | sugar-crush/src/Tools/McpToolBridge.php;sugar-crush/src/Cli/Subcommands.php;sugar-crush/src/Tui/⚠δ⚠ε | cli-config | M |
-| E679 | OPEN | LOW | sugar-crush/src/Agents/TaskList.php;sugar-crush/src/Agents/WorktreeManager.php⚠δ | agents | M |
-| E680 | OPEN | MED | sugar-crush/src/Session.php⚠δ | sessions | S |
-| E681 | OPEN | HIGH | sugar-crush/src/Chat.php;sugar-crush/tests/Commands/⚠ε | chat-input | M |
+| E671 | CLOSED | MED | scripts/parallel-tests.sh;.github/workflows/ci.yml | test-infra | M |
+| E672 | CLOSED | HIGH | sugar-crush/src/Hooks/ScriptHook.php;sugar-crush/src/Agents/ProcessExecutor.php;sugar-crush/src/Agents/AgentWorkerPool.php;sugar-crush/src/MCP/StdioMcpServer.php;sugar-crush/src/Backend/;sugar-crush/src/Sessions/;sugar-crush/src/Workflows/WorkflowEngine.php;sugar-crush/src/LSP/;sugar-crush/src/Providers/;sugar-crush/src/Config/StatusLineCommand.php;sugar-crush/src/Commands/ | containment | L |
+| E673 | CLOSED | MED | sugar-crush/src/Tools/Concerns/CapturesProcessOutput.php;sugar-crush/src/Support/ProcessReaper.php | containment | M |
+| E674 | CLOSED | LOW | sugar-crush/src/Tools/Concerns/CapturesProcessOutput.php | containment | S |
+| E675 | CLOSED | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/src/Tools/BuiltIn/TaskTool.php;sugar-crush/src/Tui/Renderer.php;sugar-crush/tests/Tools/ | tools-skills | M |
+| E676 | CLOSED | MED | sugar-crush/src/Hooks/ScriptHook.php;sugar-crush/src/Config/StatusLineCommand.php;sugar-crush/src/Sessions/BackgroundSessionRunner.php;sugar-crush/src/Support/ProcessReaper.php | containment | M |
+| E677 | CLOSED | MED | sugar-crush/src/MCP/StdioMcpServer.php;sugar-crush/src/Backend/StreamingCommandBackend.php | lsp-mcp | M |
+| E678 | PARTIAL | MED | sugar-crush/src/Tools/McpToolBridge.php;sugar-crush/src/Cli/Subcommands.php;sugar-crush/src/Tui/⚠ba | cli-config | M |
+| E679 | CLOSED | LOW | sugar-crush/src/Agents/TaskList.php;sugar-crush/src/Agents/WorktreeManager.php | agents | M |
+| E680 | CLOSED | MED | sugar-crush/src/Session.php | sessions | S |
+| E681 | CLOSED | HIGH | sugar-crush/src/Chat.php;sugar-crush/tests/Commands/ | chat-input | M |
 | E682 | OPEN | MED | sugar-crush/src/Renderer.php;sugar-crush/src/App.php | tui-render | M |
 | E683 | OPEN | LOW | sugar-crush/src/Commands/KeyBindingRegistry.php;sugar-crush/src/Renderer.php⚠γ | tui-render | M |
-| E684 | OPEN | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchFormatConstantsTest.php⚠α⚠β⚠ε | cli-config | M |
-| E685 | OPEN | HIGH | sugar-crush/src/Tools/⚠ε | tools-skills | S |
-| E686 | OPEN | MED | sugar-crush/tests/;sugar-crush/docs/;sugar-crush/README.md⚠ε | tests-harness | M |
-| E687 | OPEN | MED | sugar-crush/tests/Cli/StderrEmitterCensusTest.php;sugar-crush/src/Agents/AgentWorkerPool.php⚠γ⚠δ⚠ε | agents | M |
+| E684 | CLOSED | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchFormatConstantsTest.php | cli-config | M |
+| E685 | CLOSED | HIGH | sugar-crush/src/Tools/ | tools-skills | S |
+| E686 | PARTIAL | MED | sugar-crush/tests/;sugar-crush/docs/;sugar-crush/README.md⚠be | tests-harness | M |
+| E687 | OPEN | MED | sugar-crush/tests/Cli/StderrEmitterCensusTest.php;sugar-crush/src/Agents/AgentWorkerPool.php⚠ba | agents | M |
+| E688 | CLOSED | MED | sugar-crush/src/Agents/ProcessExecutor.php;sugar-crush/tests/Agents/WorkerExitCodeAttributionTest.php | agents | M |
+| E689 | OPEN | MED | sugar-crush/src/Tui/;sugar-crush/src/Cli/Subcommands.php;sugar-crush/src/Tools/McpToolBridge.php⚠ba | cli-config | M |
+| E690 | OPEN | MED | sugar-crush/src/LSP/LspConnection.php;sugar-crush/src/MCP/StdioMcpServer.php⚠ba | lsp-mcp | S |
+| E691 | OPEN | LOW | .github/workflows/ci.yml;scripts/ | ci-infra | S |
+| E692 | OPEN | LOW | sugar-crush/src/Backend/EngineBackend.php⚠bc | containment | S |
 ## Domain → ids index (sorted by count)
 
 > Round-63 closeout re-derivation: 32 ids left actionable (29 CLOSED + E41 CLOSED from PARTIAL + the

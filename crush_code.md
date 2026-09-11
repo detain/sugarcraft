@@ -4,7 +4,7 @@ Comparative research: opencode ([anomalyco/opencode](https://github.com/anomalyc
 
 This is a **second, independent pass** — a prior 12-agent research effort already produced [`crush_feat.md`](./crush_feat.md) (~2000-line dossier) and [`crush_feat_plan.md`](./crush_feat_plan.md) (~870-line plan). That work is done, and six PRs landed against it on 2026-08-10 (slash-command popup, command palette, themes, layout, session persistence, and a parallel-tool-routing fix — "R14b"). Every agent in this pass was briefed to treat `crush_feat.md` as a fast-start reference **only** — to verify every claim against current source rather than trust it, and to explicitly flag where it's now stale (fixed) or, just as important, where it's *not* actually fixed despite looking closed. Several findings below are exactly that: a claim from the first pass that turned out to still be broken, or broken in a new way, on re-verification. Those are **not** excluded just because a prior plan or PR claimed to address the area — if a sibling agent found it again, it's in this plan.
 
-> **Current resume point: §0-NOW-65 (round 63 closed 2026-09-10 — round 64 NEXT).**
+> **Current resume point: §0-NOW-66 (round 64 closed 2026-09-11 at `e028f142c`, CI now sharded K=min(nproc,4) — round 65 NEXT: STEP 1 mint `### E652+` backlog headings, then lanes ba–be).**
 
 ## How to read this doc
 

@@ -19854,3 +19854,35 @@ numbers were already approximate and this round moved everything below the const
 name unrelated statements. Rule 4: cite symbols, not line numbers. Not fixed here because
 `src/Tui/Renderer.php` is outside this lane's file list and the citation is explanatory rather than
 load-bearing.
+
+---
+
+> **ROUND-64 closeout (2026-09-11, `e028f142c`): the four headings below are the first `###` entries
+> minted past E651.** The standing `### E652–E688` heading debt persists — those ids' one-word stamps
+> live in the companion ledger `docs/plans/crush_code_backlog_triage.md`, re-stamped at this close
+> (E671–E677, E679–E681, E684, E685, E688 CLOSED; E678/E686 PARTIAL; E687 stays OPEN). Minting the
+> remaining headings is round-65's STEP 1 (now covering E652–E692).
+
+### E689 [OPEN] — no `/mcp` TUI panel (the E678 second half)
+
+**What:** operator-facing /mcp panel in the TUI; the E678 `crush mcp --json` wire-name rows already
+landed (lane ad, master `b76fee3cd`). **Where:** `sugar-crush/src/Tui/`, `src/Cli/Subcommands.php`.
+**Severity:** MED. Lane ad refused the panel — collides the Tui ownership set. Round-65 lane ba.
+
+### E690 [OPEN] — mount `pumpStderr()` at the LSP-side dispatch entry (the E677 remainder)
+
+**What:** the MCP dispatch-entry mounts landed in lane ad (entry + timer), but the LSP-side entry was
+out-of-ownership; fd 2 unread between turns on that path. **Where:** `sugar-crush/src/LSP/LspConnection.php`
+(mirrors the `src/MCP/StdioMcpServer.php` entry+timer mount). **Severity:** MED. Round-65 lane ba.
+
+### E691 [OPEN] — the coverage CI job is still serial for sugar-crush (the E671 seam)
+
+**What:** `f67328f94` sharded the test job only; the coverage job runs the suite serially. Sharding it
+needs a clover-merge story (per-shard coverage → merged report) first. **Where:**
+`.github/workflows/ci.yml`, `scripts/`. **Severity:** LOW. E671 seam recorded at the round-64 close.
+
+### E692 [OPEN] — `EngineBackend.php:966` `pcntl_fork` async-complete child sits outside containment scope
+
+**What:** an in-process fork (no exec), so `ProcessContainment` (which wraps exec-spawns) never sees
+it; a containment-scope call to make — does this need a pgid story of its own? **Where:**
+`sugar-crush/src/Backend/EngineBackend.php:966`. **Severity:** LOW. From the lane-ac reviewer record.

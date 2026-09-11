@@ -4,15 +4,118 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-65 BELOW. It carries the standing order, the current floor, the round-64 lanes
-α–ε — and STEP 1, the E671 CI adoption the user explicitly asked for — and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
+🔴 **START AT §0-NOW-66 BELOW. It carries the standing order, the current floor, the round-65 lanes
+b* — and STEP 1, minting the `### E652+` backlog headings (the standing minting debt, now E652–E692) — and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
 kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
 (counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
 them. Rules are durable; figures are not.
 
 ---
 
-## 0-NOW-65. ROUND 63 CLOSED (linked floor 11,438 / 175,211; README headline now census-pinned) — ROUND 64 NEXT; CURRENT
+## 0-NOW-66. ROUND 64 CLOSED (linked floor 11,462 / 175,615; CI runs SHARDED) — ROUND 65 LANES b* NEXT; CURRENT
+
+**Written 2026-09-11 at `e028f142c`. §0-NOW-65 below is superseded history — but its machinery SURVIVES
+and stays in force: operating rules 1–10 VERBATIM (with the three -66 addenda below), §3 of §0-NOW-62
+(prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the `cp -a` lane recipe).
+Only FIGURES and lane assignments are dead. Floors are MODE-DOMAIN: never quote a published figure into
+a linked brief or the other way, and always name cwd + mode beside every number.**
+
+🔴 **STEP 1 FOR THE NEW SESSION — mint the `### E652+` headings in `crush_code_hardening_backlog.md`.**
+The standing minting debt now covers **E652–E692**: E689–E692 already have headings (minted at this
+close, the first past E651), but E652–E688 exist only as triage rows — copy each into a
+`### E<n> [STAMP] — title` heading with What/Where/Severity per the triage style, stamps taken from
+`docs/plans/crush_code_backlog_triage.md` (its authority for ids ≥ E652; E650/E651's one-word stamps
+lag there too). Docs-only — commit with a negative control, no suite run needed.
+
+### STANDING ORDER — run this plan to completion
+
+**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
+at a round boundary to ask whether to continue.** Concretely:
+
+1. Land **STEP 1** (above), then work §2's lanes **ba, bb, bc, bd, be** as round 65. Close it (worklog
+   entry + a new `0-NOW-67` section + backlog/triage stamps + filemap regen), then **immediately choose
+   round 66** from what round 65 files, and keep going — rounds continue until no actionable backlog
+   remains and all plan §8b items land.
+2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
+   If you are running out of context, doing that is the last and highest-value thing you do.
+3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
+   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
+4. **Trust git, not reports.** Round 64's full-suite gate caught defects the lane's own targeted runs
+   missed TWICE — verify every claim against `git log` and the tree before bookkeeping.
+
+**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
+would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
+to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
+frame, never with a cap).
+
+#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65 — round-64 evidence confirmed the whole set; -66 addenda after)
+
+**ADDENDA at -66:**
+
+- **Rule 6 is now a SEXTET at merge**: the quartet (suite-figure.json + README headline + artifact +
+  guard) plus `scripts/parallel-tests-durations.tsv` plus README — a new test file without a manifest
+  row makes CI conservation go red. The final re-pin `e028f142c` moved 11,459→11,462 exact-predicted.
+- **Every review brief includes the `SwallowingCatchCensus` + `OneSidedHomeSandbox` filter groups** —
+  round 64 proved targeted filters miss tree-wide guards twice (ac's start-failure contracts; ad's own
+  new tests reddening the censuses).
+- **Never oversubscribe CI K** — K=min(nproc,4); ≥2× CPU pressure trips the lease/idle-ceiling races
+  (K=8 refuted by measurement at `f67328f94`).
+
+**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
+(r64=a*, r65=b*). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
+`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
+
+### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-64 FINAL / NEW ANCHOR** | **11,462 / 175,615 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (535s serial) | **LINKED, cwd = sugar-crush, at `e028f142c`** — CI shard path K=4 conservation PASS 156s |
+| predictions ledger | 11,444 / 11,459 / 11,462 — all three hit EXACTLY | additive-tests rule, ~15 rounds holding |
+
+### 2. ROUND 65 — FIVE FILE-DISJOINT LANES ba–be (concurrency 8 KEEP-FILLED; ownership verbatim into briefs; refuse out-of-lane edits, report seams)
+
+| lane | scope | ids | owns (excerpt) |
+|---|---|---|---|
+| **ba — mcp panel + LSP pump** | **E689** (/mcp TUI panel — E678 second half; `crush mcp --json` rows already DONE) + **E690** (mount pumpStderr at the LSP-side dispatch entry — E677 remainder; mirrors the MCP entry+timer mount) | E689, E690 | `sugar-crush/src/Tui/`, `src/Cli/Subcommands.php`, `src/LSP/`, `src/MCP/StdioMcpServer.php` |
+| **bb — JJ seams** | **E682** (composite adopts the abandoned-palette surface) + **E683** (KeyBindingRegistry prose + mouse pane-jump first-key seam) | E682, E683 | `sugar-crush/src/Renderer.php`, `src/App.php`, `src/Commands/KeyBindingRegistry.php` |
+| **bc — Phase-9 layer B/C** | interactive-PTY opt-in param (design settled round 40, layer A landed round 63, absent-pinned seam) | Phase9-B/C | `sugar-crush/src/Agents/`, `src/Backend/`, `src/Support/ProcessContainment.php` |
+| **bd — E653 re-derivation** | operator-drain half (shape WITHDRAWN at r62 — re-derive from the triage row before cutting the lane) | E653 | `sugar-crush/src/Cli/Bootstrap.php`, `tests/Cli/` |
+| **be — E686 tranche-2** | repo-wide figure remediation, bounded tranche (campaign, not a bundle) | E686 | `sugar-crush/tests/`, `docs/`, `README.md` |
+
+**E681 CLOSED** (save-order fix, `e4f46f7ed`). **E687** (stderr-site roster) stayed untouched — remains
+OPEN; pair with any stderr-site change. **E691** (coverage CI still serial for sugar-crush — needs a
+clover-merge story) and **E692** (EngineBackend.php:966 in-process `pcntl_fork` async-complete child —
+containment-scope call to make) stay unscheduled this round.
+
+### 3. LEDGER AFTER ROUND 64
+
+681 → **685** entries: **29+13 CLOSED this round** (E671–E677 minus the E678 half, E679–E681, E684,
+E685, E688), **E678 → PARTIAL** (panel half → E689), **E686 → PARTIAL** (tranche landed, campaign
+continues), E687 untouched-stays-OPEN, **E689–E692 minted (4)**; the E633-family PARTIALs persist.
+Actionable **131 → 117**.
+
+### RESTART INSTRUCTIONS — the new-session startup recipe (-66)
+
+1. Read this §0-NOW-66, the worklog tail (`## ROUND 64` in `docs/plans/crush_code_worklog.md`), and
+   `docs/plans/crush_code_filemap.md`.
+2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the `*** WANTED
+   PUBLISHED ***` banner is cosmetic); `git status` clean at or above tip `e028f142c`; if any figure is
+   doubted, run the floor suite FIRST (535s serial @cwd=sugar-crush, or K=4 sharded via
+   `scripts/parallel-tests.sh`).
+3. **STEP 1 FIRST: mint the `### E652+` backlog headings** (docs-only, negative-control commit).
+4. Then lanes ba–be per the filemap ownership sets (ba/bb both touch the Tui render region — serialize
+   by file; bd shares Bootstrap.php with nothing live).
+5. Per-bundle loop: implement (task+coder) → review (task+coder, verdict-first, WITH the two census
+   groups + SwallowingCatchCensus/OneSidedHomeSandbox filters) → fix round → merged-suite green →
+   commit (author `Joe Huss <[EMAIL]>`). Never push standing.
+6. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-67` + filemap regen +
+   `crush_code.md` pointer flip.
+7. Honor rules 1–10 + the -66 addenda throughout. STOP only at the four stop-and-ask items. Run the
+   plan to completion — **do not stop at round boundaries to ask.**
+
+---
+
+## 0-NOW-65. ROUND 63 CLOSED (linked floor 11,438 / 175,211; README headline now census-pinned) — ROUND 64 NEXT
 
 **Written 2026-09-10 at `8c52b26e5`. §0-NOW-64 below is superseded history — but its machinery SURVIVES
 and stays in force: §3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip

@@ -11597,6 +11597,41 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 64 — CI sharding goes live, the containment choke point lands, TaskTool goes production, and the residuals sweep (2026-09-11)
+
+**CLOSED at `e028f142c`.** Base `a102a43e7` (code tip `8c52b26e5`). **Six lanes aa–af** — the two-letter lane-naming convention adopted this round: first letter = round-group, second = lane within the round (r64=a*, r65=b*). Chain: `f67328f94` (aa/E671 CI sharding) → the ab/ac picks → `07a53049b` (ad re-pin) → `305122d6c` (ae) → `3bf8b6869` (af/E681) → `e028f142c` (final sextet re-pin). NOT pushed.
+
+### THE FLOOR
+
+| run | figure | domain |
+|---|---|---|
+| round base | 11,438 / 175,211 / 0F / 0E / 1S / exit 0 | LINKED @ `8c52b26e5`, cwd = repo root (round-63 anchor) |
+| **final merged (serial)** | **11,462 / 175,615 / 0F / 0E / 1 skipped (`McpClientTest` canary) / exit 0** (535s) | **LINKED @ `e028f142c`, cwd = sugar-crush — new anchor** |
+| CI shard path | K=4 conservation PASS (156s) | the live sugar-crush CI path since `f67328f94` |
+
+The additive-tests rule hit **all three** mid-round predictions exactly — 11,444, then 11,459, then 11,462 — roughly fifteen rounds running.
+
+### LANE OUTCOMES
+
+- **aa — E671 (STEP 1, the user's explicit ask).** The sugar-crush cell in `.github/workflows/ci.yml` now runs `scripts/parallel-tests.sh` at **K=min(nproc,4)**; `scripts/parallel-tests-durations.tsv` (480 rows) is committed; the harness gained `--durations`/`--against-json` (both additive) and CI checks the sharded totals **conservatively against `suite-figure.json` — FAIL-CLOSED**: a new test file without a manifest row makes shard-sum < figure → red. **K=8 REFUTED by measurement** — runners are 2–4 vCPU and ≥2× oversubscription trips the lease/idle-ceiling races. `ReadmeSuiteFigureDriftTest` grew into the live-enumeration arbiter (4 methods).
+- **ab — E675 + E684 (`b636591b6`, review-fix `3b76a0e8d`).** TaskTool is production-fed: `Bootstrap::chat()` hoists the agent manager and a new private `taskWorkerPool()`, threaded through `backend()`/`backendFor()`/`tools()`; TaskTool moved to `src/Tools/BuiltIn/` with the `Runtime.php:549` FQN sweep; the census trio flipped in-step (CorpusTest flat 11→12). The live-feed pin (real `Bootstrap::chat`, reflection into `EngineBackend::$tools`, `assertSame` the chat's own manager) and the pool-constitution pin are both mutation-proven. E684: Bootstrap totals prose → measured 29/128/3 and 29/135/2.
+- **ac — E672/E673/E674 + E688 (`8aaa7211b`→`ee10b4b7b`→`19231e899`→`7d680fe99`→`ff1e9530f`).** New `src/Support/ProcessContainment.php` choke point (setsid -w probe once per process, `spawnSpec()`, `env()` forcing NONINTERACTIVE and stripping SUDO_ASKPASS/GPG_TTY); **10/10 measured spawn sites routed**; terminate-with-container wired (`?int $groupPid` reaper rungs, literals 15/9, pgid==pid discriminator); E674 effective at every real spawn. **E688 minted-then-fixed in-lane**: `getExitCode():?int` with a 2.0s **REAP-wait** bound — explicitly not a request timeout (the E646 standing prohibition honored) — plus the `WorkerExitCodeAttributionTest` keystone.
+- **ad — E676/E677/E679/E680 (`b76fee3cd`, census-fix `85e8ad2f7`).** Grace ladders consolidated into `ProcessReaper::escalate()` (real trap-ignoring-child e2e pins: TERM spent, KILL lands); MCP dispatch-entry `pumpStderr` mounts (entry + timer; the idle-drain removed — the timer was the drain); the new `Support/TimedFileLock` helper replaces two drifted hand-rolled twins (TaskList byte-identical, WorktreeManager gains the @-suppress — drift settled deliberately); Session.php **verified flock-free** (the entry claim FALSE; pin added: a foreign LOCK_EX on dest never delays save). E678's `crush mcp --json` rows landed; the /mcp panel refused — collides Tui — → **E689**.
+- **ae — E685 + E686-tranche (`c0e4681d2`).** 12 doc-claims judged: 2 fixed-by-reword, 1 true-claim newly pinned via a REAL mutation-able `DocFigureProseDriftTest` generator, 9 held-with-domains; the stale `WorkflowEngine.php:895`/`:1063` cites went symbol-based. E686 stays **PARTIAL** — the 79-file campaign continues (tranche-2 = round-65 be).
+- **af — E681 (`e4f46f7ed`).** Supervisor decision: **fix the save ORDER** (the adopted recommendation; the never-remove rule stays intact). `Chat.php`'s checkpoint now snapshots `$this->inputBuf` pre-clear and rewind restores it (no more hard-coded `''`). The polarity-1 pin discriminates (real Enter-submit → store round-trip → `/rewind` verbatim; reverting either half reddens it); `RewindCommandTest:189` is now non-vacuous; legacy keyless checkpoints → `''`.
+
+### REVIEWS AND PROCESS FINDINGS
+
+The ac review caught a MAJOR class: the bogus-binary **fail-fast was lost through the containment wrapper** — LspConnection/StdioMcpServer (`7d680fe99`), then ClaudeCodeInvocation/ClaudeCodeProvider as sites #3–4, **found ONLY by the full-suite gate** after the targeted runs stood green. And ad's own new tests tripped `SwallowingCatchCensusTest` and `OneSidedHomeSandbox` (HOME pairing + capture-only-then-assert) — the second time this round a targeted filter missed a tree-wide guard. Future review briefs MUST include both census groups.
+
+### LESSONS
+
+1. **The full-suite gate is load-bearing, not ceremonial** — twice in one round it caught what targeted filters missed (start-failure contracts; census groups). Routed-site sweeps must grep start-failure contracts tree-wide.
+2. **Never oversubscribe CI** — K=8 refuted by measurement on 2–4 vCPU runners; ≥2× CPU pressure trips the lease/idle-ceiling races. K=min(nproc,4) is the committed posture.
+3. **Stuck-agent pattern** — 3 identical reports means abandon the task and re-cut an independent review; resuming is for BLANK responses, never for identical ones.
+
+Ledger: **13 CLOSED** (E671–E677 minus the E678 half, E679–E681, E684, E685, E688 — the last born AND closed in-lane), **E678/E686 → PARTIAL**, E687 untouched (stays OPEN), **E689–E692 minted (4)**. Actionable **131 → 117**. Round-64 sandboxes: crush-lane-{e671,ab,ac} bases on record; artifacts under `/home/sites/crush-r61-artifacts/{e671,ab,ac,ad,ae,af,merge-ab-ac,merge-ae-af}/`.
+
 ## ROUND 63 — containment layer A, the Task tool, sibling tier, and the corpus cluster (2026-09-10)
 
 **CLOSED at `8c52b26e5`.** Base `1a6ef5f60` — the round-62 merged tip (the round-62 docs closeout `604c11f19` stacked beneath GG/HH/II/JJ's picks). **Ten lanes AA–JJ** ran to tips: AA `b814d5e3a`+`4d68ee678` (r63-shas note: original lane commits `589a709e1`/`36e66906b` — re-cut at merge), BB `e5f597705`+`5689b8dfe`, CC `2f60e1696`+`2d538c61f`, DD `fa4f40ed4`..`7b4f770a4` (11 commits), EE `bb58148d6`..`d19c6409e` (7), FF `fa0067255`+`9bcd7dddf`, GG `133ed62ba`..`f136ce903` (6), HH `887c449c3`..`05454b5f1` (6), II `ea3e04184`..`461324ba3` (5), JJ `353e6a828`. **All 44 picks cherry-picked `-x` with ZERO conflicts and none skipped-as-ancestor** — the filemap ownership mechanism holds a third round.
