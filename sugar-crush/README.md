@@ -687,7 +687,7 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 ### Slash commands
 
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/permissions`
+`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/notices` `/permissions`
 `/rename` `/rewind` `/rules` `/sessions` `/share` `/theme` `/websearch` `/workflow`
 `/exit` (`/quit`).
 
@@ -714,6 +714,17 @@ the wrong file. Every spelling is answered locally — `/permissions rules` and
 and there is nothing for an argument to select. Unlike `/keys`, it is never
 handed to the model: a question about the local gate answered by the one
 participant that cannot see it comes back fluent and wrong.
+
+`/notices` is the launch's warning record with the caps taken off. The
+transcript seeds launch warnings as clipped rows on a 24-slot shelf, and the
+narrowed agent-tool-grant sentences arrive pair-packed into at most two
+aggregate rows — enough to say "something was configured quietly", not enough
+to read. `/notices` restates the whole shelf, the sentences the shelf overflowed
+past its cap, and the full grant list from the live collector, one numbered
+line per fact. Nothing new is stored: it reads the same sources stderr printed,
+which is the point — the panel exists so truncation ends somewhere inside the
+app rather than only in a scrollback. It takes no argument; the record is
+already total.
 
 Typing `/` opens a live popup of the matches, which fuzzy-ranks as you type
 (`/rwd` finds `/rewind`), **highlights the characters you typed** and shows each
@@ -1131,7 +1142,7 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**11,494 tests / 176,293 assertions, 0 failures, 1 skipped** — the whole of
+**11,507 tests / 176,493 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 9m15s. Measured 2026-09-11; the

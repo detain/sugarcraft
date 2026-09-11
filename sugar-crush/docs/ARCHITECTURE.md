@@ -120,7 +120,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 22
+palette, session tabs, the permission prompt, and the dispatch arms for 23
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to

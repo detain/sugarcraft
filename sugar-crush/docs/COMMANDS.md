@@ -275,6 +275,7 @@ it does not; the *What the row says* column is its `description`.
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
+| `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
 | `/compact` | ✓ | | — | Manually compact chat history to save context |
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |

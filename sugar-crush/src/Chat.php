@@ -48,6 +48,7 @@ use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Commands\CommandRegistry;
 use SugarCraft\Crush\Commands\CommandSpec;
 use SugarCraft\Crush\Commands\McpAuthCommand;
+use SugarCraft\Crush\Commands\NoticesCommand;
 use SugarCraft\Crush\Commands\RulesCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
@@ -7288,6 +7289,10 @@ final class Chat implements Model
             // — it is already on the screen — so every spelling gets a superset
             // of what it asked for rather than a "no such subcommand".
             'permissions' => $this->handlePermissionsCommand($text),
+            // Args-tolerant like `permissions`, for the same stated reason: the
+            // record is total, so every spelling gets a superset rather than
+            // a "no such subcommand".
+            'notices' => $this->handleNoticesCommand($text),
             // Both forms reach the same arm, and the bare one is why this is NOT in
             // the bare-only block above: `/rules` lists, `/rules terse` toggles.
             'rules' => $this->handleRulesCommand($text),
@@ -7433,6 +7438,37 @@ final class Chat implements Model
                     ...$this->history,
                     Message::user($inputText),
                     Message::assistant($this->permissionsReport()),
+                ],
+                'inputBuf' => '',
+                'inFlight' => false,
+            ]),
+            null,
+        ];
+    }
+
+    /**
+     * `/notices` — every warning this launch raised, whole on the transcript.
+     *
+     * E653 Shape A capped what the transcript could carry (a ≤2-row grant
+     * aggregate; a 24-slot notice shelf whose overflow rows arrive clipped) and
+     * sent the whole sentences only to stderr — a scrollback the app cannot
+     * re-read. This is the other half: the same stores, un-capped, one line per
+     * fact. {@see NoticesCommand} owns the why of reading the stores rather
+     * than keeping one; this handler is the permissions-shaped transcript write
+     * that rides on top of it — a message worth scrolling back to, not an
+     * overlay, because the question "what did I ignore at launch?" gets asked
+     * mid-session, above whatever turn prompted it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleNoticesCommand(string $inputText): array
+    {
+        return [
+            $this->mutate([
+                'history' => [
+                    ...$this->history,
+                    Message::user($inputText),
+                    Message::assistant((new NoticesCommand($this->agentManager))->report()),
                 ],
                 'inputBuf' => '',
                 'inFlight' => false,
@@ -7601,8 +7637,13 @@ final class Chat implements Model
      * screen asserted a byte class that was a strict SUBSET of what
      * `untrusted()` already removes, so it could only ever confirm that
      * `untrusted()` had been called.
+     *
+     * Promoted to public for `Commands\NoticesCommand` (E653 Shape B), which
+     * renders config paths and on-disk preset names into the same class of
+     * transcript surface — the second sibling screen to need this guard, in
+     * the E164 promotion line rather than a copy that could drift.
      */
-    private static function reportField(string $value): string
+    public static function reportField(string $value): string
     {
         return strtr(Sanitize::untrusted($value), [
             "\n" => '\\n',

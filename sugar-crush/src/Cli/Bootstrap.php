@@ -5239,6 +5239,30 @@ final class Bootstrap
     }
 
     /**
+     * The notices {@see warnPermissionConfigInTranscript()} dropped once the
+     * transcript shelf filled its cap — the CLIPPED messages behind the
+     * synthesised "...and N more" row {@see launchNotices()} appends.
+     *
+     * Added for `/notices` (E653 Shape B), the surface whose entire promise is
+     * that truncation ends somewhere. Until now the overflow count was all a
+     * reader could recover from process state — the dropped sentences
+     * themselves were only ever written to stderr, a scrollback this command
+     * must not pretend to re-read. The store already existed, keyed by the
+     * clipped message; this is the door, not a second shelf.
+     *
+     * Deliberately shaped like {@see launchNotices()} — read-only, emits
+     * nothing, allocates a plain list — so the pair cannot drift in tone.
+     *
+     * @return list<string>
+     */
+    public static function launchNoticesDropped(): array
+    {
+        // The store is a dedup set keyed by the CLIPPED message; the keys ARE
+        // the sentences, and the values only say "seen".
+        return array_keys(self::$launchNoticesDropped);
+    }
+
+    /**
      * The project's MCP config file name — the SAME file Claude Code reads, and
      * the same `mcpServers` key {@see McpClient::loadConfig()} already parsed
      * before anything built one.
