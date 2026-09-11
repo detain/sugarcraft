@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Hooks;
 
 use SugarCraft\Crush\Support\HookContextFiles;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 
 /**
@@ -551,14 +552,31 @@ final readonly class ScriptHook implements BoundedHookInterface
         // the TUI lands mid-frame over whatever candy-core last painted, and
         // under `failOnWarning="true"` turns this suite's own coverage of the
         // refusal path into a failure.
-        $process = @proc_open($this->command, $descriptors, $pipes, $cwd, $fixed + $payload['env']);
+        // E672/E674: the spec and the env come from the ONE choke point —
+        // `setsid -w` detach over /dev/tty, NONINTERACTIVE forced and
+        // SUDO_ASKPASS/GPG_TTY stripped — with the hook's own CRUSH_* keys
+        // and staged payloads riding LAST so a site's required keys still
+        // win. The size-refusal reasoning below is unchanged.
+        $process = @proc_open(
+            ProcessContainment::spawnSpec($this->command),
+            $descriptors,
+            $pipes,
+            $cwd,
+            ProcessContainment::env($fixed + $payload['env'])
+        );
 
         if (!is_resource($process) && $payload['fallback'] !== null) {
             // The exec was refused with the payloads IN the environment, so try
             // again with everything that has a file moved OUT of it. The hook
             // has not run — `proc_open()` returning false means no child was
             // started — so this is a retry, never a second execution.
-            $process = @proc_open($this->command, $descriptors, $pipes, $cwd, $fixed + $payload['fallback']);
+            $process = @proc_open(
+                ProcessContainment::spawnSpec($this->command),
+                $descriptors,
+                $pipes,
+                $cwd,
+                ProcessContainment::env($fixed + $payload['fallback'])
+            );
         }
 
         if (!is_resource($process)) {
@@ -1063,22 +1081,26 @@ final readonly class ScriptHook implements BoundedHookInterface
      * {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} and
      * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()}.
      *
-     * This signals only the DIRECT child, which for a string command is the
-     * shell: a hook that backgrounds something leaves that something orphaned.
-     * What is guaranteed here is that `execute()` returns, not that the hook's
-     * whole process tree is gone.
+     * E673: the child is a `setsid -w` wrapper that LEADS its own process
+     * group (where the host offers a usable detach), so {@see
+     * \SugarCraft\Crush\Support\ProcessContainment::terminate()} group-kills
+     * and a hook that backgrounded something dies WITH the container instead
+     * of orphaning it. On the unwrapped fallback the direct child IS the
+     * command and only it is signalled — what is unconditionally guaranteed
+     * here is that `execute()` returns; tree-reaching is guaranteed wherever
+     * the kernel says the child leads its group.
      *
      * @param resource $process
      */
     private static function terminateAndEscalate($process): void
     {
-        proc_terminate($process);
+        ProcessContainment::terminate($process);
 
         if (self::waitForExit($process, microtime(true) + self::TERMINATE_GRACE_SECONDS)) {
             return;
         }
 
-        proc_terminate($process, 9);
+        ProcessContainment::terminate($process, 9);
         // Unchecked on purpose: after signal 9 the only way to still be running
         // is an uninterruptible kernel wait, and `proc_close()` is then the
         // least-bad option left.

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\MCP;
 
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 final class StdioMcpServer implements McpServer
@@ -280,8 +281,11 @@ final class StdioMcpServer implements McpServer
      */
     public function start(): void
     {
+        // E672/E674: choke-point spec + env — a third-party MCP server from
+        // .mcp.json is exactly the untrusted command class containment is for;
+        // the entry's own env rides as overrides so configured keys still win.
         $this->process = @proc_open(
-            [$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))],
+            ProcessContainment::spawnSpec([$this->command, ...array_map(static fn (mixed $arg): string => (string) $arg, array_values($this->args))]),
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -289,7 +293,7 @@ final class StdioMcpServer implements McpServer
             ],
             $this->pipes,
             null,
-            $this->env
+            ProcessContainment::env($this->env)
         );
 
         if (!is_resource($this->process)) {
@@ -428,7 +432,10 @@ final class StdioMcpServer implements McpServer
             // the escalation necessary. The closePipes()-first guarantee above
             // stays local: it is this server's reason-to-exit, not a property
             // of the ladder.
-            ProcessReaper::terminateAndClose($this->process);
+            // E673: the group id is read WHILE the server is alive — a
+            // wrapped server's whole tree then dies with stop(), which a
+            // bare pid signal could not promise once the child forks.
+            ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
         }
         // Unconditional, because {@see stop()} above only reaches its own call
         // when the process handle is live: a connection torn down some other way

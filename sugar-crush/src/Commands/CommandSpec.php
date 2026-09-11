@@ -8,6 +8,7 @@ use Symfony\Component\Yaml\Exception\ParseException;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Support\Frontmatter;
+use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
  * Metadata for one command, used by BOTH command surfaces - the "/" popup
@@ -569,11 +570,15 @@ final class CommandSpec
         }
 
         $pipes = [];
+        // E672/E674: a command substitution runs model-authored shell text;
+        // the choke point gives it the no-controlling-terminal spawn and the
+        // fail-fast env like every other site.
         $process = @proc_open(
-            ['bash', '-c', $command],
+            ProcessContainment::spawnSpec(['bash', '-c', $command]),
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $cwd,
+            ProcessContainment::env(),
         );
 
         if (!\is_resource($process)) {

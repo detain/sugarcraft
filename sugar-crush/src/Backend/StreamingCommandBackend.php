@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -244,8 +245,18 @@ final class StreamingCommandBackend implements Backend
         // process will be opened directly … PHP will take care of any
         // necessary argument escaping"). Nothing is claimed here about what
         // Windows does with a string command; neither of us can run it.
+        // E672: the command now reaches proc_open() through
+        // ProcessContainment::spawnSpec(), which prepends `setsid -w --` and
+        // keeps either shape an ARRAY; the site itself still passes no options.
         $pipes = [];
-        $proc = @proc_open($this->command, $descriptor, $pipes);
+        // E672/E674: choke-point spec + fail-fast env.
+        $proc = @proc_open(
+            ProcessContainment::spawnSpec($this->command),
+            $descriptor,
+            $pipes,
+            null,
+            ProcessContainment::env()
+        );
         if (!is_resource($proc)) {
             return Message::assistant('_[error: failed to spawn streaming backend command]_');
         }
@@ -522,17 +533,20 @@ final class StreamingCommandBackend implements Backend
      * a normal completion pays no signal.
      *
      * What the fold did NOT change: this signals only the DIRECT child. A
-     * string command's direct child is the shell, so its own children are
-     * ORPHANED rather than killed — the grandchildren of
-     * `sh -c 'curl … | jq …'` keep running and, if they inherited the pipes,
-     * keep them open. Nothing here kills a process tree; what it guarantees is
+     * WHAT THIS USED TO CONCEDE, AND WHAT E673 CLOSED: the string command's
+     * direct child is the shell, so its own children were ORPHANED rather than
+     * killed — the grandchildren of `sh -c 'curl … | jq …'` kept running and,
+     * if they inherited the pipes, kept them open. The spawn now rides the
+     * containment wrapper and {@see ProcessContainment::groupId()} is handed
+     * to the ladder below, so where the host offers a usable detach the whole
+     * group dies with the turn. What remains unconditionally guaranteed is
      * that this method returns.
      *
      * @param resource $proc
      */
     private static function terminateAndReap($proc): void
     {
-        ProcessReaper::terminateAndAwaitExit($proc);
+        ProcessReaper::terminateAndAwaitExit($proc, ProcessContainment::groupId($proc));
     }
 
     /**
@@ -623,7 +637,7 @@ final class StreamingCommandBackend implements Backend
                     if ($timer !== null) {
                         $loop->cancelTimer($timer);
                     }
-                    @proc_terminate($state['proc'], 9);
+                    ProcessContainment::terminate($state['proc'], 9);
                     foreach ($state['pipes'] as $pipe) {
                         if (is_resource($pipe)) {
                             fclose($pipe);

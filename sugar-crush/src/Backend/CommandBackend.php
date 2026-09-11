@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
  * Backend that shells out to an external command. The command
@@ -317,13 +318,16 @@ final class CommandBackend implements Backend
                 // path — a cancel is a user abort, not a graceful shutdown, and
                 // `proc_close()` WAITS, so anything gentler hands this loop's
                 // deadline to a child that has already been given up on.
+                // E673: ProcessContainment::terminate() turns that 9 into a
+                // group kill when the wrapped child measurably leads its own
+                // group, so the command's own children die with the turn.
                 $reap = static function (int $signal) use (&$settled, &$timer, $proc, $pipes, $loop): int {
                     $settled = true;
                     if ($timer !== null) {
                         $loop->cancelTimer($timer);
                     }
                     if ($signal !== 0) {
-                        @proc_terminate($proc, $signal);
+                        ProcessContainment::terminate($proc, $signal);
                     }
                     foreach ($pipes as $pipe) {
                         if (is_resource($pipe)) {
@@ -426,7 +430,11 @@ final class CommandBackend implements Backend
      *
      * NO OPTIONS, for either shape — identical to
      * {@see StreamingCommandBackend}, which makes the same escaping promise in
-     * the same words and must not disagree with this one. The option in
+     * the same words and must not disagree with this one.
+     * E672: the command now reaches `proc_open()` through
+     * {@see \SugarCraft\Crush\Support\ProcessContainment::spawnSpec()}, which
+     * prepends `setsid -w --` and keeps either shape an ARRAY; the site itself
+     * still passes no options. The option in
      * question is `bypass_shell`, which is WINDOWS-ONLY. MEASURED on PHP 8.3 /
      * Linux it is inert for both shapes (the string `"printf a; printf b"`
      * still reaches `/bin/sh -c` with it set; the list `["printf", "a;b"]`
@@ -442,7 +450,16 @@ final class CommandBackend implements Backend
     private function spawn(): array|Message
     {
         $pipes = [];
-        $proc = @proc_open($this->command, self::DESCRIPTOR, $pipes);
+        // E672/E674: choke-point spec + fail-fast env (the 3-arg form used to
+        // inherit the environment verbatim — PATH to a pager-rich world and a
+        // controlling terminal it had no business holding).
+        $proc = @proc_open(
+            ProcessContainment::spawnSpec($this->command),
+            self::DESCRIPTOR,
+            $pipes,
+            null,
+            ProcessContainment::env()
+        );
         if (!is_resource($proc)) {
             return Message::assistant('_[error: failed to spawn backend command]_');
         }

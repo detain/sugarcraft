@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Config;
 
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
  * The `statusLine` settings key: a user-supplied command whose stdout is
@@ -425,7 +426,17 @@ final class StatusLineCommand
         // path into a failure. A refusal is '' — the segment simply does not
         // appear — because there is no channel to report through from a
         // subscription tick and no reader who could act on it mid-session.
-        $process = @proc_open($this->command, $descriptors, $pipes, $cwd, null);
+        // E672/E674: choke-point spec + env. The status line runs on a
+        // subscription TICK — a hung or tty-reaching command once per tick is
+        // the freeze class this whole file exists to bound, and it never
+        // gets a human to answer a prompt.
+        $process = @proc_open(
+            ProcessContainment::spawnSpec($this->command),
+            $descriptors,
+            $pipes,
+            $cwd,
+            ProcessContainment::env()
+        );
         if (!\is_resource($process)) {
             return '';
         }
@@ -735,18 +746,21 @@ final class StatusLineCommand
      * from ext-pcntl: this path must not itself fatal on a build without it.
      * The same escalation and the same literal as
      * {@see \SugarCraft\Crush\Hooks\ScriptHook::terminateAndEscalate()}.
+     * E673: signalling goes through {@see ProcessContainment::terminate()},
+     * so a wrapped command's whole group dies with the tick budget instead of
+     * the wrapper dying and orphaning what it backgrounded.
      *
      * @param resource $process
      */
     private static function terminateAndEscalate($process): void
     {
-        proc_terminate($process);
+        ProcessContainment::terminate($process);
 
         if (self::waitForExit($process, microtime(true) + self::TERMINATE_GRACE_SECONDS)) {
             return;
         }
 
-        proc_terminate($process, 9);
+        ProcessContainment::terminate($process, 9);
         self::waitForExit($process, microtime(true) + self::KILL_GRACE_SECONDS);
     }
 }

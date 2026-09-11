@@ -9,6 +9,7 @@ use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -115,8 +116,10 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
         // Open process directly - cannot use yield inside a closure passed to execute()
         $cmd = array_merge([$this->invocation->claudePath()], $this->invocation->baseArgs(), $args);
 
+        // E672/E674: choke-point spec + env; the three auth keys ride as
+        // overrides (see ClaudeCodeInvocation for the same routing).
         $process = proc_open(
-            $cmd,
+            ProcessContainment::spawnSpec($cmd),
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -124,11 +127,11 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             ],
             $pipes,
             null,
-            [
+            ProcessContainment::env([
                 'ANTHROPIC_API_KEY' => getenv('ANTHROPIC_API_KEY') ?: '',
                 'ANTHROPIC_AUTH_TOKEN' => getenv('ANTHROPIC_AUTH_TOKEN') ?: '',
                 'ANTHROPIC_BASE_URL' => getenv('ANTHROPIC_BASE_URL') ?: '',
-            ]
+            ])
         );
 
         if (!is_resource($process)) {
@@ -266,7 +269,7 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
                 }
             }
 
-            $exitCode = ProcessReaper::terminateAndClose($process);
+            $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process));
         }
 
         if ($exitCode !== 0 && $exitCode !== -1 && $exitCode !== null) {

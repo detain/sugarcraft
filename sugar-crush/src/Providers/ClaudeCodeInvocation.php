@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
+use SugarCraft\Crush\Support\ProcessContainment;
+
 /**
  * Encapsulates a Claude Code CLI invocation.
  */
@@ -108,8 +110,12 @@ final readonly class ClaudeCodeInvocation
     {
         $cmd = array_merge([$this->claudePath], $this->baseArgs(), $args);
 
+        // E672/E674: choke-point spec + env; the three auth keys ride as
+        // overrides. Empty-string values are dropped by proc_open() itself
+        // (measured, recorded in ProcessContainment), so an unset key stays
+        // unset rather than reaching the child as ''.
         $process = proc_open(
-            $cmd,
+            ProcessContainment::spawnSpec($cmd),
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -117,11 +123,11 @@ final readonly class ClaudeCodeInvocation
             ],
             $pipes,
             null,
-            [
+            ProcessContainment::env([
                 'ANTHROPIC_API_KEY' => getenv('ANTHROPIC_API_KEY') ?: '',
                 'ANTHROPIC_AUTH_TOKEN' => getenv('ANTHROPIC_AUTH_TOKEN') ?: '',
                 'ANTHROPIC_BASE_URL' => getenv('ANTHROPIC_BASE_URL') ?: '',
-            ]
+            ])
         );
 
         if (!is_resource($process)) {

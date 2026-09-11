@@ -70,14 +70,20 @@ final class ProcessReaper
      * `disconnect()` invoked explicitly and then again from `__destruct()`.
      *
      * @param mixed $process the value a `proc_open()` call returned
+     * @param int|null $groupPid E673: the process group a containment-wrapped
+     *        child leads (from {@see ProcessContainment::groupId()}, computed
+     *        by the caller WHILE the child is alive — a dead pid answers
+     *        nothing). When non-null the ladder signals `-groupPid` instead
+     *        of the wrapper's own pid, so descendants die with it; null keeps
+     *        the pre-containment direct-child behaviour.
      */
-    public static function terminateAndClose(mixed $process): ?int
+    public static function terminateAndClose(mixed $process, ?int $groupPid = null): ?int
     {
         if (!\is_resource($process)) {
             return null;
         }
 
-        self::terminateAndAwaitExit($process);
+        self::terminateAndAwaitExit($process, $groupPid);
 
         return \proc_close($process);
     }
@@ -98,8 +104,9 @@ final class ProcessReaper
      * {@see terminateAndClose()} intact underneath it.
      *
      * @param mixed $process the value a `proc_open()` call returned
+     * @param int|null $groupPid see {@see terminateAndClose()} — E673.
      */
-    public static function terminateAndAwaitExit(mixed $process): bool
+    public static function terminateAndAwaitExit(mixed $process, ?int $groupPid = null): bool
     {
         if (!\is_resource($process)) {
             return true;
@@ -112,7 +119,7 @@ final class ProcessReaper
             return true;
         }
 
-        \proc_terminate($process);
+        self::signal($process, $groupPid, 15);
 
         if (self::waitForExit($process, self::TERMINATE_GRACE_SECONDS)) {
             return true;
@@ -122,12 +129,29 @@ final class ProcessReaper
         // that constant is defined by ext-pcntl, and naming an optional
         // extension's symbol on a shutdown path would make the shutdown
         // path itself fatal where the extension is absent.
-        \proc_terminate($process, 9);
+        self::signal($process, $groupPid, 9);
         // The result is reported, not acted on — after signal 9 the only way
         // to still be running is an uninterruptible kernel wait, and each
         // caller's reap is then the least-bad option left (see the class
         // docblock for why no watchdog covers this).
         return self::waitForExit($process, self::KILL_GRACE_SECONDS);
+    }
+
+    /**
+     * One rung of the ladder: group signal when the caller named a group this
+     * child leads (E673 — `kill(-pgid)` reaches wrapper AND descendants, the
+     * kernel-proof half after which even an un-forwardable 9 cannot orphan a
+     * grandchild), direct `proc_terminate()` otherwise.
+     *
+     * @param resource $process
+     */
+    private static function signal($process, ?int $groupPid, int $signal): void
+    {
+        if ($groupPid !== null && \function_exists('posix_kill') && @\posix_kill(-$groupPid, $signal)) {
+            return;
+        }
+
+        \proc_terminate($process, $signal);
     }
 
     /**

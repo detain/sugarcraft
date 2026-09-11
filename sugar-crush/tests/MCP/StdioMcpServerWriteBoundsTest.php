@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\MCP\StdioMcpServer;
 use SugarCraft\Crush\McpMessage;
+use SugarCraft\Crush\Support\ProcessContainment;
 
 /**
  * {@see StdioMcpServer::writeLine()} MUST ALWAYS BE ABLE TO GIVE UP — on a
@@ -928,9 +929,10 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         $args = new \ReflectionProperty($server, 'args');
         $args->setAccessible(true);
         // `env` TOO, and it is not decoration: `start()` passes the configured
-        // environment, and a helper that omitted it handed its fixtures THIS
-        // process's environment instead. The fixtures did not care, but a mirror
-        // that silently diverges is worth less than no mirror.
+        // environment THROUGH the containment choke point (E672/E674), and a
+        // helper that omitted it handed its fixtures THIS process's environment
+        // instead. The fixtures did not care, but a mirror that silently
+        // diverges is worth less than no mirror.
         $env = new \ReflectionProperty($server, 'env');
         $env->setAccessible(true);
 
@@ -939,7 +941,7 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,
-            $env->getValue($server),
+            ProcessContainment::env($env->getValue($server)),
         );
         $this->assertIsResource($process, 'could not spawn the fixture server');
         $this->assertStartStillLooksLikeThisMirror($open);
@@ -996,10 +998,10 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             . 'this helper hard-codes has drifted from the one under test',
         );
         $this->assertStringContainsString(
-            '$this->pipes, null, $this->env',
+            '$this->pipes, null, ProcessContainment::env($this->env)',
             $flat,
-            'start() no longer spawns with (pipes, cwd=null, env), so this helper is handing its '
-            . 'fixtures a different environment from the one production gets',
+            'start() no longer spawns with (pipes, cwd=null, containment env), so this helper is '
+            . 'handing its fixtures a different environment from the one production gets',
         );
         foreach ([0, 1, 2] as $fd) {
             $this->assertStringContainsString(

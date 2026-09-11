@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Agents;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -533,9 +534,12 @@ final class ProcessExecutor implements ExecutorInterface
 
         $process = $this->processes[$agentId];
 
-        // Only terminate if process is still valid (not already closed)
+        // Only terminate if process is still valid (not already closed).
+        // E673: ProcessContainment::terminate() group-kills the setsid-wrapped
+        // worker, so anything the worker itself spawned dies with it instead
+        // of orphaning onto the session leader.
         if (is_resource($process['process'])) {
-            proc_terminate($process['process'], SIGTERM);
+            ProcessContainment::terminate($process['process']);
         }
         $this->closeProcess($process);
         unset($this->processes[$agentId]);
@@ -549,7 +553,7 @@ final class ProcessExecutor implements ExecutorInterface
     public function cancelAll(): void
     {
         foreach ($this->processes as $agentId => $process) {
-            proc_terminate($process['process'], SIGTERM);
+            ProcessContainment::terminate($process['process']);
             $this->closeProcess($process);
         }
 
@@ -606,12 +610,31 @@ final class ProcessExecutor implements ExecutorInterface
             2 => ['pipe', 'w'],  // stderr
         ];
 
+        // E672: once the containment wrapper fronts the spawn, a bogus
+        // binary NO LONGER fails inside posix_spawn() — `setsid` itself
+        // starts, and the exec failure surfaces only as the child's exit
+        // status. The pre-check keeps the "failed to spawn" contract on the
+        // call that guarded it before routing — needed only where a wrapper
+        // actually fronts it, so the unwrapped fallback behaves byte-identically.
+        if (ProcessContainment::detachedSpawnBinary() !== ''
+            && !(str_contains($this->binaryPath, '/')
+                ? is_executable($this->binaryPath)
+                : ProcessContainment::locateOnPath($this->binaryPath) !== '')
+        ) {
+            throw new \RuntimeException('Failed to spawn worker process');
+        }
+
+        // E672/E674: the worker rides the ONE choke point — `setsid -w`
+        // detach (which also makes the worker GROUP-ownable, so cancel and
+        // the escalation below reach a worker that spawned children of its
+        // own) and the fail-fast env block over the inherited one. The
+        // worker needs no site keys, so there are no overrides.
         $process = @proc_open(
-            [$this->binaryPath, '-r', $workerScript],
+            ProcessContainment::spawnSpec([$this->binaryPath, '-r', $workerScript]),
             $descriptors,
             $pipes,
             null,
-            null,
+            ProcessContainment::env(),
             ['bypass_shell' => true]
         );
 
@@ -1792,7 +1815,9 @@ PHP;
             return;
         }
 
-        proc_terminate($process, SIGTERM);
+        // E673: group-aware TERM (ProcessContainment answers a group kill only
+        // when the child measurably LEADS the group, never against our own).
+        ProcessContainment::terminate($process);
 
         $deadline = time() + self::SIGTERM_GRACE_SECS;
         while (time() < $deadline) {
@@ -1803,9 +1828,10 @@ PHP;
             usleep(100_000); // 100ms
         }
 
-        // Still running — SIGKILL
+        // Still running — SIGKILL (literal 9, per the ProcessReaper/
+        // ProcessContainment rule: the pcntl constant is optional on this path).
         if (is_resource($process)) {
-            proc_terminate($process, SIGKILL);
+            ProcessContainment::terminate($process, 9);
         }
     }
 

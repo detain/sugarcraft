@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\LSP;
 
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -221,8 +222,10 @@ final class LspConnection implements LspConnectionInterface
     {
         $this->requestTimeout = $timeout;
 
+        // E672/E674: choke-point spec + env; a language server is configured
+        // third-party code and its own env keys ride last.
         $this->process = @proc_open(
-            [$command, ...array_values($this->serverArgs)],
+            ProcessContainment::spawnSpec([$command, ...array_values($this->serverArgs)]),
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -230,7 +233,7 @@ final class LspConnection implements LspConnectionInterface
             ],
             $this->pipes,
             $cwd,
-            $env,
+            ProcessContainment::env($env),
         );
 
         if (!is_resource($this->process)) {
@@ -964,7 +967,9 @@ final class LspConnection implements LspConnectionInterface
             }
         }
 
-        ProcessReaper::terminateAndClose($this->process);
+        // E673: read the group WHILE alive — servers that fork helpers die
+        // whole instead of orphaning them past disconnect().
+        ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
 
         $this->process = null;
         $this->pipes = null;
