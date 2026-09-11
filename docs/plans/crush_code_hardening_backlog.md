@@ -40,7 +40,7 @@ sweep actually found:
 2. **An entry's own prose can be wrong about the tree.** E87 states that raising `MAX_ENTRIES` 8→20
    reds the ceiling guard; measured, 20 prices at 6,248 against an 8,192 cap and the real tipping
    point is 27. E154's "38 `error_log()` sites" is now 23. E1's suite figures are stale twice over.
-3. **The stamps have a shelf life.** They were derived at `3bf356bd6`; the round-62 and round-63 closeouts (2026-09-10, `1a6ef5f60` / `8c52b26e5`) re-stamped every moved id — but the `### E652+` headings were never minted in this file and E650/E651's one-word stamps lag the companion ledger; for ids ≥ E652 the ledger is the only authority. A round that lands code
+3. **The stamps have a shelf life.** They were derived at `3bf356bd6`; the round-62 and round-63 closeouts (2026-09-10, `1a6ef5f60` / `8c52b26e5`) re-stamped every moved id — but the `### E652+` headings went unminted until 2026-09-11 (E689–E692 at the round-64 close; the E652–E688 block appended after them at the minting-debt close) and E650/E651's one-word stamps still lag the companion ledger; for evidence and notes the ledger remains the only authority. A round that lands code
    invalidates every stamp touching the files it moved — re-verify before scheduling, per rule 60.
 
 **Full evidence, confidence, and the per-entry notes live in
@@ -19886,3 +19886,160 @@ needs a clover-merge story (per-shard coverage → merged report) first. **Where
 **What:** an in-process fork (no exec), so `ProcessContainment` (which wraps exec-spawns) never sees
 it; a containment-scope call to make — does this need a pgid story of its own? **Where:**
 `sugar-crush/src/Backend/EngineBackend.php:966`. **Severity:** LOW. From the lane-ac reviewer record.
+
+---
+
+> **MINTING-DEBT CLOSE (2026-09-11, master `9940c9cfb` atop the round-64 closeout `c611441b5`):** the
+> 37 `### E652–E688` headings below are minted from the companion ledger `crush_code_backlog_triage.md`
+> — which stays authoritative for evidence, confidence and per-entry notes (one-line pointers here only).
+> Stamps are the ledger's current states; every CLOSED claim was cross-checked against
+> `git log --grep=E<n>` and cited-SHA reachability at this HEAD — all 26 have a master trace (some SHAs
+> cited in the ledger are pre-rebase lane-branch tips). Appended after E689–E692 to keep this tail append-only.
+
+### E652 [CLOSED] — sub-agent workers had no provider spec (E649's feed gap closed)
+
+**What:** round-62 lanes E+N feed forked sub-agent workers the session provider spec — `AgentPoolConfig` inherits it into BOTH the `ProcessExecutor` and `AgentWorkerPool` feeds, the engine pool gets its own; `${VAR}` placeholders, never resolved secrets. **Conf:** HIGH. Evidence: triage E652.
+
+### E653 [PARTIAL] — operator-facing DRAIN shape for narrowed-grant warnings
+
+**What:** the `narrowedGrantWarnings()` collector shipped; the chat-time drain was withdrawn as a measured seam (round-62 lane E) — the residual drain shape must be re-derived (neighbour of E642). **Conf:** HIGH. Evidence: triage E653.
+
+### E654 [CLOSED] — per-agent system prompt on the batch path
+
+**What:** the executeAll batch path builds real per-agent prompts (raw declared prompt spliced, census rows in-step) instead of refusing (lane HH). **Conf:** MED. Evidence: triage E654.
+
+### E655 [CLOSED] — `TuiRenderer::$terminalSize` cache flake (the E642 victim shapes)
+
+**What:** a process-global size cache left NULL by tests/App tearDowns made victims read the ambient `Tty(STDOUT)`; fixed by the 60x200 `tests/bootstrap.php` pin + three App re-pins + `TerminalSizeFallbackIsolationTest`; honest scope: the pin holds only until the first `resetSizeCache` after tests/App. **Conf:** MED. Evidence: triage E655.
+
+### E656 [CLOSED] — false `File.php:NNN` citations in live-outputs tests
+
+**What:** three stale line-number citations re-anchored to symbols; the tree-wide residual continued as lane H (E657/E658). **Conf:** HIGH. Evidence: triage E656.
+
+### E657 [OPEN] — residual `File.php:NNN` prose citations in `src/`
+
+**What:** lane-D inventory (`SglangProvider.php:2431`, `VertexProvider` ×6, `Runtime.php:341/:486/:684`, "+ more"); step is rule-4 symbol re-anchoring, prose only, floor-exact discipline. **Conf:** MED. Evidence: triage E657.
+
+### E658 [OPEN] — residual `.php:NNN` prose citations across ~20 test dirs
+
+**What:** the same sweep for `tests/Providers`, `tests/Support`, `tests/Workflows`, …; `SymbolCitationDriftTest` guards tree-wide — merge-time symbol reconciliation recommended. **Conf:** LOW. Evidence: triage E658.
+
+### E659 [OPEN] — the RepoMapBlock guard test-name now UNDER-describes its domain
+
+**What:** `testRepoMapBlockNoLongerRestatesTheSourceCensus` covers the corpus scanner too; the rename must land in one commit with `tests/Context/RepoMapBlockTest.php:1210`'s `{@see}` and `SymbolCitationDriftTest` enforcement. **Conf:** MED. Evidence: triage E659.
+
+### E660 [CLOSED] — Task tool rides executeAll per-agent grants
+
+**What:** per-agent grant enforcement is no longer a names-only dormant wire on the batch path (lane BB). **Conf:** MED. Evidence: triage E660.
+
+### E661 [CLOSED] — `AgentPresetRegistry` non-array-frontmatter guard
+
+**What:** guard reached (lane HH). **Conf:** LOW. Evidence: triage E661.
+
+### E662 [OPEN] — `isDispatchableTool()` autoload-then-miss (record-only)
+
+**What:** asks `class_exists()` of secondary names whose PSR-4 path could exist as a different file; unreachable on the current tree (317/317 gate-clean), the `classNames()` comment flags it — re-derive only if the corpus gate ever reds. **Conf:** LOW. Evidence: triage E662.
+
+### E663 [CLOSED] — `/workflow-run` engine pool gets the launch worker spec
+
+**What:** filed + closed the same round (lane N); the last E649-family seam; the pool deliberately landed NO executor — injection would flip its sync dispatch. **Conf:** MED. Evidence: triage E663.
+
+### E664 [CLOSED] — `ClaudeCodeInvocation` subprocess throws retyped to `ProviderException`
+
+**What:** launch-pin props hoisted, the real spawn-failure branch driven in review (lane CC); the 12-bare-throw adjudication: 2 fixed / 10 KEEP, each justified. **Conf:** MED. Evidence: triage E664.
+
+### E665 [CLOSED] — MCP wire names surfaced where the rules are written
+
+**What:** lane CC; the operator-facing `/mcp` panel + `crush mcp --json` rows minted onward as E678. **Conf:** MED. Evidence: triage E665.
+
+### E666 [CLOSED] — an abandoned palette stands down at the delivery choke point
+
+**What:** lane JJ's `paletteStandsDown` gate in `App::delegateToChat` (both doors); its seams minted onward as E682/E683. **Conf:** MED. Evidence: triage E666.
+
+### E667 [CLOSED] — `SgrState` owns the row-boundary balance contract
+
+**What:** `Renderer::balanceSgr` delegates; rowOpen/rowClose/osc8 byte-identical; `applyOsc`'s two-field OSC 8 delta documented (lane EE). **Conf:** LOW. Evidence: triage E667.
+
+### E668 [CLOSED] — `Wait /re/` gets its AST directive and a truthful compile
+
+**What:** lane EE; the `TOKEN_REGEX` mapping rationale corrected alongside. **Conf:** LOW. Evidence: triage E668.
+
+### E669 [CLOSED] — README headline suite figure pinned by generator + guard
+
+**What:** lane FF; the refresher's whole-suite claim made true; the census trio extends to the README + `suite-figure.json` + artifact triple — first red caught by a lane's OWN guard. **Conf:** LOW. Evidence: triage E669.
+
+### E670 [OPEN] — `WorkflowProviderHandoffTest.php:141` property-order nit
+
+**What:** cosmetic ordering inside an existing pin (gayal review of lane N); round-63 CC lane pickup. **Conf:** LOW. Evidence: triage E670.
+
+### E671 [CLOSED] — CI sugar-crush cell runs `scripts/parallel-tests.sh` at K=min(nproc,4)
+
+**What:** durations TSV committed; `--against-json` conservation vs `suite-figure.json` is FAIL-CLOSED; K=8 REFUTED by measurement (2–4 vCPU runners trip the lease/idle-ceiling races). Coverage-job sharding seam minted as E691. **Where:** `.github/workflows/ci.yml`, `scripts/`. **Conf:** MED. Evidence: triage E671.
+
+### E672 [CLOSED] — `ProcessContainment` choke point routes all exec-spawn sites
+
+**What:** 10/10 measured spawn sites routed; the bogus-binary fail-fast lost through the wrapper was restored at LspConnection/StdioMcpServer/ClaudeCodeInvocation/ClaudeCodeProvider (sites 3–4 found ONLY by the full-suite gate). Lesson recorded: routed-site sweeps must grep start-failure contracts tree-wide. **Where:** `sugar-crush/src/Support/ProcessContainment.php`. **Conf:** HIGH. Evidence: triage E672.
+
+### E673 [CLOSED] — terminate-with-container wired into the reaper
+
+**What:** `?int $groupPid` reaper rungs (literals 15/9) + the pgid==pid discriminator, designed WITH the cancellation wiring as the note required. **Conf:** MED. Evidence: triage E673.
+
+### E674 [CLOSED] — `ProcessContainment::env()` strips `SUDO_ASKPASS`/`GPG_TTY`, forces `NONINTERACTIVE`
+
+**What:** effective at all real spawns (choke-point coverage measured 10/10). **Conf:** LOW. Evidence: triage E674.
+
+### E675 [CLOSED] — `TaskTool` production-fed via the `Bootstrap::chat()` pool hoist
+
+**What:** hoist threaded through `backend()`/`backendFor()`/`tools()` + private `taskWorkerPool()`; move to `src/Tools/BuiltIn/` with the `Runtime.php:549` FQN sweep; census trio flipped in-step; live-feed + pool-constitution pins mutation-proven — P8.13 is REAL. **Conf:** HIGH. Evidence: triage E675.
+
+### E676 [CLOSED] — grace ladders consolidated into `ProcessReaper::escalate()`
+
+**What:** real trap-ignoring-child e2e pins — TERM spent, KILL lands (lane ad). **Conf:** MED. Evidence: triage E676.
+
+### E677 [CLOSED] — `pumpStderr()` mounts at the MCP dispatch entry (entry + timer)
+
+**What:** the idle-drain removed — the timer was the drain; the LSP-side dispatch-entry mount was out-of-ownership and minted onward as E690. **Where:** `sugar-crush/src/MCP/StdioMcpServer.php`. **Conf:** MED. Evidence: triage E677.
+
+### E678 [PARTIAL] — MCP wire names: `crush mcp --json` rows DONE; `/mcp` panel deferred
+
+**What:** half (a) landed in lane ad; half (b) refused — Tui ownership collision — minted onward as E689. **Conf:** MED. Evidence: triage E678.
+
+### E679 [CLOSED] — `Support/TimedFileLock` replaces the two drifted hand-rolled twins
+
+**What:** TaskList byte-identical; WorktreeManager gains the @-suppress — drift settled deliberately (lane ad). **Conf:** LOW. Evidence: triage E679.
+
+### E680 [CLOSED] — `Session.php` verified flock-free (the blocking-flock entry claim was FALSE)
+
+**What:** a pin added instead — a foreign `LOCK_EX` on dest never delays save (deterministic; lane ad + census fix). **Conf:** MED. Evidence: triage E680.
+
+### E681 [CLOSED] — `/rewind` restores the draft (checkpoint save-order fixed)
+
+**What:** Chat.php checkpoint snapshots `inputBuf` pre-clear and restore returns it (no more hard-coded `''`); polarity-1 discriminating pin; legacy keyless checkpoints → `''` (lane af, supervisor decision). **Conf:** HIGH. Evidence: triage E681.
+
+### E682 [OPEN] — composite does not adopt the abandoned palette surface
+
+**What:** the JJ seam / E12-composite carry; lane ε follow-up. **Conf:** MED. Evidence: triage E682 (see E666).
+
+### E683 [OPEN] — `KeyBindingRegistry` prose + mouse pane-jump first-key-closes seam
+
+**What:** the JJ residual. **Conf:** LOW. Evidence: triage E683 (see E666).
+
+### E684 [CLOSED] — `Bootstrap` totals prose re-measured (29/128/3 at `:408`, 29/135/2 at `:450`)
+
+**What:** `McpToolWiringTest` pins live; suite filters for the file must use `-c phpunit.xml` (lane ab). **Conf:** HIGH. Evidence: triage E684.
+
+### E685 [CLOSED] — E633-SLICE-2: 12 `src/Tools` quantitative doc claims judged + guarded
+
+**What:** 2 fixed-by-reword, 1 true claim pinned via the real mutation-able `DocFigureProseDriftTest` generator, 9 held-with-domains; stale `WorkflowEngine.php` cites → symbol-based (lane ae). Repo-wide residual → E686. **Conf:** HIGH. Evidence: triage E685.
+
+### E686 [PARTIAL] — repo-wide documentation-figure prose campaign
+
+**What:** bounded tranche-1 landed per the measured-refusal ruling; the campaign continues (~334 figures / 79 files) — tranche-2 = round-65 lane be. **Conf:** MED. Evidence: triage E686.
+
+### E687 [OPEN] — E261's teardown fork-failure log needs the `StderrEmitterCensus` trio in-step
+
+**What:** roster + uppercase anchor word + NUMBER_WORDS must flip together; DECLINED in lane HH (blocked-by-census) — pair with any stderr-site change; round-64 δ shipped none. **Conf:** MED. Evidence: triage E687.
+
+### E688 [CLOSED] — `getExitCode():?int` bounded by a 2.0s REAP-WAIT (not a request timeout)
+
+**What:** born AND closed in lane ac — the review caught exit-code attribution racing the reap; `WorkerExitCodeAttributionTest` keystone; honours E646's standing prohibition. **Conf:** MED. Evidence: triage E688.
