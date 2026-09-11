@@ -174,4 +174,62 @@ final class TokenEstimateCalibrationTest extends TestCase
             'a calibration that evaporated on the next keystroke would be no calibration at all — the factor is mutate-carried model state',
         );
     }
+
+    public function testConsecutiveSettlesAgainstASteadyProviderConvergeInsteadOfOscillating(): void
+    {
+        // STEADY-STATE regression (de review fix 2): every prior test in this
+        // file observes ONE settle, where the raw-record and calibrated-record
+        // pairings agree by construction (f₀ = 1 is a no-op). The defect only
+        // appears on the SECOND settle: pairing real against the previous
+        // turn's CALIBRATED estimate stores r/f and the factor cycles
+        // period-2 around √r. A steady provider counting 2x the raw proxy
+        // must hold the factor at 2.0 forever, not alternate 2.0↔1.0.
+        $chat = $this->calibratableChat([Message::user('hello')]);
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(24, 0.001));
+        $this->assertSame(68, $chat->contextTokens(), 'first pairing: real 24 over the RAW-12 dispatch estimate — factor 2.0 over the settled 34');
+
+        // Second turn: dispatch estimates RAW 34; the provider bills 2x = 68.
+        // Raw-record stores 68/34 = 2.0 (converged). The reverted
+        // calibrated-record pairing would store 68/(34×2.0) = 1.0 and the
+        // settled 56-token history would answer 56 — an under-count.
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(68, 0.002));
+
+        $this->assertSame(
+            112,
+            $chat->contextTokens(),
+            'the second steady settle KEEPS the 2.0 factor over the now-56 raw history — 56 would be the period-2 collapse the raw-record pairing exists to prevent',
+        );
+        $this->assertGreaterThanOrEqual(68, $chat->contextTokens(), 'the estimator must not under-count the figure the provider just billed — the late-fire direction the oscillation produced');
+
+        // Third settle, same provider behavior — a convergent map is fixed,
+        // an oscillating one would have flipped back to 1.0 at the second
+        // turn and answer 78 here.
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(112, 0.003));
+
+        $this->assertSame(
+            156,
+            $chat->contextTokens(),
+            'third steady settle, factor still 2.0 over the settled 78 raw — convergence, not oscillation',
+        );
+    }
+
+    public function testASteadyInflatedProviderPinsAtTheCeilingAndNeverUnderCountsTheLastBilledFigure(): void
+    {
+        // r = 4 (beyond the 3.0 ceiling): raw-record pins f at 3.0 on EVERY
+        // settle (each ratio clamps independently), while the period-2 orbit
+        // alternated 3.0 ↔ 1.33 — and the 1.33 turn answered ~75 over a
+        // history the provider had just billed at 136.
+        $chat = $this->calibratableChat([Message::user('hello')]);
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(48, 0.004));
+        $this->assertSame(102, $chat->contextTokens(), '4x over raw 12 clamps to 3.0 across the settled 34');
+
+        $chat = $this->settle($this->dispatchDraft($chat, 'x'), Usage::new(136, 0.008));
+
+        $this->assertSame(
+            168,
+            $chat->contextTokens(),
+            '136 real over the RAW-34 estimate re-clamps to 3.0 over the settled 56 — the calibrated pairing would have stored 136/102 = 1.33 and answered ~75',
+        );
+        $this->assertGreaterThanOrEqual(136, $chat->contextTokens(), 'even at the ceiling the estimate stays above what the last turn billed');
+    }
 }

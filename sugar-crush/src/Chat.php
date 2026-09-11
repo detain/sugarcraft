@@ -1183,9 +1183,11 @@ final class Chat implements Model
          */
         ?RulesState $rulesState = null,
         /**
-         * The {@see estimateTokenCount()} figure for the history THIS Chat
-         * dispatched a turn with, kept from submit until the turn settles so
-         * the settlement can pair it with what the provider actually counted —
+         * The {@see rawTokenProxy()} figure — PRE-calibration, deliberately:
+         * pairing a real against a calibrated estimate would fold the prior
+         * factor into the observation — for the history THIS Chat dispatched
+         * a turn with, kept from submit until the turn settles so the
+         * settlement can pair it with what the provider actually counted —
          * the last-real-measurement half of E17. Null when no turn is
          * awaiting its observation; one-shot, cleared by
          * {@see turnEstimateObservation()} on the first settled AssistantMsg
@@ -3429,14 +3431,6 @@ final class Chat implements Model
     }
 
     /**
-     * Replace an engine-dispatched call's placeholder with its real result -
-     * {@see finishToolCalls()}'s replace-by-id half, and deliberately building
-     * the same `Message::assistant(…)->withToolResults([…])` shape so
-     * {@see Renderer::renderToolResults()} renders both pipelines identically
-     * (including the W1.F1 diff and the image bytes that ride along on
-     * {@see ToolResult}).
-     *
-    /**
      * Put E20's mid-turn abort on the transcript (the pump and the batched
      * backend-event chain share this one writer so the wording cannot drift
      * between the fork path and the blocking path).
@@ -3461,6 +3455,13 @@ final class Chat implements Model
     }
 
     /**
+     * Replace an engine-dispatched call's placeholder with its real result -
+     * {@see finishToolCalls()}'s replace-by-id half, and deliberately building
+     * the same `Message::assistant(…)->withToolResults([…])` shape so
+     * {@see Renderer::renderToolResults()} renders both pipelines identically
+     * (including the W1.F1 diff and the image bytes that ride along on
+     * {@see ToolResult}).
+     *
      * Correlation is on {@see ToolFinished::$toolCallId}, NOT on the adapted
      * result's own `id`: a tool never sees its own call id, so built-ins
      * routinely return an invented one and only the event carries the id the
@@ -7104,14 +7105,19 @@ final class Chat implements Model
             // thought no matter how the previous one ended.
             'streamingText' => '',
             'reasoningText' => '',
-            // E17: pair THIS number — an estimate over exactly the history
-            // being dispatched — with what the provider reports when the turn
-            // settles. Recomputed here rather than threaded from submit()'s
-            // tier because $baseHistory IS the quantity the tier last
-            // measured (raw history, compacted, or rescued, whichever won),
-            // and calibration is only honest when it measures the same
-            // quantity the tier will next compare against the window.
-            'promptEstimateAtDispatch' => $this->estimateTokenCount($baseHistory),
+            // E17: pair THIS number — the RAW proxy over exactly the
+            // history being dispatched — with what the provider reports when
+            // the turn settles. Recomputed here rather than threaded from
+            // submit()'s tier because $baseHistory IS the history the tier
+            // last measured (raw history, compacted, or rescued, whichever
+            // won). RAW rather than estimateTokenCount()'s calibrated output
+            // on purpose: pairing real against raw×f would fold the previous
+            // factor back into the observation and send it cycling period-2
+            // around the true ratio's square root — see
+            // {@see rawTokenProxy()}. Against the raw proxy the settled
+            // factor IS the correction, so consecutive turns against a
+            // steady provider CONVERGE instead of alternating.
+            'promptEstimateAtDispatch' => $this->rawTokenProxy($baseHistory),
         ]);
 
         // Auto-save checkpoint before processing prompt
@@ -13091,17 +13097,38 @@ final class Chat implements Model
      */
     private function estimateTokenCount(array $history): int
     {
-        $total = 0;
-        foreach ($history as $msg) {
-            $total += (int) ceil(mb_strlen($msg->content) / 4);
-            $total += 10; // role overhead
-        }
+        $total = $this->rawTokenProxy($history);
 
         if ($this->tokenEstimateCalibration === null) {
             return $total;
         }
 
         return max(1, (int) round($total * $this->tokenEstimateCalibration));
+    }
+
+    /**
+     * The PRE-calibration chars/4 + 10 proxy — the raw half of
+     * {@see estimateTokenCount()}, exposed as its own concept because E17's
+     * observation must be paired against THIS, never against the calibrated
+     * output: recording raw×f at dispatch and folding real/(raw×f) at settle
+     * carries the previous factor back into every later observation, and the
+     * factor then cycles period-2 around the square root of the true ratio
+     * (a real 4× ratio oscillates 1.33↔3.0 forever, under-estimating every
+     * other turn — the direction that fires the tier LATE). Paired against
+     * the raw proxy, the stored factor is the true correction itself and
+     * repeated settles against a steady provider converge to it.
+     *
+     * @param list<Message> $history
+     */
+    private function rawTokenProxy(array $history): int
+    {
+        $total = 0;
+        foreach ($history as $msg) {
+            $total += (int) ceil(mb_strlen($msg->content) / 4);
+            $total += 10; // role overhead
+        }
+
+        return $total;
     }
 
     /**
@@ -13254,6 +13281,15 @@ final class Chat implements Model
      * Pair the estimate this Chat dispatched its turn with (E17), against what
      * the settled Message says the provider actually counted, and return the
      * mutate keys that record the outcome.
+     *
+     * THE ESTIMATE SIDE IS RAW — {@see rawTokenProxy()}, not the calibrated
+     * figure — and the choice is load-bearing arithmetic, not style: the
+     * provider settles the SAME history the dispatch measured, so real/raw is
+     * the true correction and storing it converges across repeated settles.
+     * Pairing against the calibrated estimate instead (raw×f) would store
+     * real/(raw×f) = r/f, a map whose period-2 orbit around √r never settles
+     * (r=4 cycles f between 1.33 and 3.0) and half the turns run
+     * under-estimated — fires the tier LATE, the unsafe direction.
      *
      * THE UNIT STORY, named rather than papered over, because the pairing is
      * not the clean prompt-vs-prompt comparison E17 step (a) ultimately
