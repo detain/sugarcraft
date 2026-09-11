@@ -302,8 +302,17 @@ final class PermissionWarningDrainTest extends TestCase
 
             PHP);
 
+        // `timeout -s KILL` is budgeted at 40s, not the parent's 60s default
+        // that {@see \SugarCraft\Crush\Tests\Support\ChildWallClockBudgetTest}
+        // caps: a child that can outlive the parent's own watchdog hangs the
+        // suite instead of failing it. The sibling single-launch harness
+        // ({@see BootstrapToolAndPermissionSettingsTest}) budgets 20s for one
+        // `Bootstrap::chat()`; THIS child runs TWO (`chat()`, then `chat()`
+        // again to prove the Once-guard), so 2 × 20 = 40s is the same headroom
+        // scaled to the work actually done — measured at 0.28s for the pair on
+        // dev, generous for CI. Under the 50s cap.
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >%s 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 40 %s %s >%s 2>%s',
             escapeshellarg($this->probeHome),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
@@ -363,8 +372,14 @@ final class PermissionWarningDrainTest extends TestCase
      */
     private function tailRegex(): string
     {
+        // The paren form of "optional s" is deliberate, not stylistic: a bare
+        // `s?` is glob-shaped by
+        // {@see \SugarCraft\Crush\Tests\Context\GlobDialectDifferentialTest}'s
+        // harvest, and a regex fragment would silently join its pattern-path
+        // corpus. `(` is on that scanner's exclusion set, so the non-capturing
+        // group reads as prose to it and as the same `s?` to PCRE.
         return '/^'
-            . str_replace(['%d', '%s'], ['(\d+)', 's?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
+            . str_replace(['%d', '%s'], ['(\\d+)', '(?:s)?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
             . '$/';
     }
 

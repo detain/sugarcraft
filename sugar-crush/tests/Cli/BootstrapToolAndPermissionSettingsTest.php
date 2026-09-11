@@ -1328,8 +1328,13 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         // The tail row, matched against its public format rather than a
         // hardcoded sentence: `%d` is however many grants the pack could not
         // fit, `%s` the plural marker.
+        // `(?:s)?` not `s?` — a bare `s?` is glob-shaped by
+        // {@see \SugarCraft\Crush\Tests\Context\GlobDialectDifferentialTest}'s
+        // harvest and a regex fragment has no business in its pattern corpus;
+        // the parenthesis is on that scanner's exclusion set and reads the
+        // same to PCRE.
         $tailPattern = '/^'
-            . str_replace(['%d', '%s'], ['\\d+', 's?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
+            . str_replace(['%d', '%s'], ['\\d+', '(?:s)?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
             . '$/';
         self::assertSame('system', $history[2]['role']);
         self::assertMatchesRegularExpression($tailPattern, $history[2]['content']);
