@@ -342,6 +342,10 @@ final class MemoryPromptWiringTest extends TestCase
             'withPermissionApprover' => fn(EngineBackend $b): EngineBackend => $b->withPermissionApprover(
                 static fn(): bool => true,
             ),
+            // Both halves of E20's PAIR (cap + session baseline) passed non-default:
+            // the reflected set demands the builder be exercised, and passing the
+            // tail pair explicitly is what a dispatch-time clone does.
+            'withSpendCap' => fn(EngineBackend $b): EngineBackend => $b->withSpendCap(1.0, 0.25),
             'withoutHooks' => fn(EngineBackend $b): EngineBackend => $b->withoutHooks(),
             // withMemoryStore() is the setter itself, so "preserves" is not a
             // meaningful question for it; it is exercised by every other case.
