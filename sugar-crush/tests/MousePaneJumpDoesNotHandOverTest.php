@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -150,6 +149,6 @@ final class MousePaneJumpDoesNotHandOverTest extends TestCase
 
     private function resetClickTracker(): void
     {
-        (new ReflectionProperty(Chat::class, 'clickTracker'))->setValue(null, null);
+        (new \ReflectionProperty(Chat::class, 'clickTracker'))->setValue(null, null);
     }
 }
