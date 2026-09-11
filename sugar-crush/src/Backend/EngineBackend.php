@@ -963,6 +963,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         }
 
         [$parentSocket, $childSocket] = $sockets;
+        // E692 (Phase 9 scope call, lane bc): this pcntl_fork is an exec-free
+        // in-process fork, deliberately OUTSIDE ProcessContainment's remit — the
+        // choke point contains COMMAND children (spawn→env→detach), while a fork
+        // of this process runs our own code with no argv, no PATH lookup, and no
+        // interactive-prompt surface to fail fast against.
         $pid = pcntl_fork();
 
         if ($pid === -1) {

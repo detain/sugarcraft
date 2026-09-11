@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Tools\BuiltIn\Bash;
 use SugarCraft\Crush\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Pty\Pty;
@@ -52,7 +53,24 @@ final class InteractivePromptContainmentTest extends TestCase
             {
                 return self::detachedSpawnBinary();
             }
+
+            /** @return array<string,mixed> */
+            public function captureInteractive(string $command, ?float $idle = null): array
+            {
+                return $this->runCapturedInteractive($command, null, null, $idle);
+            }
         };
+    }
+
+    /**
+     * Same host gate the layer-A PTY test relies on, answered with an
+     * ASSERTION instead of a skip: on a host with no pty mechanism the
+     * honest interactive behaviour is a clean refusal (126, never started),
+     * and this suite can prove that half deterministically everywhere.
+     */
+    private static function ptyMechanism(): bool
+    {
+        return ProcessContainment::interactiveAvailable();
     }
 
     public function testFailFastEnvironmentReachesEveryToolChild(): void
@@ -201,18 +219,104 @@ final class InteractivePromptContainmentTest extends TestCase
     }
 
     /**
-     * Layer C seam, pinned as an ABSENCE: the settled design is an optional
-     * `interactive` PARAMETER on Bash (never a second tool). The parameter
-     * must not exist before the mechanism does — a schema flag with no
-     * effect teaches the model a lie. When layer C lands, this test flips
-     * on purpose, which is exactly what makes landing it a decision.
+     * Layer C seam, FLIPPED (round 65): the absent-pin of the parameter's
+     * arrival now pins its ARRIVAL — present, boolean, and STILL not
+     * required. The opt-in half of the settled design is load-bearing: a
+     * parameter that defaulted ON would silently re-attach every ordinary
+     * tool child to a terminal, undoing layer A from the inside.
      */
-    public function testNoInteractiveParameterIsPlumbedYet(): void
+    public function testInteractiveParameterHasArrivedAndStaysOptIn(): void
     {
         $schema = (new Bash())->inputSchema();
 
-        self::assertArrayNotHasKey('interactive', $schema['properties']);
+        self::assertArrayHasKey('interactive', $schema['properties']);
+        self::assertSame('boolean', $schema['properties']['interactive']['type']);
         self::assertArrayNotHasKey('interactive', $schema['required'] ?? []);
+    }
+
+    /**
+     * The default-off proof that runs on EVERY host, PTY or not: an
+     * ordinary captured child never holds a terminal — `[ -t 1 ]` is
+     * false because fd 1 is a pipe. If the interactive mechanism ever
+     * leaked into the default branch, this reddens without needing a pty.
+     */
+    public function testDefaultCaptureStillHandsTheChildNoTerminal(): void
+    {
+        $run = self::host()->capture('[ -t 1 ] && echo TTY || echo NOTTY');
+
+        self::assertSame(0, $run['exitCode'], $run['stderr']);
+        self::assertSame('NOTTY', $run['stdout']);
+    }
+
+    /**
+     * The other half of default-off: the refusal shape on hosts that cannot
+     * start a pty, or the real terminal on hosts that can — both asserted,
+     * neither vacuous, so this test proves the gate is honoured whichever
+     * way the host falls.
+     */
+    public function testInteractiveSpawnIsATerminalOrRefusesWithoutStarting(): void
+    {
+        $host = self::host();
+
+        if (!self::ptyMechanism()) {
+            $run = $host->captureInteractive('echo MUST-NOT-RUN');
+            self::assertSame(126, $run['exitCode']);
+            self::assertSame('', $run['stdout'], 'a refused interactive run must never start the command');
+            self::assertStringContainsString('interactive', $run['stderr']);
+
+            return;
+        }
+
+        $run = $host->captureInteractive('[ -t 1 ] && echo TTY || echo NOTTY');
+        self::assertSame(0, $run['exitCode'], 'transcript: ' . var_export($run, true));
+        self::assertStringContainsString('TTY', $run['stdout']);
+        self::assertStringNotContainsString('NOTTY', $run['stdout']);
+    }
+
+    /**
+     * No-askpass design: interactive means a terminal, NEVER weaker secret
+     * policy — the fail-fast env forces ride the pty path byte for byte as
+     * they do the pipe path.
+     */
+    public function testInteractiveStillCarriesTheFailFastEnvironment(): void
+    {
+        if (!self::ptyMechanism()) {
+            self::assertSame(126, self::host()->captureInteractive('true')['exitCode']);
+
+            return;
+        }
+
+        $run = self::host()->captureInteractive('printf "GTP=[$GIT_TERMINAL_PROMPT] GAP=[$GIT_ASKPASS] SA=[${SUDO_ASKPASS+set}]"');
+        self::assertSame(0, $run['exitCode'], 'transcript: ' . var_export($run, true));
+        self::assertStringContainsString('GTP=[0]', $run['stdout']);
+        self::assertStringContainsString('GAP=[/bin/false]', $run['stdout']);
+        self::assertStringContainsString('SA=[]', $run['stdout']);
+    }
+
+    /**
+     * The bounded-refusal keystone: a program that waits for a keystroke
+     * nobody can send dies at the idle ceiling with exit 124 and a legible
+     * reason — never a hang, never laundered success. `read` under sh
+     * blocks forever on an open pty whose master writes nothing; the answer
+     * must come from the ceiling, on the clock.
+     */
+    public function testInteractiveWaitForInputIsRefusedBoundedNotHung(): void
+    {
+        if (!self::ptyMechanism()) {
+            self::assertSame(126, self::host()->captureInteractive('read x')['exitCode']);
+
+            return;
+        }
+
+        $start = \microtime(true);
+        $run = self::host()->captureInteractive('printf READY; read line; echo ANSWERED', 1.5);
+        $elapsed = \microtime(true) - $start;
+
+        self::assertLessThan(9.0, $elapsed, 'the idle ceiling must bound the session, not merely shadow a slow path');
+        self::assertSame(124, $run['exitCode'], 'transcript: ' . var_export($run, true));
+        self::assertStringContainsString('READY', $run['stdout']);
+        self::assertStringNotContainsString('ANSWERED', $run['stdout'], 'input was never supplied — answering would be fabrication');
+        self::assertStringContainsString('waiting for input', $run['stderr']);
     }
 
     /**

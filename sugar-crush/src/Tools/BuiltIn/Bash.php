@@ -98,7 +98,11 @@ final readonly class Bash implements Tool, PromptGuidance
             . 'prompts disabled: sudo, ssh, git credentials and pagers fail fast and '
             . 'say so on stderr. A command that needs a human at a keyboard cannot '
             . 'run here — configure passwordless access or have the user run it '
-            . 'themselves.';
+            . 'themselves. For a program that merely REFUSES to run without a '
+            . 'terminal, `interactive: true` attaches a private pseudo-terminal it '
+            . 'can paint on and its screen comes back as the transcript; no one '
+            . 'types answers there and no password is ever accepted, so a program '
+            . 'that waits for input is terminated at its idle deadline.';
     }
 
     /**
@@ -169,6 +173,14 @@ final readonly class Bash implements Tool, PromptGuidance
                 'type' => 'string',
                 'description' => 'Clear, concise 5-10 word description in active voice of what this command does (e.g. "List files in current directory", not "runs ls").',
             ],
+            // Phase 9 layer C: the opt-in landed together with the mechanism
+            // that honours it (InteractivePromptContainmentTest pinned its
+            // absence until then). Default OFF — omitting it is today's
+            // detached pipe spawn, byte for byte.
+            'interactive' => [
+                'type' => 'boolean',
+                'description' => 'Run the command attached to a private pseudo-terminal it can paint on, for programs that refuse to run without a terminal. Default false. There is no human at this terminal and no password is ever accepted: a program that blocks waiting for input is terminated once its output stops, with its screen returned as the transcript.',
+            ],
         ],
         'required' => ['command', 'description'],
         ];
@@ -195,7 +207,15 @@ final readonly class Bash implements Tool, PromptGuidance
         // attached to the real terminal, so a command that writes there
         // paints outside the TUI frame -- and the model never sees the
         // reason a command failed.
-        $run = $this->runCaptured($cmd, null, $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null);
+        //
+        // The `interactive` opt-in (Phase 9 layer C) chooses the MECHANISM,
+        // never the policy: both branches carry ProcessContainment's
+        // fail-fast env, the default branch is untouched layer-A behaviour,
+        // and neither branch accepts secrets.
+        $maxBytes = $this->maxOutputBytes > 0 ? $this->maxOutputBytes : null;
+        $run = ($args['interactive'] ?? false) === true
+            ? $this->runCapturedInteractive($cmd, null, $maxBytes)
+            : $this->runCaptured($cmd, null, $maxBytes);
 
         // The merge can concatenate stdout AND stderr, so each being within
         // the bound is not the same as the result being within it — the final

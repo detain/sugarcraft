@@ -61,13 +61,20 @@ use SugarCraft\Crush\Support\ProcessContainment;
  * by running it, because a wrapper that laundered every command's exit code
  * into the wrapper's own would trade a hang for a lie.
  *
- * LAYER C SEAM, RECORDED NOT BUILT: the settled design gives the PTY-backed
- * interactive mode as an optional `interactive` PARAMETER on Bash (never a
- * second tool, which would split every permission/hook rule across two
- * names). The parameter is deliberately absent until the mechanism exists —
- * a schema flag with no effect is a lie the model pays for — and
- * InteractivePromptContainmentTest pins its absence so the arrival is a
- * chosen change, not drift.
+ * LAYER C SEAM, BUILT (round 65): the PTY-backed interactive mode is the
+ * optional `interactive` PARAMETER on Bash — a parameter, never a second
+ * tool, because a second name splits every permission and hook rule in
+ * two. The default is OFF, and the default path is runCaptured() exactly
+ * as layer A shipped it: setsid-detached, stdin closed, fail-fast env
+ * forced. When ON, {@see runCapturedInteractive()} routes the same
+ * command through a pty THIS process allocates and captures from — the
+ * child paints on a terminal the user never sees, and never on their
+ * screen. Neither mode accepts secrets: env() forcing is identical on
+ * both paths, and a program that blocks waiting for input is terminated
+ * at the idle ceiling with its transcript and a refusal — an interactive
+ * pty is a terminal, not a typist, and no askpass surface exists here.
+ * InteractivePromptContainmentTest pinned this parameter's ABSENCE until
+ * the mechanism landed; the flip of that pin is the chosen change.
  */
 trait CapturesProcessOutput
 {
@@ -206,6 +213,179 @@ trait CapturesProcessOutput
             'stderrDropped' => $stderrDropped,
             'stdoutMidLine' => $stdoutMidLine,
             'stderrMidLine' => $stderrMidLine,
+        ];
+    }
+
+    /**
+     * Idle ceiling for an interactive run: a program that emits NOTHING for
+     * this long while still alive is waiting on a keystroke nobody is there
+     * to send. Bounded refusal is the whole contract — an unbounded wait is
+     * the hang Phase 9 exists to end, and a "success" laundered from a
+     * frozen screen would be the second lie.
+     */
+    private const INTERACTIVE_IDLE_CEILING_SECONDS = 8.0;
+
+    /**
+     * Run $command attached to a pty this process allocates and captures —
+     * the mechanism behind Bash's optional `interactive` parameter (Phase 9
+     * layer C).
+     *
+     * The return shape is runCaptured()'s, and every semantic difference is
+     * one the presentation layer already handles: a pty multiplexes
+     * stdout, stderr and every escape sequence onto ONE stream, so the
+     * transcript rides `stdout` and `stderr` stays empty — there is no
+     * second channel to lose bytes to. `stdoutMidLine` says the byte cap
+     * cut the transcript mid-line (same rule as the captured path).
+     *
+     * Three exits, each honest about which it is:
+     *  - the program EXITS: transcript + its real status (pty children
+     *    report through the same 0/signal-number convention the captured
+     *    path already keeps);
+     *  - it goes SILENT past the idle ceiling while alive: TERM the group,
+     *    reap, exit 124, stderr names the refusal — the transcript up to
+     *    the freeze still arrives so the model can read WHY (usually its
+     *    own "[sudo] password" prompt);
+     *  - the host CANNOT give a pty (or allocation itself fails): refusal
+     *    before anything starts, exit 126, stdout empty. A degraded
+     *    pipe-mode answer to an explicit interactive request would be the
+     *    schema-flag lie the absent-pin was guarding against, in costume.
+     *
+     * @return array{
+     *     stdout: string,
+     *     stderr: string,
+     *     exitCode: int,
+     *     truncatedBytes: int,
+     *     stdoutDropped: int,
+     *     stderrDropped: int,
+     *     stdoutMidLine: bool,
+     *     stderrMidLine: bool,
+     * }
+     */
+    private function runCapturedInteractive(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $idleCeilingSec = null): array
+    {
+        $idle = $idleCeilingSec ?? self::INTERACTIVE_IDLE_CEILING_SECONDS;
+
+        if (!ProcessContainment::interactiveAvailable()) {
+            return self::interactiveRefusal(
+                'interactive mode is unavailable on this host (no pty mechanism); the command was refused and never started',
+            );
+        }
+
+        try {
+            $pty = \SugarCraft\Pty\Pty::open();
+            $child = $pty->spawn(
+                ProcessContainment::interactiveSpawnCommand($command, $cwd),
+                ProcessContainment::env(),
+                80,
+                24,
+                true,
+            );
+        } catch (\Throwable $failure) {
+            return self::interactiveRefusal(
+                'interactive mode refused: the pty could not be allocated (' . $failure->getMessage() . ')',
+            );
+        }
+
+        $transcript = '';
+        $dropped = 0;
+        $stuck = false;
+        $lastProgressAt = \microtime(true);
+        $hardDeadline = $lastProgressAt + (3.0 * $idle);
+
+        try {
+            while (true) {
+                $chunk = $pty->read(8192, 0.05);
+                if ($chunk !== null && $chunk !== '') {
+                    $transcript = self::appendBounded($transcript, $chunk, $maxBytes, $dropped);
+                    $lastProgressAt = \microtime(true);
+
+                    continue;
+                }
+
+                if ($child->exited()) {
+                    break;
+                }
+
+                $now = \microtime(true);
+                if ($now - $lastProgressAt >= $idle || $now >= $hardDeadline) {
+                    $stuck = true;
+                    ProcessContainment::terminatePid($child->pid());
+                    $child->wait();
+                    $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
+
+                    break;
+                }
+            }
+
+            // The exited() break can beat the last buffered screen repaint;
+            // one more short drain so the transcript ends where the program
+            // did, not one frame earlier.
+            $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
+        } finally {
+            $pty->close();
+        }
+
+        $exitCode = $stuck ? 124 : ($child->exitCode() ?? 0);
+        $stderr = $stuck
+            ? sprintf(
+                'the interactive program went silent for %gs and was terminated — it was waiting for input on a terminal no one can type at, and no password is ever accepted here',
+                round($idle, 3),
+            )
+            : '';
+
+        return [
+            'stdout' => \rtrim($transcript, "\r\n"),
+            'stderr' => $stderr,
+            'exitCode' => $exitCode,
+            'truncatedBytes' => $dropped,
+            'stdoutDropped' => $dropped,
+            'stderrDropped' => 0,
+            'stdoutMidLine' => $dropped > 0 && !\str_ends_with($transcript, "\n"),
+            'stderrMidLine' => false,
+        ];
+    }
+
+    /**
+     * Read the pty master until it answers nothing twice in a row, bounded
+     * so a program STILL writing (impossible right after exit/TERM, cheap
+     * insurance anyway) cannot extend the drain forever.
+     */
+    private static function drainPty(\SugarCraft\Pty\Pty $pty, int $maxChunks = 32): string
+    {
+        $seen = '';
+        $quiet = 0;
+        while ($quiet < 2 && $maxChunks-- > 0) {
+            $chunk = $pty->read(8192, 0.05);
+            if ($chunk === null || $chunk === '') {
+                ++$quiet;
+
+                continue;
+            }
+            $quiet = 0;
+            $seen .= $chunk;
+        }
+
+        return $seen;
+    }
+
+    /**
+     * The never-started answer: exit 126 (found-but-cannot-execute, the
+     * shell's own number for this exact complaint), empty stdout, reason on
+     * stderr so mergeCapturedOutput() surfaces it on the non-zero branch.
+     *
+     * @return array{stdout:string,stderr:string,exitCode:int,truncatedBytes:int,stdoutDropped:int,stderrDropped:int,stdoutMidLine:bool,stderrMidLine:bool}
+     */
+    private static function interactiveRefusal(string $reason): array
+    {
+        return [
+            'stdout' => '',
+            'stderr' => $reason,
+            'exitCode' => 126,
+            'truncatedBytes' => 0,
+            'stdoutDropped' => 0,
+            'stderrDropped' => 0,
+            'stdoutMidLine' => false,
+            'stderrMidLine' => false,
         ];
     }
 

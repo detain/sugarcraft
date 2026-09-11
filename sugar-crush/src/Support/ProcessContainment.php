@@ -249,6 +249,90 @@ final class ProcessContainment
     }
 
     /**
+     * Whether this host can run a child attached to a REAL pty — the gate
+     * the layer-C opt-in consults before promising anything.
+     *
+     * An `interactive: true` request on a host that cannot honour it (no
+     * ext-ffi, /dev/ptmx sealed, Windows, or candy-pty simply absent) is
+     * refused, not deferred: a mode that silently degrades to a pipe would
+     * hand the model a tty-shaped lie. Every check is a STAT, never a
+     * spawn — same discipline as {@see locateOnPath()} answering "might the
+     * binary be missing", because a probe that opened a pty to prove pty
+     * availability would leak descriptors on exactly the failure paths this
+     * method exists to survive. The class_exists check is the vendor-closure
+     * half: sugar-crush requires candy-pty, but a trimmed install or a
+     * mislinked vendor must answer "unavailable", not fatal mid-tool.
+     * Memoized per process like the setsid probe — the honest question is
+     * "can this host", and that answer does not change within a process.
+     */
+    public static function interactiveAvailable(): bool
+    {
+        static $resolved = null;
+
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        if (PHP_OS_FAMILY === 'Windows' || !\extension_loaded('ffi')) {
+            return $resolved = false;
+        }
+
+        if (!@\is_readable('/dev/ptmx') || !@\is_writable('/dev/ptmx')) {
+            return $resolved = false;
+        }
+
+        return $resolved = \class_exists(\SugarCraft\Pty\Pty::class);
+    }
+
+    /**
+     * The argv for a pty spawn: $command through /bin/sh, entered in $cwd
+     * when one is given.
+     *
+     * There is deliberately NO setsid wrapper here, and that is not a
+     * containment gap: layer A's detach exists to REMOVE the controlling
+     * terminal, while the entire point of an interactive run is that the
+     * child HAS one — the pty this app allocated and captures from, never
+     * the user's screen. Wrapping with setsid would opt in and then defeat
+     * the opt-in. The fail-fast env ({@see env()}) still applies verbatim:
+     * interactive means "gets a terminal", never "accepts secrets" — the
+     * standing no-askpass design rule says the pty takes no password at
+     * all, so GIT_TERMINAL_PROMPT/GIT_ASKPASS/SSH_ASKPASS forcing and the
+     * SUDO_ASKPASS/GPG_TTY strips ride both paths identically.
+     *
+     * @return non-empty-list<string>
+     */
+    public static function interactiveSpawnCommand(string $command, ?string $cwd = null): array
+    {
+        $script = ($cwd === null || $cwd === '' ? '' : 'cd ' . \escapeshellarg($cwd) . ' && ') . $command;
+
+        return ['/bin/sh', '-c', $script];
+    }
+
+    /**
+     * Signal a child by PID, reaching its group when it leads one and
+     * itself otherwise — the proc_open-free twin of {@see terminate()}.
+     *
+     * The pty path holds a candy-pty handle, not a proc_open resource, so
+     * there is nothing for terminate()'s is_resource gate to accept. The
+     * group-first order still matters: the shell is not the program, and
+     * killing only the shell would leave the actual child painting on a
+     * terminal nobody reads anymore. Signals stay INTEGER LITERALS for the
+     * same ext-pcntl-free teardown reason as terminate().
+     */
+    public static function terminatePid(int $pid, int $signal = 15): bool
+    {
+        if ($pid <= 0 || !\function_exists('posix_kill')) {
+            return false;
+        }
+
+        if (\function_exists('posix_getpgid') && \posix_getpgid($pid) === $pid && @\posix_kill(-$pid, $signal)) {
+            return true;
+        }
+
+        return @\posix_kill($pid, $signal);
+    }
+
+    /**
      * First executable named $binary on the process PATH, or '' when absent.
      *
      * An empty PATH element is skipped, not treated as '.': answering a
