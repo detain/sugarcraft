@@ -143,7 +143,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
         foreach ($envelopes as $envelope) {
             if (!$envelope['closed']) {
                 error_log(sprintf(
-                    'MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
+                    'sugarcrush: MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
                     . 'a "%s>" envelope opened at byte %d is never closed; recovering whatever '
                     . '<invoke> it had already emitted.',
                     self::ENVELOPE_PREFILTER,
@@ -222,7 +222,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
 
             if ($name === null || $name === '') {
                 error_log(sprintf(
-                    'MinimaxXmlFallbackToolCallParser: a <parameter> element on tool "%s" has no '
+                    'sugarcrush: MinimaxXmlFallbackToolCallParser: a <parameter> element on tool "%s" has no '
                     . 'readable name="..." attribute, so its value cannot be assigned to an argument.',
                     $toolName,
                 ));
@@ -232,7 +232,7 @@ final readonly class MinimaxXmlFallbackToolCallParser implements ToolCallParserI
 
             if ($parameter['terminator'] !== 'close') {
                 error_log(sprintf(
-                    'MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
+                    'sugarcrush: MinimaxXmlFallbackToolCallParser: possible MiniMax XML-delimiter truncation - '
                     . 'parameter "%s" on tool "%s" is never closed with "%s", so its value is '
                     . 'truncated by an unknown amount.',
                     $name,

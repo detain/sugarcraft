@@ -128,9 +128,13 @@ final class CommandLoader
      * one call site is the ONLY place in `src/` that hands a `CommandLoader` to
      * a `Chat`, so on the only path this class runs on, the drain is
      * unconditional. The second half of the old sentence was therefore right
-     * and the first half stopped being: a raw unprefixed copy on the same
-     * channel is the "reported twice" it was willing to accept as the price of
-     * a risk that has since been retired.
+     * and the first half stopped being: a copy on the same channel is the
+     * "reported twice" it was willing to accept as the price of a risk that
+     * has since been retired. WHAT E154 CHANGED is the copy's own face: the
+     * single funnel at {@see report()} now emits `'sugarcrush: ' . $message`,
+     * so every gated row lands on the census's prefixed stderr channel instead
+     * of anonymous stderr — the deliberate-unprefixed reasoning below is
+     * retired with it, and the CALLS stay for the reasons that survive there.
      * WHY THE CALLS STILL EARN THEIR PLACE, gated rather than deleted.
      * WHAT THIS SAID: "the seam clips a long message
      * ({@see \SugarCraft\Crush\Cli\Bootstrap}'s `LAUNCH_NOTICE_MAX_CHARS`)
@@ -153,10 +157,16 @@ final class CommandLoader
      * skip and its parse failure) reach no other channel at all — they go on
      * {@see $skippedFiles}, which nothing drains, so with the gate off this
      * loader's own accessor is their only reader. The three collector-paired
-     * ones survive as a RAW, unprefixed copy, for a log consumer that greps for
-     * this loader's wording rather than for `sugarcrush: `. That is a thin
-     * reason next to the first one, which is exactly why the gate is off by
-     * default rather than the calls being kept unconditional.
+     * ones survive as a copy — and since E154 NOT a raw unprefixed one:
+     * {@see report()} funnels every row through `error_log('sugarcrush: ' .
+     * $message)`, so a consumer grepping this loader's wording matches the
+     * SAME substring inside the prefixed line, while a consumer of the census's
+     * prefixed channel now finds these rows without a per-loader pattern. The
+     * retired half of the old sentence is the "rather than for `sugarcrush: `"
+     * clause — that was the reason the copy stayed anonymous; E154 makes it
+     * non-anonymous and nothing depended on the anonymity (the reporting test
+     * asserts mid-string). What survives is the thinness itself: which is why
+     * the gate is off by default rather than the calls being kept unconditional.
      * {@see DEBUG_REFUSALS_ENV} is how either group is asked for.
      *
      * DIRECTORY REFUSALS ONLY, matching the name and the collector's subject. A
@@ -574,7 +584,7 @@ final class CommandLoader
     private function report(string $message): void
     {
         if ($this->reportRefusals ?? self::debugRefusalsRequested()) {
-            error_log($message);
+            error_log('sugarcrush: ' . $message);
         }
     }
 

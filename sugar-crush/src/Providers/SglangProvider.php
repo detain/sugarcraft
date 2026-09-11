@@ -2391,7 +2391,7 @@ final readonly class SglangProvider implements ProviderInterface
             }
 
             error_log(sprintf(
-                'SglangProvider: tool result "%s" contains the literal "%s" (%d occurrence(s)) - '
+                'sugarcrush: SglangProvider: tool result "%s" contains the literal "%s" (%d occurrence(s)) - '
                 . 'MiniMax-M2.x truncates tool-call arguments containing that substring, so any '
                 . 'follow-up call echoing this content (Edit/Write bodies, XML/HTML/PHP/.tape '
                 . 'content) is at elevated risk of silent truncation. This request is addressed '

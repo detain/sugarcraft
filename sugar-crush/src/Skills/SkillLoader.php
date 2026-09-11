@@ -135,7 +135,7 @@ final class SkillLoader
 
         $report = $this->reportSkips ?? self::debugSkipsRequested();
         if ($report) {
-            error_log("Failed to load skill from {$path}: {$reason}");
+            error_log("sugarcrush: Failed to load skill from {$path}: {$reason}");
         }
     }
 
@@ -152,7 +152,7 @@ final class SkillLoader
 
         $report = $this->reportSkips ?? self::debugSkipsRequested();
         if ($report) {
-            error_log("Refused skills directory {$dir}: {$reason}");
+            error_log("sugarcrush: Refused skills directory {$dir}: {$reason}");
         }
     }
 

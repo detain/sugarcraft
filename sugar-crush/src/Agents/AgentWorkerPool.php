@@ -323,7 +323,7 @@ final class AgentWorkerPool
         // two dispatch arms against each other.
         if ($this->forkFailureCount > 0) {
             error_log(sprintf(
-                'AgentWorkerPool: teardown — this pool lost %d pcntl_fork() failure(s) over its '
+                'sugarcrush: AgentWorkerPool: teardown — this pool lost %d pcntl_fork() failure(s) over its '
                 . 'life; the first was logged at dispatch, later ones were only counted.',
                 $this->forkFailureCount,
             ));
@@ -1478,7 +1478,7 @@ final class AgentWorkerPool
         $errno = \function_exists('pcntl_get_last_error') ? pcntl_get_last_error() : 0;
 
         error_log(sprintf(
-            'AgentWorkerPool: pcntl_fork() FAILED (%s) — this agent, and any later one that '
+            'sugarcrush: AgentWorkerPool: pcntl_fork() FAILED (%s) — this agent, and any later one that '
             . 'hits the same failure, runs sequentially in the parent instead of concurrently. '
             . 'Unlike a build without pcntl this is a runtime resource limit and may clear on '
             . 'its own; if it does not, raise the process limit (RLIMIT_NPROC) or lower '
@@ -1537,7 +1537,7 @@ final class AgentWorkerPool
 
         $this->sequentialFallbackWarned = true;
         error_log(
-            'AgentWorkerPool: pcntl_fork() is unavailable — falling back to '
+            'sugarcrush: AgentWorkerPool: pcntl_fork() is unavailable — falling back to '
             . 'sequential (non-parallel) agent execution. Install/enable the '
             . 'pcntl extension to restore concurrent agent execution.'
         );

@@ -719,7 +719,7 @@ final class RuleLoader
     private function report(string $message): void
     {
         if ($this->reportRefusals ?? self::debugRefusalsRequested()) {
-            error_log($message);
+            error_log('sugarcrush: ' . $message);
         }
     }
 

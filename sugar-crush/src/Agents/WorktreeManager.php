@@ -22,8 +22,9 @@ use SugarCraft\Crush\Support\TimedFileLock;
  * while the registry is stored at:
  *     {basePath}/.registry.json
  *
- * ALL FOUR OF THIS CLASS'S DIAGNOSTICS ARE ON THE MID-SESSION TRANSCRIPT SEAM
- * (E192), and this paragraph is the per-site decision rather than a blanket
+ * ALL FIVE OF THIS CLASS'S DIAGNOSTICS ARE ON THE MID-SESSION TRANSCRIPT SEAM
+ * (four routed there by E192, the fifth placed there by E259), and this
+ * paragraph is the per-site decision rather than a blanket
  * one. The rule is the one the two tool-call parsers' class doc-blocks state:
  * a notice goes to {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}
  * if and only if the emitter did not produce what the caller asked for.
@@ -62,10 +63,18 @@ use SugarCraft\Crush\Support\TimedFileLock;
  *    the honest shape: each is a distinct file the user asked for and did not
  *    get, and {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
  *    de-duplicates identical rows within a batch.
+ *  - {@see cleanupStaleWorktrees()}'s per-agent removal refusal, the site
+ *    E259 added rather than routed: the silent catch made a total-failure
+ *    sweep answer 0, indistinguishable from a nothing-to-do sweep. The
+ *    git-refusal half of that catch duplicates a warning removeWorktree()
+ *    already emits before throwing; the narrow half it owns is the E222
+ *    refusal — git exits 0, the directory survives, the registry entry
+ *    stands — and that is a thing the caller asked for and did not get, so
+ *    it belongs on the transcript and not only inside a returned count.
  *
  * WHY THAT IS WORTH TRANSCRIPT TOKENS, which is the objection the routing rule
  * exists to answer — and the first thing this paragraph has to say is that
- * NOTHING IN `src/` OR `bin/` CONSTRUCTS THIS CLASS, so none of the four sites
+ * NOTHING IN `src/` OR `bin/` CONSTRUCTS THIS CLASS, so none of the five sites
  * above fires on any path today.
  *
  * WHAT THIS PARAGRAPH SAID: "These fire while the alternate screen is up, so
@@ -91,7 +100,7 @@ use SugarCraft\Crush\Support\TimedFileLock;
  * emitter's channel is the channel its FIRST caller inherits, and choosing it
  * now costs one commit while changing it after that caller exists costs a
  * reader who has already learned the wrong one. The routing rule answers YES
- * for all four sites on their merits — each reports a thing the caller asked
+ * for all five sites on their merits — each reports a thing the caller asked
  * for and did not get — and that answer does not depend on when the first
  * caller arrives. What DOES depend on it is the alternate-screen harm, which
  * is why it is now stated conditionally. The reader who could act on these is
@@ -464,7 +473,8 @@ final class WorktreeManager
      * that the outside file is READ at all — `file()` on a path a committed
      * config value chose — and that its lines then reach the user through the
      * pattern refusal below. THAT REFUSAL NO LONGER GOES ONLY TO `error_log()`;
-     * E192 routed all four of this class's diagnostics onto
+      * E192 routed all of this class's diagnostics (five sites today, the fifth
+      * added in place by E259) onto
      * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()}, which
      * writes `error_log()` itself and ALSO puts the row on the mid-session
      * transcript. The measurement this sentence rests on is unchanged — the
@@ -998,8 +1008,18 @@ final class WorktreeManager
             try {
                 $this->removeWorktree($agentId);
                 $removed++;
-            } catch (\Throwable) {
-                // Skip worktrees that fail to remove (e.g., locked files)
+            } catch (\Throwable $e) {
+                // E259: this skip used to be SILENT, and silence here has a
+                // specific cost — a total-failure sweep answers 0, the exact
+                // number a nothing-to-do sweep answers, so the caller cannot
+                // tell "no stale trees" from "every removal failed". The
+                // git-refusal case already warns: removeWorktree() routes
+                // through the seam before it throws. The narrow case this
+                // catch owns is the E222 refusal — git exits 0, the directory
+                // survives, the registry entry stands: a thing the caller
+                // asked removed and did not get, which belongs on the
+                // transcript and not only inside a returned count.
+                RuntimeNoticeSink::warn("WorktreeManager: stale worktree cleanup could not remove \"{$agentId}\"; the sweep skipped it and its registry entry stands: " . $e->getMessage());
             }
         }
 

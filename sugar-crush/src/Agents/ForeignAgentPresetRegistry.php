@@ -438,7 +438,7 @@ final class ForeignAgentPresetRegistry
                 } catch (\Throwable $e) {
                     // One malformed foreign file must not abort the import of
                     // every other agent in the directory.
-                    error_log("ForeignAgentPresetRegistry: skipping {$file}: {$e->getMessage()}");
+                    error_log("sugarcrush: ForeignAgentPresetRegistry: skipping {$file}: {$e->getMessage()}");
                 }
             }
         }
@@ -717,7 +717,7 @@ final class ForeignAgentPresetRegistry
     private function warn(string $warning): void
     {
         $this->warnings[] = $warning;
-        error_log('ForeignAgentPresetRegistry: ' . $warning);
+        error_log('sugarcrush: ForeignAgentPresetRegistry: ' . $warning);
     }
 
     /**

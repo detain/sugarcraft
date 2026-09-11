@@ -240,7 +240,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
         foreach ($envelopes as $envelope) {
             if (!$envelope['closed']) {
                 error_log(sprintf(
-                    'DsmlToolCallParser: a "%s>" envelope opened at byte %d is never closed; '
+                    'sugarcrush: DsmlToolCallParser: a "%s>" envelope opened at byte %d is never closed; '
                     . 'recovering whatever invoke(s) it had already emitted.',
                     self::ENVELOPE_PREFILTER,
                     $envelope['offset'],
@@ -318,7 +318,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             }
 
             error_log(sprintf(
-                'DsmlToolCallParser: an invoke of "%s" is never closed with "</%s>" - the '
+                'sugarcrush: DsmlToolCallParser: an invoke of "%s" is never closed with "</%s>" - the '
                 . 'generation looks truncated; recovering the %d parameter(s) it had already '
                 . 'emitted.',
                 $name,
@@ -352,7 +352,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
 
             if ($name === null || $name === '') {
                 error_log(sprintf(
-                    'DsmlToolCallParser: a "%s" element on tool "%s" has no readable name="..." '
+                    'sugarcrush: DsmlToolCallParser: a "%s" element on tool "%s" has no readable name="..." '
                     . 'attribute, so its value cannot be assigned to an argument.',
                     self::PARAMETER_OPEN,
                     $toolName,
@@ -363,7 +363,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
 
             if ($parameter['terminator'] !== 'close') {
                 error_log(sprintf(
-                    'DsmlToolCallParser: parameter "%s" on tool "%s" is never closed with "%s", so '
+                    'sugarcrush: DsmlToolCallParser: parameter "%s" on tool "%s" is never closed with "%s", so '
                     . 'its value is truncated by an unknown amount.',
                     $name,
                     $toolName,
@@ -383,7 +383,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             // likelier a restart artefact than a correction.
             if (array_key_exists($name, $arguments)) {
                 error_log(sprintf(
-                    'DsmlToolCallParser: duplicate parameter "%s" on tool "%s"; keeping the '
+                    'sugarcrush: DsmlToolCallParser: duplicate parameter "%s" on tool "%s"; keeping the '
                     . 'first occurrence and discarding the later one.',
                     $name,
                     $toolName,
@@ -465,7 +465,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             // real problem. Dropping the parameter would instead hand the tool
             // a silently-missing argument.
             error_log(sprintf(
-                'DsmlToolCallParser: parameter "%s" on tool "%s" has string=%s, which is '
+                'sugarcrush: DsmlToolCallParser: parameter "%s" on tool "%s" has string=%s, which is '
                 . 'neither "true" nor "false"; treating the value as a raw string.',
                 $paramName,
                 $toolName,
@@ -484,7 +484,7 @@ final readonly class DsmlToolCallParser implements ToolCallParserInterface
             // strictly worse than passing it on in the wrong type with a log
             // line naming the tool and the parameter.
             error_log(sprintf(
-                'DsmlToolCallParser: parameter "%s" on tool "%s" declares string="false" but its '
+                'sugarcrush: DsmlToolCallParser: parameter "%s" on tool "%s" declares string="false" but its '
                 . 'value is not valid JSON (%s); passing the raw text through untyped.',
                 $paramName,
                 $toolName,

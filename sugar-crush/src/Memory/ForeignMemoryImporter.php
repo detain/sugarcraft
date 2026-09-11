@@ -170,7 +170,7 @@ final class ForeignMemoryImporter
             } catch (\Throwable $e) {
                 // One unparseable foreign file must not abort the import of
                 // every other entry in the directory.
-                error_log("ForeignMemoryImporter: skipping {$file}: {$e->getMessage()}");
+                error_log("sugarcrush: ForeignMemoryImporter: skipping {$file}: {$e->getMessage()}");
                 continue;
             }
 
