@@ -1,9 +1,9 @@
 {
-    "tests": 11462,
-    "assertions": 175615,
+    "tests": 11480,
+    "assertions": 175940,
     "failures": 0,
     "skipped": 1,
-    "measured_at": "2026-09-10",
+    "measured_at": "2026-09-11",
     "php": "8.3.6",
     "command": "php vendor/bin/phpunit -c phpunit.xml --log-junit <file> (cwd=sugar-crush, linked siblings, monorepo sandbox root)",
     "regenerate": "php tests/Config/Support/refresh-suite-figure.php <junit.xml> (cwd=sugar-crush) \u2014 then update the README headline from the same run"
