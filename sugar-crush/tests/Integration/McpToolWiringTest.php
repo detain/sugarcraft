@@ -1267,7 +1267,7 @@ final class McpToolWiringTest extends TestCase
      * A REAL LAUNCH IN A CHILD PROCESS, not a reflection call on the seam.
      * `Bootstrap::warnPermissionConfigInTranscript()` has a construction-time
      * window, and reachability from THIS site is not inherited from the other
-     * nineteen call sites: `chat()` holds no `self::tools(` call of its own and
+     * twenty call sites: `chat()` holds no `self::tools(` call of its own and
      * only gets here through `backend()` -> `tools()` -> `mcpTools()` ->
      * `mcpClient()`. Whether that chain completes before `chat()` reads
      * `launchNotices()` on its last line is a fact about ORDERING, and only a

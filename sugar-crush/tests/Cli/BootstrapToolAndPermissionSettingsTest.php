@@ -1312,10 +1312,27 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
 
         $history = $this->chatHistoryOfLaunch();
 
-        self::assertCount(1, $history);
+        // Three rows, and the count is a FLOOR pinned by this fixture's shape,
+        // not a roster: the tool-removal report, then E653's narrowed-grant
+        // aggregate — at most a header row and an "and M more" tail whatever
+        // the fan-out, so a flood can no longer turn this list into twelve.
+        // The pair packing itself is asserted exactly (and dynamically) in
+        // {@see PermissionWarningDrainTest}.
         self::assertSame('system', $history[0]['role']);
         self::assertStringContainsString(LayeredSettings::SHARED_PATH, $history[0]['content']);
         self::assertStringContainsString('leaving: Bash', $history[0]['content']);
+        self::assertCount(3, $history);
+        self::assertSame('system', $history[1]['role']);
+        self::assertStringContainsString('narrowed by this session', $history[1]['content']);
+        self::assertStringNotContainsString(' if that is not the configuration', $history[1]['content']);
+        // The tail row, matched against its public format rather than a
+        // hardcoded sentence: `%d` is however many grants the pack could not
+        // fit, `%s` the plural marker.
+        $tailPattern = '/^'
+            . str_replace(['%d', '%s'], ['\\d+', 's?'], preg_quote(Bootstrap::NARROWED_GRANT_OVERFLOW_FORMAT, '/'))
+            . '$/';
+        self::assertSame('system', $history[2]['role']);
+        self::assertMatchesRegularExpression($tailPattern, $history[2]['content']);
     }
 
     /**

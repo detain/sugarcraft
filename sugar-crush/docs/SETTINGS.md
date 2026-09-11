@@ -451,11 +451,11 @@ The three warnings this paragraph used to name as still-stderr-only — an
 unusable provider, a skipped hook file, a rejected permission pattern — have
 since migrated through the same seam, along with the agent-preset degradations,
 the refused project directories, the skipped skill files and the empty tool set:
-**twenty** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+**twenty-one** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
 src/Cli/Bootstrap.php`, which agrees with the token scan in
 `BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare
-identifier does **not** — it reports 40, because most occurrences in that file
-are prose). The rule that decided the split is on
+identifier does **not** — it reports roughly double, because most occurrences in
+that file are prose). The rule that decided the split is on
 `Bootstrap::warnPermissionConfigInTranscript()` — a warning earns a transcript
 row iff it names something **the session can no longer do**. Warnings that
 report a malformed config entry without the session being diminished

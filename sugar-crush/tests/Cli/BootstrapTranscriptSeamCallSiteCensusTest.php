@@ -56,8 +56,8 @@ use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
  * (which rule 7's three-part form actively invites — this very paragraph does
  * not do it only because it is careful to), and it counts a first-class
  * callable. {@see testANaiveSubstringCountIsLargerThanTheRealCallCount()} pins
- * the identifier-vs-call gap so a reader who gets 31 has a test telling them
- * why.
+ * the identifier-vs-call gap so a reader whose naive count is larger than the
+ * declaration has a test telling them why.
  *
  * HOW THE COUNT IS DEFINED. Strip T_WHITESPACE, T_COMMENT and T_DOC_COMMENT
  * from `token_get_all()`, then count every T_STRING equal to the method name
@@ -244,7 +244,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
     private const PROSE_SITES = [
         'Chat::withLaunchNotices() doc-block' => [
             'file' => 'src/Chat.php',
-            'anchor' => '/\b([A-Za-z]+) OF \{@see \\\\SugarCraft\\\\Crush\\\\Cli\\\\Bootstrap\}\'S LAUNCH-WARNING CALL/',
+            'anchor' => '/\b([A-Za-z-]+) OF \{@see \\\\SugarCraft\\\\Crush\\\\Cli\\\\Bootstrap\}\'S LAUNCH-WARNING CALL/',
             'offset' => 0,
         ],
         'BootstrapLaunchNoticeRoutingTest class doc-block, "the other N"' => [
@@ -254,7 +254,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'BootstrapLaunchNoticeRoutingTest class doc-block, "holds N calls"' => [
             'file' => 'tests/Cli/BootstrapLaunchNoticeRoutingTest.php',
-            'anchor' => '/holds ([A-Za-z]+) calls to the seam by a token scan/',
+            'anchor' => '/holds ([A-Za-z-]+) calls to the seam by a token scan/',
             'offset' => 0,
         ],
         'BootstrapLaunchNoticeRoutingTest skipped-skills case, "carries N other sources"' => [
@@ -264,7 +264,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'BootstrapLaunchNoticeRoutingTest skipped-skills case, "N seam call sites"' => [
             'file' => 'tests/Cli/BootstrapLaunchNoticeRoutingTest.php',
-            'anchor' => '/\(([a-z]+) seam call sites by the token scan/i',
+            'anchor' => '/\(([a-z-]+) seam call sites by the token scan/i',
             'offset' => 0,
         ],
         'McpToolWiringTest partly-started-config case' => [
@@ -279,7 +279,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'Bootstrap::chat(), the last-read comment' => [
             'file' => 'src/Cli/Bootstrap.php',
-            'anchor' => '/([A-Za-z]+) call sites now routed onto the transcript seam/',
+            'anchor' => '/([A-Za-z-]+) call sites now routed onto the transcript seam/',
             'offset' => 0,
         ],
         'Bootstrap::mcpClient() catch, the driven-reachability comment' => [
@@ -289,7 +289,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'docs/SETTINGS.md, the transcript-seam paragraph' => [
             'file' => 'docs/SETTINGS.md',
-            'anchor' => '/\*\*([a-z]+)\*\* call sites in total/i',
+            'anchor' => '/\*\*([a-z-]+)\*\* call sites in total/i',
             'offset' => 0,
         ],
     ];
@@ -411,7 +411,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
     private const NUMBER_WORDS = [
         'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13,
         'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
-        'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20,
+        'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21,
     ];
 
     /**

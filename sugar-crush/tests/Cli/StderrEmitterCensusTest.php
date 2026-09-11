@@ -173,7 +173,7 @@ use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — TWENTY-SIX call sites in `src/Cli/Bootstrap.php`, each producing a
+ * it — TWENTY-EIGHT call sites in `src/Cli/Bootstrap.php`, each producing a
  * distinct `sugarcrush: ` line, against a channel-4 credit of four for that
  * file. Off by roughly four times, in the blind direction.
  *
@@ -349,7 +349,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const PREFIXED_WRITER_SITES = [
-        'src/Cli/Bootstrap.php' => 26,
+        'src/Cli/Bootstrap.php' => 28,
     ];
 
     /**
@@ -574,6 +574,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23, 'twenty-four' => 24,
         'twenty-six' => 26,
         'twenty-seven' => 27,
+        'twenty-eight' => 28,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
@@ -1137,9 +1138,9 @@ final class StderrEmitterCensusTest extends TestCase
      *
      * WHY THIS IS NOT A SECOND HAND-MAINTAINED INTEGER, which is the objection
      * the sibling census raises against exactly that shape and is right to.
-     * `PREFIXED_WRITER_SITES` says 26 and
+     * `PREFIXED_WRITER_SITES` carries channel 5's total and
      * {@see \SugarCraft\Crush\Cli\Bootstrap::TRANSCRIPT_SEAM_CALL_SITES}
-     * says 20; this test is what makes the second a COMPONENT of the first
+     * carries one of its three components; this test is what makes the second a COMPONENT of the first
      * rather than an unrelated number that happens to be smaller. Add a seam
      * call and both move together; add a stderr-only warning and only the total
      * moves, which is the distinction a reader of either census wants and
@@ -1167,7 +1168,7 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'without the sibling census noticing; do not bump either number until you know which.',
         );
         self::assertSame(1, $direct, 'the number of warnings that go to stderr and bypass the once-guard moved');
-        self::assertSame(5, $once, 'the number of stderr-only, once-per-process warnings moved');
+        self::assertSame(6, $once, 'the number of stderr-only, once-per-process warnings moved');
         self::assertSame(
             self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
             $direct + $once + $seam,

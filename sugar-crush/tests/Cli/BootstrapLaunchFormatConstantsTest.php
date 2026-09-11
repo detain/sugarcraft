@@ -226,6 +226,13 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // inside the agent's prompt, not on a launch page), so it carries no
         // PAGE_QUOTES row — the census only needs to know the format is named.
         'PROMPT_ATTRIBUTION_FORMAT' => ['method' => 'attributeInheritedPrompt', 'conversions' => 2],
+        // The E653 narrowed-grant pair, both `sprintf()`ed from inside the
+        // packer. The header has a doc reader (this suite renders it whole);
+        // the tail mirrors the launch-overflow line's contract. Neither is
+        // quoted on a page, so no PAGE_QUOTES row — the PROMPT_ATTRIBUTION
+        // precedent above covers exactly that shape.
+        'NARROWED_GRANT_NOTICE_FORMAT' => ['method' => 'narrowedGrantNoticeRows', 'conversions' => 3],
+        'NARROWED_GRANT_OVERFLOW_FORMAT' => ['method' => 'narrowedGrantNoticeRows', 'conversions' => 2],
     ];
 
     /**
@@ -428,6 +435,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // picks between; the sentence itself is the named constant, so the only
         // literals in the body are the `''` guard and those two words.
         'attributeInheritedPrompt' => ["''", "'built-in'", "'imported'", "\"\\n\\n\""],
+        // The E653 packer: singular/plural markers, the was/were pick, the two
+        // join separators and the encoding argument. Both sentences it emits
+        // are named constants, so nothing in the body is a format.
+        'narrowedGrantNoticeRows' => ["''", "'s'", "'was'", "'were'", "': '", "'; '", "'UTF-8'"],
     ];
 
     public function testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt(): void
@@ -708,7 +719,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $census = self::sprintfCensus(self::bootstrapSource());
 
         self::assertSame(
-            13,
+            15,
             $census['calls'],
             "Bootstrap.php's sprintf() call-site count moved; see this test's doc-block",
         );
@@ -759,13 +770,16 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         //
         // THAT SENTENCE USED TO QUOTE THE REAL-TREE CENSUS AS `12/8/0/2` and it
         // was stale before the round that wrote it ended: the E164 promotions
-        // three commits later moved two literals into constants, so the figures
-        // the assertions above actually carry are 12 calls / 3 literal /
-        // 9 constant / 0 interpolated. The quote is dropped rather than
+        // three commits later moved two literals into constants, and the
+        // figures the assertions above carry have moved again since — in the
+        // assertions, which is the only place they can red. The quote is dropped rather than
         // refreshed, because it was a SECOND COPY of four numbers that already
         // sit ten lines up in executable form — a copy that cannot red when it
         // drifts, which is the whole failure mode this control exists to
-        // prevent. Read the assertions, not a comment about them.
+        // prevent. Read the assertions, not a comment about them. (The refresh
+        // then rotted in its own turn — three more formats have moved through
+        // this file since, and the sentence outlived every one of them. That
+        // is the proof the rule needed.)
         self::assertSame(
             [
                 'calls' => 6,

@@ -319,6 +319,32 @@ final class Bootstrap
         '…and %d more launch warning%s this transcript could not fit; the full list is on stderr';
 
     /**
+     * The aggregate header {@see narrowedGrantNoticeRows()} packs narrowed
+     * agent-tool-grant warnings under.
+     *
+     * PROMOTED BECAUSE A TEST RENDERS THE WHOLE LINE (E164):
+     * {@see \SugarCraft\Crush\Tests\Cli\PermissionWarningDrainTest} `assertSame()`s
+     * the composed row rather than pinning a fragment, so the wording is a
+     * contract with the test and belongs in a named constant.
+     *
+     * `%d` the grant count, `%s` the plural marker, `%s` the was/were verb.
+     */
+    public const NARROWED_GRANT_NOTICE_FORMAT =
+        '%d agent tool grant%s %s narrowed by this session\'s allowedTools/disabledTools';
+
+    /**
+     * The tail row {@see narrowedGrantNoticeRows()} appends when the header's
+     * pair pack did not fit every grant. Mirrors
+     * {@see LAUNCH_NOTICE_OVERFLOW_FORMAT}'s contract — count the rest, point
+     * at stderr, spend one row — for the same reason: a silently truncated
+     * aggregate is the defect this seam exists to end.
+     *
+     * `%d` the grants left over, `%s` the plural marker.
+     */
+    public const NARROWED_GRANT_OVERFLOW_FORMAT =
+        '…and %d more narrowed grant%s this transcript could not fit; the full list is on stderr';
+
+    /**
      * The one-line summary {@see reportPrunedSessions()} seeds the transcript
      * with.
      *
@@ -490,7 +516,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 20;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 21;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -1211,20 +1237,22 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY call sites now routed onto the transcript seam. This said
+        // TWENTY-ONE call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
         // seventeenth and eighteenth, the two enabled-skill drop notices in
         // promptEnabledSkills(), plus its nineteenth and twentieth, the two
-        // `enabledSkills` shape notices in that same method. All four are the reason
+        // `enabledSkills` shape notices in that same method; it said twenty
+        // until E653 (round 65) added the twenty-first, the narrowed-grant
+        // drain below. All five are the reason
         // this line is LAST rather than merely tidy: the retention summary is
         // raised from sessionStore() far EARLIER in this method, and the MCP
         // one is raised far LATER, transitively through backend() -> tools() ->
         // mcpTools(), so only a read at the END has both in hand. The count is
         // a grep of this file for `self::` immediately followed by the seam's
         // name — deliberately not spelled out here, because a comment quoting
-        // that literal makes itself the twenty-first hit. No line numbers
+        // that literal makes itself an extra hit. No line numbers
         // either, for the same reason one insertion above decays them.
         // See {@see Chat::withLaunchNotices()}.
         //
@@ -1233,15 +1261,17 @@ final class Bootstrap
         // and reading the property directly here would hand the transcript a
         // silently truncated list — the exact failure mode the cap was added
         // with a counter rather than as a bare array_slice().
-        // E653 ATTEMPTED HERE AND WITHDRAWN AS A SEAM (round 62, MEASURED): a
-        // drain of AgentManager::narrowedGrantWarnings() merged into this call
-        // makes the full suite red in TWO out-of-lane pins —
-        // BootstrapToolAndPermissionSettingsTest::testTheBuiltChatComesUpWithThe
-        // ReportInItsTranscript (expects EXACTLY the permissionRules row: the
-        // per-agent echo added 12 more, the same per-agent-flood defect round-61
-        // lane A recorded) — so the fix needs a per-launch aggregation decision
-        // AND in-step roster edits in tests/Cli files no lane owns. Reported,
-        // not forced. The collector stays pull-only until then.
+        // E653 ADOPTED HERE (round 65) AS AN AGGREGATE, never as a per-warning
+        // seam: narrowedGrantWarnings() is an uncapped per-agent-per-tool list,
+        // and round 62 measured the naive drain flooding this transcript with
+        // a dozen near-identical sentences — the same per-agent-flood defect
+        // round-61 lane A recorded. drainNarrowedGrantWarnings() gives stderr
+        // the complete record exactly as before and gives the transcript at
+        // most two rows: a header packing as many compact grant pairs as fit
+        // inside LAUNCH_NOTICE_MAX_CHARS, and an "and M more" tail when the
+        // pack ran out of room.
+        self::drainNarrowedGrantWarnings($agentManager);
+
         return $chat->withLaunchNotices(self::launchNotices());
     }
 
@@ -3531,14 +3561,14 @@ final class Bootstrap
         // user meets that as `/skill` not offering something they wrote. ONE
         // ROW, whatever the count: this message is already an aggregate, which
         // is what makes it safe to put in a transcript that also has to carry
-        // nineteen other sources. THIS SAID ELEVEN. Round 44 could not correct
+        // twenty other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
         // instruction for closing it (E119). The number
         // is now a row in BootstrapTranscriptSeamCallSiteCensusTest's
         // PROSE_SITES and a declaration in {@see TRANSCRIPT_SEAM_CALL_SITES}, so
-        // a twenty-first site reds this sentence rather than dating it.
+        // a further site reds this sentence rather than dating it.
         self::warnPermissionConfigInTranscript(sprintf(
             self::SKILL_SKIP_NOTICE_FORMAT,
             $count,
@@ -5059,6 +5089,120 @@ final class Bootstrap
     }
 
     /**
+     * The compact `agent "x" declares "y" in tools` prefix of one
+     * {@see \SugarCraft\Crush\Agents\AgentManager::narrowedGrantWarnings()}
+     * sentence — the half worth spending transcript characters on.
+     *
+     * The regex is intentionally the whole shape of the sentence's first
+     * clause, so drift in the collector's wording fails CLOSED into
+     * {@see narrowedGrantPair()}'s whole-sentence fallback rather than silently
+     * mis-packing a row. The pin that keeps this pattern honest lives in
+     * {@see \SugarCraft\Crush\Tests\Cli\PermissionWarningDrainTest}.
+     */
+    private const NARROWED_GRANT_PAIR_PATTERN =
+        '/^(agent "[^"]*" declares "[^"]*" in (?:tools|disallowedTools))(?:,|$)/';
+
+    /**
+     * Seed the transcript with the narrowed-grant report E653: stderr gets
+     * every warning whole and once (the complete record), the transcript gets
+     * at most two aggregate rows (the token-budgeted summary).
+     *
+     * BOTH CHANNELS, never one instead of the other — the collector was
+     * pull-only precisely because the naive both-channels drain flooded the
+     * transcript; this is the aggregation decision that round 62 reported as
+     * missing. Called from {@see chat()} only, after every other warning has
+     * been recorded, because the header counts the grants of THIS launch and
+     * the row budget is shared with the rest of the list.
+     */
+    private static function drainNarrowedGrantWarnings(AgentManager $manager): void
+    {
+        $warnings = $manager->narrowedGrantWarnings();
+
+        if ($warnings === []) {
+            return;
+        }
+
+        foreach ($warnings as $warning) {
+            self::warnPermissionConfigOnce($warning);
+        }
+
+        foreach (self::narrowedGrantNoticeRows($warnings) as $row) {
+            self::warnPermissionConfigInTranscript($row);
+        }
+    }
+
+    /**
+     * The transcript rows for a narrowed-grant flood: ONE header row — the
+     * count, then as many compact grant pairs as fit inside
+     * {@see LAUNCH_NOTICE_MAX_CHARS} — plus ONE tail row counting what the
+     * pack could not fit. At most two rows, whatever the fan-out.
+     *
+     * The pack is greedy in collector order: the pairs share the whole
+     * message, so any order is as honest as another, and collector order
+     * keeps the visible ones aligned with the stderr record above them. The
+     * row never reaches the clip — the budget is checked while packing, not
+     * after — which is the property the drain test pins.
+     *
+     * @param list<string> $warnings
+     *
+     * @return list<string>
+     */
+    private static function narrowedGrantNoticeRows(array $warnings): array
+    {
+        $count = \count($warnings);
+
+        if ($count === 0) {
+            return [];
+        }
+
+        $header = sprintf(
+            self::NARROWED_GRANT_NOTICE_FORMAT,
+            $count,
+            $count === 1 ? '' : 's',
+            $count === 1 ? 'was' : 'were',
+        );
+
+        $row = $header;
+        $shown = 0;
+        foreach ($warnings as $warning) {
+            $pair = self::narrowedGrantPair($warning);
+            $candidate = $row . ($shown === 0 ? ': ' : '; ') . $pair;
+            if (mb_strlen($candidate, 'UTF-8') > self::LAUNCH_NOTICE_MAX_CHARS) {
+                break;
+            }
+            $row = $candidate;
+            ++$shown;
+        }
+
+        $rows = [$row];
+
+        if ($shown < $count) {
+            $remaining = $count - $shown;
+            $rows[] = sprintf(
+                self::NARROWED_GRANT_OVERFLOW_FORMAT,
+                $remaining,
+                $remaining === 1 ? '' : 's',
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The pair regex's group, or the whole sentence when the collector's
+     * shape drifted — dropping a warning from the aggregate is never an
+     * option; paying for it in characters is.
+     */
+    private static function narrowedGrantPair(string $warning): string
+    {
+        if (preg_match(self::NARROWED_GRANT_PAIR_PATTERN, $warning, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return $warning;
+    }
+
+    /**
      * The launch warnings {@see chat()} seeds the transcript with — see
      * {@see warnPermissionConfigInTranscript()}.
      *
@@ -5559,7 +5703,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // nineteen call sites: {@see chat()} holds no `self::tools(` call of
+            // twenty call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

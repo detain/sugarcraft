@@ -6075,7 +6075,7 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * TWENTY OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * TWENTY-ONE OF {@see \SugarCraft\Crush\Cli\Bootstrap}'S LAUNCH-WARNING CALL
      * SITES ARE ROUTED HERE, and the rest deliberately are not.
      *
      * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier
@@ -6089,13 +6089,14 @@ final class Chat implements Model
      * and {@see \SugarCraft\Crush\Tests\Cli\BootstrapTranscriptSeamCallSiteCensusTest}
      * fails this sentence, by name, the moment a call site is added.
      *
-     * WHAT THIS SAID: FOURTEEN. WHAT IS TRUE NOW: twenty — E78 (round 42)
+     * WHAT THIS SAID: FOURTEEN. WHAT IS TRUE NOW: twenty-one — E78 (round 42)
      * routed `reportPrunedSessions()`'s retention summary onto the seam, E86
      * (round 43) routed `mcpClient()`'s start-then-throw catch, and P7.S3
      * routed the two enabled-skill drop notices in
      * `Bootstrap::promptEnabledSkills()` as the seventeenth and eighteenth,
      * plus that method's two `enabledSkills` shape notices as the nineteenth
-     * and twentieth.
+     * and twentieth, and E653 (round 65) added the twenty-first, the
+     * narrowed-grant aggregate drain in `Bootstrap::chat()`.
      * WHY THE SENTENCE STILL EARNS ITS PLACE: the
      * number is not decoration, it is the claim that the split below is a
      * DECISION applied to a known set rather than a description of wherever the
