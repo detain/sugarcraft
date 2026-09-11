@@ -847,6 +847,31 @@ final class SlashDispatchTest extends TestCase
         $added = $this->added($next);
         $this->assertArrayHasKey(1, $added, 'mcp auth list appends the user echo and then the handler reply');
         $this->assertStringContainsString('MCP', $added[1]->content);
+
+        // E689 MOUNT PIN, live like the E675 feed pin: the reply is built
+        // through McpAuthCommand's `list` arm, and that arm must keep emitting
+        // the project-inventory panel ('MCP Project Config' is that panel's
+        // header, unconditional for every discovery status). Drop the panel
+        // call from the arm and THIS line goes red — not the fixture.
+        $this->assertStringContainsString(
+            'MCP Project Config',
+            $added[1]->content,
+            'the mcp list arm no longer emits the E689 project-inventory panel',
+        );
+
+        // Slash-form parity: `/mcp list` and the palette's ToggleMcp string
+        // ('mcp auth list', dispatched at Chat.php's PaletteAction::ToggleMcp
+        // convergence) both land on handleMcpAuthCommand and hence on the same
+        // `list` arm, so one mount proves both doors. The argument matters:
+        // bare `/mcp` + Enter is popup-completed by slashMenuShouldIntercept
+        // before dispatch (see testBothAgentSpellingsStillDispatch).
+        $slashed = $this->added($this->submit('/mcp list'));
+        $this->assertArrayHasKey(1, $slashed, '/mcp list appends the user echo and then the handler reply');
+        $this->assertStringContainsString(
+            'MCP Project Config',
+            $slashed[1]->content,
+            'the /mcp slash form must emit the same panel as the palette spelling',
+        );
     }
 
     /**

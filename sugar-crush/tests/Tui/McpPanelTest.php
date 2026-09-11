@@ -153,6 +153,55 @@ final class McpPanelTest extends TestCase
         self::assertStringContainsString('not valid JSON', $out);
     }
 
+    /**
+     * The clip is DISPLAY-WIDTH safe (review item 2): a CJK+emoji payload
+     * whose byte length vastly exceeds the pane is forced through the
+     * width-60 clip. The old `substr()` byte-cut would split a codepoint
+     * (invalid UTF-8 out), and a naive `mb_substr()` would overrun the cell
+     * grid by the number of wide glyphs. Three invariants: valid encoding
+     * throughout, every row inside the pane, and the ellipsis demonstrably
+     * fired — a clip that silently never ran would pass the first two.
+     */
+    public function testWideUtf8RowsClipByDisplayWidthWithoutSplittingCodepoints(): void
+    {
+        $root = $this->makeRoot();
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [
+                '対話サーバー-' . bin2hex(random_bytes(3)) => [
+                    'command' => '/srv/言語サーバー/' . str_repeat('あいう', 30) . '/bin/run 🧪🧪🧪',
+                ],
+            ],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        self::assertSame(Bootstrap::MCP_TRUSTED, $inventory['status']);
+
+        $width = 60;
+        $out = McpPanel::render($inventory, $width);
+
+        self::assertTrue(
+            mb_check_encoding($out, 'UTF-8'),
+            'the row clip split a codepoint — clipping must go through Width, not substr',
+        );
+        $clipped = 0;
+        foreach (explode("\n", $out) as $row) {
+            self::assertLessThanOrEqual(
+                $width,
+                \SugarCraft\Core\Util\Width::string($row),
+                'a row overflows the pane in DISPLAY cells: ' . $row,
+            );
+            if (str_contains($row, '…')) {
+                $clipped++;
+            }
+        }
+        self::assertGreaterThan(
+            0,
+            $clipped,
+            'the CJK payload demands a clip at width 60; no ellipsis anywhere means the clip never ran',
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Fixture plumbing
     // -------------------------------------------------------------------------

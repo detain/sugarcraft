@@ -113,9 +113,6 @@ final class McpAuthCommand
     }
 
     /**
-     * List all registered servers and their auth status.
-     */
-    /**
      * E689 glue: the `/mcp` list arm opens with the live project-inventory
      * panel (what `.mcp.json` declares and whether launch may run it), then
      * falls through to the auth-credentials table exactly as before. One
@@ -132,6 +129,9 @@ final class McpAuthCommand
         return $this->listServers($paneWidth);
     }
 
+    /**
+     * List all registered servers and their auth status.
+     */
     private function listServers(int $paneWidth): int
     {
         $servers = $this->authStore->listServers();

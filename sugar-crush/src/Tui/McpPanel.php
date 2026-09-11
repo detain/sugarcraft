@@ -6,6 +6,8 @@ namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Crush\Cli\Bootstrap;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * E689: the operator-facing `/mcp` panel — what this project's `.mcp.json`
  * DECLARES and whether this launch is allowed to RUN it, rendered from
@@ -88,14 +90,20 @@ final class McpPanel
     }
 
     /**
-     * One transcript line, clipped to the pane so a pathological `detail`
-     * cannot wrap the panel around itself; truncation keeps two visible
-     * characters of ellipsis room.
+     * One transcript line, clipped to the pane by DISPLAY WIDTH so a
+     * pathological `detail` cannot wrap the panel around itself. Through
+     * {@see Width::truncateMiddle()} — the primitive TranscriptTable already
+     * depends on — because both byte-slicing (a `substr()` cut through a
+     * UTF-8 server name or path emits mojibake) and naive
+     * `mb_substr()` (a CJK cluster is one codepoint but TWO cells, so an
+     * mb_substr clip overruns the pane) are wrong here. Middle-truncating
+     * with the ellipsis is deliberate for the path/detail rows, where both
+     * ends carry meaning.
      */
     private static function line(string $text, int $width): string
     {
-        if (strlen($text) > $width) {
-            $text = substr($text, 0, $width - 1) . '…';
+        if (Width::string($text) > $width) {
+            $text = Width::truncateMiddle($text, $width);
         }
 
         return $text . "\n";
