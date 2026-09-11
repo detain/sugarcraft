@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Reel;
 
 use SugarCraft\Reel\Source\Probe;
+use SugarCraft\Reel\Support\BoundedReaper;
 
 /**
  * Audio playback subprocess wrapper for video files.
@@ -88,9 +89,16 @@ class AudioPlayer
     }
 
     /**
-     * Stop the audio subprocess by sending SIGTERM.
+     * Stop the audio subprocess by terminating it in BOUNDED time.
      *
      * Safe to call even if the process has already exited.
+     *
+     * WHAT THIS USED TO BE: `proc_terminate()` then `proc_close()` with no
+     * escalation between them. E366 measured that pair: it blocks —
+     * `proc_close()` waits — so a player that ignores SIGTERM pinned the
+     * caller's shutdown indefinitely. The ladder in
+     * {@see BoundedReaper} escalates TERM→9 and confirms the exit, so the
+     * reap below cannot inherit a deadline it cannot keep.
      */
     public function stop(): void
     {
@@ -98,7 +106,7 @@ class AudioPlayer
             return;
         }
 
-        proc_terminate($this->processHandle, SIGTERM);
+        BoundedReaper::terminateNow($this->processHandle);
         proc_close($this->processHandle);
         $this->processHandle = null;
     }
@@ -127,7 +135,7 @@ class AudioPlayer
         if (!is_resource($this->processHandle)) {
             return;
         }
-        proc_terminate($this->processHandle, SIGTERM);
+        BoundedReaper::terminateNow($this->processHandle);
         $exitCode = proc_close($this->processHandle);
         $this->processHandle = null;
         $this->exitCode = $exitCode;
@@ -147,11 +155,24 @@ class AudioPlayer
     {
         if (is_resource($this->processHandle)) {
             // SIGCONT has PTY issues like SIGSTOP; terminate and restart.
-            proc_terminate($this->processHandle, SIGTERM);
+            BoundedReaper::terminateNow($this->processHandle);
             proc_close($this->processHandle);
             $this->processHandle = null;
         }
         $this->start(); // start() respects startMs
+    }
+
+    /**
+     * E366's other measured half: a handle that simply goes out of scope
+     * does NOT wait for its child — PHP's resource destructor reaps an
+     * already-exited child and ABANDONS a live one, reparenting an ffplay
+     * to init with every inherited descriptor still open. stop() is
+     * idempotent, so an explicit call before teardown still wins; this is
+     * the backstop for the path where nobody remembered to.
+     */
+    public function __destruct()
+    {
+        $this->stop();
     }
 
     /**

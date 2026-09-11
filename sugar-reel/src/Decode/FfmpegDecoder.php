@@ -6,6 +6,7 @@ namespace SugarCraft\Reel\Decode;
 
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
+use SugarCraft\Reel\Support\BoundedReaper;
 
 /**
  * Ffmpeg-based video decoder using proc_open.
@@ -354,6 +355,17 @@ final class FfmpegDecoder implements Decoder
 
     /**
      * @inheritDoc
+     *
+     * E366: the teardown used to be a bare `proc_close()` — which WAITS, so
+     * an ffmpeg that never exits (wedged network read, stuck encoder) took
+     * the caller down with it. The parent-side pipes are closed first,
+     * because that is the polite exit for a stream decoder: ffmpeg dies on
+     * its write error within microseconds of losing stdout. {@see
+     * BoundedReaper::terminateAfterGrace()} then gives a short bounded
+     * window for exactly that, and escalates SIGTERM→SIGKILL if it does not
+     * come, so `proc_close()` below reaps instead of waiting. The recorded
+     * exit code keeps its meaning: a process that took the escalation ends
+     * signalled, and the error_log line below says so.
      */
     public function close(): void
     {
@@ -363,6 +375,7 @@ final class FfmpegDecoder implements Decoder
         }
 
         if ($this->process !== null && is_resource($this->process)) {
+            BoundedReaper::terminateAfterGrace($this->process);
             $this->exitCode = proc_close($this->process);
             $this->process = null;
 
@@ -394,11 +407,23 @@ final class FfmpegDecoder implements Decoder
     /**
      * Return the cached fps value from the last open() call.
      *
-     * Allows callers (e.g. Player) to retrieve the fps without re-probing
-     * the source through VideoSource::probe().
+     * Allows callers (e.g. Player) to retrieve the fps without re-probing the
+     * source through VideoSource::probe().
      */
     public function fps(): float
     {
         return $this->fps;
+    }
+
+    /**
+     * E366 backstop: a decoder that merely goes out of scope does not wait
+     * for its child — PHP's resource destructor abandons a RUNNING one to
+     * init with every inherited descriptor. close() is idempotent, so an
+     * explicit call before teardown still wins; this covers the path where
+     * nobody remembered to make one.
+     */
+    public function __destruct()
+    {
+        $this->close();
     }
 }
