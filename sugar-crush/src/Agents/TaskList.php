@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Agents;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Hooks\HookDispatchResult;
+use SugarCraft\Crush\Support\TimedFileLock;
 
 /**
  * SQLite-backed task list for team coordination.
@@ -728,20 +729,11 @@ final class TaskList
      */
     private function flockTimed(mixed $fp, int $flags, string $what): void
     {
-        $deadline = \microtime(true) + $this->lockWaitSeconds;
-
-        while (!@\flock($fp, $flags | \LOCK_NB)) {
-            if (\microtime(true) >= $deadline) {
-                throw new \RuntimeException(sprintf(
-                    'Timed out after %.1fs waiting for the %s lock on %s — another process holds it.',
-                    $this->lockWaitSeconds,
-                    ($flags & \LOCK_EX) === \LOCK_EX ? 'exclusive' : 'shared',
-                    $what,
-                ));
-            }
-
-            \usleep(10_000);
-        }
+        // E679: one bounded-lock implementation package-wide; the message,
+        // the poll and the throw-on-timeout doctrine (E137) moved to
+        // {@see TimedFileLock::acquire()} unchanged. The per-instance budget
+        // and its test seam stay here.
+        TimedFileLock::acquire($fp, $flags, $what, $this->lockWaitSeconds);
     }
 
     /** Default bounded-lock wait; matches the SQLite busyTimeout in ms (§ E137). */

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Config;
 
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
  * The `statusLine` settings key: a user-supplied command whose stdout is
@@ -754,13 +755,18 @@ final class StatusLineCommand
      */
     private static function terminateAndEscalate($process): void
     {
-        ProcessContainment::terminate($process);
-
-        if (self::waitForExit($process, microtime(true) + self::TERMINATE_GRACE_SECONDS)) {
-            return;
-        }
-
-        ProcessContainment::terminate($process, 9);
-        self::waitForExit($process, microtime(true) + self::KILL_GRACE_SECONDS);
+        // E676: one escalation sequence package-wide (ProcessReaper::escalate);
+        // the 0.5 s budgets are this segment's pinned worst-case arithmetic
+        // (see REFRESH_SECONDS' docblock) and stay at the call site.
+        ProcessReaper::escalate(
+            static function (int $signal) use ($process): void {
+                ProcessContainment::terminate($process, $signal);
+            },
+            static function () use ($process): bool {
+                return (\proc_get_status($process)['running'] ?? false) !== true;
+            },
+            self::TERMINATE_GRACE_SECONDS,
+            self::KILL_GRACE_SECONDS,
+        );
     }
 }

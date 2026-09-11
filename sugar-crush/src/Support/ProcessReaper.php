@@ -33,6 +33,13 @@ namespace SugarCraft\Crush\Support;
  * StreamingCommandBackend takes {@see terminateAndAwaitExit()}, because its
  * caller reaps the handle itself to read the child's exit status.
  *
+ * E676 FOLDED THE LAST THREE PRIVATE LADDERS. ScriptHook,
+     * StatusLineCommand and BackgroundSessionRunner now escalate through
+     * {@see escalate()} — callables at the seam, because one family drives a
+ * `proc_open()` handle, two a containment-wrapped child on a wall-clock
+ * deadline, and one a `pcntl_fork()`ed pid with a `WNOHANG` poll. The
+ * sequences are one; the budgets stay where they were pinned.
+ *
  * WHAT THIS DELIBERATELY IS NOT: a detached-watchdog spawner. The suite's
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushDispatchTest} arms an
  * external watchdog with pid-reuse checking before its own `proc_terminate(9)`,
@@ -119,22 +126,87 @@ final class ProcessReaper
             return true;
         }
 
-        self::signal($process, $groupPid, 15);
+        // E676: the rung sequence lives in ONE method now — this ladder and
+        // every folded family ride {@see escalate()}; the class defaults are
+        // the budgets this call site always had.
+        return self::escalate(
+            static function (int $signal) use ($process, $groupPid): void {
+                self::signal($process, $groupPid, $signal);
+            },
+            static function () use ($process): bool {
+                return !self::isRunning($process);
+            },
+        );
+    }
 
-        if (self::waitForExit($process, self::TERMINATE_GRACE_SECONDS)) {
+    /**
+     * THE ladder, single-sourced by E676: signal 15, bounded wait, signal 9,
+     * bounded wait — expressed over CALLABLES so the `proc_open()` children of
+     * {@see terminateAndAwaitExit()}, the deadline-polling expiry paths of
+     * {@see \SugarCraft\Crush\Hooks\ScriptHook} and
+     * {@see \SugarCraft\Crush\Config\StatusLineCommand}, and the
+     * `pcntl_fork()`ed worker of
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner} share ONE
+     * escalation sequence instead of each keeping a private copy. Three
+     * hand-rolled ladders is one too many: a copy is where a rung drifts.
+     *
+     * THE BUDGETS STAY WITH THE CALLERS. ScriptHook and StatusLineCommand
+     * expire on a 0.5 s grace and BackgroundSessionRunner on 2.0 s, each
+     * pinned by its own family's tests; consolidating the BODY must not
+     * rewrite those numbers, so only the sequence, the poll and the literal-9
+     * doctrine are shared here.
+     *
+     * Returns whether the child is gone by the end of the budgets.
+     *
+     * @param callable(int):void $signal delivers one rung signal (15 or 9)
+     * @param callable():bool $isGone a cheap, non-blocking exited?-poll
+     * @param callable():void|null $onEscalate fired once BETWEEN the rungs,
+     *        when SIGTERM did not land — for families that log the escalation
+     */
+    public static function escalate(
+        callable $signal,
+        callable $isGone,
+        float $terminateGrace = self::TERMINATE_GRACE_SECONDS,
+        float $killGrace = self::KILL_GRACE_SECONDS,
+        ?callable $onEscalate = null,
+    ): bool {
+        $signal(15);
+
+        if (self::waitBounded($isGone, $terminateGrace)) {
             return true;
+        }
+
+        if ($onEscalate !== null) {
+            $onEscalate();
         }
 
         // Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant:
         // that constant is defined by ext-pcntl, and naming an optional
         // extension's symbol on a shutdown path would make the shutdown
         // path itself fatal where the extension is absent.
-        self::signal($process, $groupPid, 9);
+        $signal(9);
         // The result is reported, not acted on — after signal 9 the only way
         // to still be running is an uninterruptible kernel wait, and each
         // caller's reap is then the least-bad option left (see the class
         // docblock for why no watchdog covers this).
-        return self::waitForExit($process, self::KILL_GRACE_SECONDS);
+        return self::waitBounded($isGone, $killGrace);
+    }
+
+    /**
+     * Poll $isGone until it answers true or the budget runs out.
+     */
+    private static function waitBounded(callable $isGone, float $budgetSeconds): bool
+    {
+        $deadline = \microtime(true) + $budgetSeconds;
+
+        do {
+            if ($isGone()) {
+                return true;
+            }
+            \usleep(self::POLL_INTERVAL_US);
+        } while (\microtime(true) < $deadline);
+
+        return $isGone();
     }
 
     /**
@@ -202,16 +274,12 @@ final class ProcessReaper
      */
     public static function waitForExit($process, float $budgetSeconds): bool
     {
-        $deadline = \microtime(true) + $budgetSeconds;
-
-        do {
-            if (!self::isRunning($process)) {
-                return true;
-            }
-            \usleep(self::POLL_INTERVAL_US);
-        } while (\microtime(true) < $deadline);
-
-        return !self::isRunning($process);
+        return self::waitBounded(
+            static function () use ($process): bool {
+                return !self::isRunning($process);
+            },
+            $budgetSeconds,
+        );
     }
 
     /**

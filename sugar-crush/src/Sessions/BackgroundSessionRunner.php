@@ -9,6 +9,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\PermissionConfigException;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\ToolRefusal;
+use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
  * The agent loop that a `/bg` background session actually runs.
@@ -117,8 +118,6 @@ final class BackgroundSessionRunner
     /** How long signal 9 gets before the daemon exits without having reaped. */
     private const KILL_GRACE_SECONDS = 2.0;
 
-    /** How often {@see reapWithin()} re-asks with `WNOHANG`. */
-    private const REAP_POLL_MICROSECONDS = 10_000;
 
     public function __construct(
         public readonly string $sessionId,
@@ -708,6 +707,14 @@ final class BackgroundSessionRunner
      * that doubt is expressed once, where it is real, in
      * {@see signalWorker()}.
      *
+     * E676: the rung SEQUENCE (term, bounded window, kill, bounded window)
+     * is {@see \SugarCraft\Crush\Support\ProcessReaper::escalate()} now —
+     * one ladder for every family; what stays HERE are this family's means
+     * ({@see signalWorker()} + {@see workerGone()}), its pinned 2.0 s
+     * budgets, and its post-mortem log lines. The literal 15 escalate()
+     * sends is the same rung as `\SIGTERM` — integer signals are the
+     * ladder's ext-pcntl-free contract.
+     *
      * If signal 9 is also unreaped — an uninterruptible kernel wait, or a
      * build with no ext-posix to signal with at all — the daemon EXITS ANYWAY
      * and records that it did. That leaves an orphan, which is worse than a
@@ -716,20 +723,23 @@ final class BackgroundSessionRunner
      */
     private function stopWorker(int $worker): void
     {
-        $this->signalWorker($worker, \SIGTERM);
+        $reaped = ProcessReaper::escalate(
+            function (int $signal) use ($worker): void {
+                $this->signalWorker($worker, $signal);
+            },
+            function () use ($worker): bool {
+                return $this->workerGone($worker);
+            },
+            self::TERMINATE_GRACE_SECONDS,
+            self::KILL_GRACE_SECONDS,
+            function () use ($worker): void {
+                $this->log('[session:task:escalate] worker did not stop on SIGTERM pid=' . $worker);
+            },
+        );
 
-        if ($this->reapWithin($worker, self::TERMINATE_GRACE_SECONDS)) {
-            return;
+        if (!$reaped) {
+            $this->log('[session:task:unreaped] worker survived signal 9 pid=' . $worker);
         }
-
-        $this->log('[session:task:escalate] worker did not stop on SIGTERM pid=' . $worker);
-        $this->signalWorker($worker, 9);
-
-        if ($this->reapWithin($worker, self::KILL_GRACE_SECONDS)) {
-            return;
-        }
-
-        $this->log('[session:task:unreaped] worker survived signal 9 pid=' . $worker);
     }
 
     /**
@@ -749,32 +759,22 @@ final class BackgroundSessionRunner
     }
 
     /**
-     * Collect the worker over a bounded `WNOHANG` window; true if it was
-     * reaped.
+     * ONE bounded `WNOHANG` poll — true when the worker is reaped or gone.
      *
-     * Never an unflagged `pcntl_waitpid()`, for the reason
+     * The window that used to loop here is a rung budget of
+     * {@see ProcessReaper::escalate()} since E676; this answers a single poll
+     * and never waits. Never an unflagged `pcntl_waitpid()`, for the reason
      * {@see \SugarCraft\Crush\Runtime::reapKilled()} gives at its own call
      * site: the wait is only bounded if the signal landed, and whether it
-     * landed is not something this process can assume.
+     * landed is not something this process can assume. 0 is "still running";
+     * the pid is "reaped"; -1 is "not ours any more" — only the first of
+     * those is worth polling again.
      */
-    private function reapWithin(int $worker, float $seconds): bool
+    private function workerGone(int $worker): bool
     {
-        $deadline = \microtime(true) + $seconds;
         $status = 0;
 
-        while (true) {
-            // 0 is "still running"; the pid is "reaped"; -1 is "not ours any
-            // more" — and only the first of those is worth waiting on.
-            if (\pcntl_waitpid($worker, $status, \WNOHANG) !== 0) {
-                return true;
-            }
-
-            if (\microtime(true) >= $deadline) {
-                return false;
-            }
-
-            \usleep(self::REAP_POLL_MICROSECONDS);
-        }
+        return \pcntl_waitpid($worker, $status, \WNOHANG) !== 0;
     }
 
     /** Collapse a message to one line so it cannot corrupt the buffer's line protocol. */

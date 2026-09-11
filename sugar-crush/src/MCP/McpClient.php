@@ -284,6 +284,15 @@ final class McpClient
      */
     public function listTools(): array
     {
+        // E677: mount the idle pump at the dispatch caller. Before any
+        // exchange entered through this class begins, every started stdio
+        // child gets the bounded between-turns drain its pump documented
+        // ({@see pumpStderr()}) — so the servers NOT being called this
+        // exchange stop sitting on unread fd 2 while another one is talked
+        // to. readResponse() drains only the server in flight; between turns
+        // there is no reader at all, and that gap is what this line closes.
+        $this->pumpStderr();
+
         if ($this->agentPreset !== null) {
             return $this->router()->resolveAllowedTools($this->agentPreset);
         }
@@ -319,6 +328,11 @@ final class McpClient
         if (!$this->isServerAllowed($serverName)) {
             throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
         }
+
+        // E677: see listTools() — pump idle children before entering an
+        // exchange, so a flooding child on ANOTHER server is drained here and
+        // this server's own between-turns bytes are already absorbed.
+        $this->pumpStderr();
 
         return $server->callTool($toolName, $args);
     }

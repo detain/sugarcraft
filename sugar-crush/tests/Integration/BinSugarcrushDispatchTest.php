@@ -1411,6 +1411,51 @@ final class BinSugarcrushDispatchTest extends TestCase
     }
 
     /**
+     * E678 — `mcp list --output-format json` rows are truthful to the LIVE
+     * inventory: every server row carries the `wirePrefix` the permission
+     * grammar actually matches, computed from that row's own name. The rows
+     * enumerate FROM the fixture (identity-spelled and rewritten servers
+     * asserted by the same rule), so another server added to the fixture is
+     * covered without a new line here — the guard grows with the roster
+     * (E191 discipline), and a hard-coded current roster could not.
+     */
+    public function testMcpListJsonRowsCarryTheirLiveWireNames(): void
+    {
+        $home = $this->privateHome();
+        $project = $this->privateProject();
+        $servers = [
+            'git' => ['command' => '/usr/bin/true'],
+            'github.com/foo' => ['command' => '/usr/bin/true'],
+        ];
+        \file_put_contents($project . '/.mcp.json', \json_encode(['mcpServers' => $servers]));
+        \mkdir($home . '/.sugar-crush', 0700, true);
+        \file_put_contents($home . '/.sugar-crush/config.json', \json_encode(['trustedProjectMcp' => [$project]]));
+        \chmod($home . '/.sugar-crush/config.json', 0600);
+
+        $run = $this->runBin(['--root', $project, 'mcp', 'list', '--output-format', 'json'], ['HOME' => $home]);
+        $this->assertSame(0, $run['status'], 'stderr: ' . $run['stderr']);
+        $decoded = \json_decode(\trim($run['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout was not JSON: ' . $run['stdout']);
+        $this->assertNotNull($decoded['result'] ?? null, 'a trusted, readable config must answer with a result: ' . $run['stdout']);
+        $rows = $decoded['result']['servers'];
+        $this->assertCount(\count($servers), $rows, 'the JSON rows do not mirror the live fixture');
+
+        $wireByName = [];
+        foreach ($rows as $row) {
+            $this->assertArrayHasKey('wirePrefix', $row, 'row ' . ($row['name'] ?? '?') . ' has no wire identity');
+            $this->assertSame(
+                \SugarCraft\Crush\Tools\McpToolBridge::wireServerPrefix($row['name']),
+                $row['wirePrefix'],
+                'wirePrefix is not the live row\'s wire identity',
+            );
+            $wireByName[$row['name']] = $row['wirePrefix'];
+        }
+
+        $this->assertSame('mcp__git__', $wireByName['git'], 'an identity-spelled server was rewritten in the row');
+        $this->assertNotSame('mcp__github.com/foo__', $wireByName['github.com/foo'], 'an unsafe server key reached the wire unchanged');
+    }
+
+    /**
      * `--config <file>` must reach a subcommand, which is why the dispatch sits
      * AFTER Bootstrap::useConfigPath() in bin/sugarcrush rather than before it.
      * The fixture is chosen so the two answers cannot be confused: the SAME

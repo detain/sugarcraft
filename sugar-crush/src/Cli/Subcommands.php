@@ -619,6 +619,18 @@ final class Subcommands
                 return NonInteractive::EXIT_FAILURE;
             }
 
+            // E678: the JSON arm answers what-is-live row-for-row, so it
+            // carries the wire identity the text arm prints for rewritten
+            // keys — on EVERY row, machine-readable. `wirePrefix` is computed
+            // from each row's live name through the ONE sanitizer that
+            // produces it, never from a hard-coded roster.
+            $wireServers = [];
+            foreach ($inventory['servers'] as $server) {
+                $server['wirePrefix'] = \SugarCraft\Crush\Tools\McpToolBridge::wireServerPrefix($server['name']);
+                $wireServers[] = $server;
+            }
+            $inventory['servers'] = $wireServers;
+
             self::emitDocument(['result' => $inventory]);
 
             // Exit 0 for a refused (absent/outside/untrusted) config: the

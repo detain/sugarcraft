@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Hooks;
 
 use SugarCraft\Crush\Support\HookContextFiles;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 
 /**
@@ -1077,9 +1078,8 @@ final readonly class ScriptHook implements BoundedHookInterface
      *
      * Signal 9 as an INTEGER LITERAL, never the `SIGKILL` constant: that
      * constant comes from ext-pcntl, and this is a path that must not itself
-     * fatal on a build without it. Same escalation, and the same literal, as
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()} and
-     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::terminateAndReap()}.
+     * fatal on a build without it — since E676 the sequence and that doctrine
+     * live in {@see \SugarCraft\Crush\Support\ProcessReaper::escalate()}.
      *
      * E673: the child is a `setsid -w` wrapper that LEADS its own process
      * group (where the host offers a usable detach), so {@see
@@ -1094,17 +1094,21 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private static function terminateAndEscalate($process): void
     {
-        ProcessContainment::terminate($process);
-
-        if (self::waitForExit($process, microtime(true) + self::TERMINATE_GRACE_SECONDS)) {
-            return;
-        }
-
-        ProcessContainment::terminate($process, 9);
-        // Unchecked on purpose: after signal 9 the only way to still be running
-        // is an uninterruptible kernel wait, and `proc_close()` is then the
-        // least-bad option left.
-        self::waitForExit($process, microtime(true) + self::KILL_GRACE_SECONDS);
+        // E676: the rung SEQUENCE is ProcessReaper::escalate(); this call site
+        // keeps only what the rungs MEAN for a hook child (the group-aware
+        // containment signal) and this family's pinned 0.5 s budgets. The
+        // return stays unchecked by the same right as before: after signal 9
+        // the only way to still be running is an uninterruptible kernel wait.
+        ProcessReaper::escalate(
+            static function (int $signal) use ($process): void {
+                ProcessContainment::terminate($process, $signal);
+            },
+            static function () use ($process): bool {
+                return (\proc_get_status($process)['running'] ?? false) !== true;
+            },
+            self::TERMINATE_GRACE_SECONDS,
+            self::KILL_GRACE_SECONDS,
+        );
     }
 
     /**
