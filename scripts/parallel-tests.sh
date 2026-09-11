@@ -4,7 +4,7 @@
 # Usage:
 #   scripts/parallel-tests.sh [K] [--junit <xml>] [--durations <tsv>]
 #                             [--against-json <suite-figure.json>]
-#                             [--out <dir>] [--timeout <secs>] [--manifest]
+#                             [--out <dir>] [--timeout <secs>] [--manifest] [--clover]
 #
 #   K            shard count (default: nproc; CI pins it explicitly — the
 #                GitHub-hosted ubuntu-latest runner is 2-4 vCPU, NOT nproc)
@@ -33,13 +33,21 @@
 #   --out        run directory (default: ${TMPDIR:-/tmp}/parallel-tests)
 #   --timeout    per-shard wall guard in seconds (default: 250, via timeout(1))
 #   --manifest   (re)generate the deterministic LPT manifests, run nothing
+#   --clover     each shard additionally writes --coverage-clover <out>/clover-<i>.xml
+#                (E691 — the sharded sugar-crush coverage job). Default OFF: shard
+#                argv stays byte-identical to a plain run. Merge the reports after:
+#                  php scripts/merge-clover.php <out> <K> <dest.xml>
+#                Resume caveat: done-<i> markers are clover-agnostic — a shard marked
+#                done by an earlier NON-clover run of the same --out dir produces no
+#                clover file, and merge-clover.php fails closed on exactly that.
+#                CI always starts from a fresh --out.
 #
 # Measured discipline (probe lane P @round-62 base, re-validated at b2790b1a2):
 #  * Bucketing: longest-processing-time (LPT) over per-file durations extracted
 #    from the baseline junit. Deterministic: same input => byte-identical
 #    manifests, so a resumed run rebuilds the same plan (done-markers).
 #  * Per shard: own --cache-directory, explicit file args, same -c config,
-#    </dev/null, --colors=never, NO coverage. Each shard re-runs
+#    </dev/null, --colors=never, no coverage unless --clover opts in (E691). Each shard re-runs
 #    tests/bootstrap.php in its own process (TMPDIR sandbox, loop pin, stdin
 #    pin, HOME handling are all per-process).
 #  * CRITICAL RUNNER REQUIREMENT (measured 2026-09-10): do NOT wrap shards in
@@ -59,7 +67,7 @@
 set -u
 
 usage() {
-	sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -72,6 +80,7 @@ OUT="${TMPDIR:-/tmp}/parallel-tests"
 BASE_JUNIT=""
 DURATIONS=""
 AGAINST_JSON=""
+CLOVER=""
 SHARD_TIMEOUT=250
 MODE=run
 
@@ -99,6 +108,10 @@ while [ $# -gt 0 ]; do
 		;;
 	--manifest)
 		MODE=--manifest
+		shift
+		;;
+	--clover)
+		CLOVER=1
 		shift
 		;;
 	-h | --help)
@@ -161,11 +174,16 @@ for i in $(seq 0 $((K - 1))); do
 		continue
 	fi
 	mapfile -t FILES <"$OUT/shard-$i.list"
+	COV_ARGS=()
+	if [ -n "$CLOVER" ]; then
+		COV_ARGS=(--coverage-clover "$OUT/clover-$i.xml")
+	fi
 	(
 		s=$SECONDS
 		timeout "$SHARD_TIMEOUT" $PHPUNIT -c sugar-crush/phpunit.xml --colors=never \
 			--cache-directory "$OUT/cache-k$K-$i" \
 			--log-junit "$OUT/junit-$i.xml" \
+			"${COV_ARGS[@]}" \
 			"${FILES[@]}" </dev/null >"$OUT/shard-$i.log" 2>&1
 		rc=$?
 		echo $((SECONDS - s)) >"$OUT/wall-$i"
@@ -189,6 +207,11 @@ for i in $(seq 0 $((K - 1))); do
 	echo "-- shard $i: wall=$(cat "$OUT/wall-$i" 2>/dev/null || echo '?')s rc_marker=$([ -f "$OUT/done-$i" ] && echo ok || echo MISSING)"
 	grep -E '^(OK|Tests:|FAILURES|ERRORS)' "$OUT/shard-$i.log" | tail -2
 done
+
+if [ -n "$CLOVER" ]; then
+	echo "== clover shards: $OUT/clover-0.xml .. $OUT/clover-$((K - 1)).xml =="
+	echo "   merge: php scripts/merge-clover.php $OUT $K <dest.xml>"
+fi
 
 # On any red, dump the tail of each failing shard inline: CI keeps only the
 # --out dir between steps, and a conservation FAIL without the offender's

@@ -666,8 +666,45 @@ jobs:
             sleep 10
           done
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (serial)
+        if: matrix.lib != 'sugar-crush'
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
+
+      # E691 (2026-09-11): sugar-crush coverage shards through the E671 harness
+      # (same never-oversubscribe K = cores capped at 4 — 2x oversubscription
+      # measured lease/idle-ceiling race failures on the test suite). Each shard
+      # adds --coverage-clover via --clover; the CONSERVATION GATE runs before
+      # any merge (shard junit sums vs the pinned suite-figure.json, fail-closed
+      # exactly as in the test job — a shard that silently ran nothing, or a
+      # test file missing from the durations manifest, dies here rather than
+      # shipping a coverage report for an unproven subset). Then
+      # scripts/merge-clover.php unions the per-shard clovers into
+      # sugar-crush/coverage.xml — THE SAME PATH the serial job wrote — so the
+      # Codecov upload, the detain/sugarcraft Codacy upload and the split-repo
+      # Codacy mirror downstream are untouched and cannot tell merged from
+      # serial. test-merge-clover.php runs FIRST: a merger regression must fail
+      # in seconds, not after a full-suite wall. --timeout 900 per shard: the
+      # worst LPT bucket is ~280s at K=2 and pcov overhead is ~1.5x — 900 keeps
+      # headroom while still bounding a hung shard under the old serial
+      # coverage wall (~10 min without coverage, more with instrumentation).
+      # The engine is still pcov (setup-php above); only the report SHAPE
+      # (K files merged) changed, and merge-clover.php refuses missing or
+      # malformed shard reports fail-closed.
+      - name: Run tests with coverage (sugar-crush — sharded, E691)
+        if: matrix.lib == 'sugar-crush'
+        run: |
+          set -euo pipefail
+          CORES=$(nproc)
+          K=$CORES
+          if [ "$K" -gt 4 ]; then K=4; fi
+          echo "::notice::sugar-crush coverage sharded at K=$K on $CORES-core ubuntu-latest (E691)"
+          OUT="${RUNNER_TEMP:-/tmp}/parallel-tests-cov"
+          php scripts/test-merge-clover.php
+          bash scripts/parallel-tests.sh "$K" \
+            --durations scripts/parallel-tests-durations.tsv \
+            --against-json sugar-crush/tests/Config/Support/suite-figure.json \
+            --out "$OUT" --timeout 900 --clover
+          php scripts/merge-clover.php "$OUT" "$K" sugar-crush/coverage.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
