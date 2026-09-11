@@ -399,6 +399,16 @@ final class CheckPathReposTest extends TestCase
                 # needs: [gamma] — prose about an edge, not an edge
                 steps:
                   - run: echo two
+              third:
+                needs:
+                  - delta
+                  # - epsilon — same decoy in block clothing
+                steps:
+                  - run: echo three
+              fourth:
+                needs:
+                  - beta
+                  - alpha
             YAML;
 
         $this->assertSame(
@@ -417,10 +427,28 @@ final class CheckPathReposTest extends TestCase
             'the needs: reader invented an edge for a job that is not in the workflow',
         );
 
+        // E629's two arms: the SAME edge in the other spelling must give the
+        // SAME answer, and the decoy comment must still read as nothing in
+        // that spelling rather than in this one.
+        $this->assertSame(
+            ['delta'],
+            $this->ciJobNeeds($fixture, 'third'),
+            'a block-form needs: parsed empty — the shape E629 filed: an edge '
+            . 'present under one spelling, invisible to the reader, and red with '
+            . 'a message blaming the author for an edge they never removed',
+        );
+        $this->assertSame(
+            ['alpha', 'beta'],
+            $this->ciJobNeeds($fixture, 'fourth'),
+            'the block-form reader lost entries, ordered them wrongly, or both',
+        );
+
         $this->assertSame(
             ['tools-guards'],
             $this->ciJobNeeds($workflow, 'path-repo-check'),
-            'path-repo-check no longer declares `needs: [tools-guards]`. Every verdict that '
+            'path-repo-check no longer declares the edge to tools-guards under '
+            . 'either spelling (`needs: [tools-guards]` inline or a block list). '
+            . 'Every verdict that '
             . 'job prints is produced by tools/check-path-repos.php, and a run of it whose own '
             . 'classifiers are red is not evidence about the manifests — which is why '
             . 'tools/tests/ used to be that job\'s first step. Restore the edge, or rewrite '
@@ -430,18 +458,103 @@ final class CheckPathReposTest extends TestCase
     }
 
     /**
+     * The `tools-guards` job's NAME is now a checked artefact (E629).
+     *
+     * WHY A NAME IS WORTH A GUARD AT ALL: every other string this job owns is
+     * compared against something — its commands against the `--help` block,
+     * its edge against this file — and its name against nothing. Two rounds
+     * of that nothing are on record: E589 renamed the job to enumerate its
+     * guards, and within ONE round the enumeration was wrong, so the name was
+     * rewritten to state REACH instead — a judgement the workflow's own
+     * comment paragraph argues for at length. A red whose name misdescribes
+     * it is read as flaky infrastructure, which is exactly the cost that
+     * paragraph says the name exists to pay. Free text rots quietly; pinned
+     * text rots as a failing test that names the file.
+     *
+     * WHY A LITERAL AND NOT A DERIVATION: measured this round, the set of
+     * packages `tools/tests/` files mention is wider than the set the name
+     * claims — `candy-core` and `honey-bounce` appear in FIXTURE strings here,
+     * not as reach — so deriving the name from mentions would either red on
+     * noise or need a second roster to excuse the noise. The name is one
+     * human judgement; pin the judgement, and let renaming it be a decision
+     * recorded in this file's diff.
+     */
+    public function testTheGuardJobNameIsACheckedArtefact(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $workflow = \file_get_contents($root . '/.github/workflows/ci.yml');
+        $this->assertIsString($workflow, 'ci.yml is unreadable, so this assertion speaks for nothing');
+
+        $this->assertSame(
+            'tools/ guards (+ drift pins that read candy-pty/ and sugar-crush/)',
+            $this->ciJobName($workflow, 'tools-guards'),
+            'the tools-guards job name changed. It states REACH, not an '
+            . 'enumeration, because the enumeration rotted in one round (see E589 '
+            . 'and the long comment above the job in ci.yml) — so move this '
+            . 'literal together with that comment paragraph, in the same edit.',
+        );
+        $this->assertSame(
+            'Path-repo policy',
+            $this->ciJobName($workflow, 'path-repo-check'),
+            'the manifest job name changed while nothing here was updated to agree',
+        );
+
+        $fixture = <<<'YAML'
+            jobs:
+              titled:
+                name: 'A Title'
+                steps:
+                  - run: echo one
+              plain:
+                steps:
+                  - name: Step
+                    run: echo two
+              commented:
+                # name: decoy
+                steps:
+                  - run: echo three
+            YAML;
+
+        $this->assertSame('A Title', $this->ciJobName($fixture, 'titled'));
+        $this->assertNull(
+            $this->ciJobName($fixture, 'plain'),
+            'a STEP name was read as the job name — job `name:` sits at the body indent',
+        );
+        $this->assertNull(
+            $this->ciJobName($fixture, 'commented'),
+            'a commented-out name was read as a declaration',
+        );
+        $this->assertNull($this->ciJobName($fixture, 'ghost'));
+    }
+
+    /**
      * The job names one named job declares in `needs:`, sorted, or `[]`.
      *
      * READS THE LINE'S SHAPE, NOT ITS TEXT (rule 40): a `needs:` at exactly the
-     * job-key indent, with an inline list. A comment mentioning the edge, or a
-     * `needs:` belonging to a different job, is not a declaration.
+     * job-key indent. A comment mentioning the edge, or a `needs:` belonging to
+     * a different job, is not a declaration.
+     *
+     * BOTH YAML SPELLINGS COUNT, and that is E629 rather than a preference.
+     * This reader used to know only the inline form, `needs: [a, b]`, and the
+     * block form — a bare `needs:` followed by one `- name` line per
+     * dependency — parsed as `[]`. The consequence was the worst shape a
+     * guard can have: an author who reformatted the edge got a RED here
+     * telling them to "Restore the edge" while the edge stood in the file the
+     * whole time, under a spelling only GitHub's YAML parser understood. A
+     * parser cannot change what an edge MEANS, so it now reads both
+     * spellings; a commented-out edge still parses to nothing, because a
+     * comment is not the line's shape.
      *
      * @return list<string> sorted
      */
     private function ciJobNeeds(string $workflow, string $job): array
     {
+        $lines = \explode("\n", $workflow);
         $inJob = false;
-        foreach (\explode("\n", $workflow) as $line) {
+
+        for ($i = 0, $n = \count($lines); $i < $n; $i++) {
+            $line = $lines[$i];
+
             if (\preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $line, $m) === 1) {
                 $inJob = $m[1] === $job;
 
@@ -453,11 +566,34 @@ final class CheckPathReposTest extends TestCase
             if (\preg_match('/^    needs:\s*\[([^\]]*)\]\s*$/', $line, $m) === 1) {
                 $names = \array_values(\array_filter(
                     \array_map(
-                        static fn (string $n): string => \trim($n, " \t'\""),
+                        static fn (string $n2): string => \trim($n2, " \t'\""),
                         \explode(',', $m[1]),
                     ),
-                    static fn (string $n): bool => $n !== '',
+                    static fn (string $n2): bool => $n2 !== '',
                 ));
+                \sort($names);
+
+                return $names;
+            }
+
+            // BLOCK FORM: `needs:` carrying nothing but an optional trailing
+            // comment, then the sequence of `- name` lines under it. Any
+            // other line ends the declaration — including a commented-out
+            // entry, because the parser reads shape, not text.
+            if (\preg_match('/^    needs:\s*(?:#.*)?$/', $line) === 1) {
+                $names = [];
+                for ($j = $i + 1; $j < $n; $j++) {
+                    if (\trim($lines[$j]) === '') {
+                        continue;
+                    }
+                    if (\preg_match('/^\s{5,}- (\'?)([A-Za-z0-9_.-]+)\1\s*$/', $lines[$j], $mm) === 1) {
+                        $names[] = $mm[2];
+
+                        continue;
+                    }
+
+                    break;
+                }
                 \sort($names);
 
                 return $names;
@@ -465,6 +601,32 @@ final class CheckPathReposTest extends TestCase
         }
 
         return [];
+    }
+
+    /**
+     * The literal `name:` one named job carries, or null when it has none.
+     *
+     * Same shape rule as {@see ciJobNeeds()}: the first `name:` line at
+     * exactly the job-body indent, quotes stripped.
+     */
+    private function ciJobName(string $workflow, string $job): ?string
+    {
+        $inJob = false;
+        foreach (\explode("\n", $workflow) as $line) {
+            if (\preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $line, $m) === 1) {
+                $inJob = $m[1] === $job;
+
+                continue;
+            }
+            if (!$inJob) {
+                continue;
+            }
+            if (\preg_match('/^    name:\s*(.+?)\s*$/', $line, $m) === 1) {
+                return \trim($m[1], " \t'\"");
+            }
+        }
+
+        return null;
     }
 
     /**

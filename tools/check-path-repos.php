@@ -218,6 +218,7 @@ reproduce.
     php tools/check-path-repos.php --no-lib-path-repos
     php tools/check-path-repos.php
     php tools/check-path-repos.php --unused
+    php tools/check-child-lifetimes.php
     php tools/check-path-repos.php --fix --strict-closure \
       && php tools/check-path-repos.php --strict-closure \
       ; git checkout -- .                          # the injection is SCRATCH
@@ -227,11 +228,14 @@ optional: those entries must never be committed. `phpunit` there is any
 PHPUnit 10 — a PHAR, or `<any-lib>/vendor/bin/phpunit --bootstrap
 <any-lib>/vendor/autoload.php`.
 
-WHY THE FIRST LINE IS FIRST. The four checks under it are hard gates, and
+WHY THE FIRST LINE IS FIRST. The checks under it are hard gates, and
 until round 57 nothing checked the classifiers that decide what they gate on.
 `--unused` in particular reports CANDIDATES and fails the build on them; a
 version of it that had stopped matching would report a clean tree from every
-branch forever, which is indistinguishable from the tree being clean.
+branch forever, which is indistinguishable from the tree being clean. The
+child-lifetimes line has the same problem one scanner removed: its classifier
+is `ChildLifetimeScanner`, and `tools/tests/ChildLifetimesToolTest.php` is
+what keeps that gate from going blind the same way.
 
 EOF
     );
