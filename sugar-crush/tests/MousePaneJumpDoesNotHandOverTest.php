@@ -94,18 +94,46 @@ final class MousePaneJumpDoesNotHandOverTest extends TestCase
 
     public function testNoProducerOfSelectPaneMsgExistsAnywhereInSrc(): void
     {
-        $needle = 'new SelectPaneMsg';
-        $haystack = '';
+        // Alias-resolving producer scan, mirroring the pattern established in
+        // HostedFrameReadsThePaneTest::testNothingInSrcConstructsASelectPaneMsg()
+        // (tests/App/) — the naive `'new SelectPaneMsg'` needle this lane first
+        // shipped is blind to `new App\SelectPaneMsg(` (relative prefix),
+        // leading-backslash FQNs, and `use … as <alias>` spellings, which is
+        // exactly the gap that test's docblock records. Its scanner is private
+        // to that class; this is the sanctioned minimal union, not a second
+        // census — same two regexes, same semantics.
+        $names = ['SelectPaneMsg'];
+        $producers = [];
+
         $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(__DIR__ . '/../src', \FilesystemIterator::SKIP_DOTS));
         foreach ($rii as $file) {
-            if ($file->isFile() && $file->getExtension() === 'php') {
-                $haystack .= (string) file_get_contents($file->getPathname());
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $body = (string) file_get_contents($file->getPathname());
+            if (!str_contains($body, 'SelectPaneMsg')) {
+                continue;
+            }
+
+            // Every name the class can be constructed under IN THIS FILE: its
+            // own, plus any `use … as` alias a plain-name scan would never see.
+            $localNames = $names;
+            if (preg_match('/\buse\s+[\\\\\w]*\bSelectPaneMsg\s+as\s+(\w+)\s*;/i', $body, $alias) === 1) {
+                $localNames[] = $alias[1];
+            }
+
+            foreach ($localNames as $name) {
+                // Any namespace prefix, relative or absolute, or none at all.
+                if (preg_match('/\bnew\s+[\\\\\w]*\b' . preg_quote($name, '/') . '\s*\(/', $body) === 1) {
+                    $producers[] = $file->getPathname();
+                    break;
+                }
             }
         }
 
-        self::assertStringNotContainsString(
-            $needle,
-            $haystack,
+        self::assertSame(
+            [],
+            $producers,
             'E683: the App pane-hand-over message has a consumer and no producer — the mouse pane-jump door is dormant by absence',
         );
     }

@@ -623,7 +623,8 @@ final class Renderer
     }
 
     /**
-     * Drop the click-zone registry and reset the origin.
+     * Drop the click-zone registry and reset the origin and the abandonment
+     * signal.
      *
      * For a shell frame that does NOT contain this renderer's output at all —
      * the full-pane agent dashboard (crush_feat.md §5 E5) is the first one.
@@ -631,11 +632,17 @@ final class Renderer
      * never calls it would leave the PREVIOUS frame's boxes hit-testable
      * underneath content that never drew them, and a click would fire whatever
      * action last occupied that cell.
+     *
+     * `$paletteAbandoned` joins the reset for the same symmetry: App::view()'s
+     * `finally` already covers the normal path, but a compositor that dies
+     * between set and reset must leave no stale suppression behind for the
+     * next frame to inherit.
      */
     public static function clearZones(): void
     {
         self::scanner()->clear();
         self::$zoneOrigin = [0, 0];
+        self::$paletteAbandoned = false;
     }
 
     /**
