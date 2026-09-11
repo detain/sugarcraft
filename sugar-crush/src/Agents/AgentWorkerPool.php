@@ -313,6 +313,22 @@ final class AgentWorkerPool
             // Swallowed deliberately — see above.
         }
 
+        // E687: the dispatch warning says a fork failed ONCE; this says how
+        // many the latch hid. Placed before the resultDir early-return on
+        // purpose — fork failures and a vanished result directory are
+        // independent facts, and the total is the number an operator wants
+        // even when there is nothing left to clean. The wording shares no
+        // distinguishing substring with either dispatch sentence; the three
+        // lines stay pairwise-tellable-apart, same doctrine that pins the
+        // two dispatch arms against each other.
+        if ($this->forkFailureCount > 0) {
+            error_log(sprintf(
+                'AgentWorkerPool: teardown — this pool lost %d pcntl_fork() failure(s) over its '
+                . 'life; the first was logged at dispatch, later ones were only counted.',
+                $this->forkFailureCount,
+            ));
+        }
+
         if (!is_dir($this->resultDir)) {
             return;
         }
@@ -1434,10 +1450,14 @@ final class AgentWorkerPool
      * alternative is one line per dispatched agent, and a pool that has run out
      * of processes is precisely the one about to dispatch many. The cost is
      * that a fork failure which clears and later recurs is logged only the
-     * first time; the TOTAL is surfaced through {@see forkFailureCount()}
-     * rather than a second log line — a new error_log() site belongs to the
-     * stderr-emitter census this lane does not own, an accessor belongs to
-     * nobody but its caller (E261).
+     * first time; the TOTAL is surfaced two ways now (E687): the accessor
+     * {@see forkFailureCount()} answers a caller that is still running, and
+     * one closing `error_log()` line from `__destruct()` answers the case the
+     * accessor never could — a pool whose last dispatch was also its last
+     * observer, which used to die with its fork failures counted by nobody.
+     * The census pairing was the blocker, not the want: this site ships in
+     * the same commit as its StderrEmitterCensusTest roster bump, the rule
+     * that closed the E261 latch gap in the first place.
      */
     private function warnForkFailed(): void
     {

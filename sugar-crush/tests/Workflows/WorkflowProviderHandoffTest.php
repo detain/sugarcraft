@@ -27,7 +27,7 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  */
 final class WorkflowProviderHandoffTest extends TestCase
 {
-    // E667 (PSR-12 properties-before-methods): the launch-pin pair sat below
+    // E670 (PSR-12 properties-before-methods): the launch-pin pair sat below
     // the test methods it serves. Zero behaviour change — declaration order of
     // properties is semantically inert.
     private WorkflowRegistry $registry;

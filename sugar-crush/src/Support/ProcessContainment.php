@@ -249,6 +249,13 @@ final class ProcessContainment
     }
 
     /**
+     * The memo behind {@see interactiveAvailable()} — null until the first
+     * probe, then the verdict for the life of the process (or until the
+     * testing reset clears it).
+     */
+    private static ?bool $interactiveAvailableMemo = null;
+
+    /**
      * Whether this host can run a child attached to a REAL pty — the gate
      * the layer-C opt-in consults before promising anything.
      *
@@ -264,24 +271,40 @@ final class ProcessContainment
      * mislinked vendor must answer "unavailable", not fatal mid-tool.
      * Memoized per process like the setsid probe — the honest question is
      * "can this host", and that answer does not change within a process.
+     * The memo lives at class scope (not a function-local `static`) so
+     * {@see resetInteractiveAvailabilityForTesting()} can clear it: the
+     * promise is that the ANSWER does not change, not that a test may never
+     * re-ask — pinning both shapes of the gate (spawn and refusal) on one
+     * host requires a re-derive the production memo would refuse.
      */
     public static function interactiveAvailable(): bool
     {
-        static $resolved = null;
-
-        if ($resolved !== null) {
-            return $resolved;
+        if (self::$interactiveAvailableMemo !== null) {
+            return self::$interactiveAvailableMemo;
         }
 
         if (PHP_OS_FAMILY === 'Windows' || !\extension_loaded('ffi')) {
-            return $resolved = false;
+            return self::$interactiveAvailableMemo = false;
         }
 
         if (!@\is_readable('/dev/ptmx') || !@\is_writable('/dev/ptmx')) {
-            return $resolved = false;
+            return self::$interactiveAvailableMemo = false;
         }
 
-        return $resolved = \class_exists(\SugarCraft\Pty\Pty::class);
+        return self::$interactiveAvailableMemo = \class_exists(\SugarCraft\Pty\Pty::class);
+    }
+
+    /**
+     * Discard the memoized host verdict so the next
+     * {@see interactiveAvailable()} re-derives it from the same STATs.
+     * Testing seam only — production callers never reset a per-process
+     * fact mid-run; the reset exists so one host can pin both the
+     * interactive-spawn branch and the 126-refusal branch instead of
+     * leaving whichever the box does not match as dead code.
+     */
+    public static function resetInteractiveAvailabilityForTesting(): void
+    {
+        self::$interactiveAvailableMemo = null;
     }
 
     /**

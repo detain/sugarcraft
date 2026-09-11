@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tools\Concerns;
 
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
  * Runs a shell command capturing BOTH stdout and stderr.
@@ -241,8 +242,9 @@ trait CapturesProcessOutput
      *  - the program EXITS: transcript + its real status (pty children
      *    report through the same 0/signal-number convention the captured
      *    path already keeps);
-     *  - it goes SILENT past the idle ceiling while alive: TERM the group,
-     *    reap, exit 124, stderr names the refusal — the transcript up to
+     *  - it goes SILENT past the idle ceiling while alive: run the reaper's
+     *    signal-15→9 ladder over its group, reap, exit 124, stderr names
+     *    the refusal — the transcript up to
      *    the freeze still arrives so the model can read WHY (usually its
      *    own "[sudo] password" prompt);
      *  - the host CANNOT give a pty (or allocation itself fails): refusal
@@ -309,8 +311,33 @@ trait CapturesProcessOutput
                 $now = \microtime(true);
                 if ($now - $lastProgressAt >= $idle || $now >= $hardDeadline) {
                     $stuck = true;
-                    ProcessContainment::terminatePid($child->pid());
-                    $child->wait();
+
+                    // THE REAPER'S LADDER, not a lone TERM: the old shape
+                    // signalled 15 and then called `wait()` — an UNBOUNDED
+                    // poll — so a child that trapped SIGTERM turned the
+                    // bounded refusal back into the exact hang Phase 9
+                    // exists to end (E676's doctrine: one shared ladder,
+                    // caller keeps its budgets; the idle ceiling already
+                    // spent this run's patience, so the ladder's default
+                    // graces ride). terminatePid() is the group-first twin
+                    // of the reaper's own rung helper — the pty child leads
+                    // its session, and killing only the shell would orphan
+                    // the program behind it.
+                    $gone = ProcessReaper::escalate(
+                        static fn(int $signal): bool => ProcessContainment::terminatePid($child->pid(), $signal),
+                        static fn(): bool => $child->exited(),
+                    );
+
+                    // Bounded EITHER WAY — the property the ladder exists to
+                    // guarantee. When it reports the child gone, `wait()`
+                    // reaps from its fast path; when even signal 9 missed
+                    // (an uninterruptible kernel wait), not waiting is the
+                    // point: the answer still leaves at 124 on the clock and
+                    // the handle's non-blocking destructor reaps late.
+                    if ($gone) {
+                        $child->wait();
+                    }
+
                     $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
 
                     break;

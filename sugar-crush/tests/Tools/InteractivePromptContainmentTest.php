@@ -299,6 +299,23 @@ final class InteractivePromptContainmentTest extends TestCase
      * reason — never a hang, never laundered success. `read` under sh
      * blocks forever on an open pty whose master writes nothing; the answer
      * must come from the ceiling, on the clock.
+     *
+     * THE CHILD-LIVENESS HALF (r65 seam carry): exit 124 only describes the
+     * RUNNER giving up. A ceiling that signalled the shell but not its group
+     * would pass every transcript assertion while orphaning whatever the
+     * shell started — the grandchild here keeps the pty slave and the
+     * terminal slot alive long after the "bounded" refusal returned, which
+     * is precisely the leak {@see
+     * ProcessContainment::terminatePid()}'s group-first order exists to
+     * prevent. And it is built to be HARD to clean up by accident: it ignores
+     * SIGHUP (`trap '' HUP` before the exec — an ignored disposition rides
+     * through exec), because MEASURED here, the naive backgrounded `sleep`
+     * died to a plain direct TERM of the shell all by itself — killing the
+     * session leader makes the kernel hang up the tty, and SIGHUP collected
+     * the child for free. A grandchild the test only needs the GROUP signal
+     * to reach is a grandchild that actually proves group-first termination.
+     * Both pids are printed BY the child and parsed back out, so the
+     * assertion measures the real spawn, not a stand-in.
      */
     public function testInteractiveWaitForInputIsRefusedBoundedNotHung(): void
     {
@@ -308,15 +325,178 @@ final class InteractivePromptContainmentTest extends TestCase
             return;
         }
 
+        $script = <<<'CMD'
+            (trap '' HUP; exec sleep 30) & BG=$!
+            printf 'READY pid=%s bg=%s\n' "$$" "$BG"
+            read line
+            echo ANSWERED
+            CMD;
+
         $start = \microtime(true);
-        $run = self::host()->captureInteractive('printf READY; read line; echo ANSWERED', 1.5);
+        $run = self::host()->captureInteractive($script, 1.5);
         $elapsed = \microtime(true) - $start;
 
-        self::assertLessThan(9.0, $elapsed, 'the idle ceiling must bound the session, not merely shadow a slow path');
-        self::assertSame(124, $run['exitCode'], 'transcript: ' . var_export($run, true));
-        self::assertStringContainsString('READY', $run['stdout']);
-        self::assertStringNotContainsString('ANSWERED', $run['stdout'], 'input was never supplied — answering would be fabrication');
-        self::assertStringContainsString('waiting for input', $run['stderr']);
+        self::assertSame(
+            1,
+            \preg_match('/READY pid=(\d+) bg=(\d+)/', $run['stdout'], $matches),
+            'the fixture must report its own pids or the liveness half below proves nothing: ' . var_export($run['stdout'], true),
+        );
+
+        try {
+            self::assertLessThan(9.0, $elapsed, 'the idle ceiling must bound the session, not merely shadow a slow path');
+            self::assertSame(124, $run['exitCode'], 'transcript: ' . var_export($run, true));
+            self::assertStringContainsString('READY', $run['stdout']);
+            self::assertStringNotContainsString('ANSWERED', $run['stdout'], 'input was never supplied — answering would be fabrication');
+            self::assertStringContainsString('waiting for input', $run['stderr']);
+
+            self::assertTrue(
+                self::processIsGoneWithin((int) $matches[1], 2.0),
+                'the ceiling returned 124 while the shell itself was still alive (or an unreaped zombie) — '
+                    . 'a refusal that only stops reading is not a termination',
+            );
+            self::assertTrue(
+                self::processIsGoneWithin((int) $matches[2], 2.0),
+                'the backgrounded grandchild outlived the run: the ceiling signalled only the shell, not '
+                    . 'the group — the orphan holds the pty slave open, the exact leak group-first termination prevents',
+            );
+        } finally {
+            // FAILING-RUN LEASH: a regressed ceiling reaches these lines with
+            // live children attached to a pts (the exact leak the assertions
+            // above hunt); they must not outlive the test — on a green run
+            // both pids are already gone and each call no-ops.
+            self::forceGone((int) $matches[1]);
+            self::forceGone((int) $matches[2]);
+        }
+    }
+
+    /**
+     * THE KILL RUNG: a child that traps SIGTERM used to block the runner's
+     * unbounded `wait()` forever — the hang this whole subsystem exists to
+     * end, surviving one rung short of the reaper's ladder (E676 shares the
+     * ladder precisely because "a copy is where a rung drifts"). Same clock
+     * discipline as the keystone: the answer arrives at idle ceiling + the
+     * ladder's TERM grace + signal 9, bounded whether the child cooperates
+     * or not, and the pid ends up GONE — which pre-ladder code could only
+     * achieve by hanging the test rather than by failing it.
+     */
+    public function testTheCeilingLadderReachesSignalNineWhenTermIsTrapped(): void
+    {
+        if (!self::ptyMechanism()) {
+            $run = self::host()->captureInteractive("trap '' TERM; read x");
+            self::assertSame(126, $run['exitCode'], 'a refused interactive run must never start the command');
+            self::assertSame('', $run['stdout']);
+
+            return;
+        }
+
+        $script = <<<'CMD'
+            trap '' TERM
+            printf 'READY pid=%s\n' "$$"
+            read line
+            echo ANSWERED
+            CMD;
+
+        $start = \microtime(true);
+        $run = self::host()->captureInteractive($script, 1.0);
+        $elapsed = \microtime(true) - $start;
+
+        self::assertSame(
+            1,
+            \preg_match('/READY pid=(\d+)/', $run['stdout'], $matches),
+            'the fixture must report its own pid: ' . var_export($run['stdout'], true),
+        );
+
+        try {
+            // 1.0 idle + 1.0 TERM grace + signal 9 landing + drain slack; the
+            // OLD code never finished this at all, so any bound that a hang
+            // cannot satisfy is the assertion doing its job.
+            self::assertLessThan(7.0, $elapsed, 'a SIGTERM-trapping child outran the escalation ladder — the ceiling stopped being bounded');
+            self::assertSame(124, $run['exitCode'], 'transcript: ' . var_export($run, true));
+            self::assertStringNotContainsString('ANSWERED', $run['stdout']);
+            self::assertStringContainsString('waiting for input', $run['stderr']);
+
+            self::assertTrue(
+                self::processIsGoneWithin((int) $matches[1], 2.0),
+                'the TERM-trapping child was still alive when the ladder reported done — the KILL rung is missing',
+            );
+        } finally {
+            // Same leash as the keystone: under a missing-rung regression the
+            // whole POINT of this test is a child that ignores SIGTERM, so
+            // only signal 9 ends it — and it must be ended by this file.
+            self::forceGone((int) $matches[1]);
+        }
+    }
+
+    /**
+     * THE MEMO HAS A DOOR (E687 seam carry): the availability probe memoizes
+     * per process — right for production, fatal for a test that must pin
+     * BOTH shapes of the gate on one host. The reset seam clears the memo and
+     * the next read re-derives the SAME answer from the same stats: pinning
+     * clear→re-stat in both directions (a reset that never clears leaves the
+     * null-check red; a probe that stopped memoizing leaves the post-read
+     * bool-check red; a re-stat that answered differently means the probe is
+     * not deterministic).
+     */
+    public function testTheAvailabilityMemoReStatsAfterTheTestingReset(): void
+    {
+        $first = ProcessContainment::interactiveAvailable();
+
+        $memo = new \ReflectionProperty(ProcessContainment::class, 'interactiveAvailableMemo');
+        self::assertIsBool($memo->getValue(), 'the first probe did not memoize a verdict — every ptyMechanism() call in this file has been re-statting the filesystem all along');
+
+        ProcessContainment::resetInteractiveAvailabilityForTesting();
+        self::assertNull(
+            $memo->getValue(),
+            'the reset did not clear the memo, so the next read replays the old verdict instead of re-deriving it',
+        );
+
+        $second = ProcessContainment::interactiveAvailable();
+        self::assertSame($first, $second, 're-deriving the host verdict answered differently — the stat probe is not deterministic');
+        self::assertIsBool($memo->getValue(), 'the re-stat did not repopulate the memo');
+    }
+
+    /**
+     * Bounded settle-poll for the pid assertions above. A killed child can
+     * linger as a ZOMBIE until its reaper runs — the runner reaps the shell
+     * itself, while the orphaned grandchild belongs to init, asynchronously —
+     * and `posix_kill($pid, 0)` answers "alive" for a zombie. The difference
+     * between "terminated" and "gone" is exactly what these pins exist to
+     * see, so the poll is bounded (the ceiling's own promise) and the final
+     * answer is re-read after the budget, never assumed.
+     */
+    private static function processIsGoneWithin(int $pid, float $budgetSeconds): bool
+    {
+        $deadline = \microtime(true) + $budgetSeconds;
+
+        do {
+            if (!@\posix_kill($pid, 0)) {
+                return true;
+            }
+            \usleep(20_000);
+        } while (\microtime(true) < $deadline);
+
+        return !@\posix_kill($pid, 0);
+    }
+
+    /**
+     * Failing-run leash for the two ceiling tests: when the assertions above
+     * go red, the child they just refused to wait for is STILL ATTACHED to a
+     * pts, and a TERM-trapping shell answers nothing but signal 9 — the same
+     * rung the production ladder is pinned to provide. No-ops on a green run
+     * (every pid is already gone); never waits beyond WNOHANG, so the leash
+     * itself cannot reintroduce the hang it is cleaning up.
+     */
+    private static function forceGone(int $pid): void
+    {
+        if ($pid <= 0) {
+            return;
+        }
+
+        @\posix_kill($pid, 9);
+
+        if (\function_exists('pcntl_waitpid')) {
+            @\pcntl_waitpid($pid, $status, \WNOHANG);
+        }
     }
 
     /**
