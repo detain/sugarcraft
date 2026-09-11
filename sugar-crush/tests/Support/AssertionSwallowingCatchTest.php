@@ -195,7 +195,7 @@ final class AssertionSwallowingCatchTest extends TestCase
      * discussing this very defect. `token_get_all()` sees a heredoc body as one
      * string token, so a fixture's own `catch` is correctly invisible.
      *
-     * @return list<array{file: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
+     * @return list<array{file: string, line: int, types: list<string>, resolvedTypes: list<?string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
      */
     private function swallowingCatches(): array
     {
@@ -220,7 +220,19 @@ final class AssertionSwallowingCatchTest extends TestCase
     /**
      * The same scan over one source, so a fixture can drive it (rule 15).
      *
-     * @return list<array{line: int, types: list<string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
+     * THE ROW CARRIES THE NAME TWICE, AND THE TWO ARE NOT INTERCHANGEABLE
+     * (E577). `types` is the type AS THE AUTHOR WROTE it — a display string,
+     * and filtering live rows by it repeats the round-58 defect exactly (a
+     * `starts with PHPUnit\` census over it matched only the catches that
+     * needed no resolution at all, while its own failure message claimed to
+     * prove resolution; MEASURED: deleting the import arm of resolveCaughtType
+     * left that assertion GREEN). `resolvedTypes` is what the scan DECIDED
+     * over — each name resolved through the file's own imports and namespace,
+     * or null where it resolved to nothing (already filed in
+     * {@see self::$unresolvable}, not filed twice). Any future decision keyed
+     * on the row's symbol must read `resolvedTypes`; `types` is for humans.
+     *
+     * @return list<array{line: int, types: list<string>, resolvedTypes: list<?string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
      */
     private function swallowingCatchesIn(string $source): array
     {
@@ -256,6 +268,7 @@ final class AssertionSwallowingCatchTest extends TestCase
                     $found[] = [
                         'line' => $line,
                         'types' => $types,
+                        'resolvedTypes' => $this->resolvedTypesOf($types, $imports, $namespace),
                         'catchAsserts' => $this->assertsBetween($tokens, $catchStart, $catchEnd),
                         'rethrows' => $this->rethrowsBetween($tokens, $catchStart, $catchEnd),
                         'recordsForLater' => $this->recordsForLater($tokens, $catchStart, $catchEnd, $count),
@@ -352,6 +365,28 @@ final class AssertionSwallowingCatchTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * The row's resolved twin of `types` (E577): every caught name as the
+     * symbol the scan DECIDED over, or null where it resolved to nothing.
+     *
+     * Nulls are filed once, by {@see swallowsAnAssertionFailure()}, which
+     * runs the same resolution as its own decision — this map deliberately
+     * does not double-file, so the unresolvable roster stays the reporting of
+     * record and a mutation of the filing line still reddens exactly the test
+     * that pins it.
+     *
+     * @param  list<string>          $types
+     * @param  array<string, string> $imports alias => fully-qualified
+     * @return list<?string>
+     */
+    private function resolvedTypesOf(array $types, array $imports, string $namespace): array
+    {
+        return array_map(
+            fn (string $written): ?string => $this->resolveCaughtType($written, $imports, $namespace),
+            $types,
+        );
     }
 
     /**
@@ -646,7 +681,7 @@ final class AssertionSwallowingCatchTest extends TestCase
      * Rule 2: when a mutation survives, suspect the assertion's window before
      * the mutation's relevance.
      *
-     * @param list<array{file?: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}> $rows
+     * @param list<array{file?: string, line: int, types: list<string>, resolvedTypes: list<?string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}> $rows
      *
      * @return list<string>
      */
@@ -739,7 +774,12 @@ final class AssertionSwallowingCatchTest extends TestCase
                 [],
                 array_values(array_filter(
                     $probe,
-                    static fn (array $r): bool => \in_array($type, $r['types'], true),
+                    // RESOLVED, not as-written (E577): the claim is about the
+                    // symbol the alphabet reports, and on this fixture every
+                    // type was SPELLING-matched only because the fixture
+                    // controls the spelling — which is precisely the trap the
+                    // real-tree filter fell into.
+                    static fn (array $r): bool => \in_array($type, $r['resolvedTypes'], true),
                 )),
                 'catch(' . $type . ') is not being reported, so the alphabet has narrowed and part '
                 . 'of the population is unseen',
@@ -815,15 +855,19 @@ final class AssertionSwallowingCatchTest extends TestCase
         );
         $this->assertSame(
             [
-                ['line' => 6, 'types' => ['AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
-                ['line' => 7, 'types' => ['Boom'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
-                ['line' => 8, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 6, 'types' => ['AssertionFailedError'], 'resolvedTypes' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 7, 'types' => ['Boom'], 'resolvedTypes' => ['PHPUnit\\Framework\\ExpectationFailedException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 8, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'resolvedTypes' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
             ],
             $resolved,
             'the caught type is no longer being RESOLVED before it is judged. A bare imported '
             . 'name and an aliased import are not classes on their own, so if either row is '
             . 'missing the decision has gone back to comparing spellings; if the \TypeError row '
-            . 'has appeared, resolution has gone the other way and stopped discriminating',
+            . 'has appeared, resolution has gone the other way and stopped discriminating. The '
+            . 'pair of keys is the pin itself (E577): `types` holds what the author WROTE, '
+            . '`resolvedTypes` what the scan decided over, and rows 6-7 are where the two '
+            . 'diverge — an import map or an alias arm deleted turns resolvedTypes back into the '
+            . 'spelling and this assertion is the one that says so.',
         );
     }
 
@@ -880,13 +924,13 @@ final class AssertionSwallowingCatchTest extends TestCase
 
         $this->assertSame(
             [
-                ['line' => 4, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
-                ['line' => 7, 'types' => ['Throwable'], 'catchAsserts' => true, 'rethrows' => false, 'recordsForLater' => false],
-                ['line' => 10, 'types' => ['Exception'], 'catchAsserts' => false, 'rethrows' => true, 'recordsForLater' => false],
-                ['line' => 19, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
-                ['line' => 23, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => true],
-                ['line' => 28, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
-                ['line' => 33, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 4, 'types' => ['RuntimeException'], 'resolvedTypes' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 7, 'types' => ['Throwable'], 'resolvedTypes' => ['Throwable'], 'catchAsserts' => true, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 10, 'types' => ['Exception'], 'resolvedTypes' => ['Exception'], 'catchAsserts' => false, 'rethrows' => true, 'recordsForLater' => false],
+                ['line' => 19, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'resolvedTypes' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 23, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'resolvedTypes' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => true],
+                ['line' => 28, 'types' => ['RuntimeException'], 'resolvedTypes' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 33, 'types' => ['RuntimeException'], 'resolvedTypes' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
             ],
             $rows,
             'the scanner does not agree with a source whose every catch was written to be '
