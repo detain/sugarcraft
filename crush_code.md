@@ -4,7 +4,7 @@ Comparative research: opencode ([anomalyco/opencode](https://github.com/anomalyc
 
 This is a **second, independent pass** — a prior 12-agent research effort already produced [`crush_feat.md`](./crush_feat.md) (~2000-line dossier) and [`crush_feat_plan.md`](./crush_feat_plan.md) (~870-line plan). That work is done, and six PRs landed against it on 2026-08-10 (slash-command popup, command palette, themes, layout, session persistence, and a parallel-tool-routing fix — "R14b"). Every agent in this pass was briefed to treat `crush_feat.md` as a fast-start reference **only** — to verify every claim against current source rather than trust it, and to explicitly flag where it's now stale (fixed) or, just as important, where it's *not* actually fixed despite looking closed. Several findings below are exactly that: a claim from the first pass that turned out to still be broken, or broken in a new way, on re-verification. Those are **not** excluded just because a prior plan or PR claimed to address the area — if a sibling agent found it again, it's in this plan.
 
-> **Current resume point: §0-NOW-66 (round 64 closed 2026-09-11 at `e028f142c`, CI now sharded K=min(nproc,4) — round 65 NEXT: STEP 1 mint `### E652+` backlog headings, then lanes ba–be).**
+> **Current resume point: §0-NOW-67 (round 65 closed 2026-09-11 at `0c61c0686`, linked floor 11,494 / 176,293 — the `### E652+` minting debt is CLOSED; round 66 NEXT: candidates α–ε per §0-NOW-67 §2, and the five-guard filter is MANDATORY in every brief).**
 
 ## How to read this doc
 
@@ -1081,7 +1081,7 @@ because `grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6** �
 **Put a PHP version on every width claim in this plan.** The fix removes the version-conditional path
 rather than picking a branch, and `candy-core` now declares `ext-intl`.
 
-**Phase 9 is now PARTIAL** — layer A landed in round 63 (masters `b814d5e3a`+`4d68ee678`: spawn tool children detached at the runCaptured choke point, fail-fast env; the residuals are E672–E674; layer B/C (PTY opt-in param) remains, absent-pinned — see §0-NOW-65). Still sequenced after the remaining functional queue and before the deferred
+**Phase 9 remains PARTIAL** — layer A landed in round 63 (masters `b814d5e3a`+`4d68ee678`: spawn tool children detached at the runCaptured choke point, fail-fast env; the residuals E672–E674 landed in round 64), **layers B/C landed in round 65** (lane bc, master `e18184e8a` ← `b7bb99ff5`: the opt-in `interactive` parameter on Bash — default-OFF byte-identical, ON through a candy-pty PTY this process allocates owning OUR ctty, no-askpass holding, 8s idle ceiling group-TERM → 124, pty-less host → 126 refusal; E692 dispositioned at the fork site). What remains of Phase 9: the composited in-pane interactive surface and E62's permission-gated / visually-distinct chrome bar — live now that (C) is built. Still sequenced after the remaining functional queue and before the deferred
 security pass, decisions unchanged: layered **(A) detach always + (C) PTY opt-in**, the opt-in an
 **optional parameter and not a second tool**, and **no askpass** — the interactive PTY does not accept
 secrets at all.

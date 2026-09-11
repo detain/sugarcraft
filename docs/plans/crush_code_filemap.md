@@ -1,19 +1,20 @@
 # crush_code backlog — actionable file-map (lane-scheduling aid)
 
-Derived 2026-09-11 @ tip `e028f142c` (rows re-synced at the round-64 close; supersedes the round-63
-`8c52b26e5` cut) — regenerate this file at every round-close.
-Purpose: map every actionable backlog id (OPEN/PARTIAL/STALE-CITATION/UNCERTAIN = **117** per
-§0-NOW-66 §3; CLOSED rows are RETAINED below with their stamps as the closeout record — a full regen
+Derived 2026-09-11 @ tip `0c61c0686` (rows re-synced at the round-65 close; supersedes the round-64
+`e028f142c` cut) — regenerate this file at every round-close.
+Purpose: map every actionable backlog id (OPEN/PARTIAL/STALE-CITATION/UNCERTAIN = **111** per
+§0-NOW-67 §3; CLOSED rows are RETAINED below with their stamps as the closeout record — a full regen
 prunes them) to the files it touches so the supervisor can schedule file-disjoint lanes. Tier/lane
 analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain` column
-below is a file-cluster bucket. Round-64 markers (`⚠α..⚠ε`) are retired history below. Round-65 lanes
-**ba–be** (`crush_code_RESUME.md` §0-NOW-66 §2) own via fresh briefs: **ba** owns the Tui-panel +
-MCP/LSP pump region (`src/Tui/`, `src/Cli/Subcommands.php`, `src/LSP/`, `src/MCP/`); **bb** owns
-`src/Renderer.php` + `src/App.php` + KeyBindingRegistry — serialize ba/bb at any Tui/Renderer boundary;
-**bc** (Phase-9 B/C) touches `src/Agents/` + `src/Backend/` — E692 sits at `EngineBackend.php:966`,
-coordinate with bc; **bd** owns Bootstrap.php again (E653 re-derive FIRST — shape withdrawn at r62);
-**be** is prose-campaign (tests/docs/README, disjoint from all). The domain index below still carries
-round-63 counts — refresh at the full regen (STEP 1, with the `### E652+` heading mint).
+below is a file-cluster bucket. Round-64 markers (`⚠α..⚠ε`) and round-65 markers (`⚠ba..⚠be`) are
+retired history below. Round-66 lanes **α–ε** (`crush_code_RESUME.md` §0-NOW-67 §2) own via fresh briefs:
+**α** test-prose carry bundle (src/Providers + Runtime prose, ~20 tests dirs, `tests/Tools/`,
+`tests/Context/`); **β** prose-campaign tranche-3 (`tests/`, `docs/`, `README.md` — disjoint); **γ**
+ci-infra (`.github/workflows/ci.yml`, `scripts/` — E691); **δ** `tests/Workflows/` +
+`tests/Cli/StderrEmitterCensusTest.php` (E670/E687); **ε** owns `sugar-crush/src/Chat.php` + README
+(E653 Shape B /notices) — serialize by file against anything else touching Chat.php. The domain index
+below still carries round-63 counts — refresh at the full regen (the `### E652+` heading mint LANDED at
+`25924d512`; only the index re-derivation remains outstanding).
 
 ## Path normalization
 
@@ -138,7 +139,7 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 | E617 | OPEN | HIGH | sugar-crush/tests/Support/AssertionSwallowingCatchTest.php⚠ε | tests-harness | S |
 | E629 | OPEN | HIGH | tools/tests/CheckPathReposTest.php | ci-infra | S |
 | E633 | PARTIAL | HIGH | sugar-crush/src/Context/RepoMapBlock.php | other | S |
-| E653 | PARTIAL | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php;sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php;sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php;sugar-crush/tests/Cli/StderrEmitterCensusTest.php⚠α⚠β⚠δ⚠ε | agents | L |
+| E653 | CLOSED | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchNoticeRoutingTest.php;sugar-crush/tests/Cli/BootstrapToolAndPermissionSettingsTest.php;sugar-crush/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php;sugar-crush/tests/Cli/StderrEmitterCensusTest.php;sugar-crush/tests/Cli/PermissionWarningDrainTest.php⚠α⚠β⚠δ⚠ε⚠bd | agents | L |
 | E657 | OPEN | MED | sugar-crush/src/Providers/SglangProvider.php;sugar-crush/src/Providers/VertexProvider.php;sugar-crush/src/Runtime.php⚠γ | providers | M |
 | E658 | OPEN | LOW | sugar-crush/tests/⚠ε | tests-harness | S |
 | E659 | OPEN | MED | sugar-crush/tests/Tools/BuiltInToolCorpusTest.php;sugar-crush/tests/Context/RepoMapBlockTest.php;sugar-crush/tests/SymbolCitationDriftTest.php⚠β⚠ε | tests-harness | M |
@@ -155,17 +156,17 @@ Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_co
 | E679 | CLOSED | LOW | sugar-crush/src/Agents/TaskList.php;sugar-crush/src/Agents/WorktreeManager.php | agents | M |
 | E680 | CLOSED | MED | sugar-crush/src/Session.php | sessions | S |
 | E681 | CLOSED | HIGH | sugar-crush/src/Chat.php;sugar-crush/tests/Commands/ | chat-input | M |
-| E682 | OPEN | MED | sugar-crush/src/Renderer.php;sugar-crush/src/App.php | tui-render | M |
-| E683 | OPEN | LOW | sugar-crush/src/Commands/KeyBindingRegistry.php;sugar-crush/src/Renderer.php⚠γ | tui-render | M |
+| E682 | CLOSED | MED | sugar-crush/src/Renderer.php;sugar-crush/src/App.php;sugar-crush/tests/Renderer/AbandonedPaletteIsNotCompositedTest.php | tui-render | M |
+| E683 | CLOSED | LOW | sugar-crush/src/Commands/KeyBindingRegistry.php;sugar-crush/src/Renderer.php;sugar-crush/tests/MousePaneJumpDoesNotHandOverTest.php⚠γ | tui-render | M |
 | E684 | CLOSED | HIGH | sugar-crush/src/Cli/Bootstrap.php;sugar-crush/tests/Cli/BootstrapLaunchFormatConstantsTest.php | cli-config | M |
 | E685 | CLOSED | HIGH | sugar-crush/src/Tools/ | tools-skills | S |
 | E686 | PARTIAL | MED | sugar-crush/tests/;sugar-crush/docs/;sugar-crush/README.md⚠be | tests-harness | M |
 | E687 | OPEN | MED | sugar-crush/tests/Cli/StderrEmitterCensusTest.php;sugar-crush/src/Agents/AgentWorkerPool.php⚠ba | agents | M |
 | E688 | CLOSED | MED | sugar-crush/src/Agents/ProcessExecutor.php;sugar-crush/tests/Agents/WorkerExitCodeAttributionTest.php | agents | M |
-| E689 | OPEN | MED | sugar-crush/src/Tui/;sugar-crush/src/Cli/Subcommands.php;sugar-crush/src/Tools/McpToolBridge.php⚠ba | cli-config | M |
-| E690 | OPEN | MED | sugar-crush/src/LSP/LspConnection.php;sugar-crush/src/MCP/StdioMcpServer.php⚠ba | lsp-mcp | S |
+| E689 | CLOSED | MED | sugar-crush/src/Tui/;sugar-crush/src/Tui/McpPanel.php;sugar-crush/src/Commands/McpAuthCommand.php;sugar-crush/tests/Tui/McpPanelTest.php;sugar-crush/src/Cli/Subcommands.php;sugar-crush/src/Tools/McpToolBridge.php⚠ba | cli-config | M |
+| E690 | CLOSED | MED | sugar-crush/src/LSP/LspClient.php;sugar-crush/tests/LSP/LspClientDispatchPumpTest.php;sugar-crush/src/LSP/LspConnection.php;sugar-crush/src/MCP/StdioMcpServer.php⚠ba | lsp-mcp | S |
 | E691 | OPEN | LOW | .github/workflows/ci.yml;scripts/ | ci-infra | S |
-| E692 | OPEN | LOW | sugar-crush/src/Backend/EngineBackend.php⚠bc | containment | S |
+| E692 | CLOSED | LOW | sugar-crush/src/Backend/EngineBackend.php⚠bc | containment | S |
 ## Domain → ids index (sorted by count)
 
 > Round-63 closeout re-derivation: 32 ids left actionable (29 CLOSED + E41 CLOSED from PARTIAL + the

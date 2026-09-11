@@ -19863,29 +19863,27 @@ load-bearing.
 > (E671–E677, E679–E681, E684, E685, E688 CLOSED; E678/E686 PARTIAL; E687 stays OPEN). Minting the
 > remaining headings is round-65's STEP 1 (now covering E652–E692).
 
-### E689 [OPEN] — no `/mcp` TUI panel (the E678 second half)
+### E689 [CLOSED] — no `/mcp` TUI panel (the E678 second half)
 
-**What:** operator-facing /mcp panel in the TUI; the E678 `crush mcp --json` wire-name rows already
-landed (lane ad, master `b76fee3cd`). **Where:** `sugar-crush/src/Tui/`, `src/Cli/Subcommands.php`.
-**Severity:** MED. Lane ad refused the panel — collides the Tui ownership set. Round-65 lane ba.
+**What:** landed round 65 lane ba — `src/Tui/McpPanel`, a read-dominant transcript panel with EVERY row derived from `Bootstrap::mcpServerInventory()` (zero rosters, randomised fixtures), mounted in the `McpAuthCommand` list arm so both the `/mcp` slash entry and the palette Toggle light up; review round added the both-arm emission pin (mutation-verified) + `Width::truncateMiddle` display-cell clipping; the trust toggle declined — it would invent a second persistence seam. **Conf:** MED. Lane `90747e04a`+`1c85b8498` → masters `6220e5b29`/`a6768adde`. Evidence: triage E689.
 
-### E690 [OPEN] — mount `pumpStderr()` at the LSP-side dispatch entry (the E677 remainder)
+### E690 [CLOSED] — mount `pumpStderr()` at the LSP-side dispatch entry (the E677 remainder)
 
-**What:** the MCP dispatch-entry mounts landed in lane ad (entry + timer), but the LSP-side entry was
-out-of-ownership; fd 2 unread between turns on that path. **Where:** `sugar-crush/src/LSP/LspConnection.php`
-(mirrors the `src/MCP/StdioMcpServer.php` entry+timer mount). **Severity:** MED. Round-65 lane ba.
+**What:** landed round 65 lane ba — `LspClient::pumpStderr()` fan-out (instanceof-gated; the interface never grows a pump method, in-memory fakes stay inert) mounted in all five `*For` operations after the language guard, before cache lookup; `diagnostics()` skipped (pure cache read); `LspClientDispatchPumpTest` pin: post-settled noise drained by the NEXT op, <2s bounded, zero timers, mount-order row. Drift fix `ce87e4e1d` aligned the copied `waitForFile` fail-message to canonical. **Conf:** MED. Lane `35b38ea5c` → masters `858614688`/`ce87e4e1d`. Evidence: triage E690.
 
 ### E691 [OPEN] — the coverage CI job is still serial for sugar-crush (the E671 seam)
 
 **What:** `f67328f94` sharded the test job only; the coverage job runs the suite serially. Sharding it
 needs a clover-merge story (per-shard coverage → merged report) first. **Where:**
 `.github/workflows/ci.yml`, `scripts/`. **Severity:** LOW. E671 seam recorded at the round-64 close.
+Round 65 left the coverage job untouched BY DESIGN (no lane owned CI infra); round-66 candidate γ.
 
-### E692 [OPEN] — `EngineBackend.php:966` `pcntl_fork` async-complete child sits outside containment scope
+### E692 [CLOSED] — `EngineBackend.php:966` `pcntl_fork` async-complete child sits outside containment scope
 
-**What:** an in-process fork (no exec), so `ProcessContainment` (which wraps exec-spawns) never sees
-it; a containment-scope call to make — does this need a pgid story of its own? **Where:**
-`sugar-crush/src/Backend/EngineBackend.php:966`. **Severity:** LOW. From the lane-ac reviewer record.
+**What:** CLOSED-WITH-DECISION, round 65 lane bc. The in-process, **exec-free** fork carries no
+argv/PATH/interactive surface, so it is OUT of `ProcessContainment`'s exec-spawn remit — no pgid story
+owed. The scope call is recorded as a comment at the fork site itself (a `b7bb99ff5` hunk, master
+`e18184e8a`). Reasoning stands with the code. **Conf:** LOW. Evidence: triage E692.
 
 ---
 
@@ -19900,9 +19898,9 @@ it; a containment-scope call to make — does this need a pgid story of its own?
 
 **What:** round-62 lanes E+N feed forked sub-agent workers the session provider spec — `AgentPoolConfig` inherits it into BOTH the `ProcessExecutor` and `AgentWorkerPool` feeds, the engine pool gets its own; `${VAR}` placeholders, never resolved secrets. **Conf:** HIGH. Evidence: triage E652.
 
-### E653 [PARTIAL] — operator-facing DRAIN shape for narrowed-grant warnings
+### E653 [CLOSED] — operator-facing DRAIN shape for narrowed-grant warnings
 
-**What:** the `narrowedGrantWarnings()` collector shipped; the chat-time drain was withdrawn as a measured seam (round-62 lane E) — the residual drain shape must be re-derived (neighbour of E642). **Conf:** HIGH. Evidence: triage E653.
+**What:** Shape A shipped round 65 lane bd — `chat()`-tail drain: stderr every `narrowedGrantWarnings()` whole and once; transcript ≤2 rows (greedy pair-pack to the 400-char launch-notice budget, fail-soft on collector drift); `PermissionWarningDrainTest` 6T/47A dynamic N/K/M; the census flip set was FIVE files not four (`BootstrapLaunchFormatConstantsTest` the surprise). **Shape B — a `/notices` panel surface — recorded as follow-up (round-66 candidate ε).** Chain: lane `03912ee13` + review-2 `6b52bf7e5` → masters `8af65962d`/`d26dd4377`. **Conf:** HIGH. Evidence: triage E653.
 
 ### E654 [CLOSED] — per-agent system prompt on the batch path
 
@@ -20016,13 +20014,13 @@ it; a containment-scope call to make — does this need a pgid story of its own?
 
 **What:** Chat.php checkpoint snapshots `inputBuf` pre-clear and restore returns it (no more hard-coded `''`); polarity-1 discriminating pin; legacy keyless checkpoints → `''` (lane af, supervisor decision). **Conf:** HIGH. Evidence: triage E681.
 
-### E682 [OPEN] — composite does not adopt the abandoned palette surface
+### E682 [CLOSED] — composite does not adopt the abandoned palette surface
 
-**What:** the JJ seam / E12-composite carry; lane ε follow-up. **Conf:** MED. Evidence: triage E682 (see E666).
+**What:** landed round 65 lane bb — paint-only parity: `Renderer::setPaletteAbandoned()` computed per frame by `App::view()` from E666's predicate (reset in `finally`, standalone renders self-heal); suppression ≠ close, the choke point stays; ghost frame mutation-pinned (8.8 KB when the guard lifts); sidebar-palette negative pinned. The full composite-live route remains open (E12). Lane `219bd908d` + review-fix `d91a3c461` → masters `cf70cd0ae`/`8222f9576`. **Conf:** MED. Evidence: triage E682 (see E666).
 
-### E683 [OPEN] — `KeyBindingRegistry` prose + mouse pane-jump first-key-closes seam
+### E683 [CLOSED] — `KeyBindingRegistry` prose + mouse pane-jump first-key-closes seam
 
-**What:** the JJ residual. **Conf:** LOW. Evidence: triage E683 (see E666).
+**What:** landed round 65 lane bb — prose half TRUE → the `chatCtrlRunesYieldedToShell()` paragraph extended with the ADOPTION route (close + paint) while keeping composite-live open; mouse pane-jump half measured FALSE (chrome zones menu-only; `SelectPaneMsg` consumer-without-producer) → pinned DORMANT, not removed (`MousePaneJumpDoesNotHandOverTest`); `mouse.pane` description de-overclaimed to what the drift observation proves. Lane `87508724f` → master `c477505fc`. **Conf:** LOW. Evidence: triage E683 (see E666).
 
 ### E684 [CLOSED] — `Bootstrap` totals prose re-measured (29/128/3 at `:408`, 29/135/2 at `:450`)
 
@@ -20034,7 +20032,11 @@ it; a containment-scope call to make — does this need a pgid story of its own?
 
 ### E686 [PARTIAL] — repo-wide documentation-figure prose campaign
 
-**What:** bounded tranche-1 landed per the measured-refusal ruling; the campaign continues (~334 figures / 79 files) — tranche-2 = round-65 lane be. **Conf:** MED. Evidence: triage E686.
+**What:** bounded tranche-1 landed (round-64 ae) per the measured-refusal ruling; **tranche-2 landed
+round 65** (master `09c08c481`, lane `85a20c50c`): 27 figure claims judged — 16 TRUE pinned in 8 new
+`DocFigureProseDriftTest` arms (12 arms total), 3 FALSE fixed prose-only in `docs/ARCHITECTURE.md`, 6
+HELD measured/external-labeled. The campaign continues (~334 figures / 79 files): tranche-3 carries from
+`be/measures.md`'s SKIP row — round-66 candidate β. **Conf:** MED. Evidence: triage E686.
 
 ### E687 [OPEN] — E261's teardown fork-failure log needs the `StderrEmitterCensus` trio in-step
 
