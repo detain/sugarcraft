@@ -64,8 +64,8 @@ use SugarCraft\Crush\Context\InstructionFileLoader;
  * {@see \SugarCraft\Crush\Tools\BuiltIn\Edit} and
  * {@see \SugarCraft\Crush\Tools\BuiltIn\Write} get, and four times this
  * trait's whole {@see DEFAULT_MAX_OUTPUT_BYTES}. At the shipped default a Read
- * returns this repository's 9,611-byte `CLAUDE.md` verbatim, which is the
- * intended behaviour — it is announce-once, so it is paid on the first read
+ * returns this repository's `CLAUDE.md` verbatim - comfortably true at any
+ * size up to the 1 MiB read bound, which is the intended behaviour — it is announce-once, so it is paid on the first read
  * under a governing directory and never again — but it is a bound of a
  * different order from the other four users, and the headline above used to
  * claim it was the same one.

@@ -3196,8 +3196,8 @@ final class AgentTest extends TestCase
                     $subprocesses,
                     "a REAL WorkflowEngine chain of {$stages} plain sequential stages no longer costs "
                         . 'five git subprocesses per stage. If it costs fewer, the per-stage render at '
-                        . 'WorkflowEngine.php:1063 is gone: a caller began sharing one EnvironmentBlock '
-                        . 'across the foreach at WorkflowEngine.php:895, which is EXACTLY the wiring '
+                        . 'the WorkflowEngine per-step EnvironmentBlock wiring is gone: a caller began sharing one '
+                        . 'across the step-dispatch foreach in WorkflowEngine.php, which is EXACTLY the wiring '
                         . 'P3.S6 declined and recorded as an escalation. That is the P3.S6 disposition '
                         . 'changing - the write signal now has a per-stage seam a caller is using - and '
                         . 'it must be re-dispositioned rather than silenced by moving this number.',

@@ -11,6 +11,8 @@ use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Support\ToolIpcFiles;
+use SugarCraft\Crush\Tools\BuiltIn\Read;
+use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 
 /**
  * E633-SLICE-1: a doc-block that quotes measured figures AND draws a
@@ -130,6 +132,66 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('runaway guard, not a sizing target', $doc);
         self::assertStringNotContainsString('orders of magnitude', $doc);
         self::assertStringNotContainsString('tens of directories', $doc);
+    }
+
+
+    /**
+     * E685 (E633-SLICE-2): the trait headline reserves Read a quarter and
+     * states the resulting multiples ("sixteen times" DEFAULT_MAX_INSTRUCTION_
+     * BYTES, "four times" DEFAULT_MAX_OUTPUT_BYTES) - live arithmetic on three
+     * constants, so every word is re-derived here rather than trusted. The two
+     * de-digitalised corrections minted the same round (the size-agnostic
+     * CLAUDE.md sentence; the digit-less Glob rationale) are pinned as prose:
+     * E633's lesson that an unpinned correction rots back into the claim it
+     * corrected.
+     */
+    public function testToolsReserveMultipliersSurviveTheirConstants(): void
+    {
+        $traitDoc = (string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Tools/Concerns/TruncatesOutput.php',
+        );
+
+        self::assertSame(
+            1,
+            preg_match(
+                '/default `\$\w+` is (\d+) MiB.{0,30}?reserve is (\d+).{0,12}?KiB.{0,12}?sixteen times the flat'
+                . ' \{\@see DEFAULT_MAX_INSTRUCTION_BYTES\}.*?and four times this/s',
+                $traitDoc,
+                $m,
+            ),
+            'the reserve sentence no longer spells its MiB, its KiB reserve, and both multipliers'
+            . ' in one sentence — rewrite the pin with the prose, do not delete it',
+        );
+
+        $readDefault = null;
+        foreach ((new \ReflectionClass(Read::class))->getMethods() as $method) {
+            foreach ($method->getParameters() as $parameter) {
+                if ($parameter->isDefaultValueAvailable() && $parameter->getDefaultValue() === 1_048_576) {
+                    $readDefault = 1_048_576;
+                    break 2;
+                }
+            }
+        }
+        self::assertNotNull(
+            $readDefault,
+            'nothing in Read defaults to 1 MiB any more — the headline still says "is 1 MiB",'
+            . ' so the sentence and this probe must move together',
+        );
+        self::assertSame((int) $m[1], intdiv($readDefault, 1_048_576), 'prose MiB figure drifted from Read');
+        self::assertSame((int) $m[2], intdiv(intdiv($readDefault, 4), 1024), 'prose reserve-KiB drifted from Read/4');
+
+        $instruction = (int) (new \ReflectionClass(TruncatesOutput::class))->getConstant('DEFAULT_MAX_INSTRUCTION_BYTES');
+        $output = (int) (new \ReflectionClass(TruncatesOutput::class))->getConstant('DEFAULT_MAX_OUTPUT_BYTES');
+        $reserve = intdiv($readDefault, 4);
+        self::assertSame(16, intdiv($reserve, $instruction), '"sixteen times" is no longer the true multiple of DEFAULT_MAX_INSTRUCTION_BYTES');
+        self::assertSame(4, intdiv($reserve, $output), '"four times" is no longer the true multiple of DEFAULT_MAX_OUTPUT_BYTES');
+
+        // pinned corrections (each false as a digit, de-digitalised this round)
+        self::assertStringNotContainsString('9,611-byte `CLAUDE.md` verbatim', $traitDoc, 'the stale repo-CLAUDE.md digit is back — the file is 9,167 bytes at 07a53049b and any digit rots');
+        self::assertStringContainsString('verbatim - comfortably true at any', $traitDoc, 'the corrective sentence moved');
+        $globDoc = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Tools/BuiltIn/Glob.php');
+        self::assertStringNotContainsString('112,000', $globDoc, 'the unlabeled whole-tree figure is back; the point needs no digit');
+        self::assertStringContainsString('whole tree and discarding nearly all of it', $globDoc, 'the Glob corrective sentence moved');
     }
 
     private static function docBlockOf(string $class, string $constant): string

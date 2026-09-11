@@ -42,7 +42,7 @@ final readonly class Glob implements Tool, ParallelSafe, CarriesSessionState
      *
      * A count cap rather than only a byte cap because the traversal is the
      * expensive half: stopping at 1,000 entries means the walk ENDS there,
-     * instead of collecting 112,000 and discarding 111,000 of them. 1,000
+     * instead of collecting the whole tree and discarding nearly all of it. 1,000
      * paths is also about what the byte cap admits, so the two agree rather
      * than one silently pre-empting the other.
      */
