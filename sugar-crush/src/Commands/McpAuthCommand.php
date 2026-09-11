@@ -105,7 +105,7 @@ final class McpAuthCommand
         $subCommand = $args[0] ?? 'list';
 
         return match ($subCommand) {
-            'list' => $this->listServers(TranscriptTable::paneWidth($chat)),
+            'list' => $this->listWithProjectPanel($chat, TranscriptTable::paneWidth($chat)),
             'add' => $this->addServer($args),
             'remove' => $this->removeServer($args),
             default => $this->printError("Unknown sub-command '{$subCommand}'. Use: list, add, remove"),
@@ -115,6 +115,23 @@ final class McpAuthCommand
     /**
      * List all registered servers and their auth status.
      */
+    /**
+     * E689 glue: the `/mcp` list arm opens with the live project-inventory
+     * panel (what `.mcp.json` declares and whether launch may run it), then
+     * falls through to the auth-credentials table exactly as before. One
+     * discovery path — {@see \SugarCraft\Crush\Cli\Bootstrap::mcpServerInventory()}
+     * — so the panel and `sugarcrush mcp --json` can never disagree.
+     */
+    private function listWithProjectPanel(Chat $chat, int $paneWidth): int
+    {
+        echo \SugarCraft\Crush\Tui\McpPanel::render(
+            \SugarCraft\Crush\Cli\Bootstrap::mcpServerInventory(),
+            $paneWidth,
+        );
+
+        return $this->listServers($paneWidth);
+    }
+
     private function listServers(int $paneWidth): int
     {
         $servers = $this->authStore->listServers();
