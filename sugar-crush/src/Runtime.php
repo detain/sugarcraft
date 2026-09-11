@@ -546,7 +546,7 @@ final class Runtime
      * implementor, which is outside this step's declared file list.
      *
      * `Task` JOINED THIS ROSTER ON THE SAME JUDGEMENT `Bash` RIDES, not on a
-     * primitive scan: {@see \SugarCraft\Crush\Tools\TaskTool} calls no write
+     * primitive scan: {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} calls no write
      * primitive itself — it dispatches a sub-agent through
      * {@see \SugarCraft\Crush\Agents\AgentManager::executeAll()}, and whatever
      * that agent's granted tools do to the tree happens in a forked worker this

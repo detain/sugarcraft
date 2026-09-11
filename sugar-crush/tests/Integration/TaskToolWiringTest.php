@@ -11,6 +11,7 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
+use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Cli\Bootstrap;
@@ -43,7 +44,9 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * `Bootstrap::tools()` could not name it as a literal and the corpus exempted
  * it. The launch feed now builds the bound instance, which
  * {@see testTheProductionLaunchFeedsTaskBoundToTheChatOwnManager()} pins as
- * LIVE wiring — the registry shape alone was never the claim.
+ * LIVE wiring — the registry shape alone was never the claim — and its sibling
+ * {@see testTheProductionLaunchThreadsTheChatBoundWorkerPoolIntoTask()} pins
+ * the OTHER half of the feed, the session-bound worker pool.
  *
  * WHY THE EXECUTOR IS INJECTED (a recording fake, not a forked worker): an
  * injected executor puts the pool on its synchronous in-parent dispatch, which
@@ -115,6 +118,75 @@ final class TaskToolWiringTest extends TestCase
             . 'and the /agents panel answer from different rosters.',
         );
         self::assertNotNull($boundManager, 'the fed Task must not carry a null manager — that is the inert shape E675 removed');
+    }
+
+    /**
+     * The OTHER half of the E675 feed: not only WHICH manager but WHICH pool.
+     * `Bootstrap::taskWorkerPool()` builds a fresh pool per launch, so instance
+     * identity is unassertable — what IS assertable is its CONSTITUTION: the
+     * injected {@see ProcessExecutor} (a default-constructed pool carries no
+     * executor at all) plus every knob read off the SAME
+     * {@see AgentPoolConfig} the Chat received. Regression shapes each die on a
+     * distinct assert: pool threaded as null → the assertInstanceOf; a bare
+     * `new AgentWorkerPool()` or hand-built default pool → the ProcessExecutor
+     * instanceof; a pool derived from a different config → a knob assertSame.
+     * Pure reflection over construction state: no dispatch, no timers, no fork.
+     */
+    public function testTheProductionLaunchThreadsTheChatBoundWorkerPoolIntoTask(): void
+    {
+        $chat = Bootstrap::chat($this->root);
+        $backend = $chat->backend();
+
+        $feed = (new \ReflectionProperty($backend, 'tools'))->getValue($backend);
+        $taskTools = array_values(array_filter(
+            $feed,
+            static fn (object $tool): bool => $tool instanceof TaskTool,
+        ));
+        $this->assertCount(1, $taskTools, 'same single-feed assumption as the manager pin above');
+
+        $pool = (new \ReflectionProperty(TaskTool::class, 'workerPool'))->getValue($taskTools[0]);
+        self::assertInstanceOf(
+            AgentWorkerPool::class,
+            $pool,
+            'the fed Task must carry the launch pool — a null pool is the drop-threading regression E675 closed',
+        );
+
+        $config = $chat->agentPoolConfig();
+        self::assertNotNull($config, 'chat() must hand the Chat the AgentPoolConfig the Task pool was derived from');
+
+        $executor = (new \ReflectionProperty(AgentWorkerPool::class, 'executor'))->getValue($pool);
+        self::assertInstanceOf(
+            ProcessExecutor::class,
+            $executor,
+            'taskWorkerPool() builds the session pool with an injected ProcessExecutor; a default-constructed pool '
+            . 'carries none — this is the fresh-pool discriminator',
+        );
+
+        self::assertSame(
+            $config->maxConcurrent,
+            (new \ReflectionProperty(AgentWorkerPool::class, 'maxConcurrent'))->getValue($pool),
+            'pool concurrency must come from the Chat-bound config, not a literal',
+        );
+        self::assertSame(
+            $config->workerProvider,
+            (new \ReflectionProperty(AgentWorkerPool::class, 'workerProvider'))->getValue($pool),
+            'the pool-side provider spec must be the session spec (E652), not a dropped null',
+        );
+        self::assertSame(
+            $config->stopOnFirstFailure,
+            (new \ReflectionProperty(AgentWorkerPool::class, 'stopOnFirstFailure'))->getValue($pool),
+            'the governed stop-on-first-failure flag is part of the documented pool constitution',
+        );
+        self::assertSame(
+            $config->defaultTimeoutSeconds,
+            (new \ReflectionProperty(ProcessExecutor::class, 'timeoutSeconds'))->getValue($executor),
+            'the executor timeout must ride the config, matching taskWorkerPool()',
+        );
+        self::assertSame(
+            $config->workerProvider,
+            (new \ReflectionProperty(ProcessExecutor::class, 'workerProvider'))->getValue($executor),
+            'the executor-side provider spec is the fork-carrying half (E652) and must match the config too',
+        );
     }
 
     public function testAModelTaskCallReachesTheAgentManagerAndTheSubAgentAnswerComesBack(): void
