@@ -33,6 +33,15 @@ declare(strict_types=1);
  * integration test in `tools/tests/ChildLifetimesToolTest.php` reddens the
  * `tools/ guards` job on the next run.
  *
+ * THE SAME COUPLING RUNS ONE LEVEL DEEPER, and this is the sentence that
+ * keeps it from being rediscovered as a fatal: the scanner is loaded with NO
+ * autoloader registered, so every file its class graph needs is required by
+ * path below, in dependency order — `TokenFunctionRanges`, and since E174's
+ * trait extraction `SplitsTopLevelArgumentsTrait`. A future `use` of another
+ * Support trait inside the scanner (or one that trait itself grows) must
+ * join that require list the same day it lands, or this tool dies at
+ * class-declaration time on both the CLI path and the tools/tests gate.
+ *
  * WHAT IS IN SCOPE. Every first-level directory that carries a
  * `composer.json` with an `autoload` section — a lib's REAL autoload roots
  * (psr-4, classmap, files), read from its manifest exactly the way
@@ -78,6 +87,12 @@ declare(strict_types=1);
 use SugarCraft\Crush\Tests\Support\ChildLifetimeScanner;
 
 require_once __DIR__ . '/../sugar-crush/tests/Support/TokenFunctionRanges.php';
+// Required BEFORE the scanner: its class body declares `use
+// SplitsTopLevelArgumentsTrait` (E174), same namespace, no import — with no
+// autoloader here, the trait must already be declared or the scanner file
+// fatals at declaration time. Keep this list in sync with the scanner's
+// trait graph; see the class doc-block above for why.
+require_once __DIR__ . '/../sugar-crush/tests/Support/SplitsTopLevelArgumentsTrait.php';
 require_once __DIR__ . '/../sugar-crush/tests/Support/ChildLifetimeScanner.php';
 
 final class CheckChildLifetimes
