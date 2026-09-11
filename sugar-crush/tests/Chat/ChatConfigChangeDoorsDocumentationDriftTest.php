@@ -9,6 +9,7 @@ use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
 
 /**
  * `Chat::$onConfigChange` has FOUR doors, and every doc-block that enumerates
@@ -377,28 +378,35 @@ final class ChatConfigChangeDoorsDocumentationDriftTest extends TestCase
     }
 
     /**
-     * Doc-block paragraphs, leader-stripped and whitespace-collapsed, because
-     * every claim here is line-wrapped and a raw `str_contains()` would report
-     * a line break as a defect.
+     * Doc-block paragraphs — the shared window, E125/E144.
+     *
+     * WHAT THIS WAS: the fourth splitter, still carrying the blank-line rule
+     * the three `tests/Config/` suites had already delegated away — split on
+     * a blank line, strip doc-block leaders, collapse whitespace. Every claim
+     * here is line-wrapped, so a raw `str_contains()` would report a line
+     * break as a defect; that justification moved, in full, to
+     * {@see DocumentParagraphs}.
+     *
+     * WHAT IS TRUE NOW: this method is a one-line call to
+     * `DocumentParagraphs::of()`, the window every other doc-drift oracle
+     * reads through. The delegation was measured before it was made (E144):
+     * every doc-block and page this file reads is plain prose — no fences, no
+     * tables, no lists — so the widened rule cuts the same units here it
+     * would under the old window, and the assertions below are phrase
+     * searches over those units.
+     *
+     * WHY THE METHOD REMAINS AT ALL: it is the seam, the same reason
+     * `\SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::paragraphs()`
+     * survives as one line — call sites read a method, the rule itself lives
+     * in exactly one place, and the window can be changed and measured
+     * against {@see \SugarCraft\Crush\Tests\Config\DocumentParagraphsTest}'s
+     * fixture table rather than by hand.
      *
      * @return list<string>
      */
     private static function paragraphs(string $text): array
     {
-        $lines = [];
-        foreach (preg_split('/\R/', $text) ?: [] as $line) {
-            $lines[] = preg_replace('#^\s*(/\*\*|\*/|\*)#', '', $line) ?? $line;
-        }
-
-        $out = [];
-        foreach (preg_split('/\n\s*\n/', implode("\n", $lines)) ?: [] as $paragraph) {
-            $normalised = trim((string) preg_replace('/\s+/', ' ', $paragraph));
-            if ($normalised !== '') {
-                $out[] = $normalised;
-            }
-        }
-
-        return $out;
+        return DocumentParagraphs::of($text);
     }
 
     /**

@@ -167,10 +167,6 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             . 'from reading each other\'s file. The `-F`/`-f` defect that made the copies '
             . 'differ in BEHAVIOUR was fixed in both, one round apart, which is the event this '
             . 'guard exists to make visible next time.',
-        'readOrFail' =>
-            'The text of the failure message differs; the read and the refusal are identical. '
-            . 'Each message names what its own census is void without, which is worth more '
-            . 'than one shared sentence.',
         'readme' =>
             'One copy calls a helper named `document()`, the other one named `repoFile()`. Two '
             . 'different accessors in two different classes, reached by helpers that happen to '

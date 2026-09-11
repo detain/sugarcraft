@@ -11,6 +11,7 @@ use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
+use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
 
 /**
  * `~/.sugar-crush/config.json` receives exactly two keys, and every document
@@ -66,6 +67,8 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
  */
 final class ConfigWriteProducerDocumentationDriftTest extends TestCase
 {
+    use RefusesAnUnreadableSourceTrait;
+
     private const SETTINGS_DOC = __DIR__ . '/../../docs/SETTINGS.md';
     private const README = __DIR__ . '/../../README.md';
 
@@ -589,14 +592,6 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
         return $which === 'docblock'
             ? $this->layeredSettingsDocBlock()
             : self::readOrFail(self::SETTINGS_DOC);
-    }
-
-    private static function readOrFail(string $path): string
-    {
-        $text = file_get_contents($path);
-        self::assertIsString($text, $path . ' could not be read');
-
-        return $text;
     }
 
     /**

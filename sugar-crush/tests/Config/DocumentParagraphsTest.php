@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
+use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
 
 /**
  * THE SHARED WINDOW, AND THE BLIND SPOT IT USED TO HAVE.
@@ -28,6 +29,8 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
  */
 final class DocumentParagraphsTest extends TestCase
 {
+    use RefusesAnUnreadableSourceTrait;
+
     /**
      * The window as it was: split on a blank line, and nothing else.
      *
@@ -539,13 +542,5 @@ final class DocumentParagraphsTest extends TestCase
         self::assertArrayHasKey('src/Config/LayeredSettings.php', $scope);
 
         return $scope;
-    }
-
-    private static function readOrFail(string $path): string
-    {
-        $text = file_get_contents($path);
-        self::assertIsString($text, $path . ' could not be read');
-
-        return $text;
     }
 }

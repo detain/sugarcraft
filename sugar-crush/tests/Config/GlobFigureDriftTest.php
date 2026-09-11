@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
+use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
 
 /**
  * THE CHARACTER COUNTS BESIDE `[!B]*` ARE FIGURES, AND A FIGURE WITHOUT A
@@ -79,6 +80,8 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
  */
 final class GlobFigureDriftTest extends TestCase
 {
+    use RefusesAnUnreadableSourceTrait;
+
     private const SETTINGS_DOC = __DIR__ . '/../../docs/SETTINGS.md';
 
     /**
@@ -104,6 +107,32 @@ final class GlobFigureDriftTest extends TestCase
         7 => 'seven', 8 => 'eight', 9 => 'nine', 10 => 'ten', 11 => 'eleven', 12 => 'twelve',
     ];
 
+    /**
+     * The stale-figure pattern, built once per test (see {@see stalePattern()}).
+     */
+    private ?string $stalePattern = null;
+
+    /**
+     * The retraction-exemption pattern, built once per test (see {@see retracts()}).
+     */
+    private ?string $retractionPattern = null;
+
+    /**
+     * The spelled form of `$n`.
+     *
+     * THE ASSERTION IS HERE, AND IT IS ONCE PER CALL, NOT ONCE PER PARAGRAPH.
+     * WHAT THIS COST BEFORE E143: every paragraph the census read went through
+     * `stalePattern()`, which rebuilt the pattern from `word(8)` — so an
+     * assertion that pins a property of THIS FILE (the WORDS table reaches far
+     * enough) fired once per paragraph of every file in scope, E143 measured
+     * ~18,000 times a run, to repeat the same verdict the first call reached.
+     * {@see stalePattern()} and {@see retracts()} now memoize their compiled
+     * patterns per test, which puts the check back where it belongs: once per
+     * hard-coded key, outside the paragraph loop. `matchOrFail()`'s comment
+     * below is the same precedent one class away — an assertion per call that
+     * pins nothing the failure path does not already pin is noise, and noise
+     * of tens of thousands is a budget.
+     */
     private function word(int $n): string
     {
         $this->assertArrayHasKey($n, self::WORDS, 'the glob left the range this file can spell; extend WORDS');
@@ -423,23 +452,41 @@ final class GlobFigureDriftTest extends TestCase
      * {@see word()}, the numeral from the same integer, and the exemption's
      * word from `strlen(self::GLOB)`. Change the glob and the whole alphabet
      * moves with it.
+     *
+     * MEMOIZED (E143). Nothing this method reads varies by paragraph: the
+     * glob and the word are class constants. Building it per paragraph paid
+     * one `word()` assertion and one string concat for every paragraph of
+     * every file in scope — tens of thousands of assertions saying what the
+     * first one said.
      */
     private function stalePattern(): string
     {
+        if ($this->stalePattern !== null) {
+            return $this->stalePattern;
+        }
+
         $separator = '[\s\-_]*';
         $characters = 'char(?:acter)?s?';
 
-        return '/(?:'
+        return $this->stalePattern = '/(?:'
             . '\b' . $this->word(8) . $separator . '(?:' . $characters . '|bytes?)'
             . '|(?<![\w.\-])' . 8 . $separator . '(?:' . $characters . ')'
             . ')\b/i';
     }
 
-    /** Does this paragraph retract the figure rather than assert it? */
+    /**
+     * Does this paragraph retract the figure rather than assert it?
+     *
+     * The exemption pattern is memoized for the same E143 reason as
+     * {@see stalePattern()}: it is built from `word(strlen(self::GLOB))`, which
+     * is a constant, and it used to rebuild per matched paragraph.
+     */
     private function retracts(string $normalised): bool
     {
+        $this->retractionPattern ??= '/\b' . $this->word(\strlen(self::GLOB)) . '\b/i';
+
         $spellsTheCurrentCount = $this->matchOrFail(
-            '/\b' . $this->word(\strlen(self::GLOB)) . '\b/i',
+            $this->retractionPattern,
             $normalised,
             'retraction probe',
         );
@@ -613,14 +660,6 @@ final class GlobFigureDriftTest extends TestCase
             \count($src) + \count($docs),
             'the scope grew a third half nothing in this file describes',
         );
-    }
-
-    private static function readOrFail(string $path): string
-    {
-        $text = file_get_contents($path);
-        self::assertIsString($text, $path . ' is unreadable, so the census over it is void');
-
-        return $text;
     }
 
     /**

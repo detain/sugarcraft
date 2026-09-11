@@ -22,8 +22,13 @@ namespace SugarCraft\Crush\Tests\Config\Support;
  *
  * - **S1 direct** — the literal is the argument of `getenv(` (or `\getenv(`).
  * - **S3 forwarded** — the literal is argument #k of `self::m(…)`,
- *   `static::m(…)` or `$this->m(…)`; `m` is located in the same file, its
- *   parameter #k is read out of the signature, and that parameter must itself
+ *   `static::m(…)` or `$this->m(…)`; `m` is located in the call site's
+ *   declaring scope (innermost class/trait/enum body that contains it), and
+ *   only when no enclosing scope declares it, anywhere in the same file —
+ *   E127 replaced the old whole-file first-match sweep, which resolved
+ *   through whichever twin a trait-and-class file happened to carry first
+ *   rather than through the one PHP would run. Its parameter #k is read out
+ *   of the signature, and that parameter must itself
  *   reach `getenv()` in `m`'s body. `Chat::envFlag()`,
  *   `Bootstrap::backendCommandEnv()` and `Bootstrap::toollessBackend()` are all
  *   found this way, none of them by name.
@@ -554,7 +559,7 @@ final class EnvReadScanner
         $call = $this->enclosingCall($sig, $i);
         if ($call !== null) {
             [$callee, $argIndex] = $call;
-            $method = $this->methodSignature($sig, $n, $callee);
+            $method = $this->methodSignature($sig, $n, $callee, $i);
             if ($method !== null && isset($method['params'][$argIndex])) {
                 $reached = $this->reachesGetenv(
                     $sig,
@@ -599,7 +604,7 @@ final class EnvReadScanner
                 continue;
             }
             [$callee, $argIndex] = $call;
-            $method = $this->methodSignature($sig, \count($sig), $callee);
+            $method = $this->methodSignature($sig, \count($sig), $callee, $j);
             if ($method === null || !isset($method['params'][$argIndex])) {
                 continue;
             }
@@ -727,10 +732,83 @@ final class EnvReadScanner
         return [$name, $commas];
     }
 
-    /** @return array{params: array<int, string>, start: int, end: int}|null */
-    private function methodSignature(array $sig, int $n, string $name): ?array
+    /**
+     * The `$name` declaration, resolved through the CALL SITE'S declaring scope.
+     *
+     * WHAT THIS USED TO BE (E127): a first-match sweep of the whole token
+     * stream — `function <name>` anywhere in the file, whichever came first.
+     * A call site does not live in a FILE, it lives in a CLASS, and a file
+     * holding a trait and its using class can declare the same method name
+     * twice with different bodies. The sweep then resolved
+     * `self::flag('SUGARCRUSH_X')` written inside the class through the
+     * TRAIT's `flag()` — whichever was physically first — which is the wrong
+     * answer exactly when the class's own declaration shadows the trait's,
+     * because PHP itself runs the class method, and a forwarded literal would
+     * then be followed into a body that never executes. MEASURED at filing:
+     * no same-name collision exists in `src/` today, so the sweep and this
+     * agree on the live tree; the collision is cheap to write, invisible to
+     * every other assertion in the family, and the fix belongs before it.
+     *
+     * HOW THE SCOPE IS FOUND: lexical, token-level, and deliberately not a
+     * link-time symbol table. Every `class`/`trait`/`enum` body that CONTAINS
+     * the call site is a candidate, innermost first; a declaration inside the
+     * call site's own class wins over one earlier in the file. A trait
+     * declared in the same file is not lexically inside the using class, so a
+     * class that does NOT declare the method falls through to the whole-file
+     * sweep — which is the right answer for trait methods and the old rule's
+     * only honest case. What the resolution can no longer do is answer FIRST
+     * where PHP would answer SHADOWED.
+     */
+    private function methodSignature(array $sig, int $n, string $name, int $atIndex): ?array
     {
+        foreach ($this->enclosingScopes($sig, $n, $atIndex) as [$from, $to]) {
+            $found = $this->functionDeclaration($sig, $n, $name, $from, $to);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+
+        return $this->functionDeclaration($sig, $n, $name, 0, $n);
+    }
+
+    /**
+     * Class/trait/enum bodies containing `$atIndex`, innermost first.
+     *
+     * A body that cannot be bounded (a one-line interface method stub between
+     * the declaration and its brace is not a scope the scanner can trust) is
+     * skipped, not guessed.
+     *
+     * @return list<array{0: int, 1: int}>
+     */
+    private function enclosingScopes(array $sig, int $n, int $atIndex): array
+    {
+        $scopes = [];
         for ($j = 0; $j < $n; $j++) {
+            if (!\in_array($sig[$j]['id'], [\T_CLASS, \T_TRAIT, \T_ENUM], true)) {
+                continue;
+            }
+            $body = $this->braceRange($sig, $j, $n);
+            if ($body === null) {
+                continue;
+            }
+            if ($atIndex > $body[0] && $atIndex < $body[1]) {
+                $scopes[] = $body;
+            }
+        }
+        usort($scopes, static fn (array $a, array $b): int => ($a[1] - $a[0]) <=> ($b[1] - $b[0]));
+
+        return $scopes;
+    }
+
+    /**
+     * The first `function $name(...)` within `[$from, $to)`, params and body
+     * range read out of the signature — the pre-E127 matcher, confined.
+     *
+     * @return array{params: array<int, string>, start: int, end: int}|null
+     */
+    private function functionDeclaration(array $sig, int $n, string $name, int $from, int $to): ?array
+    {
+        for ($j = $from; $j < $to; $j++) {
             if (strtolower($sig[$j]['text']) !== 'function' || ($sig[$j + 1]['text'] ?? '') !== $name) {
                 continue;
             }

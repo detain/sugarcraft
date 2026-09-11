@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
 use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
 
 /**
@@ -219,6 +220,79 @@ final class EnvRosterDriftTest extends TestCase
             '[' . $expectedShape . ']',
             implode(' ', $scanner->reads()[$expectedName]),
             'the scanner resolved the read through a different shape than the one this fixture is for',
+        );
+    }
+
+    /**
+     * S3 forwarding resolves through the CALL SITE'S declaring scope, not
+     * through file order (E127).
+     *
+     * THE TRAIT IS DECLARED FIRST, ON PURPOSE. The old whole-file sweep reached
+     * the trait's `flag()` — which forwards to `getenv()` — and recorded a
+     * read, while PHP would run the CLASS's own `flag()`, which does not read
+     * anything. So the honest verdict on this fixture is the opposite of what
+     * a passing roster looks like: the literal is NOT a read and it IS
+     * reported, in `unresolved()`. A resolution that silently counted it would
+     * have been the defect — a name documented because a body that never runs
+     * appears earlier in a file.
+     *
+     * THE SECOND HALF IS THE FALL-THROUGH, and it is asserted in the same
+     * method because the fold has to keep working for the shape the rule
+     * actually resolves today: when nothing in the enclosing scope declares
+     * the name, the same-file trait declaration is as close as a token
+     * scanner can get to the declaring scope, and the read must resolve
+     * exactly as before. Reverting E127 reddens the first half; breaking the
+     * fall-through reddens the second; neither can be satisfied by the other.
+     */
+    public function testASameNamedTraitAndClassMethodResolveByShadowingNotByFileOrder(): void
+    {
+        $shadowing = new EnvReadScanner(['shadow.php' => <<<'PHP'
+            <?php
+            trait Reader {
+                private static function flag(string $name): bool { return getenv($name) !== false; }
+            }
+            class A {
+                use Reader;
+                function f() { return self::flag("SUGARCRUSH_SHADOWED"); }
+                private static function flag(string $ignored): bool { return false; }
+            }
+            PHP]);
+
+        $this->assertSame(
+            [],
+            $shadowing->reads(),
+            'a forwarded literal was resolved through the trait declaration the class shadows — '
+            . 'file order is not PHP dispatch order, and this read belongs to a body that never runs',
+        );
+        $this->assertCount(
+            1,
+            $shadowing->unresolved(),
+            'the shadowed occurrence vanished instead of being reported — an unplaced literal is '
+            . 'allowed to disappear only when the same name resolved elsewhere, and nothing did',
+        );
+        $this->assertStringContainsString('SUGARCRUSH_SHADOWED', $shadowing->unresolved()[0]);
+
+        $inheriting = new EnvReadScanner(['inherit.php' => <<<'PHP'
+            <?php
+            trait Reader {
+                private static function flag(string $name): bool { return getenv($name) !== false; }
+            }
+            class A {
+                use Reader;
+                function f() { return self::flag("SUGARCRUSH_INHERITED"); }
+            }
+            PHP]);
+
+        $this->assertSame([], $inheriting->unresolved());
+        $this->assertArrayHasKey(
+            'SUGARCRUSH_INHERITED',
+            $inheriting->reads(),
+            'the same-file trait fall-through stopped resolving — every legitimate S3 read through '
+            . 'a trait method now vanishes from the roster',
+        );
+        $this->assertStringContainsString(
+            '[S3-forward:flag#0]',
+            implode(' ', $inheriting->reads()['SUGARCRUSH_INHERITED']),
         );
     }
 
@@ -802,6 +876,32 @@ final class EnvRosterDriftTest extends TestCase
      * the reason {@see tabulatedNames()} sets out: it is the one page whose
      * prose deliberately discusses a variable nothing reads.
      *
+     * `docs/` IS WALKED RECURSIVELY (E148). WHAT THIS USED TO BE:
+     * `glob($root . '/docs/*.md')` — accurate while `docs/` was flat, silent
+     * the moment anyone filed a page one directory deeper, and there is no
+     * `GlobFigureDriftTest`-shaped guard for a surface census: a page the walk
+     * skips is not a missing hit, it is a missing PAGE, indistinguishable from
+     * a page that names nothing. Recursion costs nothing today and buys the
+     * first `docs/reference/` for free; the walk itself is pinned by
+     * {@see testTheMentionCensusActuallyReadsTheOtherPages()} against a fixture
+     * tree rather than against this repo's layout, because the half of the
+     * defect is that the disk shape and the code shape coincide.
+     *
+     * SKILL.MD FILES ARE DELIBERATELY NOT MENTION SURFACES, and the decision
+     * is recorded rather than defaulted. MEASURED 2026-09-11: not one
+     * `SKILL.md` under `src/Skills/BuiltIn` carries a prefixed name today, and
+     * the only `.md` files outside the surface set that do —
+     * `CALIBER_LEARNINGS.md` naming `SUGARCRUSH_SEARCH_ENDPOINT` and
+     * `CHANGELOG.md` naming `SUGARCRUSH_SESSION_RETENTION_DAYS` — name
+     * variables the census already covers through `README.md`, so widening
+     * would close no gap today. It is declined for a shape reason: a
+     * `SKILL.md` is prompt text a model reads, and users author and import
+     * them; making every skill body a promise the roster oracle enforces would tie third-party prose into a docs rule no
+     * skill author was told about. The day a shipped skill tells the USER to
+     * set a variable, the right fix is to add that file to the surface list
+     * with a line saying so — not to let the name ride ungoverned, which is
+     * what a silent walk would otherwise do.
+     *
      * @return array<string, string>
      */
     private function mentionSurfaces(): array
@@ -812,7 +912,19 @@ final class EnvRosterDriftTest extends TestCase
         $roster = realpath(self::ENVIRONMENT_DOC);
         self::assertIsString($roster, 'docs/ENVIRONMENT.md is gone, so the exclusion below excludes nothing');
 
-        $paths = array_merge([$root . '/README.md'], glob($root . '/docs/*.md') ?: []);
+        // The census's historical tier, kept as an explicit floor: every page
+        // the walk finds through recursion it also proves by the FLAT sweep
+        // still having something at its top. A re-layout that moved ALL pages
+        // one directory down is a layout decision worth a red, not an
+        // absorption.
+        $flatTier = glob($root . '/docs/*.md') ?: [];
+        self::assertNotEmpty(
+            $flatTier,
+            'not one page sits directly in docs/ anymore — the surface census predates a layout change '
+            . 'and its floors below were written against the old tier',
+        );
+
+        $paths = array_merge([$root . '/README.md'], $this->docsSurfacePaths($root . '/docs'));
         self::assertGreaterThan(
             1,
             \count($paths),
@@ -840,7 +952,45 @@ final class EnvRosterDriftTest extends TestCase
     }
 
     /**
+     * Every `.md` under `$dir`, at any depth.
+     *
+     * A METHOD, not an inlined walk, because E148's whole claim is about DEPTH
+     * and the repo today cannot demonstrate depth without rotting the first
+     * time a page moves — so the fixture tree below is the demonstration, and
+     * this is the seam it drives.
+     *
+     * A GLOB DESCENT rather than an iterator: the per-directory `*.md` sweep
+     * recursed through directory children is exactly as deep, and it keeps the
+     * `docs/*.md` glob vocabulary in the tree, which the derived corpus of
+     * `\SugarCraft\Crush\Tests\Context\GlobDialectDifferentialTest` harvests —
+     * a walk refactor that silently moves that census's pair product would
+     * make this file a stranger's red.
+     *
+     * @return list<string>
+     */
+    private function docsSurfacePaths(string $dir): array
+    {
+        $found = glob($dir . '/*.md') ?: [];
+        foreach (glob($dir . '/*', \GLOB_ONLYDIR) ?: [] as $sub) {
+            $found = array_merge($found, $this->docsSurfacePaths($sub));
+        }
+        sort($found);
+
+        return $found;
+    }
+
+    /**
      * Two pages whose census answer is known, for the tests that assert `[]`.
+     *
+     * THE WRAPPED NAME IS E149'S FIXTURE, and it earns its place the way every
+     * fixture in this file does: the live census cannot demonstrate the shape
+     * on demand — no shipped page wraps a name today (measured 2026-09-11) —
+     * so the mechanism is pinned where its answer is known instead. The wrap
+     * is asserted in BOTH directions by one exact `assertSame`: the rejoined
+     * `SUGARCRUSH_FIXTURE_WRAPPED` must be in the answer (positive), and the
+     * truncated head `SUGARCRUSH_FIXTURE_`, which the raw pattern happily
+     * captures on its own, must NOT be (negative — it would otherwise surface
+     * as an unkept promise about a variable nobody spells that way).
      *
      * @return array<string, string>
      */
@@ -848,13 +998,15 @@ final class EnvRosterDriftTest extends TestCase
     {
         return [
             'fixture-a.md' => 'set `SUGARCRUSH_FIXTURE_ONE`, or the old `SUGAR_CRUSH_FIXTURE_TWO`',
-            'fixture-b.md' => 'and `SUGARCRUSH_FIXTURE_ONE` again, in a second page',
+            'fixture-b.md' => "and `SUGARCRUSH_FIXTURE_ONE` again, in a second page\n"
+                . "the wrapped `SUGARCRUSH_FIXTURE_\nWRAPPED` sits across a soft line break",
         ];
     }
 
     /** The census answer {@see censusFixture()} must produce. */
     private const CENSUS_FIXTURE_ANSWER = [
         'SUGARCRUSH_FIXTURE_ONE' => ['fixture-a.md', 'fixture-b.md'],
+        'SUGARCRUSH_FIXTURE_WRAPPED' => ['fixture-b.md'],
         'SUGAR_CRUSH_FIXTURE_TWO' => ['fixture-a.md'],
     ];
 
@@ -866,17 +1018,81 @@ final class EnvRosterDriftTest extends TestCase
      * find what its alphabet cannot spell, and the deprecated pair is exactly
      * what a canonical-prefix-only pattern misses in silence.
      *
+     * NORMALISED THROUGH THE SHARED WINDOW (E149). WHAT THIS USED TO BE: one
+     * `preg_match_all()` over the raw page text — a different window from the
+     * one every other doc-drift oracle in this suite reads through, so the two
+     * halves of the family could disagree about where a paragraph ends. What
+     * it is now: {@see DocumentParagraphs::of()} splits the text into units
+     * and each unit is scraped, which puts both censuses on one window.
+     *
+     * THE WINDOW IS ALSO WHERE THE WRAP FIX LIVES, and the wrap was the
+     * reason normalising was not enough on its own. A name broken by a
+     * markdown soft line break reaches a unit as
+     * `SUGARCRUSH_SESSION_ RETENTION_DAYS` (the newline collapsed, not
+     * removed), and the raw pattern then sees a truncated head
+     * `SUGARCRUSH_SESSION_` — a well-formed-looking NAME the code has never
+     * heard of, reported as an unkept promise — plus a prefix-less tail that
+     * matches nothing at all. The second pattern below admits EXACTLY ONE
+     * whitespace gap inside the name body, rejoins it, and vetoes the raw
+     * head so the census reports the name rather than its halves. ONE GAP,
+     * not more, because a soft wrap replaces one newline, and an unbounded
+     * gap would let any name followed by an ALL-CAPS word —
+     * "`SUGARCRUSH_X` OR" — conjure a candidate; the cap keeps the ambiguity
+     * on the side where rejoining is the only reading a wrapped identifier
+     * has. THE LIMIT IS STATED RATHER THAN SMOOTHED: a break INSIDE the fixed
+     * prefix (`SUGAR_\nCRUSH_X`) is not rejoined, because admitting a gap
+     * there would make the ordinary words `SUGAR CRUSH...` in any casing a
+     * name candidate — the hazard is one-sided and this oracle refuses to
+     * buy coverage with a prose-hunting regex. A break is also invisible to
+     * the tabulated side of the roster in exactly the same way; both halves
+     * see whole tokens, and that is the shared assumption now written down.
+     * MEASURED 2026-09-11 over every surface the census reads: no prefixed
+     * name ends a line anywhere in scope, and no unit contains a
+     * name-then-ALL-CAPS-word collision, so the joined half reports exactly
+     * what the raw half reported before, and the difference in the two sets
+     * today is zero. The fixture in {@see censusFixture()} is the day that
+     * stops being true, because a real wrapped page is not something the
+     * census can be asked to demonstrate on demand.
+     *
      * @return list<string>
      */
     private function prefixedNamesIn(string $text): array
     {
-        $matched = preg_match_all('/\b(SUGAR_?CRUSH_[A-Z0-9_]+)\b/', $text, $matches);
-        $this->assertIsInt($matched, 'the mention scrape failed to run, so its answer means nothing');
+        $names = [];
+        foreach (DocumentParagraphs::of($text) as $unit) {
+            $matched = preg_match_all('/\b(SUGAR_?CRUSH_[A-Z0-9_]+)\b/', $unit, $matches);
+            $this->assertIsInt($matched, 'the mention scrape failed to run, so its answer means nothing');
+            $whole = $matches[1];
 
-        $names = array_values(array_unique($matches[1]));
-        sort($names);
+            $matched = preg_match_all('/\b(SUGAR_?CRUSH_[A-Z0-9_]* [A-Z0-9_]+)\b/', $unit, $wrapped);
+            $this->assertIsInt($matched, 'the wrapped-name scrape failed to run, so its answer means nothing');
+            foreach ($wrapped[1] as $spelled) {
+                $joined = str_replace(' ', '', $spelled);
+                if (preg_match(EnvReadScanner::NAME_PATTERN, $joined) !== 1) {
+                    continue;
+                }
+                $whole[] = $joined;
+                // The head the raw pattern captured across the break is a
+                // piece of this name, not a name; keeping it would report the
+                // wrap as an unkept promise about a variable nobody has ever
+                // spelled that way.
+                $head = strstr($spelled, ' ', true);
+                foreach ($whole as $k => $candidate) {
+                    if ($candidate === $head) {
+                        unset($whole[$k]);
+                    }
+                }
+            }
 
-        return $names;
+            foreach ($whole as $name) {
+                $names[$name] = true;
+            }
+        }
+
+        $out = array_keys($names);
+        sort($out);
+
+        return $out;
     }
 
     /**
@@ -1019,5 +1235,37 @@ final class EnvRosterDriftTest extends TestCase
             \count($pages),
             'the mention census is reading barely any pages, so its empty diffs say almost nothing',
         );
+
+        // THE RECURSIVE HALF OF THE WALK, pinned against a tree that actually
+        // HAS depth (E148). This repo cannot demonstrate it — `docs/` is flat
+        // today, so the live walk matches a flat `glob()` exactly and deleting
+        // the recursion changes nothing the assertions above can see. A depth
+        // fixture is therefore the only witness, and a temp tree (not a page
+        // committed under `docs/`) so the census itself is not held hostage to
+        // a file that exists only to be walked.
+        $deep = \sys_get_temp_dir() . '/env_surface_walk_' . \getmypid() . '_' . \bin2hex(\random_bytes(4)) . '/docs';
+        \mkdir($deep . '/reference', 0777, true);
+        \file_put_contents($deep . '/flat.md', "flat page\n");
+        \file_put_contents($deep . '/reference/nested.md', "a page one directory down\n");
+
+        try {
+            $walked = array_map(
+                static fn (string $p): string => substr($p, \strlen($deep) + 1),
+                $this->docsSurfacePaths($deep),
+            );
+
+            $this->assertSame(
+                ['flat.md', 'reference/nested.md'],
+                $walked,
+                'the docs/ walk no longer reaches a page one directory deep — E148 was filed against '
+                . 'exactly this shape, and a skipped surface is invisible to every set diff in this file',
+            );
+        } finally {
+            \unlink($deep . '/flat.md');
+            \unlink($deep . '/reference/nested.md');
+            \rmdir($deep . '/reference');
+            \rmdir($deep);
+            \rmdir(\dirname($deep));
+        }
     }
 }

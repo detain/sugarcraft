@@ -58,15 +58,23 @@ namespace SugarCraft\Crush\Tests\Support;
  * the asymmetry it was meant to remove, because the survivor then looks
  * canonical and the dropped reason is the one nobody goes looking for.
  *
- * THREE FURTHER COPIES ARE DELIBERATELY LEFT IN PLACE, and they are named here
- * rather than swept: `Config/DocumentParagraphsTest`,
- * `Config/ConfigWriteProducerDocumentationDriftTest` and
- * `Config/GlobFigureDriftTest`. Two carry a `could not be read` message and one
- * carries `the census over it is void`, which is the one-token pair
- * {@see DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE} has a `readOrFail`
- * row for. Folding them in as well would strand that row — and none of the
- * three has a fixture reaching its arm, which is a finding of its own and not
- * something to fix silently inside a consolidation. Recorded, not done.
+ * THE THREE CONFIG COPIES ARE NOW FOLDED IN TOO — E357/E386, round 67.
+ * WHAT THIS SAID: three further copies were deliberately left in place and
+ * named rather than swept — `Config/DocumentParagraphsTest` and
+ * `Config/ConfigWriteProducerDocumentationDriftTest` with a `could not be read`
+ * message, `Config/GlobFigureDriftTest` with `the census over it is void` —
+ * because folding them would strand the `readOrFail` row of
+ * {@see DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE}. WHAT IS TRUE NOW:
+ * all three consume this trait, both message variants are replaced by the
+ * union text above, and the `readOrFail` row went in the same commit the
+ * consolidation landed in — that is the discipline the row's own guard
+ * prescribes ("delete the row"), and it is why the fold and the deletion were
+ * never separable. WHY THE DEFERRAL STILL EARNS ITS PLACE: its real content
+ * was the finding — none of the three classes had a fixture reaching its own
+ * arm, so each copy could be reverted to the bare cast in silence. The fold is
+ * what resolves that finding rather than burying it: the three classes now run
+ * THIS trait's fixture, the one input in the tree that reaches the arm, once
+ * per consuming class exactly as the paragraph above says.
  */
 trait RefusesAnUnreadableSourceTrait
 {
