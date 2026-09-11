@@ -290,13 +290,47 @@ final class PosixMasterPty implements MasterPty
         // suite -- `vendor/bin/phpunit --filter Posix` gives
         // 165 tests / 394 assertions / 1 warning / 2 skipped / rc 0, the same
         // figures as with it. It costs two syscalls and defers the hangup by
-        // that much. It is kept rather than deleted because dormant code in
-        // this tree is wired or justified, never quietly removed, and because
-        // no search for a caller pattern that WOULD need a stable reference
-        // has been run -- "no reachable caller was found" has not been
-        // established, only "no test notices". If someone establishes that,
-        // this block is the thing to delete, and the paragraph above is the
-        // measurement to re-take first.
+        // that much.
+        //
+        // WHAT THIS PARAGRAPH USED TO SAY: that no search had been run for a
+        // caller pattern that WOULD need a stable reference, and that until
+        // somebody ran it the block was justified only by "no test notices".
+        // WHAT IS TRUE NOW -- E466 ran the search, and the answer has two
+        // halves, one of which is structural enough to stay true.
+        //
+        // MEASURED: every caller of this close() across the libraries that
+        // can reach it was walked for the one shape that would matter, a
+        // scope that takes the master's fd NUMBER and reads it after a
+        // close() call in the same scope. The callers are PtyPool::release()
+        // and PtyPool::drain() in this package, the deprecated Pty facade
+        // here, candy-wish's InProcessTransport teardown, sugar-crush's
+        // CapturesProcessOutput pty drain, and the finally-block cleanups in
+        // the candy-pty, candy-flip, candy-core and sugar-crush suites
+        // (candy-mosaic never touches a pty). NONE reads the number back.
+        // Two honest caveats on the instrument: this walk replaces the
+        // `--filter Posix` measurement above for this question, because the
+        // fd-holding candidates are class-named SizeIoctl* and
+        // TermiosFactory* -- names no Posix filter selects, so that earlier
+        // run could not have seen them; and a census is a fact about today's
+        // tree, which is why the second half matters more.
+        //
+        // STRUCTURAL: no caller COULD be helped by this dup, because the dup
+        // does not survive the call. $stableFd is closed below, inside this
+        // method, before it ever returns -- so there exists no window,
+        // however brief, in which the master would be reachable BY NUMBER
+        // after close() that this block could stabilise. A caller reading
+        // the number back gets EBADF with the dup or without it. That is the
+        // same conclusion {@see \SugarCraft\Pty\Master}'s own doc-block
+        // draws from the other side of the boundary: a snapshot value, never
+        // the source of truth for whether an fd is still open. What the dup
+        // actually buys is that tty_hangup() lands at the release below
+        // rather than at the close above -- a deferral of two syscalls,
+        // within this thread, unobservable from any caller's position.
+        //
+        // So the block stays on the house rule -- dormant code here is wired
+        // or justified, never quietly removed -- and this paragraph IS the
+        // justification the old one promised to wait for. Deleting it now
+        // takes an argument, not a search.
         $stableFd = -1;
         if ($usedStream) {
             $stableFd = self::libc()->dup($this->fd);
