@@ -44,6 +44,7 @@ use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
 use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
@@ -1201,7 +1202,16 @@ final class App implements Model
      */
     public function view(): string|View
     {
-        return TuiRenderer::renderView($this, $this->cols, $this->rows);
+        // E682: the composite adopts the abandonment signal. The predicate is
+        // E666's, computed for this frame; the flag lives exactly as long as
+        // the paint it governs (reset in the `finally`), so a standalone
+        // Renderer path can never inherit a stale value.
+        Renderer::setPaletteAbandoned(KeyboardHandler::paletteIsAbandoned($this));
+        try {
+            return TuiRenderer::renderView($this, $this->cols, $this->rows);
+        } finally {
+            Renderer::setPaletteAbandoned(false);
+        }
     }
 
     /**

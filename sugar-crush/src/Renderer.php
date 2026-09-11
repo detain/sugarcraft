@@ -591,6 +591,38 @@ final class Renderer
     }
 
     /**
+     * Whether the palette this renderer would paint is ABANDONED: open on the
+     * hosted `Chat` while a keyboard-owning shell view stands in front of it,
+     * so `Chat::update()` is not driving its next keystroke.
+     *
+     * E682 (the E12-composite carry on E666): while this is true the overlay
+     * chain skips the palette link. The ONE rule opening that chain is that
+     * the overlay on screen must be the one `Chat::update()` routes the next
+     * keystroke to — a painted-but-undrivable palette behind the F10 menu or
+     * the skill picker is exactly the ghost that rule forbids. Suppressing
+     * the paint is the composite side of the seam only; closing the abandoned
+     * palette stays at the delivery choke point
+     * ({@see \SugarCraft\Crush\App\App::delegateToChat()}, E666).
+     *
+     * Like {@see setZoneOrigin()} this is computed once per frame by the shell
+     * compositor ({@see \SugarCraft\Crush\App\App::view()}) from
+     * {@see \SugarCraft\Crush\Tui\KeyboardHandler::paletteIsAbandoned()}, and
+     * reset on the way out — a standalone `Chat` render never sets it, so the
+     * default `false` self-heals every non-hosted path.
+     */
+    private static bool $paletteAbandoned = false;
+
+    /**
+     * Declare whether the hosted palette is abandoned for the frame being
+     * composited. Called by the shell compositor around its render, never by
+     * a standalone Chat render — see {@see self::$paletteAbandoned}.
+     */
+    public static function setPaletteAbandoned(bool $abandoned): void
+    {
+        self::$paletteAbandoned = $abandoned;
+    }
+
+    /**
      * Drop the click-zone registry and reset the origin.
      *
      * For a shell frame that does NOT contain this renderer's output at all —
@@ -1261,7 +1293,11 @@ final class Renderer
         if ($overlay === '') {
             $overlay = self::renderPermissionPrompt($chat, $theme);
         }
-        if ($overlay === '') {
+        // E682: an abandoned palette is not painted — the keyboard is not
+        // driving it, which is what the ONE rule above forbids. This is the
+        // PAINT side of the seam; the CLOSE side stays at E666's delivery
+        // choke point, so the frame never fabricates an input event.
+        if ($overlay === '' && !self::$paletteAbandoned) {
             $overlay = self::renderPalette($chat, $theme);
         }
         if ($overlay === '') {
