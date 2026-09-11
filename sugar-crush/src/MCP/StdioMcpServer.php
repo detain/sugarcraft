@@ -281,6 +281,19 @@ final class StdioMcpServer implements McpServer
      */
     public function start(): void
     {
+        // E672: the wrapper-fronts-spawn pre-check, symmetric with
+        // LspConnection::connect() and ProcessExecutor's worker spawn — a
+        // bogus binary under `setsid` starts the WRAPPER fine and the exec
+        // failure would otherwise surface only as a missing handshake after
+        // the full timeout, instead of failing fast here.
+        if (ProcessContainment::detachedSpawnBinary() !== ''
+            && !(str_contains($this->command, '/')
+                ? is_executable($this->command)
+                : ProcessContainment::locateOnPath($this->command) !== '')
+        ) {
+            throw new \RuntimeException("Failed to start MCP server: {$this->name}");
+        }
+
         // E672/E674: choke-point spec + env — a third-party MCP server from
         // .mcp.json is exactly the untrusted command class containment is for;
         // the entry's own env rides as overrides so configured keys still win.

@@ -1931,7 +1931,9 @@ PHP;
     private function getExitCode($process): ?int
     {
         if (!is_resource($process)) {
-            return -1;
+            // E688: no handle means NO measured code — fabricating -1 would
+            // let a caller attribute a crash that was never observed.
+            return null;
         }
 
         $status = proc_get_status($process);

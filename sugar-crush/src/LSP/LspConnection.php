@@ -222,6 +222,21 @@ final class LspConnection implements LspConnectionInterface
     {
         $this->requestTimeout = $timeout;
 
+        // E672: once the containment wrapper fronts the spawn, a bogus
+        // binary NO LONGER fails inside posix_spawn() — `setsid` itself
+        // starts, and the exec failure surfaces only as the child's exit
+        // status. The pre-check keeps the fail-fast contract on the call
+        // that guarded it before routing (the twin of ProcessExecutor's
+        // worker pre-check); needed only where a wrapper actually fronts
+        // it, so the unwrapped fallback behaves byte-identically.
+        if (ProcessContainment::detachedSpawnBinary() !== ''
+            && !(str_contains($command, '/')
+                ? is_executable($command)
+                : ProcessContainment::locateOnPath($command) !== '')
+        ) {
+            throw new \RuntimeException("Failed to start LSP server: {$command}");
+        }
+
         // E672/E674: choke-point spec + env; a language server is configured
         // third-party code and its own env keys ride last.
         $this->process = @proc_open(

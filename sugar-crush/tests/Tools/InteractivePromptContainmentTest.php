@@ -103,10 +103,12 @@ final class InteractivePromptContainmentTest extends TestCase
     public function testSudoAskpassIsStrippedButUnrelatedVarsAreNot(): void
     {
         $previous = getenv('SUDO_ASKPASS');
+        $previousGpgTty = getenv('GPG_TTY');
         putenv('SUDO_ASKPASS=/sentinel/must-not-reach-a-tool-child');
+        putenv('GPG_TTY=/sentinel/tty-must-not-reach-a-tool-child');
         try {
             $probe = self::host()->capture(
-                'printf "SA=[${SUDO_ASKPASS+set}] KEEP=[${SC_CONTAINMENT_KEEP:-absent}]"'
+                'printf "SA=[${SUDO_ASKPASS+set}] GT=[${GPG_TTY+set}] KEEP=[${SC_CONTAINMENT_KEEP:-absent}]"'
             );
         } finally {
             // Restore exactly: leave-as-was, or remove if this process never
@@ -116,10 +118,16 @@ final class InteractivePromptContainmentTest extends TestCase
             } else {
                 putenv('SUDO_ASKPASS=' . $previous);
             }
+            if ($previousGpgTty === false) {
+                putenv('GPG_TTY');
+            } else {
+                putenv('GPG_TTY=' . $previousGpgTty);
+            }
         }
 
         self::assertSame(0, $probe['exitCode'], $probe['stderr']);
         self::assertStringContainsString('SA=[]', $probe['stdout'], 'SUDO_ASKPASS must not reach the child');
+        self::assertStringContainsString('GT=[]', $probe['stdout'], 'GPG_TTY must not reach the child (E674 strip)');
         self::assertStringContainsString('KEEP=[absent]', $probe['stdout'], 'unset names must stay unset, not be forged empty');
 
         // And a plain inherited name still arrives — the strip list is a
