@@ -116,6 +116,20 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
         // Open process directly - cannot use yield inside a closure passed to execute()
         $cmd = array_merge([$this->invocation->claudePath()], $this->invocation->baseArgs(), $args);
 
+        // E672: the wrapper-fronts-spawn pre-check, twin of
+        // ClaudeCodeInvocation::execute() — under `setsid` a bogus claudePath
+        // starts the WRAPPER fine and the exec failure would surface only as
+        // exit 127 inside the stream, not as this site's typed throw.
+        $claudeBinary = $this->invocation->claudePath();
+        if (ProcessContainment::detachedSpawnBinary() !== ''
+            && !(str_contains($claudeBinary, '/')
+                ? is_executable($claudeBinary)
+                : ProcessContainment::locateOnPath($claudeBinary) !== '')
+        ) {
+            // E27(a): typed throw, exit code null = the child never spawned.
+            throw new ProviderException('Failed to start Claude Code process');
+        }
+
         // E672/E674: choke-point spec + env; the three auth keys ride as
         // overrides (see ClaudeCodeInvocation for the same routing).
         $process = proc_open(

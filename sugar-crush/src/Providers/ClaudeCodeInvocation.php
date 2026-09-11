@@ -110,6 +110,22 @@ final readonly class ClaudeCodeInvocation
     {
         $cmd = array_merge([$this->claudePath], $this->baseArgs(), $args);
 
+        // E672: once the containment wrapper fronts the spawn, a bogus
+        // claudePath NO LONGER fails inside posix_spawn() — `setsid` itself
+        // starts and the exec failure surfaces only as exit 127 attributed to
+        // the RUN, laundering this site's typed spawn-failure contract into
+        // generic exit text. The pre-check keeps fail-fast on the call that
+        // guarded it before routing (twin of ProcessExecutor's worker check).
+        if (ProcessContainment::detachedSpawnBinary() !== ''
+            && !(str_contains($this->claudePath, '/')
+                ? is_executable($this->claudePath)
+                : ProcessContainment::locateOnPath($this->claudePath) !== '')
+        ) {
+            // E664: typed throw, exit code null = the child never spawned —
+            // the SAME shape the !is_resource branch below carries.
+            throw new ProviderException('Failed to start Claude Code process');
+        }
+
         // E672/E674: choke-point spec + env; the three auth keys ride as
         // overrides. Empty-string values are dropped by proc_open() itself
         // (measured, recorded in ProcessContainment), so an unset key stays
