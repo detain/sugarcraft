@@ -32,6 +32,7 @@ use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Events\ReasoningDelta;
+use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -188,7 +189,7 @@ final class Chat implements Model
      * this", "the model said this" and "the model called that tool" is the
      * story of an agentic turn and three queues could not preserve it.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta|ReasoningDelta}>
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|TokenDelta|ReasoningDelta}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -344,6 +345,62 @@ final class Chat implements Model
      * tab strip has nowhere to put more than that anyway.
      */
     private const TITLE_MAX_CHARS = 100;
+
+    /**
+     * Set to any value other than empty or `0` to keep the "onToken observer
+     * threw, detaching it for this turn" line on stderr (E175). The DETACH is
+     * never gated — the environment decides whether anyone is TOLD about a
+     * broken embedder sink, never whether the TURN survives it, and a switch
+     * that could suppress the detach would let a misconfigured debug flag
+     * resurrect the whole-turn loss the catch exists to prevent. Off by
+     * default for the reason E154 argued: this fires mid-turn, with the
+     * alternate screen held by the renderer, and the audience is the embedder
+     * who owns the throwing sink rather than the person at the terminal, who
+     * can do nothing with it while their reply streams normally either way.
+     * Mirrors the `SUGARCRUSH_DEBUG_*` trio in SkillLoader/CommandLoader/
+     * RuleLoader; {@see debugStreamRequested()} is the one funnel.
+     */
+    public const DEBUG_STREAM_ENV = 'SUGARCRUSH_DEBUG_STREAM';
+
+    /**
+     * Floor of the E17 calibration factor — 1.0, ON PURPOSE: an observation
+     * implying the provider counts FEWER tokens than chars/4+10 (possible:
+     * the +10-per-message overhead dominates a history of short messages,
+     * and an unreported-usage streak paired wrongly could produce anything)
+     * must not make the blocking tier LOUDER about fitting than the raw
+     * proxy already was. Fail-open keeps the pre-E17 behaviour as the floor.
+     */
+    private const TOKEN_CALIBRATION_MIN = 1.0;
+
+    /**
+     * Ceiling of the E17 calibration factor. The entry's own direction is
+     * that the raw proxy runs LOW ("code and CJK tokenize worse than
+     * chars/4"), so the legitimate span above 1.0 is real but bounded; the
+     * observation meanwhile carries the whole turn's BILLED TOTAL against a
+     * PROMPT-only estimate (the split is not crossed onto the carrier yet —
+     * see {@see \SugarCraft\Crush\Providers\CompleteResponse::$usage}), which
+     * inflates it further by every completion's worth of tokens. 3.0 caps
+     * that bundled error: the tier may fire up to a third early — the safe
+     * direction against an overflow — and no single chatty turn can triple
+     * the session's estimate. Widening this bound is a real decision, not a
+     * tuning knob: at 1.0 the estimator is raw chars/4, at higher clamps the
+     * total-vs-prompt inflation dominates.
+     */
+    private const TOKEN_CALIBRATION_MAX = 3.0;
+
+    /**
+     * Whether {@see DEBUG_STREAM_ENV} asks for the observer-failure report —
+     * one funnel so the call site cannot drift on the gate, exactly as
+     * {@see \SugarCraft\Crush\Context\RuleLoader} funnels its own refusals.
+     * unset, empty and `0` all read as off, matching every other
+     * `SUGARCRUSH_*` switch.
+     */
+    private static function debugStreamRequested(): bool
+    {
+        $value = getenv(self::DEBUG_STREAM_ENV);
+
+        return $value !== false && $value !== '' && $value !== '0';
+    }
 
     /**
      * How many palette rows the MRU list remembers. Small on purpose: the
@@ -787,7 +844,7 @@ final class Chat implements Model
          * allocating here) keeps every existing embedder/test constructor
          * call working unchanged.
          *
-         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta|ReasoningDelta}>|null
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
         /**
@@ -1125,6 +1182,31 @@ final class Chat implements Model
          *      two owners instead of a copy pushed to each.
          */
         ?RulesState $rulesState = null,
+        /**
+         * The {@see estimateTokenCount()} figure for the history THIS Chat
+         * dispatched a turn with, kept from submit until the turn settles so
+         * the settlement can pair it with what the provider actually counted —
+         * the last-real-measurement half of E17. Null when no turn is
+         * awaiting its observation; one-shot, cleared by
+         * {@see turnEstimateObservation()} on the first settled AssistantMsg
+         * either way, so a compaction or titler settlement can never pair
+         * with a dispatch estimate it did not pay for.
+         */
+        private readonly ?int $promptEstimateAtDispatch = null,
+        /**
+         * Empirical scale factor from the ESTIMATOR's unit (chars/4 + 10 per
+         * message) to the PROVIDER's counted tokens, derived from the last
+         * settled turn that reported usage (E17 step (a): "use the last real
+         * measurement to calibrate the estimator"). Null = no observation
+         * yet, which is every offline run, every non-reporting provider, and
+         * every turn before the first settlement — and it behaves exactly as
+         * the raw proxy always did. Clamped on the way in to
+         * [{@see TOKEN_CALIBRATION_MIN}, {@see TOKEN_CALIBRATION_MAX}]: the
+         * observation can tighten the tier's estimate but can never loosen
+         * the raw proxy below itself. {@see estimateTokenCount()} is the sole
+         * reader; see it for the unit caveat the clamp bounds exist to cap.
+         */
+        private readonly ?float $tokenEstimateCalibration = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -1338,7 +1420,18 @@ final class Chat implements Model
             // `reasoning`, which {@see Renderer::renderAssistantTurn()} paints
             // from the transcript, so leaving the live accumulation up would
             // show the same thought twice.
-            $settled = $this->mutate(['streamingText' => '', 'reasoningText' => '']);
+            $settled = $this->mutate(array_merge(
+                ['streamingText' => '', 'reasoningText' => ''],
+                // E17: fold this turn's estimate-vs-real observation into the
+                // calibration HERE — this mutate is the one point every exit
+                // of the arm passes through, the tool-call branch above it
+                // and the plain reply below, so the pairing is neither missed
+                // on multi-step turns nor done twice. Reading
+                // $msg->message->usage, not the tracker: the tracker holds the
+                // session SUM, and calibration needs THIS turn against the
+                // estimate THIS dispatch recorded.
+                $this->turnEstimateObservation($msg->message->usage),
+            ));
 
             // Check if the message has tool calls to execute
             if ($message->toolCalls !== [] && $this->tools !== []) {
@@ -3028,6 +3121,15 @@ final class Chat implements Model
             return [$this, Cmd::send(new AssistantMsg($msg->message, $msg->generation))];
         }
 
+        if ($event instanceof SpendCapBreached) {
+            // E20's mid-turn abort lands in the SAME ordered story as the
+            // tool calls around it — appended, then the chain continues to
+            // the turn's settled message exactly as any other event does.
+            $next = $this->appendSpendCapNotice($event);
+
+            return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event)
             : $this->replaceToolRunningPlaceholder($event);
@@ -3070,8 +3172,11 @@ final class Chat implements Model
         foreach ($this->liveToolEvents as [, $event]) {
             // TokenDelta and ReasoningDelta share the queue (see the
             // property docblock) but are not tool lifecycle events, and this
-            // accessor's contract is.
-            if ($event instanceof TokenDelta || $event instanceof ReasoningDelta) {
+            // accessor's contract is. SpendCapBreached is the same exclusion
+            // with a third reason: it is not even per-call — it is one
+            // verdict about the turn — and a consumer pairing starts with
+            // finishes would never close it.
+            if ($event instanceof TokenDelta || $event instanceof ReasoningDelta || $event instanceof SpendCapBreached) {
                 continue;
             }
             $events[] = $event;
@@ -3280,6 +3385,10 @@ final class Chat implements Model
             return [$this->mutate(['reasoningText' => $this->reasoningText . $thought]), $more];
         }
 
+        if ($event instanceof SpendCapBreached) {
+            return [$this->appendSpendCapNotice($event), $more];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event)
             // A ToolFinished deliberately does NOT reset the partial: the
@@ -3327,6 +3436,31 @@ final class Chat implements Model
      * (including the W1.F1 diff and the image bytes that ride along on
      * {@see ToolResult}).
      *
+    /**
+     * Put E20's mid-turn abort on the transcript (the pump and the batched
+     * backend-event chain share this one writer so the wording cannot drift
+     * between the fork path and the blocking path).
+     *
+     * THE GUARANTEE IT NAMES IS DELIBERATELY DIFFERENT from
+     * {@see spendCapRefusal()}'s. That one refuses to START: nothing was
+     * billed, the draft sits in the box. This one says a call already
+     * happened and the loop stopped before the NEXT one — the distinction
+     * E20's step demands the messages keep apart, because they are different
+     * promises about money already spent.
+     */
+    private function appendSpendCapNotice(SpendCapBreached $event): self
+    {
+        return $this->mutate(['history' => [...$this->history, Message::system(
+            sprintf(
+                '_Spend cap reached mid-turn: aborted after provider call %d — $%.4f of the $%.4f cap spent. No further calls were made this turn; /budget raises the cap._',
+                $event->completedCalls,
+                $event->spentUsd,
+                $event->capUsd,
+            ),
+        )]]);
+    }
+
+    /**
      * Correlation is on {@see ToolFinished::$toolCallId}, NOT on the adapted
      * result's own `id`: a tool never sees its own call id, so built-ins
      * routinely return an invented one and only the event carries the id the
@@ -5963,6 +6097,14 @@ final class Chat implements Model
             // being the drain owner the moment the user types, and every
             // mid-session notice for the rest of the session goes nowhere.
             'drainsRuntimeNotices' => $this->drainsRuntimeNotices,
+            // Both halves of the E17 estimator calibration are model state on
+            // purpose (not tracker fields): the estimate is a per-DISPATCH
+            // pairing that belongs to the turn this clone submitted, and the
+            // factor is a read-only-after-settlement decision the next
+            // keystroke must still see — dropped from this map either one
+            // would evaporate on the first character typed after settling.
+            'promptEstimateAtDispatch' => $this->promptEstimateAtDispatch,
+            'tokenEstimateCalibration' => $this->tokenEstimateCalibration,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -6962,6 +7104,14 @@ final class Chat implements Model
             // thought no matter how the previous one ended.
             'streamingText' => '',
             'reasoningText' => '',
+            // E17: pair THIS number — an estimate over exactly the history
+            // being dispatched — with what the provider reports when the turn
+            // settles. Recomputed here rather than threaded from submit()'s
+            // tier because $baseHistory IS the quantity the tier last
+            // measured (raw history, compacted, or rescued, whichever won),
+            // and calibration is only honest when it measures the same
+            // quantity the tier will next compare against the window.
+            'promptEstimateAtDispatch' => $this->estimateTokenCount($baseHistory),
         ]);
 
         // Auto-save checkpoint before processing prompt
@@ -6975,6 +7125,15 @@ final class Chat implements Model
                 // pre-clear buffer: for a checkpoint taken at submit that is exactly the
                 // prompt this turn sent, which is what rewind re-seeds the box with.
                 'inputBuf' => $this->inputBuf,
+                // The cursor travels WITH the draft (E4): `inputCursorOffset()`'s
+                // flat codepoint form is exactly the shape the checkpoint state
+                // map needs — see its docblock — and without this key a restored
+                // draft always reseeds with the caret at the end, because
+                // mutate()'s two-write-routes rule rebuilds the `input` widget
+                // from a bare `inputBuf` and the rebuild lands at end-of-text.
+                // Read from $this beside 'inputBuf' for the same load-bearing
+                // reason: $next already blanked the draft.
+                'inputCursor' => $this->inputCursorOffset(),
                 'inFlight' => false,
                 'agentContext' => [
                     'currentSessionId' => $this->currentSessionId,
@@ -8101,6 +8260,16 @@ final class Chat implements Model
     private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
     {
         $backend = $next->backend;
+        // E20: thread the session's dollar ceiling DOWN into the engine that
+        // will spend it. instanceof rather than a Backend-interface method
+        // because EchoBackend has no steps to cap and every other implementer
+        // is an embedder's; a capability check is the honest shape, and the
+        // cap arriving as (ceiling, baseline) PAIRED with the dispatch — not
+        // installed at launch — is what keeps a `/budget` raised mid-session
+        // from applying retroactively to a turn already forked.
+        if ($backend instanceof Backend\EngineBackend && $this->maxCostUsd !== null) {
+            $backend = $backend->withSpendCap($this->maxCostUsd, $this->spentUsd());
+        }
         $history = $next->history;
 
         $inbox = $next->liveToolEvents;
@@ -8126,37 +8295,34 @@ final class Chat implements Model
         // of an abort — a whole turn lost to a misbehaving logger. A broken
         // observer is therefore detached for the remainder of THIS turn
         // (per-turn because $userSink is a local of this call, so one bad
-        // delta does not disable the embedder's sink forever) and reported
-        // once through error_log rather than once per token.
+        // delta does not disable the embedder's sink forever) and — when asked
+        // for — reported once through error_log rather than once per token.
         //
-        // NOT GATED, AND THE DECISION WAS MADE RATHER THAN DEFERRED (E154).
-        // That last clause settled the FREQUENCY without ever asking about the
-        // CHANNEL, and the channel is the interesting half: this closure runs
-        // inside the streaming loop of a turn already in flight, so by the time
-        // it can fire the alternate screen has been up for the whole session and
-        // the write lands on a frame the renderer believes it owns. Every
-        // launch-time stderr write in this application was routed for exactly
-        // that reason, onto
+        // THE REPORT IS GATED; THE DETACH IS NOT (E175, E154's channel half).
+        // The CHANNEL was the interesting half of E154's argument: this closure
+        // runs inside the streaming loop of a turn already in flight, so by the
+        // time it can fire the alternate screen has been up for the whole
+        // session and an ungated write lands on a frame the renderer believes
+        // it owns — every launch-time stderr write in this application was
+        // routed for exactly that reason, onto
         // {@see \SugarCraft\Crush\Cli\Bootstrap::warnPermissionConfigInTranscript()}.
-        //
-        // THE SEAM IS UNREACHABLE FROM HERE, verified rather than assumed: it
+        // That seam is UNREACHABLE from here, verified rather than assumed: it
         // appends to a static list `Bootstrap::chat()` drains into
         // {@see withLaunchNotices()} ONCE, at construction, and this fires
-        // mid-turn long afterwards. So the choice is between fd 2 and a
-        // `SUGARCRUSH_DEBUG_*` gate on
+        // mid-turn long afterwards. So the surviving choice was fd 2 versus
+        // quiet, and the app's own precedent —
         // {@see \SugarCraft\Crush\Skills\SkillLoader::recordSkip()}'s
-        // quiet-by-default contract — and the gate is the better answer, because
-        // the audience is the EMBEDDER whose `onToken` threw rather than the
-        // person at the terminal, who cannot act on "your logger raised" and
-        // whose turn completes normally either way.
-        //
-        // WHY IT IS STILL UNCONDITIONAL: `StreamingWiringTest::
-        // testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()` asserts this
-        // line reaches `error_log()`, and it is right to — "the failure is not
-        // swallowed silently" is the contract as it stands. Gating is therefore
-        // a two-file change and belongs in a round where both files are in one
-        // lane's hands. Do not gate this without amending that test in the same
-        // commit, and do not delete this paragraph instead of doing so.
+        // quiet-by-default contract, joined since by CommandLoader and
+        // RuleLoader — answers it: quiet by default, loud on
+        // {@see DEBUG_STREAM_ENV}, because the audience is the EMBEDDER whose
+        // `onToken` threw rather than the person at the terminal, who cannot
+        // act on "your logger raised" and whose turn completes normally either
+        // way. The gate decides who is TOLD, never whether the turn survives:
+        // `$userSink = null` above sits OUTSIDE it, so no debug flag can make a
+        // broken sink abort the reply. Amending
+        // `StreamingWiringTest::testAThrowingObserverLosesItsOwnDeltasButNotTheTurn()`
+        // to set the flag — and pinning the off-by-default silence — landed in
+        // this same commit, as the two-file rule demanded.
         $userSink = $next->onToken;
         $onToken = !$next->streaming ? null : static function (string $delta) use ($inbox, $generation, &$userSink): void {
             if ($delta === '') {
@@ -8171,12 +8337,14 @@ final class Chat implements Model
                 $userSink($delta);
             } catch (\Throwable $e) {
                 $userSink = null;
-                error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+                if (self::debugStreamRequested()) {
+                    error_log('Chat: onToken observer threw, detaching it for this turn: ' . $e->getMessage());
+                }
             }
         };
 
         return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
-            $onEvent = static function (ToolStarted|ToolFinished $event) use ($inbox, $generation): void {
+            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($inbox, $generation): void {
                 $inbox[] = [$generation, $event];
             };
 
@@ -8262,8 +8430,8 @@ final class Chat implements Model
      * Applying them here would in any case be too late to be streaming — the
      * turn is over.
      *
-     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta|ReasoningDelta}> $inbox
-     * @return list<ToolStarted|ToolFinished>
+     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|TokenDelta|ReasoningDelta}> $inbox
+     * @return list<ToolStarted|ToolFinished|SpendCapBreached>
      */
     private static function drainToolEventInbox(\ArrayObject $inbox, int $generation): array
     {
@@ -11031,6 +11199,11 @@ final class Chat implements Model
                 $messages,
             );
             $inputBuf = $state['state_data']['inputBuf'] ?? $state['inputBuf'] ?? '';
+            // E4: the caret offset the checkpoint captured, in the same flat
+            // codepoint form {@see inputCursorOffset()} produces. Absent (null)
+            // for hand-saved or pre-E4 checkpoints — the mutate below then
+            // reseeds at end-of-text exactly as it always did.
+            $inputCursor = $state['state_data']['inputCursor'] ?? $state['inputCursor'] ?? null;
 
             // Build response
             $rewoundCount = count($this->history) - count($messages);
@@ -11058,6 +11231,17 @@ final class Chat implements Model
                 // {@see applyModelCompaction()}.
                 'pendingCompactionId' => null,
             ]);
+
+            // AFTER the mutate on purpose: naming `inputBuf` alone is the
+            // replace-the-whole-draft route and its widget rebuild parks the
+            // caret at the end, so the captured offset has to be re-applied to
+            // the rebuilt draft, not smuggled through it. `withInputCursor()`
+            // clamps through `seekInput()` — a stale offset from a draft that
+            // has since been shortened lands at the end rather than corrupting
+            // the widget or the restore.
+            if (is_int($inputCursor)) {
+                $next = $next->withInputCursor($inputCursor);
+            }
 
             return [$next, null];
         } catch (\Throwable $e) {
@@ -12887,6 +13071,22 @@ final class Chat implements Model
      * countTokens(), so the idle-compaction threshold agrees with what
      * /compact itself would report.
      *
+     * CALIBRATED since E17: the raw chars/4 + 10 proxy is multiplied by the
+     * session's last estimate-vs-real observation ({@see $tokenEstimateCalibration})
+     * when one exists. Read that field's docblock and
+     * {@see turnEstimateObservation()} before concluding the units here are
+     * the provider's — they are an EMPIRICAL SCALE toward them, bounded to
+     * [1.0, 3.0], and until {@see Providers\CompleteResponse::$usage} is
+     * populated through `Runtime`'s fold the scale carries the whole turn's
+     * billed total over a prompt-only estimate (HIGH, safe direction).
+     * Consequence for the claim above: with a calibration in force this
+     * agrees with the provider's counter MORE than
+     * {@see ContextCompactor::countTokens()} does — the compactor still
+     * counts raw — so the 70% idle nudge can arrive a little earlier than a
+     * `/compact` would self-report. That is a nudge deciding to fire, not a
+     * tier refusing, and the direction (nudge before the lossy automatic
+     * route is ever needed) is the correct one to be wrong in.
+     *
      * @param list<Message> $history
      */
     private function estimateTokenCount(array $history): int
@@ -12896,7 +13096,12 @@ final class Chat implements Model
             $total += (int) ceil(mb_strlen($msg->content) / 4);
             $total += 10; // role overhead
         }
-        return $total;
+
+        if ($this->tokenEstimateCalibration === null) {
+            return $total;
+        }
+
+        return max(1, (int) round($total * $this->tokenEstimateCalibration));
     }
 
     /**
@@ -13043,6 +13248,62 @@ final class Chat implements Model
         }
 
         $this->tokenTracker->addTotalUsage($usage->totalTokens, $usage->costUsd);
+    }
+
+    /**
+     * Pair the estimate this Chat dispatched its turn with (E17), against what
+     * the settled Message says the provider actually counted, and return the
+     * mutate keys that record the outcome.
+     *
+     * THE UNIT STORY, named rather than papered over, because the pairing is
+     * not the clean prompt-vs-prompt comparison E17 step (a) ultimately
+     * wants: the estimate is chars/4 over the history the tier measured, and
+     * the observation is the provider's count of a prompt that also carries
+     * the system block, the tool schemas, and the fresh user turn — summed
+     * over every step the agentic loop made, completion tokens included,
+     * because that is what a {@see Usage} carries when the split has not been
+     * crossed onto its carrier. {@see Providers\CompleteResponse::$usage}
+     * landed in this commit as the carrier; until `Runtime`'s two fold sites
+     * and the providers pass it, {@see Usage::promptTokens()} answers null
+     * and this prefers the total it does answer with. Both distortions push
+     * the same way — observed HIGH — so the calibrated estimate fires the
+     * tier EARLIER than the raw proxy, the safe direction against an
+     * overflow, and {@see TOKEN_CALIBRATION_MAX} bounds how early;
+     * {@see TOKEN_CALIBRATION_MIN} refuses to let any pairing loosen the
+     * proxy below itself. When the carrier is wired the first expression
+     * starts answering and the inflation stops by itself — that is why the
+     * prompt half is preferred wherever both exist.
+     *
+     * ONE-SHOT BY CONSTRUCTION: `promptEstimateAtDispatch` is cleared on
+     * every return, observed or not. Only `submit()` sets it, only the
+     * settled AssistantMsg arm reads it, and the four other
+     * {@see accountUsage()} callers (titler, compaction, superseded-tool,
+     * parked summary) never route through that arm — so no non-chat billing
+     * can masquerade as a history-size observation. An unobserved settle (a
+     * stream that reported nothing, the ordinary case) leaves the EXISTING
+     * factor alone by omitting the key rather than nulling it: one silent
+     * turn must not erase a measurement a loud turn already made.
+     *
+     * @return array{promptEstimateAtDispatch: null, tokenEstimateCalibration?: float}
+     */
+    private function turnEstimateObservation(?Usage $usage): array
+    {
+        $estimate = $this->promptEstimateAtDispatch;
+        $observed = $usage?->promptTokens() ?? $usage?->totalTokens;
+
+        if ($estimate === null || $estimate <= 0 || $observed === null || $observed <= 0) {
+            return ['promptEstimateAtDispatch' => null];
+        }
+
+        $ratio = $observed / $estimate;
+
+        return [
+            'promptEstimateAtDispatch' => null,
+            'tokenEstimateCalibration' => min(
+                self::TOKEN_CALIBRATION_MAX,
+                max(self::TOKEN_CALIBRATION_MIN, $ratio),
+            ),
+        ];
     }
 
     /**

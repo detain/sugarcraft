@@ -190,6 +190,10 @@ Environment variables:
                           discovery-refusal lines back on stderr.
    SUGARCRUSH_DEBUG_RULES Any value other than empty or 0 puts RuleLoader's
                           discovery-refusal lines back on stderr.
+   SUGARCRUSH_DEBUG_STREAM
+                          Any value other than empty or 0 keeps Chat's
+                          "onToken observer threw" line on stderr. The
+                          detach itself happens either way.
 
    docs/ENVIRONMENT.md tabulates every variable this build reads, with its
    full contract.

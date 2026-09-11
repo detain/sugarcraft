@@ -77,5 +77,57 @@ final readonly class CompleteResponse
          * flag.
          */
         public bool $truncated = false,
+        /**
+         * The provider's own usage DOCUMENT, split buckets included — the
+         * carrier half of the decision E17 was blocked on.
+         *
+         * WHAT WAS BLOCKING (verbatim from the entry): "A decision on whether
+         * CompleteResponse::$tokensUsed is split into prompt/completion and
+         * surfaced through Backend." The decision is TAKEN, in this field:
+         * the split surfaces through `Backend` as a {@see \SugarCraft\Crush\Usage}
+         * rather than as two new flat ints, because `Usage` is where
+         * prompt_plan.md P4.S1 defined the bucket identity
+         * (`promptTokens = cacheRead + cacheCreation + input`) and P4.S2
+         * already routed five providers' parse seams through it — a flat pair
+         * here would fork that arithmetic a second time. The old projection
+         * fields are untouched and remain authoritative for anything that
+         * only reads a total: this is ADDITIVE.
+         *
+         * NULL IS THE ORDINARY ANSWER TODAY. No construction site in `src/`
+         * passes it yet: each split-reading provider still ends its Usage at
+         * the `tokensUsed`/`costUsd` projection, and widening `Runtime`'s
+         * fold (the two `Usage::reported($response->tokensUsed, …)` sites in
+         * `runStreaming()`/`runBatch()`) plus the seven providers' construction
+         * sites is the follow-through — deliberately outside the lane that
+         * owns this file, so the carrier is published, documented, and
+         * unit-tested here with the fold listed rather than silently half-done
+         * (same posture {@see $truncated} shipped in). A null means
+         * "the split was not carried", never "the split is zero" — see the
+         * Usage docblock's "Zero is not the same as unknown".
+         *
+         * WHY IT EARNS ITS PLACE NOW rather than in the same commit as the
+         * fold: Chat's tier calibration
+         * ({@see \SugarCraft\Crush\Chat::noteTurnUsageObservation()}) reads
+         * `promptTokens()` THROUGH this field and prefers it over the total —
+         * the moment the fold lands, the estimator tightens with no further
+         * Chat change, and until then the fallback keeps the calibration
+         * honest about what it is actually measuring.
+         */
+        public ?\SugarCraft\Crush\Usage $usage = null,
     ) {}
+
+    /**
+     * The provider's counted PROMPT-side tokens, or null when this response
+     * does not carry a usage document at all or the document's cache buckets
+     * are incomplete.
+     *
+     * The "resolved accessor" the split needed: one call answers BOTH null
+     * shapes — no carrier, and a carrier that could not total the prompt
+     * ({@see \SugarCraft\Crush\Usage::promptTokens()}'s three-bucket rule) —
+     * so a consumer never re-derives the identity or forgets half of it.
+     */
+    public function promptTokens(): ?int
+    {
+        return $this->usage?->promptTokens();
+    }
 }

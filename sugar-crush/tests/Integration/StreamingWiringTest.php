@@ -311,6 +311,13 @@ final class StreamingWiringTest extends TestCase
      * unwinds out of the `Cmd::promise()` factory, so before this was caught
      * the turn produced no promise at all: no later delta, no settlement, and
      * a Chat stuck `inFlight`. The observer is optional; the turn is not.
+     *
+     * The REPORT half is gated on `SUGARCRUSH_DEBUG_STREAM` (E175); this test
+     * turns the flag on — and must keep asserting the line arrives, because
+     * "the failure is not swallowed silently WHEN ASKED" is the contract as it
+     * now stands. The off-by-default silence beside it is pinned by
+     * {@see testAThrowingObserverIsSilentByDefaultButStillDetached()}; the
+     * DETACH itself is outside the gate and is asserted in both.
      */
     public function testAThrowingObserverLosesItsOwnDeltasButNotTheTurn(): void
     {
@@ -327,16 +334,21 @@ final class StreamingWiringTest extends TestCase
 
         // error_log is the reporting channel, so point it at a file both to
         // keep the suite's stderr clean and to assert the failure is not
-        // swallowed silently.
+        // swallowed silently when the debug flag asks for it.
         $log = \tempnam(\sys_get_temp_dir(), 'sugarcrush_ontoken_');
         $this->assertIsString($log);
         $previousLog = \ini_get('error_log');
         \ini_set('error_log', $log);
+        $previousStreamFlag = \getenv(Chat::DEBUG_STREAM_ENV);
 
         try {
+            \putenv(Chat::DEBUG_STREAM_ENV . '=1');
             $this->startAsyncCmd($cmd, $resolved);
         } finally {
             $previousLog === false ? \ini_restore('error_log') : \ini_set('error_log', $previousLog);
+            $previousStreamFlag === false
+                ? \putenv(Chat::DEBUG_STREAM_ENV)
+                : \putenv(Chat::DEBUG_STREAM_ENV . '=' . $previousStreamFlag);
         }
 
         $this->assertSame(['Hi'], $seen, 'a sink that throws is detached rather than retried once per token');
@@ -351,6 +363,55 @@ final class StreamingWiringTest extends TestCase
         $this->assertSame('', $done->streamingText());
         $this->assertFalse($done->inFlight, 'the turn must still settle');
         $this->assertSame('Hi there you', $done->history[array_key_last($done->history)]->content);
+    }
+
+    /**
+     * The other polarity of the E175 gate: with no `SUGARCRUSH_DEBUG_STREAM`
+     * the line must NOT reach error_log — that silence is the whole point of
+     * gating an alt-screen mid-turn stderr write — while EVERYTHING the
+     * unconditional half of the contract guarantees still holds: the sink is
+     * detached after one throw, its deltas are not retried, and the turn
+     * settles with the full reply. A gate that swallowed the DETACH would turn
+     * a debug flag into a way to lose turns again; this test is what stops the
+     * next reader from "tidying" `$userSink = null` inside the condition.
+     */
+    public function testAThrowingObserverIsSilentByDefaultButStillDetached(): void
+    {
+        $backend = new ChunkedBackend(['Hi', ' there', ' you']);
+        $seen = [];
+        $chat = (new Chat(inputBuf: 'hello', backend: $backend, streaming: true))
+            ->onToken(static function (string $delta) use (&$seen): void {
+                $seen[] = $delta;
+
+                throw new \RuntimeException('embedder blew up on ' . $delta);
+            });
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $log = \tempnam(\sys_get_temp_dir(), 'sugarcrush_ontoken_');
+        $this->assertIsString($log);
+        $previousLog = \ini_get('error_log');
+        $previousStreamFlag = \getenv(Chat::DEBUG_STREAM_ENV);
+        \ini_set('error_log', $log);
+
+        try {
+            \putenv(Chat::DEBUG_STREAM_ENV);
+            $this->startAsyncCmd($cmd, $resolved);
+        } finally {
+            $previousLog === false ? \ini_restore('error_log') : \ini_set('error_log', $previousLog);
+            $previousStreamFlag === false
+                ? \putenv(Chat::DEBUG_STREAM_ENV)
+                : \putenv(Chat::DEBUG_STREAM_ENV . '=' . $previousStreamFlag);
+        }
+
+        $this->assertSame('', (string) \file_get_contents($log), 'with no debug flag nobody is told — the alt-screen stays the renderer\'s');
+        @\unlink($log);
+
+        $this->assertSame(['Hi'], $seen, 'the DETACH is outside the gate — silence about a throw must not mean retrying it');
+        [$streaming] = $next->update(new ToolEventPumpMsg());
+        $this->assertSame('Hi there you', $streaming->streamingText());
+        [$done] = $streaming->update($this->settleAsyncCmd($backend, $resolved));
+        $this->assertFalse($done->inFlight, 'the turn must still settle');
     }
 
     /**

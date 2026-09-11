@@ -241,6 +241,91 @@ final class RewindCommandTest extends TestCase
     }
 
     /**
+     * E4, end to end through the real save path: the checkpoint captures the
+     * CARET where the user was editing, not just the text, and the restore
+     * puts it back there.
+     *
+     * The failure this pins is invisible to the E681 draft test above: a
+     * rewound draft whose caret lands at the END while the user was mid-edit
+     * types into the wrong place the moment they press a key. Both halves are
+     * load-bearing — save must write `inputCursor`, restore must re-apply it
+     * AFTER the mutate (mutate's replace-the-whole-draft route rebuilds the
+     * widget at end-of-text, so smuggling the offset through the same mutate
+     * call cannot win).
+     */
+    public function testRewindRestoresTheCursorPositionTheSubmitCaptured(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+
+        $start = new Chat(
+            history: [],
+            inputBuf: 'fix the login bug',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+        // Park the caret mid-draft: five LEFTs from the end (17 chars → 12).
+        for ($i = 0; $i < 5; $i++) {
+            [$start] = $start->update(new KeyMsg(KeyType::Left));
+        }
+        $this->assertSame(12, $start->inputCursorOffset(), 'fixture: the caret is mid-draft before submit');
+
+        [$afterSubmit] = $start->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertTrue($afterSubmit->inFlight);
+        $this->assertSame('', $afterSubmit->inputBuf, 'submit still clears the box');
+
+        $rewinder = new Chat(
+            history: [Message::user('fix the login bug')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+        [$next] = $rewinder->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('fix the login bug', $next->inputBuf);
+        $this->assertSame(
+            12,
+            $next->inputCursorOffset(),
+            'E4: the caret comes back where the user was editing, not at the end of the draft',
+        );
+    }
+
+    /**
+     * E4 legacy polarity: checkpoints written before the cursor key existed
+     * (hand-saved or pre-E4 auto-saves) carry `inputBuf` with no
+     * `inputCursor`. The restore must fall back to end-of-text — the exact
+     * pre-E4 behaviour — rather than jumping the caret to offset 0 or
+     * crashing on the missing key.
+     */
+    public function testRewindOfALegacyCheckpointWithoutACursorKeyRestoresCaretAtEnd(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+        $this->sessionStore->saveCheckpoint('test-session', [
+            'messages' => [['role' => 'user', 'content' => 'Hello']],
+            'inputBuf' => 'half-typed draft',
+            // deliberately NO 'inputCursor' key
+            'agentContext' => ['currentSessionId' => 'test-session'],
+        ]);
+
+        $chat = new Chat(
+            history: [Message::user('Hello'), Message::assistant('Hi')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('half-typed draft', $next->inputBuf);
+        $this->assertSame(
+            16,
+            $next->inputCursorOffset(),
+            'a checkpoint with no captured caret restores the caret at the end, exactly as before E4',
+        );
+    }
+
+    /**
      * E681 EMPTY POLARITY, legacy shape: checkpoints written before the draft
      * field was populated carry no `inputBuf` key at all. The restore must fall
      * back to '' — no phantom text, no crash.

@@ -13,6 +13,7 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
+use SugarCraft\Crush\Events\SpendCapBreached;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
@@ -279,6 +280,41 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
          * `Chat` has to be visible to the instance that builds the next turn.
          */
         private readonly ?RulesState $rulesState = null,
+        /**
+         * The session's dollar ceiling, copied IN by
+         * {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()} on the
+         * clone that dispatches a turn (E20). Null — what every construction
+         * site that never calls {@see withSpendCap()} gets — means no mid-turn
+         * check: the loop runs its bounded course exactly as it did before.
+         *
+         * This is the half of the spend cap that lives BELOW the fork. The
+         * pre-flight refusal ({@see \SugarCraft\Crush\Chat::spendCapRefusal()})
+         * can only stop a turn that has not started; a turn is up to
+         * `$maxSteps` billed calls, and the per-step figures are produced
+         * inside the pcntl-forked child, where nothing but this field and
+         * {@see $sessionSpendAtStartUsd} can see them between steps. It is a
+         * COPY, not a shared object, on purpose: the child must know the cap
+         * at the instant of its own birth, and a by-reference session total
+         * mutating under a running loop would make "which step was refused"
+         * unanswerable.
+         *
+         * The check is a SPEND-ESTIMATE ABORT at step boundaries — never a
+         * wall-clock kill. No provider call in flight is aborted, no total
+         * timeout is armed, and the fork's idle-timeout discipline
+         * (per-frame, reset by every token/reasoning/event frame) is
+         * untouched: an in-flight HTTP request finishes on its own terms and
+         * its cost lands in the sum before the next boundary is judged. That
+         * is the standing rule against blanket LLM-call timeouts, honored
+         * here rather than excepted.
+         */
+        private readonly ?float $spendCapUsd = null,
+        /**
+         * The session's reported spend WHEN THE TURN STARTED, paired with
+         * {@see $spendCapUsd}: the cap is a SESSION ceiling, the loop only
+         * sees this turn's steps, and the breach arithmetic needs the
+         * baseline or every turn would restart its count at zero.
+         */
+        private readonly float $sessionSpendAtStartUsd = 0.0,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -309,7 +345,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withTools(array $tools): self
     {
-        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -317,7 +353,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSkills(array $skills): self
     {
-        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -332,7 +368,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withSkillRegistry(SkillRegistry $skillRegistry): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -344,13 +380,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withInstructionLoader(InstructionFileLoader $instructionLoader): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     public function withHooks(HookManager $hookManager): self
     {
         // An explicit hook manager always wins and clears any prior opt-out.
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $hookManager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -378,7 +414,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withPermissionGate(PermissionGate $permissionGate): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -461,7 +497,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withoutHooks(): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, null, $this->maxSteps, true, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -475,7 +511,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withRoot(?string $root): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -509,12 +545,48 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function withRulesState(?RulesState $rulesState): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     public function withMaxSteps(int $maxSteps): self
     {
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $this->hookManager, max(1, $maxSteps), $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+    }
+
+    /**
+     * The per-dispatch install of E20's mid-turn spend cap: the dollar
+     * ceiling plus the session spend the turn STARTS at, as a pair. Returns a
+     * clone; the cap is a launch-again decision, never a mutation of the
+     * backend a previous turn is still running.
+     *
+     * Called by {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()} on
+     * the EngineBackend clone it is about to dispatch, and by nothing else in
+     * `src/` — which is the whole point of the PAIR: a cap copied without the
+     * baseline would compare each turn's fresh steps against a session
+     * ceiling and under-count, and a baseline without a cap answers nothing.
+     * Pass null to take the check off (a capped-but-escaped session never
+     * dispatches anyway; the pre-flight refusal stops it first).
+     */
+    public function withSpendCap(?float $capUsd, float $sessionSpendAtStartUsd = 0.0): self
+    {
+        return new self(
+            $this->provider,
+            $this->model,
+            $this->tools,
+            $this->skills,
+            $this->hookManager,
+            $this->maxSteps,
+            $this->hooksDisabled,
+            $this->skillRegistry,
+            $this->instructionLoader,
+            $this->root,
+            $this->permissionGate,
+            $this->permissionApprover,
+            $this->memoryStore,
+            $this->rulesState,
+            $capUsd,
+            $sessionSpendAtStartUsd,
+        );
     }
 
     /**
@@ -538,7 +610,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         $manager->registerBuiltIns();
         $manager->register(new BashEscapeDenyHook($worktreeRoot));
 
-        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState);
+        return new self($this->provider, $this->model, $this->tools, $this->skills, $manager, $this->maxSteps, false, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
     }
 
     /**
@@ -676,6 +748,47 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
 
             if ($toolResults === []) {
                 break; // model answered without calling tools — done
+            }
+
+            // E20: THE MID-TURN SPEND CAP, checked HERE and nowhere else —
+            // this is the only point in the app that stands between a step
+            // the session has already paid for and the NEXT provider call it
+            // could still refuse. Below the break (a turn that answered
+            // without tools is over; there is no next call to price) and
+            // above the prompt assembly (the refusal must not pay for
+            // building a prompt it will never send).
+            //
+            // The arithmetic is the SAME shape as Chat::spendCapReached():
+            // baseline session spend + this turn's billed steps, breached at
+            // `>=`. A step that reported nothing contributes 0.0 — the
+            // fail-open direction the cap has always had: an unreported
+            // session cannot prove a breach, and the mid-turn check inherits
+            // that, overspending rather than falsely stopping.
+            //
+            // NO wall-clock kill, no abort of the call in flight, and the
+            // fork's idle-timeout discipline untouched — an in-flight
+            // provider call finishes on its own terms and lands in the sum
+            // at the boundary above. What this refuses is the DECISION to
+            // make another call, which is the only spend decision this loop
+            // actually owns (standing rule against blanket LLM timeouts).
+            if ($this->spendCapUsd !== null) {
+                $sessionSpendAtBoundary = $this->sessionSpendAtStartUsd;
+                foreach ($stepUsages as $stepUsage) {
+                    $sessionSpendAtBoundary += $stepUsage?->costUsd ?? 0.0;
+                }
+
+                if ($sessionSpendAtBoundary >= $this->spendCapUsd) {
+                    // On the tool-event channel, in wire order with the turn's
+                    // other events, so the transcript can say which call was
+                    // refused — and a consumer that ignores it costs the turn
+                    // nothing (see the event's own docblock). $step is 0-based,
+                    // so the calls made number $step + 1.
+                    if ($onEvent !== null) {
+                        $onEvent(new SpendCapBreached($step + 1, $sessionSpendAtBoundary, $this->spendCapUsd));
+                    }
+
+                    break;
+                }
             }
 
             // P3.S5: the per-step half of P3.S2's lever. This loop is the only
@@ -1267,7 +1380,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 static function (string $delta) use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'token', 'text' => $delta]);
                 },
-                static function (ToolStarted|ToolFinished $event) use ($childSocket): void {
+                static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($childSocket): void {
                     self::writeFrame($childSocket, self::encodeEvent($event));
                 },
                 // E456. The child's third sink, and the one that exists for the
@@ -1450,8 +1563,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *
      * @return array<string, mixed>
      */
-    private static function encodeEvent(ToolStarted|ToolFinished $event): array
+    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached $event): array
     {
+        if ($event instanceof SpendCapBreached) {
+            return [
+                'kind' => 'spend_cap',
+                'calls' => $event->completedCalls,
+                'spent' => $event->spentUsd,
+                'cap' => $event->capUsd,
+            ];
+        }
+
         if ($event instanceof ToolStarted) {
             return [
                 'kind' => 'started',
@@ -1483,19 +1605,37 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *
      * @param array<string, mixed> $encoded
      */
-    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|null
+    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|null
     {
+        // THE KIND IS READ BEFORE THE IDENTITY, and the order is the fix, not
+        // a style choice: a spend_cap frame carries no toolCallId/name pair at
+        // all, and the old leading guard rejected anything without them — it
+        // would have silently dropped every breach report off an otherwise
+        // healthy socket, on the fork path only, with the sync path green.
+        $kind = $encoded['kind'] ?? null;
+
+        if ($kind === 'spend_cap') {
+            $calls = is_int($encoded['calls'] ?? null) ? $encoded['calls'] : null;
+            $spent = $encoded['spent'] ?? null;
+            $cap = $encoded['cap'] ?? null;
+            if ($calls === null || !(is_float($spent) || is_int($spent)) || !(is_float($cap) || is_int($cap))) {
+                return null;
+            }
+
+            return new SpendCapBreached($calls, (float) $spent, (float) $cap);
+        }
+
         $id = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;
         $name = is_string($encoded['name'] ?? null) ? $encoded['name'] : null;
         if ($id === null || $name === null) {
             return null;
         }
 
-        if (($encoded['kind'] ?? null) === 'started') {
+        if ($kind === 'started') {
             return new ToolStarted($id, $name, is_array($encoded['arguments'] ?? null) ? $encoded['arguments'] : []);
         }
 
-        if (($encoded['kind'] ?? null) !== 'finished') {
+        if ($kind !== 'finished') {
             return null;
         }
 
