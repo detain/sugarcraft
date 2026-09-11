@@ -6966,7 +6966,13 @@ final class Chat implements Model
         if ($this->sessionStore !== null && $this->currentSessionId !== null && method_exists($this->sessionStore, 'saveCheckpoint')) {
             $chatState = [
                 'messages' => $next->history,
-                'inputBuf' => $next->inputBuf,
+                // THE DRAFT IS READ FROM $this, NOT $next — the order is load-bearing.
+                // $next above already blanked inputBuf (submit consumed the prompt), so
+                // snapshotting $next->inputBuf stored '' on every turn and `/rewind`'s
+                // draft restore had nothing to restore (E681). $this->inputBuf is the
+                // pre-clear buffer: for a checkpoint taken at submit that is exactly the
+                // prompt this turn sent, which is what rewind re-seeds the box with.
+                'inputBuf' => $this->inputBuf,
                 'inFlight' => false,
                 'agentContext' => [
                     'currentSessionId' => $this->currentSessionId,
@@ -10991,7 +10997,13 @@ final class Chat implements Model
             // Return Chat with restored state
             $next = $this->mutate([
                 'history' => [...$messages, Message::user($inputText), Message::assistant($response)],
-                'inputBuf' => '',
+                // E681: the draft the checkpoint captured goes back into the box —
+                // a checkpoint restore is one of mutate()'s replace-the-whole-draft
+                // routes (see the two-write-routes comment in mutate()). Before the
+                // save-side fix this field was always '' AND was ignored here, so
+                // rewinds silently dropped the in-flight text; a checkpoint with no
+                // draft (hand-saved or legacy) still restores to ''.
+                'inputBuf' => $inputBuf,
                 'inFlight' => false,
                 // An outstanding `/compact` summarization is ABANDONED, for the
                 // same reason `/clear` abandons one: the transcript it was

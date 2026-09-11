@@ -186,6 +186,84 @@ final class RewindCommandTest extends TestCase
         $this->assertCount(5, $next->history);
         $this->assertSame('Hello', $next->history[0]->content);
         $this->assertSame('Hi there!', $next->history[1]->content);
+        // E681 EMPTY POLARITY: the rewind target (checkpoint 1, saved above with
+        // 'inputBuf' => '') had no draft, so the restore must yield ''. After the
+        // fix this asserts the saved '' genuinely ROUND-TRIPS — pre-E681 it passed
+        // vacuously because handleRewindCommand blanked the box regardless.
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    /**
+     * E681 NON-EMPTY POLARITY, end to end through the real save path: type a
+     * draft, submit, then /rewind — the box comes back with the text.
+     *
+     * MEASURED SHAPE: the auto-checkpoint fires at submit, so the draft it
+     * captures is the prompt that turn just sent (the buffer's pre-clear
+     * contents); that is what a rewind of that checkpoint re-seeds. Every
+     * real-save checkpoint therefore carries a non-empty draft — the empty
+     * polarity for real saves does not exist, only for hand-saved/legacy
+     * checkpoints (pinned by the test above and the legacy-key one below).
+     *
+     * Pre-fix this was red twice over: saveCheckpoint stored $next->inputBuf
+     * (always '' after submit's clear), and handleRewindCommand restored ''
+     * (hardcoded, ignoring the extracted field).
+     */
+    public function testRewindRestoresTheDraftTheSubmitCaptured(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+
+        // Turn 1: a live draft goes through the REAL submit path, which
+        // auto-saves the checkpoint mid-update() — that capture is the fix.
+        $chat = new Chat(
+            history: [],
+            inputBuf: 'fix the login bug',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertTrue($afterSubmit->inFlight);
+        $this->assertSame('', $afterSubmit->inputBuf, 'submit still clears the box');
+
+        // Rewind: the checkpoint of that turn restores its draft into the box.
+        $rewinder = new Chat(
+            history: [Message::user('fix the login bug')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+        [$next] = $rewinder->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
+        $this->assertStringContainsString('Rewound', $next->history[count($next->history) - 1]->content);
+        $this->assertSame('fix the login bug', $next->inputBuf, 'the submitted draft comes back on rewind');
+    }
+
+    /**
+     * E681 EMPTY POLARITY, legacy shape: checkpoints written before the draft
+     * field was populated carry no `inputBuf` key at all. The restore must fall
+     * back to '' — no phantom text, no crash.
+     */
+    public function testRewindOfALegacyCheckpointWithoutADraftKeyRestoresEmpty(): void
+    {
+        $this->sessionStore->createSession('test-session', 'openai', 'gpt-4');
+        $this->sessionStore->saveCheckpoint('test-session', [
+            'messages' => [['role' => 'user', 'content' => 'Hello']],
+            // deliberately NO 'inputBuf' key
+            'agentContext' => ['currentSessionId' => 'test-session'],
+        ]);
+
+        $chat = new Chat(
+            history: [Message::user('Hello'), Message::assistant('Hi')],
+            inputBuf: '/rewind',
+            backend: new EchoBackend(),
+            sessionStore: $this->sessionStore,
+            currentSessionId: 'test-session',
+        );
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertFalse($next->inFlight);
         $this->assertSame('', $next->inputBuf);
     }
 
