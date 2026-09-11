@@ -117,6 +117,31 @@ final class LspClient
     }
 
     /**
+     * E690: forward the between-exchanges stderr drain to every registered
+     * connection — the dispatch-entry mirror of
+     * {@see \SugarCraft\Crush\MCP\McpClient::pumpStderr()}.
+     *
+     * The `instanceof` gate is that precedent carried over verbatim: only a
+     * spawned child owns an fd 2, so the interface must NOT grow
+     * `pumpStderr()` and the in-memory fakes that implement it stay inert
+     * here. Cheap and non-blocking by contract (see
+     * {@see LspConnection::pumpStderr()}), and mounted at DISPATCH ENTRY
+     * inside the `…For()` operations only — never from a timer or the loop,
+     * the hazard the connection's own docblock records (E537). A language
+     * whose server never connected, or already disconnected, is a no-op for
+     * the same reason, which is what makes the blanket fan-out safe to call
+     * unconditionally on entry.
+     */
+    public function pumpStderr(): void
+    {
+        foreach ($this->connections as $connection) {
+            if ($connection instanceof LspConnection) {
+                $connection->pumpStderr();
+            }
+        }
+    }
+
+    /**
      * Whether a server is registered and connected for the given language.
      */
     public function isConnected(?string $language = null): bool
@@ -164,6 +189,11 @@ final class LspClient
         }
 
         $cache = $this->caches[$language];
+        // E690: dispatch-entry drain (mirror of McpClient's callTool/
+        // listTools/listResources pumps). Runs for cache hits too — a
+        // between-turns visit is exactly the settled gap LspConnection's
+        // contract names, and the fan-out is non-blocking.
+        $this->pumpStderr();
         $key = self::positionalKey('textDocument/definition', $line, $col);
 
         if ($cache->has($uri, $key)) {
@@ -212,6 +242,11 @@ final class LspClient
         }
 
         $cache = $this->caches[$language];
+        // E690: dispatch-entry drain (mirror of McpClient's callTool/
+        // listTools/listResources pumps). Runs for cache hits too — a
+        // between-turns visit is exactly the settled gap LspConnection's
+        // contract names, and the fan-out is non-blocking.
+        $this->pumpStderr();
         $key = self::positionalKey('textDocument/references', $line, $col);
 
         if ($cache->has($uri, $key)) {
@@ -260,6 +295,11 @@ final class LspClient
         }
 
         $cache = $this->caches[$language];
+        // E690: dispatch-entry drain (mirror of McpClient's callTool/
+        // listTools/listResources pumps). Runs for cache hits too — a
+        // between-turns visit is exactly the settled gap LspConnection's
+        // contract names, and the fan-out is non-blocking.
+        $this->pumpStderr();
         $key = self::positionalKey('textDocument/hover', $line, $col);
 
         if ($cache->has($uri, $key)) {
@@ -309,6 +349,11 @@ final class LspClient
         }
 
         $cache = $this->caches[$language];
+        // E690: dispatch-entry drain (mirror of McpClient's callTool/
+        // listTools/listResources pumps). Runs for cache hits too — a
+        // between-turns visit is exactly the settled gap LspConnection's
+        // contract names, and the fan-out is non-blocking.
+        $this->pumpStderr();
 
         if ($cache->has($uri, 'textDocument/documentSymbol')) {
             return $cache->get($uri, 'textDocument/documentSymbol') ?? [];
@@ -364,6 +409,11 @@ final class LspClient
         }
 
         $cache = $this->caches[$language];
+        // E690: dispatch-entry drain (mirror of McpClient's callTool/
+        // listTools/listResources pumps). Runs for cache hits too — a
+        // between-turns visit is exactly the settled gap LspConnection's
+        // contract names, and the fan-out is non-blocking.
+        $this->pumpStderr();
         $key = self::positionalKey('textDocument/codeAction', $line, $col, $context);
 
         if ($cache->has($uri, $key)) {
