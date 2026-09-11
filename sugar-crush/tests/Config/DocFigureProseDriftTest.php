@@ -5,20 +5,33 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\AgentPoolConfig;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\Mailbox;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\ClaudeCodeMcpClient;
 use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Commands\CommandRegistry;
+use SugarCraft\Crush\Commands\CommandSpec;
+use SugarCraft\Crush\Config\StatusLineCommand;
+use SugarCraft\Crush\Context\CompactorConfig;
+use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\RepoMapBlock;
+use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Hooks\HookResult;
+use SugarCraft\Crush\Hooks\ScriptHook;
 use SugarCraft\Crush\LSP\LspConnection;
 use SugarCraft\Crush\MCP\StdioMcpServer;
 use SugarCraft\Crush\Providers\ClaudeCodeProvider;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Providers\TransientFailure;
+use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Support\TimedFileLock;
@@ -51,6 +64,11 @@ use SugarCraft\Crush\Workflows\Workflow;
  * one loses its digit, and a measured/historical figure stays labeled-by-
  * method. New symbols cited by name only, never by line number (line-number
  * prose rots; that is E686's own finding on this page).
+ *
+ * E686 TRANCHE-3 (round-66, lane cb) adds the Context/Hooks/RuleLoader/MCP
+ * arms below and grows the stderr-tail family with its fourth site — and
+ * judged zero FALSE claims: every digit measured this tranche re-derived
+ * exactly, which is what the campaign's pinning is FOR.
  *
  * @internal
  */
@@ -345,18 +363,20 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-2 (D): three independent children all justify a 65536-byte
-     * stderr tail as "one pipe buffer on this host". The figure is only true as
-     * a family if all three constants move together, and each 64 stays 64*1024
-     * of its own constant; the host labels (PHP/Linux versions, "this host")
-     * are held as measured-domain sentences by the preserved substrings.
+     * E686 tranche-2 (D) + tranche-3 extension: four independent children all
+     * justify a 65536-byte stderr tail as "one pipe buffer on this host" (the
+     * fourth, ClaudeCodeMcpClient, joined at lane cb — the family grows with the
+     * tree, it does not fork). The figure is only true as a family if all four
+     * constants move together, and each 64 stays 64*1024 of its own constant;
+     * the host labels (PHP/Linux versions, "this host") are held as
+     * measured-domain sentences by the preserved substrings.
      */
     public function testStderrTailSixtyFourKibibyteFamilyAgrees(): void
     {
         $values = [];
-        foreach ([LspConnection::class, ClaudeCodeProvider::class] as $class) {
+        foreach ([LspConnection::class, ClaudeCodeProvider::class, ClaudeCodeMcpClient::class] as $class) {
             $value = (int) (new \ReflectionClass($class))->getConstant('MAX_STDERR_BYTES');
-            self::assertSame(65536, $value, "{$class}::MAX_STDERR_BYTES moved — the three-site family sentence must move with it");
+            self::assertSame(65536, $value, "{$class}::MAX_STDERR_BYTES moved — the four-site family sentence must move with it");
             $doc = self::docBlockOf($class, 'MAX_STDERR_BYTES');
             self::assertSame(
                 1,
@@ -602,6 +622,559 @@ final class DocFigureProseDriftTest extends TestCase
         }
         $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
         self::assertSame(count($names), $wordNumbers[$m[1]] ?? -1, 'the spelled word no longer counts the live SUBCOMMANDS list — flip both together (census-trio lesson)');
+    }
+
+    /**
+     * E686 tranche-3 (I): EnvironmentBlock's cap prose is pure cross-constant
+     * arithmetic — 24,576 of fields, the 45,056/36,864 every-bound totals named
+     * in exact KiB, the 25,600 whole-block promise, and four neighbor figures
+     * cited as sizing anchors. Every digit here re-derives from the constants
+     * it names; even the caption length (which rotted once, 100 → 91) is
+     * re-counted live.
+     */
+    public function testContextBlockCapArithmeticSurvivesItsConstants(): void
+    {
+        $class = new \ReflectionClass(EnvironmentBlock::class);
+        $diff = (int) $class->getConstant('DIFF_MAX_BYTES');
+        $summary = (int) $class->getConstant('SUMMARY_MAX_BYTES');
+        $branch = (int) $class->getConstant('BRANCH_MAX_BYTES');
+        $memory = new \ReflectionClass(MemoryBlock::class);
+        $memoryBytes = (int) $memory->getConstant('MAX_BYTES');
+        $memoryEntries = (int) $memory->getConstant('MAX_ENTRIES');
+        $repoMap = (int) (new \ReflectionClass(RepoMapBlock::class))->getConstant('MAX_SECTION_BYTES');
+        $tool = (int) (new \ReflectionClass(TruncatesOutput::class))->getConstant('DEFAULT_MAX_OUTPUT_BYTES');
+        $caveat = (string) $class->getConstant('GIT_STATE_CAVEAT');
+
+        $fields = 2 * $diff + 2 * $summary;
+        $diffDoc = self::docBlockOf(EnvironmentBlock::class, 'DIFF_MAX_BYTES');
+        $summaryDoc = self::docBlockOf(EnvironmentBlock::class, 'SUMMARY_MAX_BYTES');
+        $branchDoc = self::docBlockOf(EnvironmentBlock::class, 'BRANCH_MAX_BYTES');
+
+        self::assertSame(
+            1,
+            preg_match("/this block's\s+\*\s+([\d,]+) B of capped fields \(below\), plus `MemoryBlock`'s ([\d,]+), plus/s", $diffDoc, $m),
+            'the total sentence in the DIFF doc-block no longer names the fields ceiling and MemoryBlock\'s share together',
+        );
+        self::assertSame($fields, (int) str_replace(',', '', $m[1]), 'prose fields-total drifted from 2*DIFF + 2*SUMMARY');
+        self::assertSame($memoryBytes, (int) str_replace(',', '', $m[2]), 'prose MemoryBlock figure drifted from MAX_BYTES');
+
+        self::assertSame(
+            1,
+            preg_match("/`RepoMapBlock`'s 2 x ([\d,]+) — ([\d,]+) B, exactly (\d+) KiB/s", $diffDoc, $m),
+            'the every-bound sentence no longer spells its section size, total and KiB unit together',
+        );
+        self::assertSame($repoMap, (int) str_replace(',', '', $m[1]), 'prose RepoMap section figure drifted from MAX_SECTION_BYTES');
+        $everyBound = (int) str_replace(',', '', $m[2]);
+        self::assertSame($fields + $memoryBytes + 2 * $repoMap, $everyBound, 'the every-bound total is no longer fields + memory + 2 repo-map sections');
+        self::assertSame(0, $everyBound % 1024, 'the every-bound total is no longer an exact KiB count — the prose says "exactly"');
+        self::assertSame(intdiv($everyBound, 1024), (int) $m[3], 'the "exactly N KiB" figure drifted from the byte total');
+
+        self::assertSame(
+            1,
+            preg_match('/real ceiling is ([\d,]+) B, exactly (\d+) KiB/s', $diffDoc, $m),
+            'the practical-ceiling sentence moved',
+        );
+        $realCeiling = (int) str_replace(',', '', $m[1]);
+        self::assertSame($fields + $memoryBytes + $repoMap, $realCeiling, 'the practical ceiling is no longer fields + memory + ONE repo-map section');
+        self::assertSame(0, $realCeiling % 1024, 'the practical ceiling is no longer an exact KiB count');
+        self::assertSame(intdiv($realCeiling, 1024), (int) $m[2], 'the "exactly N KiB" figure drifted from the practical ceiling');
+
+        self::assertSame(
+            1,
+            preg_match('/spells (\d+) and (\d+) as KiB/s', $diffDoc, $m),
+            'the units-correction sentence no longer names both byte counts it spells correctly',
+        );
+        self::assertSame([$diff, $summary], [(int) $m[1], (int) $m[2]], 'the correction sentence\'s own figures drifted from DIFF/SUMMARY');
+
+        self::assertSame(
+            1,
+            preg_match('/\{\@see MemoryBlock::MAX_BYTES\}\s+\*\s+is ([\d,]+) for ([a-z]+) curated notes/s', $diffDoc, $m),
+            'the neighbour sentence no longer pairs the byte figure with its spelled entry count',
+        );
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        self::assertSame($memoryBytes, (int) str_replace(',', '', $m[1]), 'prose Memory::MAX_BYTES cite drifted from the constant');
+        self::assertSame($memoryEntries, $wordNumbers[$m[2]] ?? -1, 'the spelled "twelve curated notes" no longer counts MemoryBlock::MAX_ENTRIES — flip both together (census-trio lesson)');
+
+        self::assertSame(
+            1,
+            preg_match('/default is ([\d,]+); a diff needs/s', $diffDoc, $m),
+            'the TruncatesOutput anchor sentence moved',
+        );
+        self::assertSame($tool, (int) str_replace(',', '', $m[1]), 'prose tool-default figure drifted from TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES');
+
+        self::assertSame(
+            1,
+            preg_match('/MAX_SECTION_BYTES\}\s+\*\s+is ([\d,]+) — the same figure as this one/s', $diffDoc, $m),
+            'the coincidence sentence no longer claims the two section sizes are equal',
+        );
+        self::assertSame($repoMap, (int) str_replace(',', '', $m[1]), 'prose RepoMap figure drifted from MAX_SECTION_BYTES');
+        self::assertSame($diff, $repoMap, 'the prose still reads "the same figure as this one" — RepoMap and DIFF no longer coincide, so the sentence must change HERE and in the doc-block together');
+
+        self::assertSame(
+            1,
+            preg_match('/\+ 2 \* this = ([\d,]+) B/s', $summaryDoc, $m),
+            'the SUM of the derivation sentence no longer resolves',
+        );
+        self::assertSame($fields, (int) str_replace(',', '', $m[1]), 'the SUMMARY doc-block\'s own 2*DIFF + 2*this sum drifted');
+        self::assertSame(
+            1,
+            preg_match('/so the\s+\*\s+([\d,]+) is a true ceiling on the fields/s', $summaryDoc, $m),
+            'the ceiling re-cite moved',
+        );
+        self::assertSame($fields, (int) str_replace(',', '', $m[1]), 'the re-cited fields ceiling drifted from the same arithmetic');
+        self::assertSame(
+            1,
+            preg_match('/the (\d+)-byte \{\@see GIT_STATE_CAVEAT\} caption/s', $summaryDoc, $m),
+            'the caption no longer carries a byte figure — keep the sentence and the string in step',
+        );
+        self::assertSame(strlen($caveat), (int) $m[1], 'prose caption bytes drifted from the GIT_STATE_CAVEAT string (it already rotted once: 100 → 91)');
+        self::assertSame(
+            1,
+            preg_match('/under (\d+) KiB \(([\d,]+) B\) however dirty the tree is/s', $summaryDoc, $m),
+            'the whole-block bound moved — EnvironmentBlockTest derives the same total',
+        );
+        self::assertSame($fields + 1024, (int) str_replace(',', '', $m[2]), '24,576 + the 1 KiB fixed part is no longer the stated whole-block bound');
+        self::assertSame(intdiv((int) str_replace(',', '', $m[2]), 1024), (int) $m[1], 'the KiB word and the byte count disagree');
+
+        self::assertSame(
+            1,
+            preg_match('/value (\d+) B \+ newlines is nowhere near ([\d,]+) B, so\s+\*\s+([\d,]+) \+ ([\d,]+) = ([\d,]+) continues to hold/s', $branchDoc, $m),
+            'the fixed-part arithmetic sentence no longer states value, slack, and the sum in one breath',
+        );
+        self::assertSame($branch, (int) $m[1], 'prose branch-cap figure drifted from BRANCH_MAX_BYTES');
+        self::assertSame($fields, (int) str_replace(',', '', $m[3]), 'the branch doc-block\'s fields figure drifted from the same arithmetic as SUMMARY\'s');
+        self::assertSame(
+            (int) str_replace(',', '', $m[3]) + (int) str_replace(',', '', $m[4]),
+            (int) str_replace(',', '', $m[5]),
+            'the branch doc-block\'s sum no longer adds up',
+        );
+        self::assertSame((int) str_replace(',', '', $m[2]), (int) str_replace(',', '', $m[4]), 'the "nowhere near" slack and the reserved slack are no longer the same figure');
+        self::assertSame(
+            1,
+            preg_match("/takes `str_repeat\('([^']+)', (\d+)\)` whole/s", $branchDoc, $m),
+            'the escaping premise sentence moved — the +3 B a tag arithmetic below cites it',
+        );
+        self::assertSame(
+            1,
+            preg_match('/at \+3 B a tag, growing those (\d+) bytes to (\d+)/s', $branchDoc, $b),
+            'the escape-growth sentence no longer names its before and after together',
+        );
+        self::assertSame((int) $m[2] * strlen($m[1]), (int) $b[1], 'the pre-escape byte figure is no longer repeats x tag-length from the premise sentence');
+        self::assertSame((int) $b[1] + (int) $m[2] * 3, (int) $b[2], 'the +3 B a tag growth no longer carries 250 to the stated 400');
+    }
+
+    /**
+     * E686 tranche-3 (J): the hook runtime budgets — the 60s default quoted on
+     * three pages, the 200ms drain slice shared by three files under a "five
+     * wakeups a second" justification, the 16,384 quartet whose 16,465 example
+     * is re-derived from the ACTUAL clip marker re-extracted from clip(), the
+     * 8 wrapped permission rows, the 10,000-byte note cap, and the
+     * PAGE_SIZE * 32 env-entry cap — all live off their constants.
+     */
+    public function testHookRunBudgetsSurviveTheirConstants(): void
+    {
+        $hookClass = new \ReflectionClass(ScriptHook::class);
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $trouble = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
+
+        $timeout = (float) $hookClass->getConstant('DEFAULT_TIMEOUT_SECONDS');
+        self::assertSame(
+            1,
+            preg_match('/(\d+) seconds, because a hook legitimately/', self::docBlockOf(ScriptHook::class, 'DEFAULT_TIMEOUT_SECONDS'), $m),
+            'the timeout justification no longer states its seconds figure',
+        );
+        self::assertSame((int) $timeout, (int) $m[1], 'prose timeout drifted from DEFAULT_TIMEOUT_SECONDS');
+        self::assertSame(
+            1,
+            preg_match('/reap together\.\*\* (\d+) seconds by default/', $hooks, $m),
+            'docs/HOOKS.md no longer states the hook-run bound',
+        );
+        self::assertSame((int) $timeout, (int) $m[1], 'docs/HOOKS.md timeout figure drifted from DEFAULT_TIMEOUT_SECONDS');
+        self::assertSame(
+            1,
+            preg_match('/at (\d+) seconds by default\./', $trouble, $m),
+            'docs/TROUBLESHOOTING.md no longer states the hook-run bound',
+        );
+        self::assertSame((int) $timeout, (int) $m[1], 'docs/TROUBLESHOOTING.md timeout figure drifted from DEFAULT_TIMEOUT_SECONDS');
+
+        $slice = (float) $hookClass->getConstant('DRAIN_SLICE_SECONDS');
+        self::assertSame(
+            (float) (new \ReflectionClass(StatusLineCommand::class))->getConstant('DRAIN_SLICE_SECONDS'),
+            $slice,
+            'the prose promises StatusLineCommand shares ScriptHook::DRAIN_SLICE_SECONDS — one side moved',
+        );
+        $sliceDoc = self::docBlockOf(ScriptHook::class, 'DRAIN_SLICE_SECONDS');
+        self::assertSame(
+            1,
+            preg_match('/for (\w+) wakeups a second.*?makes at the same (\d+)ms/s', $sliceDoc, $m),
+            'the drain-slice sentence no longer spells its wakeups-per-second and its cross-class 200ms together',
+        );
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
+        self::assertSame($wordNumbers[$m[1]] ?? -1, intdiv(1000, (int) round($slice * 1000)), 'the spelled wakeups-per-second no longer equals 1s / DRAIN_SLICE_SECONDS — flip both together');
+        self::assertSame((int) round($slice * 1000), (int) $m[2], 'prose milliseconds drifted from DRAIN_SLICE_SECONDS');
+        self::assertSame(
+            1,
+            preg_match("/DRAIN_SLICE_SECONDS\}'\s+\*\s+(\d+)ms, for its reason/s", self::docBlockOf(StatusLineCommand::class, 'DRAIN_SLICE_SECONDS'), $m),
+            'the StatusLine drain doc no longer cites the shared slice with its millisecond figure',
+        );
+        self::assertSame((int) round($slice * 1000), (int) $m[1], 'StatusLine prose milliseconds drifted from the shared slice');
+        $specBody = self::bodyExcerpt(self::sourceOf('Commands/CommandSpec.php'), 'runShellSubstitution', 5000);
+        self::assertSame(
+            1,
+            preg_match('/Capped at (\d+)ms per wait/', $specBody, $m),
+            'CommandSpec no longer comments its slice in milliseconds — the "same 200ms" prose cites it',
+        );
+        self::assertSame((int) round($slice * 1000), (int) $m[1], 'CommandSpec\'s commented slice drifted from ScriptHook\'s constant');
+        self::assertSame(
+            1,
+            preg_match('/min\(\$remaining, ([\d.]+)\)/', $specBody, $m),
+            'runShellSubstitution lost its inline slice literal — the cross-class "same 200ms" claim lost its referent',
+        );
+        self::assertSame($slice, (float) $m[1], 'CommandSpec no longer waits at ScriptHook\'s slice — the "same trade" prose is false');
+
+        $deny = (int) $hookClass->getConstant('MAX_DENY_REASON_BYTES');
+        $ask = (int) $hookClass->getConstant('MAX_ASK_PROMPT_BYTES');
+        $rewrite = (int) $hookClass->getConstant('MIN_REWRITE_BYTES');
+        self::assertSame($deny, $ask, 'the deny and ask clips were the same figure in docs — one constant moved');
+        self::assertSame($deny, $rewrite, 'the rewrite floor and the deny clip were the same figure — one moved');
+        self::assertSame(
+            $deny,
+            (int) (new \ReflectionClass(CommandSpec::class))->getConstant('MAX_SUBSTITUTION_BYTES'),
+            'the MIN_REWRITE prose cites CommandSpec::MAX_SUBSTITUTION_BYTES as "the figure it already uses" — one side moved',
+        );
+        self::assertSame(
+            1,
+            preg_match('/(\d+) KiB, the figure/', self::docBlockOf(ScriptHook::class, 'MIN_REWRITE_BYTES'), $m),
+            'the rewrite-floor sentence no longer states its KiB figure',
+        );
+        self::assertSame(intdiv($deny, 1024), (int) $m[1], 'prose KiB drifted from the 16384 quartet');
+        self::assertSame(
+            3,
+            preg_match_all('/clipped at (\d+) KiB/', $hooks, $m),
+            'docs/HOOKS.md no longer states the 16 KiB clip on all three of its rows — re-pin with the prose',
+        );
+        foreach ($m[1] as $stated) {
+            self::assertSame(intdiv($deny, 1024), (int) $stated, 'a prose "clipped at N KiB" figure drifted from the 16384 quartet');
+        }
+        $noteCap = (int) (new \ReflectionClass(HookResult::class))->getConstant('MAX_ADDITIONAL_CONTEXT_BYTES');
+        preg_match_all('/\| ([\d,]+) bytes \|/', $hooks, $tableBytes);
+        self::assertCount(
+            3,
+            $tableBytes[1],
+            'the clipping-table byte column no longer has its three cells (note, ask, deny) — re-pin with the prose',
+        );
+        self::assertSame(
+            [$noteCap, $deny, $deny],
+            array_map(static fn (string $v): int => (int) str_replace(',', '', $v), $tableBytes[1]),
+            'a "| N bytes |" cell in docs/HOOKS.md drifted from the constant it clips against',
+        );
+        self::assertSame(
+            1,
+            preg_match('/\*\*note\*\*, capped at ([\d,]+) bytes/', $hooks, $m),
+            'the exit-code table no longer states the allow-note cap',
+        );
+        self::assertSame($noteCap, (int) str_replace(',', '', $m[1]), 'prose note cap drifted from MAX_ADDITIONAL_CONTEXT_BYTES');
+        self::assertSame(
+            1,
+            preg_match('/\*\*([\d,]+) bytes\*\*, counted as bytes/', $hooks, $m),
+            'the note-cap rationale sentence moved',
+        );
+        self::assertSame($noteCap, (int) str_replace(',', '', $m[1]), 'the rationale bold figure drifted from MAX_ADDITIONAL_CONTEXT_BYTES');
+
+        $askDoc = self::docBlockOf(ScriptHook::class, 'MAX_ASK_PROMPT_BYTES');
+        self::assertSame(
+            1,
+            preg_match('/A ([\d,]+)-byte question reaches\s+\*\s+`settleAsk\(\)` as ([\d,]+) bytes — ([\d,]+) plus a marker that names both/s', $askDoc, $m),
+            'the 16,465 example sentence no longer spells question, total, and clip together',
+        );
+        self::assertSame($ask, (int) str_replace(',', '', $m[3]), 'the example\'s clip figure drifted from MAX_ASK_PROMPT_BYTES');
+        $clipBody = self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'clip');
+        self::assertSame(
+            1,
+            preg_match("/sprintf\(\s*'([^']+)'/s", $clipBody, $f),
+            'clip() no longer builds a single-quoted sprintf marker — the marker-length arithmetic behind the example lost its referent',
+        );
+        $questionLen = (int) str_replace(',', '', $m[1]);
+        self::assertSame(
+            $ask + strlen(sprintf($f[1], $ask, $questionLen)),
+            (int) str_replace(',', '', $m[2]),
+            'the stated clipped total is no longer the cap plus the marker the code actually formats',
+        );
+        self::assertSame(
+            1,
+            preg_match('/keeps\s+\*\s+`PERMISSION_PROMPT_MAX_ROWS` = (\d+) wrapped rows/s', $askDoc, $m),
+            'the modal-bound cite no longer names the renderer constant with its digit',
+        );
+        self::assertSame(
+            (int) (new \ReflectionClass(Renderer::class))->getConstant('PERMISSION_PROMPT_MAX_ROWS'),
+            (int) $m[1],
+            'prose wrapped-rows figure drifted from PERMISSION_PROMPT_MAX_ROWS',
+        );
+
+        $envMax = (int) $hookClass->getConstant('MAX_ENV_ENTRY_BYTES');
+        self::assertSame(
+            1,
+            preg_match('/is `PAGE_SIZE \* 32` = ([\d,]+), and/', self::docBlockOf(ScriptHook::class, 'MAX_ENV_ENTRY_BYTES'), $m),
+            'the kernel-limit derivation no longer spells PAGE_SIZE * 32 with its byte figure',
+        );
+        self::assertSame($envMax, (int) str_replace(',', '', $m[1]), 'prose env-entry figure drifted from MAX_ENV_ENTRY_BYTES');
+        self::assertSame($envMax, 4096 * 32, 'MAX_ENV_ENTRY_BYTES is documented as 4 KiB pages times 32 — the page premise or the constant moved');
+        self::assertSame(
+            1,
+            preg_match('/usual 4 KiB pages that is \*\*([\d,]+) bytes\*\*/', $hooks, $m),
+            'docs/HOOKS.md no longer states the E2BIG ceiling',
+        );
+        self::assertSame($envMax, (int) str_replace(',', '', $m[1]), 'docs/HOOKS.md env-entry figure drifted from MAX_ENV_ENTRY_BYTES');
+    }
+
+    /**
+     * E686 tranche-3 (K): SglangProvider's contextWindow() docblock quotes the
+     * CompactorConfig tiers and derives twelve token figures from them and the
+     * three context windows — every "~N" here re-evaluates as
+     * intdiv(pct x window, 100) off the constants, including the historical
+     * correction triple (the sentence exists precisely to prove derived figures
+     * move when their input does).
+     */
+    public function testSglangContextTierFiguresSurviveTheirConstants(): void
+    {
+        $sglang = new \ReflectionClass(SglangProvider::class);
+        $windows = [
+            (int) $sglang->getConstant('DEEPSEEK_V4_CONTEXT_WINDOW'),
+            (int) $sglang->getConstant('QWEN3_NEXT_CONTEXT_WINDOW'),
+            (int) $sglang->getConstant('LEGACY_DEFAULT_CONTEXT_WINDOW'),
+        ];
+        $tiers = [
+            self::promotedParamDefault(CompactorConfig::class, 'reminderThreshold'),
+            self::promotedParamDefault(CompactorConfig::class, 'backgroundCompactionThreshold'),
+            self::promotedParamDefault(CompactorConfig::class, 'foregroundBlockingThreshold'),
+        ];
+        $doc = self::methodDocOf(SglangProvider::class, 'contextWindow');
+
+        self::assertSame(
+            1,
+            preg_match('/the (\d+)% reminder, (\d+)% automatic compaction,\s+\*\s+(\d+)% blocking refusal and the idle-compaction prompt/s', $doc, $m),
+            'the four-tier sentence no longer spells all three percentages with the idle prompt',
+        );
+        self::assertSame($tiers, [(int) $m[1], (int) $m[2], (int) $m[3]], 'prose tier percentages drifted from the CompactorConfig defaults');
+
+        self::assertSame(
+            1,
+            preg_match('/arm those fire at ~([\d,]+) \/ ~([\d,]+) \/ ~([\d,]+) estimated tokens; on\s+\*\s+the Qwen3\.8 arm at ~([\d,]+) \/ ~([\d,]+) \/ ~([\d,]+); on the legacy arm\s+\*\s+at ~([\d,]+) \/ ~([\d,]+) \/ ~([\d,]+), unchanged/s', $doc, $m),
+            'the three-arm token table no longer reads as one sentence — re-pin it with the prose',
+        );
+        $stated = [];
+        for ($i = 1; $i <= 9; ++$i) {
+            $stated[] = (int) str_replace(',', '', $m[$i]);
+        }
+        $derived = [];
+        foreach ($windows as $window) {
+            foreach ($tiers as $pct) {
+                $derived[] = intdiv($pct * $window, 100);
+            }
+        }
+        self::assertSame(
+            $derived,
+            $stated,
+            'a window or tier constant moved and one of the nine "~tokens" figures did not follow — the docblock\'s own words make recomputing them the duty',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/are (\d+)\/(\d+)\/(\d+)% of ([\d,]+), of ([\d,]+) and\s+\*\s+of ([\d,]+) respectively and of nothing else/s', $doc, $m),
+            'the "of nothing else" sentence no longer ties the percentages to all three windows',
+        );
+        self::assertSame($tiers, [(int) $m[1], (int) $m[2], (int) $m[3]], 'the second percentages cite drifted from CompactorConfig');
+        self::assertSame(
+            $windows,
+            array_map(static fn (string $v): int => (int) str_replace(',', '', $v), [$m[4], $m[5], $m[6]]),
+            'the three windows named in prose drifted from the provider constants',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/written as\s+\*\s+~([\d,]+) \/ ~([\d,]+) \/ ~([\d,]+) - the same percentages of the superseded\s+\*\s+([\d,]+)/s', $doc, $m),
+            'the correction sentence moved — it is the cautionary tale this pin exists for',
+        );
+        $superseded = (int) str_replace(',', '', $m[4]);
+        foreach ($tiers as $index => $pct) {
+            self::assertSame(
+                intdiv($pct * $superseded, 100),
+                (int) str_replace(',', '', $m[1 + $index]),
+                'the historical triple is no longer the stated percentages of the stated superseded window — arithmetic rot in a correction is how these sentences die',
+            );
+        }
+
+        $qwenDoc = self::docBlockOf(SglangProvider::class, 'QWEN3_NEXT_CONTEXT_WINDOW');
+        self::assertSame(
+            1,
+            preg_match('/min\(1_000_000, ([\d_]+) − ([\d_]+)\)` = \*\*([\d_]+)\*\*/s', $qwenDoc, $m),
+            'the Qwen window derivation no longer reads as the pinned min/minus sentence',
+        );
+        $inputLen = (int) $sglang->getConstant('QWEN3_NEXT_MAX_REQUEST_INPUT_LEN');
+        self::assertSame($inputLen, (int) str_replace('_', '', $m[1]), 'prose input-length drifted from QWEN3_NEXT_MAX_REQUEST_INPUT_LEN');
+        self::assertSame($windows[1], (int) str_replace('_', '', $m[3]), 'the bold result drifted from QWEN3_NEXT_CONTEXT_WINDOW');
+        self::assertSame($windows[1], min(1_000_000, $inputLen - (int) str_replace('_', '', $m[2])), 'the derivation sentence no longer evaluates to the window it names');
+    }
+
+    /**
+     * E686 tranche-3 (L): RuleLoader's aggregate-arithmetic header states the
+     * walk as (directories x MAX_FILES) with a live-call-site count, the +1
+     * root file, and the splice ceiling it hands to Runtime. The pre-FU5
+     * derived absolutes ("12,724,235 raw") stay held as history-of-the-bug.
+     */
+    public function testRuleLoaderAggregateArithmeticSurvivesItsConstants(): void
+    {
+        $loader = self::sourceOf('Context/RuleLoader.php');
+        $loaderClass = new \ReflectionClass(RuleLoader::class);
+
+        self::assertSame(
+            3,
+            substr_count($loader, '$this->loadFromDirectory('),
+            'RuleLoader no longer walks exactly three directories — flip the header sentence\'s first factor and this probe in-step',
+        );
+        self::assertSame(
+            1,
+            preg_match('/\(directories walked x MAX_FILES\) = (\d+) x (\d+)\s+\*\s+= (\d+) reads/s', $loader, $m),
+            'the aggregate-arithmetic sentence no longer spells directories, cap and product in one breath',
+        );
+        self::assertSame(3, (int) $m[1], 'prose directory count drifted from the live call-site count');
+        self::assertSame((int) $loaderClass->getConstant('MAX_FILES'), (int) $m[2], 'prose per-directory cap drifted from MAX_FILES');
+        self::assertSame((int) $m[1] * (int) $m[2], (int) $m[3], 'the stated product is no longer directories x cap');
+        self::assertSame(
+            1,
+            preg_match('/all ([\d,]+) files this sum can name/s', $loader, $m2),
+            'the +1 root sentence moved',
+        );
+        self::assertSame((int) $m[3] + 1, (int) str_replace(',', '', $m2[1]), 'the walk total plus the root RULES.md no longer equals the stated sum');
+        self::assertSame(
+            1,
+            preg_match('/prices the standing loops at ([\d,]+)\s+\*\s+framed post-escape bytes/s', $loader, $m3),
+            'the splice-ceiling sentence no longer names Runtime\'s figure',
+        );
+        self::assertSame(
+            (int) (new \ReflectionClass(Runtime::class))->getConstant('MAX_STANDING_RULE_BYTES'),
+            (int) str_replace(',', '', $m3[1]),
+            'prose splice ceiling drifted from Runtime::MAX_STANDING_RULE_BYTES',
+        );
+    }
+
+    /**
+     * E686 tranche-3 (M): the operator-facing sizing notes — the /memory
+     * troubleshooting bounds, the MEMORY.md truncation demo's cap, the
+     * status-line byte cap in prose and settings docs, and the agent pool's
+     * default width (whose Claude Code clause stays labeled external).
+     */
+    public function testOperatorVisibleSizingDefaultsSurviveTheirSymbols(): void
+    {
+        $memory = new \ReflectionClass(MemoryBlock::class);
+        $trouble = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
+        self::assertSame(
+            1,
+            preg_match('/Two more bounds: (\d+) entries, newest first, and ([\d,]+) bytes of rendered note/s', $trouble, $m),
+            'the /memory bounds sentence no longer spells entries and bytes together',
+        );
+        self::assertSame((int) $memory->getConstant('MAX_ENTRIES'), (int) $m[1], 'prose entry bound drifted from MemoryBlock::MAX_ENTRIES');
+        self::assertSame((int) $memory->getConstant('MAX_BYTES'), (int) str_replace(',', '', $m[2]), 'prose byte bound drifted from MemoryBlock::MAX_BYTES');
+
+        $memoryDoc = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MEMORY.md');
+        self::assertSame(
+            1,
+            preg_match('/comes back at \*\*exactly ([\d,]+) bytes\*\*/', $memoryDoc, $m),
+            'the truncation demo no longer states its byte figure — the MEASURED label stays, the cap it names is pinned here',
+        );
+        self::assertSame((int) $memory->getConstant('MAX_ENTRY_BYTES'), (int) str_replace(',', '', $m[1]), 'prose per-note cap drifted from MemoryBlock::MAX_ENTRY_BYTES');
+
+        $statusCap = (int) (new \ReflectionClass(StatusLineCommand::class))->getConstant('MAX_OUTPUT_BYTES');
+        $settings = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md');
+        self::assertSame(
+            1,
+            preg_match('/MAX_OUTPUT_BYTES` \((\d+) KiB\)/', $settings, $m),
+            'docs/SETTINGS.md no longer states the status-line cap in KiB beside the symbol',
+        );
+        self::assertSame(intdiv($statusCap, 1024), (int) $m[1], 'docs/SETTINGS.md KiB figure drifted from MAX_OUTPUT_BYTES');
+        self::assertSame(
+            1,
+            preg_match('/(\d+) KiB, which is/s', self::docBlockOf(StatusLineCommand::class, 'MAX_OUTPUT_BYTES'), $m),
+            'the status-line justification sentence moved',
+        );
+        self::assertSame(intdiv($statusCap, 1024), (int) $m[1], 'prose KiB drifted from MAX_OUTPUT_BYTES');
+
+        $maxConcurrent = new \ReflectionProperty(AgentPoolConfig::class, 'maxConcurrent');
+        $poolDoc = (string) $maxConcurrent->getDocComment();
+        self::assertSame(
+            1,
+            preg_match('/Defaults to (\d+), matching/', $poolDoc, $m),
+            'the pool-width docblock no longer states its default with the external provenance clause',
+        );
+        self::assertSame(self::promotedParamDefault(AgentPoolConfig::class, 'maxConcurrent'), (int) $m[1], 'prose default drifted from the promoted parameter default');
+        self::assertStringContainsString(
+            'matching Claude Code',
+            $poolDoc,
+            'the external-provenance label must stay labeled — an external premise may not be silently internalized into a pinned in-repo fact (E686)',
+        );
+    }
+
+    /**
+     * E686 tranche-3 (N): the Claude-Code MCP client's retry shape is one
+     * sentence over two literal loops, and the write-idle cite names a constant
+     * with its decimal. The "poll for 1.8s" narrative (attempts plus read time,
+     * measured) stays held; only the derivable digits are pinned.
+     */
+    public function testMcpWritePumpRetryProseSurvivesItsLiterals(): void
+    {
+        $mcp = self::sourceOf('ClaudeCodeMcpClient.php');
+
+        self::assertSame(
+            1,
+            preg_match('/drive \((\d+) attempts, (\d+) ms apart\)/', $mcp, $m),
+            'the retry-shape sentence no longer spells attempts and interval together',
+        );
+        $attempts = (int) $m[1];
+        $intervalMs = (int) $m[2];
+        foreach (['callTool', 'listTools'] as $pump) {
+            $body = self::bodyExcerpt($mcp, $pump);
+            self::assertSame(1, preg_match('/while \(\$attempts < (\d+)\)/', $body, $loop), "{$pump}() lost its counted retry loop — the prose attempts count lost its referent");
+            self::assertSame(1, preg_match('/usleep\((\d+)\)/', $body, $poll), "{$pump}() no longer polls with a fixed usleep — the prose interval lost its referent");
+            self::assertSame($attempts, (int) $loop[1], "prose attempt count drifted from {$pump}()'s loop bound");
+            self::assertSame($intervalMs, intdiv((int) $poll[1], 1000), "prose poll milliseconds drifted from {$pump}()'s usleep");
+        }
+        self::assertSame(
+            1,
+            preg_match('/so ~([\d.]+)s of waiting plus read time/', $mcp, $m),
+            'the waiting-time sentence moved — its digit is derived, so it must re-pin with the loop bounds',
+        );
+        self::assertSame(
+            (float) ($attempts * $intervalMs) / 1000.0,
+            (float) $m[1],
+            'the "~Ns of waiting" figure is no longer attempts x interval',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/\{\@see WRITE_IDLE_SECONDS\} = ([\d.]+);/', $mcp, $m),
+            'the write-idle cite no longer names the constant with its decimal — update both sides',
+        );
+        self::assertSame(
+            (float) (new \ReflectionClass(ClaudeCodeMcpClient::class))->getConstant('WRITE_IDLE_SECONDS'),
+            (float) $m[1],
+            'the cited decimal drifted from WRITE_IDLE_SECONDS',
+        );
+    }
+
+    /**
+     * ReflectionProperty::getDefaultValue() reads NULL for promoted parameters
+     * at the suite's PHP level, so defaults are taken from the constructor
+     * signature, which is the truth the prose quotes anyway.
+     */
+    private static function promotedParamDefault(string $class, string $parameter): int
+    {
+        foreach ((new \ReflectionClass($class))->getConstructor()->getParameters() as $param) {
+            if ($param->getName() === $parameter && $param->isDefaultValueAvailable()) {
+                return (int) $param->getDefaultValue();
+            }
+        }
+
+        self::fail("{$class}::__construct() no longer promotes \${$parameter} with a default — the prose default lost its referent");
     }
 
     private static function sourceOf(string $relative): string
