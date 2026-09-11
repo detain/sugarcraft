@@ -11,9 +11,10 @@ use PHPUnit\Framework\TestCase;
  * stderr on the suite's.
  *
  * The heading used to name `tests/Integration/`, which was the whole of
- * SCOPE when this file was written and has been three directories and then
- * six since. The constant is the list; a heading that repeats it is a second
- * copy that goes stale on the commit that widens the first.
+ * SCOPE when this file was written and has grown by adoption ever since. The
+ * constant is the list; a heading that repeats it is a second copy that goes
+ * stale on the commit that widens the first - E235 caught exactly that in
+ * prose one directory deep.
  *
  * WHAT THIS WAS COMMISSIONED TO FIX, AND WHAT WAS ACTUALLY THERE. Round 45
  * recorded the suite's `sugarcrush: ` stderr lines as a HARNESS property -
@@ -165,67 +166,85 @@ final class ChildStderrCaptureTest extends TestCase
      * makes that work; it reads oddly enough that the failure message says so
      * rather than sending the reader looking for a directory.
      *
-     * THE REASONS DELIBERATELY CARRY NO SITE COUNTS. A cardinality measured
-     * over `tests/` in one lane's worktree is wrong by the next merge, and
-     * every count a reader could want is derived by the two tests from the
-     * tree itself.
+     * THE REASONS CARRY NO SITE COUNTS IN PROSE - the EXTENTS live as DATA.
+     * WHAT THIS ROW USED TO CARRY: a reason string and nothing else, checked
+     * only for "at least one offender still here", and the doc-block forbade
+     * counts because "a cardinality measured over tests/ in one lane's
+     * worktree is wrong by the next merge". E235 measured the hole that left:
+     * THREE rows argued an extent in prose - Config/'s "One exec", Sessions'
+     * positional-only story, Workflows' "A single bare exec()" - and every
+     * one of them was already stale, silently redefining what the deferral
+     * covered. A count in PROSE rots toward wrongness with every merge in
+     * either direction. A MINIMUM in data rots toward safety: an added
+     * offender cannot falsify an at-least claim (the directory is still
+     * deferred, more of it than before), and a reduced one reds
+     * {@see testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn()} so that
+     * the round doing the partial cleanup re-pins the row in-step - which is
+     * exactly when the knowledge is freshest. Zero still reds with the
+     * move-to-SCOPE message, and an equality would red on GROWTH too, which
+     * would punish the honest reporter that only came to fix one site and
+     * count the rest; a lower bound accepts the count-up and interrogates the
+     * count-down, and count-downs are what the stale rows were.
      *
-     * @var array<string, string>
+     * @var array<string, array{minOffenders:int, reason:string}>
      */
     private const OUT_OF_SCOPE = [
-        'BaseSystemPromptTest.php' =>
-            'A root-level file, so the key is the filename. Its one offender is an `exec()` '
+        'BaseSystemPromptTest.php' => ['minOffenders' => 1, 'reason' =>
+            'A root-level file, so the key is the filename. Its offender is an `exec()` '
             . 'removing a temp tree, where the shell has no output the test reads and the '
             . 'redirection is pure noise-suppression. Cheap to close, but the file is at the '
-            . "root of tests/ and in no lane's list.",
-        'ChatTest.php' =>
+            . "root of tests/ and in no lane's list."],
+        'ChatTest.php' => ['minOffenders' => 1, 'reason' =>
             'A root-level file, so the key is the filename. Its offender probes a tty with '
             . '`stty ... 2>/dev/null`, where the discard is load-bearing: the call is a FEATURE '
             . 'TEST whose failure output is expected and must not reach the suite. Closing it '
             . 'means a pipe plus a decision about what to do with the text, not a redirection '
-            . 'swap.',
-        'Cli/' =>
+            . 'swap.'],
+        'Cli/' => ['minOffenders' => 3, 'reason' =>
             'Offenders are `exec()` calls with no redirection at all, which is the cheap shape '
             . 'to close - the child writes to a file the helper reads back, so fd 2 has an '
-            . 'obvious home. Deferred on ownership only.',
-        'Commands/' =>
+            . 'obvious home. Deferred on ownership only.'],
+        'Commands/' => ['minOffenders' => 10, 'reason' =>
             'The largest inherited-shape cluster outside SCOPE and the cheapest to close: bare '
             . '`exec()` calls, several of them `rm -rf` on a sandbox where nothing reads any '
-            . 'output. Deferred on ownership only.',
-        'Config/' =>
-            'One `exec(... 2>/dev/null)` whose exit status IS the assertion. The discard hides '
+            . 'output. Deferred on ownership only.'],
+        'Config/' => ['minOffenders' => 2, 'reason' =>
+            '`exec(... 2>/dev/null)` calls whose exit status IS the assertion. The discard hides '
             . "the diagnostic that would explain a failure, so closing it improves the test's "
-            . 'failure message rather than just its shape. Deferred on ownership only.',
-        'Context/' =>
+            . 'failure message rather than just its shape. Deferred on ownership only.'],
+        'Context/' => ['minOffenders' => 57, 'reason' =>
             'The largest discard cluster in the tree: `git init` / `git config` fixture setup '
-            . 'with `2>/dev/null` on each line. The discards are deliberate - a missing git '
-            . 'must not print - but they are also the shape this guard exists to refuse, so '
-            . 'each needs either a pipe or an argued exemption row. The volume is why this is '
-            . 'a round of its own.',
-        'Diagnostics/' =>
-            'A single bare `exec()`. Cheap, deferred on ownership only.',
-        'Hooks/' =>
-            'One `shell_exec()` reading `getconf PAGESIZE`, already `@`-suppressed and guarded '
+            . 'with `2>/dev/null` on each line, plus a bare `exec()` alongside it. The discards '
+            . 'are deliberate - a missing git must not print - but they are also the shape this '
+            . 'guard exists to refuse, so each needs either a pipe or an argued exemption row. '
+            . 'The volume is why this is a round of its own.'],
+        'Diagnostics/' => ['minOffenders' => 1, 'reason' =>
+            'A bare `exec()`. Cheap, deferred on ownership only.'],
+        'Hooks/' => ['minOffenders' => 1, 'reason' =>
+            'A `shell_exec()` reading `getconf PAGESIZE`, already `@`-suppressed and guarded '
             . 'by a `<= 0` check, so the inherited fd 2 is the only thing that can reach the '
-            . 'suite. Cheap, deferred on ownership only.',
-        'Renderer/' =>
+            . 'suite. Cheap, deferred on ownership only.'],
+        'Renderer/' => ['minOffenders' => 1, 'reason' =>
             'A POSITIONAL descriptor spec sending all three fds to /dev/null in a `runQuietly()` '
             . 'helper. Read as `inherited` until round 48 fixed the classifier, so this row '
             . 'records a site that was invisible rather than deferred. The discard is the '
-            . "helper's entire purpose, so this one wants an exemption row, not a fix.",
-        'Sessions/' =>
+            . "helper's entire purpose, so this one wants an exemption row, not a fix."],
+        'Sessions/' => ['minOffenders' => 5, 'reason' =>
             'A POSITIONAL descriptor spec sending all three fds to /dev/null while spawning a '
-            . 'process purely to harvest a pid that is guaranteed dead. Same classifier fix as '
-            . 'Renderer/, same conclusion: the discard is the point, so this wants an exemption '
-            . 'row.',
-        'Tools/' =>
-            'A `git init` fixture cluster with `2>/dev/null` plus one bare `exec()`. The git '
-            . 'half belongs with Context/. It used to say "with Context/ and Providers/" as '
-            . 'well; Providers/ has since been cleaned and moved into SCOPE, and naming an '
-            . 'adopted directory as a fellow-deferred is how a reader concludes this row is '
-            . 'waiting on a round that has already happened.',
-        'Workflows/' =>
-            'A single bare `exec()`. Cheap, deferred on ownership only.',
+            . 'process purely to harvest a pid that is guaranteed dead, and `proc_open()` sites '
+            . 'whose descriptor spec this scanner cannot read at all (they report `unclassified`, '
+            . 'which is a failure to argue, not a pass). Same classifier story as Renderer/; the '
+            . 'positional discard is the point, so that one wants an exemption row.'],
+        'Tools/' => ['minOffenders' => 6, 'reason' =>
+            'A `git init` fixture cluster with `2>/dev/null` plus bare `exec()`s - the count '
+            . 'reaches into `Tools/BuiltIn/` because `str_starts_with()` does not stop at a '
+            . 'deeper directory. The git half belongs with Context/. It used to say "with '
+            . 'Context/ and Providers/" as well; Providers/ has since been cleaned and moved '
+            . 'into SCOPE, and naming an adopted directory as a fellow-deferred is how a reader '
+            . 'concludes this row is waiting on a round that has already happened.'],
+        'Workflows/' => ['minOffenders' => 2, 'reason' =>
+            'Bare `exec()` calls whose child writes nowhere the test reads. Cheap, deferred on '
+            . 'ownership only.'],
     ];
 
     /**
@@ -592,35 +611,69 @@ final class ChildStderrCaptureTest extends TestCase
             'the order check must hold on the proc_open command-string path too, not just the shell one',
         );
 
-        // TWO KNOWN FALSE POSITIVES, pinned rather than described. Both are
-        // limits of
-        // {@see ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()} and
-        // both are argued at length in its doc-block; neither occurs under
-        // {@see SCOPE}. They are asserted at their CURRENT answer so that the
-        // day somebody teaches the predicate quote-awareness or last-wins
-        // precedence, these two lines red and get updated deliberately -
-        // instead of the limit quietly outliving the sentence describing it.
+        // THE TWO FORMER FALSE POSITIVES, pinned at their TRUE answers. E205
+        // measured {@see ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()}
+        // - the text-searching predicate these lines used to pin at its WRONG
+        // answer with a "delete me when fixed" note - reporting a discard where
+        // the shell says a capture, both in the polarity that reds correct
+        // code. The replacement reads the command as words with quoting in
+        // shell order ({@see ChildStderrCaptureScanner::shellFdTwo()}), so an
+        // INNER shell's `2>/dev/null` is invisible to the outer command and a
+        // LATER fd 2 redirection overrides an earlier one. If either line
+        // reddens back toward `discarded`, the quote- or order-awareness has
+        // been lost, and the loss is the E205 defect returning.
         $this->assertSame(
-            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
             $one('proc_open("sh -c \'inner 2>/dev/null\'", [2 => ["pipe", "w"]], $p);')['shape'],
-            'KNOWN LIMIT: a redirection belonging to an INNER shell is read as the outer '
-                . "command's. The outer child's fd 2 is really the pipe. If this now reports a "
-                . 'capture the scanner got quote-aware - delete this line and say so',
+            'a redirection inside single quotes belongs to the INNER shell; the outer child\'s '
+                . 'fd 2 is the pipe the caller reads - reading it as a discard was E205',
         );
         $this->assertSame(
-            ChildStderrCaptureScanner::SHAPE_DISCARDED,
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
             $one('exec("sh -c \'inner 2>/dev/null\' 2>$err", $out, $rc);')['shape'],
-            'KNOWN LIMIT: a bare 2>/dev/null matches wherever it appears, so a LATER fd 2 '
-                . 'redirection that overrides it is not consulted. If this now reports a capture '
-                . 'the predicate learned last-wins precedence - delete this line and say so',
+            'the outer command\'s LAST fd 2 redirection is the unreadable $err, not the quoted '
+                . 'inner sink - last-wins precedence was the second E205 limit',
+        );
+        // ...with the inner shell's OWN silence still a discard when the inner
+        // command is what is executed, and both spellings of quoting.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('exec("sh -c \'inner 2>/dev/null\'");')['shape'],
+            'a command whose ONLY redirection is inside quotes says nothing about its own fd 2',
+        );
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('exec("sh -c \\"inner 2>/dev/null\\" 2>&1");')['shape'],
+            'double quotes hide the inner redirection too, and the outer 2>&1 names the capture',
         );
 
-        // ...and the composition that makes the second limit hard to "fix"
+        // ...and the composition that made the old limit hard to "fix"
         // naively: here the null device really IS the last word on fd 2.
         $this->assertSame(
             ChildStderrCaptureScanner::SHAPE_DISCARDED,
             $one('exec("cmd 2>$err 2>/dev/null", $out, $rc);')['shape'],
             'a later 2>/dev/null genuinely does override an earlier 2>$err',
+        );
+
+        // SUBSTITUTED TEXT IS AN INNER COMMAND'S, the same reading that makes
+        // the quoted case a capture: `$(x 2>/dev/null)` silences the
+        // substitution, not the outer child.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('exec("echo $(inner 2>/dev/null)");')['shape'],
+        );
+        // A digit GLUED to a word is part of the word, not an fd number -
+        // bash reads `cmd2>/dev/null` as the command `cmd2` with FD 1 sunk and
+        // fd 2 untouched, and the old text search read a discard there.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('exec("cmd2>/dev/null");')['shape'],
+        );
+        // `>&2` moves STDOUT onto fd 2; it says nothing about where fd 2
+        // itself goes, which remains inherited.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('exec("cmd >&2");')['shape'],
         );
 
         // fd 0 on the null device is an ordinary child with no stdin, and says
@@ -684,7 +737,8 @@ final class ChildStderrCaptureTest extends TestCase
      * MEASURED TWICE, and each measurement bought a fixture below rather than
      * a reassurance.
      *
-     * ONE. With `classifyShell()`'s null-device branch mutated to
+     * ONE. With `classifyShell()`'s (since E205: `classifyShellCommand()`'s)
+     * null-device branch mutated to
      * `if (false)`, BOTH
      * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()} and
      * {@see testEveryDiscardExemptionStillDescribesRealSites()} passed. The
@@ -902,7 +956,13 @@ final class ChildStderrCaptureTest extends TestCase
                 . "pipe, a file, or `2>&1` onto the stdout already being read. Do NOT send it to "
                 . '/dev/null: for most of these shapes the line is the assertion. An '
                 . '"unclassified" site is a descriptor spec this scanner could not follow, which '
-                . 'is a hole in the guard rather than a pass for the site. A "discarded" site '
+                . 'is a hole in the guard rather than a pass for the site - and the bound it '
+                . 'could not cross is stated so the fix is findable: a spec must be an inline '
+                . 'literal or a variable assigned earlier in the SAME NAMED FUNCTION '
+                . '(hoisting it to a property or class constant crosses that bound and lands '
+                . 'here; this scanner resolves neither, unlike ChildLifetimeScanner, which does '
+                . 'follow same-file constants - the asymmetry is the narrower guard). A '
+                . '"discarded" site '
                 . 'sends fd 2 to /dev/null, which is the one destination this guard exists to '
                 . 'refuse: nobody can read it, including the test.',
         );
@@ -1036,19 +1096,25 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'it instead, or, if the discard is the point, add a row to '
                 . 'ACCEPTED_DISCARDED_STDERR keyed by this file with the COUNT of discards it '
                 . 'covers and the reason. `unclassified` means this scanner could not read the '
-                . 'descriptor spec - it is NOT a clean bill: spell the spec so it can be read, '
-                . 'or argue it like a discard.',
+                . 'descriptor spec - it is NOT a clean bill: spell the spec so it can be read '
+                . '(inline literal, or a variable assigned earlier in the same named function - '
+                . 'a property or class constant is beyond this scanner, which resolves '
+                . 'assignments only inside the enclosing function), or argue it like a discard.',
         );
     }
 
     /**
-     * A deferral cannot outlive the offender it was written for.
+     * A deferral cannot outlive the offender it was written for, and cannot
+     * quietly overstate the cluster it defers.
      *
      * Without this, {@see OUT_OF_SCOPE} decays into a list of directories
      * somebody once worried about, and the partition above would keep passing
      * because a stale row still matches the prefix. A row whose directory has
      * been cleaned up means the directory is ready to JOIN {@see SCOPE}, and
-     * that is the one moment anybody is likely to notice.
+     * that is the one moment anybody is likely to notice. And the EXTENT
+     * check - the row's `minOffenders` against what is really under the
+     * prefix - is what E235 was: three rows whose prose argued a wider
+     * cluster than they held, discovered by nobody until a map was measured.
      */
     public function testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn(): void
     {
@@ -1065,21 +1131,28 @@ final class ChildStderrCaptureTest extends TestCase
             }
 
             $relative = substr($file->getPathname(), \strlen($root) + 1);
-            if (self::offendingSites($relative, (string) file_get_contents($file->getPathname())) !== []) {
-                $withOffenders[] = $relative;
+            $offenders = self::offendingSites($relative, (string) file_get_contents($file->getPathname()));
+            if ($offenders !== []) {
+                $withOffenders[$relative] = $offenders;
             }
         }
 
-        foreach (self::OUT_OF_SCOPE as $prefix => $reason) {
+        foreach (self::OUT_OF_SCOPE as $prefix => $row) {
+            $reason = $row['reason'];
             $this->assertNotSame('', trim($reason), $prefix . ' is deferred without a reason');
 
-            $stillOffending = false;
-            foreach ($withOffenders as $relative) {
-                $stillOffending = $stillOffending || str_starts_with($relative, $prefix);
+            $observed = [];
+            foreach ($withOffenders as $relative => $offenders) {
+                if (str_starts_with($relative, $prefix)) {
+                    foreach ($offenders as $site) {
+                        $observed[] = $relative . ':' . $site;
+                    }
+                }
             }
 
-            $this->assertTrue(
-                $stillOffending,
+            $this->assertNotSame(
+                [],
+                $observed,
                 $prefix . ' is recorded in OUT_OF_SCOPE as holding a spawn whose stderr reaches '
                     . 'the suite, and it no longer does. Move the prefix into SCOPE and delete '
                     . 'this row, in the SAME change-set - a deferral that has been overtaken is '
@@ -1094,6 +1167,24 @@ final class ChildStderrCaptureTest extends TestCase
                     . 'ForkedChildReaperAdoptionTest keeps its own SCOPE/OUT_OF_SCOPE pair over '
                     . 'the same directories for a different offence, and cleaning a directory '
                     . 'for one of them does not move it in the other.',
+            );
+
+            // THE EXTENT, as data rather than as prose the way E235 found it:
+            // at least this many offenders still hide under the prefix. Growth
+            // passes silently (a deferred directory accruing offences is still
+            // deferred, and the joint-totality test above has already checked
+            // each new site is accounted for); a SHRINK past the floor means
+            // the row's story describes a cluster that is partly fixed, and
+            // the round holding that knowledge re-pins it now.
+            $this->assertGreaterThanOrEqual(
+                $row['minOffenders'],
+                count($observed),
+                $prefix . ' is deferred as holding at least ' . $row['minOffenders']
+                    . ' offending spawn(s); only ' . count($observed) . ' remain ('
+                    . implode(', ', $observed) . '). The cleanup has begun - either finish it and '
+                    . 'move the prefix into SCOPE, or re-pin this row to what is actually there, '
+                    . 'because a row that overstates its cluster is the stale-extent defect '
+                    . 'E235 measured wearing a current number.',
             );
         }
 

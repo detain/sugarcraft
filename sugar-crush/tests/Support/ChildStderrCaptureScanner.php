@@ -45,9 +45,10 @@ namespace SugarCraft\Crush\Tests\Support;
  *
  * THAT SENTENCE USED TO END "and reports honestly that under
  * `tests/Integration/` there is currently none of it". WHAT IS TRUE NOW: the
- * guard that points this scanner at the tree covers six directories, not one,
- * and which ones is {@see ChildStderrCaptureTest::SCOPE}'s business rather
- * than a scanner's. WHY THE REST OF THE PARAGRAPH STILL EARNS ITS PLACE: the
+ * guard that points this scanner at the tree covers many more directories
+ * than that one - how many is {@see ChildStderrCaptureTest::SCOPE}'s business
+ * rather than a scanner's, and a count repeated here would be the stale
+ * numeral E235 makes a rule against. WHY THE REST OF THE PARAGRAPH STILL EARNS ITS PLACE: the
  * distinction it draws does not move with the scope. A reader who takes a
  * green run as evidence that the suite's `sugarcrush: ` lines are gone has
  * misread what this instrument can see, and most of those lines are the kind
@@ -55,6 +56,8 @@ namespace SugarCraft\Crush\Tests\Support;
  */
 final class ChildStderrCaptureScanner
 {
+    use SplitsTopLevelArgumentsTrait;
+
     /** Launch functions whose command is a shell string. */
     private const SHELL_SPAWNS = ['exec', 'shell_exec', 'passthru', 'system', 'popen'];
 
@@ -118,7 +121,7 @@ final class ChildStderrCaptureScanner
                 $sites[] = [
                     'line' => self::lineOf($tokens, $i),
                     'call' => self::CALL_BACKTICK,
-                    'shape' => self::classifyShell(self::codeText($tokens, $i, $end)),
+                    'shape' => self::classifyShellCommand($tokens, $i, $end),
                 ];
                 continue;
             }
@@ -163,7 +166,7 @@ final class ChildStderrCaptureScanner
                 'line' => $token[2],
                 'call' => $name,
                 'shape' => $isShell
-                    ? self::classifyShell(self::codeText($tokens, $open, $close))
+                    ? self::classifyShellCall($tokens, $open, $close)
                     : self::classifyProcOpen($tokens, $open, $close, $functions),
             ];
         }
@@ -171,83 +174,365 @@ final class ChildStderrCaptureScanner
         return $sites;
     }
 
+    /** The child's fd 2 lands on the null device. */
+    private const FD_TWO_SINK = 'sink';
+
+    /** The child's fd 2 lands on a target the command names. */
+    private const FD_TWO_NAMED = 'named';
+
+    /** The command says nothing about fd 2. */
+    private const FD_TWO_NONE = 'none';
+
     /**
-     * A shell command captures stderr when it says where fd 2 goes: `2>&1`
-     * onto the stdout the caller is already reading, or `2>` a file it opens
-     * afterwards. The null device is named separately; anything else inherits.
+     * A shell spawn's shape, read from its COMMAND argument - the first one.
+     *
+     * WHAT THIS USED TO BE: a text search of the whole argument list. E205
+     * measured two ways that answered wrong, both in the false-positive
+     * direction, and both are fixed here rather than merely documented now:
+     *
+     *  - a `2>/dev/null` INSIDE QUOTES belongs to an inner shell and says
+     *    nothing about the outer child's fd 2 - `proc_open("sh -c 'inner
+     *    2>/dev/null'", [2 => ["pipe", "w"]], $p)` used to report `discarded`
+     *    while the outer fd 2 really is the pipe;
+     *  - only the `>/dev/null` + `2>&1` PAIR was order-checked, so a LATER
+     *    `2>` that overrides an earlier sink was not consulted - `exec("sh
+     *    -c 'inner 2>/dev/null' 2>$err")` used to report `discarded` though
+     *    the shell's last fd 2 redirection wins.
+     *
+     * WHAT IT IS NOW: {@see shellFdTwo()} walks the command as words with
+     * quoting and honours every redirection in order, and only for
+     * REDIRECTIONS - operators outside the command string's argument are not
+     * the command's either, which is why the walk reads argument one instead
+     * of the call's text.
      */
-    private static function classifyShell(string $argumentList): string
+    private static function classifyShellCall(array $tokens, int $open, int $close): string
     {
-        if (self::sendsFdTwoToTheNullDevice($argumentList)) {
-            return self::SHAPE_DISCARDED;
+        $arguments = self::topLevelArguments($tokens, $open, $close);
+        if (!isset($arguments[0])) {
+            return self::SHAPE_INHERITED;
         }
 
-        return \str_contains($argumentList, '2>') ? self::SHAPE_CAPTURED : self::SHAPE_INHERITED;
+        return self::classifyShellCommand($tokens, $arguments[0][0], $arguments[0][1]);
     }
 
     /**
-     * Whether a shell command sends fd 2 to `/dev/null`.
+     * The shape of a shell execution given the token range of its command
+     * expression - the whole backtick pair, or argument one of a shell spawn.
      *
-     * THE ORDER OF REDIRECTIONS IS HONOURED, because the two orderings mean
-     * opposite things and both appear in real commands. `>/dev/null 2>&1`
-     * points fd 1 at the sink and then fd 2 at fd 1: discarded. `2>&1
-     * >/dev/null` points fd 2 at whatever fd 1 was AT THAT MOMENT - for a
-     * child of `exec()`/`proc_open()` that is the pipe the caller reads - and
-     * only then moves fd 1 to the sink: a capture, and reporting it as a
-     * discard would be a guard reddening correct code, which is how the next
-     * real offender buys its exemption.
-     *
-     * The literal `/dev/null` is what is matched, not a general notion of a
-     * sink. A path in a variable is a file as far as these tokens go; see
-     * {@see SHAPE_DISCARDED} for what that leaves open.
-     *
-     * TWO LIMITS ON THE ORDER CHECK, measured on this scanner rather than
-     * reasoned about, and both in the FALSE-POSITIVE direction - this reports
-     * a discard where the truth is a capture, which is the polarity that reds
-     * correct code and buys the next real offender its exemption.
-     *
-     *  - NESTING IS NOT SEEN. The whole argument text is searched, so a
-     *    redirection belonging to an INNER shell counts as if it were the
-     *    outer command's. `proc_open("sh -c 'inner 2>/dev/null'", [2 =>
-     *    ["pipe", "w"]], $p)` reports `discarded`, and the outer child's fd 2
-     *    really is the pipe the caller reads. Telling them apart needs quote
-     *    awareness this scanner does not have.
-     *  - ONLY THE `>/dev/null` + `2>&1` PAIR IS ORDER-CHECKED. A bare
-     *    `2>/dev/null` matches wherever it appears, so a LATER fd 2
-     *    redirection that overrides it is not consulted:
-     *    `exec("sh -c 'inner 2>/dev/null' 2>$err", ...)` reports `discarded`
-     *    though the shell's last fd 2 redirection wins and it is `$err`.
-     *    (The reverse composition is already right for the reason that makes
-     *    this wrong: `cmd 2>$err 2>/dev/null` really is discarded.)
-     *
-     * NEITHER IS LIVE UNDER {@see ChildStderrCaptureTest::SCOPE} - no spawn
-     * in the guarded directories has either shape - which is why the fix is
-     * recorded rather than attempted here: changing this predicate moves
-     * every site in the tree at once, and a shape with no occurrence to
-     * verify against is not a change worth making blind.
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
      */
-    private static function sendsFdTwoToTheNullDevice(string $text): bool
+    private static function classifyShellCommand(array $tokens, int $from, int $to): string
     {
-        // `2>/dev/null`, `2>> /dev/null`, quoted or not.
-        if (\preg_match('~2>>?\s*([\'"]?)/dev/null\1~', $text) === 1) {
-            return true;
+        return match (self::shellFdTwo(self::commandFragments($tokens, $from, $to))) {
+            self::FD_TWO_SINK => self::SHAPE_DISCARDED,
+            self::FD_TWO_NAMED => self::SHAPE_CAPTURED,
+            default => self::SHAPE_INHERITED,
+        };
+    }
+
+    /**
+     * The command string as the shell would receive it, as far as these
+     * tokens say.
+     *
+     * Literals are decoded and concatenated - `"php x" . " 2>&1"` is one
+     * command. Anything the scanner cannot read - a variable, an interpolated
+     * run, a constant, a call - becomes a `\x00` GAP: a character that can be
+     * a redirect's unreadable TARGET but never lets an operator or a path
+     * form across it. `"php {$v} 2>/dev/null"` still reads as a sink (the
+     * gap sits well clear of the operator); `exec("php $v>x")` does not read
+     * as one.
+     *
+     * Comments are dropped, not gapified: a PHP comment between the command
+     * and the closing paren - `shell_exec("php x" /asterisk 2> here asterisk/)`
+     * - has no redirection, the `2>` is comment text the shell never sees,
+     * and this is the same rule {@see codeText()} applies everywhere else in
+     * the scanner.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function commandFragments(array $tokens, int $from, int $to): string
+    {
+        $stream = '';
+        foreach (\range($from, $to) as $index) {
+            $token = $tokens[$index];
+            $text = match (true) {
+                !\is_array($token) => match ($token) {
+                    '"', "'", '`', '.', '{', '}' => '',
+                    default => "\x00",
+                },
+                $token[0] === \T_CONSTANT_ENCAPSED_STRING => self::decodeStringLiteral($token[1]),
+                $token[0] === \T_ENCAPSED_AND_WHITESPACE => $token[1],
+                \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT, \T_START_HEREDOC, \T_END_HEREDOC, \T_STRING_VARNAME], true) => '',
+                default => "\x00",
+            };
+            if ($text === "\x00" && \str_ends_with($stream, "\x00")) {
+                continue; // one gap is as unreadable as many
+            }
+            $stream .= $text;
         }
 
-        // bash's both-streams forms.
-        if (\preg_match('~(?:&>>?|>&)\s*([\'"]?)/dev/null\1~', $text) === 1) {
-            return true;
+        return $stream;
+    }
+
+    /**
+     * A PHP string literal's content as the bytes the shell receives.
+     */
+    private static function decodeStringLiteral(string $literal): string
+    {
+        $body = \substr($literal, 1, -1);
+        if ($literal[0] === "'") {
+            return \str_replace(["\\\\", "\\'"], ["\\", "'"], $body);
         }
 
-        // `>/dev/null` FOLLOWED BY `2>&1`. The offset comparison is the order
-        // check described above; without it the reversed form reads the same.
-        return \preg_match(
-            '~(?<![0-9&])1?>>?\s*([\'"]?)/dev/null\1~',
-            $text,
-            $stdout,
-            \PREG_OFFSET_CAPTURE,
-        ) === 1
-            && \preg_match('~2>&1~', $text, $dup, \PREG_OFFSET_CAPTURE) === 1
-            && $dup[0][1] > $stdout[0][1];
+        return \preg_replace_callback(
+            '~\\\\(.)~s',
+            static fn (array $m): string => match ($m[1]) {
+                'n' => "\n",
+                'r' => "\r",
+                't' => "\t",
+                'v' => "\v",
+                'f' => "\f",
+                'e' => "\x1b",
+                default => $m[1],
+            },
+            $body,
+        ) ?? $body;
+    }
+
+    /**
+     * Where a shell command sends fd 2: sink, named target, or nowhere.
+     *
+     * A miniature of the shell's redirection rules read as TOKENS OF A
+     * STREAM, because the E205 defects were both failures to parse: the old
+     * predicate searched TEXT and so could not tell a quoted `2>/dev/null`
+     * (an inner shell's business) from an outer one, nor a superseded
+     * redirection from a final one. This walk carries only what the answer
+     * needs - where fd 1 and fd 2 land, updated in ORDER - and models the
+     * forms in use:
+     *
+     *  - `N> FILE`, `N>> FILE` - N (default 1) lands on FILE; `/dev/null` is
+     *    the sink, any other or unreadable target is named;
+     *  - `N>& WORD` - N lands where WORD says: a digit duplicates that fd's
+     *    CURRENT destination (`>/dev/null 2>&1` sinks fd 2, `2>&1 >/dev/null`
+     *    does not - which is the whole order-honouring point), anything else
+     *    names a target;
+     *  - `&> FILE`, `&>> FILE` - both streams land on FILE;
+     *  - `<` input redirections are consumed (their target is read as a
+     *    word, so the walker cannot mistake `cmd<f 2>/dev/null`'s parts) and
+     *    change nothing about fd 2.
+     *
+     * DELIBERATELY UNREAD, and gap-safe because the scanner never sees the
+     * text anyway: a `$(...)` or backtick substitution's contents (their
+     * redirect belongs to the inner command), and everything behind a
+     * `\x00` gap. A word glued to an operator (`cmd2>/dev/null`) is the
+     * shell's own reading - `2` is part of the word `cmd2`, so the operator
+     * is a bare `>` on fd 1, and fd 2 inherits. The old text regex saw a
+     * sink there; bash does not.
+     */
+    private static function shellFdTwo(string $stream): string
+    {
+        $stdout = self::FD_TWO_NONE;
+        $stderr = self::FD_TWO_NONE;
+
+        $length = \strlen($stream);
+        $index = 0;
+        $wordStarted = false;
+
+        while ($index < $length) {
+            $char = $stream[$index];
+
+            if ($char === "\x00" || $char === ' ' || $char === "\t" || $char === "\n" || $char === ';' || $char === '|' || $char === '(' || $char === ')') {
+                $wordStarted = $char === "\x00" ? $wordStarted : false;
+                $index++;
+                continue;
+            }
+
+            // `&>` and `&>>`: both streams to the following target.
+            if ($char === '&' && ($stream[$index + 1] ?? '') === '>') {
+                $index += 2;
+                if (($stream[$index] ?? '') === '>') {
+                    $index++;
+                }
+                [$target, $index] = self::readRedirectTarget($stream, $index);
+                if ($target === '/dev/null') {
+                    $stdout = self::FD_TWO_SINK;
+                    $stderr = self::FD_TWO_SINK;
+                } elseif (\ctype_digit($target) && $target !== '') {
+                    // `&>1` - both streams share fd 1's current destination.
+                    $stderr = $stdout === self::FD_TWO_NONE ? self::FD_TWO_NAMED : $stdout;
+                } else {
+                    $stdout = self::FD_TWO_NAMED;
+                    $stderr = self::FD_TWO_NAMED;
+                }
+                $wordStarted = false;
+                continue;
+            }
+
+            // `&&` and a bare `&` are separators; an `&` mid-word is a char.
+            if ($char === '&') {
+                $wordStarted = true;
+                $index++;
+                continue;
+            }
+
+            // Substituted text belongs to an INNER command: `$(x 2>/dev/null)`
+            // and `` `x 2>/dev/null` `` silence the substitution's stderr, not
+            // the outer command's, so the whole run is skipped unread.
+            if ($char === '`') {
+                $index++;
+                while ($index < $length && $stream[$index] !== '`') {
+                    $index++;
+                }
+                $index++;
+                $wordStarted = true;
+                continue;
+            }
+            if ($char === '$' && ($stream[$index + 1] ?? '') === '(') {
+                $index += 2;
+                $depth = 1;
+                while ($index < $length && $depth > 0) {
+                    $depth += match ($stream[$index]) { '(' => 1, ')' => -1, default => 0 };
+                    $index++;
+                }
+                $wordStarted = true;
+                continue;
+            }
+
+            $redirect = $char === '>' || $char === '<';
+            $fd = null;
+            if (!$redirect && !$wordStarted && $char >= '0' && $char <= '9') {
+                $digits = '';
+                $cursor = $index;
+                while ($cursor < $length && $stream[$cursor] >= '0' && $stream[$cursor] <= '9') {
+                    $digits .= $stream[$cursor++];
+                }
+                if (($stream[$cursor] ?? '') === '>' || ($stream[$cursor] ?? '') === '<') {
+                    $fd = $digits;
+                    $index = $cursor;
+                    $char = $stream[$index];
+                    $redirect = true;
+                }
+            }
+
+            if (!$redirect) {
+                [, $index] = self::readWord($stream, $index);
+                $wordStarted = true;
+                continue;
+            }
+
+            $input = $char === '<';
+            $index++;
+            $append = ($stream[$index] ?? '') === ($input ? '<' : '>');
+            if ($append) {
+                $index++;
+            }
+            $duplicates = !$input && ($stream[$index] ?? '') === '&';
+            if ($duplicates) {
+                $index++;
+            }
+            if ($input) {
+                // `<`, `<<`, `<<<`: consume the target, touch no output fd.
+                [$target, $index] = self::readRedirectTarget($stream, $index);
+                unset($target);
+                $wordStarted = false;
+                continue;
+            }
+
+            [$target, $index] = self::readRedirectTarget($stream, $index);
+            if ($duplicates) {
+                // `N>& WORD`: N lands where WORD's fd CURRENTLY lands - the
+                // order-honouring step. Duplication of a stream that has no
+                // redirection yet points it at the parent's own, which for
+                // these spawns is the pipe the caller reads: NAMED, not none.
+                $lands = \ctype_digit($target) && $target !== ''
+                    ? ($target === '1' ? $stdout : ($target === '2' ? $stderr : self::FD_TWO_NAMED))
+                    : self::FD_TWO_NAMED;
+                $lands = $lands === self::FD_TWO_NONE ? self::FD_TWO_NAMED : $lands;
+            } else {
+                $lands = $target === '/dev/null' ? self::FD_TWO_SINK : self::FD_TWO_NAMED;
+            }
+            if ($fd === null || $fd === '1') {
+                $stdout = $lands;
+            }
+            if ($fd === '2') {
+                $stderr = $lands;
+            }
+            $wordStarted = false;
+        }
+
+        return $stderr;
+    }
+
+    /**
+     * The word following a redirection operator - its target, which may be
+     * separated from the operator by spaces and may be quoted. An unreadable
+     * or missing target answers as one that NAMES something: the conservative
+     * direction, because a bare `2>` is a capture nobody can call a discard.
+     *
+     * @return array{0:string,1:int} [target, new index]
+     */
+    private static function readRedirectTarget(string $stream, int $index): array
+    {
+        $length = \strlen($stream);
+        while ($index < $length && ($stream[$index] === ' ' || $stream[$index] === "\t")) {
+            $index++;
+        }
+        if ($index >= $length || $stream[$index] === "\x00") {
+            return ['' . "\x00", $index + 1];
+        }
+
+        return self::readWord($stream, $index);
+    }
+
+    /**
+     * One shell word, honouring quotes: quoted runs contribute their content
+     * as literal characters and can never form an operator.
+     *
+     * @return array{0:string,1:int} [word, new index]
+     */
+    private static function readWord(string $stream, int $index): array
+    {
+        $length = \strlen($stream);
+        $word = '';
+        while ($index < $length) {
+            $char = $stream[$index];
+            if ($char === "'") {
+                $index++;
+                while ($index < $length && $stream[$index] !== "'") {
+                    $word .= $stream[$index];
+                    $index++;
+                }
+                $index++;
+                continue;
+            }
+            if ($char === '"') {
+                $index++;
+                while ($index < $length && $stream[$index] !== '"') {
+                    if ($stream[$index] === '\\' && $index + 1 < $length) {
+                        $index++;
+                    }
+                    $word .= $stream[$index];
+                    $index++;
+                }
+                $index++;
+                continue;
+            }
+            if ($char === '\\' && $index + 1 < $length) {
+                $word .= $stream[$index + 1];
+                $index += 2;
+                continue;
+            }
+            if ($char === '`' || ($char === '$' && ($stream[$index + 1] ?? '') === '(')) {
+                break; // a substitution starts a new word, and its body is not this command's
+            }
+            if ($char === "\x00" || \str_contains(" \t\n;|&<>()", $char)) {
+                break;
+            }
+            $word .= $char;
+            $index++;
+        }
+
+        return [$word, $index];
     }
 
     /**
@@ -278,19 +563,23 @@ final class ChildStderrCaptureScanner
      */
     private static function classifyProcOpen(array $tokens, int $open, int $close, array $functions): string
     {
-        $whole = self::codeText($tokens, $open, $close);
-
-        // A redirection in the command string is applied by the shell and
-        // decides the matter for whatever fd it names, before the descriptor
-        // spec is ever consulted.
-        if (self::sendsFdTwoToTheNullDevice($whole)) {
-            return self::SHAPE_DISCARDED;
-        }
-        if (\str_contains($whole, '2>')) {
-            return self::SHAPE_CAPTURED;
-        }
-
         $arguments = self::topLevelArguments($tokens, $open, $close);
+
+        // A redirection in the COMMAND decides the matter for the fd it names
+        // before the descriptor spec is ever consulted - but only a real one:
+        // read from the command argument, in shell order, quoting honoured
+        // (see {@see shellFdTwo()}; the E205 pair of false positives lived in
+        // searching the whole call's text for `2>` instead).
+        if (isset($arguments[0])) {
+            $destination = self::shellFdTwo(self::commandFragments($tokens, $arguments[0][0], $arguments[0][1]));
+            if ($destination === self::FD_TWO_SINK) {
+                return self::SHAPE_DISCARDED;
+            }
+            if ($destination === self::FD_TWO_NAMED) {
+                return self::SHAPE_CAPTURED;
+            }
+        }
+
         if (!isset($arguments[1])) {
             return self::SHAPE_UNCLASSIFIED;
         }
@@ -735,44 +1024,10 @@ final class ChildStderrCaptureScanner
         return null;
     }
 
-    /**
-     * The token spans of the call's top-level arguments.
-     *
-     * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @return list<array{0:int,1:int}>
-     */
-    private static function topLevelArguments(array $tokens, int $open, int $close): array
-    {
-        $args = [];
-        $depth = 0;
-        $start = $open + 1;
-
-        for ($i = $open + 1; $i < $close; $i++) {
-            $text = self::tokenText($tokens[$i]);
-            if (\is_array($tokens[$i])
-                && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                // `"{$x}"` opens with an ARRAY token and closes with a plain
-                // '}'. Counting only the closer sent the depth negative, and
-                // top-level commas after an interpolated string stopped being
-                // seen at all: a correctly-capturing
-                // `proc_open("php {$script}", [... 2 => ['pipe','w']], $p)`
-                // came back `unclassified`. A guard that reds correct code
-                // invites an exemption, and the exemption is where the next
-                // real offender hides.
-                $depth++;
-            } elseif (\is_string($tokens[$i]) && \in_array($text, ['(', '[', '{'], true)) {
-                $depth++;
-            } elseif (\is_string($tokens[$i]) && \in_array($text, [')', ']', '}'], true)) {
-                $depth--;
-            } elseif (\is_string($tokens[$i]) && $text === ',' && $depth === 0) {
-                $args[] = [$start, $i - 1];
-                $start = $i + 1;
-            }
-        }
-        $args[] = [$start, $close - 1];
-
-        return $args;
-    }
+    // The depth walk that splits a call into its top-level arguments lives in
+    // {@see SplitsTopLevelArgumentsTrait} (E174) - this class asked for one of
+    // the three copies of it; the consolidation records why they were one rule
+    // wearing three spellings, and which openers the running PHP produces.
 
     /** @param array{0:int,1:string,2:int}|string $token */
     private static function tokenText(array|string $token): string

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
+use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
 
 /**
  * WHERE {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt} GETS ATTACHED,
@@ -32,6 +34,9 @@ use PHPUnit\Framework\TestCase;
  */
 final class HeadlessPermissionPromptAttachmentTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+    use SplitsTopLevelArgumentsTrait;
+
     /**
      * The zero-based position of `$consolePermissionPrompt` in each entry
      * point's signature.
@@ -329,14 +334,10 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
      */
     private static function scan(string $kind, string $source): int
     {
-        $significant = [];
-        foreach (token_get_all($source) as $token) {
-            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                continue;
-            }
-
-            $significant[] = $token;
-        }
+        // The strip is the shared {@see DropsInsignificantTokensTrait} (E174
+        // round): the same drop-list this file used to spell inline, kept in
+        // one home so a widened alphabet reaches every walker at once.
+        $significant = self::significantTokens($source);
 
         $count = 0;
         foreach ($significant as $i => $token) {
@@ -393,7 +394,7 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
      */
     private static function flagArgument(array $significant, int $open, int $position): ?string
     {
-        $arguments = self::topLevelArguments($significant, $open);
+        $arguments = self::topLevelArgumentLists($significant, $open);
 
         // EVERY argument is examined before the positional read, and the search
         // does not stop at the first name it does not recognise. WHAT THIS DID:
@@ -480,72 +481,54 @@ final class HeadlessPermissionPromptAttachmentTest extends TestCase
     /**
      * The call's top-level arguments, each as its own token list.
      *
-     * THE ARRAY-TOKEN OPENERS ARE PART OF THE DEPTH WALK, and they are here
-     * because the sibling stderr census shipped this same walk WITHOUT them and
-     * mis-counted (E161): PHP 8.3.6 lexes `#[`, and the `{`/`${` of `"{$a}"`
-     * and `"${a}"`, as ARRAY tokens whose closers it lexes as plain one-byte
-     * strings — so a walk counting only `( [ {` sees a close with no open,
-     * reaches a spurious depth 0 and stops early. An interpolated first
-     * argument is an everyday shape, and `Bootstrap::backendFor("p{$x}", …)` is
-     * exactly the call this file reads.
+     * THE DEPTH WALK ITSELF IS THE SHARED ONE — {@see SplitsTopLevelArgumentsTrait}
+     * (E174). This file once held the third copy; what stays here is only the
+     * contract this census reads, not a second walker. THE ARRAY-TOKEN OPENERS
+     * the walk names (`#[`, and the `{`/`${` of `"{$a}"` and `"${a}"`) are part
+     * of that shared rule and are here because the sibling stderr census shipped
+     * this same walk WITHOUT them and mis-counted (E161): PHP 8.3.6 lexes those
+     * openers as ARRAY tokens whose closers it lexes as plain one-byte strings,
+     * so a walk counting only `( [ {` sees a close with no open, reaches a
+     * spurious depth 0 and stops early. An interpolated first argument is an
+     * everyday shape, and `Bootstrap::backendFor("p{$x}", …)` is exactly the
+     * call this file reads.
+     *
+     * THE CLOSER CHECK STAYS, and it is not paranoia the shared walk absorbs:
+     * `balancedClose()` answers whichever bracket balances first, and an
+     * argument list whose zero-depth closer is not `)` means the walk met an
+     * array-token opener that PHP lexes differently on THIS interpreter than
+     * the roster knows. A census that silently read on through such a stream
+     * would under-count attachments, which is the failure this whole file
+     * exists to make impossible.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $significant
      * @return list<list<array{0: int, 1: string, 2: int}|string>>
      */
-    private static function topLevelArguments(array $significant, int $open): array
+    private static function topLevelArgumentLists(array $significant, int $open): array
     {
-        $arrayTokenOpeners = [T_ATTRIBUTE, T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES];
-        $depth = 0;
-        $arguments = [];
-        $current = [];
+        $close = self::balancedClose($significant, $open);
 
-        for ($i = $open; $i < \count($significant); $i++) {
-            $token = $significant[$i];
-
-            if (\is_array($token) && \in_array($token[0], $arrayTokenOpeners, true)) {
-                $depth++;
-                $current[] = $token;
-
-                continue;
-            }
-            if (\in_array($token, ['(', '[', '{'], true)) {
-                $depth++;
-                if ($depth > 1) {
-                    $current[] = $token;
-                }
-
-                continue;
-            }
-            if (\in_array($token, [')', ']', '}'], true)) {
-                $depth--;
-                if ($depth === 0) {
-                    if ($token !== ')') {
-                        throw new \RuntimeException(
-                            "the argument list opened at token {$open} balances to zero on '{$token}' rather "
-                                . "than on ')': it carries a bracket opener lexed as an array token this walk "
-                                . 'does not know.',
-                        );
-                    }
-                    if ($current !== []) {
-                        $arguments[] = $current;
-                    }
-
-                    return $arguments;
-                }
-                $current[] = $token;
-
-                continue;
-            }
-            if ($depth === 1 && $token === ',') {
-                $arguments[] = $current;
-                $current = [];
-
-                continue;
-            }
-
-            $current[] = $token;
+        if ($close === null) {
+            throw new \RuntimeException('a call opened at this token never closes; the scan cannot answer for it');
         }
 
-        throw new \RuntimeException('a call opened at this token never closes; the scan cannot answer for it');
+        $closer = $significant[$close];
+        if ($closer !== ')') {
+            $text = \is_array($closer) ? $closer[1] : $closer;
+            throw new \RuntimeException(
+                "the argument list opened at token {$open} balances to zero on '{$text}' rather "
+                    . "than on ')': it carries a bracket opener lexed as an array token this walk "
+                    . 'does not know.',
+            );
+        }
+
+        $arguments = [];
+        foreach (self::topLevelArguments($significant, $open, $close) as [$from, $to]) {
+            if ($from <= $to) {
+                $arguments[] = \array_slice($significant, $from, $to - $from + 1);
+            }
+        }
+
+        return $arguments;
     }
 }

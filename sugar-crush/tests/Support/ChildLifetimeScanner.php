@@ -48,6 +48,8 @@ namespace SugarCraft\Crush\Tests\Support;
  */
 final class ChildLifetimeScanner
 {
+    use SplitsTopLevelArgumentsTrait;
+
     /** The child is drained and closed inside the function that spawned it. */
     public const LIFETIME_SHORT = 'short';
 
@@ -1105,44 +1107,10 @@ final class ChildLifetimeScanner
         return $target === '' ? null : $target;
     }
 
-    /**
-     * The token spans of the call's top-level arguments.
-     *
-     * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @return list<array{0:int,1:int}>
-     */
-    private static function topLevelArguments(array $tokens, int $open, int $close): array
-    {
-        $args = [];
-        $depth = 0;
-        $start = $open + 1;
-
-        for ($i = $open + 1; $i < $close; $i++) {
-            $token = $tokens[$i];
-            if (\is_array($token) && \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                // `"{$x}"` opens with an ARRAY token and closes with a plain
-                // `}`; counting only the closer sends the depth negative and
-                // every later top-level comma stops being seen.
-                $depth++;
-
-                continue;
-            }
-            if (!\is_string($token)) {
-                continue;
-            }
-            if (\in_array($token, ['(', '[', '{'], true)) {
-                $depth++;
-            } elseif (\in_array($token, [')', ']', '}'], true)) {
-                $depth--;
-            } elseif ($token === ',' && $depth === 0) {
-                $args[] = [$start, $i - 1];
-                $start = $i + 1;
-            }
-        }
-        $args[] = [$start, $close - 1];
-
-        return $args;
-    }
+    // The depth walk that splits a call into its top-level arguments lives in
+    // {@see SplitsTopLevelArgumentsTrait} (E174). This class was one of the
+    // three copies; the consolidation records why they were one rule, and the
+    // fact that `specFds()` walks the same spans this method returns.
 
     /**
      * The source text of each top-level element of an array literal, or null
