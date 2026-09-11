@@ -58,21 +58,31 @@ final class TimedFileLockTest extends TestCase
     {
         TimedFileLock::acquire($this->held, \LOCK_EX, $this->path, 0.5);
 
+        // CAPTURE INSIDE, ASSERT OUTSIDE (round-61 family): PHPUnit's
+        // ExpectationFailedException extends RuntimeException, so assertions
+        // living inside the catch — or a fail() inside the try — get swallowed
+        // by the very handler meant to prove the throw. SwallowingCatchCensusTest
+        // is the tree-wide guard; this row follows its remedy shape.
         $contender = \fopen($this->path, 'c');
+        $failure = null;
         $start = \microtime(true);
         try {
             TimedFileLock::acquire($contender, \LOCK_EX, $this->path, 0.2);
-            $this->fail('a contended lock failed open instead of throwing');
-        } catch (\RuntimeException $failure) {
-            $elapsed = \microtime(true) - $start;
-            $this->assertStringContainsString('waiting for the exclusive lock', $failure->getMessage());
-            $this->assertStringContainsString($this->path, $failure->getMessage());
-            $this->assertStringContainsString('another process holds it', $failure->getMessage());
-            $this->assertGreaterThanOrEqual(0.2, $elapsed, 'gave up before the budget');
-            $this->assertLessThan(2.0, $elapsed, 'the bound does not bound — this test can now hang');
-        } finally {
-            \fclose($contender);
+        } catch (\RuntimeException $caught) {
+            $failure = $caught;
         }
+        $elapsed = \microtime(true) - $start;
+        \fclose($contender);
+
+        $this->assertNotNull($failure, 'a contended lock failed open instead of throwing');
+        // FULL-message pin, head clause included: the %.1f spelling of the
+        // wait is part of the contract a duplicate copy silently drifted on.
+        $this->assertSame(
+            \sprintf('Timed out after %.1fs waiting for the exclusive lock on %s — another process holds it.', 0.2, $this->path),
+            $failure->getMessage(),
+        );
+        $this->assertGreaterThanOrEqual(0.2, $elapsed, 'gave up before the budget');
+        $this->assertLessThan(2.0, $elapsed, 'the bound does not bound — this test can now hang');
     }
 
     public function testASharedAcquireBlockedByAnExclusiveHolderNamesTheSharedFlavour(): void

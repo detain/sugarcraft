@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Session;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
 /**
  * E680 — the entry said `src/Session.php` still blocks on an unbounded
@@ -20,22 +21,24 @@ use SugarCraft\Crush\Session;
  */
 final class SessionSaveLockTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $tempDir;
-    private string $originalHome;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->tempDir = \sys_get_temp_dir() . '/sugar-crush-sessionlock-' . \uniqid((string) \getmypid(), true);
-        \mkdir($this->tempDir, 0755, true);
-        $this->originalHome = (string) (\getenv('HOME') ?: '');
-        \putenv('HOME=' . $this->tempDir);
+        // OneSidedHomeSandboxTest discipline: BOTH spellings of HOME move
+        // together — the trait redirects getenv('HOME') AND $_SERVER['HOME']
+        // and restores both, so no row is owed in its roster.
+        $this->useHomeSandbox($this->tempDir);
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
-        \putenv('HOME=' . $this->originalHome);
+        $this->restoreHomeSandbox();
         foreach (\iterator_to_array(new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($this->tempDir, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST,
