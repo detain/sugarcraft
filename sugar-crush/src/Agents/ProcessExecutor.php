@@ -8,6 +8,7 @@ use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -306,7 +307,10 @@ final class ProcessExecutor implements ExecutorInterface
         $this->closeProcess($process);
         $this->stopTracking($agent->id);
 
-        if ($exitCode !== 0) {
+        // E688: null is UNKNOWN (a child the bounded reap could not land),
+        // never a 0 dressed as a crash — only a measured non-zero attributes
+        // a code to the worker.
+        if ($exitCode !== null && $exitCode !== 0) {
             return new AgentResult(
                 agentId: $agent->id,
                 status: AgentStatus::Failed,
@@ -500,7 +504,8 @@ final class ProcessExecutor implements ExecutorInterface
         $this->closeProcess($process);
         $this->stopTracking($agent->id);
 
-        if ($exitCode !== 0) {
+        // E688: see execute()'s twin — null stays unknown, never 0.
+        if ($exitCode !== null && $exitCode !== 0) {
             yield new AgentResult(
                 agentId: $agent->id,
                 status: AgentStatus::Failed,
@@ -1903,12 +1908,27 @@ PHP;
     }
 
     /**
-     * Get the exit code of a process that has already terminated.
+     * The exit code of a worker, or null when it is UNKNOWN (E688).
      *
-     * proc_get_status() reports 'running' => false after the process exits,
-     * and the exit code is in the 'exitcode' field. Returns 0 if unavailable.
+     * WHAT THIS USED TO DO, AND WHY IT WAS A LIE: it returned 0 whenever
+     * proc_get_status() still said running=true. Worker pipes can EOF while
+     * the child lives — or while its reap is merely unscheduled under CPU
+     * pressure — and both tail callers read that fabricated 0 through
+     * `!== 0` as "ended without a complete message", laundering a real crash
+     * code (measured red in the aa lane: a worker that died with code 5 was
+     * reported as a clean EOF).
+     *
+     * The honest instrument: a BOUNDED reap first (ProcessReaper's polled
+     * wait — the exit is imminent if the EOF is true, so a short budget
+     * resolves the overwhelmingly common delayed-reap case), then the status
+     * read; null when the budget lands with the child still running. Null
+     * keeps the generic branch as the outcome — an unknown must not claim a
+     * code either way. The budget is deliberately NOT raised past
+     * {@see self::EXIT_REAP_BUDGET_SECONDS}: this wait sits on the result
+     * path of every worker turn, and the aa lesson (verbatim in ci.yml) says
+     * stretched reap budgets trade a wrong answer for a slow one.
      */
-    private function getExitCode($process): int
+    private function getExitCode($process): ?int
     {
         if (!is_resource($process)) {
             return -1;
@@ -1919,6 +1939,15 @@ PHP;
             return $status['exitcode'] ?? -1;
         }
 
-        return 0;
+        if (!ProcessReaper::waitForExit($process, self::EXIT_REAP_BUDGET_SECONDS)) {
+            return null;
+        }
+
+        $status = proc_get_status($process);
+
+        return $status['exitcode'] ?? -1;
     }
+
+    /** E688 — the bounded reap budget {@see getExitCode()} gives a pipe-EOF'd child. */
+    private const EXIT_REAP_BUDGET_SECONDS = 2.0;
 }
