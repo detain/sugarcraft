@@ -221,16 +221,26 @@ final class KeyBindingRegistry
      * in the agent view, painted-but-undrivable behind the other two states,
      * revealed the moment the user left.
      *
-     * The ghost is closed by the STAND-DOWN route, not by a claim-set change
-     * (which measures worse, as above):
+     * The ghost is closed by two routes, neither a claim-set change (which
+     * measures worse, as above). The STAND-DOWN route:
      * {@see \SugarCraft\Crush\Tui\KeyboardHandler::paletteStandsDown()} makes
      * the chord a true no-op while the keyboard-owning shell views are up —
-     * nothing opens, and nothing waits on the other side of the exit — and
-     * {@see \SugarCraft\Crush\App\App::delegateToChat()} enforces it at the
-     * one delivery choke point both doors share. The COMPOSITE route — the
-     * shell painting a hosted overlay over its full-pane views, so the chord
-     * becomes live there — remains open as its own layout item, recorded on
-     * the E12 entry in docs/plans/crush_code_hardening_backlog.md.
+     * nothing opens, and nothing waits on the other side of the exit. The
+     * ADOPTION route, for a palette already open when some OTHER door handed
+     * the keyboard over (Tab, the agents toggle, F10, the skill picker): the
+     * shared choke point {@see \SugarCraft\Crush\App\App::delegateToChat()}
+     * closes the abandoned palette on the next fall-through keystroke
+     * ({@see \SugarCraft\Crush\Tui\KeyboardHandler::paletteIsAbandoned()},
+     * E666), and since E682 the composite no longer PAINTS what the keyboard
+     * is not driving —
+     * {@see \SugarCraft\Crush\Renderer::setPaletteAbandoned()}
+     * ({@see \SugarCraft\Crush\App\App::view()}) drops the abandoned palette
+     * from the shell frame, so the menu and picker states are no longer
+     * painted-but-undrivable while the closure waits for its keystroke. The
+     * full COMPOSITE route — the shell painting a hosted overlay over its
+     * full-pane views so the chord becomes LIVE there — remains open as its
+     * own layout item, recorded on the E12 entry in
+     * docs/plans/crush_code_hardening_backlog.md.
      * {@see \SugarCraft\Crush\Tests\Tui\KeyboardHandlerTest::testTheAgentViewTakesAPaletteItNeitherPaintsNorDrives()}
      * pinned the ghost; it now pins the stand-down.
      *
@@ -606,7 +616,7 @@ final class KeyBindingRegistry
         return [
             KeyBinding::new('mouse.wheel', 'Wheel', 'Scroll the transcript', $c),
             KeyBinding::new('mouse.tab', 'Click tab', 'Switch to that session', $c),
-            KeyBinding::new('mouse.pane', 'Click pane', 'Focus that pane', $c),
+            KeyBinding::new('mouse.pane', 'Click pane', 'Open the pane menu (palette)', $c),
             KeyBinding::new('mouse.tool-call', 'Click tool', 'Expand or collapse that call\'s output', $c),
             KeyBinding::new('mouse.palette-row', 'Click row', 'Run that palette row', $c),
         ];
