@@ -2,13 +2,34 @@
 # Sharded parallel PHPUnit runner for the sugar-crush suite.
 #
 # Usage:
-#   scripts/parallel-tests.sh [K] [--junit <xml>] [--out <dir>]
-#                             [--timeout <secs>] [--manifest]
+#   scripts/parallel-tests.sh [K] [--junit <xml>] [--durations <tsv>]
+#                             [--against-json <suite-figure.json>]
+#                             [--out <dir>] [--timeout <secs>] [--manifest]
 #
-#   K            shard count (default: nproc)
+#   K            shard count (default: nproc; CI pins it explicitly — the
+#                GitHub-hosted ubuntu-latest runner is 2-4 vCPU, NOT nproc)
 #   --junit      baseline JUnit XML from a serial run — the duration source for
 #                the LPT manifest, and the conservation reference. Without it,
-#                reuses <out>/durations.tsv from a previous --junit invocation.
+#                --durations, or a previous <out>/durations.tsv, there is no
+#                duration source and the run refuses to start.
+#   --durations  explicit per-file durations TSV (e.g. the committed
+#                scripts/parallel-tests-durations.tsv). Lets CI shard WITHOUT
+#                a serial baseline run. Takes effect only when --junit is
+#                absent; <out>/durations.tsv from a prior --junit run still
+#                wins over nothing, exactly as before.
+#                REGENERATION when tests are added/moved: run once with
+#                `--junit <serial-baseline.xml> --out <dir>`, then
+#                `cp <dir>/durations.tsv scripts/parallel-tests-durations.tsv`
+#                and re-pin suite-figure.json — conservation pins both to the
+#                same live enumeration; an unrefreshed TSV goes RED by design.
+#   --against-json  conservation reference is a pinned suite-figure.json
+#                (tests/assertions/failures/skipped) instead of a baseline
+#                junit. This is the fail-closed CI shape: a test file present
+#                in the tree but absent from the durations manifest silently
+#                runs nowhere, its tests never enter the shard sums, and the
+#                pinned figure (re-derived LIVE by
+#                ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
+#                at every merge) then refuses the shortfall.
 #   --out        run directory (default: ${TMPDIR:-/tmp}/parallel-tests)
 #   --timeout    per-shard wall guard in seconds (default: 250, via timeout(1))
 #   --manifest   (re)generate the deterministic LPT manifests, run nothing
@@ -38,7 +59,7 @@
 set -u
 
 usage() {
-	sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
@@ -49,6 +70,8 @@ REPO=$(git rev-parse --show-toplevel 2>/dev/null) || {
 K=$(nproc)
 OUT="${TMPDIR:-/tmp}/parallel-tests"
 BASE_JUNIT=""
+DURATIONS=""
+AGAINST_JSON=""
 SHARD_TIMEOUT=250
 MODE=run
 
@@ -56,6 +79,14 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--junit)
 		BASE_JUNIT=${2:?--junit needs a file}
+		shift 2
+		;;
+	--durations)
+		DURATIONS=${2:?--durations needs a file}
+		shift 2
+		;;
+	--against-json)
+		AGAINST_JSON=${2:?--against-json needs a file}
 		shift 2
 		;;
 	--out)
@@ -93,12 +124,22 @@ if [ -n "$BASE_JUNIT" ]; then
 		exit 1
 	}
 	SOURCE="$BASE_JUNIT"
+elif [ -n "$DURATIONS" ]; then
+	[ -s "$DURATIONS" ] || {
+		echo "parallel-tests: missing durations: $DURATIONS" >&2
+		exit 1
+	}
+	SOURCE="$DURATIONS"
 elif [ -s "$DUR" ]; then
 	SOURCE="$DUR"
 else
-	echo "parallel-tests: no durations yet — pass --junit <xml> once to measure (see --help)" >&2
+	echo "parallel-tests: no durations yet — pass --junit <xml> once to measure, or --durations <tsv> (see --help)" >&2
 	exit 1
 fi
+[ -z "$AGAINST_JSON" ] || [ -s "$AGAINST_JSON" ] || {
+	echo "parallel-tests: missing suite-figure json: $AGAINST_JSON" >&2
+	exit 1
+}
 
 mkdir -p "$OUT"
 php "$REPO/scripts/parallel-tests-make-shards.php" "$SOURCE" "$K" "$OUT" || exit 1
@@ -149,6 +190,19 @@ for i in $(seq 0 $((K - 1))); do
 	grep -E '^(OK|Tests:|FAILURES|ERRORS)' "$OUT/shard-$i.log" | tail -2
 done
 
+# On any red, dump the tail of each failing shard inline: CI keeps only the
+# --out dir between steps, and a conservation FAIL without the offender's
+# failure block forces a re-run just to read the error.
+if [ "$FAILED" -ne 0 ]; then
+	for i in $(seq 0 $((K - 1))); do
+		[ -f "$OUT/shard-$i.log" ] || continue
+		if [ ! -f "$OUT/done-$i" ]; then
+			echo "== failing shard $i — last 60 lines =="
+			tail -n 60 "$OUT/shard-$i.log"
+		fi
+	done
+fi
+
 if [ -n "$BASE_JUNIT" ]; then
 	echo "== conservation (shard junit roots vs baseline) =="
 	php -r '
@@ -174,6 +228,33 @@ $ok = $sum["tests"]==$bs["tests"] && $sum["skipped"]==$bs["skipped"] && $sum["er
 printf("CONSERVATION: %s\n", $ok?"PASS":"FAIL");
 exit($ok?0:1);
 ' "$OUT" "$K" "$BASE_JUNIT" || FAILED=1
+fi
+
+if [ -n "$AGAINST_JSON" ]; then
+	echo "== conservation (shard junit roots vs pinned suite figure) =="
+	php -r '
+$out = $argv[1]; $K = (int)$argv[2]; $figFile = $argv[3];
+$fig = json_decode((string)file_get_contents($figFile), true, 512, JSON_THROW_ON_ERROR);
+foreach (["tests", "assertions", "failures", "skipped"] as $k) {
+  if (!isset($fig[$k]) || !is_int($fig[$k])) { fwrite(STDERR, "figure missing int key: $k\n"); exit(2); }
+}
+$sum = ["tests"=>0,"assertions"=>0,"errors"=>0,"failures"=>0,"skipped"=>0,"time"=>0.0];
+for ($i=0;$i<$K;$i++){
+  $f="$out/junit-$i.xml"; if(!is_file($f)) { fwrite(STDERR,"missing shard junit $i\n"); exit(2); }
+  $d=new DOMDocument(); $d->load($f);
+  $r=$d->getElementsByTagName("testsuite")->item(0); if(!$r) exit(2);
+  foreach(["tests","assertions","errors","failures"] as $k){ $sum[$k]+= (int)($r->getAttribute($k) ?: 0); }
+  $sum["time"] += (float)$r->getAttribute("time");
+  $x=new DOMXPath($d); $sum["skipped"] += iterator_count($x->query("//testcase/skipped"));
+}
+printf("shards: tests=%d assertions=%d errors=%d failures=%d skipped=%d sumTime=%.1fs\n",$sum["tests"],$sum["assertions"],$sum["errors"],$sum["failures"],$sum["skipped"],$sum["time"]);
+printf("figure: tests=%d assertions=%d errors=0 failures=%d skipped=%d  (%s)\n",$fig["tests"],$fig["assertions"],$fig["failures"],$fig["skipped"],$figFile);
+printf("delta:  tests=%+d assertions=%+d\n",$sum["tests"]-$fig["tests"],$sum["assertions"]-$fig["assertions"]);
+$ok = $sum["tests"]==$fig["tests"] && $sum["skipped"]==$fig["skipped"]
+    && $sum["errors"]==0 && $sum["failures"]==$fig["failures"];
+printf("CONSERVATION: %s\n", $ok?"PASS":"FAIL");
+exit($ok?0:1);
+' "$OUT" "$K" "$AGAINST_JSON" || FAILED=1
 fi
 
 exit $FAILED

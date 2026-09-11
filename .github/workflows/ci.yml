@@ -393,7 +393,53 @@ jobs:
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
-      - name: Run tests
+      # E671 (2026-09-10): the sugar-crush cell shards through
+      # scripts/parallel-tests.sh instead of the ~9.3-minute serial run
+      # (round-63 junit time=559.6s) — the suite was the wall-clock critical
+      # path of every push that touches it. K equals the runner core count,
+      # capped at 4: ubuntu-latest is 2 vCPU (free tier) / 4 vCPU (paid), and
+      # MEASURED contention discipline says never oversubscribe — at 2x
+      # (K=8 on 4 cpus) the suite grew 1 wall-clock-race failure, at 4x it grew
+      # 4 across 4 files (ProcessExecutorTest lease reap, idle-ceiling and
+      # Lsp stdin-wedge; production races, tracked as a seam — never hide them
+      # by raising the timeout). CI never runs a serial baseline for durations:
+      # it shards from the committed scripts/parallel-tests-durations.tsv and
+      # the conservation gate compares the per-shard junit sum against the
+      # PINNED sugar-crush/tests/Config/Support/suite-figure.json. Fail-closed:
+      # a test file absent from the manifest runs in zero shards, so shard-sum
+      # tests < figure tests -> red; and the figure itself cannot rot, because
+      # ReadmeSuiteFigureDriftTest::testArtifactIsNotStaleAgainstTheLiveEnumeration
+      # re-derives `tests` LIVE from `phpunit --list-tests` inside this very
+      # suite at every merge. The double lock means adding tests without
+      # refreshing BOTH artifacts cannot go green. --timeout 600 per shard: the
+      # worst LPT bucket is ~140s at K=4 and ~280s at K=2 (594 CPU-seconds,
+      # measured k4c4 sumTime=594.2s); 600 keeps >=2x headroom on the slowest
+      # legit shard without letting a hung shard run past the serial baseline.
+      # Verified green in-sandbox at exactly this shape: K=4 on 4 cpus, wall
+      # 152s (vs 559.6s serial), conservation PASS — shards summed to
+      # 11438 tests / 175211 assertions / 1 skip / 0 fail / 0 err, byte-equal
+      # to the pinned figure.
+      - name: Run tests (sugar-crush — sharded, E671)
+        if: matrix.lib == 'sugar-crush'
+        run: |
+          set -euo pipefail
+          CORES=$(nproc)
+          K=$CORES
+          if [ "$K" -gt 4 ]; then K=4; fi
+          echo "::notice::sugar-crush sharded at K=$K on $CORES-core ubuntu-latest (E671)"
+          OUT="${RUNNER_TEMP:-/tmp}/parallel-tests"
+          RC=0
+          bash scripts/parallel-tests.sh "$K" \
+            --durations scripts/parallel-tests-durations.tsv \
+            --against-json sugar-crush/tests/Config/Support/suite-figure.json \
+            --out "$OUT" --timeout 600 || RC=$?
+          if [ "$RC" -ne 0 ]; then
+            echo "sharded run failed rc=$RC (per-shard tails are printed inline by the harness)"
+            exit "$RC"
+          fi
+
+      - name: Run tests (serial)
+        if: matrix.lib != 'sugar-crush'
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
 
   # Windows test job — verifies Windows-native TTY paths (FFI/kernel32 paths
