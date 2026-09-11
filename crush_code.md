@@ -4,7 +4,7 @@ Comparative research: opencode ([anomalyco/opencode](https://github.com/anomalyc
 
 This is a **second, independent pass** — a prior 12-agent research effort already produced [`crush_feat.md`](./crush_feat.md) (~2000-line dossier) and [`crush_feat_plan.md`](./crush_feat_plan.md) (~870-line plan). That work is done, and six PRs landed against it on 2026-08-10 (slash-command popup, command palette, themes, layout, session persistence, and a parallel-tool-routing fix — "R14b"). Every agent in this pass was briefed to treat `crush_feat.md` as a fast-start reference **only** — to verify every claim against current source rather than trust it, and to explicitly flag where it's now stale (fixed) or, just as important, where it's *not* actually fixed despite looking closed. Several findings below are exactly that: a claim from the first pass that turned out to still be broken, or broken in a new way, on re-verification. Those are **not** excluded just because a prior plan or PR claimed to address the area — if a sibling agent found it again, it's in this plan.
 
-> **Current resume point: §0-NOW-67 (round 65 closed 2026-09-11 at `0c61c0686`, linked floor 11,494 / 176,293 — the `### E652+` minting debt is CLOSED; round 66 NEXT: candidates α–ε per §0-NOW-67 §2, and the five-guard filter is MANDATORY in every brief).**
+> **Current resume point: §0-NOW-68 (round 66 closed 2026-09-11 at `61cde19c5`, linked floor 11,519 / 176,743, actionable ledger **100** — coverage job sharded via `--clover` + `scripts/merge-clover.php` (E691), both E653 shapes live incl. `/notices`, the Config base-red formally DEAD; round 67 NEXT: lanes da–df per §0-NOW-68 §2, the five-guard filter AND the PTY-pipe suite rule are MANDATORY in every brief).**
 
 ## How to read this doc
 
