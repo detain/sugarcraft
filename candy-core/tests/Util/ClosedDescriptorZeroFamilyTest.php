@@ -21,9 +21,10 @@ use SugarCraft\Core\Program;
  * It is deliberately one guard over the family rather than four guards over
  * four symptoms. The members do not share an interface — one is a static
  * predicate, one is an environment probe, one is a private method on a
- * 1500-line runtime class — but they share the exact precondition that
- * breaks them, and a precondition is a much better thing to test once than
- * four times.
+ * 1500-line runtime class, and since E370 one is a public method on the tty
+ * backend the Program builds over a stream it does not own — but they share
+ * the exact precondition that breaks them, and a precondition is a much
+ * better thing to test once than four times.
  *
  * ## Why a child process
  *
@@ -99,6 +100,13 @@ final class ClosedDescriptorZeroFamilyTest extends TestCase
         self::assertSame(['ok' => false], $result['tty_detect_is_atty_null']);
         self::assertSame(['ok' => false], $result['env_detect_is_console_stdin']);
 
+        // E370: the backend's own isTty(), over both shapes of dead handle —
+        // the family's closed descriptor 0, and an unrelated closed stream.
+        // Swapping `is_resource(...) && stream_isatty(...)` into the unsafe
+        // order throws here, which is exactly what these rows are for.
+        self::assertSame(['ok' => false], $result['posix_backend_is_tty']);
+        self::assertSame(['ok' => false], $result['posix_backend_is_tty_closed_handle']);
+
         // proc_open() throws the same way on a dead descriptor-array entry,
         // and runExec()'s try/catch would turn that into exit -1 with an
         // error rather than an exception — so these rows assert the exit
@@ -132,6 +140,8 @@ final class ClosedDescriptorZeroFamilyTest extends TestCase
         // point of guarding it.
         self::assertSame(['ok' => false], $result['tty_detect_is_atty']);
         self::assertSame(['ok' => false], $result['env_detect_is_console_stdin']);
+        self::assertSame(['ok' => false], $result['posix_backend_is_tty']);
+        self::assertSame(['ok' => false], $result['posix_backend_is_tty_closed_handle']);
         self::assertSame(['ok' => [7, null]], $result['program_run_exec_captured']);
         self::assertSame(['ok' => [9, null]], $result['program_run_exec_passthrough']);
     }
@@ -238,6 +248,12 @@ final class ClosedDescriptorZeroFamilyTest extends TestCase
         // false in both other modes.
         self::assertSame(['ok' => true], $result['tty_detect_is_atty']);
         self::assertSame(['ok' => true], $result['env_detect_is_console_stdin']);
+        self::assertSame(['ok' => true], $result['posix_backend_is_tty']);
+
+        // A dead handle is a dead handle whatever descriptor 0 is — this row
+        // answers false in ALL three modes, and that is the point: it is not
+        // descriptor 0's state it reports, it is its own.
+        self::assertSame(['ok' => false], $result['posix_backend_is_tty_closed_handle']);
 
         // null is still not a stream, whatever descriptor 0 is.
         self::assertSame(['ok' => false], $result['tty_detect_is_atty_null']);

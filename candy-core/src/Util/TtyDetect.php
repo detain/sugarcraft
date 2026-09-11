@@ -133,8 +133,18 @@ namespace SugarCraft\Core\Util;
  *   - `SugarCraft\Core\Program::runExec()` — resolves each child
  *     descriptor to the program's own handle, then the constant, then a
  *     `/dev/null` file spec; never to a constant alone.
+ *   - {@see Tty\PosixBackend::isTty()} — `is_resource()` first, then
+ *     `stream_isatty()`, E370. The order is the whole guarantee and it was
+ *     unpinned until the two `posix_backend_*` probe rows added it: nothing
+ *     in the suite distinguished the short-circuited answer from the throw
+ *     the swapped operands produce.
  *   - `SugarCraft\Mosaic\Detect::stdinFd()` — answers null for a dead
  *     handle, and its readers treat null as their existing no-answer case.
+ *
+ * `Tty\WindowsBackend::isTty()` is deliberately NOT a row. It carries the
+ * same guard today, but it is unreachable from every runner that executes
+ * this probe — a family member no mode can exercise is a wish, not a guard,
+ * and it would rot silently in exactly the way the rows above cannot.
  *
  * ONE guard pins the family rather than four pinning symptoms:
  * {@see \SugarCraft\Core\Tests\Util\ClosedDescriptorZeroFamilyTest} drives

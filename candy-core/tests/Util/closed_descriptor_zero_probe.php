@@ -58,6 +58,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty\EnvDetect;
+use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Core\Util\TtyDetect;
 use React\EventLoop\StreamSelectLoop;
 
@@ -130,6 +131,24 @@ $run('tty_detect_is_atty', static fn (): bool => TtyDetect::isAtty(\STDIN));
 $run('tty_detect_is_atty_null', static fn (): bool => TtyDetect::isAtty(null));
 
 $run('env_detect_is_console_stdin', static fn (): bool => EnvDetect::isConsoleStdin());
+
+// E370. `Tty\PosixBackend::isTty()` reads `is_resource($this->stream) &&
+// stream_isatty($this->stream)`. That short-circuit answers correctly for a
+// closed handle today, but correctly BY ACCIDENT OF OPERAND ORDER — swap the
+// two operands and the exact TypeError the control above raises walks back
+// in, through every caller of a method the Program reaches on each frame.
+// Two rows, because the trap has two shapes: the family's own closed
+// descriptor 0, and any OTHER handle closed out from under a backend that
+// still holds the resource slot (a pty stream `fclose()`d by its owner while
+// the backend lingers). A dead handle is a dead handle whatever fd it was.
+$run('posix_backend_is_tty', static fn (): bool => (new PosixBackend(\STDIN))->isTty());
+
+$run('posix_backend_is_tty_closed_handle', static function (): bool {
+    $handle = fopen('php://memory', 'r+b');
+    fclose($handle);
+
+    return (new PosixBackend($handle))->isTty();
+});
 
 $run('program_run_exec_captured', static function () use ($sink): array {
     $seen    = null;
