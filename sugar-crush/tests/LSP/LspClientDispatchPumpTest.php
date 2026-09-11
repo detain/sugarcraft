@@ -174,7 +174,7 @@ final class LspClientDispatchPumpTest extends TestCase
         while (!file_exists($path)) {
             if (microtime(true) >= $bound) {
                 $this->fail(sprintf(
-                    'timed out after %.1fs waiting for %s: %s',
+                    'timed out after %.1fs waiting for the fixture file %s: %s',
                     self::HANDSHAKE_BOUND_SECONDS,
                     basename($path),
                     $context,
