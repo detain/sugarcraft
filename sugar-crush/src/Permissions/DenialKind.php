@@ -60,23 +60,31 @@ namespace SugarCraft\Crush\Permissions;
  * surfaces — the model told its call failed rather than that it was refused,
  * which is a correctness failure and not a cosmetic one.
  *
- * THREE IS NOT YET A CLOSED VOCABULARY, AND UNTIL RECENTLY THE OPEN QUESTION
- * HAD NO HOME IN THE TREE (E347, E375). The headless prompt refuses an ASK in
- * two situations — a person answered no, and there was nobody at the keyboard
- * to answer — and BOTH publish {@see DenialKind::Refused}, because in each an
- * approver was attached and the answer it gave was not `true`. So a
- * `--output-format json` consumer cannot tell the two apart, and closing that
- * means either a fourth case here or a second published field on the refusal
- * entry. Both change what this enum PUBLISHES, which makes the question a
- * product decision about the vocabulary, not a formatting change a lane can
- * make — which is exactly what E375 recorded as unowned. This paragraph is the
- * record: the question lives here, its answer does not. Until it is answered,
- * the two arms are deliberately indistinguishable to a machine, and
- * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} is what says so
- * — that test's observer pair is the pin a change must argue with, and its
- * sibling pins in {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} (the
- * backing values, the kind tokens, the README roster) all name three, so a
- * fourth case added without the decision goes red in the places that make the
+ * THREE IS THE CLOSED VOCABULARY — DECIDED (E347, E375; ruled round 69,
+ * recorded by fb `5ea48fe21`, shipped by fn `5d050411d`→`f2c2c2327`, stamped
+ * here by lane gb 2026-09-12). WHAT THIS PARAGRAPH SAID: that the headless
+ * prompt refuses an ASK in two situations — a person answered no, and there
+ * was nobody at the keyboard to answer — that BOTH published
+ * {@see self::Refused}, that a `--output-format json` consumer could not tell
+ * the two apart, and that closing the gap meant either a fourth case here or
+ * a second published field on the refusal entry — a product decision the tree
+ * had never placed. WHAT IS TRUE NOW: the ruling took the second road. No
+ * fourth case; this enum's three backing values are FROZEN. A refusal frame
+ * keeps its three keys, and the no-approver arm alone gains an OPTIONAL
+ * fourth envelope key `unattended` => true — carried by
+ * `NonInteractive::$askWasUnattended`: cleared at the top of `run()`, written
+ * only where the headless prompt meets a keyboard-less run, read-and-clear in
+ * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()} gated on
+ * {@see self::Refused} — while the human, hook, and unanswered rows stay
+ * three-key. WHY THAT IS THE CHEAPER DOOR: the qualifier adds one
+ * consumer-visible KEY on one arm, where a fourth case would move the
+ * PUBLISHED VOCABULARY every classifier switches on and re-open the
+ * autoload argument this leaf exists to keep closed. WHAT STILL GUARDS THE
+ * LINE: {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest}'s observer
+ * pair and its sibling pins in
+ * {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} (the backing values,
+ * the kind tokens, the README roster) all name three, so a fourth case added
+ * without re-opening the ruling goes red in the places that make the
  * publication visible rather than drifting silently past it.
  */
 enum DenialKind: string

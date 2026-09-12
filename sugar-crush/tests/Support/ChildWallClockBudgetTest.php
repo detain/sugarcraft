@@ -1871,6 +1871,83 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
+     * THE SAME-FILE-LITERAL-ONLY LAW, PINNED AS A LAW (E390, measured lane gb).
+     *
+     * WHY PIN A NON-FEATURE. fk deferred the E390 consolidation in round 69 on
+     * two measurements: this resolver reduces `self::` against
+     * {@see integerConstantsIn()} — ONE file's token stream — and the two
+     * shapes a consolidation would leave behind both land `unresolved`. The
+     * deferral was re-measured, not trusted: the licensé row in
+     * {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest}
+     * stands over a LIVE byte-identical pair, and dropping it reddens the
+     * unrecorded census naming both suite files (probed at this commit). So
+     * the licensé is not obsolete paperwork, the one-motion unblock cannot
+     * land without the two suite files, and E390 does NOT ship in this lane.
+     * WHAT THIS ARM BUYS: fk's prescribed unblock is to WIDEN this resolver to
+     * read `Other::CONST` or an in-file alias `= Other::CONST`. The moment a
+     * later lane does, these arms red — which is the machine-visible tripwire
+     * forcing the licensé drop to ride that same commit. "One motion" stops
+     * being a convention and becomes a gate.
+     */
+    public function testTheResolverRefusesCrossFileLiteralShapesToKeepTheSameFileLaw(): void
+    {
+        $of = static function (string $body): array {
+            return self::resolvedParametrisedIn(
+                'fixture.php',
+                str_replace('@BUDGET@', self::needle(), "<?php\nclass F {\n" . $body . "\n}\n"),
+            );
+        };
+
+        // THE POSITIVE CONTROL: same number, same file, resolvable. Without
+        // it, every refusal below is also exactly what a dead walk returns.
+        $sameFile = $of("const B = 21;\nfunction a() { sprintf('@BUDGET@', self::B); }");
+        $this->assertSame(
+            [['fixture.php', 4, 21, 'self::B']],
+            $sameFile['resolved'],
+            'the same-file control no longer resolves, so the cross-file refusals below '
+            . 'prove nothing about WHERE the boundary actually sits',
+        );
+
+        // SHAPE ONE: THE ARGUMENT REACHES INTO ANOTHER FILE. `Other::B` is not
+        // `self`, so the value lives in a token stream this walk was never
+        // given. Borrowing the same-named constant declared next door would
+        // certify a number the other file is free to re-value — refused, with
+        // the reason, never borrowed.
+        $crossFile = $of("const B = 21;\nfunction a() { sprintf('@BUDGET@', Other::B); }");
+        $this->assertSame(
+            [],
+            $crossFile['resolved'],
+            'a cross-file constant reference resolved. The number came from a name collision '
+            . "with this file's own table, not from the file that declares it — which is how a "
+            . 'consolidated budget silently outruns the licensé row that licenses its duplication',
+        );
+        $this->assertStringContainsString(
+            'cannot reduce',
+            $crossFile['unresolved'][0] ?? '',
+            'the cross-file refusal does not name the shape it choked on, so the reader '
+            . 'cannot tell it from any other unreadable budget',
+        );
+
+        // SHAPE TWO: THE ALIAS A CONSOLIDATION ACTUALLY LEAVES BEHIND — the
+        // const is same-file, its VALUE is `= Other::B`. Same name, same
+        // lookup, different failure, and rule 14 demands the resolver say
+        // WHICH: "no such constant" and "declared but unevaluable" are
+        // different sentences a reader acts on differently.
+        $alias = $of("const B = Other::B;\nfunction a() { sprintf('@BUDGET@', self::B); }");
+        $this->assertSame(
+            [],
+            $alias['resolved'],
+            'a same-file alias to another class resolved by pretending the alias was a literal',
+        );
+        $this->assertStringContainsString(
+            'not an integer literal',
+            $alias['unresolved'][0] ?? '',
+            'the alias refusal reports the wrong half — the constant IS declared; it is the '
+            . 'value that is not a literal',
+        );
+    }
+
+    /**
      * No child budget reaches the parent's own ceiling.
      */
     public function testEveryChildWallClockBudgetLeavesTheParentAlarmRoomToLose(): void

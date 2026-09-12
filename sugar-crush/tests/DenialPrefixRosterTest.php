@@ -745,6 +745,21 @@ final class DenialPrefixRosterTest extends TestCase
             );
         }
 
+        // E616 — DECIDED 2026-09-12 (lane gb; the measurement is fb's at
+        // `5ea48fe21`). THE RULING: DENIAL_SHAPE's bytes stay UNCHANGED — the
+        // lookbehind keeps its letter-only exclusion and the three rows below
+        // stay pinned REPORTED. The tail of a hyphenated compound is
+        // DELIBERATELY VISIBLE to the scanner, not exempt, and the
+        // fixture-naming trade the entry warned about is ACCEPTED as its
+        // price. WHY THIS SIDE: adding a hyphen to the lookbehind was measured
+        // on these exact strings and reports ALL THREE NOWHERE — it buys two
+        // protocol-English silences only by blinding the whole-src map to
+        // producer hyphenations like the third row, and the failure modes are
+        // not symmetric: a false positive is a red this file explains, while
+        // an invisible denial prefix is silence no guard reports. A lane that
+        // re-opens the decision must re-pin all three rows AND this paragraph
+        // in the same edit, naming which side of the trade each row prices.
+        //
         // AND E616'S TWO DIRECTIONS, FIXED BEFORE EITHER IS CHOSEN. The frame's
         // lookbehind is `(?<![A-Za-z])` and a hyphen is not a letter, so the
         // TAIL of a hyphenated compound opens a frame of its own — for every
