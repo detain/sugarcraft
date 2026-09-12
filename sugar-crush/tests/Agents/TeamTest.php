@@ -39,12 +39,23 @@ final class TeamTest extends TestCase
     /** @var list<string> */
     private array $realHomeFootprint = [];
 
+    /**
+     * Per-process attribution token (E281): every Team fixture id is built
+     * through {@see teamId()} so it starts with this value, and the footprint
+     * guard only counts entries that start with it.
+     */
+    private string $processToken = '';
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->sandboxDir = sys_get_temp_dir() . '/sc_team_' . bin2hex(random_bytes(6));
         mkdir($this->sandboxDir . '/home', 0o700, true);
+
+        // BEFORE the snapshot: the very first realHomeFootprint() call already
+        // filters by this token.
+        $this->processToken = uniqid((string) getmypid(), true);
 
         $this->originalHome = getenv('HOME') ?: '';
         $this->originalServerHome = isset($_SERVER['HOME']) ? (string) $_SERVER['HOME'] : null;
@@ -84,10 +95,26 @@ final class TeamTest extends TestCase
     }
 
     /**
-     * Everything under the real ~/.sugar-crush a Team could create: the config
-     * dir's own entries, so conjuring the directory itself is caught, plus the
-     * names directly under teams/, which is where one directory per Team
-     * appears.
+     * Everything under the real ~/.sugar-crush THIS PROCESS's Teams could
+     * create: the config dir's own entries, so conjuring the directory itself
+     * is caught, plus the names directly under teams/ that carry this
+     * process's token (E281).
+     *
+     * WHY THE TEAMS LEVEL IS ATTRIBUTED AND NOT JUST COUNTED: the home is
+     * shared across concurrent lanes, and siblings leak. MEASURED at the time
+     * of this fix, the real tree carried thousands of leftover team dirs from
+     * non-pid-prefixed fixtures elsewhere (the found origin is
+     * `tests/Integration/MultiAgentRefactorTest.php` writing
+     * `'throwing-' . uniqid('', true)` — a file outside this one's ownership).
+     * An unfiltered before/after diff let any sibling's leak between the two
+     * snapshots redden THIS file for a bug it does not have. Attribution
+     * requires the name: every Team id here now flows through
+     * {@see teamId()}, and only tokens matching this process are compared.
+     *
+     * The `teams/` directory itself is excluded at the config-dir level: its
+     * existence is structural — a sibling creating it concurrently is the
+     * exact false positive this item removes — while anything THIS process
+     * writes under it is caught by token at the leaf.
      *
      * Deliberately shallow: the residue is one new entry per Team, so a
      * recursive walk buys nothing and costs a full tree scan twice per test.
@@ -98,10 +125,66 @@ final class TeamTest extends TestCase
     {
         $configDir = $this->realHome . '/.sugar-crush';
 
-        return [
-            ...self::entriesOf($configDir),
-            ...self::entriesOf($configDir . '/teams'),
+        $entries = array_values(array_filter(
+            self::entriesOf($configDir),
+            static fn(string $path): bool => basename($path) !== 'teams',
+        ));
+
+        foreach (self::entriesOf($configDir . '/teams') as $teamEntry) {
+            if ($this->isOwnTeamsEntry($teamEntry)) {
+                $entries[] = $teamEntry;
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * True when a `teams/<name>` entry is attributed to this process — the
+     * classification decision of {@see realHomeFootprint()}, extracted so the
+     * fixture table below can pin both polarities (E322 rule: a scan is not
+     * tested until a known offender is proven to be caught by it — and its
+     * mirror, until a known foreign name is proven NOT to be).
+     */
+    private function isOwnTeamsEntry(string $path): bool
+    {
+        return str_starts_with(basename($path), $this->processToken);
+    }
+
+    /**
+     * A fixture Team id, attributed to this process. Idempotent: passing an
+     * already-tokenised id (e.g. a `$team->id` handed back to a teammate
+     * factory) returns it untouched, so both call shapes stay consistent.
+     */
+    private function teamId(string $name): string
+    {
+        return str_starts_with($name, $this->processToken)
+            ? $name
+            : $this->processToken . '-' . $name;
+    }
+
+    public function testTheFootprintAttributesOnlyThisProcessesTeamEntries(): void
+    {
+        $teamsDir = $this->realHome . '/.sugar-crush/teams';
+
+        $cases = [
+            // This process's own fixtures, as teamId() builds them.
+            $teamsDir . '/' . $this->teamId('team-alpha')            => true,
+            // The residue shapes this guard used to false-alarm on.
+            $teamsDir . '/throwing-68d1f2a3b4c5d6e7.89012345'        => false,
+            $teamsDir . '/team-alpha'                                => false,
+            $teamsDir . '/team-tasklist-' . uniqid((string) (getmypid() + 1000), true) => false,
+            // (Traversal-shaped ids never reach disk — Team throws first — so
+            // the leaf-basename rule below only ever sees single-segment names.)
         ];
+
+        foreach ($cases as $path => $expected) {
+            $this->assertSame(
+                $expected,
+                $this->isOwnTeamsEntry($path),
+                'attribution of ' . basename($path) . ' went the wrong way',
+            );
+        }
     }
 
     /**
@@ -127,13 +210,13 @@ final class TeamTest extends TestCase
     {
         $createdAt = new \DateTimeImmutable('2026-01-15T10:00:00Z');
         $team = new Team(
-            id: 'team-alpha',
+            id: $id = $this->teamId('team-alpha'),
             name: 'Alpha Squad',
             leadAgentId: 'lead-001',
             createdAt: $createdAt,
         );
 
-        $this->assertSame('team-alpha', $team->id);
+        $this->assertSame($id, $team->id);
         $this->assertSame('Alpha Squad', $team->name);
         $this->assertSame('lead-001', $team->leadAgentId);
         $this->assertSame($createdAt, $team->createdAt);
@@ -143,13 +226,13 @@ final class TeamTest extends TestCase
     {
         $createdAt = new \DateTimeImmutable();
         $team = new Team(
-            id: 'team-beta',
+            id: $id = $this->teamId('team-beta'),
             name: 'Beta Team',
             leadAgentId: 'lead-002',
             createdAt: $createdAt,
         );
 
-        $this->assertSame('team-beta', $team->id);
+        $this->assertSame($id, $team->id);
         $this->assertSame('Beta Team', $team->name);
         $this->assertSame('lead-002', $team->leadAgentId);
         $this->assertSame($createdAt, $team->createdAt);
@@ -158,7 +241,7 @@ final class TeamTest extends TestCase
     public function testDefaultMaxTeammatesIsFive(): void
     {
         $team = new Team(
-            id: 'team-default-cap',
+            id: $this->teamId('team-default-cap'),
             name: 'Default Cap Team',
             leadAgentId: 'lead-default-cap',
             createdAt: new \DateTimeImmutable(),
@@ -174,7 +257,7 @@ final class TeamTest extends TestCase
     public function testGetTeammatesInitiallyEmpty(): void
     {
         $team = new Team(
-            id: 'team-empty',
+            id: $this->teamId('team-empty'),
             name: 'Empty Team',
             leadAgentId: 'lead-empty',
             createdAt: new \DateTimeImmutable(),
@@ -220,7 +303,7 @@ final class TeamTest extends TestCase
         $teammate = $this->createTeammate('tm-wrong', 'team-b', 'Dan', AgentType::Coder);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Teammate tm-wrong does not belong to team team-a');
+        $this->expectExceptionMessage('Teammate tm-wrong does not belong to team ' . $this->teamId('team-a'));
 
         $team->addTeammate($teammate);
     }
@@ -233,7 +316,7 @@ final class TeamTest extends TestCase
         $original = $this->createTeammate('tm-same', 'team-overwrite', 'Original', AgentType::Coder);
         $replacement = new Teammate(
             id: 'tm-same',
-            teamId: 'team-overwrite',
+            teamId: $this->teamId('team-overwrite'),
             name: 'Replacement',
             type: AgentType::Reviewer,
             model: 'claude-sonnet-4-6',
@@ -300,7 +383,7 @@ final class TeamTest extends TestCase
 
         $replacement = new Teammate(
             id: 'tm-slot',
-            teamId: 'team-capped-replace',
+            teamId: $this->teamId('team-capped-replace'),
             name: 'Second',
             type: AgentType::Reviewer,
             model: 'claude-sonnet-4-6',
@@ -389,7 +472,7 @@ final class TeamTest extends TestCase
     public function testGetTaskListReturnsTaskListInstance(): void
     {
         $team = new Team(
-            id: 'team-tasklist-' . uniqid((string) getmypid(), true),
+            id: $this->teamId('team-tasklist'),
             name: 'Task List Test',
             leadAgentId: 'lead-tasklist',
             createdAt: new \DateTimeImmutable(),
@@ -401,7 +484,7 @@ final class TeamTest extends TestCase
     public function testGetTaskListReturnsSameInstance(): void
     {
         $team = new Team(
-            id: 'team-tasklist-same-' . uniqid((string) getmypid(), true),
+            id: $this->teamId('team-tasklist-same'),
             name: 'Task List Same Test',
             leadAgentId: 'lead-tasklist-same',
             createdAt: new \DateTimeImmutable(),
@@ -420,7 +503,7 @@ final class TeamTest extends TestCase
     public function testGetMailboxReturnsMailboxInstance(): void
     {
         $team = new Team(
-            id: 'team-mailbox-' . uniqid((string) getmypid(), true),
+            id: $this->teamId('team-mailbox'),
             name: 'Mailbox Test',
             leadAgentId: 'lead-mailbox',
             createdAt: new \DateTimeImmutable(),
@@ -432,7 +515,7 @@ final class TeamTest extends TestCase
     public function testGetMailboxReturnsSameInstance(): void
     {
         $team = new Team(
-            id: 'team-mailbox-same-' . uniqid((string) getmypid(), true),
+            id: $this->teamId('team-mailbox-same'),
             name: 'Mailbox Same Test',
             leadAgentId: 'lead-mailbox-same',
             createdAt: new \DateTimeImmutable(),
@@ -480,7 +563,7 @@ final class TeamTest extends TestCase
 
     public function testClaimTaskReturnsFalseWhenTeammateNotFound(): void
     {
-        $team = $this->createTeam('team-claim-no-tm-' . uniqid((string) getmypid(), true));
+        $team = $this->createTeam('team-claim-no-tm');
 
         // No teammates added — claimTask must return false.
         $wm = $this->createRealWorktreeManager();
@@ -498,7 +581,7 @@ final class TeamTest extends TestCase
      */
     public function testClaimTaskRollsBackTheClaimWhenWorktreeCreationFails(): void
     {
-        $team = $this->createTeam('team-claim-rollback-' . uniqid((string) getmypid(), true));
+        $team = $this->createTeam('team-claim-rollback');
         $team->addTeammate($this->createTeammate('tm-rb', $team->id, 'Riley', AgentType::Coder));
         $wm = $this->createRealWorktreeManager();
 
@@ -551,7 +634,7 @@ final class TeamTest extends TestCase
 
     public function testClaimTaskReturnsFalseWhenTaskAlreadyClaimed(): void
     {
-        $team = $this->createTeam('team-claim-taken-' . uniqid((string) getmypid(), true));
+        $team = $this->createTeam('team-claim-taken');
 
         $teammate = $this->createTeammate('tm-1', $team->id, 'Alice', AgentType::Coder);
         $team->addTeammate($teammate);
@@ -583,7 +666,7 @@ final class TeamTest extends TestCase
 
     public function testClaimTaskReturnsTrueAndWiresWorktreePathOnSuccess(): void
     {
-        $team = $this->createTeam('team-claim-ok-' . uniqid((string) getmypid(), true));
+        $team = $this->createTeam('team-claim-ok');
 
         $teammate = $this->createTeammate('tm-claim', $team->id, 'Bob', AgentType::Coder);
         $team->addTeammate($teammate);
@@ -626,7 +709,7 @@ final class TeamTest extends TestCase
         // Proxy repro for "sweepIfDue() has a real caller": claimTask() must
         // invoke WorktreeManager::sweepIfDue(), whose only observable side
         // effect is writing the .last-sweep throttle marker file.
-        $team = $this->createTeam('team-claim-sweep-' . uniqid((string) getmypid(), true));
+        $team = $this->createTeam('team-claim-sweep');
 
         $teammate = $this->createTeammate('tm-sweep', $team->id, 'Sweeper', AgentType::Coder);
         $team->addTeammate($teammate);
@@ -670,6 +753,9 @@ final class TeamTest extends TestCase
 
     private function createTeam(string $id, int $maxTeammates = 5): Team
     {
+        // Every Team id in this file is attributed to the process (E281).
+        $id = $this->teamId($id);
+
         return new Team(
             id: $id,
             name: "Team {$id}",
@@ -687,7 +773,9 @@ final class TeamTest extends TestCase
     ): Teammate {
         return new Teammate(
             id: $id,
-            teamId: $teamId,
+            // Accepts a raw literal OR an already-tokenised $team->id; teamId()
+            // is idempotent, and both call shapes appear in this file.
+            teamId: $this->teamId($teamId),
             name: $name,
             type: $type,
             model: 'claude-sonnet-4-6',

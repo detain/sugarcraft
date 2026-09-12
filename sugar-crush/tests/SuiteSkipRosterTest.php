@@ -33,6 +33,14 @@ use SugarCraft\Crush\Tests\Support\SuiteSkipRoster;
  *    exit zero). One without the other is half a control: "the child failed" is
  *    also what a broken harness says, and "the child passed" is also what a
  *    child that never started says.
+ *
+ * Two further child-run shapes extend that mechanism test (E469): a run whose
+ * only test class skips wholesale, and a run that `pcntl_fork()`s mid-flight —
+ * the fork arm pins that the inherited shutdown handler neither prints the
+ * banner twice nor overwrites the child's chosen exit status. And two pins
+ * drive the verdict logic on the REAL roster instead of the synthetic one,
+ * because a one-key synthetic roster cannot distinguish `rosterWasFullyReached()`
+ * from "the only key was reached".
  */
 #[CoversClass(SuiteSkipRoster::class)]
 final class SuiteSkipRosterTest extends TestCase
@@ -433,6 +441,103 @@ final class SuiteSkipRosterTest extends TestCase
     }
 
     /**
+     * The same counts check, driven on the REAL roster shape (E469).
+     *
+     * `rosterWasFullyReached()` — the AND half of the counts check — is
+     * untestable against a one-key synthetic roster: reaching "every expected
+     * key prepared" and reaching "the one expected key prepared" are the same
+     * statement. With the real two-key roster this proves the check arms only
+     * AFTER the last rostered method has been prepared, and fires when a
+     * rostered method then skips in a second data-provider row.
+     */
+    public function testTheRealRosterShapeReportsWhenARosteredMethodSkipsTwice(): void
+    {
+        $keys = array_keys(SuiteSkipRoster::EXPECTED);
+        self::assertGreaterThan(1, count($keys), 'the roster shrank to one key and lost its discriminating power');
+
+        $roster = new SuiteSkipRoster(SuiteSkipRoster::EXPECTED, 'Linux');
+        foreach ($keys as $key) {
+            $roster->recordPrepared($key);
+            $roster->recordSkip($key . '#0', $key, 'first row of ' . $key);
+        }
+
+        self::assertNull(
+            $roster->report(),
+            'a complete run of the real roster — every key prepared, every key skipping exactly once — '
+            . 'was judged dirty; the counts check cannot tell a full run from a broken one',
+        );
+
+        $roster->recordSkip($keys[0] . '#1', $keys[0], 'a second data-provider row for ' . $keys[0]);
+
+        $report = (string) $roster->report();
+        self::assertStringContainsString(
+            'SKIP EVENT COUNT IS ' . (count($keys) + 1) . ', ROSTER SIZE IS ' . count($keys),
+            $report,
+            'the real-shape roster accepted a duplicate skip silently',
+        );
+        self::assertStringContainsString($keys[0] . '#1', $report);
+    }
+
+    /**
+     * The premise under the counts check: every rostered skip must be
+     * PREPARABLE (E469).
+     *
+     * `report()`'s counts arm only fires once `rosterWasFullyReached()`, which
+     * reads the `Test\Prepared` stream — and a `#[Requires…]`-attribute skip is
+     * emitted ABOVE preparation (measured in `vendor/phpunit/phpunit/src/Framework/TestCase.php`,
+     * per the roster class's own doc-block). So an attribute-gated or
+     * `setUpBeforeClass()`-gated test on the roster would leave the counts
+     * check permanently disarmed for it, and a second skip row could never be
+     * named. This pins the layout premise against the real rostered files —
+     * body-level `markTestSkipped()` inside the method, no Requires attribute,
+     * no class-level gate. It reads by reflection only; it runs nothing.
+     */
+    public function testEveryRosteredSkipIsPreparableSoTheCountsCheckIsLive(): void
+    {
+        foreach (array_keys(SuiteSkipRoster::EXPECTED) as $entry) {
+            [$class, $method] = explode('::', $entry, 2);
+            $reflection = new \ReflectionClass($class);
+
+            foreach ([...$reflection->getAttributes(), ...$reflection->getMethod($method)->getAttributes()] as $attribute) {
+                self::assertStringNotContainsString(
+                    'Requires',
+                    $attribute->getName(),
+                    $entry . ' is gated by ' . $attribute->getName()
+                    . ' — attribute skips are emitted above Test\\Prepared, which permanently disarms'
+                    . ' the roster counts check for it. Move the gate into the test body.',
+                );
+            }
+
+            $body = implode('', array_slice(
+                (array) file($reflection->getFileName()),
+                $reflection->getMethod($method)->getStartLine() - 1,
+                $reflection->getMethod($method)->getEndLine() - $reflection->getMethod($method)->getStartLine() + 1,
+            ));
+            self::assertStringContainsString(
+                'markTestSkipped',
+                $body,
+                $entry . ' no longer skips from inside its own body, yet stays on the roster — the '
+                . 'run either never prepares it (filter trap) or never reaches it (layout trap).',
+            );
+
+            if ($reflection->hasMethod('setUpBeforeClass')) {
+                $gate = $reflection->getMethod('setUpBeforeClass');
+                $gateBody = implode('', array_slice(
+                    (array) file($gate->getFileName()),
+                    $gate->getStartLine() - 1,
+                    $gate->getEndLine() - $gate->getStartLine() + 1,
+                ));
+                self::assertStringNotContainsString(
+                    'markTestSkipped',
+                    $gateBody,
+                    $entry . "'s class skips in setUpBeforeClass() — a class-level gate prepares "
+                    . 'nothing and is not rosterable (check 4 reports it as a violation instead).',
+                );
+            }
+        }
+    }
+
+    /**
      * A `--filter`ed run that never reaches the rostered test is silent.
      *
      * Without this the guard would red on every partial run a developer makes,
@@ -661,6 +766,86 @@ final class SuiteSkipRosterTest extends TestCase
             $result['output'],
         );
         self::assertStringContainsString('cannot be put on the roster', $result['output']);
+    }
+
+    /**
+     * A pcntl child must not inherit the roster's shutdown verdict (E469).
+     *
+     * `install()` registers the shutdown handler BEFORE any test runs, and
+     * `pcntl_fork()` copies it into the child along with the whole accumulated
+     * roster. This suite forks for real — the worker pools do — so an
+     * unguarded child would judge the PARENT's events at its own exit: a
+     * second banner on the wire and, worse, the child's `exit()` status
+     * rewritten to 1, turning a deliberate fork result into a bogus roster
+     * violation at its parent's `pcntl_waitpid()`.
+     *
+     * The probe makes the run dirty FIRST (an off-roster body skip, exactly
+     * the shape the pair test above proves is caught), so the parent's own
+     * banner is guaranteed, and only then forks a child that exits 7.
+     * MEASURED on this box (pcntl present): with the pid guard in place the
+     * banner prints exactly once and the waitpid reads 7; with the guard's
+     * condition mutated away the child prints the banner a second time and
+     * its shutdown `exit(1)` overwrites the 7. The box-shape fallback (no
+     * pcntl — `composer.json` carries no ext-pcntl requirement) keeps the
+     * single-banner assertion, which is all it can prove. The parent test
+     * never calls `markTestSkipped()`: this suite is itself under the guard,
+     * and an off-roster skip HERE would red the very run hosting the pin.
+     */
+    public function testAForkedChildDoesNotCarryTheRostersShutdownVerdict(): void
+    {
+        $result = $this->runChildSuite(
+            \dirname(__DIR__),
+            <<<'PHP'
+                public function testTheRunIsDirtyBeforeTheFork(): void
+                {
+                    $this->markTestSkipped('an off-roster skip armed BEFORE any fork happens');
+                }
+
+                public function testTheChildKeepsItsOwnExitStatus(): void
+                {
+                    if (!function_exists('pcntl_fork')) {
+                        echo "CHILD-EXIT: no-pcntl\n";
+                        $this->assertTrue(true);
+
+                        return;
+                    }
+
+                    $pid = pcntl_fork();
+                    if ($pid === 0) {
+                        // The inherited shutdown handler runs RIGHT HERE.
+                        exit(7);
+                    }
+
+                    pcntl_waitpid($pid, $status);
+                    echo 'CHILD-EXIT: ' . (pcntl_wifexited($status) ? pcntl_wexitstatus($status) : 'signalled') . "\n";
+                    $this->assertTrue(true);
+                }
+                PHP,
+        );
+
+        self::assertNotSame(
+            0,
+            $result['rc'],
+            "the parent's off-roster skip stopped failing the run once a fork joined it.\n"
+            . $result['output'],
+        );
+        self::assertSame(
+            1,
+            substr_count($result['output'], 'SUITE SKIP ROSTER VIOLATION'),
+            "the banner printed a number of times other than once — a second copy means a forked "
+            . "child ran the parent's shutdown report, which is exactly the leak this pins.\n"
+            . $result['output'],
+        );
+
+        if (!str_contains($result['output'], 'CHILD-EXIT: no-pcntl')) {
+            self::assertStringContainsString(
+                'CHILD-EXIT: 7',
+                $result['output'],
+                "the forked child did not exit with the status it chose — the roster's shutdown "
+                . "handler overwrote it (enforced exit 1 is what this measured under mutation).\n"
+                . $result['output'],
+            );
+        }
     }
 
     /**

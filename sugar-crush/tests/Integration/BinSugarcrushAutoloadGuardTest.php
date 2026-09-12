@@ -43,6 +43,19 @@ use SugarCraft\Crush\Cli\NonInteractive;
  *    per-session id rows, which stay raw on purpose.
  *  - `bin/sugarcrush`, one — this branch.
  *
+ * THAT ENUMERATION IS ONE CHANNEL OF A LARGER CENSUS (E158, round 69). Raw
+ * `fwrite(STDERR, …)` is only the emitter this branch happens to use. The
+ * full stderr ledger lives in
+ * {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest::testTheDirectFwriteStderrRosterIsUnchanged()}
+ * and its siblings: the STDERR-captured handle, the `error_log` sites, the
+ * `sugarcrush:`-prefixed message shapes, the `warnPermissionConfig*` family,
+ * and the `RuntimeNoticeSink::warn` call sites, each re-derived from the tree
+ * on every run. The tie is load-bearing in both directions — that census
+ * re-reads the figure above against its own live scan
+ * ({@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest::testTheInheritedCensusStillAgreesWithTheScan()}),
+ * so prose here that desyncs from the tree goes red THERE. Do not reword the
+ * "call sites … is WORD" sentence above without reading that test first.
+ *
  * WHY THE EXEMPTION CLAIM STILL EARNS ITS PLACE, narrowed to what was checked:
  * the nine in `NonInteractive` and `Subcommands` are all on the ONE-SHOT and
  * SUBCOMMAND paths, and {@see \SugarCraft\Crush\Cli\Bootstrap::launchNotices()}

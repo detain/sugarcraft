@@ -972,6 +972,12 @@ final class BinSugarcrushWiringTest extends TestCase
      * guard spuriously — and the natural "fix" for that is to weaken the
      * pattern, which is the outcome worth avoiding.
      *
+     * COST, KNOWINGLY (E257): this yields one data row per `src/` file plus
+     * `bin/sugarcrush`, so every source file added to the library adds one
+     * test total to the suite. Same growth lands in
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest}'s real-tree
+     * cases, whose class doc-block states the full price.
+     *
      * @return array<string, array{0: string, 1: string}>
      */
     public static function crushSourceFiles(): array
@@ -1049,6 +1055,69 @@ final class BinSugarcrushWiringTest extends TestCase
                 $name . ' resolves a project root with a bare getcwd(). Read the configured root '
                     . '(App::$root / Chat::$projectRoot / EngineBackend::withRoot()) and fall back to '
                     . 'getcwd() only when it is null, or `--root` stops here (crush_code.md Phase 0 item 6).',
+            );
+        }
+    }
+
+    /**
+     * Known-OFFENDERS for every bare-`getcwd()` spelling (E322, round 69).
+     *
+     * The real-tree guard above is a one-sided proof: every scanned file is
+     * compliant, so a pattern typo'd into matching NOTHING stays green forever
+     * — and the one file whose shape would exercise
+     * {@see ROOT_CAPTURE_EXEMPT_PATTERN} is exactly the file the guard skips.
+     * These fixtures are the missing positive side. Each row must fire its own
+     * pattern, must spare the sanctioned `$configured ?? getcwd()` fallback,
+     * and must NOT be caught by any sibling pattern — the cross-exclusion
+     * keeps a wildcarded typo from swallowing a neighbour's spelling and
+     * letting its own row go untested.
+     *
+     * @return array<string, array{0: int, 1: string, 2: string}>
+     */
+    public static function bareGetcwdSpellingFixtures(): array
+    {
+        return [
+            'named-argument projectRoot'      => [0, '$chat = Chat::new(projectRoot: getcwd());', '$chat = Chat::new(projectRoot: $configured ?? getcwd());'],
+            'named-argument workingDirectory' => [1, 'spawn(workingDirectory: (string) getcwd(), argv: $argv);', 'spawn(workingDirectory: $configured ?? getcwd(), argv: $argv);'],
+            'capture fallback'                => [2, 'EnvironmentBlock::capture(getcwd())', 'EnvironmentBlock::capture($snapshot ?? self::root())'],
+            'assigned projectRoot'            => [3, '$projectRoot = (string) getcwd();', '$projectRoot = $config->root ?? (string) getcwd();'],
+            'assigned workingDirectory'       => [4, '$workingDirectory = getcwd();', '$workingDirectory = $config->dir ?? getcwd();'],
+            'assigned root'                   => [5, '$root = getcwd();', '$root = $config->root ?? getcwd();'],
+        ];
+    }
+
+    /**
+     * @dataProvider bareGetcwdSpellingFixtures
+     */
+    public function testEachBareGetcwdSpellingCatchesItsOffenderAndSparesItsNeighbours(int $index, string $offender, string $fallback): void
+    {
+        $patterns = array_values(self::BARE_GETCWD_ROOT_SPELLINGS);
+        $this->assertArrayHasKey($index, $patterns, 'fixture row drifted past the spelling list');
+        $own = $patterns[$index];
+
+        $this->assertMatchesRegularExpression(
+            $own,
+            $offender,
+            'spelling ' . $index . ' no longer catches a bare getcwd() — the guard is dormant',
+        );
+
+        $this->assertDoesNotMatchRegularExpression(
+            $own,
+            $fallback,
+            'spelling ' . $index . ' also fires on the SANCTIONED configured-root fallback — '
+                . 'the guard would reject its own recommended fix',
+        );
+
+        foreach ($patterns as $otherIndex => $other) {
+            if ($otherIndex === $index) {
+                continue;
+            }
+
+            $this->assertDoesNotMatchRegularExpression(
+                $other,
+                $offender,
+                'spelling ' . $otherIndex . ' reached into spelling ' . $index
+                    . "'s offender — two patterns test the same shape and the other's row goes untested",
             );
         }
     }

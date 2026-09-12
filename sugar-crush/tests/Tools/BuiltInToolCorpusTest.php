@@ -16,6 +16,18 @@ use SugarCraft\Crush\Tools\Tool;
  * depends on it: it saw one flat directory, and its interface/trait guard sat
  * behind a `class_exists()` that throws first.
  *
+ * WHAT ADDING A SOURCE FILE COSTS (E257, round 69, stated so the price is
+ * paid knowingly). `BuiltInToolCorpus::classNames()` token-scans ALL of `src/`,
+ * and the real-tree cases here instantiate everything it derives — so a new
+ * `src/` file lands a class in this corpus whether or not it is a tool, and a
+ * new dispatchable tool must be recorded in the corpus's secondary-declaration
+ * map or the roster arms go red. The same growth reaches
+ * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushWiringTest::crushSourceFiles()},
+ * whose provider yields one data row per `src/` file plus `bin/sugarcrush`:
+ * every file added to the library adds one test total to every run, wherever
+ * it sits in the tree. Figures here are deliberately DERIVED, never typed, so
+ * the only thing a new file can change is the live count.
+ *
  * TWO KINDS OF TEST HERE, kept apart on purpose:
  *  - against the REAL `src/` — the figures the corpus doc-block quotes, derived
  *    so they cannot drift from the tree they describe;
