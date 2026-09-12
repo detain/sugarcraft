@@ -375,10 +375,19 @@ final class EngineBackendTest extends TestCase
         // `restore()`'s matching `(…, true)` both landed on the runner's fd 0.
         // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
         // goes true -> false across this seam (3/3); with an explicit stream it
-        // stays true (3/3). That side effect is not cosmetic: the descriptor-0
-        // repair in `tests/bootstrap.php` IS an `O_NONBLOCK` flag on fd 0, and
-        // `restore()` here was clearing it back for every later test in the
-        // run. See that file's write-up; it cost a full run to find.
+        // stays true (3/3). WHAT THIS PARAGRAPH CLAIMED (E342): that the
+        // descriptor-0 repair in `tests/bootstrap.php` "IS an `O_NONBLOCK` flag
+        // on fd 0, and `restore()` here was clearing it back for every later
+        // test in the run". WHAT IS TRUE NOW, re-derived against the code: the
+        // shipped repair is `fclose(\STDIN)` plus a `/dev/null` reopen - it
+        // holds no flag - and `PosixBackend::restore()`'s
+        // `stream_set_blocking(…, true)` is `is_resource()`-guarded (candy-core
+        // `PosixBackend.php:716`), so it cannot reach the closed constant, for
+        // this test or any later one. WHY THE TEST STILL EARNS ITS PLACE: the
+        // property is "the seam writes to the stream it was GIVEN" - the pair
+        // below asserts it in BOTH directions - and that holds under either
+        // repair. See `tests/bootstrap.php`'s write-up of the superseded flag
+        // attempt; it cost a full run to find.
         //
         // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
         // reports a memory stream as blocked whatever you set, so it cannot
@@ -399,7 +408,9 @@ final class EngineBackendTest extends TestCase
         try {
             $this->assertFalse(
                 stream_get_meta_data($flagSink[0])['blocked'],
-                "enableRawMode() did not clear O_NONBLOCK on the stream it was GIVEN, so it wrote the flag "
+                "enableRawMode() did not SET O_NONBLOCK on the stream it was GIVEN - its trailing "
+                    . 'stream_set_blocking($stream, false) puts the flag ON the open file description '
+                    . 'that forked and execed children share - so it wrote the flag '
                     . "somewhere else - on a null stream that somewhere else is the runner's descriptor 0",
             );
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before completing');
@@ -416,7 +427,9 @@ final class EngineBackendTest extends TestCase
             $tty->restore();
             $this->assertTrue(
                 stream_get_meta_data($flagSink[0])['blocked'],
-                'restore() did not put O_NONBLOCK back on the stream it was given',
+                'the seam did not CLEAR O_NONBLOCK on the stream it was given - its matching '
+                    . 'stream_set_blocking($stream, true) takes the flag OFF the open file description '
+                    . 'that forked and execed children share - so the descriptor is still non-blocking',
             );
             fclose($flagSink[0]);
             fclose($flagSink[1]);

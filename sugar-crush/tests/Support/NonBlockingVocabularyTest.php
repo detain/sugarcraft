@@ -111,25 +111,17 @@ final class NonBlockingVocabularyTest extends TestCase
      * files is owned by another lane, so a row keyed on a line would go stale
      * on an edit that has nothing to do with this.
      *
+     * EMPTY since the sweep landed (round-67 wave 2, lane dj): E319's last
+     * eight inverted failure messages — `EngineBackendTest` (x2), `ChatTest`
+     * (x2) and `Support/ForkedChildTest` (x4) — were rewritten to the flag
+     * sense, and their rows were deleted in the same commit as the sentences,
+     * which is the success case this file promises above. Do not restore a row
+     * from history: a row here claims LIVE inverted sentences, and the scanner
+     * re-derives that on every run.
+     *
      * @var array<string,array{sites:int,why:string}>
      */
     private const INVERTED_ROSTER = [
-        'tests/Backend/EngineBackendTest.php' => [
-            'sites' => 2,
-            'why' => 'The pair around enableRawMode()/restore(). Both assertions are RIGHT and '
-                . 'both sentences name the other direction. Out of this lane\'s file list.',
-        ],
-        'tests/ChatTest.php' => [
-            'sites' => 2,
-            'why' => 'The same pair, copied. That it is a COPY is the reason a census beats a '
-                . 'fix here: the sentence travelled with the helper it describes.',
-        ],
-        'tests/Support/ForkedChildTest.php' => [
-            'sites' => 4,
-            'why' => 'TWO copies of the pair, and E319 recorded this file as carrying ONE — the '
-                . 'entry says "(x2)" where the tree has four. Derived here rather than quoted, '
-                . 'which is why the discrepancy is visible at all. Out of this lane.',
-        ],
     ];
 
     /**

@@ -870,7 +870,9 @@ final class ChatTest extends TestCase
         try {
             $this->assertFalse(
                 stream_get_meta_data($flagSink[0])['blocked'],
-                'enableRawMode() did not clear O_NONBLOCK on the stream it was GIVEN, so it wrote the flag '
+                'enableRawMode() did not SET O_NONBLOCK on the stream it was GIVEN - its trailing '
+                    . 'stream_set_blocking($stream, false) puts the flag ON the open file description '
+                    . 'that forked and execed children share - so it wrote the flag '
                     . "somewhere else - on a null stream that somewhere else is the runner's descriptor 0",
             );
             $this->assertTrue($isRaw($slavePath), 'setup: raw mode must be active before running the tool');
@@ -891,7 +893,9 @@ final class ChatTest extends TestCase
             $tty->restore();
             $this->assertTrue(
                 stream_get_meta_data($flagSink[0])['blocked'],
-                'restore() did not put O_NONBLOCK back on the stream it was given',
+                'the seam did not CLEAR O_NONBLOCK on the stream it was given - its matching '
+                    . 'stream_set_blocking($stream, true) takes the flag OFF the open file description '
+                    . 'that forked and execed children share - so the descriptor is still non-blocking',
             );
             fclose($flagSink[0]);
             fclose($flagSink[1]);
