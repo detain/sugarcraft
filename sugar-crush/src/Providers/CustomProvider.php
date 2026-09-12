@@ -392,7 +392,9 @@ final readonly class CustomProvider implements ProviderInterface
         // P4.S2: one parsed Usage is the source of every usage number leaving
         // this method; tokensUsed/costUsd keep their exact prior expressions
         // for legitimate wire values (a negative count clamps to 0 per Usage's
-        // doctrine, as in SglangProvider::parseResponse()).
+        // doctrine, as in SglangProvider::parseResponse()). The E17 fold hands
+        // the parsed object itself to the carrier so the split outlives this
+        // parse instead of collapsing into the two projections below.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
 
         return new CompleteResponse(
@@ -401,6 +403,7 @@ final readonly class CustomProvider implements ProviderInterface
             toolCalls: $toolCalls,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
         );
     }
 

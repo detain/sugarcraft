@@ -93,25 +93,26 @@ final readonly class CompleteResponse
          * fields are untouched and remain authoritative for anything that
          * only reads a total: this is ADDITIVE.
          *
-         * NULL IS THE ORDINARY ANSWER TODAY. No construction site in `src/`
-         * passes it yet: each split-reading provider still ends its Usage at
-         * the `tokensUsed`/`costUsd` projection, and widening `Runtime`'s
-         * fold (the two `Usage::reported($response->tokensUsed, …)` sites in
-         * `runStreaming()`/`runBatch()`) plus the seven providers' construction
-         * sites is the follow-through — deliberately outside the lane that
-         * owns this file, so the carrier is published, documented, and
-         * unit-tested here with the fold listed rather than silently half-done
-         * (same posture {@see $truncated} shipped in). A null means
-         * "the split was not carried", never "the split is zero" — see the
+         * CORRECTED IN PLACE when the fold landed (E17 follow-through): WHAT
+         * IT SAID: "NULL IS THE ORDINARY ANSWER TODAY. No construction site
+         * in `src/` passes it yet ... widening Runtime's fold ... is the
+         * follow-through." WHAT IS TRUE NOW: every split-reading provider
+         * passes its parsed document whole at its usage-bearing construction
+         * sites, and `Runtime`'s fold prefers that carrier, falling back to
+         * the projection whenever a carrier measures nothing — so an empty
+         * usage document and no document at all still answer identically.
+         * Null remains ordinary where no split exists: stream deltas (which
+         * carry no usage), the flat-wire ClaudeCodeProvider, EchoProvider,
+         * and error arms. A null still means "the split was not carried",
+         * never "the split is zero" — see the
          * Usage docblock's "Zero is not the same as unknown".
          *
-         * WHY IT EARNS ITS PLACE NOW rather than in the same commit as the
-         * fold: Chat's tier calibration
+         * WHY IT EARNS ITS PLACE: Chat's tier calibration
          * ({@see \SugarCraft\Crush\Chat::noteTurnUsageObservation()}) reads
          * `promptTokens()` THROUGH this field and prefers it over the total —
-         * the moment the fold lands, the estimator tightens with no further
-         * Chat change, and until then the fallback keeps the calibration
-         * honest about what it is actually measuring.
+         * with the fold landed, the estimator tightens with no further Chat
+         * change, and where the carrier is null the fallback keeps the
+         * calibration honest about what it is actually measuring.
          */
         public ?\SugarCraft\Crush\Usage $usage = null,
     ) {}

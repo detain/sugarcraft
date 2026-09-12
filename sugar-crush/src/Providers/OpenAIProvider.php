@@ -237,6 +237,9 @@ final readonly class OpenAIProvider implements ProviderInterface
         // it now decodes to an all-unreported Usage, the same doctrine
         // Usage::fromArray() applies at the fork boundary ("a corrupt frame
         // costs the turn its accounting, not the turn itself").
+        // E17: the parsed object rides out on `usage:` with the projections, so
+        // prompt/completion/cached buckets reach Runtime instead of stopping
+        // at this method.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
 
         return new CompleteResponse(
@@ -245,6 +248,7 @@ final readonly class OpenAIProvider implements ProviderInterface
             toolCalls: $toolCalls,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
         );
     }
 

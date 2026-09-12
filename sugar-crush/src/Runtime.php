@@ -20,6 +20,7 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
@@ -1359,7 +1360,7 @@ final class Runtime
                         // still has to reach the screen.
                         $onProgress($response->reasoning);
                     }
-                    $usages[] = Usage::reported($response->tokensUsed, $response->costUsd);
+                    $usages[] = self::foldUsage($response);
 
                     // Folded in above BEFORE being noted as a failure, so that
                     // when it is not retried the accumulated result is
@@ -1401,7 +1402,10 @@ final class Runtime
         // its output and none of its input. Usage::sum() returns null when
         // every chunk reported nothing, which is the common case on this path
         // (see the note above) and is NOT the same answer as zero; {@see Usage}
-        // spells out why that distinction is load-bearing.
+        // spells out why that distinction is load-bearing. Since the E17 fold
+        // the two Vertex arms also carry their side's buckets on the carrier
+        // (each priced to its own projection, never the whole document twice),
+        // so sum() merges the split across the pair as well as the totals.
         yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages));
 
         if ($toolCalls !== []) {
@@ -1491,8 +1495,11 @@ final class Runtime
             // The provider-counted figures this response already carried and
             // that were dropped here until crush_code.md Phase 5 item 7. Null
             // when the provider reported neither, which is not the same claim
-            // as "$0.00 spent" - see {@see Usage}.
-            Usage::reported($response->tokensUsed, $response->costUsd),
+            // as "$0.00 spent" - see {@see Usage}. Since the E17 fold the
+            // provider's parsed buckets ride along when the wire carried
+            // them; {@see foldUsage()} keeps the projection shape for every
+            // provider that still reports only totals.
+            self::foldUsage($response),
         );
 
         if ($response->toolCalls !== null && $response->toolCalls !== []) {
@@ -1500,6 +1507,46 @@ final class Runtime
                 yield $msg;
             }
         }
+    }
+
+    /**
+     * Fold one provider response into the Usage that reaches the Message (E17
+     * follow-through on the CompleteResponse carrier widening).
+     *
+     * A provider that parsed a usage document off the wire now hands it to
+     * CompleteResponse whole, buckets and all; providers without such a
+     * document still report only the projected totals. The fold therefore
+     * prefers the carrier and falls back to the projection:
+     *
+     *   - carrier absent, or carrier measuring NOTHING at all (zero total,
+     *     zero cost, every bucket unreported - the shape an empty usage
+     *     document parses to, e.g. Bedrock's terminal metadata events) ->
+     *     `Usage::reported()` of the projected figures, byte-identical to the
+     *     pre-fold answer, which is itself null when nothing was counted -
+     *     zero is not the same claim as unknown, see {@see Usage};
+     *   - carrier measuring anything -> the carrier, whole. Every flipped
+     *     construction site builds its carrier's total and cost to equal the
+     *     very projections the old fold made, so the pass-through changes no
+     *     existing figure; it only recovers the split buckets the projection
+     *     had thrown away.
+     */
+    private static function foldUsage(CompleteResponse $response): ?Usage
+    {
+        $carrier = $response->usage;
+
+        if ($carrier !== null
+            && ($carrier->totalTokens !== 0
+                || $carrier->costUsd !== 0.0
+                || $carrier->inputTokens !== null
+                || $carrier->outputTokens !== null
+                || $carrier->cacheReadTokens !== null
+                || $carrier->cacheCreationTokens !== null
+                || $carrier->reasoningTokens !== null)
+        ) {
+            return $carrier;
+        }
+
+        return Usage::reported($response->tokensUsed, $response->costUsd);
     }
 
     /**

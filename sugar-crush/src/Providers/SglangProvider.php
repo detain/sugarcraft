@@ -899,21 +899,21 @@ final readonly class SglangProvider implements ProviderInterface
                 // message_delta pair bills through; the E456 comment there
                 // names "usage-only" as an expected chunk shape). Emitted
                 // last, after any recovery chunk, so the bill is the stream's
-                // terminal event and `[DONE]` stays inert. WHY tokensUsed
-                // ONLY: the parsed Usage - buckets incl. reasoning_tokens
-                // (fixture: 57/28/85/25) - is projected to the carrier's two
-                // money fields exactly as parseResponse() does on the batch
-                // path; lifting buckets across providers is the
-                // CompleteResponse widening Usage.php's class docblock names
-                // as the later seam, not this step. A stream that reports
-                // nothing never sets $streamUsage, so this yield is skipped
-                // and the turn still sums to null, not zero.
+                // terminal event and `[DONE]` stays inert. The parsed Usage
+                // rides out WHOLE on `usage:` since the E17 fold - buckets
+                // incl. reasoning_tokens (fixture: 57/28/85/25) reach Runtime
+                // through this same usage-only channel; `tokensUsed`/`costUsd`
+                // stay the exact projections they were, both for older
+                // carrier readers and as the fold's fallback figure. A stream
+                // that reports nothing never sets $streamUsage, so this yield
+                // is skipped and the turn still sums to null, not zero.
                 yield new CompleteResponse(
                     content: '',
                     reasoning: null,
                     toolCalls: null,
                     tokensUsed: $streamUsage->totalTokens,
                     costUsd: $streamUsage->costUsd,
+                    usage: $streamUsage,
                 );
             }
         } catch (GuzzleException $e) {
@@ -1671,7 +1671,9 @@ final readonly class SglangProvider implements ProviderInterface
         // for every wire value a provider legitimately sends; a NEGATIVE wire
         // count now clamps to 0 (Usage's stated doctrine for provider bugs)
         // where it used to pass through — no test pinned the pass-through, and
-        // UsageWiringTest pins the clamp.
+        // UsageWiringTest pins the clamp. The E17 fold sends that one parsed
+        // object on the carrier too — one source of truth for the split as
+        // well as for the two projections.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
 
         // §Q7 (E-32): `finish_reason` was read nowhere on the batch arm, so a
@@ -1694,6 +1696,7 @@ final readonly class SglangProvider implements ProviderInterface
             toolCalls: $toolCalls,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
             truncated: $truncated,
         );
     }

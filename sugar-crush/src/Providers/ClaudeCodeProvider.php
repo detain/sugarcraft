@@ -385,6 +385,12 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             );
         }
 
+        // No `usage:` carrier on purpose (E17 audit): this shell-out wire
+        // reports exactly two money numbers - `usage.total_tokens` and
+        // `total_cost_usd` - and no split to lose. A Usage built here would
+        // carry five unreported buckets beside the same total, and Runtime's
+        // fold would project it back to precisely the object the fallback
+        // already makes. The projections below stay the whole truth.
         return new CompleteResponse(
             content: $data['result'] ?? $data['content'] ?? '',
             reasoning: $data['reasoning'] ?? null,

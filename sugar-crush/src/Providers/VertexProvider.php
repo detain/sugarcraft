@@ -913,6 +913,8 @@ final readonly class VertexProvider implements ProviderInterface
         // this method; tokensUsed/costUsd keep their exact prior expressions
         // for legitimate wire values (a negative count clamps to 0 per
         // Usage's doctrine, as in SglangProvider::parseResponse()).
+        // E17: the whole parsed document also leaves on `usage:` — the unary
+        // reply's input/output/cache buckets now cross into Runtime.
         $usage = $this->parseAnthropicUsage(
             is_array($data['usage'] ?? null) ? $data['usage'] : [],
             $model,
@@ -924,6 +926,7 @@ final readonly class VertexProvider implements ProviderInterface
             toolCalls: $toolCalls === [] ? null : $toolCalls,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
         );
     }
 
@@ -1151,16 +1154,16 @@ final readonly class VertexProvider implements ProviderInterface
         // non-streaming arm would read zero on every live stream (the
         // step-brief's named failure mode). The PER-DELTA shape these two
         // returns emit is P1.S5's contract and is untouched: each event
-        // still bills exactly its own side, the 0-gates still hold, and the
-        // buckets ride the parse, not the wire - CompleteResponse has no
-        // field for them until the reported "widen CompleteResponse" seam
-        // lands. One consequence of keeping that gate, recorded honestly
-        // because it is subtle: a `message_start` whose EVERYTHING was a
-        // cache hit (input_tokens 0 with a positive cache_read) still drops
-        // here exactly as it dropped before this method read cache at all;
-        // changing the gate would change P1.S5-pinned emission semantics
-        // under this step's no-behaviour-change boundary and is part of the
-        // same reported follow-up.
+        // still bills exactly its own side and the 0-gates still hold.
+        // Since the E17 fold the buckets ride the wire too - each event's
+        // carrier document names ONLY its own side's tokens, never the whole
+        // parsed document (see ACCOUNTING OWNERSHIP below), so the summed
+        // turn still cannot double-bill. One consequence of keeping the
+        // gates, recorded honestly because it is subtle: a `message_start`
+        // whose EVERYTHING was a cache hit (input_tokens 0 with a positive
+        // cache_read) still drops here exactly as it dropped before this
+        // method read cache at all; changing the gate would alter
+        // P1.S5-pinned emission semantics and remains a reported follow-up.
         //
         // ACCOUNTING OWNERSHIP, split on purpose (review-2): the PARSE owns
         // the document - the Usage parseAnthropicUsage() returns prices the
@@ -1177,20 +1180,35 @@ final readonly class VertexProvider implements ProviderInterface
         // would bill the same side twice across the summed turn. Today the
         // per-side split is unobservable through cost - Vertex's
         // costPer1kTokens() is a placeholder `return 0.0` - so the P4.S2
-        // tests pin the tokensUsed side of it instead.
+        // tests pin the tokensUsed side of it. The E17 carriers make the
+        // same ownership visible beside the cost: the start carrier reports
+        // only the input-side buckets, the delta carrier only the output
+        // side, whatever extra fields a stray document may have carried.
         if ($type === 'message_start') {
             $usage = $this->parseAnthropicUsage(
                 is_array($event['message']['usage'] ?? null) ? $event['message']['usage'] : [],
                 $model,
             );
 
-            return $usage->inputTokens === null || $usage->inputTokens === 0
-                ? null
-                : new CompleteResponse(
-                    content: '',
-                    tokensUsed: $usage->inputTokens,
-                    costUsd: $this->cost($model, $usage->inputTokens ?? 0, 0),
-                );
+            if ($usage->inputTokens === null || $usage->inputTokens === 0) {
+                return null;
+            }
+
+            $startCost = $this->cost($model, $usage->inputTokens, 0);
+
+            return new CompleteResponse(
+                content: '',
+                tokensUsed: $usage->inputTokens,
+                costUsd: $startCost,
+                usage: Usage::new(
+                    $usage->inputTokens,
+                    $startCost,
+                    $usage->inputTokens,
+                    null,
+                    $usage->cacheReadTokens,
+                    $usage->cacheCreationTokens,
+                ),
+            );
         }
 
         if ($type === 'message_delta') {
@@ -1199,13 +1217,18 @@ final readonly class VertexProvider implements ProviderInterface
                 $model,
             );
 
-            return $usage->outputTokens === null || $usage->outputTokens === 0
-                ? null
-                : new CompleteResponse(
-                    content: '',
-                    tokensUsed: $usage->outputTokens,
-                    costUsd: $this->cost($model, 0, $usage->outputTokens ?? 0),
-                );
+            if ($usage->outputTokens === null || $usage->outputTokens === 0) {
+                return null;
+            }
+
+            $deltaCost = $this->cost($model, 0, $usage->outputTokens);
+
+            return new CompleteResponse(
+                content: '',
+                tokensUsed: $usage->outputTokens,
+                costUsd: $deltaCost,
+                usage: Usage::new($usage->outputTokens, $deltaCost, null, $usage->outputTokens),
+            );
         }
 
         if ($type === 'error') {
@@ -1520,6 +1543,8 @@ final readonly class VertexProvider implements ProviderInterface
         // leaving this method; tokensUsed/costUsd keep their exact prior
         // expressions for legitimate wire values (a negative count clamps
         // to 0 per Usage's doctrine, as in SglangProvider::parseResponse()).
+        // E17: and the parsed document itself now rides out on `usage:`, so
+        // the unary Gemini reply delivers its buckets to Runtime as well.
         $usage = $this->parseUsageMetadata(
             is_array($data['usageMetadata'] ?? null) ? $data['usageMetadata'] : [],
             $model,
@@ -1531,6 +1556,7 @@ final readonly class VertexProvider implements ProviderInterface
             toolCalls: null,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
         );
     }
 
@@ -1587,10 +1613,14 @@ final readonly class VertexProvider implements ProviderInterface
         );
 
         if ($usage->totalTokens !== 0) {
+            // The parked response carries the whole cumulative document
+            // (E17) - one emit, so unlike the Anthropic arms there is no
+            // other side to protect from a double count.
             $pendingUsage = new CompleteResponse(
                 content: '',
                 tokensUsed: $usage->totalTokens,
                 costUsd: $usage->costUsd,
+                usage: $usage,
             );
         }
 

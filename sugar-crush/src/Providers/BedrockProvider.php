@@ -395,7 +395,9 @@ final readonly class BedrockProvider implements ProviderInterface
         // P4.S2: one parsed Usage is the source of every usage number leaving
         // this method; tokensUsed/costUsd keep their exact prior expressions
         // for legitimate wire values (a negative count clamps to 0 per Usage's
-        // doctrine, as in SglangProvider::parseResponse()).
+        // doctrine, as in SglangProvider::parseResponse()). Since the E17 fold
+        // the parsed object itself now LEAVES with them via `usage:`, so the
+        // buckets survive past this boundary instead of dying at the projection.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : [], $model);
 
         return new CompleteResponse(
@@ -404,6 +406,7 @@ final readonly class BedrockProvider implements ProviderInterface
             toolCalls: null,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
         );
     }
 
@@ -506,7 +509,10 @@ final readonly class BedrockProvider implements ProviderInterface
         // to the identical `TokenUsage` shape, so the cache buckets cannot be
         // wired on one arm and missed on the other. An event with no usage
         // parses to an all-unreported Usage whose total is 0 - exactly the
-        // zeros this method hardcoded before.
+        // zeros this method hardcoded before. Passing that same object on
+        // `usage:` (E17) is therefore honest on BOTH arms: an empty document
+        // reads as nothing-measured and Runtime's fold falls back to the
+        // projection, while the terminal event's cache buckets survive.
         $usage = $this->parseUsage(
             is_array($data['metadata']['usage'] ?? null) ? $data['metadata']['usage'] : [],
             $model,
@@ -518,6 +524,7 @@ final readonly class BedrockProvider implements ProviderInterface
             toolCalls: null,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
+            usage: $usage,
         );
     }
 

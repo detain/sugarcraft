@@ -12,9 +12,9 @@ use SugarCraft\Crush\Usage;
  * The E17 carrier: CompleteResponse::$usage is where a provider's split usage
  * DOCUMENT starts its journey back to Chat — the decision the backlog entry
  * said was blocking, taken. These tests pin the carrier's contract at the
- * carrier itself, because the fold sites that will pass it (Runtime's two
- * `Usage::reported(...)` seams and the seven providers' constructions) are a
- * follow-through outside this lane; a contract nothing tests until the last
+ * carrier itself; the fold sites (Runtime's two seams and the providers'
+ * constructions) landed later and are pinned in RuntimeUsageFoldTest and
+ * ProviderUsageCarriersTest — a contract nothing tests until the last
  * wire lands is how the $truncated field nearly drifted.
  */
 final class CompleteResponseUsageCarrierTest extends TestCase
