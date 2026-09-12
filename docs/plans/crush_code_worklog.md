@@ -11647,6 +11647,27 @@ ff's reviewer returned FOUR blank reports; the same task_id was resumed each tim
 - **ge — E309:** measure-and-verdict (tree-wide ToolResult factory span).
 - Continues: E25 piece-2 design carry · LSP load-flake watch · E134/E204/E353 unowned (fh brief-listed but not in its landed scope).
 
+### ROUND-70 HANDOFF (2026-09-12)
+
+- **Rulings recap (evidence):** E375 B-QUALIFIER shipped → CLOSED (fn `5d050411d` → pick `f2c2c2327`;
+  `unattended: true` optional envelope key only on the no-tty Refused arm, `DenialKind` bytes frozen, fb's
+  exact-array pins survive). E199 PER-TURN shipped → PARTIAL (fn same SHAs; `TURN_NOTICE_LIMIT=20` opt-in via
+  `beginTurn()`; the ONLY open seam is arming it at `src/Chat.php:8266` `scheduleBackendCompletion()` —
+  assigned **ga**). E43 CLOSED-DECLINED (fj; global fence-budget flip vs `fitToPane` wrap-not-truncate :2288-2315,
+  per-block routing out of ownership, palette renders no fences). E611 design-carry (supervisor harness item).
+  fj's Chat.php ownership breach ACCEPTED — `handlePaletteKey`'s only home is Chat.php.
+- **Launch state:** wave-1 sandboxes `crush-lane-{ga,gb,gd,ge}` cut at `55de6e269` (filemap atop closeout
+  `5e3e1ce83`), linked 18/18+7/7, trees clean at cut, artifacts dirs created. **gc = wave-2, DEFERRED** — its
+  E172-drain edits `src/Cli/Bootstrap.php`, whose emitter rows `StderrEmitterCensusTest` (ga edits this wave)
+  scans → co-flip risk; compose off the post-wave-1-merge tip. E353 folded into gd; E134/E204 are
+  supervisor-owned-file items judged at round close, not lane work.
+- **Findings watch:** `LspClientDispatchPumpTest` ~10s load-flake under shard contention — ambient, no lane.
+  ga's seam list (complete): `StderrEmitterCensusTest:55` stale ELEVEN quote · `MultiAgentRefactorTest`
+  tokenless `throwing-` ids · `ProcessUniqueTempNameTest` matching() third copy · `RuntimeNoticeSink:778`
+  reset() docblock · fn OVERFLOW_FORMAT "this session" prose.
+- Standing order unchanged: **do not stop at round boundaries** — close r70 (worklog + §0-NOW-72 + stamps +
+  filemap) and immediately compose/launch r71 per RESUME.
+
 ## ROUND 68 (2026-09-12) — lanes ea–ee: E17 provider fold shipped, citation guard widened tree-wide, doc-figure t5, palette caret gated; floor 11,602/166,072
 
 - Floor moved 11,574/163,533 → **11,602/166,072/0F/0E/1S exit0** (linked, cwd=sugar-crush; serial 9m21s; K=8 shardcheck +0/+0 85s; five-guard 44T/4457A; Config 801T/17047A/1S; durations 496→499 rows).

@@ -7803,9 +7803,12 @@ in `classifySpec()`, require fd 2's entry to be a literal array before answering
 out this round because it was not measured against the whole tree and rule 16 says a prescription is a
 hypothesis until it is.
 
-### E204 [OPEN] — three lanes share ONE scratchpad directory, and two of them collided in round 47
+### E204 [PARTIAL] — three lanes share ONE scratchpad directory, and two of them collided in round 47
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process. **Observed, cost one four-minute run.**
+**PARTIAL (round-70 launch ruling 2026-09-12):** the per-lane `scratchpad/lane-<x>/` brief mandate has been
+in force since round 48; the remaining enforcement half is a supervisor-owned harness/docs item — judged at
+round-70 close, NOT lane work.
 
 **What.** All three round-47 implementers were given the same
 `/tmp/claude-1000/-home-sites-sugarcraft/<session>/scratchpad` path. Lane a and lane b both wrote a
@@ -11993,6 +11996,8 @@ gives the same entropy with no period.
 ### E353 [OPEN] — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
+**FOLDED INTO round-70 gd per supervisor (2026-09-12):** the guard/no-guard decision rides gd's E686-tranche-7
+brief (with docs/HOOKS.md in its touch-list); row stays OPEN until gd lands, then gets stamped there.
 
 E328 changed a user-facing default and `HOOKS.md`'s built-in table went on documenting the old path for
 a full round. Grepped `tests/` for the filename: the only hits are `ScriptHook`/`Bootstrap` guards, none

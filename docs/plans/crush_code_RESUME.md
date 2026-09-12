@@ -90,21 +90,31 @@ artifacts `/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its 
 |---|---|---|
 | **ROUND-69 FINAL / NEW ANCHOR** | **11,656 / 167,184 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial gate 9m27s) | **LINKED, cwd = sugar-crush, at `b600c9760`** — K=8 shardcheck CONSERVATION PASS +0/+0; five-guard 74T/5150A; Config filter 805T/17,129A/1S; `durations.tsv` 503 rows (+PaletteQueryCaretTest, +InputCaretGraphemeTest, +RuntimeNoticeSinkResetExtensionTest, +FixtureLifetimeCensusTest); runtime config.json md5 `05480c74…2210` stable |
 | wave-1 pin | 11,625 / 166,473 (`45b370c75`) | fa+fb+fc+fd+fi+fj picks + `c2b695867` ShellContrast drift-fix |
+| post-closeout doc tip | figures UNCHANGED — `55de6e269` filemap regen atop closeout `5e3e1ce83` atop re-pin `b600c9760` | docs-only chain above the code floor; **the round-70 wave-1 sandboxes are cut at this sha** |
 
 ### 1b. THE STANDARD LOCAL GATE — unchanged from §0-NOW-70 §1b (K=8 sharded, FAIL-CLOSED conservation, fresh `--out`, plain pipe; durations manifest must carry a row for every new test file BEFORE sharded conservation means anything; serial is the re-pin truth).
 
-### 2. ROUND 70 — LANES TO LAUNCH (cut fresh sandboxes off the round-69 closeout tip)
+### 2. ROUND 70 — LANES TO LAUNCH (wave split — wave-1 sandboxes ALREADY CUT)
+
+**Wave-1 = ga, gb, gd, ge — ALL FOUR SANDBOXES ALREADY CUT at `55de6e269` (branch `lane/<id>`,
+`/home/sites/crush-lane-<id>`, linked 18/18+7/7, trees clean at cut; artifacts dirs
+`/home/sites/crush-r61-artifacts/{ga,gb,gd,ge}` created 2026-09-12). Wave-2 = gc, DEFERRED: its E172-drain
+edits `src/Cli/Bootstrap.php`, whose emitter rows `StderrEmitterCensusTest` (ga-owned this wave) scans —
+co-flip risk; compose gc's brief off the post-wave-1-merge tip. E353 (docs/HOOKS.md, was unowned) is
+FOLDED INTO gd per supervisor — gd briefs now include it. E134/E204 rows are supervisor-owned-file items —
+supervisor judges at round-70 close, NOT lane work.**
 
 | lane | scope / ids | owns / notes |
 |---|---|---|
-| **ga — seam sweep** | fn's `Chat.php:8266` `beginTurn()` wiring (E199 drain activation — the ONLY destructive drain is `Chat.php:13100`); `StderrEmitterCensusTest:55` stale "is ELEVEN" quote; `MultiAgentRefactorTest:423` tokenless `throwing-` team ids; `ProcessUniqueTempNameTest` matching() third copy (fd's carry); `RuntimeNoticeSink:778` stale reset() docblock; fn OVERFLOW_FORMAT "this session" prose (now per-turn) | **owns src/Chat.php** + StderrEmitterCensusTest + ProcessUniqueTempNameTest + MultiAgentRefactorTest; ⚠ census trio flips in-step if emitter sites change |
-| **gb — denial/children tail** | E390 UNBLOCK as ONE motion: widen `ChildWallClockBudgetTest::resolveArgument` (same-file-literal-only) AND drop the `DuplicatedTestHelperDrift` licensé — both guards unowned post-merge; E616 `-'` lookbehind pattern decision (measured: reports all three tail fixtures NOWHERE); DenialKind docblock DECIDED stamp (fb's file) | owns tests/Support/ChildWallClockBudgetTest + DuplicatedTestHelperDriftTest + DenialPrefixRosterTest + src DenialKind.php; ⚠ same-file edits must land together (dual-guard coupling) |
-| **gc — providers/doctor** | E172 drain half (feeder landed `CommandLoader`:95/:293), E10 name decision (tool-schema owner), E493 OPEN-provider progress-callback heartbeat (fa's PARTIAL remainder) | owns src/Providers + src/Tools/BuiltIn/Doctor + CommandLoader + Bootstrap; ⚠ Bootstrap sprintf/format census caveat (BootstrapLaunchFormatConstantsTest + StderrEmitterCensus) — gc's drain seam may flip them IN-STEP; coordinate with ga via waves if both touch Chat/census territory |
-| **gd — E686 tranche-7** | ~50 figure files per fl's carry + the 7 HELD rows fl enumerated | owns tests/Config/DocFigureProseDriftTest + docs; ⚠ GlobDialect corpus: any doc edit adding/removing a glob-shaped literal drifts the PathGlob census figure — re-shape before re-pin |
-| **ge — E309 verdict** | measure-and-verdict ONLY (tree-wide ToolResult factory span; fb's refusal evidence is the starting point) | reads src/Tools broadly; writes no fb/fn-owned files; verdict → backlog renote, no forced fix |
+| **ga — seam sweep** (wave-1) | fn's `Chat.php:8266` `beginTurn()` wiring (E199 drain activation — the ONLY destructive drain is `Chat.php:13100`); `StderrEmitterCensusTest:55` stale "is ELEVEN" quote; `MultiAgentRefactorTest:423` tokenless `throwing-` team ids; `ProcessUniqueTempNameTest` matching() third copy (fd's carry); `RuntimeNoticeSink:778` stale reset() docblock; fn OVERFLOW_FORMAT "this session" prose (now per-turn) | **owns src/Chat.php** + StderrEmitterCensusTest + ProcessUniqueTempNameTest + MultiAgentRefactorTest; ⚠ census trio flips in-step if emitter sites change |
+| **gb — denial/children tail** (wave-1) | E390 UNBLOCK as ONE motion: widen `ChildWallClockBudgetTest::resolveArgument` (same-file-literal-only) AND drop the `DuplicatedTestHelperDrift` licensé — both guards unowned post-merge; E616 `-'` lookbehind pattern decision (measured: reports all three tail fixtures NOWHERE); DenialKind docblock DECIDED stamp (fb's file) | owns tests/Support/ChildWallClockBudgetTest + DuplicatedTestHelperDriftTest + DenialPrefixRosterTest + src DenialKind.php; ⚠ same-file edits must land together (dual-guard coupling) |
+| **gc — providers/doctor** (WAVE-2 — compose off post-wave-1-merge tip; do NOT launch with wave 1) | E172 drain half (feeder landed `CommandLoader`:95/:293), E10 name decision (tool-schema owner), E493 OPEN-provider progress-callback heartbeat (fa's PARTIAL remainder) | owns src/Providers + src/Tools/BuiltIn/Doctor + CommandLoader + Bootstrap; ⚠ Bootstrap sprintf/format census caveat (BootstrapLaunchFormatConstantsTest + StderrEmitterCensus) — gc's drain seam may flip them IN-STEP; the StderrEmitterCensus co-flip risk with ga is precisely WHY gc rides wave-2 |
+| **gd — E686 tranche-7 + E353** (wave-1) | ~50 figure files per fl's carry + the 7 HELD rows fl enumerated + **E353 (docs/HOOKS.md guard decision — folded in per supervisor)** | owns tests/Config/DocFigureProseDriftTest + docs; ⚠ GlobDialect corpus: any doc edit adding/removing a glob-shaped literal drifts the PathGlob census figure — re-shape before re-pin |
+| **ge — E309 verdict** (wave-1) | measure-and-verdict ONLY (tree-wide ToolResult factory span; fb's refusal evidence is the starting point) | reads src/Tools broadly; writes no fb/fn-owned files; verdict → backlog renote, no forced fix |
 
-**Unowned carry (pick or drop at the next close):** E25 piece-2 design item · E134 / E204 / E353 (fh-brief-listed
-but NOT in fh's landed scope — re-derive before launching) · Phase 9 + E62 chrome-bar (deferred TUI design) ·
+**Unowned carry (pick or drop at the next close):** E25 piece-2 design item · E134 / E204 (supervisor-owned-file
+items — supervisor judges at round-70 close, NOT lane work; E353 moved out of this list into gd above) ·
+Phase 9 + E62 chrome-bar (deferred TUI design) ·
 `src/Backend.php` `$onEvent` docblock drift + `ProcessReaper::escalate` family-list (docs micro) · E481 (LOW) ·
 **E655 "KeyboardHandlerPaletteTest" PHANTOM warning stays (do NOT re-issue without real target)** · LSP
 load-flake watch (ambient, not a lane).
@@ -114,19 +124,22 @@ load-flake watch (ambient, not a lane).
 1. Read this §0-NOW-71, the worklog tail (`## ROUND 69` in `docs/plans/crush_code_worklog.md`), and
    `docs/plans/crush_code_filemap.md`.
 2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the
-   `*** WANTED PUBLISHED ***` banner is cosmetic); `git status` clean at or above the round-69 closeout tip
-   (code floor `b600c9760`; the closeout docs above it are inert); if any figure is doubted, run the floor
+   `*** WANTED PUBLISHED ***` banner is cosmetic); `git status` clean at the tip — filemap regen
+   `55de6e269` atop closeout `5e3e1ce83` atop code floor `b600c9760` (the pre-flight floor figures are
+   VERIFIED at the `b600c9760` chain; the two docs commits above it are inert); if any figure is doubted, run the floor
    gate FIRST: `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv
    --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8),
    ~85s at 11,656T, **through a PLAIN PIPE, not a PTY** (`-u LINES -u COLUMNS`); serial is reserved for
    figure re-pins. NOTE: the thirteen round-69 lane worktrees (`crush-lane-{fa..fn}`) and their branches
    are still on disk — clean them per the standing rule once round-70 merges land.
-3. Brief §2's round-70 lanes (ga–ge) with the filemap ownership sets; `src/Chat.php` is RESERVED for ga
-   (fj's r69 breach is CLOSED — do not repeat the collision risk with gc: gc owns Bootstrap, NOT Chat). Cut
-   fresh `crush-lane-{ga..ge}` off **this closeout commit** — the commit that introduces §0-NOW-71 (resolve
-   at restart: `git -C /home/sites/sugarcraft log --grep='round-69 closeout' --oneline -1`; NEVER a stale
-   literal): `git -C /home/sites/sugarcraft worktree add /home/sites/crush-lane-<id> -b lane/<id>
-   <that-sha>` — round-69 sandboxes get cleaned at the round-70 merge, fresh cuts are the standing rule.
+3. Brief §2's round-70 lanes with the filemap ownership sets; `src/Chat.php` is RESERVED for ga
+   (fj's r69 breach is CLOSED — do not repeat the collision risk with gc: gc owns Bootstrap, NOT Chat).
+   The four WAVE-1 sandboxes are **ALREADY CUT — verify, do NOT re-cut**:
+   `git -C /home/sites/sugarcraft worktree list | grep crush-lane-g` must show `crush-lane-ga`,
+   `crush-lane-gb`, `crush-lane-gd`, `crush-lane-ge` on branches `lane/{ga,gb,gd,ge}` at `55de6e269`.
+   ONLY **gc** gets cut fresh, and only off the **post-wave-1-merge tip** (never now):
+   `git -C /home/sites/sugarcraft worktree add /home/sites/crush-lane-gc -b lane/gc <post-wave-1-tip>`.
+   Round-69 sandboxes get cleaned at the round-70 merge; fresh cuts remain the standing rule for wave-2 on.
 4. Per-bundle loop: implement (task+coder) → **verify claimed SHAs + worktree (rule 4)** → review
    (task+coder, verdict-first, WITH the five-guard filter) → fix round → merged-suite green (PIPE, not
    PTY) → commit (author `Joe Huss <[EMAIL]>`). Never push standing. Blank report — builder OR reviewer —
