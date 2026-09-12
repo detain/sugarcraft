@@ -235,17 +235,25 @@ final readonly class RepoMapBlock implements PromptSection
      * So this constant is sized to the largest real input measured rather than
      * placed on the growth ladder, and the two arguments do not compete.
      *
-     * THE MEASUREMENT: the SugarCraft monorepo root, 58 sub-packages, renders
-     * 6,878 B of package lines at the {@see MAX_ENTRY_BYTES} clip below —
-     * 1,314 B of headroom, about eleven more packages at this repository's
-     * mean line. `sugar-crush` itself as a single-package root renders 33
-     * source-directory lines in 1,915 B, a quarter of the cap. Both figures
-     * are the sum of the LINES, which is what this constant is compared
-     * against; the joined strings are 57 and 32 bytes longer, because the
-     * newline separators are outside the budget (see {@see renderSection()}). DOMAIN: those
-     * are two real repositories, not a property of monorepos; a workspace with
-     * several hundred packages will be truncated, and the header says so in
-     * that case rather than pretending the list is complete.
+     * THE MEASUREMENT IS A DATED RECORD, NOT A LIVE PROPERTY. The value was
+     * chosen from what two real repositories rendered in the 2026-08-21
+     * revision of this file: the SugarCraft monorepo root, then 58
+     * sub-packages, fit its package lines under this cap at the
+     * {@see MAX_ENTRY_BYTES} clip below with roughly a sixth spare, and
+     * `sugar-crush` itself, as a single-package root, rendered its
+     * source-directory lines at about a quarter of it. Both readings are
+     * history with no generator: the digits moved with every manifest added
+     * and every description edited after that revision, and an exact byte
+     * total quoted here is a number the tree grows into while reading as a
+     * property of it. What the record still earns is the sizing argument
+     * above — this cap was placed at the largest real input measured, not
+     * on a growth ladder. Both figures were sums of the LINES, which is
+     * what this constant is compared against; the joined strings ran longer
+     * by the newline separators, which sit outside the budget (see
+     * {@see renderSection()}). DOMAIN: the record covered two real
+     * repositories, not a property of monorepos; a workspace with several
+     * hundred packages will be truncated, and the header says so in that
+     * case rather than pretending the list is complete.
      */
     public const MAX_SECTION_BYTES = 8192;
 
@@ -261,18 +269,23 @@ final readonly class RepoMapBlock implements PromptSection
      * whichever field turns out to carry the bytes.
      *
      * 120 leaves ~70 B for the description after a typical
-     * `- candy-core/  ->  SugarCraft\Core\  ` prefix. MEASURED on this
-     * repository's 58 manifests, whose descriptions have a 159 B median (the
-     * sorted middle pair is 158 and 160) and a 165 B mean — an earlier
-     * revision said "a 160 B median", which is the upper of the two middle
-     * values and not their midpoint: 49
-     * of the 58 lines clip, for 6,878 B. Raising the cap buys progressively
-     * less — 140 costs +947 B to un-clip four more lines, 160 costs +1,836 B
-     * for seven and lands at 8,714 B, over {@see MAX_SECTION_BYTES}, at which
-     * point packages start being DROPPED instead of clipped. That is the
-     * trade the figure is chosen on: a clipped line still carries the
-     * directory and the namespace, which is the half the model cannot guess,
-     * while a dropped package carries nothing.
+     * `- candy-core/  ->  SugarCraft\Core\  ` prefix. The prefix half of
+     * that budget is structural; the measurements behind the number are a
+     * DATED RECORD of the 2026-08-21 revision over this repository's
+     * then-58 manifests, not a live property of them. There, descriptions
+     * ran long enough that most assembled lines clipped at 120, and raising
+     * the cap was measured to buy progressively less: 140 un-clipped only
+     * four more lines, and 160 pushed the whole section over
+     * {@see MAX_SECTION_BYTES} — the cliff where packages stop being
+     * CLIPPED and start being DROPPED. The digits that once carried those
+     * claims (a median, a mean, an exact clip count, per-cap byte deltas,
+     * a section total) are elided: none had a generator, every one moved
+     * with description edits, and one was wrong the day it shipped — the
+     * paragraph quoted "a 160 B median" when the sorted middle pair was
+     * 158 and 160, the upper of the pair rather than their midpoint. What
+     * survives the elision is the trade the figure was chosen on: a clipped
+     * line still carries the directory and the namespace, which is the half
+     * the model cannot guess, while a dropped package carries nothing.
      */
     public const MAX_ENTRY_BYTES = 120;
 

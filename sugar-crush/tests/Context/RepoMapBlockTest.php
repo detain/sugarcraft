@@ -904,10 +904,12 @@ final class RepoMapBlockTest extends TestCase
      * file defended the `MAX_PACKAGES` survivor with an argument that fits only
      * this constant: a bound whose DOC-BLOCK REASONS ABOUT ITS VALUE has to be
      * pinned, because deriving the test from the value asserts nothing about
-     * the measurement the value came from. 120 is exactly that — it is chosen
-     * against 140 and 160 on a measured trade (+947 B to un-clip four more
-     * lines, +1,836 B for seven and over the section cap), and the whole
-     * paragraph is void if the figure moves. `MAX_PACKAGES`'s doc-block argues
+     * the measurement the value came from. 120 is exactly that — it was argued
+     * against 140 and 160 on a measured trade in the revision that chose it
+     * (the E564/E633 pass turned the digits of that trade into a dated record
+     * in the doc-block; the cliff where 160 overruns the section cap is what
+     * the choice still rests on), and the whole argument is void if the figure
+     * moves. `MAX_PACKAGES`'s doc-block argues
      * only that a bound EXISTS, so its literal is pinned here for symmetry
      * rather than because 256 carries an argument.
      */
@@ -917,6 +919,96 @@ final class RepoMapBlockTest extends TestCase
         $this->assertSame(256, RepoMapBlock::MAX_PACKAGES);
         $this->assertSame(8192, RepoMapBlock::MAX_SECTION_BYTES);
         $this->assertSame(20000, RepoMapBlock::MAX_SOURCE_FILES);
+    }
+
+    /**
+     * E564 and E633 together: the two byte-cap doc-blocks now record their
+     * 2026-08-21 measurements as DATED history instead of arguing them as
+     * live properties of whatever the tree holds. Pinned here are the
+     * CONCLUSIONS the retired digits were supporting — E633 set the rule for
+     * this pass (mutate a conclusion, not a figure; a figure with no
+     * generator is exactly what rotted). The doc-blocks are read through
+     * reflection, not through a path literal: this file carries a fixture-tree
+     * walker (`rmrf()`), and `TreeWideGuardRosterTest` re-grades every
+     * walk in any file that names the package root — an anchored
+     * `file_get_contents()` here would drag that fixture cleanup into its
+     * census for no gain. The prose-pin idiom itself is established by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold()}.
+     */
+    public function testTheByteCapDocblocksCarryTheirMeasurementsAsDatedRecords(): void
+    {
+        $prose = '';
+        foreach (['MAX_SECTION_BYTES', 'MAX_ENTRY_BYTES'] as $capConstant) {
+            $docComment = (new \ReflectionClass(RepoMapBlock::class))
+                ->getReflectionConstant($capConstant)
+                ->getDocComment();
+            self::assertIsString(
+                $docComment,
+                "the {$capConstant} doc-block vanished; every pin below would go vacuously red on an empty read",
+            );
+
+            // Two-step normalisation, matching BuiltInToolCorpusTest: strip
+            // the per-line ` * ` marker FIRST, then collapse whitespace — a
+            // doc-block wraps at 80 columns, and ` * ` is not whitespace.
+            $lines = array_map(
+                static fn (string $line): string => preg_replace('/^\s*\*\s?/', '', $line) ?? $line,
+                explode("\n", (string) $docComment),
+            );
+            $prose .= ' ' . implode(' ', $lines);
+        }
+        $prose = trim((string) preg_replace('/\s+/', ' ', $prose));
+
+        // Every surviving reading hangs off its date anchor; without the
+        // anchor "roughly a sixth spare" reads as a property of today again.
+        $this->assertSame(
+            2,
+            substr_count($prose, '2026-08-21'),
+            'a byte-cap measurement lost its date anchor — the qualitative readings it '
+            . 'carries are supposed to be history, not live claims',
+        );
+
+        self::assertStringContainsString(
+            'THE MEASUREMENT IS A DATED RECORD, NOT A LIVE PROPERTY',
+            $prose,
+        );
+        self::assertStringContainsString(
+            'this cap was placed at the largest real input measured',
+            $prose,
+            'the sizing argument that keeps MAX_SECTION_BYTES off the growth ladder has left '
+            . 'the doc-block; the digits that demonstrated it are already gone',
+        );
+
+        self::assertStringContainsString(
+            'stop being CLIPPED and start being DROPPED',
+            $prose,
+            'the cliff conclusion — the actual reason 160 is too roomy and 120 is not — has '
+            . 'left the doc-block, and nothing else carries the trade any more',
+        );
+        self::assertStringContainsString(
+            'a dropped package carries nothing',
+            $prose,
+            'the clipped-versus-dropped trade, which is what the 120 figure was chosen on, '
+            . 'has left the doc-block',
+        );
+
+        self::assertStringContainsString(
+            'the sorted middle pair was 158 and 160',
+            $prose,
+            'the lesson that a hand-computed median can be wrong the day it ships has left '
+            . 'the doc-block — it is the reason the elided digits stay elided',
+        );
+
+        // The absence arm: none of the retired live figures creeps back as a
+        // present-tense property (their paired presence above is the positive
+        // arm — an absence-only test would also pass on a file whose doc-block
+        // was deleted wholesale).
+        foreach (['6,878', '1,314', '1,915', '+947', '1,836', '8,714', '57 and 32', '159 B', '165 B'] as $retiredFigure) {
+            self::assertStringNotContainsString(
+                $retiredFigure,
+                $prose,
+                "the retired live figure {$retiredFigure} is back in the production doc-block",
+            );
+        }
     }
 
     /**
