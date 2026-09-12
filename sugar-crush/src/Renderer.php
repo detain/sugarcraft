@@ -3597,7 +3597,15 @@ final class Renderer
         $selected = $palette->selectedIndex;
         $grouped = $palette->query === '' && $palette->mode !== 'providers' && $palette->mode !== 'themes';
 
-        $lines = ['🔍 ' . self::untrusted($palette->query) . '█', ''];
+        // E3 (caret-paint half): the block caret is the palette's keyboard
+        // claim. Once the shell holds the keys - {@see self::$paletteAbandoned}
+        // - the builder must not forge that claim, so the query line paints
+        // without its tail. The input box caret is renderInput()'s own cursor
+        // and keeps drawing as usual. Wire-not-delete: the box still renders
+        // under hand-off; a caller that ever composites this overlay again
+        // loses only the caret, never a whole frame.
+        $caret = self::$paletteAbandoned ? '' : '█';
+        $lines = ['🔍 ' . self::untrusted($palette->query) . $caret, ''];
         /** @var array<int, string> $rows row index => the content line it produced */
         $rows = [];
         if ($results === []) {
