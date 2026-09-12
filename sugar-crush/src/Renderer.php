@@ -1317,9 +1317,9 @@ final class Renderer
             // the terminal over-wide — the absolute-cursorTo row collision
             // fitToPane() exists to prevent, on the standalone path with no
             // hosted clipWidth() net underneath. Clip before compositing
-            // (backlog E47); see clipOverlayToCols() for why this cuts rather
+            // (backlog E47); see clipRowsToCols() for why this cuts rather
             // than wraps.
-            $overlay = self::clipOverlayToCols($overlay, $chat->cols());
+            $overlay = self::clipRowsToCols($overlay, $chat->cols());
             // A fresh Veil per render call (rather than one persisted on
             // Chat) means its own frame-diffing never kicks in - fine here,
             // since Chat already does its own diffing at a higher level in
@@ -2047,18 +2047,31 @@ final class Renderer
         // nothing else -- named now, because the dashboard's copy of this
         // arithmetic subtracted 2 and was wrong by exactly the padding.
         // The 40 floor is unchanged and still costs what it always did: under
-        // 44 columns the floor wins, the strip is wider than the terminal, and
-        // the shell renderer's clipWidth() is what keeps it off the screen.
+        // 44 columns the floor wins and the strip wants more cells than the
+        // terminal has. What E54 closes is that this used to be left to the
+        // HOSTED clipWidth() alone, and the standalone path has no hosted
+        // clip - the 44-cell rows escaped the fitter straight toward the
+        // terminal. The block is now cut to $cols here by the same guard the
+        // overlays use (below the E47 comment in renderView()), so both paths
+        // reach the terminal holding the one-row-one-line invariant, and the
+        // cut-vs-wrap trade is made once in clipRowsToCols(), not per caller.
         $width = AgentViewPane::contentWidth($cols, 40);
 
         // The status bar's first row is this pane's header, so it carries the
         // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs
         // the same /agents dispatch Ctrl+A does. See {@see markPaneHeader()}
-        // for why the whole block is not marked.
+        // for why the whole block is not marked, and clipRowsToCols() for why
+        // the clip runs BEFORE the mark (a cut must never split a sentinel).
         $theme = $chat->theme();
 
-        return self::markPaneHeader(Pane::Agents, AgentStatusBar::render($states, $theme))
-            . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS, $theme);
+        return self::markPaneHeader(
+            Pane::Agents,
+            self::clipRowsToCols(
+                AgentStatusBar::render($states, $theme)
+                . "\n" . AgentViewPane::render($states, -1, $width, self::AGENT_VIEW_MAX_ROWS, $theme),
+                $cols,
+            ),
+        );
     }
 
     /**
@@ -2500,7 +2513,11 @@ final class Renderer
     }
 
     /**
-     * Hold every row of an overlay block to $cols display cells by CUTTING.
+     * Hold every row of a post-choke-point block to $cols display cells by
+     * CUTTING. Named for the work it does, not for its first caller: the
+     * Veil overlays (E47) and the appended agent strip (E54) are BOTH blocks
+     * assembled after {@see fitToPane()} had its pass, and the standalone
+     * frame has no hosted clipWidth() underneath either.
      *
      * Deliberately not fitToPane(): that WRAPS, and a wrapped box row would
      * add physical rows to a frame renderView() has already sized to $rows —
@@ -2516,17 +2533,19 @@ final class Renderer
      * may end with an open style — the same exposure that row had before this
      * guard existed, and unchanged for every other row.
      *
-     * The overlay strings carry no zone sentinels at this point (the palette's
-     * item zones are marked on the COMPOSITED frame, after this call), so
-     * hardFit() cannot clip a sentinel triple in half here.
+     * Callers clip BEFORE marking zones: the overlay strings carry no zone
+     * sentinels at this point (the palette's item zones are marked on the
+     * COMPOSITED frame, after this call), and {@see renderAgentView()} keeps
+     * the same order for its `pane:agents` header so hardFit() can never clip
+     * a sentinel triple in half here.
      */
-    private static function clipOverlayToCols(string $overlay, int $cols): string
+    private static function clipRowsToCols(string $block, int $cols): string
     {
         if ($cols <= 0) {
-            return $overlay;
+            return $block;
         }
 
-        $rows = explode("\n", $overlay);
+        $rows = explode("\n", $block);
         foreach ($rows as $index => $row) {
             if (Width::of($row) > $cols) {
                 $rows[$index] = self::hardFit($row, $cols);
@@ -3604,8 +3623,29 @@ final class Renderer
         // and keeps drawing as usual. Wire-not-delete: the box still renders
         // under hand-off; a caller that ever composites this overlay again
         // loses only the caret, never a whole frame.
+        //
+        // E3 (caret-POSITION half): the glyph lands at PaletteState::$queryCursor,
+        // spliced between the query's halves exactly like renderInput() splices
+        // the draft's - same two-pass sanitise-then-measure, same cluster snap,
+        // same byte-identity when the caret is at the end (which is every state
+        // the pre-E3 keys could produce, so the older captures survive).
         $caret = self::$paletteAbandoned ? '' : '█';
-        $lines = ['🔍 ' . self::untrusted($palette->query) . $caret, ''];
+        $cleanQuery = self::untrusted($palette->query);
+        $caretAt = self::snapToClusterStart(
+            $cleanQuery,
+            min(
+                mb_strlen($cleanQuery, 'UTF-8'),
+                mb_strlen(self::untrusted(
+                    mb_substr($palette->query, 0, $palette->queryCursor, 'UTF-8')
+                ), 'UTF-8'),
+            ),
+        );
+        $lines = [
+            '🔍 ' . mb_substr($cleanQuery, 0, $caretAt, 'UTF-8')
+                . $caret
+                . mb_substr($cleanQuery, $caretAt, null, 'UTF-8'),
+            '',
+        ];
         /** @var array<int, string> $rows row index => the content line it produced */
         $rows = [];
         if ($results === []) {
@@ -4115,6 +4155,45 @@ final class Renderer
     }
 
     /**
+     * Floor a CODEPOINT offset onto the grapheme-cluster boundary at or
+     * before it (E5) - the one rule both caret splices share: the draft's
+     * in {@see renderInput()} and the palette query's in
+     * {@see renderPalette()}.
+     *
+     * `mb_substr()` splits codepoints, so a splice at an un-snapped offset can
+     * land between a base character and its combining mark and hand the mark
+     * to whatever glyph was spliced in. Snapping DOWN keeps every mark glued
+     * to its base and moves the caret back to where a reader would say it
+     * sits; snapping UP would silently eat the rest of the cluster behind the
+     * caret. The two ends are exact boundaries, so the common offsets - 0 and
+     * the whole string - short-circuit without a walk; a mid-text caret costs
+     * one ICU walk as far as the caret, the segmentation candy-core's `Width`
+     * already charges for per row (E68 made `ext-intl` the guarantee).
+     */
+    private static function snapToClusterStart(string $text, int $codepointOffset): int
+    {
+        $total = mb_strlen($text, 'UTF-8');
+        if ($codepointOffset <= 0 || $codepointOffset >= $total) {
+            return max(0, min($codepointOffset, $total));
+        }
+
+        $prev = 0;
+        $cp   = 0;
+        $byte = 0;
+        while ($cp < $codepointOffset) {
+            $cluster = grapheme_extract($text, 1, 0, $byte, $next);
+            if ($cluster === false || $cluster === '') {
+                break;
+            }
+            $prev = $cp;
+            $cp   += mb_strlen($cluster, 'UTF-8');
+            $byte  = $next;
+        }
+
+        return $cp === $codepointOffset ? $codepointOffset : $prev;
+    }
+
+    /**
      * Paint the input box.
      *
      * The box is painted HERE and not by `TextArea::view()`, deliberately:
@@ -4126,7 +4205,13 @@ final class Renderer
      * cursor motion visible at all; before {@see Chat::$input} existed the
      * glyph was unconditionally appended to the end of the draft. When the
      * cursor IS at the end, this produces byte-identical output to that
-     * older form.
+     * older form. The offset is snapped to a grapheme-cluster boundary
+     * first (E5): the widget walks CODEPOINTS — measured, two Lefts from the
+     * end of "e" + U+0301 + "x" answer offset 1, between a base and its
+     * combining mark — and splicing a glyph there let the mark compose onto
+     * the CURSOR instead of onto its base. At every boundary offset (which
+     * is every state the keys themselves can produce) the snap answers
+     * unchanged.
      */
     private static function renderInput(Chat $chat, Theme $theme): string
     {
@@ -4156,11 +4241,14 @@ final class Renderer
         // the glyph lands a column or two off. Nothing unsafe reaches the
         // terminal either way — both passes strip C0/C1.
         $clean = self::untrusted($chat->inputBuf);
-        $at = min(
-            mb_strlen($clean, 'UTF-8'),
-            mb_strlen(self::untrusted(
-                mb_substr($chat->inputBuf, 0, $chat->inputCursorOffset(), 'UTF-8')
-            ), 'UTF-8'),
+        $at = self::snapToClusterStart(
+            $clean,
+            min(
+                mb_strlen($clean, 'UTF-8'),
+                mb_strlen(self::untrusted(
+                    mb_substr($chat->inputBuf, 0, $chat->inputCursorOffset(), 'UTF-8')
+                ), 'UTF-8'),
+            ),
         );
         $draft = mb_substr($clean, 0, $at, 'UTF-8')
             . $cursor

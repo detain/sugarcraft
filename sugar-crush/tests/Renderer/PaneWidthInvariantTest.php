@@ -1077,7 +1077,8 @@ final class PaneWidthInvariantTest extends TestCase
      * 2. `renderView()`'s body choke point holds `$body` only, and the palette
      *    box is composited by `Veil` afterwards at its own natural width, so a
      *    narrow terminal used to get over-wide overlay rows. E47 routes the
-     *    overlay through `clipOverlayToCols()` before compositing. Swept: from
+     *    overlay through `clipRowsToCols()` (named for what it clips, since
+     *    E54 gave it a second caller) before compositing. Swept: from
      *    cols=60 up the box fits untouched (widest 60, then 77 from 80 up) and
      *    the guard's fast path leaves those frames byte-identical; below it the
      *    composited rows are CUT to the pane (cols=40: the 56-cell box lands
@@ -1129,7 +1130,7 @@ final class PaneWidthInvariantTest extends TestCase
             40,
             self::widestRow(implode("\n", self::transcriptRows($narrow))),
             'the clipped palette overlay no longer lands exactly on the pane at cols=40; '
-            . 'clipOverlayToCols() either stopped firing or the box changed shape',
+            . 'clipRowsToCols() either stopped firing or the box changed shape',
         );
     }
 

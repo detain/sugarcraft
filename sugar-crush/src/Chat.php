@@ -12414,12 +12414,38 @@ final class Chat implements Model
             // again on top of itself.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
                 => [$this->mutate(['palette' => null]), null],
+            // E3: the query buffer answers the caret like the draft does.
+            // Typing inserts AT the caret and Backspace erases BEFORE it, so
+            // the append-only pair these arms replaces (`query . rune`,
+            // `dropLast(query)`) is gone - a caret parked at the end makes
+            // those two exactly the old behaviour. ctrl-flagged runes keep
+            // typing the LETTER (the draft's documented rule; the only ctrl
+            // chord with an arm above is the Ctrl+P toggle-close).
             $msg->type === KeyType::Char
-                => [$this->withPaletteQuery($this->palette->query . $msg->rune), null],
+                => [$this->insertAtPaletteCaret($msg->rune), null],
             $msg->type === KeyType::Space
-                => [$this->withPaletteQuery($this->palette->query . ' '), null],
+                => [$this->insertAtPaletteCaret(' '), null],
             $msg->type === KeyType::Backspace
-                => [$this->withPaletteQuery(self::dropLast($this->palette->query)), null],
+                => [$this->eraseBeforePaletteCaret(), null],
+            $msg->type === KeyType::Delete
+                => [$this->eraseAfterPaletteCaret(), null],
+            // Caret motion, cluster-wise (see {@see clusterStartBefore()}).
+            // Alt/Ctrl+arrow chords move ONE cluster here, not one word: word
+            // motion stays the draft's alone for now, and a one-step move is
+            // what these chords did NOT do at all before (no-op), so this is
+            // a strict superset, never a wrong-word jump.
+            $msg->type === KeyType::Left
+                => [$this->movePaletteCaret(
+                    self::clusterStartBefore($this->palette->query, $this->palette->queryCursor)
+                ), null],
+            $msg->type === KeyType::Right
+                => [$this->movePaletteCaret(
+                    self::clusterEndAfter($this->palette->query, $this->palette->queryCursor)
+                ), null],
+            $msg->type === KeyType::Home
+                => [$this->movePaletteCaret(0), null],
+            $msg->type === KeyType::End
+                => [$this->movePaletteCaret(mb_strlen($this->palette->query, 'UTF-8')), null],
             // Mid-turn the palette browses but does not dispatch — see
             // {@see runSelectedPaletteActionWhileInFlight()}.
             $msg->type === KeyType::Enter
@@ -12474,9 +12500,115 @@ final class Chat implements Model
         return $this->refuseInFlightAction($label);
     }
 
-    private function withPaletteQuery(string $query): self
+    private function withPaletteQuery(string $query, ?int $queryCursor = null): self
     {
-        return $this->mutate(['palette' => $this->palette->withQuery($query)]);
+        return $this->mutate(['palette' => $this->palette->withQuery($query, $queryCursor)]);
+    }
+
+    /**
+     * Type one rune at the palette caret and park the caret after it.
+     *
+     * Inserting at a cluster boundary and advancing by the rune's whole
+     * codepoint count keeps the caret on a boundary even when the rune is
+     * itself multi-codepoint (a paste arrives as one wide rune, not as its
+     * parts), which is the invariant {@see movePaletteCaret()} relies on.
+     */
+    private function insertAtPaletteCaret(string $rune): self
+    {
+        $query = $this->palette->query;
+        $at    = $this->palette->queryCursor;
+
+        return $this->withPaletteQuery(
+            mb_substr($query, 0, $at, 'UTF-8') . $rune . mb_substr($query, $at, null, 'UTF-8'),
+            $at + mb_strlen($rune, 'UTF-8'),
+        );
+    }
+
+    /** Delete the cluster before the caret; the caret follows it left. */
+    private function eraseBeforePaletteCaret(): self
+    {
+        $query = $this->palette->query;
+        $cut   = self::clusterStartBefore($query, $this->palette->queryCursor);
+
+        return $this->withPaletteQuery(
+            mb_substr($query, 0, $cut, 'UTF-8') . mb_substr($query, $this->palette->queryCursor, null, 'UTF-8'),
+            $cut,
+        );
+    }
+
+    /** Delete the cluster after the caret; the caret stays put. */
+    private function eraseAfterPaletteCaret(): self
+    {
+        $query = $this->palette->query;
+        $at    = $this->palette->queryCursor;
+        $cut   = self::clusterEndAfter($query, $at);
+
+        return $this->withPaletteQuery(
+            mb_substr($query, 0, $at, 'UTF-8') . mb_substr($query, $cut, null, 'UTF-8'),
+            $at,
+        );
+    }
+
+    /** Pure caret move; {@see PaletteState::withQueryCursor()} clamps it. */
+    private function movePaletteCaret(int $offset): self
+    {
+        return $this->mutate(['palette' => $this->palette->withQueryCursor($offset)]);
+    }
+
+    /**
+     * The grapheme-cluster boundary strictly left of codepoint offset `$at`
+     * (0 when there is none - the left clamp).
+     *
+     * ICU segmentation via `grapheme_extract()`, the one segmentation
+     * candy-core guarantees (`ext-intl` is its declared dependency, and
+     * `Width` walks the same ICU boundaries since E68). Queries are a few
+     * keystrokes long and the walk stops at `$at`, so this runs the length
+     * of the caret's own column, not of any buffer - the ~24ms full-frame
+     * warning on {@see Renderer::scanRoot()} does not reach a per-keystroke
+     * walk over a search string.
+     */
+    private static function clusterStartBefore(string $s, int $at): int
+    {
+        $prev = 0;
+        $cp   = 0;
+        $byte = 0;
+        while ($cp < $at) {
+            $cluster = grapheme_extract($s, 1, 0, $byte, $next);
+            if ($cluster === false || $cluster === '') {
+                break;
+            }
+            $prev = $cp;
+            $cp   += mb_strlen($cluster, 'UTF-8');
+            $byte  = $next;
+        }
+
+        return $prev;
+    }
+
+    /**
+     * The grapheme-cluster boundary at or after codepoint offset `$at` -
+     * the end of the cluster `$at` sits inside, or the next one's end when
+     * `$at` already names a boundary (so Right from a boundary advances a
+     * whole cluster); the draft length when there is nothing left.
+     */
+    private static function clusterEndAfter(string $s, int $at): int
+    {
+        $total = mb_strlen($s, 'UTF-8');
+        $cp    = 0;
+        $byte  = 0;
+        while ($cp < $total) {
+            $cluster = grapheme_extract($s, 1, 0, $byte, $next);
+            if ($cluster === false || $cluster === '') {
+                break;
+            }
+            $cp += mb_strlen($cluster, 'UTF-8');
+            $byte = $next;
+            if ($cp > $at) {
+                return $cp;
+            }
+        }
+
+        return $total;
     }
 
     private function movePaletteSelection(int $direction): self
@@ -12671,27 +12803,6 @@ final class Chat implements Model
             . 'https://sugarcraft.github.io/lib/sugar-crush.html';
 
         return [$this->mutate(['history' => [...$this->history, Message::assistant($message)]]), null];
-    }
-
-    /**
-     * Drop the last UTF-8 codepoint from `$s`. Plain `substr(-1)`
-     * would corrupt multi-byte input — a backspace after typing
-     * an emoji should remove the whole grapheme.
-     *
-     * Now the PALETTE query's backspace only. The draft's backspace moved to
-     * {@see TextArea}, which needs a cursor-relative delete this cannot do;
-     * the palette query has no cursor, so it still wants exactly this.
-     */
-    private static function dropLast(string $s): string
-    {
-        if ($s === '') {
-            return $s;
-        }
-        $i = strlen($s) - 1;
-        while ($i > 0 && (ord($s[$i]) & 0xc0) === 0x80) {
-            $i--;
-        }
-        return substr($s, 0, $i);
     }
 
     /**

@@ -77,10 +77,14 @@ final class AgentViewPane
      * actually left after the metrics, and the metrics degrade (usage first,
      * then elapsed) rather than being clipped mid-token.
      *
-     * `clipWidth()` in the shell renderer remains the backstop, for the case
-     * {@see contentWidth()} documents: a terminal narrower than
-     * `$minimum + CHROME_WIDTH` still gets rows wider than itself, because the
-     * floor there is the CALLER's and nothing in this class can see it.
+     * The floor's cost stays out of the terminal either way, by TWO nets:
+     * `clipWidth()` in the shell renderer for hosted frames, and — since
+     * E54 — {@see \SugarCraft\Crush\Renderer::clipRowsToCols()} for the
+     * in-transcript strip on the standalone path, which has no hosted clip
+     * under it. Both cover the case {@see contentWidth()} documents: a
+     * terminal narrower than `$minimum + CHROME_WIDTH` still gets rows wider
+     * than itself, because the floor there is the CALLER's and nothing in
+     * this class can see it.
      *
      * It exists as a named constant because the two callers each used to
      * write their own literal for it and one of them wrote the wrong one:
@@ -101,8 +105,10 @@ final class AgentViewPane
      * `$outerWidth` is under `$minimum + CHROME_WIDTH` the floor wins and the
      * rendered rows are wider than the budget after all. Nothing here can fix
      * that -- a pane cannot be both at least `$minimum` wide and narrower than
-     * the terminal -- so the shell renderer's `clipWidth()` remains the
-     * backstop for terminals that narrow, exactly as before.
+     * the terminal -- so the clipping nets named at {@see CHROME_WIDTH}
+     * (the shell's `clipWidth()` hosted, `Renderer::clipRowsToCols()` on the
+     * standalone strip since E54) remain the backstop for terminals that
+     * narrow, exactly as before.
      */
     public static function contentWidth(int $outerWidth, int $minimum): int
     {

@@ -615,21 +615,27 @@ final class AgentViewPaneGeometryTest extends TestCase
      * keeps catching itself getting wrong, so it is pinned against output
      * captured from the pre-change tree rather than argued from the source.
      *
-     * 60 columns and up, NOT 44. This test was written over 44/60/80/120 and
-     * 44 has since moved — see
-     * {@see testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64()},
-     * which pins both halves of that move. 44 is the boundary where
+     * 80 columns and up, NOT 60 or 44. This test was written over 44/60/80/120
+     * and 44 has since moved twice — see
+     * {@see testRenderAgentViewAt44ColumnsMovedTwiceE64ThenTheE54HeaderCut()},
+     * which pins both halves of both moves. 44 is the boundary where
      * `contentWidth($cols, 40)` is exact, so the strip there is handed a
      * content width of 40, which is inside the range E64's operation floor
-     * was breaking; the three wider captures are outside it and are still
-     * byte-for-byte what the pre-CHROME_WIDTH tree drew.
+     * was breaking; 80 and 120 are outside it and are still byte-for-byte
+     * what the pre-CHROME_WIDTH tree drew.
      *
-     * BELOW 44 the `max(40, …)` floor still makes the strip wider than the
-     * terminal — unchanged, on purpose — and is still left to `clipWidth()`.
-     * This test therefore says nothing about widths under 44, and the name
-     * says so.
+     * E54 moved 60, and the reason is a measurement this test could never
+     * see while it skipped 44: `AgentStatusBar::render()`'s header row is
+     * 61 cells for this fixture and nothing bounded it — the pre-change tree
+     * simply drew it over-wide at 60 columns and left the cut to whoever was
+     * downstream, which standalone was nobody. The strip is now cut to the
+     * pane width at every width
+     * ({@see testTheAgentStripFitsTheTerminalAtEveryWidth()}), which is exactly
+     * what moves these two bytes, so the boundary of byte-identity walked
+     * from 60 up to 80 — one cell above the header's natural width. The
+     * over-run half is pinned below, in the direction of the change.
      */
-    public function testRenderAgentViewIsByteIdenticalAtAndAbove60Columns(): void
+    public function testRenderAgentViewIsByteIdenticalAtAndAbove80Columns(): void
     {
         $provider = $this->createMock(ProviderInterface::class);
         $manager = new AgentManager($provider, new SkillRegistry());
@@ -648,7 +654,7 @@ final class AgentViewPaneGeometryTest extends TestCase
         $render = new \ReflectionMethod(Renderer::class, 'renderAgentView');
 
         foreach (self::preChangeFrames() as $cols => $expected) {
-            if ($cols < 60) {
+            if ($cols < 80) {
                 continue;
             }
 
@@ -660,26 +666,120 @@ final class AgentViewPaneGeometryTest extends TestCase
                 sprintf('the in-transcript agent strip changed at %d columns', $cols),
             );
         }
+
+        $chat = (new Chat(agentManager: $manager))->withSize(60, 40);
+        $at60 = (string) $render->invoke(null, $chat);
+
+        $this->assertNotSame(
+            self::preChangeFrames()[60],
+            base64_encode($at60),
+            'the 60-column strip is back to its pre-E54 bytes — the 61-cell status bar must be cut',
+        );
+        $this->assertSame(
+            60,
+            Width::string(self::unmarked(explode("\n", $at60)[0])),
+            'the cut 60-column header should sit exactly on the pane width',
+        );
     }
 
     /**
-     * The one width of the four where the in-transcript strip DID move, and
-     * both halves of the move, so neither can be quietly walked back.
+     * The block with the `pane:agents` zone markers removed, which is what
+     * `scanRoot()` puts in the frame: an opening and a closing marker each
+     * wrap their id text in Private-Use sentinels, and all of it is parsed
+     * out and deleted before the diff sees a single cell. Measuring widths on
+     * the marked block would therefore accuse `markPaneHeader()` of a
+     * 27-cell over-run that never reaches a screen — and, worse, would not
+     * see the over-run E54 is about, which is inside the markers' shadow.
+     */
+    private static function unmarked(string $row): string
+    {
+        return preg_replace("/\x{e000}[^\x{e001}]{0,}\x{e001}/u", '', $row) ?? $row;
+    }
+
+    /**
+     * E54's heading: the `max(40, …)` floor in
+     * {@see AgentViewPane::contentWidth()} was kept — on purpose, for the
+     * reasons written down beside it — but the over-run it guarantees under
+     * 44 columns, and the 61-cell status bar above that, were left to
+     * `clipWidth()`, which only exists on the hosted path. `render()` splices
+     * the strip in after `fitToPane()` and nothing else touches its columns,
+     * so standalone a 61-cell status bar row walked toward terminals of any
+     * size. Measured on the pre-fix tree, the returned block's widest visible
+     * row (zone markers stripped — see {@see unmarked()}) was 61 cells at
+     * every width 24..60 — the header, which nothing bounded at all — over
+     * box rows of 44 below the floor and exactly `cols` above it; the box's
+     * own over-run under 44 needed a second terminal narrower than the
+     * header already needed.
      *
-     * At 44 columns `contentWidth(44, 40)` hands `AgentViewPane::render()` a
-     * content width of 40, and 40 is inside the band E64's operation floor was
-     * breaking: 17 cells of identity plus a 5-cell operation plus 24 cells of
-     * `0s  0 tok | $0.0000` is 46, which does not fit 40. The strip drew
-     * `● reviewer [working]  Revi…0s  0 tok | $` — the usage column clipped
-     * mid-token, with no gap before it and a cost that reads as `$` rather
-     * than as truncated. It now drops the usage column it cannot fit and
-     * right-aligns what remains: `● reviewer [working]  Revi…          0s`.
+     * The strip is now cut to the pane by the same `clipRowsToCols()` the
+     * overlays use, and this is the fit pin: widest visible row == cols,
+     * exactly, at every width 24..130. The equality is two-arm: under 61 a
+     * walk-back of the clip re-exposes the 61-cell header and reddens; from
+     * 61 up nothing may come in short of the width either, so a drift in the
+     * box's exact fit reddens there. Red on the pre-fix tree is the point.
+     */
+    public function testTheAgentStripFitsTheTerminalAtEveryWidth(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $manager = new AgentManager($provider, new SkillRegistry());
+        $manager->register(new Agent(
+            name: 'reviewer',
+            description: 'Reviews code for bugs',
+            prompt: 'You are a reviewer.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
+
+        $render = new \ReflectionMethod(Renderer::class, 'renderAgentView');
+
+        for ($cols = 24; $cols <= 130; $cols++) {
+            $chat = (new Chat(agentManager: $manager))->withSize($cols, 40);
+
+            $widths = array_map(
+                static fn(string $row): int => Width::string(self::unmarked($row)),
+                explode("\n", (string) $render->invoke(null, $chat)),
+            );
+
+            $this->assertSame(
+                $cols,
+                max($widths),
+                sprintf('the in-transcript agent strip does not sit on a %d-column terminal', $cols),
+            );
+        }
+    }
+
+    /**
+     * The one width of the four where the in-transcript strip moved TWICE —
+     * once for E64, once for E54 — and both halves of both moves, so neither
+     * can be quietly walked back.
+     *
+     * E64's move is the boxed agent row. At 44 columns `contentWidth(44, 40)`
+     * hands `AgentViewPane::render()` a content width of 40, and 40 is inside
+     * the band E64's operation floor was breaking: 17 cells of identity plus a
+     * 5-cell operation plus 24 cells of `0s  0 tok | $0.0000` is 46, which
+     * does not fit 40. The row drew `● reviewer [working]  Revi…0s  0 tok | $`
+     * — the usage column clipped mid-token, with no gap before it and a cost
+     * that reads as `$` rather than as truncated. It now drops the usage
+     * column it cannot fit and right-aligns what remains:
+     * `● reviewer [working]  Revi…          0s`.
+     *
+     * E54's move is the header strip above it — the row the boxed assertions
+     * deliberately used to scope OUT ("a separate one-line strip this change
+     * does not touch"). E54 is precisely the change that touches it: the
+     * 61-cell status header was cut to the pane width, so at 44 columns its
+     * `0 tok | $0.0000` tail is gone too. The boxed half is byte-identical
+     * between the E64-era capture and this one, which is why both stories can
+     * be told from one re-taken capture.
      *
      * Asserted against BOTH captures rather than just the new one, because
-     * "this is what it draws now" alone would pass just as happily if the
-     * clamp were reverted and the capture re-taken.
+     * "this is what it draws now" alone would pass just as happily if a clamp
+     * were reverted and the capture re-taken.
      */
-    public function testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64(): void
+    public function testRenderAgentViewAt44ColumnsMovedTwiceE64ThenTheE54HeaderCut(): void
     {
         $provider = $this->createMock(ProviderInterface::class);
         $manager = new AgentManager($provider, new SkillRegistry());
@@ -704,28 +804,39 @@ final class AgentViewPaneGeometryTest extends TestCase
             $actual,
             'the 44-column strip is back to its pre-E64 bytes',
         );
-        $this->assertSame(self::postE64Frame44(), $actual, 'the 44-column strip moved again');
+        $this->assertSame(self::postE54Frame44(), $actual, 'the 44-column strip moved again');
 
-        // The BOXED row only. `renderAgentView()`'s frame opens with a
-        // separate one-line zone-marked strip that this change does not touch
-        // and that still carries the full usage figure -- asserting over the
-        // whole frame would be a claim about the pane written against a
-        // different thing.
+        // The E64 half, on the BOXED row: exactly one agent row, identity
+        // kept, usage column dropped, row still exactly one pane wide.
         $lines = explode("\n", self::plain(base64_decode($actual, true) ?: ''));
         $boxed = array_values(array_filter($lines, static fn(string $l): bool => str_contains($l, "\u{2502}")));
         $this->assertCount(1, $boxed, 'the pane draws exactly one agent row here');
         $this->assertStringContainsString('reviewer [working]', $boxed[0]);
         $this->assertStringNotContainsString('tok', $boxed[0], 'the usage column does not fit 40 content cells');
         $this->assertSame(44, Width::string($boxed[0]));
+
+        // The E54 half, on the HEADER row — the row the old comment above
+        // scoped out because nothing clipped it. It now does: the identity
+        // survives the cut, the 20-cell usage tail does not, and the visible
+        // header is exactly the pane width.
+        $head = $lines[0];
+        $this->assertStringContainsString('reviewer [working]', $head);
+        $this->assertStringNotContainsString('tok', $head, 'E54 cut the over-long header, usage tail and all');
+        $this->assertSame(44, Width::string(self::unmarked($head)));
     }
 
     /**
-     * `renderAgentView()` at 44 columns as it stands with E64 fixed, base64
+     * `renderAgentView()` at 44 columns as it stands with E54 fixed, base64
      * for the same reason {@see preChangeFrames()} is.
+     *
+     * The E64-era capture this constant replaced differed from it only in the
+     * header line — the boxed agent row is identical between the two — which
+     * is what lets this one capture carry both halves of
+     * {@see testRenderAgentViewAt44ColumnsMovedTwiceE64ThenTheE54HeaderCut()}.
      */
-    private static function postE64Frame44(): string
+    private static function postE54Frame44(): string
     {
-        return '7oCAcGFuZTphZ2VudHPugIEbWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSAbWzFtG1szODsyOzE2MDsyMTY7MTYwbXJldmlld2VyG1swbSAbWzM4OzI7MTYwOzIxNjsxNjBtW3dvcmtpbmddG1swbSAbWzM4OzI7MTk3OzIwMTsyMTJtUmV2aWV3cyBjb2RlIGZvciBidWdzG1swbSAbWzM4OzI7MTM5OzE0MzsxNjhtMHMbWzBtIBtbMzg7MjsxMzk7MTQzOzE2OG0wIHRvayB8ICQwLjAwMDAbWzBt7oCAL3BhbmU6YWdlbnRz7oCBCuKVrSBhZ2VudHMg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pWuCuKUgiAbWzM4OzI7MTM5OzE0MzsxNjhtG1szODsyOzE2MDsyMTY7MTYwbeKXjxtbMG0gcmV2aWV3ZXIgW3dvcmtpbmddICBSZXZp4oCmICAgICAgICAgIBtbMG0bWzM4OzI7MTM5OzE0MzsxNjhtMHMbWzBtICDilIIK4pWw4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pWv';
+        return '7oCAcGFuZTphZ2VudHPugIEbWzM4OzI7MTYwOzIxNjsxNjBt4pePG1swbSAbWzFtG1szODsyOzE2MDsyMTY7MTYwbXJldmlld2VyG1swbSAbWzM4OzI7MTYwOzIxNjsxNjBtW3dvcmtpbmddG1swbSAbWzM4OzI7MTk3OzIwMTsyMTJtUmV2aWV3cyBjb2RlIGZvciBidWdzG1swbSAbWzM4OzI7MTM5OzE0MzsxNjhtMBtbMG0bWzM4OzI7MTM5OzE0MzsxNjhtG1swbe6AgC9wYW5lOmFnZW50c+6AgQrila0gYWdlbnRzIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKVrgrilIIgG1szODsyOzEzOTsxNDM7MTY4bRtbMzg7MjsxNjA7MjE2OzE2MG3il48bWzBtIHJldmlld2VyIFt3b3JraW5nXSAgUmV2aeKApiAgICAgICAgICAbWzBtG1szODsyOzEzOTsxNDM7MTY4bTBzG1swbSAg4pSCCuKVsOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKVrw==';
     }
 
     /**
@@ -733,11 +844,13 @@ final class AgentViewPaneGeometryTest extends TestCase
      * stood BEFORE the chrome constant was introduced, base64 so the SGR bytes
      * and the private-use zone sentinels survive the source file intact.
      *
-     * Still all four widths. 60/80/120 are what the strip draws today; 44 is
-     * kept as the BEFORE half of
-     * {@see testRenderAgentViewAt44ColumnsMovedExactlyOnceAndThatWasE64()},
-     * which is why the byte-identity sweep skips it rather than this array
-     * dropping it.
+     * Still all four widths. 80/120 are what the strip draws today; 44 and 60
+     * are kept as the BEFORE halves of
+     * {@see testRenderAgentViewAt44ColumnsMovedTwiceE64ThenTheE54HeaderCut()}
+     * and of the 60-column arm in
+     * {@see testRenderAgentViewIsByteIdenticalAtAndAbove80Columns()}, which is
+     * why the byte-identity sweep skips the two rather than this array
+     * dropping them.
      *
      * @return array<int, string>
      */
