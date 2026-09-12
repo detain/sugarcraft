@@ -460,6 +460,14 @@ final class BootstrapLayeredSettingsTest extends TestCase
      * config it cannot parse. `readUserConfig()` is called once per turn by
      * `EngineBackend` and is contracted never to throw, so the uncertainty has
      * to cost the project layer and nothing else.
+     *
+     * AND THE REFUSED ANSWER IS FROZEN, which is the E74b half pinned here in
+     * the same sequence that measures it: the throw used to be the ONE outcome
+     * this method's once-per-process freeze did not cache, so the read below
+     * that repairs the config mid-process re-asked the question and let a grant
+     * arrive that the process had already refused. The repair is still honoured
+     * for the USER tier — what the freeze holds is the TRUST answer, not a
+     * continued parse failure.
      */
     public function testACorruptUserConfigCostsTheProjectLayerAndNotTheRead(): void
     {
@@ -473,6 +481,21 @@ final class BootstrapLayeredSettingsTest extends TestCase
 
         self::assertSame('from-settings-json', $config['theme']);
         self::assertArrayNotHasKey('titleModel', $config);
+
+        $this->trustTheProject();
+
+        $repaired = Bootstrap::readUserConfig();
+
+        self::assertSame(
+            'from-settings-json',
+            $repaired['theme'],
+            'the repaired config answers the user tier again — the freeze is the trust decision, not a continued parse failure',
+        );
+        self::assertArrayNotHasKey(
+            'titleModel',
+            $repaired,
+            'a grant that arrived after the process already refused this config path must not take effect in it',
+        );
     }
 
     // -------------------------------------------------------------------------

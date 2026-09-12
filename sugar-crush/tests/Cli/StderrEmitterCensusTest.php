@@ -312,11 +312,21 @@ final class StderrEmitterCensusTest extends TestCase
         // absent rather than zero because
         // census() omits files with no sites; testEveryFileTheRostersNameExists()
         // is what keeps that from hiding a deletion.
-        // E154 deliberately left these two rows UNPREFIXED: Chat.php's site
-        // (Chat.php:8174 as this ships) is
-        // lane de's share of the routing, Bootstrap.php's is the wave-2
-        // transcript tail (Bootstrap.php:5722) — both move through their own
-        // lane's roster edits.
+        // THE TWO ROWS THIS ROSTER'S EARLIER REVISION NAMED AS PENDING PREFIX
+        // MOVES ARE CLOSED WITHOUT MOVING EITHER ROW, and one of the two was
+        // mis-named at the time it was written (re-measured by lane dh, round
+        // 67, before any roster edit was attempted): channel 3 counts CALLS,
+        // and the literal credit lives on MESSAGE_SHAPES. Bootstrap.php's site
+        // NEVER lacked a prefix — its message has carried `sugarcrush: ` since
+        // the call was first written, through MCP_PARTIAL_START_LOG_FORMAT, and
+        // that literal is already one of the four the file is credited for on
+        // MESSAGE_SHAPES above; a comment claiming the row unprefixed had
+        // contradicted this test's own roster for three weeks. Chat.php's site
+        // is the onToken-detach log: lane de's E154c/E175 gated it behind
+        // SUGARCRUSH_DEBUG_STREAM and kept its self-label `Chat: ` — a
+        // programmer-facing diagnostic, not a launch notice — so it earns no
+        // `sugarcrush: ` literal and no MESSAGE_SHAPES row by design, exactly
+        // like the default-off RuleLoader funnel below.
         'src/Chat.php' => 1,
         'src/Cli/Bootstrap.php' => 1,
         'src/Commands/CommandLoader.php' => 1,

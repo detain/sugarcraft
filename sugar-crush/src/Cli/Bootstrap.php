@@ -658,6 +658,14 @@ final class Bootstrap
      * process, so a mid-session edit to the user's OWN `config.json` cannot
      * widen the grant a launch already decided.
      *
+     * AND SINCE E74b THAT HOLDS FOR THE REFUSED ANSWER TOO. The one door this
+     * freeze used to leave open was the throw: an unusable `config.json` cached
+     * nothing, so a later call re-read the file and a config repaired
+     * mid-process started contributing the layer its own unparseability had
+     * just cost. A refusal now caches the empty list under the path it
+     * resolved; only a home this process cannot name — no key to answer under —
+     * still reaches the parser twice, and both attempts fail closed.
+     *
      * @var array<string, list<string>>
      */
     private static array $trustedSettingsRoots = [];
@@ -3151,6 +3159,14 @@ final class Bootstrap
      * costs the project settings layer. That is fail-closed: the layer is the
      * lowest-trust input in the stack, and its absence is the pre-layering
      * behaviour.
+     *
+     * THE SWALLOW IS FROZEN LIKE ANY OTHER ANSWER (E74b). The throw caches the
+     * empty list for the config path it had resolved before failing, so the
+     * refusal is this process's answer for that path and not a question the
+     * next turn may re-ask — {@see \SugarCraft\Crush\Tests\Cli\BootstrapLayeredSettingsTest::testACorruptUserConfigCostsTheProjectLayerAndNotTheRead()}
+     * pins the repaired-config-mid-process sequence this closes. The one
+     * outcome that cannot be frozen is a home this process cannot name: there
+     * is no key to answer under, and the next call fails closed the same way.
      */
     private static function projectSettingsTrusted(string $root): bool
     {
@@ -3164,6 +3180,8 @@ final class Bootstrap
         // ({@see requireHomeDirectory()}) that must not take the theme with it.
         // Leaving it outside would have made the swallow above cosmetic — the
         // first uncertainty in the chain would still have escaped.
+        $path = null;
+
         try {
             $path = self::trustedConfigDirPath() . '/config.json';
 
@@ -3175,6 +3193,29 @@ final class Bootstrap
                 );
             }
         } catch (\Throwable) {
+            // THE REFUSED ANSWER FREEZES TOO (E74b). It used to be the ONE
+            // outcome this freeze did not cache: a throw left the key absent,
+            // so the NEXT call re-read `config.json` — and a config repaired
+            // mid-process then widened a grant this process had already
+            // refused, which is precisely the widening the property doc-block
+            // says the freeze exists to forbid. An empty list is the honest
+            // shape of "nothing is trusted from this config path": the freeze
+            // is keyed by path, so the refusal cannot leak to a different
+            // `~/.sugar-crush`. `??=` is deliberate-code insurance, not a
+            // covered sequence: today a throw with a computed `$path` can only
+            // originate inside the fill branch, which runs solely when the key
+            // is ABSENT, so plain assignment would behave identically. It
+            // stands because the invariant it guards — no later failure may
+            // overwrite an earlier cached answer, positive included — would
+            // break the moment a throw source moves below the `array_key_exists`
+            // gate, and the failure mode of that refactor is a silently revoked
+            // trust grant, not a red line. What stays uncached is a throw
+            // before `$path` could be computed: with no key there is nothing to
+            // freeze, and the next call fails closed the same way.
+            if ($path !== null) {
+                self::$trustedSettingsRoots[$path] ??= [];
+            }
+
             return false;
         }
 
@@ -5345,6 +5386,22 @@ final class Bootstrap
         // THE TRUST GATE, and it is checked AFTER containment so that an
         // out-of-tree config is reported as out-of-tree rather than as untrusted:
         // the two have different fixes and only one of them is "opt in".
+        //
+        // THE FIRST ARM IS DELIBERATE BELT-AND-BRACES, NOT DEAD CODE (E45a) —
+        // written down because "unreachable guard" is precisely what a later
+        // cleanup pass deletes, and a security gate that loses one branch
+        // acquires a hole. The cost of keeping it is one arm; the shape of the
+        // refusal below already expects it (`$canonicalRoot !== false ? … :
+        // $root`). And the original unreachability premise — that the `is_file`
+        // above can only have passed on a path composed from a RESOLVED root —
+        // measured weaker than written: `$path` falls back to the raw `$root`
+        // when `realpath()` fails, so the stat that let execution through is no
+        // longer proof that the root canonicalised. Keep it for the direction it
+        // fails in: the arm short-circuits into MCP_UNTRUSTED. Falling through
+        // instead would hand `false` to `projectMcpIsTrusted()`, whose parameter
+        // is `string` under `declare(strict_types=1)`, and turn an impossible
+        // state into a TypeError on `tools()` — the one class of failure on a
+        // path every launch and every provider switch reaches.
         if ($canonicalRoot === false || !self::projectMcpIsTrusted($canonicalRoot)) {
             self::$projectTierRefusals[$path] = sprintf(
                 'starting the MCP servers it names means running programs this repository chose, '
