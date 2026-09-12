@@ -904,7 +904,9 @@ records them as **survivors**.
   rather than part of moving the draft into the widget"*.
 - **Blocked on** Nothing.
 
-### E3 [OPEN] — the Ctrl+P palette has its own hand-rolled append-only query buffer
+### E3 [PARTIAL] — the Ctrl+P palette has its own hand-rolled append-only query buffer
+
+**Round-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** the input-handling half landed with the de cluster; the CARET-PAINT seam was REFUSED on ownership — it needs the unconditional `'█'` at `src/Renderer.php:3600` + `PaletteState`, a TUI lane with Renderer ownership (routed to round-67 wave-2, §0-NOW-68). Side finding filed for closeout: `Chat::dropLast`'s docblock says grapheme but the walk is codepoints. Evidence: triage E3, worklog ROUND 67.
 
 - **What** After the chat draft got a real cursor, the command palette's query is
   still a hand-rolled append/`dropLast` string — no cursor movement in it.
@@ -924,7 +926,9 @@ records them as **survivors**.
   touch the draft's ownership of completion or `↑` recall.
 - **Blocked on** Nothing.
 
-### E4 [OPEN] — the draft cursor position is not persisted in checkpoints
+### E4 [CLOSED] — the draft cursor position is not persisted in checkpoints
+
+**Closed ROUND-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** checkpoint saves `'inputCursor' => inputCursorOffset()`; `/rewind` applies `withInputCursor` when `is_int` (seekInput clamps; legacy keyless checkpoints keep the caret-end behaviour). 2T/7A. Evidence: triage E4, worklog ROUND 67.
 
 - **What** A restored checkpoint reseeds the draft with the cursor at the end
   rather than where it was.
@@ -1190,7 +1194,9 @@ records them as **survivors**.
 
 ---
 
-### E17 [OPEN] — the 95% blocking tier refuses a turn on an ESTIMATE, not a token count
+### E17 [CLOSED] — the 95% blocking tier refuses a turn on an ESTIMATE, not a token count
+
+**Closed ROUND-67 wave-1 (lane de — lanes `bc3e11e1a`+`e4d448ead` → masters `2da286745`+`2973380d4`):** `CompleteResponse` carries `?Usage`; `Chat` calibrates the estimate against billed `promptTokens() ?? totalTokens` with factor `f ← clamp(real/raw, 1.0, 3.0)` — one-shot, fail-open; the review round killed the period-2 √r oscillation and added steady-state pins. Provider-fold follow-through (7 sites + `Runtime:1362/:1495`) rode the same lane. Evidence: triage E17, worklog ROUND 67.
 
 - **What** `Chat::submit()` now refuses to dispatch a turn when
   `ContextCompactor::shouldCompactForeground()` reports the history is still at
@@ -1364,7 +1370,9 @@ fixture. What is left after the correction is a narrower but real dead end.
   `compactionChanges()`'s docblock so the next person to reach for "just move the
   notice" finds it first.
 
-### E20 [OPEN] — the spend cap can be overshot by one whole agentic turn, and the turn cannot be aborted
+### E20 [CLOSED] — the spend cap can be overshot by one whole agentic turn, and the turn cannot be aborted
+
+**Closed ROUND-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** mid-turn abort via `Events\SpendCapBreached` frame event — `EngineBackend` gains `withSpendCap`/`sessionSpendAtStartUsd` (13 clone sites threaded), the check runs only past the `toolResults !== []` continue point, `Chat` folds at both event pumps under generation guards. NO wall-clock kill anywhere — the E646 standing prohibition honored, documented in the ctor docblock. Follow-through `9f0c5db62` wired `withSpendCap` into `MemoryPromptWiringTest::$steps`. Evidence: triage E20, worklog ROUND 67.
 
 - **What** `Chat::spendCapRefusal()` (Phase 5 item 7) refuses to START a turn once
   the reported spend has reached `$SUGARCRUSH_MAX_COST` / `/budget <n>`. It cannot
@@ -5863,7 +5871,9 @@ itself go stale — the guard would become the thing needing a guard.
 **Step.** Give `KeyBinding` a canonical machine id per chord and match on that. Until then the table
 stays prose. Related: the `keybindings` L item, still DEFERred.
 
-### E111 [PARTIAL] — five `docs/SETTINGS.md` claim families still have no cheap oracle
+### E111 [CLOSED] — five `docs/SETTINGS.md` claim families still have no cheap oracle
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** new `ClaimFamiliesDocumentationDriftTest` 5T — skills-twelve / preset-six / exit-tables-three / flags-synopsis two-directional with word-number pins, codes-only (types ride the `JsonErrorContract` sibling), `--prompt` corpus-wide exemption. **PREMISE ERRATA:** the claims live in SKILLS.md/README/TROUBLESHOOTING, not SETTINGS.md — documented in the class docblock. Evidence: triage E111, worklog ROUND 67.
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, and it is the honest residue of
 E83 rather than a defect.
@@ -6204,7 +6214,9 @@ on the `_data` sources, which live outside `sugar-crush/` — outside every lane
 **Step.** Decide whether the `_data` sources are in scope for the `sugar-crush` doc-drift guards at all.
 If they are, the guard belongs beside `tools/gen-docs.php`, not in `sugar-crush/tests/`.
 
-### E125 [PARTIAL] — the `paragraphs()` splitter exists in three independent copies
+### E125 [CLOSED] — the `paragraphs()` splitter exists in three independent copies
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** the fourth copy (the E144 routing) also folded — `Chat`'s splitter delegates to `DocumentParagraphs::of`, delegation proven by breaking the canonical. Evidence: triage E125, worklog ROUND 67.
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low, test-quality.
 
@@ -6231,7 +6243,9 @@ them — that is what makes the test half both cheap and uniquely rot-prone. The
 separate, larger instrument. The doc-block says so; this entry exists so the limit is not mistaken for
 coverage.
 
-### E127 [OPEN] — `EnvReadScanner`'s S3 forwarding resolves a callee by bare method name within one file
+### E127 [CLOSED] — `EnvReadScanner`'s S3 forwarding resolves a callee by bare method name within one file
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** `EnvReadScanner::methodSignature()` now resolves the innermost enclosing class/trait/enum, with whole-file sweep as fall-through (trait inheritance), plus a new shadow pin (+1T). Evidence: triage E127, worklog ROUND 67.
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
 **Inherited and re-confirmed in round 44, not introduced by it.**
@@ -6538,7 +6552,9 @@ rather than an edit.
 creates and SIGKILLs any survivor in `tearDown()`, which is inside the parent's control and needs no
 phpunit.xml change.
 
-### E143 [OPEN] — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
+### E143 [CLOSED] — one test's assertion count tracks the number of PARAGRAPHS in `src/` + `docs/`, which is why lanes cannot reconcile their assertion deltas
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** `stalePattern`/`retracts` memoized — the Config window dropped ~14.2k per-paragraph assertions (31,014A→16,830A at the lane's measurement; 16,845A at the wave-1 re-pin). HONEST noise-cut, re-pin owed to the merge agent (landed at `56501908d`). Evidence: triage E143, worklog ROUND 67.
 
 **Recorded 2026-08-22 by round-45 lane b (fix stage).** Severity: low for correctness, HIGH for every
 future round's reporting. **Measured, with the generator below.**
@@ -6578,7 +6594,9 @@ over `assertIsInt()` for precisely this reason ("an assertion per call added ~34
 assertion count while pinning nothing") — and then reintroduced the same cost one call deeper.
 `tests/Config/GlobFigureDriftTest.php` belongs to another lane, hence a backlog entry rather than a fix.
 
-### E144 [OPEN] — a FOURTH `paragraphs()` copy carries the same blind spot and was not routed
+### E144 [CLOSED] — a FOURTH `paragraphs()` copy carries the same blind spot and was not routed
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** the fourth copy in `ChatConfigChangeDoorsDocumentationDriftTest` routed to `DocumentParagraphs::of` together with E125's Chat site — one canonical splitter. Evidence: triage E144, worklog ROUND 67.
 
 **Recorded 2026-08-22 by round-45 lane c.** Severity: low. **Lane-local provisional id per E135 — the
 supervisor should renumber at merge.**
@@ -6687,7 +6705,9 @@ confined to `tests/Agents/*` as interference, re-run those files alone, and say 
 round-45 brief already asks for `/tmp`, extended to `$HOME`. Do NOT bulk-delete
 `~/.sugar-crush/teams/*` while sibling lanes are running.
 
-### E148 [OPEN] — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
+### E148 [CLOSED] — the mention oracle's surface alphabet stops at `README.md` + `docs/*.md`
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** recursive `docs/` walk + flat-tier floor; the `SKILL.md` extension DECLINED with measurement, and the temp-tree depth pin folded (+0T). ⚠ Gotcha recorded: the `'/docs/*.md'` literal feeds `GlobDialectDifferentialTest`'s tree-wide corpus — re-shape glob literals before touching figures. Evidence: triage E148, worklog ROUND 67.
 
 **Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id per
 E135.**
@@ -6710,7 +6730,9 @@ reason recorded there, and decide deliberately whether `SKILL.md` files are ment
 decided, the decision belongs in `mentionSurfaces()`' doc-block with the measurement, not in a filename
 list.
 
-### E149 [OPEN] — the mention scrape reads raw text, so a line-wrapped variable name is invisible
+### E149 [CLOSED] — the mention scrape reads raw text, so a line-wrapped variable name is invisible
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** `prefixedNamesIn` via paragraph window + one-gap rejoin + head veto (`NAME_PATTERN` validator; prefix-gap limit stated; `censusFixture` wrap pos+neg). Evidence: triage E149, worklog ROUND 67.
 
 **Recorded 2026-08-22 by the round-45 lane-c fix agent.** Severity: low. **Lane-local provisional id.**
 
@@ -6790,6 +6812,8 @@ structurally, by `METHOD_LITERALS`.
 project's globs remove EVERY tool, which gives the no-survivors constant the reader it lacks.
 
 ### E154 [PARTIAL] — 38 `error_log()` call sites in `src/` write to the user's stderr, unprefixed and unrouted
+
+**Round-67 wave-1 status:** the db-owned half CLOSED (lane `687f68cce` → master `0e9ce9e05` — 21 `sugarcrush:` prefixes routed; census counts CALLS vs MESSAGE_SHAPES literals), and the (c) site — `Chat`'s onToken detach — landed with de/E175 (`2da286745`). **Remainder: the one site at `src/Cli/Bootstrap.php:5722` — routed to round-67 wave-2 lane dh.** Kept PARTIAL with the remainder named; not stamped CLOSED.
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: medium, TUI corruption.
 **Measured on PHP 8.3.6, `ini_get('error_log')` empty on this box.**
@@ -7089,7 +7113,9 @@ exit code"* — and that caller gets a turn that completed with a tool quietly n
 routing of those lines — see the E155 section of `HeadlessPermissionPrompt`'s docblock for why stderr is
 right for them.
 
-### E174 [PARTIAL] — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
+### E174 [CLOSED] — `StderrEmitterCensusTest` and its sibling still carry two copies of `flattened()`
+
+**Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`):** the depth-walk's three copies consolidated into the new `tests/Support/SplitsTopLevelArgumentsTrait.php` (`topLevelArguments` + `balancedClose`, shared `#[`-in-parens default) — a ZERO-MOVE consolidation (215 stderr / 1706 lifetime sites untouched). Evidence: triage E174, worklog ROUND 67.
 
 **Recorded 2026-08-22 by round-46 lane a; inherited from round 45's own deferred note.** Severity: low.
 
@@ -7103,7 +7129,9 @@ E161's array-token openers so it does not repeat that defect.
 **Step.** One `tests/Support/` trait holding `flattened()`, `significantTokens()` and the depth walk, in a
 round where that directory is in scope. Until then, every copy must carry the array-token openers.
 
-### E175 [OPEN] — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
+### E175 [CLOSED] — gating `Chat`'s streaming-observer diagnostic is a two-file change across two lanes
+
+**Closed ROUND-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** the two-file change landed at last — the onToken detach `error_log` gated behind `Chat::DEBUG_STREAM_ENV` (`SUGARCRUSH_DEBUG_STREAM`, report-only; the DETACH itself stays ungated), with `StreamingWiringTest` both polarities + ENVIRONMENT.md row + Help.php roster IN-STEP. Carries E154's (c) site — see E154's remainder note. Evidence: triage E175, worklog ROUND 67.
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low, blocked. **Analysed and deliberately not done.**
 
@@ -7567,7 +7595,9 @@ which no round-47 lane was allowed to touch.
 mutate `RuntimeNoticeSink::record()` to append its calling test class to a file, run the full suite,
 `sort | uniq -c`. Round 47 measured 262 armed records across six classes.
 
-### E195 [OPEN] — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
+### E195 [CLOSED] — channel 6's alphabet is blind to four call shapes, not the one its doc-block named
+
+**Closed ROUND-67 wave-1 (lane db — lane `687f68cce` → master `0e9ce9e05`):** channel 6 is alias-aware — class-alias resolution in `scan()` replaces last-name-segment keying. Evidence: triage E195, worklog ROUND 67.
 
 MEASURED on PHP 8.3.6 by running `StderrEmitterCensusTest::scan()` over a fixture per shape; each scans
 as **0** where the bare spelling scans as 1:
@@ -7745,7 +7775,9 @@ method that no longer exists under that name.
   mechanism E201 falsified — PHPUnit has no "shutdown sequence", and a child that plainly exits never
   re-enters the runner at all.
 
-### E205 [OPEN] — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
+### E205 [CLOSED] — the stderr predicate has two false positives, now pinned, and the obvious fix does not work
+
+**Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`):** the text-regex predicate replaced by `commandFragments()` + a quote/order-aware `shellFdTwo()` walker over ARG0 only; both previously pinned FPs flipped to CAPTURED with polarity twins. Evidence: triage E205, worklog ROUND 67.
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low (no live occurrence). **Measured**, on
 `ChildStderrCaptureScanner::sendsFdTwoToTheNullDevice()` at lane-b HEAD, PHP 8.3.6.
@@ -8405,7 +8437,9 @@ cannot follow is `unclassified`. All five positional shapes are pinned in the un
 positional discard is the liveness helper's fourth discard path. Mutating `positionalShape()` back to the
 old always-`inherited` answer is killed by all five tests in the file.
 
-### E235 [PARTIAL] — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
+### E235 [CLOSED] — thirteen prefixes now carry an argued OUT_OF_SCOPE row in the child-stderr guard, and each is a standing obligation on its owning lane
+
+**Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`):** OUT_OF_SCOPE rows became `{minOffenders, reason}` extent data (mins 1,1,3,10,2,57,1,1,1,5,6,2) with lower-bound semantics — growth silent, shrink reds, zero keeps the move-to-SCOPE message; stale numeral prose de-numeraled in-step. Evidence: triage E235, worklog ROUND 67.
 
 **Recorded 2026-08-23 by round-48 lane b.** Severity: cross-lane coordination. **Measured**, and the map
 is checked in both directions.
@@ -8976,7 +9010,9 @@ cardinalities in `tests/Tools/BuiltInToolCorpusTest.php`, and two restated figur
 **Step.** Worth stating at the top of `BuiltInToolCorpusTest` alongside E252's option (a), so a lane
 adding a `src/` file learns the cost before a four-minute run tells it.
 
-### E258 [OPEN] — `constructionSites()` reports a false ZERO for any class built through a named static factory
+### E258 [CLOSED] — `constructionSites()` reports a false ZERO for any class built through a named static factory
+
+**Closed ROUND-67 wave-1 (lane db — lane `687f68cce` → master `0e9ce9e05`):** `constructionSites()` now counts named static-factory construction (the census distinguishes CALLS vs MESSAGE_SHAPES literals; reviewer mutation-proved). Evidence: triage E258, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: correctness of an INSTRUMENT. **Measured, PHP 8.3.6.**
 Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`).
@@ -9003,7 +9039,9 @@ a superset scanner because the shared one could not answer, which is drift in th
 
 ---
 
-### E259 [OPEN] — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
+### E259 [CLOSED] — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
+
+**Closed ROUND-67 wave-1 (lane db — lane `687f68cce` → master `0e9ce9e05`):** the swallow routed and both coupled numbers flipped with it — the census trio (NINETEEN / 19 / `WorktreeManager.php => 5`) moved IN-STEP. Lane note: this fix was reconstructed after the builder's original mutation was lost. Evidence: triage E259, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: diagnosability. **Measured.** Lane b's file, deferred
 deliberately.
@@ -9247,7 +9285,9 @@ rule 11 — a census's scope is part of its coverage, and this one's is narrower
 
 ---
 
-### E267 [PARTIAL] — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
+### E267 [CLOSED] — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
+
+**Closed ROUND-67 wave-1 (lane db — lane `687f68cce` → master `0e9ce9e05`):** the `is_file()`/directory arm landed alongside the existing `readOrFail()` wiring — a directory roster entry can no longer read as empty string and scan as zero. Evidence: triage E267, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
 8.3.6.** Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`), in flight this round.
@@ -9304,7 +9344,9 @@ the blanket textual pass rule 26 warns about.
 
 ---
 
-### E269 [OPEN] — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
+### E269 [CLOSED] — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
+
+**Closed ROUND-67 wave-1 (lane db — lane `687f68cce` → master `0e9ce9e05`):** the funnel cardinality is now kept honest per the entry's prescribed remedy (roster/rename as the commit carries it in the census cluster). Evidence: triage E269, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: cosmetic / rot. **Measured.** Lane c's own file.
 
@@ -9328,7 +9370,9 @@ the way the channels are, is what would make "two" a measurement.
 
 ---
 
-### E270 [PARTIAL] — a failure message's generator is the one part of a green suite that never runs
+### E270 [CLOSED] — a failure message's generator is the one part of a green suite that never runs
+
+**Closed ROUND-67 wave-1 (lane db — lane `687f68cce` → master `0e9ce9e05`):** the general guard/inventory for assertion-message-only helpers landed, retiring the named-instance-only state. Evidence: triage E270, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: low. **Measured, and fixed for one instance.**
 
@@ -9669,7 +9713,9 @@ pin the dormancy from the interpreter (assert the token's text) rather than leav
 as dead — and pin the deprecated opener behaviourally, since its truncation makes two drifted copies
 compare EQUAL, which reads as "no drift" rather than as an error.
 
-### E283 [PARTIAL] — a deferral keyed on the FILENAME is silent on a partial fix
+### E283 [CLOSED] — a deferral keyed on the FILENAME is silent on a partial fix
+
+**Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`):** the rot-proof extent question answered the same way as E235 — cluster rows carry `minOffenders` data instead of filename-keyed silence. Evidence: triage E283, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Fixed** for
 `InterpolationOpenerTokenTest::KNOWN_GAPS` in the same round; the shape is the entry.
@@ -11539,7 +11585,9 @@ inside their own history paragraphs, and a pattern sweep cannot tell an offender
 
 ---
 
-### E343 [OPEN] — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
+### E343 [CLOSED] — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
+
+**Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`):** both unclassified-failure messages now name the same-named-function spec bound, incl. the asymmetry vs `ChildLifetimeScanner::specFds` (which follows same-file T_CONST — verified at the scanner). Evidence: triage E343, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass), found while refuting a doc-block claim.** Severity:
 guard sharpness, latent. **Measured by pushing known-answer sources through
@@ -11956,7 +12004,9 @@ in a round that owns `tests/Config/`, or record the two shapes as deliberate and
 
 ---
 
-### E357 [OPEN] — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
+### E357 [CLOSED] — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** the three copies folded into `RefusesAnUnreadableSourceTrait` (+3 fixture T) with the `ACCEPTED_DIVERGENCE` 'readOrFail' row deleted IN-STEP — one `readOrFail` implementation tree-wide. Evidence: triage E357/E386, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: latent, and a narrower version of E332.
 
@@ -12243,7 +12293,9 @@ Anything that spawns a child which can outlive the call inherits phpunit's stdou
 
 ---
 
-### E366 [PARTIAL] — the `proc_open` sweep E365 asked for: the fd-inheritance half is monorepo-wide, the ORPHANING is not
+### E366 [CLOSED] — the `proc_open` sweep E365 asked for: the fd-inheritance half is monorepo-wide, the ORPHANING is not
+
+**Closed ROUND-67 wave-1 (lane df — masters `aa2497e07` dash / `5b6bb6b1b` reel / `1a4c39fc4` repo):** the orphaning half landed where it was missing — sugar-dash `ExternalModule` gains the `terminateBounded` grace/TERM/KILL ladder in `__destruct` (3T readiness-gated), sugar-reel gains a per-package `Support\BoundedReaper` (6T; also removed a latent SIGTERM-constant fatal when ext-pcntl is absent), and the repo-wide gate accounts both. sugar-crush's own half rode earlier rounds. Evidence: triage E366, worklog ROUND 67.
 
 **Recorded 2026-08-24.** Severity: hygiene, plus a handle-leak-into-third-party-subprocess concern.
 **FINDING ONLY — deliberately not fixed** (functionality before hardening; the finding is what must not
@@ -12491,7 +12543,9 @@ a row with no judgement is a row the next reader adds blind.
 
 ---
 
-### E370 [OPEN] — two family members degrade rather than throw, and nothing pins that they still do
+### E370 [CLOSED] — two family members degrade rather than throw, and nothing pins that they still do
+
+**Closed ROUND-67 wave-1 (lane df — lane `25033773e` → master `7fbc7636b`):** candy-core `PosixBackend::isTty` pinned into the closed-descriptor-zero family (probe rows added; the `WindowsBackend` member judged-not-a-row with reason). Evidence: triage E370, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: unpinned invariant. **Verified by symbol. Out of lane
 — `candy-core/src/Util/Tty.php` and `candy-core/src/Util/Tty/WindowsBackend.php`.**
@@ -13002,7 +13056,9 @@ loop gets written with an example in mind, and the one after the loop gets writt
 
 ---
 
-### E386 [OPEN] — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
+### E386 [CLOSED] — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
+
+**Closed ROUND-67 wave-1 (lane dd — lane `1e4ff44c5` → master `4d58dadd7`):** same fold as E357 — the trait's own fixture reaches the arm, and the trait's closing paragraph rewritten to the FOLDED-IN rule-7 wording. Evidence: triage E386, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-52 lane c.** Not actioned: `tests/Config/` is not this lane's.
 
@@ -13889,7 +13945,9 @@ other claimant is actually running before paying the cost of avoiding it.
 
 ---
 
-### E417 [OPEN] — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
+### E417 [CLOSED] — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
+
+**Closed ROUND-67 wave-1 (lane dc — lane `bb83512bc` → master `18daf2d55`), CLOSED-WITH-EVIDENCE, zero code:** re-proved that a child inherits ALL non-cloexec parent fds regardless of spec — naming fds ADDS, never removes; stoppers are `O_CLOEXEC`/`'e'`, close-before-spawn, and reaping, and the guard file already carries that truth. ⚠ The entry's own prescription paragraph (backlog ~`:13864-13870` region) remains stale prose — renote deferred to the round-67 close. Evidence: triage E417, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: handle-leak-into-subprocess. **FINDING ONLY —
 deliberately not fixed** (functionality before hardening; lane c changes no `src/`).
@@ -14706,7 +14764,9 @@ before each of the long-lived spawns. Against it, all measured or read off the c
 a socket pair open across a long-lived spawn — not at the seven spawn sites. Recorded so the next reader
 does not re-derive it.
 
-### E447 [OPEN] — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
+### E447 [CLOSED] — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
+
+**Closed ROUND-67 wave-1 (lane df — lane `25033773e` → master `7fbc7636b`), NO-OP REFUTED:** the entry's action is moot — E485's guard arm already covers the shape (df re-measured at the tip; verdict recorded in the commit). Zero code. Evidence: triage E447/E485, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: blind spot, out of lane.
 
@@ -14724,7 +14784,9 @@ candy-core edit. Hence: not done, recorded.
 **STEP:** spell the spec where the call can see it, in candy-core, then widen
 `testNoDescriptorSpecInSrcIsUnreadable()` to `LIB_SCOPE` alongside the exposure arm.
 
-### E448 [OPEN] — three exposed spawns sit in libraries `sugar-crush` cannot reach
+### E448 [CLOSED] — three exposed spawns sit in libraries `sugar-crush` cannot reach
+
+**Closed ROUND-67 wave-1 (lane df — masters `aa2497e07`/`5b6bb6b1b`/`1a4c39fc4`):** the unreachable spawns got the bounded-reap mitigations in their own libs (dash/reel, see E366) and now sit on the repo-wide gate's ACCOUNTED roster as E366-mitigated rows. Evidence: triage E448, worklog ROUND 67.
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: finding. **Measured.**
 
@@ -15314,7 +15376,9 @@ stop happening, the doc-blocks are told rather than quietly vindicated. The `try
 registration still earns its place (a sealed facade, or a moved class, would otherwise be a fatal in every
 such child); it is simply not what makes them quiet.
 
-### E466 [OPEN] — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
+### E466 [CLOSED] — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
+
+**Closed ROUND-67 wave-1 (lane df — lane `98e21fda0` → master `436965761`):** the owed caller census shipped (comment-only finding): 18 scopes examined, zero post-close fd reads — the dup is released inside `close()`, so no window ever exists. Evidence: triage E466, worklog ROUND 67.
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: open question, deliberately deferred. **Not done.**
 
@@ -15718,7 +15782,9 @@ clause — and one corpus row disagreeing with what the spec plainly said. Measu
 was reported as complete** — a wrong answer, not a refusal, which then passes the readability arm as an
 ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
 
-### E486 [OPEN] — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
+### E486 [CLOSED] — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
+
+**Closed ROUND-67 wave-1 (lane df — lane `1afee66ab` → master `1a4c39fc4`):** the alternative shipped instead — new `tools/check-child-lifetimes.php` REQUIRES the canonical `ChildLifetimeScanner` by path (no third copy), walks 57 libs' autoload roots, 24 sites, ACCOUNTED roster of 6 rows, fail-closed, wired as the LAST step of ci.yml's path-repo-check (SET equality couples the two CLI steps). Evidence: triage E486, worklog ROUND 67.
 
 **Round 55, lane c.** NOT DONE. Costed, and the cost is the finding.
 
@@ -17795,7 +17861,9 @@ so a test can vary it, and one test does (`protected` adds no pairs *today*). Th
 is whether "no pairs today" is the same claim as "the alphabet is right". Lane a's guard inherited its
 neighbour's blindness rather than a bug of its own, which is where rule 11 says alphabets come from.
 
-### E566 [OPEN] — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
+### E566 [CLOSED] — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
+
+**Closed ROUND-67 wave-1 (lane df — lane `1afee66ab` → master `1a4c39fc4`), re-derived: NO ACTION owed.** Every remaining `T_FUNCTION`-without-`T_FN` mention in the tree is a NAME/forward/comment/brace-walk idiom, not a walk bound — the census's nineteen-file claim had decayed; closure by measurement. Evidence: triage E566, worklog ROUND 67.
 
 **Round 58, lane a. CENSUS ONLY — not audited, and mostly out of lane.** `BackendSignatureNullability
 Test` had `T_FN` missing from a guard whose entire subject is parameter spellings. Generator:
@@ -17881,7 +17949,9 @@ together. **Promoting the engine's constant to `public` collapses all of it**: e
 fact. `FrameCapFamilyTest` already asserts the constant IS still private, with a failure message saying to
 do exactly this when that stops being true. `src/Backend/EngineBackend.php` is not lane b's file.
 
-### E572 [OPEN] — the swallowing-catch census's two stated blind spots
+### E572 [CLOSED] — the swallowing-catch census's two stated blind spots
+
+**Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** both stated blind spots closed — the indirect-assertion and `set_error_handler` arms — with the permissive-fallback keystone; the 10 `AgentManagerTest` true-positives landed on the shrink-only roster (3 byte-identical dup rows left as a cosmetic closeout chore). Lane gotcha recorded: an EXECUTED swallowing handler poisons the PHPUnit process itself. Evidence: triage E572, worklog ROUND 67.
 
 `SwallowingCatchCensusTest` refuses a general-purpose exception type caught around an asserting try, and
 says in its own doc-block what it cannot see. Both remain open:
@@ -17936,7 +18006,9 @@ latter now derived from the declaration rather than a hand list. Only the prose 
 tells the reader to edit a roster that no longer exists. One paragraph, mechanical, no measurement needed
 beyond re-reading the other two.
 
-### E577 [OPEN] — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
+### E577 [CLOSED] — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
+
+**Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** resolved with the `resolvedTypes` FQN key (the display-label-rename option declined), per the entry's either/or prescription. Evidence: triage E577, worklog ROUND 67.
 
 `AssertionSwallowingCatchTest::swallowingCatchesIn()` resolves each caught type through the import map and
 the file's namespace in order to DECIDE whether the catch swallows, then records the type in the row as the
@@ -17950,7 +18022,9 @@ The remaining consumer of `types` is a failure-message renderer, which is the co
 that the key is DISPLAY-ONLY and nothing says so at its definition: any future decision keyed on it repeats
 the defect exactly. Either add the resolved FQN as a second key, or name the existing one for what it is.
 
-### E578 [OPEN] — the census's resolver is deliberately more permissive than PHP, and that is unpinned
+### E578 [CLOSED] — the census's resolver is deliberately more permissive than PHP, and that is unpinned
+
+**Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** pinned in BOTH measured polarities — with the caveat that E578-as-written is FALSE per E615 (the resolver's real divergence is the other direction); the closure is the two-polarity pin, not the original prescription. Evidence: triage E578/E615, worklog ROUND 67.
 
 `SwallowingCatchCensusTest::resolve()` tries the file's own namespace and then falls back to the global
 name. PHP does neither: an unqualified class name in a namespaced file resolves to the current namespace
@@ -18765,7 +18839,9 @@ count. **The E334 path check verifies that paths EXIST. Nothing checks that a la
 its own file list**, which is the gap that produced this, and it is mechanically checkable: every file a
 brief item names should be run through that item's lane regex at prep time.
 
-### E612 [OPEN] — `SwallowingCatchCensusTest` does not model catch-clause ORDER, so it reports round 58's own repair shape as an offender
+### E612 [CLOSED] — `SwallowingCatchCensusTest` does not model catch-clause ORDER, so it reports round 58's own repair shape as an offender
+
+**Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** the census now models clause order — a catch following an `ExpectationFailedException`/`\Throwable`-first repair is no longer reported as an offender. Evidence: triage E612, worklog ROUND 67.
 
 🔴 MEASURED on PHP 8.3.6 / PHPUnit 10.5.64, by driving the SHIPPED `scanSource()` through reflection (not a
 copy of it). Two sources, identical but for one clause:
@@ -18846,7 +18922,9 @@ invisible and `Support/RefusesAnUnreadableSourceTrait.php` was dropped entirely.
 diffing the scanner's answer against a plain `grep`. Any guard built from this must match both token kinds
 and pin each with its own fixture.
 
-### E615 [OPEN] — E578's prescribed fixture is FALSE as written; the resolver's real divergence is the other direction
+### E615 [CLOSED] — E578's prescribed fixture is FALSE as written; the resolver's real divergence is the other direction
+
+**Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** the corrected-direction fixture pins the two Demo578 rows and the `resolve()` doc-block now states both directions. Evidence: triage E615, worklog ROUND 67.
 
 E578 prescribes: *"A fixture asserting that the permissive fallback cannot produce a `safe` verdict for a
 type PHP would have failed to load would close it."* MEASURED against the shipped `scanSource()`, PHP 8.3.6,
@@ -18887,7 +18965,9 @@ those false positives and simultaneously blinds the scan to a genuinely invented
 (`Auto-Approve denied:` → today frames as `Approve denied:` and is reported; with the hyphen excluded it is
 reported nowhere). Both directions need fixtures before either is chosen. No occurrence in `src/` today.
 
-### E617 [OPEN] — E577 was not addressed and was not re-measured; it is out of every lane's reach this round
+### E617 [CLOSED] — E577 was not addressed and was not re-measured; it is out of every lane's reach this round
+
+**Closed ROUND-67 wave-1 (lane da — lane `2a943d13b` → master `d3fb349fd`):** the reachability claim superseded — da re-measured and landed E577's `resolvedTypes` key in-lane, closing its own tracking row. Evidence: triage E617, worklog ROUND 67.
 
 `AssertionSwallowingCatchTest::swallowingCatchesIn()` lives in `sugar-crush/tests/Support/`, which is lane
 a's directory, and lane a's file list names four specific paths that do not include it. So E577 (the `types`
@@ -19261,7 +19341,9 @@ the same block take their column from the intro and are read as nothing. That fa
 documented names every variable the script reads reports undocumented — and it is a fixture rather
 than a promise. It is where a future widening starts.
 
-### E629 [OPEN] — two guards under `tools/` still describe their own reach with unchecked artefacts
+### E629 [CLOSED] — two guards under `tools/` still describe their own reach with unchecked artefacts
+
+**Closed ROUND-67 wave-1 (lane df — lane `1afee66ab` → master `1a4c39fc4`):** `ciJobNeeds` moved to block-list spelling and `ciJobName` gained a literal name-pin test — the guards' reach claims are now checked artefacts (mutation: re-spelling the scanner literal stays GREEN only under the new discrimination, proven by df). Evidence: triage E629, worklog ROUND 67.
 
 **DEFERRED. Neither is a hole today; both are prose that no test can contradict.**
 
@@ -20027,6 +20109,8 @@ now shipped — **E653 FULL CLOSED, no follow-up wording survives.** Chain: lane
 
 **What:** durations TSV committed; `--against-json` conservation vs `suite-figure.json` is FAIL-CLOSED; K=8 REFUTED by measurement (2–4 vCPU runners trip the lease/idle-ceiling races). Coverage-job sharding seam minted as E691. **Where:** `.github/workflows/ci.yml`, `scripts/`. **Conf:** MED. Evidence: triage E671.
 
+**ROUND-67 addendum (landed at `fb5078e6d`, lane ks `4810321e4`):** the LOCAL default flipped to K=min(nproc,8) — measured 565s serial → 159s at K=4 → ~65–80s at K=8 on the 64-core devbox, hard floor the 62.6s single-file `ProcessExecutorTest` bucket (K-sweep 8/16/24/32: no gain past K=8). CI runners are untouched — both ci.yml legs keep explicit K=min(nproc,4); the K=8 refutation above is runner-scoped, not devbox-scoped.
+
 ### E672 [CLOSED] — `ProcessContainment` choke point routes all exec-spawn sites
 
 **What:** 10/10 measured spawn sites routed; the bogus-binary fail-fast lost through the wrapper was restored at LspConnection/StdioMcpServer/ClaudeCodeInvocation/ClaudeCodeProvider (sites 3–4 found ONLY by the full-suite gate). Lesson recorded: routed-site sweeps must grep start-failure contracts tree-wide. **Where:** `sugar-crush/src/Support/ProcessContainment.php`. **Conf:** HIGH. Evidence: triage E672.
@@ -20093,7 +20177,7 @@ the Environment/Hooks/Providers/RuleLoader figure families judged and pinned —
 now carries **18 arms** (was 12; the cb lane measured its own delta +8T for the arm set at r65's close,
 re-counted at this closeout from the class). The campaign continues (~334 figures / 79 files):
 **tranche-4 carry = the HOOKS.md `CRUSH_*` roster claims (the "7×/8×" env-var figures must move to
-dynamic-roster derivation, the same disease E583 names for symbol citations)**. **Conf:** MED. Evidence:
+dynamic-roster derivation, the same disease E583 names for symbol citations)**. **ROUND-67:** no wave-1 lane touched the campaign (zero of its arms moved in da–df); tranche-4 is ASSIGNED to wave-2 per §0-NOW-68. **Conf:** MED. Evidence:
 triage E686.
 
 ### E687 [CLOSED] — E261's teardown fork-failure log needs the `StderrEmitterCensus` trio in-step
