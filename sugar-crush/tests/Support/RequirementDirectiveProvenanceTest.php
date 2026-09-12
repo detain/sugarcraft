@@ -45,19 +45,23 @@ use PHPUnit\Metadata\Parser\Registry;
  *
  * WHAT THE POPULATION REACHES THAT IS NOT IN IT. The walk visits only the files
  * the suite collects, and within each it asks about every public method the
- * class DECLARES OR IMPORTS FROM A TRAIT — not every method it exposes, since
- * one INHERITED from a parent is filtered out by the declaring-class check in
- * {@see requirementsOf()}. A trait method survives that check because reflection
+ * class DECLARES, IMPORTS FROM A TRAIT, OR INHERITS FROM AN IN-TREE PARENT —
+ * {@see requirementsOf()} walks the parents rather than filtering them out
+ * since E391 closed that gap; vendor ancestors are the one deliberate non-population,
+ * and the comment beside the scope guard says why. A trait method survives the
+ * declaring-class question because reflection
  * answers with the USING class for it, so a directive quoted in a shared trait's
  * doc-comment - which is where an explanatory paragraph is most likely to end
  * up, and whose own file this walk never opens - is reported against every test
  * class that uses it. Louder than necessary, and the right direction to err in.
- * An inherited one is the gap: nothing in this tree populates it today (no
- * collected class extends an in-tree base), and closing it means walking the
- * parents rather than trusting the filter.
+ * The inherited spelling is pinned both ways: the parent/child fixture pair
+ * below runs in the guard's own child process and skips under the CHILD's name,
+ * and the walk attributes that hit to the PARENT's declaration.
  *
  * @see \SugarCraft\Crush\Tests\Support\Fixtures\AnnotationSkipProvenance\ProseQuotingADirectiveFixture
  * @see \SugarCraft\Crush\Tests\Support\Fixtures\AnnotationSkipProvenance\ProseWithoutTheSigilFixture
+ * @see \SugarCraft\Crush\Tests\Support\Fixtures\AnnotationSkipProvenance\DirectiveBearingParentFixture
+ * @see \SugarCraft\Crush\Tests\Support\Fixtures\AnnotationSkipProvenance\InheritedDirectiveChildFixture
  */
 final class RequirementDirectiveProvenanceTest extends TestCase
 {
@@ -112,11 +116,17 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
     private const METHOD_SKIPPING_FIXTURE = self::FIXTURE_DIR . '/MethodProseQuotingADirectiveFixture.php';
 
+    private const DIRECTIVE_PARENT_FIXTURE = self::FIXTURE_DIR . '/DirectiveBearingParentFixture.php';
+
+    private const INHERITED_CHILD_FIXTURE = self::FIXTURE_DIR . '/InheritedDirectiveChildFixture.php';
+
     /** Every fixture this guard owns, so no arm can quietly cover a subset. */
     private const FIXTURES = [
         self::SKIPPING_FIXTURE,
         self::METHOD_SKIPPING_FIXTURE,
         self::RUNNING_FIXTURE,
+        self::DIRECTIVE_PARENT_FIXTURE,
+        self::INHERITED_CHILD_FIXTURE,
     ];
 
     /**
@@ -248,14 +258,53 @@ final class RequirementDirectiveProvenanceTest extends TestCase
     }
 
     /**
+     * AN INHERITED DIRECTIVE IS ATTRIBUTED TO THE PARENT THAT CARRIES IT (E391).
+     *
+     * Known-true and known-false through the SAME call the census makes. The
+     * exact-match shape is the whole pin: the inherited hit must appear keyed
+     * by the declaring class (a walk that dropped the parent chain reported
+     * nothing here and stayed green on the real tree), and the parent's
+     * directive-free neighbour must NOT appear (a chain walk that reports every
+     * inherited public method would answer "yes" to the first half too). The
+     * parent asked about itself keeps its own method-name key - declaring-class
+     * equality, not the inherited spelling - so the census cannot double-charge
+     * the same comment under two shapes of one name.
+     */
+    public function testAnInheritedDirectiveIsAttributedToItsDeclaringClass(): void
+    {
+        $predicates = self::requirementPredicates();
+        $parent = self::classFor(self::DIRECTIVE_PARENT_FIXTURE);
+        $child = self::classFor(self::INHERITED_CHILD_FIXTURE);
+
+        self::assertSame(
+            [$parent . '::testTheBodyNeverRuns' => 'isRequiresPhp'],
+            self::requirementsOf($child, $predicates),
+            'asked about the child, the walk did not attribute the parent-carried directive to '
+                . 'the PARENT declaration. Nothing at all means the parent chain is not walked '
+                . 'and the census is blind to inherited skips again; the neighbour method '
+                . 'appearing too means the walk reports every inherited public method as a hit',
+        );
+
+        self::assertSame(
+            ['testTheBodyNeverRuns' => 'isRequiresPhp'],
+            self::requirementsOf($parent, $predicates),
+            'a class stopped keying its OWN declared methods by method name, so the two key '
+                . 'shapes blur and a roster row no longer identifies the declaration it permits',
+        );
+    }
+
+    /**
      * AND THE SAME PAIR THROUGH PHPUNIT'S OWN RESULT OUTPUT, in a child run.
      *
      * The parser is the mechanism; a SKIP is the consequence, and the two are
      * worth separating because only the consequence is what a reader ever sees.
-     * This runs the two fixtures under a real `phpunit` and reads the JUnit log
+     * This runs the fixtures under a real `phpunit` and reads the JUnit log
      * it writes: the quoted-directive fixture must come back SKIPPED and its
      * sibling must not. Neither file contains a skip-marking call — asserted
-     * below — so a skip here can only have come out of a comment.
+     * below — so a skip here can only have come out of a comment. Since E391
+     * the map has a third row, and it is the sharpest: the child file spells
+     * NO directive anywhere and still skips, because it inherits the method
+     * that carries one — the consequence the parent-chain walk exists to see.
      */
     public function testPhpunitItselfReportsTheQuotedDirectiveFixtureAsSkipped(): void
     {
@@ -297,8 +346,16 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
         self::assertSame(
             [
-                self::METHOD_SKIPPING_FIXTURE . '::testTheBodyNeverRuns' => true,
-                self::SKIPPING_FIXTURE . '::testTheBodyNeverRuns' => true,
+                // Written in the instrument's own sorted order (rule: the
+                // walk sorts, `assertSame` is order-sensitive, and this map
+                // is the proof the instrument agrees with its doc-block).
+                // Keys are the RUNNING class and method, derived through the
+                // same classFor() the census uses - the log's file attribute
+                // for the inherited row names the PARENT's file, which is
+                // precisely why file is not the key.
+                self::classFor(self::INHERITED_CHILD_FIXTURE) . '::testTheBodyNeverRuns' => true,
+                self::classFor(self::METHOD_SKIPPING_FIXTURE) . '::testTheBodyNeverRuns' => true,
+                self::classFor(self::SKIPPING_FIXTURE) . '::testTheBodyNeverRuns' => true,
             ],
             $skipped,
             "PHPUnit did not report exactly the quoted-directive fixture as skipped. If it "
@@ -588,7 +645,9 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
     /**
      * Every requirement PHPUnit's parser reads for a class and its test
-     * methods, keyed by `<method>` or by `*` for a class-level one.
+     * methods, keyed by `<method>`, by `*` for a class-level one, and by
+     * `<declaring class>::<method>` for one inherited from an in-tree parent
+     * (E391 - the comment lives there, so the provenance names that file).
      *
      * @param  list<string>         $predicates
      * @return array<string,string>
@@ -605,13 +664,36 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         }
 
         foreach ($reflected->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
-            if ($method->getDeclaringClass()->getName() !== $class) {
+            $declaring = $method->getDeclaringClass()->getName();
+
+            // E391: WALK THE PARENT CHAIN instead of trusting the filter.
+            // `ReflectionMethod` on an inherited pair lands on the DECLARING
+            // declaration - which is exactly where PHPUnit reads the doc-block
+            // that decides the child's skip - so a directive a parent carries
+            // acts on every child, and a walk that `continue`d on declaring
+            // mismatch reported such a child as clean while the real child
+            // run said `skipped`. The hit is keyed by the declaring class so
+            // the provenance names the file a reader can open, and N children
+            // of one parent collapse to the one place the comment lives; an
+            // override re-keys itself to the child automatically, because the
+            // declaring class has then moved.
+            //
+            // TWO SCOPES ARE DELIBERATELY NOT WALKED. VENDOR ancestors
+            // (`PHPUnit\Framework\TestCase` and friends): their public surface
+            // is machinery, never a test, and enumerating ~200 parser calls per
+            // collected file buys a population the defect class excludes by
+            // construction. A class-level directive is not inherited either -
+            // `forClass` of the child parses only the child's own comment, and
+            // the walk answers the parser's question, not a hypothetical one.
+            if ($declaring !== $class && !\str_starts_with($declaring, 'SugarCraft\\Crush\\')) {
                 continue;
             }
 
-            foreach (Registry::parser()->forMethod($class, $method->name) as $metadata) {
+            $key = $declaring === $class ? $method->name : $declaring . '::' . $method->name;
+
+            foreach (Registry::parser()->forMethod($declaring, $method->name) as $metadata) {
                 foreach (self::kindsOf($metadata, $predicates) as $kind) {
-                    $found[$method->name] = $kind;
+                    $found[$key] = $kind;
                 }
             }
         }
@@ -638,13 +720,16 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
     /**
      * The tests PHPUnit reported skipped in a JUnit log, as sorted
-     * `<relative file>::<method>` keys.
+     * `<class>::<method>` keys.
      *
-     * THE KEY IS THE PAIR, NOT THE FILE. Keyed on the file alone, two skipped
-     * tests in one fixture collapsed into one entry and the exact-match arm
-     * that reads this stayed green — an instrument that cannot represent its
-     * input has a hole shaped like the next defect, and silently dropping half
-     * of it is the worst version of that.
+     * THE KEY IS THE PAIR, NOT THE FILE — and E391 measured why the pair is
+     * CLASS+method rather than file+method. An inherited skip prints the
+     * DECLARING class's file and the RUNNING class's name in different
+     * attributes of the same entry; keyed on file, the child's skip and the
+     * parent's own would collapse into one row — the shape of hole this
+     * doc-block has always warned about, relocated one level rather than
+     * fixed. The class attribute distinguishes them exactly, and the
+     * expected map below names the child.
      *
      * SORTED because the order is the child PHPUnit's file iteration order and
      * `assertSame()` on an associative array is order-sensitive. Alphabetical
@@ -667,12 +752,9 @@ final class RequirementDirectiveProvenanceTest extends TestCase
             . 'did not parse as XML, so this arm has no result output to read');
 
         $skipped = [];
-        $root = \dirname(__DIR__, 2) . '/';
 
         foreach ($document->xpath('//testcase[skipped]') ?: [] as $case) {
-            $file = (string) $case['file'];
-            $relative = str_starts_with($file, $root) ? substr($file, \strlen($root)) : $file;
-            $skipped[$relative . '::' . (string) $case['name']] = true;
+            $skipped[(string) $case['class'] . '::' . (string) $case['name']] = true;
         }
 
         ksort($skipped);

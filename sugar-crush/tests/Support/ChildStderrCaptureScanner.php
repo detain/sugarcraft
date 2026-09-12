@@ -157,7 +157,7 @@ final class ChildStderrCaptureScanner
                 continue;
             }
 
-            $close = self::matching($tokens, $open, '(', ')');
+            $close = TokenFunctionRanges::matching($tokens, $open, '(', ')');
             if ($close === null) {
                 continue;
             }
@@ -1010,7 +1010,7 @@ final class ChildStderrCaptureScanner
                     return self::codeText($tokens, $equals + 1, $j);
                 }
                 if (\is_string($tokens[$j]) && $tokens[$j] === '[') {
-                    $end = self::matching($tokens, $j, '[', ']');
+                    $end = TokenFunctionRanges::matching($tokens, $j, '[', ']');
                     if ($end === null) {
                         return null;
                     }
@@ -1063,31 +1063,10 @@ final class ChildStderrCaptureScanner
         return null;
     }
 
-    /** @param list<array{0:int,1:string,2:int}|string> $tokens */
-    private static function matching(array $tokens, int $openAt, string $open, string $close): ?int
-    {
-        $depth = 0;
-        for ($i = $openAt, $n = \count($tokens); $i < $n; $i++) {
-            if (!\is_string($tokens[$i])) {
-                if ($open === '{' && \is_array($tokens[$i])
-                    && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                    $depth++;
-                }
-
-                continue;
-            }
-            if ($tokens[$i] === $open) {
-                $depth++;
-            } elseif ($tokens[$i] === $close) {
-                $depth--;
-                if ($depth === 0) {
-                    return $i;
-                }
-            }
-        }
-
-        return null;
-    }
+    // The bracket matcher used to be a copy of the one in {@see TokenFunctionRanges}.
+    // fd widened the canonical onto heredoc bodies and attribute groups (3555a3940);
+    // this class had asked for a second copy of the plain rule that predates it.
+    // Third copies are how rule 7 dies, so this file now calls the canonical.
 
     /**
      * The closing backtick of the shell execution opened at $openAt.

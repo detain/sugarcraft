@@ -23,9 +23,14 @@ use PHPUnit\Framework\TestCase;
  * THE FIXTURES ARE SYNTHETIC ON PURPOSE. Pinning against real files in `src/`
  * would make this file red whenever another lane edits a spawn site, which is
  * the guard's job and not this one's. Here the source IS the expectation.
+ * THE ONE MEASURED EXCEPTION is {@see self::testEveryRosterKeyNamesAMethodThatExistsInSrc()}
+ * (E424): it reads real `src/` files, but it asks about NAMES, not spawn
+ * sites - and a roster key whose method has been renamed out from under it is
+ * exactly the drift that must turn this file red, wherever it lives.
  */
 final class ChildLifetimeScannerFixtureTest extends TestCase
 {
+    use SourceFileWalkTrait;
     /**
      * A long-lived child whose spec says nothing about fd 3 and above.
      *
@@ -819,8 +824,11 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
      * is a fact about a method in `src/` - in another lane's package, at that -
      * and it cannot be settled from a synthetic string. What it does prove is
      * that the row is wired, that its polarity is the one the roster claims,
-     * and that removing it costs a red. The residual is recorded in the
-     * hardening backlog.
+     * and that removing it costs a red. The residual it recorded - that the
+     * NAME points at no real code - is closed by E424's
+     * {@see self::testEveryRosterKeyNamesAMethodThatExistsInSrc()}; what still
+     * rests on human measurement is the behaviour claim in the row's reason,
+     * which no token walk can make.
      *
      * @dataProvider rosteredHelpers
      */
@@ -882,6 +890,130 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             yield 'best effort: ' . $helper
                 => [$helper, ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, null];
         }
+    }
+
+    /**
+     * Every roster key names a class and method that EXIST in this package's
+     * `src/` (E424).
+     *
+     * WHY EXISTENCE IS ITS OWN GUARD. A roster row is a claim about somebody
+     * else's method: the scanner spends it at call sites, the guard believes
+     * the verdict, and if the method was renamed, moved, or was mis-typed on
+     * the day the row was written, every spawn that matches the key is closed
+     * by a name that answers to no code. {@see self::testEveryRosteredHelperProducesItsRostersVerdict()}
+     * spends the row through a SYNTHETIC call - which proves the wiring
+     * matches the key and proves nothing about `src/`. This arm is the half
+     * that reads the real tree.
+     *
+     * WHAT IT DELIBERATELY DOES NOT CLAIM: scope. The resolver asks "does ANY
+     * class named this, in ANY src file, declare a method named this", not
+     * "does the callee's import resolve there" - the roster itself matches
+     * only the trailing `Class::method` pair for exactly that reason (a
+     * `use` can rewrite everything left of it), and pinning import resolution
+     * would ask a token walk to be the PHP compiler. The behavioural promise
+     * - that the method really closes on every path - stays what the row's
+     * own reason text says it is: a measurement a human took.
+     *
+     * Rule 15 keeps its pair: the two ghost keys below run the same resolver
+     * and must resolve to nothing, or this arm is reporting a green that a
+     * dead resolver would report too.
+     */
+    public function testEveryRosterKeyNamesAMethodThatExistsInSrc(): void
+    {
+        $sourceFiles = self::everySourceFileIn(\dirname(__DIR__, 2), ['src']);
+        self::assertNotSame(
+            [],
+            $sourceFiles,
+            'the src/ walk returned nothing, so every resolution below is vacuous - a census of '
+                . 'no files passes by construction',
+        );
+
+        $rosters = [
+            'CLOSING_HELPERS' => ChildLifetimeScanner::CLOSING_HELPERS,
+            'BEST_EFFORT_REAPERS' => ChildLifetimeScanner::BEST_EFFORT_REAPERS,
+        ];
+
+        foreach ($rosters as $rosterName => $roster) {
+            foreach (\array_keys($roster) as $helper) {
+                self::assertTrue(
+                    self::rosterKeyResolvesInSrc($helper, $sourceFiles),
+                    "{$rosterName}[{$helper}] names no class+method anywhere in src/. The "
+                        . 'scanner spends this row at real call sites and the guard believes '
+                        . 'the verdict: a key nobody implements closes children by wishful '
+                        . 'typing. Rename the row to what exists, or delete it and let the '
+                        . 'site be accounted for.',
+                );
+            }
+        }
+
+        self::assertFalse(
+            self::rosterKeyResolvesInSrc('processreaper::methodThatWasNeverTyped', $sourceFiles),
+            'the resolver matched a method that does not exist - it is answering yes to '
+                . 'everything and the rows above prove nothing',
+        );
+        self::assertFalse(
+            self::rosterKeyResolvesInSrc('classThatWasNeverTyped::terminateandclose', $sourceFiles),
+            'the resolver matched a class that does not exist on the strength of the method '
+                . 'name alone - pairing, not membership, is the claim',
+        );
+    }
+
+    /**
+     * Whether `class::method` names a method declared by a class of that name
+     * in the same src file.
+     *
+     * Coarse on purpose, per the doc-block above the arm: declaration-position
+     * names only (`T_CLASS`/`T_INTERFACE`/`T_TRAIT`/`T_ENUM` then a bare
+     * `T_STRING`, `T_FUNCTION` then a bare `T_STRING`), case-insensitively,
+     * per file. `::class` resolves to T_CLASS followed by something that is
+     * not a name, which the state machine drops on its next token.
+     *
+     * @param array<string,string> $sourceFiles package-relative => absolute
+     */
+    private static function rosterKeyResolvesInSrc(string $helper, array $sourceFiles): bool
+    {
+        [$class, $method] = \explode('::', $helper, 2);
+
+        foreach ($sourceFiles as $path) {
+            $classSeen = false;
+            $methodSeen = false;
+            $expect = null;
+
+            foreach (\PhpToken::tokenize(\file_get_contents($path)) as $token) {
+                if ($token->id === \T_WHITESPACE) {
+                    continue;
+                }
+
+                if ($token->is([\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM])) {
+                    $expect = 'class';
+                    continue;
+                }
+
+                if ($token->id === \T_FUNCTION) {
+                    $expect = 'function';
+                    continue;
+                }
+
+                if ($expect !== null && $token->id === \T_STRING) {
+                    $lower = \strtolower($token->text);
+                    if ($expect === 'class' && $lower === $class) {
+                        $classSeen = true;
+                    } elseif ($expect === 'function' && $lower === $method) {
+                        $methodSeen = true;
+                    }
+                    $expect = null;
+                    continue;
+                }
+
+                $expect = null;
+            }
+
+            if ($classSeen && $methodSeen) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -980,16 +1112,19 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     }
 
     /**
-     * A handle inside an array literal is UNFOLLOWED, not untouched.
+     * A handle inside an array literal is FOLLOWED ONE LEVEL (E419).
      *
-     * `$a = ['p' => $h];` has no callee to name, so the escape branch does not
-     * fire and the fall-through claimed "nothing in this function returns,
-     * stores or proc_close()s $h" - flatly false about a function that plainly
-     * puts it somewhere. Same family as the unfollowable-call sentence, and
-     * the same rule: a reviewer can act on "I could not follow this", and
-     * cannot act on a false absence.
+     * `$bundle = ['p' => $h]; return $bundle;` used to answer "appears again
+     * in a shape with no callee to name" about a function whose very next
+     * line returned the array - the false-absence this fixture existed to
+     * catch, surviving one level of indirection. `ProcessExecutor::spawnWorker`
+     * is that exact shape in production, and the guard's exemption row had to
+     * document that the scanner could not see what the code plainly did. The
+     * carrier's return is now the handle's return, and the sentence names
+     * both ends. The untouched polarity below keeps the absence sentence
+     * alive for the function that really does nothing.
      */
-    public function testAHandleInsideAnArrayLiteralSaysSoRatherThanClaimingNothingHappens(): void
+    public function testAHandleInsideAnArrayLiteralIsFollowedOneLevel(): void
     {
         $member = $this->sitesIn(<<<'PHP'
             <?php
@@ -1006,14 +1141,167 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             }
             PHP);
 
-        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $member[0]['lifetime']);
-        self::assertStringContainsString('appears again on line', $member[0]['reason']);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $member[0]['lifetime']);
+        self::assertStringContainsString('the handle in $h is returned in $bundle', $member[0]['reason']);
         self::assertStringNotContainsString('nothing in this function', $member[0]['reason']);
 
         // The other polarity, in the same test: a function that really does
         // nothing with the handle must still get the absence sentence, or the
         // fix above has simply replaced one always-wrong message with another.
         self::assertStringContainsString('nothing in this function', $untouched[0]['reason']);
+    }
+
+    /**
+     * A property that receives the literal receives the handle (E419).
+     *
+     * `$this->pool = ['process' => $h];` is the storage the handle-into-a-
+     * literal rule most needs to catch - it outlives the function through
+     * the object - and it returns LONG at the store, before any close can be
+     * weighed, on the same hidden-leak polarity as the direct property store.
+     */
+    public function testAHandleStoredThroughAnArrayMemberIsLong(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $this->pool = ['process' => $h];
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+        self::assertStringContainsString('stored through an array member in $this->pool', $sites[0]['reason']);
+    }
+
+    /**
+     * Handing the CARRIER to something is handing the handle to it (E419).
+     *
+     * The escape sentence names both ends - `$h is handed to ->adopt through
+     * $bundle` - because "which this scanner cannot follow" must point the
+     * reviewer at the exact call AND the exact indirection.
+     */
+    public function testACarrierHandedToAnUnknownCallEscapesThroughIt(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                $this->registry->adopt($bundle);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('->adopt through $bundle', $sites[0]['reason']);
+    }
+
+    /**
+     * A close invoked on the CARRIER is not a close of the handle (E419).
+     *
+     * `proc_close($bundle)` hands an ARRAY to the language's closer; whether
+     * anything digs the handle out is exactly the question a roster-free
+     * "runs unconditionally" sentence would answer with false confidence.
+     * The site lands in the escape sentence instead, naming the indirection.
+     * This is the polarity that keeps the membership walk from MANUFACTURING
+     * short lifetimes one level removed from the real ones.
+     */
+    public function testACloseOnTheCarrierIsNotClaimedAsAReap(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                proc_close($bundle);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('proc_close through $bundle', $sites[0]['reason']);
+        self::assertStringNotContainsString('runs unconditionally', $sites[0]['reason']);
+    }
+
+    /**
+     * Two levels of membership is where the walk stops, and it says so (E419).
+     *
+     * `$outer = ['worker' => $bundle];` puts the carrier inside ANOTHER
+     * literal. Following that recursively turns a scanner into an alias chase
+     * with no decidable answer; the honest endpoint names the carrier and the
+     * level it stopped at.
+     */
+    public function testSecondLevelMembershipStopsAndNamesTheCarrier(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                $outer = ['worker' => $bundle];
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('as a member of another literal', $sites[0]['reason']);
+        self::assertStringContainsString('one level and no further', $sites[0]['reason']);
+    }
+
+    /**
+     * A carrier with no fate at all still cannot be reported as an absence.
+     *
+     * The handle went INTO a literal on a named line; the array went nowhere.
+     * That is "I followed it one level and it stopped", not "nothing happens
+     * to it" - rule 14 again, one level in (E419).
+     */
+    public function testADeadCarrierSaysWhereTheHandleWasPlaced(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('was placed in an array literal on line', $sites[0]['reason']);
+        self::assertStringNotContainsString('nothing in this function', $sites[0]['reason']);
+    }
+
+    /**
+     * The membership walk stops at every non-literal user of `=>` (E419).
+     *
+     * `fn() => $h` shares the arrow token with array members but has no
+     * literal behind it: the backward walk must die at the parameter list's
+     * `(` and the site must land in the unfollowed-shape sentence, NOT in a
+     * fabricated return or store. The second shape is the one that makes this
+     * pin bite rather than vacuate: when an EARLIER literal shares the
+     * statement, a walk without the parenthesis stop would walk through the
+     * arrow function's parameter list, find that literal, and register a
+     * carrier for a handle the array never actually holds - a closure is what
+     * captured it.
+     */
+    public function testAnArrowFunctionDoesNotReadAsAnArrayMember(): void
+    {
+        $bare = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $delayed = fn() => $h;
+            }
+            PHP);
+        $embedded = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['idle' => 1, 'wake' => fn() => $h];
+            }
+            PHP);
+
+        foreach ([$bare, $embedded] as $sites) {
+            self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+            self::assertStringContainsString('in a shape with no callee to name', $sites[0]['reason']);
+            self::assertStringNotContainsString('was placed in an array literal', $sites[0]['reason']);
+        }
     }
 
     /**

@@ -165,19 +165,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
         // E366 MEDIUM. The handle goes into a local array literal, that array
         // into `$this->processes[$id]`, and the array is returned as well.
         //
-        // THE REASON THE READER WILL SEE IS NOT THE ONE THIS COMMENT USED TO
-        // GIVE. It said the scanner reports `unclassified` because "the handle
-        // escapes through an array member", which is true of the code and is
-        // not what the instrument says: `is_resource($process)` is called on
-        // the handle first, so the escape branch fires on THAT and the failure
-        // output names `is_resource`. A row whose comment describes a
-        // different sentence from the one the guard prints sends the reader
-        // looking for something that is not there.
+        // SINCE E419 THE SCANNER SAYS THE OUTCOME DIRECTLY: the literal
+        // assigned to `$processDescriptor` is followed one level, and the
+        // first `return self::deadWorker($processDescriptor, ...)` answers
+        // long - "the handle in $process is returned in $processDescriptor".
+        // Before the membership walk the printed reason named `is_resource()`
+        // instead - true, but an indirect sentence the reader had to be
+        // talked through here; the row and the instrument now agree without
+        // commentary about what the instrument cannot see.
         'Agents/ProcessExecutor.php::spawnWorker' => [
             'count' => 1,
-            'reason' => 'agent worker held in $this->processes; the handle is handed to '
-                . 'is_resource() and then escapes through an array member, neither of which this '
-                . 'scanner follows',
+            'reason' => 'agent worker held in $this->processes; the handle is returned in the '
+                . '$processDescriptor array that also lands there, so it outlives the call',
         ],
 
         // The handle is returned to a caller that drains it from a periodic

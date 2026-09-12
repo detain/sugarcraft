@@ -242,7 +242,7 @@ final class ChildLifetimeScanner
                 continue;
             }
 
-            $close = self::matching($tokens, $open, '(', ')');
+            $close = TokenFunctionRanges::matching($tokens, $open, '(', ')');
             if ($close === null) {
                 $unresolved[] = [
                     'line' => $token[2],
@@ -279,7 +279,11 @@ final class ChildLifetimeScanner
      * has a child that can outlive the call, and reading the `proc_close()` as
      * proof of a short life is the polarity that hides a leak - so a
      * `$this->handle = $proc` returns {@see LIFETIME_LONG} the moment
-     * {@see classifyLocal()} walks onto it, before any close is weighed.
+     * {@see classifyLocal()} walks onto it, before any close is weighed. E419
+     * extended the same precedence to membership: a handle stored or returned
+     * THROUGH an array literal (`['process' => $h]` into `$bundle`, then
+     * `return $bundle;`) is the identical leak wearing a container, and is
+     * followed exactly one level.
      *
      * "ESCAPE WINS" IS WHAT THIS SAID, FLATLY, AND IT IS TRUE OF ONE OF THE
      * TWO ESCAPE SPELLINGS. MEASURED: `$this->register($h); proc_close($h);`
@@ -377,6 +381,16 @@ final class ChildLifetimeScanner
     /**
      * The fate of a handle that lands in a plain local variable.
      *
+     * E419: a handle that lands in an ARRAY LITERAL gets the same walk, one
+     * level deep. The literal is registered to the local that receives it and
+     * that carrier's returns, property stores and callee escapes are reported
+     * as the handle's fate "through" it - because before this rule the
+     * scanner called `['process' => $h]` followed by `return $bundle;` an
+     * unfollowable shape and its reason sentence denied that the function
+     * stored anything. Second-level membership is deliberately NOT followed:
+     * it re-answers "no callee to name" with the carrier named, which a
+     * reviewer can act on, rather than a depth-unbounded alias chase.
+     *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      * @return array{0:string,1:string}
      */
@@ -392,6 +406,12 @@ final class ChildLifetimeScanner
         $escapes = [];
         $bestEffort = [];
         $unfollowedAt = null;
+        // E419 state: plain locals that received an array literal holding
+        // $variable, the line the handle went into one, and the line a carrier
+        // itself appeared in an unfollowable shape.
+        $carriers = [];
+        $carriedAt = null;
+        $carrierUnfollowedAt = null;
         $depth = 0;
         $floor = 0;
 
@@ -462,31 +482,95 @@ final class ChildLifetimeScanner
                     if (\is_string($tokens[$j]) && $tokens[$j] === ';') {
                         break;
                     }
-                    if (\is_array($tokens[$j]) && $tokens[$j][0] === \T_VARIABLE && $tokens[$j][1] === $variable
+                    if (\is_array($tokens[$j]) && $tokens[$j][0] === \T_VARIABLE
+                        && ($tokens[$j][1] === $variable || isset($carriers[$tokens[$j][1]]))
                         && !self::isProcCloseArgument($tokens, $j)) {
-                        return [self::LIFETIME_LONG, 'the handle in ' . $variable . ' is returned'];
+                        // E419: returning the CARRIER returns what it holds.
+                        $via = $tokens[$j][1] === $variable ? '' : ' in ' . $tokens[$j][1];
+
+                        return [self::LIFETIME_LONG, 'the handle in ' . $variable . ' is returned' . $via];
                     }
                 }
 
                 continue;
             }
 
-            if (!\is_array($token) || $token[0] !== \T_VARIABLE || $token[1] !== $variable) {
+            if (!\is_array($token) || $token[0] !== \T_VARIABLE) {
                 continue;
+            }
+
+            // E419: a carrier is a plain local handed an array literal that
+            // contains the handle. Its fates are the handle's fates read from
+            // the other end, and every sentence names both ends.
+            $through = '';
+            if ($token[1] !== $variable) {
+                if (!isset($carriers[$token[1]])) {
+                    continue;
+                }
+                $through = ' through ' . $token[1];
             }
 
             // `$this->handles[] = $handle;` / `self::$live = $handle;`
             $equals = self::prev($tokens, $i);
             if ($equals !== null && self::tokenText($tokens[$equals]) === '=') {
-                $target = self::assignmentTarget($tokens, $equals, 0);
-                if ($target !== null && (\str_contains($target, '->') || \str_contains($target, '::'))) {
-                    return [self::LIFETIME_LONG, 'the handle in ' . $variable . ' is stored in ' . $target];
+                $stored = self::assignmentTarget($tokens, $equals, 0);
+                if ($stored !== null && (\str_contains($stored, '->') || \str_contains($stored, '::'))) {
+                    return [self::LIFETIME_LONG, 'the handle in ' . $variable . ' is stored in ' . $stored . $through];
                 }
+            }
+
+            // `$bundle = ['process' => $h]` (E419). The handle is an array
+            // MEMBER: walk back over the literal the `=>` lives in - bounded
+            // because the literal is born on this statement - and read where
+            // that array goes. A property keeps the handle through the member;
+            // a plain local becomes a CARRIER whose fates this loop weighs
+            // exactly like the handle's own.
+            $arrow = self::prev($tokens, $i);
+            if ($arrow !== null && self::tokenText($tokens[$arrow]) === '=>') {
+                $literal = self::enclosingArrayOpener($tokens, $arrow);
+                $equals = $literal === null ? null : self::prev($tokens, $literal);
+                $held = $equals !== null && self::tokenText($tokens[$equals]) === '='
+                    ? self::assignmentTarget($tokens, $equals, 0)
+                    : null;
+
+                if ($through === '' && $held !== null
+                    && (\str_contains($held, '->') || \str_contains($held, '::'))) {
+                    return [
+                        self::LIFETIME_LONG,
+                        'the handle in ' . $variable . ' is stored through an array member in ' . $held,
+                    ];
+                }
+
+                if ($through === '' && $held !== null && \preg_match('/^\$\w+$/', $held) === 1
+                    && $held !== $variable) {
+                    $carriers[$held] = true;
+                    $carriedAt ??= $token[2];
+
+                    continue;
+                }
+
+                if ($through !== '') {
+                    // The carrier sits inside ANOTHER literal: that is the
+                    // second level, and this walk stops at the first - with
+                    // the carrier named, not a false absence.
+                    $carrierUnfollowedAt ??= $token[2];
+
+                    continue;
+                }
+
+                $unfollowedAt ??= $token[2];
+
+                continue;
             }
 
             $callee = self::calleeTakingArgument($tokens, $i);
 
-            if ($callee !== null && self::isClosingCallee($callee)) {
+            // A close CLAIM is only made for the handle's own occurrences. A
+            // rostered closer invoked on the CARRIER array is a shape this
+            // scanner cannot vouch for - it cannot tell whether the callee
+            // digs out the handle - so it goes to the escape sentence, where
+            // the reader is told what was not followed.
+            if ($callee !== null && $through === '' && self::isClosingCallee($callee)) {
                 // NAMED SEPARATELY BY CONDITIONALITY, because the reason
                 // sentence quotes one of them and the reader goes looking for
                 // that exact line. A single `$closer` overwritten by whichever
@@ -503,7 +587,7 @@ final class ChildLifetimeScanner
                 continue;
             }
 
-            if ($callee !== null && isset(self::BEST_EFFORT_REAPERS[\strtolower($callee)])) {
+            if ($callee !== null && $through === '' && isset(self::BEST_EFFORT_REAPERS[\strtolower($callee)])) {
                 $bestEffort[$callee] = true;
 
                 continue;
@@ -514,14 +598,15 @@ final class ChildLifetimeScanner
             // it, and the two must not share a sentence. A reviewer can act on
             // the name of the call; they cannot act on a false absence.
             if ($callee !== null) {
-                $escapes[$callee] = true;
+                $escapes[$callee . $through] = true;
 
                 continue;
             }
 
-            // Not an assignment, not a return, not an argument: the handle
-            // appears in a shape with no callee to name - an array member
-            // (`$a = ['p' => $h];`), an index, an interpolation. Recording the
+            // Not an assignment, not a return, not an argument, not a member
+            // of a literal this walk can place: the handle appears in a shape
+            // with no callee to name - an index, an interpolation, a literal
+            // whose home could not be read. Recording the
             // LINE rather than nothing, because the alternative sentence -
             // "nothing in this function returns, stores or proc_close()s $h" -
             // is flatly false about a function that plainly mentions it.
@@ -571,11 +656,30 @@ final class ChildLifetimeScanner
             ];
         }
 
+        if ($carrierUnfollowedAt !== null) {
+            return [
+                self::LIFETIME_UNCLASSIFIED,
+                'the array holding ' . $variable . ' appears again on line ' . $carrierUnfollowedAt
+                    . ' as a member of another literal, and membership is followed one level and '
+                    . 'no further, so this scanner cannot say where the handle goes',
+            ];
+        }
+
+        if ($carriedAt !== null) {
+            return [
+                self::LIFETIME_UNCLASSIFIED,
+                'the handle in ' . $variable . ' was placed in an array literal on line ' . $carriedAt
+                    . '; no return, store or call moves that array anywhere else in this function, '
+                    . 'and membership is followed one level and no further',
+            ];
+        }
+
         if ($unfollowedAt !== null) {
             return [
                 self::LIFETIME_UNCLASSIFIED,
                 $variable . ' appears again on line ' . $unfollowedAt . ' in a shape with no '
-                    . 'callee to name - an array member, an index, an interpolation - so this '
+                    . 'callee to name - an index, an interpolation, or a literal whose home this '
+                    . 'walk could not read - so this '
                     . 'scanner cannot say where it goes',
             ];
         }
@@ -1062,11 +1166,53 @@ final class ChildLifetimeScanner
                 return self::codeText($tokens, $from, $i - 1);
             }
             if (\is_string($tokens[$i]) && \in_array($tokens[$i], ['[', '('], true)) {
-                $end = self::matching($tokens, $i, $tokens[$i], $tokens[$i] === '[' ? ']' : ')');
+                $end = TokenFunctionRanges::matching($tokens, $i, $tokens[$i], $tokens[$i] === '[' ? ']' : ')');
                 if ($end === null) {
                     return null;
                 }
                 $i = $end;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The `[` that opened the array literal an `=>` belongs to, or null.
+     *
+     * BACKWARD bracket walk from the `=>` at $arrowAt, stopped at any
+     * statement or block boundary - `;`, `{`, `}`, `(`, `)` - and at `#[`
+     * attribute groups. Those stops are what make the walk SOUND, not merely
+     * short: the shapes that share `=>` with array literals all cross one of
+     * them before any real literal opener - an arrow function (`fn($x) =>`),
+     * a `match` arm (the body's `{`), `foreach ... as $k => $v` (the `)` of
+     * the traversable) - and a literal that does exist on the statement is
+     * always reached before a stopper, since it was born there. A `]` seen
+     * walking back is a nested literal's close and takes one `[` off the
+     * hunt; string and comment tokens carry their delimiters inside their
+     * text, so bracket characters in prose can never stop or steer the walk.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function enclosingArrayOpener(array $tokens, int $arrowAt): ?int
+    {
+        $depth = 0;
+        for ($j = $arrowAt - 1; $j >= 0; $j--) {
+            $token = $tokens[$j];
+
+            if (\is_string($token)) {
+                if ($token === ']') {
+                    $depth++;
+                } elseif ($token === '[') {
+                    if ($depth === 0) {
+                        return $j;
+                    }
+                    $depth--;
+                } elseif (\in_array($token, [';', '{', '}', '(', ')'], true)) {
+                    return null;
+                }
+            } elseif (\is_array($token) && $token[0] === \T_ATTRIBUTE) {
+                return null;
             }
         }
 
@@ -1317,29 +1463,8 @@ final class ChildLifetimeScanner
         return \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true);
     }
 
-    /** @param list<array{0:int,1:string,2:int}|string> $tokens */
-    private static function matching(array $tokens, int $openAt, string $open, string $close): ?int
-    {
-        $depth = 0;
-        for ($i = $openAt, $n = \count($tokens); $i < $n; $i++) {
-            if (!\is_string($tokens[$i])) {
-                if ($open === '{' && \is_array($tokens[$i])
-                    && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                    $depth++;
-                }
-
-                continue;
-            }
-            if ($tokens[$i] === $open) {
-                $depth++;
-            } elseif ($tokens[$i] === $close) {
-                $depth--;
-                if ($depth === 0) {
-                    return $i;
-                }
-            }
-        }
-
-        return null;
-    }
+    // The bracket matcher used to be a copy of the one in {@see TokenFunctionRanges}.
+    // fd widened the canonical onto heredoc bodies and attribute groups (3555a3940);
+    // this class had asked for a second copy of the plain rule that predates it.
+    // Third copies are how rule 7 dies, so this file now calls the canonical.
 }
