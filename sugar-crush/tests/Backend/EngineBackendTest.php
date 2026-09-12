@@ -361,10 +361,11 @@ final class EngineBackendTest extends TestCase
 
         // Injected Termios test seam (see Tty's constructor docblock) -
         // exercises the real PosixBackend raw-mode/restore machinery against
-        // a real fd without depending on candy-core's separate (int)-cast fd
-        // resolution, which only coincides with the real OS fd for a
-        // process's original STDIN/STDOUT (irrelevant to production, which
-        // only ever wraps the real STDIN).
+        // a real fd. The (int)-cast fd resolution this seam was written to
+        // bypass no longer exists: candy-core resolves streams through
+        // descriptorForStream() now (E368). The seam still pins the termios
+        // work to the fd it is handed, instead of one PHP estimated -
+        // which is what a test of a real PTY slave wants either way.
         //
         // THE STREAM ARGUMENT IS EXPLICIT, AND USED TO BE `null` (round 49).
         // WHAT THAT DID: `Tty::__construct()` is `self::backend($stream ??

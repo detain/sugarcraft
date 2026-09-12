@@ -7,8 +7,11 @@ namespace SugarCraft\Crush\Tests\Support;
 use PHPUnit\Framework\TestCase;
 
 /**
- * THE SUITE'S SENTENCES ABOUT `O_NONBLOCK` SAY THE OPPOSITE OF WHAT ITS CODE
- * DOES, AND EVERY MEASUREMENT IN EVERY ONE OF THOSE FILES IS CORRECT (E319).
+ * THE SUITE'S SENTENCES ABOUT `O_NONBLOCK` USED TO SAY THE OPPOSITE OF WHAT
+ * ITS CODE DOES, AND EVERY MEASUREMENT BESIDE THEM WAS CORRECT (E319). The
+ * last eight inverted sentences were rewritten by the round-67 sweep (lane
+ * dj) — the roster below is EMPTY because of it — and this file stands so a
+ * ninth cannot arrive unremarked.
  *
  * That combination is the dangerous one. A wrong measurement fails; a wrong
  * SENTENCE beside a right measurement survives re-reading, and the reader who
@@ -37,7 +40,9 @@ use PHPUnit\Framework\TestCase;
  * offending shape is a message paired with an assertion that contradicts it,
  * so neither half can be read alone: `assertFalse($meta['blocked'], …)` demands
  * a set flag and `assertTrue($meta['blocked'], …)` demands a cleared one. A
- * `grep` for the token sees ten sites and can rank none of them.
+ * `grep` for the token sees every message that names it and can rank none of
+ * them — and the census writes no cardinal down, because a count over `tests/`
+ * is stale at the next merge (rule 18); the population is derived per run.
  *
  * AND THE DEMANDED DIRECTION IS STILL NOT THE ANSWER, WHICH IS WHERE THE FIRST
  * VERSION OF THIS FILE WAS WRONG. A failure message is read at the moment the
@@ -73,7 +78,8 @@ use PHPUnit\Framework\TestCase;
  * blocking and it should not be" is not ranked at all — and there are more of
  * those in `tests/` than there are ranked sites. A read of the near-miss ones
  * found none currently inverted (they are `must report blocked` controls beside
- * the rostered pairs, which are correct), so this is coverage and not a live
+ * the pairs whose sentences the round-67 sweep rewrote — correct since, and
+ * rostered nowhere now), so this is coverage and not a live
  * defect, but "the census is clean" means clean over the narrower population.
  * That exclusion is encoded as a provider row rather than only described here
  * ({@see vocabularyCases()}, "an assertion that never names the flag is out of
@@ -495,7 +501,7 @@ final class NonBlockingVocabularyTest extends TestCase
             ['inverted'],
         ];
         yield 'an AFFIRMATIVE message with a setting verb beside a demand-cleared assertion is consistent' => [
-            'the CORRECTED form of the tree\'s one affirmative site was still reported as a '
+            'the CORRECTED form of the tree\'s then-one affirmative site was still reported as a '
                 . 'contradiction, so the fix for it has nowhere to land',
             $call('assertTrue', 'the bootstrap ' . $set . ' ' . $flag . ' on a TERMINAL'),
             ['consistent'],
@@ -657,8 +663,13 @@ final class NonBlockingVocabularyTest extends TestCase
      * backwards for the affirmative one — wrong in BOTH polarities, not merely
      * blind to one — and it false-cleaned the tree's one affirmative site
      * (`tests/SuiteChildStdinIsolationTest.php`, the TERMINAL arm), reporting
-     * `consistent` for a sentence that is inverted and reddening if anybody
-     * fixed it. It survived its own known-answer table because all four
+     * `consistent` for a sentence that was then inverted and would have
+     * reddened if anybody fixed it. THAT SENTENCE IS GONE: the
+     * descriptor-replacement rewrite removed the flag from that arm's message,
+     * so the site left the scanner's alphabet with the flag itself, and the
+     * affirmative rows of {@see vocabularyCases()} keep its shape pinned as a
+     * specimen whatever lives at the original site. It survived
+     * its own known-answer table because all four
      * polarity rows there were negated: the shape it mis-ranked was outside
      * the table's alphabet by construction (rule 11).
      *
@@ -700,21 +711,27 @@ final class NonBlockingVocabularyTest extends TestCase
      * setting verb matches inside `offset` and every message in the suite would
      * name both directions."
      *
-     * WHAT IS TRUE NOW: that was never measured and it is false. Pushing the
-     * real population (`tests` + `src`, 10 ranked sites, PHP 8.3.6) through a
-     * byte-copy of this pair with every `\b` removed changes 0 of 10 verdicts,
-     * and mutating each `\b` pair out of this file individually SURVIVED the
-     * whole of `tests/Support tests/Cli tests/Config`. The word `offset`
-     * appears in no ranked message.
+     * WHAT IS TRUE NOW: that was never measured and it is false — and the
+     * claim's own escape hatch has since closed. The original measurement
+     * (a byte-copy of this pair with every `\b` removed, pushed through the
+     * population of its day — 10 ranked sites, PHP 8.3.6) saw 0 of 10 verdicts
+     * change, and deleting each `\b` pair from this file individually SURVIVED
+     * the whole of `tests/Support tests/Cli tests/Config`. RE-MEASURED at
+     * round 68 (lane ee) against the post-sweep tree — 8 ranked sites — the
+     * same deletion now flips FOUR to `unreadable` and reddens the census: the
+     * `finally`-block sentences in `Backend/EngineBackendTest`, `ChatTest` and
+     * both forked twins of `Support/ForkedChildTest`, which name the clearing
+     * verb and quote the call that carries the setting one inside it. The word
+     * `offset` still appears in no ranked message.
      *
-     * WHY THEY STILL EARN THEIR PLACE: the shape that needs them has not
-     * arrived yet but is one edit away — a message that quotes the call it is
-     * about. `stream_set_blocking(STDIN, false)` contains the setting verb and
-     * `unclear` contains the clearing one, so a sentence naming either would,
-     * without the boundaries, name both directions and be downgraded from
-     * `inverted` to `unreadable` — a real site quietly leaving the census. That
-     * is no longer an argument: two rows of {@see vocabularyCases()} are those
-     * two sentences, and each one reds if its boundary is removed.
+     * WHY THEY EARN THEIR PLACE: the shape this paragraph once called "not
+     * arrived yet but one edit away" HAS ARRIVED — the round-67 rewrite gave
+     * those real sentences exactly the quoting form. A message like that
+     * without the boundaries names both directions, so a correct `inverted`
+     * verdict is downgraded to `unreadable` — a real site quietly leaving the
+     * census, four of them today. Two rows of {@see vocabularyCases()} are the
+     * kept specimens of the two shapes, each red if its boundary is removed,
+     * and the census now reds on the live sites too.
      *
      * The setting side also spells `setting`, which it did not: it matched
      * `set|sets|back|restore[sd]?` while the clearing side matched all four of

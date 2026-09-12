@@ -123,7 +123,16 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
     /**
      * The keystone the pin rests on: with the probe ARMED (an explicit reset)
      * and STDOUT not a tty, `getTerminalSize()` answers exactly the documented
-     * 60x200 default. bootstrap pins to that same viewport, which is what
+     * 60x200 default — AND that arm is only true when `LINES`/`COLUMNS` are
+     * unset. The env pair is load-bearing, not atmosphere: with no tty for the
+     * ioctl to answer, candy-core's `PosixBackend::size()` falls through to
+     * `getenv('COLUMNS')`/`getenv('LINES')` ahead of every later fallback, so
+     * a harness that pipes STDOUT yet exports a window — the measured shapes
+     * were a ctty handoff at 40x120 and a 50x254 supervising shell — pre-empts
+     * the default and reddens the piped arm below. Plain-pipe runs with those
+     * variables unset are the CI shape; keep them that way (round-66/-67
+     * closeout seam, restated here so the assumption lives with the assert).
+     * bootstrap pins to that same viewport, which is what
      * makes the tests/App re-pins no-ops for every test that passes today —
      * if this constant ever moves, the pin silently changes the suite.
      *
@@ -164,6 +173,10 @@ final class TerminalSizeFallbackIsolationTest extends TestCase
             return;
         }
 
+        // PIPED STDOUT with LINES/COLUMNS unset — the precondition stated in
+        // the doc-block above. An exported window would answer this arm from
+        // PosixBackend::size()'s env step ahead of the default below, and the
+        // verdict would belong to the runner instead of the code.
         self::assertSame(
             ['rows' => 60, 'cols' => 200],
             TuiRenderer::getTerminalSize(),

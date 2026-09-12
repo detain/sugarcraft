@@ -35,15 +35,16 @@ use PHPUnit\Framework\TestCase;
  *
  * Uses `Tty`'s injected-Termios test seam (a real fd obtained via candy-pty's
  * own FFI `open()`, mirroring `candy-pty/tests/Posix/PosixTermiosTest.php`)
- * rather than `fopen()` + `(int)` cast: `PosixBackend::enableRawMode()`
- * resolves a stream to an fd via `(int) $this->stream`, which is PHP's
- * internal resource ID, not the OS fd - it happens to coincide for a
- * process's original STDIN/STDOUT (both opened first, low IDs, and usually
- * the same physical terminal anyway) but not for a stream opened later in a
- * busy test process. That's a separate, pre-existing quirk of candy-core's
- * fd resolution - irrelevant to production (which only ever wraps the
- * process's real STDIN) and irrelevant to the actual bug this file guards;
- * the injected-Termios seam exists precisely to sidestep it in tests.
+ * rather than `fopen()` + `(int)` cast. WHY THE CAST WAS NOT USABLE WHEN THIS
+ * WAS WRITTEN: `PosixBackend::enableRawMode()` then resolved a stream to an
+ * fd via `(int) $this->stream` - PHP's internal resource ID, not the OS fd -
+ * which happens to coincide for a process's original STDIN/STDOUT (both
+ * opened first, low IDs, and usually the same physical terminal anyway) but
+ * not for a stream opened later in a busy test process. THAT QUIRK SINCE
+ * DIED IN CANDY-CORE (E368 at `dd6edc699`: resolution goes through
+ * `descriptorForStream()` now), and the seam's job is unchanged by it - it
+ * drives the fd you hand it, which is exactly what a test of a real PTY
+ * slave wants regardless of how the default path resolves anything.
  */
 final class ForkedChildTest extends TestCase
 {
@@ -178,9 +179,15 @@ final class ForkedChildTest extends TestCase
         //
         // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
         // goes true -> false across this seam (3/3); with an explicit stream it
-        // never moves (3/3). `tests/bootstrap.php` repairs descriptor 0 with
-        // exactly that flag, so `restore()` here was silently undoing it for
-        // every later test in the run — see that file's write-up.
+        // never moves (3/3). WHAT bootstrap DID THEN: it repaired descriptor 0
+        // by SETTING exactly that flag (the superseded flag attempt in that
+        // file's write-up), so `restore()` here was silently undoing the
+        // repair for every later test in the run. WHAT IT DOES NOW: the
+        // shipped repair is `fclose(\STDIN)` plus a `/dev/null` reopen — it
+        // holds no flag for `restore()` to undo. The explicit stream still
+        // earns its place: a `null` would still wrap the runner's fd 0 and put
+        // a test in raw mode on a descriptor it does not own, which
+        // `TtyStreamArgumentCensusTest` keeps red either way.
         //
         // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
         // reports a memory stream as blocked whatever is set on it, so it
@@ -271,9 +278,15 @@ final class ForkedChildTest extends TestCase
         //
         // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
         // goes true -> false across this seam (3/3); with an explicit stream it
-        // never moves (3/3). `tests/bootstrap.php` repairs descriptor 0 with
-        // exactly that flag, so `restore()` here was silently undoing it for
-        // every later test in the run — see that file's write-up.
+        // never moves (3/3). WHAT bootstrap DID THEN: it repaired descriptor 0
+        // by SETTING exactly that flag (the superseded flag attempt in that
+        // file's write-up), so `restore()` here was silently undoing the
+        // repair for every later test in the run. WHAT IT DOES NOW: the
+        // shipped repair is `fclose(\STDIN)` plus a `/dev/null` reopen — it
+        // holds no flag for `restore()` to undo. The explicit stream still
+        // earns its place: a `null` would still wrap the runner's fd 0 and put
+        // a test in raw mode on a descriptor it does not own, which
+        // `TtyStreamArgumentCensusTest` keeps red either way.
         //
         // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
         // reports a memory stream as blocked whatever is set on it, so it

@@ -832,8 +832,11 @@ final class ChatTest extends TestCase
             return str_contains($out, '-icanon') && str_contains($out, '-echo');
         };
 
-        // Injected Termios test seam - see EngineBackendTest's matching test
-        // for why this bypasses candy-core's (int)-cast fd resolution.
+        // Injected Termios test seam - see EngineBackendTest's matching test.
+        // The (int)-cast fd resolution this used to sidestep is gone from
+        // candy-core (E368: `descriptorForStream()`); the seam still earns
+        // its place by driving the fd it is handed rather than one PHP
+        // estimated.
         //
         // THE STREAM ARGUMENT IS EXPLICIT, AND USED TO BE `null` (round 49,
         // lane e - a FORCED out-of-lane edit, named in that lane's report).
@@ -843,8 +846,12 @@ final class ChatTest extends TestCase
         // its own `isTty()` guard - so its trailing
         // `@stream_set_blocking($this->stream, false)` and `restore()`'s
         // matching `(..., true)` both landed on the runner's fd 0.
-        // `tests/bootstrap.php` repairs descriptor 0 with exactly that flag,
-        // so `restore()` here was undoing it for every later test in the run.
+        // `tests/bootstrap.php` USED TO repair descriptor 0 by SETTING exactly
+        // that flag (the superseded flag attempt in its write-up), so
+        // `restore()` here was undoing the repair for every later test in the
+        // run. What ships now is `fclose(\STDIN)` plus a `/dev/null` reopen -
+        // no flag for `restore()` to undo - and the explicit stream still
+        // matters either way: `null` would still wrap the runner's fd 0.
         //
         // THIS SITE IS WHY THE OTHER THREE WERE NOT ENOUGH, and it is worth a
         // sentence: the census that found the others was `grep -rn 'new Tty('`
