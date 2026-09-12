@@ -40,10 +40,19 @@ use PHPUnit\Framework\TestCase;
  * - a BACKTICKED symbol in the same files — the shape a doc-block reaches for
  *   when the sentence wants prose rather than a tool-resolvable reference;
  * - a backticked symbol in a `docs/*.md` page;
- * - and a BARE `{@see someTestMethod()}` inside a `tests/` file, with no class
+ * - a BARE `{@see someTestMethod()}` inside a `tests/` file, with no class
  *   at all, which resolves against the classes DECLARED IN THAT FILE. Three
  *   dangling ones were found by adding this shape, one of them in a doc-block
- *   whose whole subject is instruments that answer zero when they are dead.
+ *   whose whole subject is instruments that answer zero when they are dead;
+ * - and a bare `{@see someMethod()}` whose name does NOT start with `test` —
+ *   invisible to the shape above by construction, because that shape matches
+ *   only `test…()`. Round 68 (E547/E583) measured ELEVEN of these sitting in
+ *   `tests/` comments, each naming a method declared in `src/` or in a shared
+ *   Support trait, every one of them silently rename-proof. The eleven were
+ *   rewritten to their declaring FQNs; the arm that reds the twelfth is
+ *   {@see testNoBareCitationNamesAnExistingMethodWithoutItsDeclaringClass()},
+ *   and offenders in files another lane owns ride {@see DEFERRED_BARE_CITATIONS}
+ *   with a fail-closed occurrence count — a roster that may only ever shrink.
  *
  * RESOLUTION IS A BASE LIST AND THE ORDER IS PART OF THE CONTRACT. A citation
  * is written the way a human reads it, not the way an autoloader does, so a
@@ -110,6 +119,28 @@ final class SymbolCitationDriftTest extends TestCase
      * @var list<string>
      */
     private const PLACEHOLDER_CLASSES = ['Test', 'FooTest', 'BarTest', 'BazTest'];
+
+    /**
+     * Bare-name citations the scanner FINDS but this lane could not fix, because
+     * the citing files belong to other lanes. Keyed `file|token` => occurrences
+     * measured at the commit that widened the scan; a citation fixed in place
+     * without its row being deleted reds as a STALE roster entry, and an
+     * occurrence count that moved reds too. The roster may only ever shrink.
+     *
+     * WHY A ROSTER AND NOT AN EXEMPTION: the guard is the point — every NEW bare
+     * citation of an existing symbol reddens from here on, and these rows are
+     * debts with a name, a count, and a test that notices when they are paid.
+     *
+     * @var array<string, int>
+     */
+    private const DEFERRED_BARE_CITATIONS = [
+        'tests/Chat/SessionStartHookWireTest.php|dispatchTurnHooks()' => 1,
+        'tests/Chat/SessionStartHookWireTest.php|expandCustomCommand()' => 1,
+        'tests/Context/GlobDialectDifferentialTest.php|legacyPathMatch()' => 1,
+        'tests/Integration/RulePathScopingWiringTest.php|tools()' => 1,
+        'tests/RuntimeInitialDispatchOrderTest.php|executeToolCalls()' => 1,
+        'tests/Support/DuplicatedDocBlockLineTest.php|everyTestFile()' => 2,
+    ];
 
     /** @var list<string> */
     private array $unparseable = [];
@@ -233,6 +264,189 @@ final class SymbolCitationDriftTest extends TestCase
             static fn (string $short): string => ($namespace === '' ? '' : $namespace . '\\') . $short,
             $m[1],
         ));
+    }
+
+    /**
+     * Every method declared by a class-like in one source, with its line.
+     *
+     * TOKEN-BASED AND SCOPE-AWARE, because the question this answers — "is that
+     * name THIS file's own?" — is a question about declarations. The walk keeps
+     * a stack of enclosing class-like FQNs and a brace-depth line for each one,
+     * so a `function` keyword in a nested anonymous block attributes to the
+     * outer named class rather than to nothing, and interpolation braces inside
+     * strings (`{$x}`) are counted as openers via their own token types so the
+     * depth bookkeeping cannot pop a class frame early.
+     *
+     * METHODS ONLY. Top-level `function` declarations are not in this alphabet:
+     * MEASURED at the commit that wrote this, `src/` and `tests/` declare none
+     * outside a class-like (the only file-level functions in the tree live in
+     * `bin/` and in stubs outside the roster), so a bare `{@see someFn()}` of a
+     * top-level function is silently out of scope here exactly as it is out of
+     * scope for the `{@see}` shapes above.
+     *
+     * @return list<array{0: string, 1: string, 2: int}> [name, declaring Fqn, line]
+     */
+    private function declaredMethodsOf(string $text): array
+    {
+        $tokens = token_get_all($text);
+        $out = [];
+        $namespace = '';
+        /** @var list<string> $classStack */
+        $classStack = [];
+        /** @var array<int, int|null> $frameAt brace depth => class-stack height, null for interpolation braces */
+        $frameAt = [];
+        $depth = 0;
+        for ($i = 0, $n = count($tokens); $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (!is_array($token)) {
+                if ($token === '{') {
+                    $depth++;
+                    $frameAt[$depth] = count($classStack);
+                } elseif ($token === '}') {
+                    $height = $frameAt[$depth] ?? null;
+                    if ($height !== null && count($classStack) > $height) {
+                        array_pop($classStack);
+                    }
+                    unset($frameAt[$depth]);
+                    $depth--;
+                }
+
+                continue;
+            }
+            if ($token[0] === T_NAMESPACE) {
+                $namespace = '';
+                for ($j = $i + 1; $j < $n; $j++) {
+                    $piece = $tokens[$j];
+                    if (is_array($piece) && ($piece[0] === T_STRING || $piece[0] === T_NAME_QUALIFIED)) {
+                        $namespace = (string) $piece[1];
+                        break;
+                    }
+                    if ($piece === ';' || $piece === '{') {
+                        break;
+                    }
+                }
+
+                continue;
+            }
+            if ($token[0] === T_CURLY_OPEN || $token[0] === T_DOLLAR_OPEN_CURLY_BRACES) {
+                $depth++;
+                $frameAt[$depth] = null;
+
+                continue;
+            }
+            if ($token[0] === T_CLASS || $token[0] === T_TRAIT || $token[0] === T_INTERFACE || $token[0] === T_ENUM) {
+                $before = $tokens[$i - 1] ?? null;
+                if (is_array($before) && ($before[0] === T_DOUBLE_COLON || $before[0] === T_OBJECT_OPERATOR || $before[0] === T_NEW)) {
+                    continue;
+                }
+                for ($j = $i + 1; $j < $n; $j++) {
+                    if (is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                        continue;
+                    }
+                    if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
+                        $classStack[] = ($namespace === '' ? '' : $namespace . '\\') . $tokens[$j][1];
+                    }
+                    break;
+                }
+
+                continue;
+            }
+            if ($token[0] === T_FUNCTION) {
+                for ($j = $i + 1; $j < $n; $j++) {
+                    if (is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                        continue;
+                    }
+                    if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING && $classStack !== []) {
+                        $out[] = [(string) $tokens[$j][1], $classStack[count($classStack) - 1], $token[2]];
+                    }
+                    break;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Every method name declared anywhere under `src/` or `tests/`, mapped to
+     * its declaring sites as `Fqn::name()` + file:line strings.
+     *
+     * THE ALPHABET OF THE BARE-SYMBOL ARM. A name in here is one a bare
+     * `{@see someMethod()}` could silently be pointing at; the arm reports every such
+     * citation that the CITING file does not itself declare.
+     *
+     * @return array<string, list<string>>
+     */
+    private function declaredMethodsTreeWide(): array
+    {
+        $index = [];
+        foreach (['src', 'tests'] as $subdir) {
+            foreach ($this->sources($subdir, 'php') as $label => $text) {
+                foreach ($this->declaredMethodsOf($text) as [$name, $owner, $line]) {
+                    $index[$name][] = $owner . '::' . $name . '() at ' . $label . ':' . $line;
+                }
+            }
+        }
+        ksort($index);
+
+        return $index;
+    }
+
+    /**
+     * Bare `{@see someMethod()}` citations in ONE `tests/` source's comments, for a
+     * name the file does NOT declare but the tree does.
+     *
+     * COMMENTS ONLY — T_DOC_COMMENT and T_COMMENT tokens and nothing else. The
+     * census fixture strings inside these very files carry `{@see ...}` shapes
+     * as DATA (a provider row in `StderrEmitterCensusTest` plants a whole
+     * doc-comment in a string literal); a raw-byte scan of the new arm would
+     * report that fixture as a violation of a file the census itself owns,
+     * which is the fixture being mistaken for the finding. A string literal is
+     * never a comment token, so the exclusion is STRUCTURAL — rule 40 — not an
+     * exemption list, and a fixture can never grow back into the violation set
+     * by accident.
+     *
+     * THE LINE IS THE CITATION'S OWN when `{@see someMethod()}` sits contiguously in
+     * the token (every site measured so far), and the COMMENT'S FIRST LINE when
+     * the citation wrapped — the flattening that joins a wrapped continuation
+     * removes the very bytes a byte-offset line count would need.
+     *
+     * @param array<string, list<string>> $index
+     *
+     * @return list<array{file: string, line: int, token: string, declared: list<string>}>
+     */
+    private function bareSymbolCitationsIn(string $label, string $text, array $index): array
+    {
+        $own = [];
+        foreach ($this->declaredMethodsOf($text) as [$name, $owner, $line]) {
+            $own[$name] = true;
+        }
+        $rows = [];
+        foreach (token_get_all($text) as $token) {
+            if (!is_array($token) || ($token[0] !== T_DOC_COMMENT && $token[0] !== T_COMMENT)) {
+                continue;
+            }
+            [$id, $content, $line] = $token;
+            if (!str_contains((string) $content, '{@')) {
+                continue;
+            }
+            preg_match_all('/\{\@see\s+([A-Za-z_][A-Za-z0-9_]*)\(\)/', $this->flatten((string) $content), $matches);
+            foreach ($matches[1] as $name) {
+                if (str_starts_with((string) $name, 'test') || isset($own[(string) $name]) || !isset($index[(string) $name])) {
+                    continue;
+                }
+                $needle = '{@see ' . $name . '()}';
+                $at = strpos((string) $content, $needle);
+                $rows[] = [
+                    'file' => $label,
+                    'line' => $at === false ? $line : $line + substr_count((string) $content, "\n", 0, $at),
+                    'token' => $name . '()',
+                    'declared' => $index[(string) $name],
+                ];
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -992,6 +1206,165 @@ final class SymbolCitationDriftTest extends TestCase
             'prose that merely spells the suffix, a metasyntactic name or a namespace prefix '
             . 'is being scraped as a citation, which is how this census reported its own '
             . 'alphabet paragraph as the tree\'s defect',
+        );
+    }
+
+    /**
+     * No bare citation in `tests/` names an existing method without its class.
+     *
+     * THE ARM E583 ADDED, AND WHAT IT COSTS TO LEAVE THE SHAPE UNSCANNED: a
+     * bare `{@see someMethod()}` reads fine to a human until the declaring method is
+     * renamed, and then the sentence that vouches for a behaviour points at
+     * nothing, in a file the compiler has never read. Round 68 measured
+     * ELEVEN such citations in `tests/` comments — every one of them naming a
+     * method of `src/` or of a shared Support trait, every one of them outside
+     * the reach of the shapes above, which resolve bare tokens only against
+     * the citing file's own classes and only when the name starts with `test`.
+     * The eleven now spell their declaring FQNs; this test is what keeps the
+     * twelfth from arriving.
+     *
+     * THE DEFERRAL ROSTER, not an exemption list. Seven occurrences in five
+     * files the round-68 lane may not touch are counted exactly; a new
+     * occurrence anywhere, or an occurrence of a rostered pair going silent,
+     * reddens here. See {@see DEFERRED_BARE_CITATIONS} for why a roster with a
+     * staleness check beats both silence and a second scan.
+     */
+    public function testNoBareCitationNamesAnExistingMethodWithoutItsDeclaringClass(): void
+    {
+        $index = $this->declaredMethodsTreeWide();
+
+        $counts = [];
+        $places = [];
+        $sites = [];
+        foreach ($this->sources('tests', 'php') as $label => $text) {
+            foreach ($this->bareSymbolCitationsIn($label, $text, $index) as $row) {
+                $key = $row['file'] . '|' . $row['token'];
+                $counts[$key] = ($counts[$key] ?? 0) + 1;
+                $places[$key][] = $row['file'] . ':' . $row['line'];
+                $sites[$key] = $row['declared'];
+            }
+        }
+        ksort($counts);
+
+        $offences = [];
+        foreach ($counts as $key => $seen) {
+            $expected = self::DEFERRED_BARE_CITATIONS[$key] ?? null;
+            if ($expected === null) {
+                $offences[] = $key . ' at ' . implode(', ', $places[$key])
+                    . ' — the name is declared at ' . implode(' / ', array_slice($sites[$key], 0, 4))
+                    . ' and NOT in the citing file; a rename of the declaration would leave this sentence '
+                    . 'pointing at nothing. Spell the citation with the declaring FQN';
+            } elseif ($seen !== $expected) {
+                $offences[] = $key . ' at ' . implode(', ', $places[$key])
+                    . ': the deferral roster carries ' . $expected . ' occurrence(s) and the scan sees ' . $seen;
+            }
+        }
+        foreach (self::DEFERRED_BARE_CITATIONS as $key => $expected) {
+            if (!isset($counts[$key])) {
+                $offences[] = $key . ': the deferral roster carries ' . $expected
+                    . ' occurrence(s) and the scan sees none — the citation was fixed or renamed in place, '
+                    . 'so delete the roster row in the same commit';
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offences,
+            'a bare ' . '{' . '@see name()} citation in tests/ names a method the citing file does not '
+            . 'declare; qualify it with the declaring FQN in the commit that writes the sentence, or the '
+            . 'sentence is unbacked the day the method moves',
+        );
+    }
+
+    /**
+     * THE KNOWN-POSITIVE FOR THE BARE ARM, with its three negatives, driven
+     * through the same `bareSymbolCitationsIn()` the census calls (rule 15).
+     *
+     * An absence assertion over the whole tree — `assertSame([], $offences)` —
+     * is satisfied perfectly by a scanner that reports nothing, which is exactly
+     * how eleven of these sat invisible for as long as they did. So a synthetic
+     * `tests/` source that cites a REAL tree method (`pump()`, declared in
+     * `src/Backend/StreamingCommandBackend.php`, not in the fixture) must come
+     * back flagged at its own line, while the three shapes that must NOT flag —
+     * a name the fixture declares itself, a `test…` name owned by the see-self
+     * shape, and the citation planted inside a STRING LITERAL, which is what
+     * keeps census fixtures out of the violation set — must come back clean.
+     */
+    public function testTheBareSymbolScanRedsOnASourceItHasNeverSeen(): void
+    {
+        $open = '{@' . 'see ';
+        $existing = 'pump';
+
+        $index = $this->declaredMethodsTreeWide();
+        self::assertArrayHasKey($existing, $index, 'the fixture symbol has stopped being a real declaration');
+
+        $offender = implode("\n", [
+            '<?php',
+            'namespace SugarCraft\Crush\Tests;',
+            '/**',
+            ' * ' . $open . $existing . '()} is not declared by this source.',
+            ' */',
+            'final class BareProbeCiter {}',
+        ]);
+        $rows = $this->bareSymbolCitationsIn('tests/BareProbe.php', $offender, $index);
+        self::assertCount(1, $rows, 'the bare-symbol scan reported nothing for a source it must report');
+        self::assertSame('tests/BareProbe.php', $rows[0]['file']);
+        self::assertSame(4, $rows[0]['line'], 'the violation does not name the citation\'s own line');
+        self::assertSame($existing . '()', $rows[0]['token']);
+        $declared = implode(' / ', $rows[0]['declared']);
+        self::assertStringContainsString('StreamingCommandBackend::pump()', $declared);
+        self::assertStringContainsString('src/Backend/StreamingCommandBackend.php', $declared);
+
+        $host = implode("\n", [
+            '<?php',
+            'namespace SugarCraft\Crush\Tests;',
+            '/**',
+            ' * ' . $open . $existing . '()} names the method declared below, in THIS file.',
+            ' */',
+            'final class BareProbeHost',
+            '{',
+            '    private function pump(): void',
+            '    {',
+            '    }',
+            '}',
+        ]);
+        self::assertSame(
+            [],
+            $this->bareSymbolCitationsIn('tests/BareHost.php', $host, $index),
+            'a citation of the citing file\'s OWN method is being reported — the exemption that keeps '
+            . 'the hundreds of self-references in the census files green would be lost',
+        );
+
+        $seeSelf = implode("\n", [
+            '<?php',
+            'namespace SugarCraft\Crush\Tests;',
+            '/**',
+            ' * ' . $open . 'testPumpNothingAtAll()} belongs to the see-self shape, not this arm.',
+            ' */',
+            'final class BareProbeSelfShape {}',
+        ]);
+        self::assertSame(
+            [],
+            $this->bareSymbolCitationsIn('tests/BareSelfShape.php', $seeSelf, $index),
+            'the bare-symbol arm is double-reporting the test-prefixed shape the see-self census owns',
+        );
+
+        $fixtureString = implode("\n", [
+            '<?php',
+            'namespace SugarCraft\Crush\Tests;',
+            'final class BareProbeDataProvider',
+            '{',
+            '    public static function cases(): array',
+            '    {',
+            "        return ['<?php /** " . $open . $existing . '()} */' . "'];",
+            '    }',
+            '}',
+        ]);
+        self::assertSame(
+            [],
+            $this->bareSymbolCitationsIn('tests/BareFixtureString.php', $fixtureString, $index),
+            'a citation inside a string literal is being reported — census fixtures that carry the shape '
+            . 'as DATA would flood the violation list, which is why the arm reads comment tokens only',
         );
     }
 }

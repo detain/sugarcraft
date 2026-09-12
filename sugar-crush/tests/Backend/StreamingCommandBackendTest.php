@@ -1027,10 +1027,10 @@ printf 'ok\n'
      * the other. Not a slow case — unbounded; a child that could exit would at
      * least hand the writer an EPIPE, and this one cannot reach its exit.
      *
-     * {@see pump()} writes a slice of stdin from the same iteration that drains
-     * stdout, so neither pipe can fill without the other being emptied — which
-     * is why hoisting the loop fixed `complete()` too, and not only the method
-     * this round set out to unblock.
+     * {@see \SugarCraft\Crush\Backend\StreamingCommandBackend::pump()} writes a
+     * slice of stdin from the same iteration that drains stdout, so neither pipe
+     * can fill without the other being emptied — which is why hoisting the loop
+     * fixed `complete()` too, and not only the method this round set out to unblock.
      *
      * Without it neither of these fails — they HANG, unbounded, and no timer
      * rescues them: `awaitPromise()`'s safety timer lives on the very loop the

@@ -328,8 +328,8 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
      * MATCHED AGAINST A FLATTENED COPY OF THE SOURCE, never the raw bytes. A
      * doc-block wraps at 80 columns with ` * ` on every continuation, so a
      * sentence is never those bytes in a row — round 44 shipped an
-     * `assertStringNotContainsString(<sentence>, $rawSource)` that survived
-     * re-adding the very sentence it existed to forbid. {@see flattened()}
+     * `assertStringNotContainsString(<sentence>, $rawSource)` that survived re-adding the
+     * very sentence it existed to forbid. {@see \SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait::flattened()}
      * removes the continuation markers first; its own correctness is checked on
      * a synthetic wrapped fixture in
      * {@see testTheProseSiteCountInThisFilesOwnDocBlocksMatchesTheList()},

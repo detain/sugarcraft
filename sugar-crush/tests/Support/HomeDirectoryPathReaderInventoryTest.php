@@ -158,13 +158,14 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
      *
      * WHAT THIS SAID, AND IT WAS TRUE OF A WALK THAT COULD NOT DO IT.
      * {@see indirectPathCalls()} reads the neighbours of a `::` by index, and
-     * until 2026-08-24 the stream it read still carried `T_WHITESPACE`: this
-     * copy of {@see significantTokens()} dropped comments only, while the twin
-     * it was copied from — `ContainedPathInventoryTest`'s — dropped whitespace
-     * as well. So `$class :: path()` had a whitespace token where the subject
-     * and the method were looked for, and the scan walked past it before it
-     * ever reached the `T_VARIABLE` test. The absence this test asserts was an
-     * absence of the ZERO-WHITESPACE spelling alone.
+     * until 2026-08-24 the stream it read still carried `T_WHITESPACE`: this copy of
+     * {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait::significantTokens()}
+     * dropped comments only, while the twin it was copied from —
+     * `ContainedPathInventoryTest`'s — dropped whitespace as well. So `$class ::
+     * path()` had a whitespace token where the subject and the method were
+     * looked for, and the scan walked past it before it ever reached the
+     * `T_VARIABLE` test. The absence this test asserts was an absence of the
+     * ZERO-WHITESPACE spelling alone.
      *
      * WHY THE CLAIM STILL EARNS ITS PLACE: the blind spot the paragraph names
      * is the right one to state, and the walk now really has only that one.
@@ -196,8 +197,9 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
      * Rule 15: `assertSame([], …)` over `src/` is satisfied perfectly by a walk
      * that has stopped working, and this one HAD stopped working for every
      * spelling with a space in it. The spaced arm is the load-bearing half —
-     * restore the whitespace-keeping copy of {@see significantTokens()} and it
-     * is the assertion that reds.
+     * restore the whitespace-keeping copy of
+     * {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait::significantTokens()}
+     * and it is the assertion that reds.
      */
     public function testTheIndirectCallScanSeesBothSpellingsAndSparesTheDirectOne(): void
     {

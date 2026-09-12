@@ -2002,12 +2002,12 @@ final class StderrEmitterCensusTest extends TestCase
      * is added.
      *
      * THE ONE HOLE THE SWEEP FOUND was the comment strip in
-     * {@see significantTokens()} — no row killed its removal, on any channel.
-     * The rows added for it are marked in place. There are FOUR of them and
-     * all four red when the strip goes, which is one more than the sentence
-     * here used to claim: the fourth is `and that write is still not indirect`,
-     * and it is the interesting one, because it fails in the OPPOSITE
-     * direction. It expects 0 at head and answers 1 with the comment strip
+     * {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait::significantTokens()} —
+     * no row killed its removal, on any channel. The rows added for it are
+     * marked in place. There are FOUR of them and all four red when the strip
+     * goes, which is one more than the sentence here used to claim: the fourth
+     * is `and that write is still not indirect`, and it is the interesting one,
+     * because it fails in the OPPOSITE direction. It expects 0 at head and answers 1 with the comment strip
      * gone — an unstripped comment displaces `STDERR` out of the first
      * argument position, so channel 2 starts counting a direct write as a
      * captured handle. MEASURED, PHP 8.3.6, round 49.
@@ -2019,7 +2019,8 @@ final class StderrEmitterCensusTest extends TestCase
         yield 'a direct write' => ['direct', '<?php fwrite(STDERR, "x");', 1];
         yield 'a namespaced direct write' => ['direct', '<?php \\fwrite(\\STDERR, "x");', 1];
 
-        // THE COMMENT STRIP, PINNED (E228). {@see significantTokens()} drops
+        // THE COMMENT STRIP, PINNED (E228).
+        // {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait::significantTokens()} drops
         // T_WHITESPACE, T_COMMENT and T_DOC_COMMENT, and until this row nothing
         // in this provider noticed if it stopped dropping the last two: the
         // three rows that MENTION a comment all answer 0 whether the strip runs
@@ -2481,14 +2482,15 @@ final class StderrEmitterCensusTest extends TestCase
      * it. If you find yourself wanting to write that size a second time, add a
      * row instead.
      *
-     * MATCHED AGAINST {@see flattened()} AND NOT THE RAW BYTES, for the reason
-     * the sibling census gives: a doc-block wraps at 80 columns with ` * ` on
-     * every continuation, so a sentence is never those bytes in a row. Some of
-     * these anchors cross a wrap; how many is deliberately not stated here, per
-     * the paragraph above. The flattener's own known-positive control is the
-     * first assertion in the test, because a flattener returning `''` would
-     * make every anchor fail open into a zero match — which this treats as a
-     * failure, not a skip.
+     * MATCHED AGAINST
+     * {@see \SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait::flattened()}
+     * AND NOT THE RAW BYTES, for the reason the sibling census gives: a
+     * doc-block wraps at 80 columns with ` * ` on every continuation, so a
+     * sentence is never those bytes in a row. Some of these anchors cross a
+     * wrap; how many is deliberately not stated here, per the paragraph above.
+     * The flattener's own known-positive control is the first assertion in the
+     * test, because a flattener returning `''` would make every anchor fail
+     * open into a zero match — which this treats as a failure, not a skip.
      *
      * @return list<array{anchor: string, expected: int, what: string}>
      */

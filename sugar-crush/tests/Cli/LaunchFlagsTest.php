@@ -408,7 +408,7 @@ final class LaunchFlagsTest extends TestCase
      * `Bootstrap::backendFor()` builds the `EngineBackend` the run uses, and
      * its model is private, so this reads it by reflection rather than
      * inferring it from the caption. Asserting only through
-     * {@see selectedProviderLabel()} would pin the LABEL and leave the backend
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::selectedProviderLabel()} would pin the LABEL and leave the backend
      * free to use a different model — the exact split-domain defect the shared
      * resolver exists to prevent.
      *

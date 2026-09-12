@@ -311,9 +311,10 @@ final class SkillPathScopingTest extends TestCase
      * there was nothing to say.
      *
      * The predicate is reached by reflection because it is the thing that was
-     * wrong and it has no external observable: {@see forPaths()} returns null
-     * either way. The externally visible half is asserted beside it so this is
-     * not a white-box test alone.
+     * wrong and it has no external observable:
+     * {@see \SugarCraft\Crush\Skills\SkillPathNudge::forPaths()} returns null either
+     * way. The externally visible half is asserted beside it so this is not a
+     * white-box test alone.
      */
     public function testASkillTheModelMayNotInvokeIsNotPending(): void
     {

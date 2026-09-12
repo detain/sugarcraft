@@ -50,7 +50,7 @@ final class LspConnectionShutdownTest extends TestCase
     private const BOUND_SECONDS = 4.0;
 
     /**
-     * Tighter than {@see BOUND_SECONDS}, because {@see __destruct()} has no
+     * Tighter than {@see BOUND_SECONDS}, because {@see \SugarCraft\Crush\LSP\LspConnection::__destruct()} has no
      * protocol phase to pay for: it is the ~1.0s SIGTERM grace plus the reap,
      * and nothing else. Sized to sit between that and the 8.0s request timeout
      * {@see testDroppingTheLastReferenceKillsTheServer()} configures precisely
@@ -224,10 +224,11 @@ final class LspConnectionShutdownTest extends TestCase
 
     /**
      * THE BOUND THAT WAS DEAD CODE. {@see LspConnection::sendRequest()} computes
-     * `microtime(true) + $this->requestTimeout` and {@see readResponse()} loops
-     * on it — and none of that ran, because `connect()` left the server's stdout
-     * BLOCKING and the first `fread()` inside `readMessage()` sat in the kernel
-     * until the server wrote or exited. The deadline was never re-tested.
+     * `microtime(true) + $this->requestTimeout` and
+     * {@see \SugarCraft\Crush\LSP\LspConnection::readResponse()} loops on it —
+     * and none of that ran, because `connect()` left the server's stdout BLOCKING
+     * and the first `fread()` inside `readMessage()` sat in the kernel until the
+     * server wrote or exited. The deadline was never re-tested.
      *
      * MEASURED before the fix, with `$timeout = 2.0` against this same
      * answers-nothing fixture: **20.02s**, i.e. exactly the fixture's own
