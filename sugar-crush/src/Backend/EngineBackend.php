@@ -83,8 +83,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * unconditional: a NON-streaming provider (`supportsStreaming() === false`)
      * makes one blocking call per agentic step, so between two steps there is
      * genuinely nothing to announce and a slow batch provider still dies here.
-     * Closing that needs a heartbeat raised on a timer rather than on a chunk.
-     */
+      * Closing that needs a heartbeat raised on a timer rather than on a chunk.
+      * E493 re-verified that gap at round 69; E524 measured why neither cheap
+      * shape of the heartbeat works from this side: an async signal
+      * (pcntl_alarm) does not dispatch inside the blocking C call the provider
+      * response is waiting on, and a second writer pumping heartbeats into the
+      * same socket would interleave with the length-prefixed frames — whose
+      * drain discards a corrupt buffer whole, costing the turn. What does tick
+      * through a stalled transfer is an HTTP progress callback, and its seam
+      * lives in the providers, not below this ceiling.
+      */
     private const COMPLETE_TIMEOUT_SECONDS = 120;
 
     /**

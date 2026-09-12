@@ -23,8 +23,13 @@ namespace SugarCraft\Crush\Support;
  * leaves a window in which the payload is on disk and readable.
  *
  * **They leaked forever on cancel.** Each dispatcher unlinks a payload when it
- * collects it, and that is the ONLY unlink either of them has. It never runs
- * when the completion child is SIGKILLed out from under the group — an
+ * collects it — and, since round 45, on its abandon paths too: the Runtime
+ * discards degraded-reservation and settled-uncollected payloads in its
+ * unwind, {@see \SugarCraft\Crush\Runtime::executeConcurrently()} and its
+ * collect side included. Collection and discards are all in-process, which is
+ * the half this paragraph used to overstate as the only unlink either
+ * dispatcher has (E140 corrects the wording, not the conclusion): none of it
+ * runs when the completion child is SIGKILLed out from under the group — an
  * Escape-Escape cancel, or {@see \SugarCraft\Crush\Backend\EngineBackend}'s
  * idle timeout — because the orphaned tool grandchildren keep running and
  * write payloads nobody is left to collect. {@see sweep()} is the reaper of

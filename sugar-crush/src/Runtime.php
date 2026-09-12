@@ -1483,7 +1483,12 @@ final class Runtime
         // than EngineBackend's ceiling to answer still dies with nothing having
         // crossed the fork. That is a separate defect with a separate fix (a
         // heartbeat the child raises on a timer rather than on a chunk) and it
-        // is recorded rather than half-done here.
+        // is recorded rather than half-done here. E493 re-stamped that record
+        // at round 69; E524 measured why this side cannot raise the timer
+        // itself — an async signal does not dispatch inside the blocking
+        // provider call, and a second writer on the result socket would
+        // interleave with its length-prefixed frames — so the fix belongs to
+        // the providers' HTTP layer, not to this announcement.
         if ($onProgress !== null && $response->reasoning !== null && $response->reasoning !== '') {
             $onProgress($response->reasoning);
         }
@@ -1666,6 +1671,12 @@ final class Runtime
         ?callable $onEvent,
         ?callable $onPermissionRequest,
     ): ToolResultMessage {
+        // E16: emitted BEFORE the gate, so the frame carries the model's RAW
+        // arguments — deliberately. id and name are invariant across any
+        // rewrite, and the rewritten shape reaches its consumers through the
+        // gate itself (PostToolUse observes withRewrittenArgs) and through the
+        // executed call; ToolFinished has no arguments field, so no reader
+        // can mistake this frame for the input that actually ran.
         $this->emit($onEvent, ToolStarted::fromCall($toolCall));
 
         // Find the tool
@@ -1770,6 +1781,9 @@ final class Runtime
         // Phase 1 — gate the whole group, and reserve every payload name,
         // before anything is forked.
         foreach ($toolCalls as $toolCall) {
+            // E16: the same pre-gate decision as the sequential path — the
+            // started frame is the model's raw ask, and any legal rewrite
+            // lands on this job's context for PostToolUse, never on the frame.
             $this->emit($onEvent, ToolStarted::fromCall($toolCall));
 
             // Non-null by construction: segments() only groups calls whose

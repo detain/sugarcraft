@@ -322,6 +322,50 @@ final class RuntimeTest extends TestCase
         $this->assertFalse($events[1]->result->isError());
     }
 
+    /**
+     * E16: ToolStarted fires BEFORE the gate, so its arguments are the
+     * model's raw ask while a legal PreToolUse rewrite goes to the tool.
+     * This pins that decision in both directions: the started frame is what
+     * the model asked for, the executed call is what the policy allowed, and
+     * the only frame that could contradict either — ToolFinished — carries no
+     * arguments field at all and pairs to its start by id alone.
+     */
+    public function testToolStartedCarriesTheModelArgumentsWhenAHookRewritesThem(): void
+    {
+        $this->provider->method('supportsStreaming')->willReturn(false);
+
+        $seen = new \ArrayObject();
+        $this->hookRegistry->register($this->rewriteHook('echo hi', ['command' => 'echo rewritten']));
+
+        $toolCall = new ToolCall('call_rw', 'rw_tool', ['command' => 'echo hi']);
+        $this->provider->method('complete')
+            ->willReturn(new CompleteResponse(content: 'calling', toolCalls: [$toolCall]));
+
+        $app = App::new($this->provider, 'gpt-4')
+            ->withTools([$this->createArgumentRecordingTool('rw_tool', $seen)]);
+
+        $events = [];
+        iterator_to_array($this->runtime->run($app, function ($event) use (&$events): void {
+            $events[] = $event;
+        }));
+
+        $this->assertCount(2, $events);
+        [$started, $finished] = $events;
+
+        $this->assertInstanceOf(ToolStarted::class, $started);
+        $this->assertSame(['command' => 'echo hi'], $started->arguments);
+
+        // Vacuity guard: the rewrite really reached the tool — without this,
+        // the frame assertion above would pass on a pipeline that rewrites
+        // nothing at all.
+        $this->assertSame([['command' => 'echo rewritten']], $seen->getArrayCopy());
+
+        $this->assertInstanceOf(ToolFinished::class, $finished);
+        $this->assertSame($started->toolCallId, $finished->toolCallId);
+        $this->assertObjectNotHasProperty('arguments', $finished);
+        $this->assertFalse($finished->result->isError());
+    }
+
     public function testRunEmitsToolEventsOnTheStreamingPathToo(): void
     {
         $this->provider->method('supportsStreaming')->willReturn(true);
