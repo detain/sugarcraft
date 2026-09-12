@@ -84,12 +84,16 @@ use PHPUnit\Framework\TestCase;
  * SCOPE. Only forks that happen INSIDE this process. Roughly half the
  * `pcntl_fork()` text in `tests/` sits in a heredoc that a test writes to
  * disk and runs as its own `php` process; a plain `exit()` there is correct,
- * and the scanner's doc-block explains how the two are told apart.
+ * and the scanner's doc-block explains how the two are told apart. As of
+ * E291 the walk covers `src/` under the same rule - which it promptly
+ * justified: `BackgroundSessionRunner::run` delegates to a `: never` helper
+ * that ends in a plain `exit($code)`, a deliberate protocol exit that the
+ * pre-E291 shape vocabulary would have waved through as safe.
  */
 final class ForkedChildExitConventionTest extends TestCase
 {
     /**
-     * Files whose child branch leaves through a plain `exit()`, with the
+     * SITES whose child branch leaves through a plain `exit()`, with the
      * COUNT of sites accepted there and the reason. Not a list of things to
      * get around to: every entry is either a deliberate exemption or a
      * recorded open defect, and says which.
@@ -97,24 +101,33 @@ final class ForkedChildExitConventionTest extends TestCase
      * THE COUNT IS PART OF THE EXEMPTION, and this map used to be keyed by
      * file alone. WHAT IT SAID: a file key plus a reason, with the guard
      * skipping every bare exit in a listed file. WHAT IS TRUE NOW: the
-     * allowance is spent per site, so exactly the sites that were argued for
+     * allowance is spent per SITE, so exactly the sites that were argued for
      * are accepted. MEASURED, which is why this changed - a brand-new,
      * entirely un-argued forked child ending in `exit(7)` was appended to
      * Support/ForkedChildTest.php and both fork guards stayed green. WHY THIS
      * EARNS ITS PLACE: every reason below names a SPECIFIC site (one names
-     * the test method it is the assertion of, the other names two sentinels),
-     * so a second site in the same file is definitionally outside the
-     * argument the row was granted for. A bare file key is a blank cheque
-     * that licenses every future fork added to the file as well.
+     * the test method it is the assertion of, one names each of the two
+     * sentinels it licences), so a second site in the same file is
+     * definitionally outside the argument the row was granted for. A bare
+     * file key is a blank cheque that licenses every future fork added to the
+     * file as well. Even so the count still does the spending, because one
+     * function can legitimately hold several argued sites (a fixture loop, a
+     * pair of sentinels) and naming them all as separate keys would be the
+     * same rot with a longer key.
      *
-     * Keyed by path relative to `tests/`. Line numbers are deliberately not
-     * recorded - they rot within a round and would make this a list nobody
-     * dares touch; the count is the part that does not rot.
+     * Keyed by `<file>::<function>`: the census-relative path (tests files
+     * under `tests/`, E291's widened ones under `src/`), the literal `::`,
+     * and the function holding the fork - `<top>` for file scope, via the
+     * scanner's own {@see ForkedChildExitScanner::functionKey()}, so the
+     * roster and the walk cannot disagree about what a site's coordinate is.
+     * Line numbers are deliberately not recorded - they rot within a round
+     * and would make this a list nobody dares touch; the count is the part
+     * that does not rot.
      *
      * @var array<string,array{count:int,reason:string}>
      */
     private const ACCEPTED_BARE_EXIT = [
-        'Support/ForkedChildTest.php' => [
+        'Support/ForkedChildTest.php::testPlainExitInAForkedChildNoLongerClobbersRawMode' => [
             'count' => 1,
             'reason' =>
                 'DELIBERATE, and the bare exit IS the assertion: '
@@ -123,23 +136,59 @@ final class ForkedChildExitConventionTest extends TestCase
                 . 'termios case specifically. Rewriting it to exitNow() would delete the test.',
         ],
 
-        'Integration/WorkflowResumptionTest.php' => [
-            'count' => 2,
+        'Integration/WorkflowResumptionTest.php::testRealSigtermMidWorkflowCapturesInFlightState' => [
+            'count' => 1,
             'reason' =>
                 'DELIBERATE, and REWRITTEN once (E178). WHAT IT SAID: "recorded open, and not '
-                . 'closable from inside tests/ - both children drive WorkflowEngine\'s real SIGTERM '
-                . 'handler, which itself ends in a plain exit(), so converting the sentinels alone '
+                . 'closable from inside tests/ - the child drives WorkflowEngine\'s real SIGTERM '
+                . 'handler, which itself ends in a plain exit(), so converting the sentinel alone '
                 . 'would green the row while leaving the path it stands for untouched." WHAT IS TRUE '
                 . 'NOW: the handler\'s FORKED-CHILD branch is ForkedChild::exitNow(); its other '
                 . 'branch is a plain exit() on purpose, because it only runs in the process that '
                 . 'installed the handler - the live TUI - whose shutdown sequence is what restores '
-                . 'the terminal and stops the MCP servers. WHY THIS STILL EARNS ITS PLACE: the two '
-                . 'sites the scanner sees here are the `exit(99)`/`exit(98)` SENTINELS, and they are '
-                . 'now load-bearing rather than incidental. exitNow() is a SIGKILL, so an exited '
-                . 'status is exactly how each test tells "the handler never fired" from "the handler '
-                . 'fired"; routing a sentinel through exitNow() would collapse the two into one wait '
-                . 'status and delete the discrimination. Both are unreachable whenever the test '
-                . 'passes.',
+                . 'the terminal and stops the MCP servers. WHY THIS STILL EARNS ITS PLACE: the site '
+                . 'the scanner sees here is the `exit(99)` SENTINEL, and it is now load-bearing '
+                . 'rather than incidental. exitNow() is a SIGKILL, so an exited status is exactly '
+                . 'how the test tells "the handler never fired" from "the handler fired"; routing '
+                . 'the sentinel through exitNow() would collapse the two into one wait status and '
+                . 'delete the discrimination. It is unreachable whenever the test passes.',
+        ],
+
+        'Integration/WorkflowResumptionTest.php::testForkedChildDoesNotRacePauseFileOnRealSignal' => [
+            'count' => 1,
+            'reason' =>
+                'DELIBERATE, same argument as its sibling row one test above - the `exit(98)` '
+                . 'SENTINEL is the discrimination between "handler never fired" (SIGKILL from the '
+                . 'test) and "handler fired and reached its sentinel", which exitNow() would erase. '
+                . 'E178 rewrote the handler branch it stands behind; see that row for the full '
+                . 'history.',
+        ],
+
+        'src/Sessions/BackgroundSessionRunner.php::run' => [
+            'count' => 1,
+            'reason' =>
+                'DELIBERATE, E291 bringing src/ into the census. The child branch ends in '
+                . '$this->exitWorker($code) - a `: never` helper whose own last statement is a '
+                . 'plain `exit($code)` ON PURPOSE, argued at its doc-block: the exit code IS the '
+                . 'protocol, the parent distinguishes outcomes by the waited status, which is the '
+                . 'same discrimination the WorkflowResumption sentinels above earn their rows with. '
+                . 'The scanner RESOLVES the delegation to that terminus (round-49 fixture flipped '
+                . 'in-step), which is exactly why this site shows up at all and needs the row.',
+        ],
+
+        'src/Agents/AgentWorkerPool.php::startAgent' => [
+            'count' => 1,
+            'reason' =>
+                'DELIBERATE, E291. The child branch (reached through the forkProcess() wrapper - '
+                . 'the wrapper itself is shape fork-wrapper and needs no row) ends in a plain '
+                . '`exit(0)` whose result the PARENT reads: waitForCompletion() reports an agent '
+                . 'from the reap when no result file arrived, so the status IS part of the '
+                . 'protocol, and exitNow()\'s self-SIGKILL would describe a death on the success '
+                . 'path. The site is already the argued shape: storeResult() runs first, the '
+                . 'inherited output-buffer levels are DRAINED without flushing (the '
+                . 'BackgroundSessionRunner exitWorker() shape) before the clean exit, and the '
+                . 'raw-tty half is fixed at the root by candy-core\'s PID-aware restore(). The '
+                . 'E295 comment at the site carries all three.',
         ],
     ];
 
@@ -155,23 +204,42 @@ final class ForkedChildExitConventionTest extends TestCase
     ];
 
     /**
-     * @return array<string,list<array{line:int,spelling:string,shape:string}>>
+     * Every in-process fork site, keyed by census-relative path.
+     *
+     * E291: the walk covers `src/` as well as `tests/`. It was tests-only not
+     * by judgment but by the round that wrote it staying inside its own
+     * directory - and `src/` is where the forks with USER-VISIBLE exit-code
+     * protocols live (the runner worker, the agent pool), the exact sites
+     * whose endings cannot be changed carelessly and therefore the ones whose
+     * conventions most need a machine checking them. Files are labelled the
+     * way `ACCEPTED_BARE_EXIT` keys them: `tests/`-relative today, `src/`-
+     * prefixed for the widened half.
+     *
+     * @return array<string,list<array{line:int,spelling:string,shape:string,function:?string}>>
      */
     private function census(): array
     {
-        $root = \dirname(__DIR__);
+        $testsRoot = \dirname(__DIR__);
+        $srcRoot = \dirname($testsRoot) . '/src';
         $out = [];
 
-        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
-        foreach ($files as $file) {
-            /** @var \SplFileInfo $file */
-            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
-                continue;
-            }
+        foreach ([$testsRoot, $srcRoot] as $root) {
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+            foreach ($files as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                    continue;
+                }
 
-            $sites = ForkedChildExitScanner::scan((string) file_get_contents($file->getPathname()));
-            if ($sites !== []) {
-                $out[substr($file->getPathname(), \strlen($root) + 1)] = $sites;
+                $sites = ForkedChildExitScanner::scan((string) file_get_contents($file->getPathname()));
+                if ($sites === []) {
+                    continue;
+                }
+
+                // tests/ files keep their historical tests-relative labels;
+                // src/ files gain the `src/` prefix their roster rows carry.
+                $relative = substr($file->getPathname(), \strlen($root) + 1);
+                $out[$root === $testsRoot ? $relative : 'src/' . $relative] = $sites;
             }
         }
 
@@ -258,10 +326,33 @@ final class ForkedChildExitConventionTest extends TestCase
         $never = ForkedChildExitScanner::scan(
             "<?php\nclass F {\n"
             . '  public function t(): void { $pid = pcntl_fork(); if ($pid === 0) { $this->go(); } }' . "\n"
-            . '  private function go(): never { exit(0); }' . "\n}\n",
+            . '  private function go(): never { ForkedChild::exitNow(0); }' . "\n}\n",
         );
         $this->assertCount(1, $never);
         $this->assertSame(ForkedChildExitScanner::SHAPE_NEVER_HELPER, $never[0]['shape']);
+
+        // E291: the `never` annotation is a TYPE promise, not an exit
+        // protocol - `private function go(): never { exit(0); }` compiles, and
+        // its `exit()` runs the shutdown sequence with the inherited object
+        // graph, which is the defect wearing the safe shape's coat. (What the
+        // first version of this fixture asserted: it paired the delegation
+        // with a helper ending in `exit(0)` and expected `never-helper` -
+        // flattered by exactly the conflation this line removes. The
+        // delegation is now RESOLVED to the helper's terminus; three src
+        // helpers end in `exitNow` and stay safe, BackgroundSessionRunner's
+        // ends in a plain `exit($code)` on protocol purpose and reports as
+        // what it leaves by.)
+        $neverEndsBare = ForkedChildExitScanner::scan(
+            "<?php\nclass F {\n"
+            . '  public function t(): void { $pid = pcntl_fork(); if ($pid === 0) { $this->go(); } }' . "\n"
+            . '  private function go(): never { exit(0); }' . "\n}\n",
+        );
+        $this->assertCount(1, $neverEndsBare);
+        $this->assertSame(
+            ForkedChildExitScanner::SHAPE_BARE_EXIT,
+            $neverEndsBare[0]['shape'],
+            'a never-helper that itself ends in a plain exit delegates the defect, not an escape',
+        );
 
         // The reaper trait's wrapper is a fork site under its own name, so
         // adopting the trait cannot make a site invisible here.
@@ -348,6 +439,37 @@ final class ForkedChildExitConventionTest extends TestCase
             'only a function named as a fork spelling may return from a child branch',
         );
 
+        // E291's `return pcntl_fork();` wrapper: the fork VALUE leaving the
+        // wrapper outright has no child branch here - the pid split is the
+        // caller's - so the wrapper is shape fork-wrapper, and the CALLER,
+        // scanned under the wrapper's own name (forkProcess is in FORK_SPELLINGS),
+        // carries the child-branch verdict. That is how AgentWorkerPool's
+        // single seam-fork keeps every dispatch site under the convention
+        // instead of hiding all of them behind the seam.
+        $returnWrapper = ForkedChildExitScanner::scan(
+            "<?php\nclass F {\n"
+            . '  private function forkProcess(): int {' . "\n"
+            . '    return pcntl_fork();' . "\n"
+            . '  }' . "\n"
+            . "  public function t(): void { \$pid = \$this->forkProcess(); if (\$pid === 0) { exit(0); } }\n}\n",
+        );
+        $this->assertCount(2, $returnWrapper, 'the wrapper body and the caller are both sites');
+        $this->assertSame(ForkedChildExitScanner::SHAPE_FORK_WRAPPER, $returnWrapper[0]['shape']);
+        $this->assertSame('forkProcess', $returnWrapper[0]['function']);
+        $this->assertSame(ForkedChildExitScanner::SHAPE_BARE_EXIT, $returnWrapper[1]['shape']);
+        $this->assertSame('forkProcess', $returnWrapper[1]['spelling']);
+        $this->assertSame('t', $returnWrapper[1]['function']);
+
+        // The roster key of a file-scope site is the scanner's `<top>`, not
+        // the file name - the one place the key format is spelled, so the
+        // rosters and the walk cannot drift apart.
+        $topScope = ForkedChildExitScanner::scan(
+            "<?php\n\$pid = pcntl_fork();\nif (\$pid === 0) { exit(0); }\n",
+        );
+        $this->assertCount(1, $topScope);
+        $this->assertNull($topScope[0]['function']);
+        $this->assertSame('<top>', ForkedChildExitScanner::functionKey($topScope[0]));
+
         // A fork in a heredoc runs in a DIFFERENT process. No site at all.
         $embedded = ForkedChildExitScanner::scan(
             "<?php\n" . '$script = <<<PHP' . "\n"
@@ -363,23 +485,34 @@ final class ForkedChildExitConventionTest extends TestCase
         $census = $this->census();
         $this->assertNotSame([], $census, 'the scanner found no in-process forks at all - it is dead');
 
+        /** @var array<string,int> $spentPerKey */
+        $spentPerKey = [];
         $offenders = [];
         foreach ($census as $file => $sites) {
-            // Spent per SITE, not per file: the N bare exits that were argued
-            // for are accepted and the N+1th in the same file is an offender.
-            $allowance = self::ACCEPTED_BARE_EXIT[$file]['count'] ?? 0;
-
             foreach ($sites as $site) {
                 if (\in_array($site['shape'], self::SAFE_SHAPES, true)) {
                     continue;
                 }
-                if ($site['shape'] === ForkedChildExitScanner::SHAPE_BARE_EXIT && $allowance > 0) {
-                    --$allowance;
 
-                    continue;
+                // Spent per SITE - file plus the function holding the fork -
+                // not per file: the N bare exits that were argued for are
+                // accepted and the N+1th in the same file is an offender even
+                // when the file itself is listed.
+                $key = $file . '::' . ForkedChildExitScanner::functionKey($site);
+
+                if ($site['shape'] === ForkedChildExitScanner::SHAPE_BARE_EXIT
+                    && ($allowance = self::ACCEPTED_BARE_EXIT[$key]['count'] ?? 0) > 0) {
+                    // COUNT is the whole licence; several sites sharing one
+                    // function spend it one by one as the walk passes them.
+                    $spent = $spentPerKey[$key] ?? 0;
+                    if ($spent < $allowance) {
+                        $spentPerKey[$key] = $spent + 1;
+
+                        continue;
+                    }
                 }
 
-                $offenders[] = $file . ':' . $site['line'] . ' (' . $site['shape'] . ')';
+                $offenders[] = $key . ':' . $site['line'] . ' (' . $site['shape'] . ')';
             }
         }
 
@@ -393,9 +526,10 @@ final class ForkedChildExitConventionTest extends TestCase
                 . 'graph, while falling through returns into the runner so PHPUnit\'s own '
                 . 'after-test hooks fire a second time. End the child branch with '
                 . 'ForkedChild::exitNow(), or delegate to a helper declared `: never`. If the '
-                . 'plain exit is genuinely the point, add the file to '
-                . 'ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT with its COUNT and the '
-                . 'reason - a file key alone would license the next fork added here too. A shape '
+                . 'plain exit is genuinely the point, add the site to '
+                . 'ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT keyed '
+                . '`<file>::<function>` with its COUNT and the reason - a file key alone would '
+                . 'license the next fork this file grows too. A shape '
                 . 'of "unclassified" means the scanner could not find the child branch at all, '
                 . 'which is a hole in the guard rather than a licence: teach the scanner the '
                 . 'shape.',
@@ -403,39 +537,46 @@ final class ForkedChildExitConventionTest extends TestCase
     }
 
     /**
-     * The exemption list cannot rot in EITHER direction. A file that no
-     * longer has a bare exit must lose its row, so the reason it carries
-     * stays a live claim about live code - and a file that has GROWN one must
-     * re-argue, because the extra site was never covered by the argument the
-     * row was granted for.
+     * The exemption list cannot rot in EITHER direction. A site that no
+     * longer has its bare exit must lose its row, so the reason it carries
+     * stays a live claim about live code - and a function that has GROWN one
+     * beyond its count must re-argue, because the extra site was never
+     * covered by the argument the row was granted for.
      *
      * The upward direction is the one that was measured missing, which is why
      * this replaced a presence-only check named
      * `testEveryAcceptedBareExitFileStillHasOne()`: with the map keyed by file
      * alone, a brand-new un-argued `exit(7)` forked child appended to an
-     * already-listed file left both fork guards green.
+     * already-listed file left both fork guards green. E445 finished that
+     * correction by making the KEY itself a site, not just its count: with a
+     * file key and a per-file count, a second bare exit in a DIFFERENT
+     * function of the same file could spend the first function's allowance -
+     * the count was honest about HOW MANY and mute about WHICH.
      */
     public function testEveryAcceptedBareExitCountStillMatches(): void
     {
         $census = $this->census();
 
-        foreach (self::ACCEPTED_BARE_EXIT as $file => $exemption) {
+        foreach (self::ACCEPTED_BARE_EXIT as $key => $exemption) {
+            [$file, $function] = \explode('::', $key, 2);
+
             $bare = \count(array_filter(
-                array_column($census[$file] ?? [], 'shape'),
-                static fn (string $shape): bool => $shape === ForkedChildExitScanner::SHAPE_BARE_EXIT,
+                $census[$file] ?? [],
+                static fn (array $site): bool => $site['shape'] === ForkedChildExitScanner::SHAPE_BARE_EXIT
+                    && ForkedChildExitScanner::functionKey($site) === $function,
             ));
 
             $this->assertSame(
                 $exemption['count'],
                 $bare,
-                "{$file} is exempted for {$exemption['count']} bare-exit forked child(ren) but has "
+                "{$key} is exempted for {$exemption['count']} bare-exit forked child(ren) but has "
                     . "{$bare}. Re-argue the exemption at its real count or delete the row - a "
                     . 'count that no longer matches is a licence nobody checked.',
             );
             $this->assertNotSame(
                 '',
                 trim($exemption['reason']),
-                "{$file} is exempted without a reason",
+                "{$key} is exempted without a reason",
             );
         }
     }

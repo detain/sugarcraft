@@ -288,6 +288,10 @@ final class StdioMcpServerShutdownTest extends TestCase
      * `pcntl` is not assumed: without it the trap cannot be installed and the
      * process is merely a normal server, which still satisfies the pid identity
      * assertion (the half this fixture exists for) and dies on the first signal.
+     *
+     * E505 census: the past-EOF `sleep(30)` tail is under the 60 s alarm, so it
+     * is no roster row; BOUND_SECONDS and the isAlive asserts end the test long
+     * before it, and the escalation ladder (SIGTERM, then KILL) reaps it.
      */
     private const STUBBORN_MCP_SERVER = <<<'PHP'
         <?php

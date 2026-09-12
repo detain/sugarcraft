@@ -1230,6 +1230,11 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * buffer and stays full for as long as the child lives. The sleep is longer
      * than any budget in this file so the child cannot exit and turn the wedge
      * into an EPIPE by accident.
+     *
+     * E505 census: 30 s is under the 60 s alarm, so this is no roster row even
+     * though the point of the fixture is to outlive every BUDGET in the file -
+     * the tests kill it via killServer()/their own bounded watches first, and
+     * the file's long-lived siblings (120 s, two of them) carry the rows.
      */
     private const DEAF_SERVER = <<<'PHP'
         <?php

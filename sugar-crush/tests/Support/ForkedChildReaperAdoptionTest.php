@@ -43,7 +43,12 @@ use PHPUnit\Framework\TestCase;
  * `Backend/` came off it, and which is the failure mode the prose list this
  * replaced actually had (it was written from a census taken with a scanner
  * that could not see `\pcntl_fork()`, and so omitted
- * `tests/Agents/TaskListTest.php` entirely).
+ * `tests/Agents/TaskListTest.php` entirely). E378 in round 69 added the
+ * SIXTH prefix, `Hooks/` - which is not a widening onto unprotected code but
+ * the registration of a file that was already protected:
+ * `Hooks/AuditHookConcurrentAppendTest.php` forks through the trait and
+ * reaps first in tearDown(), and the only thing SCOPE did not yet know was
+ * that it had to keep doing so.
  */
 final class ForkedChildReaperAdoptionTest extends TestCase
 {
@@ -52,7 +57,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Backend/', 'Diagnostics/', 'Integration/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Diagnostics/', 'Hooks/', 'Integration/', 'Support/'];
 
     /**
      * Prefixes with in-process forks that are NOT yet under {@see SCOPE},
@@ -96,33 +101,43 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      *
      * The count is part of the exemption on purpose. A bare file-keyed
      * exemption is a blank cheque - it would license every future fork added
-     * to the file as well as the one that was argued for.
+     * to the file as well as the one that was argued for. E445 sharpened the
+     * key itself the same way its sibling guard was sharpened: rows are keyed
+     * `<file>::<function>`, the site coordinate the scanner reports, because
+     * a file key with a per-file count let a raw fork in a DIFFERENT function
+     * of an exempted file spend the argued site's allowance. Both reasons
+     * below name the specific function each row covers; a row whose key does
+     * not match a real site is reported by
+     * {@see testEveryUntrackedForkExemptionStillDescribesRealSites()}.
      *
      * @var array<string,array{count:int,reason:string}>
      */
     private const UNTRACKED_FORKS_ALLOWED = [
-        'Integration/ParallelToolCallsTest.php' => [
+        'Integration/ParallelToolCallsTest.php::testAGroupWhoseForksAllFailStillReturnsEveryResultAndStrandsNothing' => [
             'count' => 1,
             'reason' =>
-                'testAGroupWhoseForksAllFail...\'s NPROC probe. It runs INSIDE a child that '
+                'The NPROC probe in this test. It runs INSIDE a child that '
                 . 'forkTracked() already emptied the ledger in, and that child leaves through '
                 . 'ForkedChild::exitNow() without ever running tearDown() - so there is no reaper '
                 . 'on that side for a ledger entry to reach. Tracking it would record a pid that '
                 . 'nothing can ever reap, which is a lie about what the ledger is for.',
         ],
 
-        'Support/ReapsForkedChildrenTraitTest.php' => [
-            'count' => 2,
+        'Support/ReapsForkedChildrenTraitTest.php::forkSleeper' => [
+            'count' => 1,
             'reason' =>
-                'BOTH raw forks are the point of the test they sit in, and routing either through '
-                . 'forkTracked() would delete what it measures. forkSleeper()\'s child is handed '
-                . 'to trackForkedChild() BY HAND, which is the other entry point to the ledger '
-                . 'and has to be exercised by something. '
-                . 'testAChildForkedOutsideTheTraitCannotReapTheLedgerItInherited()\'s child must '
-                . 'inherit a POPULATED ledger to reach the owner check at all - forkTracked() '
-                . 'empties the child\'s copy, so routing it there would exercise the FIRST line '
-                . 'of defence for a second time and leave the second untested, which is the state '
-                . 'that test was written to end.',
+                'forkSleeper()\'s child is handed to trackForkedChild() BY HAND, which is the other '
+                . 'entry point to the ledger and has to be exercised by something - routing the '
+                . 'fork through forkTracked() would delete the only caller of the manual entry.',
+        ],
+
+        'Support/ReapsForkedChildrenTraitTest.php::testAChildForkedOutsideTheTraitCannotReapTheLedgerItInherited' => [
+            'count' => 1,
+            'reason' =>
+                'This test\'s child must inherit a POPULATED ledger to reach the owner check at '
+                . 'all - forkTracked() empties the child\'s copy, so routing it there would '
+                . 'exercise the FIRST line of defence for a second time and leave the second '
+                . 'untested, which is the state that test was written to end.',
         ],
     ];
 
@@ -142,10 +157,16 @@ final class ForkedChildReaperAdoptionTest extends TestCase
      * satisfied the first, and a call in a method nothing calls satisfied the
      * second.
      *
-     * @param list<array{line:int,spelling:string,shape:string}> $sites
+     * @param list<array{line:int,spelling:string,shape:string,function?:?string}> $sites
+     * @param array<string,int> $untrackedAllowedByFunction function key (the
+     *        scanner's {@see ForkedChildExitScanner::functionKey()}) to the
+     *        count of raw forks licensed in it - the rows of
+     *        {@see UNTRACKED_FORKS_ALLOWED} for one file, spent PER SITE so
+     *        an exemption cannot be consumed by a fork in a function nobody
+     *        argued about (E445)
      * @return list<string> the halves a source is missing, empty when whole
      */
-    private static function missingHalves(string $source, array $sites, int $untrackedAllowed = 0): array
+    private static function missingHalves(string $source, array $sites, array $untrackedAllowedByFunction = []): array
     {
         $missing = [];
 
@@ -178,22 +199,28 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             $missing[] = 'reapTrackedForkedChildren() first in tearDown() (' . $position . ')';
         }
 
-        $untracked = 0;
+        /** @var array<string,int> $untrackedPerFunction */
+        $untrackedPerFunction = [];
         foreach ($sites as $site) {
             if ($site['spelling'] !== 'forkTracked'
                 && $site['shape'] !== ForkedChildExitScanner::SHAPE_FORK_WRAPPER) {
-                $untracked++;
+                $key = ForkedChildExitScanner::functionKey($site);
+                $untrackedPerFunction[$key] = ($untrackedPerFunction[$key] ?? 0) + 1;
             }
         }
-        if ($untracked > $untrackedAllowed) {
-            $missing[] = $untracked . ' fork(s) not routed through $this->forkTracked()'
-                . ($untrackedAllowed > 0 ? ' (' . $untrackedAllowed . ' allowed)' : '');
+        foreach ($untrackedPerFunction as $function => $untracked) {
+            $allowed = $untrackedAllowedByFunction[$function] ?? 0;
+            if ($untracked > $allowed) {
+                $missing[] = $untracked . ' fork(s) not routed through $this->forkTracked()'
+                    . ($function === '<top>' ? '' : " in {$function}()")
+                    . ($allowed > 0 ? " ({$allowed} allowed)" : '');
+            }
         }
 
         return $missing;
     }
 
-    /** @param list<array{line:int,spelling:string,shape:string}> $sites */
+    /** @param list<array{line:int,spelling:string,shape:string,function?:?string}> $sites */
     private static function everySiteIsAForkWrapper(array $sites): bool
     {
         foreach ($sites as $site) {
@@ -203,6 +230,26 @@ final class ForkedChildReaperAdoptionTest extends TestCase
         }
 
         return true;
+    }
+
+    /**
+     * The {@see UNTRACKED_FORKS_ALLOWED} rows belonging to one census file,
+     * as the per-function allowance map {@see missingHalves()} spends.
+     *
+     * @return array<string,int>
+     */
+    private static function untrackedAllowanceFor(string $relative): array
+    {
+        $allowed = [];
+
+        foreach (self::UNTRACKED_FORKS_ALLOWED as $key => $exemption) {
+            [$file, $function] = \explode('::', $key, 2);
+            if ($file === $relative) {
+                $allowed[$function] = $exemption['count'];
+            }
+        }
+
+        return $allowed;
     }
 
     /**
@@ -243,7 +290,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             }
 
             $relative = substr($file->getPathname(), \strlen($root) + 1);
-            if (self::missingHalves($source, $sites, self::UNTRACKED_FORKS_ALLOWED[$relative]['count'] ?? 0) !== []) {
+            if (self::missingHalves($source, $sites, self::untrackedAllowanceFor($relative)) !== []) {
                 $offenders[] = $relative;
             }
         }
@@ -388,6 +435,10 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     {
         $tracked = [['line' => 1, 'spelling' => 'forkTracked', 'shape' => 'exitNow']];
         $raw = [['line' => 1, 'spelling' => 'pcntl_fork', 'shape' => 'exitNow']];
+        // The synthetic sites above carry no 'function' key, so their
+        // functionKey is the scanner's '<top>' - the same map shape
+        // untrackedAllowanceFor() produces for real files.
+        $topLicensed = ['<top>' => 1];
 
         $whole = "<?php\nclass F extends TestCase {\n    use ReapsForkedChildrenTrait;\n"
             . "    protected function tearDown(): void {\n"
@@ -413,11 +464,27 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             self::missingHalves($whole, $raw),
         );
 
-        // ...and the exemption, which is a count and not a blank cheque.
-        $this->assertSame([], self::missingHalves($whole, $raw, 1));
+        // ...and the exemption, which is a count and not a blank cheque -
+        // and which the E445 re-key now spends PER FUNCTION: a raw fork whose
+        // function key is not in the map is an offender even when another
+        // function of the same file is licensed, which is what a file-keyed
+        // count could not see.
+        $this->assertSame([], self::missingHalves($whole, $raw, $topLicensed));
         $this->assertSame(
             ['2 fork(s) not routed through $this->forkTracked() (1 allowed)'],
-            self::missingHalves($whole, [...$raw, ...$raw], 1),
+            self::missingHalves($whole, [...$raw, ...$raw], $topLicensed),
+        );
+        $this->assertSame(
+            ['1 fork(s) not routed through $this->forkTracked() in otherFunction()'],
+            self::missingHalves(
+                $whole,
+                [
+                    ['line' => 1, 'spelling' => 'pcntl_fork', 'shape' => 'exitNow', 'function' => 'forkSleeper'],
+                    ['line' => 2, 'spelling' => 'pcntl_fork', 'shape' => 'exitNow', 'function' => 'otherFunction'],
+                ],
+                ['forkSleeper' => 1],
+            ),
+            'a licence granted to one function must not be spent by another',
         );
 
         // A fork WRAPPER is the trait's own `pcntl_fork()`; it is not an
@@ -563,7 +630,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             $missing = self::missingHalves(
                 $source,
                 $sites,
-                self::UNTRACKED_FORKS_ALLOWED[$relative]['count'] ?? 0,
+                self::untrackedAllowanceFor($relative),
             );
             if ($missing === []) {
                 $covered++;
@@ -825,7 +892,7 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             }
             $checked++;
 
-            $allowed = self::UNTRACKED_FORKS_ALLOWED[$relative]['count'] ?? 0;
+            $allowed = self::untrackedAllowanceFor($relative);
             if (self::missingHalves($source, $sites, $allowed) === []) {
                 continue;
             }
@@ -856,20 +923,26 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     }
 
     /**
-     * An untracked-fork exemption cannot outlive the site it was written for.
+     * An untracked-fork exemption cannot outlive the site it was written for
+     * - and, since E445, cannot be CONSUMED by a different site either: each
+     * row is checked against the raw forks of the ONE function its key names,
+     * so a row whose site was renamed, moved, or deleted reports zero, and a
+     * second raw fork grown inside a licensed function reports two.
      */
     public function testEveryUntrackedForkExemptionStillDescribesRealSites(): void
     {
         $root = \dirname(__DIR__);
 
-        foreach (self::UNTRACKED_FORKS_ALLOWED as $file => $exemption) {
+        foreach (self::UNTRACKED_FORKS_ALLOWED as $key => $exemption) {
+            [$file, $function] = \explode('::', $key, 2);
             $path = $root . '/' . $file;
             $this->assertFileExists($path, "{$file} is exempted but no longer exists");
 
             $untracked = 0;
             foreach (ForkedChildExitScanner::scan((string) file_get_contents($path)) as $site) {
                 if ($site['spelling'] !== 'forkTracked'
-                    && $site['shape'] !== ForkedChildExitScanner::SHAPE_FORK_WRAPPER) {
+                    && $site['shape'] !== ForkedChildExitScanner::SHAPE_FORK_WRAPPER
+                    && ForkedChildExitScanner::functionKey($site) === $function) {
                     $untracked++;
                 }
             }
@@ -877,11 +950,11 @@ final class ForkedChildReaperAdoptionTest extends TestCase
             $this->assertSame(
                 $exemption['count'],
                 $untracked,
-                "{$file} is exempted for {$exemption['count']} untracked fork(s) but has {$untracked}. "
+                "{$key} is exempted for {$exemption['count']} untracked fork(s) but has {$untracked}. "
                     . 'Re-argue the exemption or delete it - a count that no longer matches is a '
                     . 'licence nobody checked.',
             );
-            $this->assertNotSame('', trim($exemption['reason']), "{$file} is exempted without a reason");
+            $this->assertNotSame('', trim($exemption['reason']), "{$key} is exempted without a reason");
         }
     }
 }

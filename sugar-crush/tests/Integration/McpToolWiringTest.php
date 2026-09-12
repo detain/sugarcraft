@@ -1066,6 +1066,10 @@ final class McpToolWiringTest extends TestCase
      * cannot witness whether anything stopped it — the pipe closes on the owning
      * process's exit either way. Only used by the fork test, which is the only one
      * that observes a server across a process boundary.
+     *
+     * E505 census: under the 60 s alarm, so no roster row - the fork test's
+     * strayPids SIGKILL (registered BEFORE any assertion runs) is the mechanism
+     * that ends it, and the isAlive reads are what prove whether it worked.
      */
     private const SURVIVOR_SERVER = <<<'PHP'
         <?php

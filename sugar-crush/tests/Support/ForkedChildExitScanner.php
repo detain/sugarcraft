@@ -29,13 +29,20 @@ namespace SugarCraft\Crush\Tests\Support;
 final class ForkedChildExitScanner
 {
     /**
-     * The call spellings that put a second copy of the PHPUnit process on the
+     * The call spellings that put a second copy of the process on the
      * machine. `forkTracked()` is {@see ReapsForkedChildrenTrait}'s wrapper
      * around `pcntl_fork()`; it is listed here because adopting the reaper
      * trait replaces the raw call at a site and must not thereby make the site
-     * invisible to this scanner.
+     * invisible to this scanner. `forkProcess()` is listed for the same
+     * reason at its own shape (E291): {@see
+     * \SugarCraft\Crush\Agents\AgentWorkerPool::forkProcess()} is a
+     * seam-wrapped `return pcntl_fork();` whose child branch lives in the
+     * CALLER — naming the wrapper here makes every caller of it a scanned
+     * site, which is the condition the {@see SHAPE_FORK_WRAPPER} exemption
+     * has always existed to enforce: a wrapper cannot buy itself a pass
+     * without exposing all of its call sites.
      */
-    private const FORK_SPELLINGS = ['pcntl_fork', 'forkTracked'];
+    private const FORK_SPELLINGS = ['pcntl_fork', 'forkTracked', 'forkProcess'];
 
     /**
      * A fork site is matched on TWO token types, and the second one is not
@@ -59,7 +66,13 @@ final class ForkedChildExitScanner
     /** Leaving shapes that never run PHP's shutdown sequence. */
     public const SHAPE_EXIT_NOW = 'exitNow';
 
-    /** A call to a same-file method declared `: never`. */
+    /**
+     * A call to a same-file method declared `: never`, whose own last
+     * statement leaves safely. E291 resolved the delegation: a `never`
+     * helper ending in a plain `exit()` reports `bare-exit` at the CALLER,
+     * because the helper ran the shutdown sequence and the branch that
+     * delegated to it inherits that ending - {@see resolveNeverHelper()}.
+     */
     public const SHAPE_NEVER_HELPER = 'never-helper';
 
     /** A bare `exit(...)` / `die(...)`: runs PHPUnit's shutdown a second time. */
@@ -89,7 +102,7 @@ final class ForkedChildExitScanner
     public const SHAPE_FORK_WRAPPER = 'fork-wrapper';
 
     /**
-     * @return list<array{line:int,spelling:string,shape:string}>
+     * @return list<array{line:int,spelling:string,shape:string,function:?string}>
      */
     public static function scan(string $source): array
     {
@@ -97,7 +110,7 @@ final class ForkedChildExitScanner
         $never = self::neverReturningMethods($tokens);
         $functions = TokenFunctionRanges::scan($tokens);
 
-        /** @var list<array{line:int,spelling:string,shape:string}> $sites */
+        /** @var list<array{line:int,spelling:string,shape:string,function:?string}> $sites */
         $sites = [];
 
         foreach ($tokens as $i => $token) {
@@ -115,6 +128,7 @@ final class ForkedChildExitScanner
             }
 
             /** @var array{0:int,1:string,2:int} $token */
+            $enclosing = TokenFunctionRanges::enclosing($functions, $i);
             $sites[] = [
                 'line' => $token[2],
                 'spelling' => $spelling,
@@ -122,8 +136,14 @@ final class ForkedChildExitScanner
                     $tokens,
                     $i,
                     $never,
-                    TokenFunctionRanges::enclosing($functions, $i)['name'] ?? null,
+                    $enclosing['name'] ?? null,
                 ),
+                // E445: the licence rosters are keyed by SITE, and the site's
+                // coordinate is file + function. Exposing it here is the one
+                // copy of "which function holds this token" the two guards
+                // share; a second walk to derive it in a guard is the drift
+                // DuplicatedTestHelperDriftTest exists to red.
+                'function' => $enclosing['name'] ?? null,
             ];
         }
 
@@ -131,11 +151,44 @@ final class ForkedChildExitScanner
     }
 
     /**
+     * The roster key for one scanned site: the function that holds it, with a
+     * named stand-in for file scope so a top-level fork still has a key.
+     *
+     * Shared by {@see ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT} and
+     * {@see ForkedChildReaperAdoptionTest::UNTRACKED_FORKS_ALLOWED} rather
+     * than spelled twice - two copies of a key format is where rosters start
+     * disagreeing with the walks that consult them.
+     *
+     * @param array{line:int,spelling:string,shape:string,function?:?string} $site
+     */
+    public static function functionKey(array $site): string
+    {
+        return $site['function'] ?? '<top>';
+    }
+
+    /**
      * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @param list<string> $never
+     * @param array<string,array{from:int,to:int}> $never
      */
     private static function classify(array $tokens, int $forkAt, array $never, ?string $enclosing): string
     {
+        // A fork whose value the enclosing fork-spelling function RETURNS
+        // outright (`return pcntl_fork();`) has no child branch here at all -
+        // the pid split is the CALLER's `if ($pid === 0)`, and the caller is
+        // itself a scanned site because the wrapper's name is in
+        // {@see FORK_SPELLINGS}. Without this rule the walk below runs past
+        // the end of the function and classifies the next unrelated `if` in
+        // the file as this site's branch; `AgentWorkerPool::forkProcess()` is
+        // that shape (E291), and the name gate is the same one
+        // {@see SHAPE_FORK_WRAPPER} has always used, so a wrapper named
+        // anything else still falls through to a red rather than an
+        // exemption.
+        $before = self::prev($tokens, $forkAt);
+        if ($before !== null && \is_array($tokens[$before]) && $tokens[$before][0] === \T_RETURN
+            && $enclosing !== null && \in_array($enclosing, self::FORK_SPELLINGS, true)) {
+            return self::SHAPE_FORK_WRAPPER;
+        }
+
         $openBrace = null;
         $closeBrace = null;
 
@@ -225,7 +278,55 @@ final class ForkedChildExitScanner
             return self::SHAPE_UNCLASSIFIED;
         }
 
-        return self::classifyTail($tokens, $tail[0], $tail[1], $never, $enclosing);
+        return self::classifyTail($tokens, $tail[0], $tail[1], $never, $enclosing, []);
+    }
+
+    /**
+     * How a `: never` helper's own body leaves, resolved rather than assumed.
+     *
+     * E291's census widens to `src/`, and `src/` delegates children to never
+     * helpers at four sites - three of which end in
+     * `ForkedChild::exitNow()` and one (`BackgroundSessionRunner::exitWorker`)
+     * ends in a plain `exit($code)` ON PURPOSE, because the exit code is that
+     * fork's protocol. A shape that calls everything ending in a `: never`
+     * call "safe" cannot tell those apart, and "leaving without running PHP's
+     * shutdown sequence" - the sentence {@see SAFE_SHAPES} hangs on
+     * `never-helper` - was false the day a helper was written whose last
+     * statement is `exit()`. So the delegation is resolved to its terminus:
+     * a helper that ends safely stays `never-helper`; one that ends bare
+     * reports the shape it actually leaves by, which puts it in front of the
+     * exemption roster with a reason or in front of the offender list.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     * @param array<string,array{from:int,to:int}> $never
+     * @param list<string> $visited cycle guard - mutual `never` delegation is
+     *                            legal PHP and cannot terminate
+     */
+    private static function resolveNeverHelper(array $tokens, string $name, array $never, array $visited): string
+    {
+        if (\in_array($name, $visited, true)) {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+        $visited[] = $name;
+
+        $body = $never[$name] ?? null;
+        if ($body === null) {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        [$tail, $terminator] = self::lastStatement($tokens, $body['from'], $body['to']);
+        if ($tail === null || $terminator !== ';') {
+            return self::SHAPE_UNCLASSIFIED;
+        }
+
+        $resolved = self::classifyTail($tokens, $tail[0], $tail[1], $never, $name, $visited);
+
+        // Any non-safe resolution is reported AS ITSELF: the site delegates to
+        // a helper that ends like the defect, and the census has to see that,
+        // not the delegation.
+        return \in_array($resolved, [self::SHAPE_BARE_EXIT, self::SHAPE_FALLS_THROUGH, self::SHAPE_UNCLASSIFIED], true)
+            ? $resolved
+            : self::SHAPE_NEVER_HELPER;
     }
 
     /**
@@ -248,7 +349,8 @@ final class ForkedChildExitScanner
      * impersonate either of them.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @param list<string> $never
+     * @param array<string,array{from:int,to:int}> $never
+     * @param list<string> $visited
      */
     private static function classifyTail(
         array $tokens,
@@ -256,6 +358,7 @@ final class ForkedChildExitScanner
         int $to,
         array $never,
         ?string $enclosing,
+        array $visited,
     ): string {
         /** @var list<int> $sig indices of the statement's significant tokens */
         $sig = [];
@@ -293,7 +396,10 @@ final class ForkedChildExitScanner
 
         foreach ($sig as $k => $at) {
             // `$this->helper(` / `self::helper(` / `static::helper(`, where
-            // `helper` is declared `: never` in this same file.
+            // `helper` is declared `: never` in this same file. The shape is
+            // RESOLVED through to the helper's own terminus - see
+            // {@see resolveNeverHelper()} for why a delegation is not yet a
+            // safe exit.
             $next = $sig[$k + 1] ?? null;
             $after = $sig[$k + 2] ?? null;
             if ($next === null || $after === null) {
@@ -302,8 +408,8 @@ final class ForkedChildExitScanner
             $isThis = $type($at) === \T_VARIABLE && $text($at) === '$this'
                 && $type($next) === \T_OBJECT_OPERATOR;
             $isSelf = \in_array($text($at), ['self', 'static'], true) && $type($next) === \T_DOUBLE_COLON;
-            if (($isThis || $isSelf) && \in_array($text($after), $never, true)) {
-                return self::SHAPE_NEVER_HELPER;
+            if (($isThis || $isSelf) && \array_key_exists($text($after), $never)) {
+                return self::resolveNeverHelper($tokens, $text($after), $never, $visited);
             }
         }
 
@@ -390,12 +496,14 @@ final class ForkedChildExitScanner
     }
 
     /**
-     * Method names in this file declared with a `never` return type - the
-     * language's own way of saying "does not come back", which is exactly the
-     * property a child branch delegating to a helper needs.
+     * Method names in this file declared with a `never` return type, mapped to
+     * their body's token range - the language's own way of saying "does not
+     * come back", which is exactly the property a child branch delegating to a
+     * helper needs, AND the body the delegation must be resolved through
+     * ({@see resolveNeverHelper()}).
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @return list<string>
+     * @return array<string,array{from:int,to:int}>
      */
     private static function neverReturningMethods(array $tokens): array
     {
@@ -423,7 +531,19 @@ final class ForkedChildExitScanner
             $type = self::next($tokens, $colon);
             if ($type !== null && \is_array($tokens[$type]) && $tokens[$type][0] === \T_STRING
                 && \strtolower($tokens[$type][1]) === 'never') {
-                $names[] = $tokens[$nameAt][1];
+                // The body, so a delegation to this helper can be resolved to
+                // how the helper itself leaves ({@see resolveNeverHelper()}).
+                // An interface/abstract `never` declaration has no brace and
+                // keeps no body to resolve.
+                $brace = self::next($tokens, $type);
+                if ($brace === null || self::tokenText($tokens[$brace]) !== '{') {
+                    continue;
+                }
+                $end = TokenFunctionRanges::matching($tokens, $brace, '{', '}');
+                if ($end === null) {
+                    continue;
+                }
+                $names[$tokens[$nameAt][1]] = ['from' => $brace, 'to' => $end];
             }
         }
 
