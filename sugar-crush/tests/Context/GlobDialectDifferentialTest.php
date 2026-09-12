@@ -958,7 +958,7 @@ final class GlobDialectDifferentialTest extends TestCase
                     // past its own terminator. That was tolerable exactly while
                     // the result failed to COMPILE — PCRE refused
                     // `#^[[:alpha:]\]x$#Ds` and the pattern routed to
-                    // {@see legacyPathMatch()}. It is not tolerable when a
+                     // {@see \SugarCraft\Crush\Skills\SkillRegistry::legacyPathMatch()}. It is not tolerable when a
                     // LATER `[` in the pattern supplies the missing `]`:
                     // MEASURED on PHP 8.3.6, `[[:alpha:]][!a]` emitted
                     // `#^[[:alpha:]\][^a]$#Ds`, which compiles, swallows the

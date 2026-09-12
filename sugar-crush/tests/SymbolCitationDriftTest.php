@@ -121,26 +121,28 @@ final class SymbolCitationDriftTest extends TestCase
     private const PLACEHOLDER_CLASSES = ['Test', 'FooTest', 'BarTest', 'BazTest'];
 
     /**
-     * Bare-name citations the scanner FINDS but this lane could not fix, because
-     * the citing files belong to other lanes. Keyed `file|token` => occurrences
-     * measured at the commit that widened the scan; a citation fixed in place
-     * without its row being deleted reds as a STALE roster entry, and an
-     * occurrence count that moved reds too. The roster may only ever shrink.
+     * Bare-name citations the scanner FINDS but the lane that widened the scan
+     * could not fix, because the citing files belong to other lanes. Keyed
+     * `file|token` => occurrences measured at the commit that widened the scan;
+     * a citation fixed in place without its row being deleted reds as a STALE
+     * roster entry, and an occurrence count that moved reds too. The roster may
+     * only ever shrink.
      *
      * WHY A ROSTER AND NOT AN EXEMPTION: the guard is the point — every NEW bare
      * citation of an existing symbol reddens from here on, and these rows are
      * debts with a name, a count, and a test that notices when they are paid.
      *
+     * EMPTY AS OF ROUND 69. It held six rows (seven occurrences) when round 68
+     * minted it; lane fi paid every one — the citation was qualified in place
+     * and the row deleted in the same commit, which is the only exit this
+     * roster has. The const and its staleness arm stay: a row is added only by
+     * a lane that ships the guard while a violation it names sits in a file it
+     * may not touch, and the obligation to clear it is the point of writing it
+     * down at all.
+     *
      * @var array<string, int>
      */
-    private const DEFERRED_BARE_CITATIONS = [
-        'tests/Chat/SessionStartHookWireTest.php|dispatchTurnHooks()' => 1,
-        'tests/Chat/SessionStartHookWireTest.php|expandCustomCommand()' => 1,
-        'tests/Context/GlobDialectDifferentialTest.php|legacyPathMatch()' => 1,
-        'tests/Integration/RulePathScopingWiringTest.php|tools()' => 1,
-        'tests/RuntimeInitialDispatchOrderTest.php|executeToolCalls()' => 1,
-        'tests/Support/DuplicatedDocBlockLineTest.php|everyTestFile()' => 2,
-    ];
+    private const DEFERRED_BARE_CITATIONS = [];
 
     /** @var list<string> */
     private array $unparseable = [];
@@ -1223,11 +1225,13 @@ final class SymbolCitationDriftTest extends TestCase
      * The eleven now spell their declaring FQNs; this test is what keeps the
      * twelfth from arriving.
      *
-     * THE DEFERRAL ROSTER, not an exemption list. Seven occurrences in five
-     * files the round-68 lane may not touch are counted exactly; a new
-     * occurrence anywhere, or an occurrence of a rostered pair going silent,
-     * reddens here. See {@see DEFERRED_BARE_CITATIONS} for why a roster with a
-     * staleness check beats both silence and a second scan.
+     * THE DEFERRAL ROSTER, not an exemption list. It minted with six debts —
+     * seven occurrences in five files the round-68 lane may not touch — each
+     * counted exactly; a new occurrence anywhere, or an occurrence of a
+     * rostered pair going silent, reddens here. Round 69 paid all six, so the
+     * roster is empty and both loops below are currently no-ops kept for the
+     * day a lane must defer again. See {@see DEFERRED_BARE_CITATIONS} for why a
+     * roster with a staleness check beats both silence and a second scan.
      */
     public function testNoBareCitationNamesAnExistingMethodWithoutItsDeclaringClass(): void
     {

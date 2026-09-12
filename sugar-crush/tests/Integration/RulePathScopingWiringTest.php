@@ -397,9 +397,10 @@ final class RulePathScopingWiringTest extends TestCase
 
     /**
      * The other half of the route: `chat()` holds the session's instance and
-     * {@see tools()} is three frames away, reached through `backend()` — and through
-     * `backendFor()` on every launch that selects a provider by env var or by an
-     * earlier Ctrl+P. This asserts the engine entry point actually crosses that
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} is three frames away, reached
+     * through `backend()` — and through `backendFor()` on every launch that selects
+     * a provider by env var or by an earlier Ctrl+P. This asserts the engine entry
+     * point actually crosses that
      * distance, on the real object graph rather than on a hand-built tracker.
      */
     public function testTheBackendBootEntryPointThreadsTheSetIntoTheToolsItBuilds(): void

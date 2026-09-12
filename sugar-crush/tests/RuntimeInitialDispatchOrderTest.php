@@ -35,7 +35,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * synchronously (`buildMessages()`, `assembleSections()`), yields the
  * assistant message, and dispatches every tool call only as the CONSUMER
  * advances the generator past that yield — `runBatch()` yields
- * {@see AssistantMessage} before it iterates {@see executeToolCalls()}, and
+ * {@see AssistantMessage} before it iterates {@see \SugarCraft\Crush\Runtime::executeToolCalls()}, and
  * PHP generators do not run what they have not been pulled to. Dispatch order
  * is provider order by construction (see the executeToolCalls doc-block).
  *

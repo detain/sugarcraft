@@ -272,7 +272,7 @@ final class SessionStartHookWireTest extends TestCase
      *
      * WHY THE `''`-PROMPT ARM IS NOT TESTED HERE (rather than faked): `submit()`
      * guards on `trim($this->inputBuf) === ''` and returns before
-     * {@see dispatchTurnHooks()} is reached, and a custom command expanding to
+     * {@see \SugarCraft\Crush\Chat::dispatchTurnHooks()} is reached, and a custom command expanding to
      * nothing is refused by its own guard for the same reason — so no draft that
      * reaches this call site is empty, and the `'{}'` fallback inside
      * `turnHookContext()` is defence in depth that Chat itself cannot exercise.
@@ -370,7 +370,7 @@ final class SessionStartHookWireTest extends TestCase
      * that way would stay green with the flag removed.
      *
      * A file-based custom command body is the route that does: it is read off disk,
-     * reassigned straight onto `$text` by {@see expandCustomCommand()}, and never
+     * reassigned straight onto `$text` by {@see \SugarCraft\Crush\Chat::expandCustomCommand()}, and never
      * passes through the buffer. `CommandSpec::TEMPLATE_PATTERN` carries no `/u`
      * modifier either, so the invalid bytes survive expansion and reach the encoder
      * intact. Without JSON_INVALID_UTF8_SUBSTITUTE the encode returns false, the

@@ -27,13 +27,14 @@ use PHPUnit\Framework\TestCase;
  * clean, and an instrument with no exemption row cannot be bought with one
  * (rule 33). The number is not written into any assertion here; it is derived
  * on every run by {@see repeatedDocBlockLinesIn()} over
- * {@see everyTestFile()} and the source roots beside it.
+ * {@see TestFileWalkTrait::everyTestFile()} and the source roots beside it.
  *
  * WHAT THAT SENTENCE USED TO CLAIM, and why it is worth recording rather than
  * quietly correcting: it said "`tests/`, `src/` and `bin/`" and "the whole
  * package". Neither was true. The walk's file test was the `.php` extension,
  * `bin/` holds one extensionless executable, and so the `bin/` root
- * contributed ZERO files under a sentence naming it — see {@see isPhp()}. And
+ * contributed ZERO files under a sentence naming it — see
+ * {@see SourceFileWalkTrait::isPhp()}. And
  * "the whole package" left out `examples/` and `workflows/` entirely. Both
  * halves are now true rather than narrowed: the walk sees `bin/sugarcrush`,
  * the two missing roots are in {@see SOURCE_ROOTS}, and the roots are asked
@@ -74,6 +75,7 @@ use PHPUnit\Framework\TestCase;
 final class DuplicatedDocBlockLineTest extends TestCase
 {
     use TestFileWalkTrait;
+    use SourceFileWalkTrait;
 
     /**
      * The package roots walked beside `tests/`, which
@@ -99,7 +101,7 @@ final class DuplicatedDocBlockLineTest extends TestCase
         foreach (self::everyTestFile() as $relative => $path) {
             $sources['tests/' . $relative] = (string) file_get_contents($path);
         }
-        foreach (self::everySourceFile() as $relative => $path) {
+        foreach (self::everySourceFileIn(\dirname(__DIR__, 2), self::SOURCE_ROOTS) as $relative => $path) {
             $sources[$relative] = (string) file_get_contents($path);
         }
 
@@ -110,7 +112,7 @@ final class DuplicatedDocBlockLineTest extends TestCase
         //
         // WHAT THIS SAID: one `assertGreaterThan(400, count($sources))`,
         // offered as the proof that the walk collected something. WHAT IS TRUE
-        // NOW, measured on PHP 8.3.6: {@see everyTestFile()} ALONE returns 467
+        // NOW, measured on PHP 8.3.6: {@see TestFileWalkTrait::everyTestFile()} ALONE returns 467
         // files, so that floor sat BELOW one of the two halves it was meant to
         // be guarding, and the entire source side could vanish without
         // reddening it — mutation-checked, replacing this walk's root list
@@ -121,7 +123,7 @@ final class DuplicatedDocBlockLineTest extends TestCase
         // drift, and reds on exactly the failure a single scalar cannot see —
         // one root silently contributing nothing at all.
         //
-        // IT IS ALSO WHAT PINS {@see isPhp()}. `bin/` holds exactly one file
+        // IT IS ALSO WHAT PINS {@see SourceFileWalkTrait::isPhp()}. `bin/` holds exactly one file
         // and that file has no `.php` extension, so the shebang arm dying is
         // indistinguishable from `bin/` being empty — and both red here.
         //
@@ -422,68 +424,4 @@ final class DuplicatedDocBlockLineTest extends TestCase
         return "<?php\n/**\n" . $line . "\n" . $line . "\n */\nclass A {}\n";
     }
 
-    /**
-     * @return array<string,string> path relative to the package => absolute path
-     */
-    private static function everySourceFile(): array
-    {
-        $package = \dirname(__DIR__, 2);
-        $found = [];
-
-        foreach (self::SOURCE_ROOTS as $root) {
-            $directory = $package . '/' . $root;
-            if (!is_dir($directory)) {
-                // SILENT HERE AND CAUGHT THERE, deliberately. A root that has
-                // been renamed away contributes nothing, and nothing is what
-                // the per-root assertion in
-                // {@see testNoDocBlockInThisPackageRepeatsALineUnderItself()}
-                // reds on. Throwing here would move the diagnosis into the
-                // walker and leave the test that makes the claim unable to
-                // state which root went missing.
-                continue;
-            }
-            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory)) as $file) {
-                /** @var \SplFileInfo $file */
-                if (!$file->isFile() || !self::isPhp($file->getPathname())) {
-                    continue;
-                }
-                $found[substr($file->getPathname(), \strlen($package) + 1)] = $file->getPathname();
-            }
-        }
-        ksort($found);
-
-        return $found;
-    }
-
-    /**
-     * Whether $path holds PHP source — asked of the FILE, not of its name.
-     *
-     * WHY NOT `str_ends_with($path, '.php')`, which is what stood here. That
-     * test reported ZERO files for the `bin/` root while the doc-block above
-     * claimed the census covered it: measured on PHP 8.3.6, `bin/` holds
-     * exactly one entry, `bin/sugarcrush`, and it is 431 lines of PHP behind a
-     * `#!/usr/bin/env php` line with no extension at all. The root was in the
-     * walk, the walk was in the prose, and the file was in neither — rule 11 at
-     * its plainest, the alphabet here being the file extension and the one file
-     * it could not express being the package's own executable.
-     *
-     * The shebang is read from the file rather than guessed from the path, so
-     * a second extensionless entry point arrives covered instead of arriving
-     * uncounted.
-     */
-    private static function isPhp(string $path): bool
-    {
-        if (str_ends_with($path, '.php')) {
-            return true;
-        }
-
-        $handle = fopen($path, 'rb');
-        if ($handle === false) {
-            return false;
-        }
-        $first = (string) fgets($handle, 256);
-        fclose($handle);
-
-        return str_starts_with($first, '#!') && str_contains($first, 'php');
-    }
 }

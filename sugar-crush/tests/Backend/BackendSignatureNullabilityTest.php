@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Tests\Support\SourceFileWalkTrait;
 use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
 
 /**
@@ -94,6 +95,8 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  */
 final class BackendSignatureNullabilityTest extends TestCase
 {
+    use SourceFileWalkTrait;
+
     /**
      * The tokens that introduce a parameter list this scanner will read.
      *
@@ -630,27 +633,20 @@ final class BackendSignatureNullabilityTest extends TestCase
     }
 
     /**
-     * Every `.php` file under `src/`, keyed by its path relative to `src/`.
+     * Every PHP file under `src/`, keyed by its path relative to the package
+     * (so `src/Runtime.php`, one prefix longer than this file used to key it —
+     * the keys appear only in offender-message text and a count, neither of
+     * which pins the prefix).
+     *
+     * The walk itself is E609's shared copy in
+     * {@see \SugarCraft\Crush\Tests\Support\SourceFileWalkTrait}; the doc-block
+     * census carried the other one, and the two had drifted.
      *
      * @return array<string, string>
      */
     private static function everySourceFile(): array
     {
-        $root = dirname(__DIR__, 2) . '/src';
-        $found = [];
-
-        /** @var \SplFileInfo $file */
-        foreach (new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-        ) as $file) {
-            if (!$file->isFile() || $file->getExtension() !== 'php') {
-                continue;
-            }
-            $found[substr($file->getPathname(), strlen($root) + 1)] = $file->getPathname();
-        }
-        ksort($found);
-
-        return $found;
+        return self::everySourceFileIn(\dirname(__DIR__, 2), ['src']);
     }
 
     /**
