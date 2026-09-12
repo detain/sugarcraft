@@ -63,6 +63,18 @@
     <php>
         <ini name="memory_limit" value="1G"/>
     </php>
+    <!--
+        E194: RuntimeNoticeSink is a process-wide static; round 47's appointment
+        (Chat::drainsRuntimeNotices) made the known leak unreachable but left
+        "clean at your start" as a property of who happens to drain. This
+        extension resets it before every test, making the guarantee structural.
+        Registered here rather than in tests/bootstrap.php so it reaches exactly
+        the process that emits test events - and so the guarantee is visible to
+        whoever reads the config. See the class doc-block for the event choice.
+    -->
+    <extensions>
+        <bootstrap class="SugarCraft\Crush\Tests\Support\RuntimeNoticeSinkResetExtension"/>
+    </extensions>
     <testsuites>
         <testsuite name="SugarCrush">
             <directory>tests</directory>

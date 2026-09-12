@@ -27,6 +27,18 @@ namespace SugarCraft\Crush\Tests\Support;
  * scanner asks "may I look back this far", and a closure is not a scope
  * boundary for either question - PHP closures capture by `use`, so an
  * assignment before the closure really is visible inside it.
+ *
+ * THE BRACE HANDLING IS THE POINT OF THIS CLASS, NOT AN AUXILIARY. Every
+ * counter here dispatches on the two array tokens PHP uses to OPEN a brace
+ * that a plain `}` closes, and {@see InterpolationOpenerTokenTest} requires
+ * every file that counts brace depth to name every opener the running PHP
+ * produces. E208 recorded that {@see ForkedChildExitScanner} carried a second
+ * copy of the `matching()` walk beside this one, plus its own copy of the
+ * opener pair inside `lastStatement()` - two instruments, one syntax, and
+ * three edits to make when the language changes it. Both now call through
+ * here: {@see matching()} is the single closer, and {@see opensBraceDepth()}
+ * / {@see closesBraceDepth()} are the single depth rule. That fold is the
+ * reason those three methods are public.
  */
 final class TokenFunctionRanges
 {
@@ -126,26 +138,61 @@ final class TokenFunctionRanges
         return null;
     }
 
-    /** @param list<array{0:int,1:string,2:int}|string> $tokens */
-    private static function matching(array $tokens, int $openAt, string $open, string $close): ?int
+    /**
+     * The index of the token closing the bracket opened at $openAt, or null
+     * when the walk reaches the end of the stream without levelling out.
+     *
+     * PUBLIC BY E208'S FOLD: this walk existed twice - here and inside
+     * {@see ForkedChildExitScanner} - byte-for-byte, opener roster and all.
+     * One instrument, named in one place; the other copy was deleted rather
+     * than kept in step.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    public static function matching(array $tokens, int $openAt, string $open, string $close): ?int
     {
         $depth = 0;
         for ($i = $openAt, $n = \count($tokens); $i < $n; $i++) {
-            $text = self::tokenText($tokens[$i]);
-            if (\is_string($tokens[$i]) && $text === $open) {
+            if ($open === '{' ? self::opensBraceDepth($tokens[$i]) : (\is_string($tokens[$i]) && $tokens[$i] === $open)) {
                 $depth++;
-            } elseif (\is_string($tokens[$i]) && $text === $close) {
+            } elseif ($close === '}' ? self::closesBraceDepth($tokens[$i]) : (\is_string($tokens[$i]) && $tokens[$i] === $close)) {
                 $depth--;
                 if ($depth === 0) {
                     return $i;
                 }
-            } elseif ($open === '{' && \is_array($tokens[$i])
-                && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                // `{$x}` inside a string opens a brace whose closer is a plain '}'.
-                $depth++;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Whether a token adds a level to a brace-depth count: the bare `{`, or
+     * one of the array tokens PHP uses to open an interpolation whose closer
+     * is a plain `}`.
+     *
+     * THE ROSTER IS DERIVED, NOT WRITTEN, and {@see InterpolationOpenerTokenTest}
+     * asks the running interpreter what the list is and requires this file -
+     * the one home of the rule - to name all of it. A missed opener is not a
+     * crash: a walk loses a level and the scanner silently stops seeing
+     * anything past the first interpolated string.
+     */
+    public static function opensBraceDepth(array|string $token): bool
+    {
+        if (\is_string($token)) {
+            return $token === '{';
+        }
+
+        return \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true);
+    }
+
+    /**
+     * Whether a token removes a level from a brace-depth count. The CLOSER of
+     * an interpolation is always the bare `}` - which is the asymmetry that
+     * makes {@see opensBraceDepth()} the half a walker forgets.
+     */
+    public static function closesBraceDepth(array|string $token): bool
+    {
+        return \is_string($token) && $token === '}';
     }
 }

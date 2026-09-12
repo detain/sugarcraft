@@ -45,29 +45,32 @@ use PHPUnit\Framework\TestCase;
  * built from was the one file it could not see, and re-opening the exemplar's
  * original defect in it left this census green. Selection is therefore on the
  * reflection read ALONE, and the slice is looked for one call hop deep among
- * the functions declared in the SAME FILE. A reader's COVERAGE SET is its own
- * body plus the bodies of the same-file functions it delegates the slice to,
- * because those two are jointly responsible for the pairing.
+ * the functions the callee name resolves to: this file first, then, since
+ * E325 step (b) moved `declaredSlice()` into
+ * {@see SlicesDeclaredMethodsTrait}, the shared helper file when the walked
+ * tree holds exactly one function of that name. A reader's COVERAGE SET is its
+ * own body plus the bodies of the functions it delegates the slice to, because
+ * those two are jointly responsible for the pairing.
  *
  * AND A REFLECTION READ WHOSE SLICE IS OUT OF REACH IS REPORTED, NOT DROPPED.
- * One hop within one file is a bound, and a bound has an outside: a slice
- * lifted into a shared helper class is past it. Rather than reading such a site
- * as clean — which is what silently skipping it would say — the scanner returns
- * it separately and {@see SLICE_UNREACHABLE} must carry a row for it. That
- * roster is EMPTY today and both directions are checked, so it costs nothing
- * until the day it is the only thing standing between a moved helper and a
- * census that has quietly stopped covering anything.
+ * One hop is a bound, and a bound has an outside: two hops, a name carried by
+ * more than one walked file, or a callee outside the walked tree. Rather than
+ * reading such a site as clean — which is what silently skipping it would say
+ * — the scanner returns it separately and {@see SLICE_UNREACHABLE} must carry a
+ * row for it. That roster is EMPTY today and both directions are checked, so
+ * it costs nothing until the day it is the only thing standing between a moved
+ * helper and a census that has quietly stopped covering anything.
  *
  * THE SECOND HALF OF THE ORIGINAL DEFECT IS NOT COVERED BY THIS FILE, and the
- * omission is deliberate and recorded. Reflection's line numbers are fixed when
- * the class loads while `file()` is read on every call, so an edit to the file
- * in between shifts every slice WHILE THE FILE NAME STILL MATCHES. That half
- * was the one actually OBSERVED. Only `VhsTapeContractTest` guards it, through
- * a `declaredSlice()` that refuses unless the slice's first line spells
- * `function <name>`. Every other reader here is open to it. Rostering every
- * reader by `<file>::<method>` across five concurrently-merging lanes would red
- * on every rename, so it is a backlog entry rather than a guard — see the
- * round-49 lane c report.
+ * omission is deliberate and recorded. Reflection's line numbers are fixed
+ * when the class loads while `file()` is read on every call, so an edit to the
+ * file in between shifts every slice WHILE THE FILE NAME STILL MATCHES. That
+ * half was the one actually OBSERVED. Only `VhsTapeContractTest` guards it,
+ * through {@see SlicesDeclaredMethodsTrait::declaredSlice()}, which refuses
+ * unless the slice's first line spells `function <name>`. Every other reader
+ * here is open to it. Rostering every reader by `<file>::<method>` across five
+ * concurrently-merging lanes would red on every rename, so it is a backlog
+ * entry rather than a guard — see the round-49 lane c report and E325.
  */
 final class ReflectionLineSliceReaderCensusTest extends TestCase
 {
@@ -79,29 +82,31 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
      * row whose reader has been fixed fails and must be deleted, and a reader
      * with no row fails and must be argued or fixed.
      *
+     * WHAT THIS HELD: one row - `Cli/HelpTest.php::backendSelectionVariables`,
+     * recorded here rather than fixed because its file sat outside the lane
+     * that added this census (E325's step (a), "delete this row with the
+     * fix"). The fix has now landed - the provider asserts
+     * `$reflected->getFileName()` against the path it reads - and the
+     * `overtaken` arm caught the moment by design. WHY THE MECHANISM STILL
+     * EARNS ITS PLACE EMPTY: a reader that appears unchecked is exactly the
+     * thing this census exists to surface, and the map is the only place its
+     * deferral can go.
+     *
      * @var array<string,string>
      */
-    private const DECLARING_FILE_UNCHECKED = [
-        'Cli/HelpTest.php::backendSelectionVariables' =>
-            'It reflects `Bootstrap`\'s methods and slices a `$lines` read from Bootstrap.php by '
-            . 'path, so the file is right today by construction rather than by check — and the '
-            . 'day one of those methods arrives through a trait, the slice silently addresses '
-            . 'the wrong text and the census built on it reports whichever variables happen to '
-            . 'live at those offsets. The fix is one `assertSame()` against '
-            . '`$reflected->getFileName()`. It is NOT DONE HERE because `tests/Cli/HelpTest.php` '
-            . 'is outside the lane that added this census (round 49, lane c, tests/Support plus '
-            . 'the two stderr censuses), and a silent cross-lane edit is worse than a recorded '
-            . 'one. Delete this row with the fix.',
-    ];
+    private const DECLARING_FILE_UNCHECKED = [];
 
     /**
      * Functions that read reflection line numbers whose SLICE this scanner
-     * cannot reach — the indexing is more than one call hop away, or lives in
-     * another file — each with the reason it is left that way.
+     * cannot reach — the indexing is more than one call hop away, behind a
+     * name several walked files carry, or outside the walked tree — each with
+     * the reason it is left that way.
      *
      * EMPTY IS THE CORRECT STATE AND IT IS NOT THE SAME AS UNCHECKED. Every
      * such read is currently either indexing in its own body or delegating one
-     * hop inside its own file, so nothing needs a row. The roster exists
+     * hop to a function this census can resolve — since E325 step (b), that
+     * includes the shared {@see SlicesDeclaredMethodsTrait::declaredSlice()},
+     * which the unique name resolves to across files. The roster exists
      * because the alternative to it is a `continue`, and a `continue` here
      * would read a reader the scanner has lost track of as a reader that is
      * fine. Both directions are checked, so a row that outlives its site fails
@@ -136,10 +141,11 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
         $unrostered = array_diff_key($unreachable, self::SLICE_UNREACHABLE);
         self::assertSame([], $unrostered, \sprintf(
             "%d function(s) read reflection line numbers whose slice is out of this scanner's "
-            . "reach — not in the function, and not in a same-file function it calls. That is a "
-            . "reader this census can no longer say anything about, which is what happens when "
-            . "the indexing is lifted into a shared helper. Route the read and the slice back "
-            . "into reach of one another, or add a row to SLICE_UNREACHABLE with the reason.\n  %s",
+            . "reach — not in the function, and not one resolvable call hop away (same file, "
+            . "then a name exactly one walked file carries). That is a reader this census can "
+            . "no longer say anything about, which is what happens when indexing moves past "
+            . "the hop. Route the read and the slice back into reach of one another, or add a "
+            . "row to SLICE_UNREACHABLE with the reason.\n  %s",
             \count($unrostered),
             \implode("\n  ", array_map(
                 static fn (string $key, string $at): string => $key . ' (' . $at . ')',
@@ -423,6 +429,78 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
         self::assertSame(['a/A.php::body' => true], $readers, 'a delegating reader that names '
             . 'the declaring file was reported as unchecked');
 
+        // ...AND THE HOP MAY CROSS A FILE WHEN THE NAME RESOLVES TO EXACTLY ONE
+        // WALKED FUNCTION. E325 step (b) lifted `VhsTapeContractTest`'s helper
+        // into {@see SlicesDeclaredMethodsTrait}, so the live tree now contains
+        // a delegating reader whose slice lives in ANOTHER walked source. A
+        // same-file-only hop would have filed the exemplar as out-of-reach on
+        // the same commit that folded it — the roster would then demand a row
+        // for the very pair this census exists to police. These fixtures are
+        // that shape: a caller in one source, the slicer in another.
+        $crossFileCaller = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function body(string $method): string
+                {
+                    $r = new \ReflectionMethod(self::class, $method);
+
+                    return self::cut(file(__FILE__) ?: [], $r->getStartLine(), $r->getEndLine());
+                }
+            }
+            PHP;
+        $crossFileHelper = <<<'PHP'
+            <?php
+            trait T
+            {
+                private static function cut(array $lines, int $from, int $to): string
+                {
+                    return implode('', array_slice($lines, $from - 1, $to - $from + 1));
+                }
+            }
+            PHP;
+
+        [$readers, $problems, $unreachable] = self::readers([
+            'a/A.php' => $crossFileCaller,
+            'b/T.php' => $crossFileHelper,
+        ]);
+        self::assertSame(['a/A.php::body' => false], $readers, 'a reader delegating its slice '
+            . 'across a file boundary was not followed to the helper, or was not selected at '
+            . 'all — either way the fold into the shared trait would fall off this census');
+        self::assertSame([], $problems);
+        self::assertSame([], $unreachable, 'a cross-file delegate was filed as out-of-reach '
+            . 'even though exactly one walked file carries the name');
+
+        $crossFileChecked = str_replace(
+            'file(__FILE__)',
+            'file((string) $r->getFileName())',
+            $crossFileCaller,
+        );
+        [$readers] = self::readers([
+            'a/A.php' => $crossFileChecked,
+            'b/T.php' => $crossFileHelper,
+        ]);
+        self::assertSame(['a/A.php::body' => true], $readers, 'a cross-file delegating reader '
+            . 'that names the declaring file was reported as unchecked');
+
+        // ...BUT AN AMBIGUOUS NAME IS NOT FOLLOWED. Two walked files carrying
+        // the same slicer name means the scanner cannot say WHICH body the
+        // call reaches, and guessing toward whichever one clears the check is
+        // laundering. The read is filed out-of-reach instead — reported, not
+        // silently passed — which is the fail-closed side of the resolution
+        // rule.
+        [$readers, $problems, $unreachable] = self::readers([
+            'a/A.php' => $crossFileCaller,
+            'b/T.php' => $crossFileHelper,
+            'c/T.php' => str_replace('trait T', 'trait T2', $crossFileHelper),
+        ]);
+        self::assertSame([], $readers);
+        self::assertSame([], $problems);
+        self::assertSame(['a/A.php::body' => 'a/A.php:8'], $unreachable, 'a call whose name two '
+            . 'walked files carry was resolved by guesswork; an ambiguous hop must land in the '
+            . 'reported out-of-reach pile, because either answer — cleared or accused — would '
+            . 'be a claim this scanner cannot support');
+
         // ...AND THE CHECK COUNTS FROM EITHER HALF OF THE PAIR. The reader and
         // the helper it delegates to are jointly responsible for the pairing,
         // so the assertion may honestly live in the helper.
@@ -502,15 +580,18 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
      * whole correction. Keying on both-in-one-function looks tighter and is
      * strictly blinder: it cannot see a reader that delegates the indexing, and
      * it drops the delegate too, because the delegate holds no reflection call.
-     * The slice is therefore chased ONE HOP into the functions declared in the
-     * same file, and a read whose slice is not reachable that way comes back in
-     * the third return rather than being skipped.
+     * The slice is therefore chased ONE HOP into the function the callee name
+     * resolves to — this file first, then, since the E325 fold put
+     * `declaredSlice()` in a shared trait, another walked source when exactly
+     * one carries the name — and a read whose slice is not reachable that way
+     * comes back in the third return rather than being skipped.
      *
-     * ONE HOP, WITHIN ONE FILE, AND NO FURTHER. Two hops or a cross-file
-     * resolution would need a call graph over the whole suite, which is a
-     * second instrument nobody could check. The bound is honest because
-     * overrunning it is REPORTED — see the third return — rather than read as
-     * a clean file.
+     * ONE HOP, AND NO FURTHER. Two hops would need a call graph over the whole
+     * suite, which is a second instrument nobody could check. An ambiguous
+     * name is not resolved by preference either: the scanner declines to guess
+     * which body PHP would reach, because picking the clearing candidate from
+     * two would launder the check. The bound is honest because overrunning it
+     * is REPORTED — see the third return — rather than read as a clean file.
      *
      * @param array<string,string> $sources relative path => source
      *
@@ -523,14 +604,48 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
         $problems = [];
         $unreachable = [];
 
+        // E325 step (b) paired with this census: `declaredSlice()` moved into
+        // a shared trait file, so the slice a reader delegates now lives one
+        // call hop away in ANOTHER walked source. Callees are therefore
+        // resolved against every source: same file first (a file's own
+        // function shadows the name), and cross-file only when exactly one
+        // walked function carries it. An ambiguous name is NOT followed -
+        // the read then lands in $unreachable, which is the reported shape
+        // rather than the silent one. One hop, still; a name-keyed call
+        // graph over the whole suite remains a second instrument nobody
+        // could check.
+        $streams = [];
+        $byName = [];
         foreach ($sources as $relative => $source) {
-            $tokens = \token_get_all($source);
-            $ranges = TokenFunctionRanges::scan($tokens);
-
-            $sameFile = [];
-            foreach ($ranges as $range) {
-                $sameFile[$range['name']] = $range;
+            $streams[$relative] = $tokens = \token_get_all($source);
+            foreach (TokenFunctionRanges::scan($tokens) as $range) {
+                $byName[$range['name']][] = [$relative, $range];
             }
+        }
+
+        /**
+         * Resolve one called name the way PHP would prefer it here: own file
+         * first, then a cross-file match only when the walked tree holds
+         * exactly one.
+         *
+         * @return array{0:string,1:array{name:string,from:int,to:int}}|null
+         */
+        $hopInto = static function (string $called, string $ownFile) use ($byName): ?array {
+            if (!isset($byName[$called])) {
+                return null;
+            }
+
+            foreach ($byName[$called] as $candidate) {
+                if ($candidate[0] === $ownFile) {
+                    return $candidate;
+                }
+            }
+
+            return \count($byName[$called]) === 1 ? $byName[$called][0] : null;
+        };
+
+        foreach ($streams as $relative => $tokens) {
+            $ranges = TokenFunctionRanges::scan($tokens);
 
             foreach ($tokens as $i => $token) {
                 if (!\is_array($token) || $token[0] !== \T_STRING || $token[1] !== 'getStartLine') {
@@ -549,17 +664,25 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
                 $key = $relative . '::' . $enclosing['name'];
                 $names = self::namesIn($tokens, $enclosing['from'], $enclosing['to']);
 
-                // THE COVERAGE SET: this function, plus every same-file
-                // function it calls that does the indexing for it. Both are
-                // responsible for the pairing, so a check in either one counts.
+                // THE COVERAGE SET: this function, plus every function it
+                // calls that does the indexing for it - in this file or,
+                // since E325 step (b), in the shared helper file the name
+                // resolves to. Both are responsible for the pairing, so a
+                // check in either one counts.
                 $coverage = [$names];
 
                 foreach (array_keys($names) as $called) {
-                    if ($called === $enclosing['name'] || !isset($sameFile[$called])) {
+                    if ($called === $enclosing['name']) {
                         continue;
                     }
 
-                    $hop = self::namesIn($tokens, $sameFile[$called]['from'], $sameFile[$called]['to']);
+                    $target = $hopInto($called, $relative);
+                    if ($target === null) {
+                        continue;
+                    }
+
+                    [$hopFile, $hopRange] = $target;
+                    $hop = self::namesIn($streams[$hopFile], $hopRange['from'], $hopRange['to']);
                     if (isset($hop['array_slice'])) {
                         $coverage[] = $hop;
                     }

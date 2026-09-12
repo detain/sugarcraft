@@ -334,7 +334,8 @@ final class HelpTest extends TestCase
      */
     public static function backendSelectionVariables(): array
     {
-        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
+        $source = (string) \file_get_contents($bootstrapFile);
         $lines = \explode("\n", $source);
 
         $vars = [];
@@ -379,6 +380,21 @@ final class HelpTest extends TestCase
             // concern with its own blast radius.
         ] as $method) {
             $reflected = new \ReflectionMethod(Bootstrap::class, $method);
+            // E325 direction one: the line numbers below index $lines, which
+            // was read from ONE named path, and reflection's numbers address
+            // the file the method is DECLARED in. For a method that arrives
+            // through a trait those are different files, and the slice would
+            // silently scrape whichever text sits at the trait's offsets -
+            // the defect {@see \SugarCraft\Crush\Tests\Support\ReflectionLineSliceReaderCensusTest}
+            // exists to catch. True by construction today; asserted so it
+            // stays true when someone extracts a trait.
+            self::assertSame(
+                $bootstrapFile,
+                $reflected->getFileName(),
+                $method . '() is not declared in ' . $bootstrapFile . ', so its reflection line'
+                . ' numbers do not address the lines scraped here. Read the body from'
+                . ' $reflected->getFileName(), or keep the method where the scrape expects it.',
+            );
             $body = \implode("\n", \array_slice(
                 $lines,
                 $reflected->getStartLine() - 1,

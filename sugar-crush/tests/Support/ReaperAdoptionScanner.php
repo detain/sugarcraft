@@ -78,7 +78,7 @@ final class ReaperAdoptionScanner
                     // string reported `adoptsTrait() = false`, i.e. the guard
                     // reddened a file that WAS adopting. Every other brace
                     // walker in this suite - {@see bodyOf()} below,
-                    // {@see ForkedChildExitScanner::matching()},
+                    // {@see TokenFunctionRanges::matching()},
                     // {@see ChildStderrCaptureScanner::topLevelArguments()} -
                     // already counted this token; this walk was the one that
                     // did not.

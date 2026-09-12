@@ -47,10 +47,11 @@ namespace SugarCraft\Crush\Tests\Support;
  *
  * WHY THE SCANNERS KEEP PASSING A BOUNDED RANGE AND THE TEST AN OPEN ONE.
  * {@see topLevelArguments()} walks between a caller-supplied pair of indices;
- * the scanners resolve their own closer through their own `matching()` before
- * asking for the split, and a guard that re-derived the closer here would be
- * a second closer algorithm to keep in step. {@see balancedClose()} is the
- * forward walk for callers that do not already have one, and it is the half
+ * the scanners resolve their own closer first - through their own `matching()`
+ * copy or, since E208's fold, through {@see TokenFunctionRanges::matching()} -
+ * and a guard that re-derived the closer here would be a second closer
+ * algorithm to keep in step. {@see balancedClose()} is the forward walk for
+ * callers that do not already have one, and it is the half
  * {@see topLevelArguments()}'s range contract assumes.
  *
  * EVERY CONSUMER KEEPS ITS OWN KNOWN-POSITIVE CONTROL, and sharing the code

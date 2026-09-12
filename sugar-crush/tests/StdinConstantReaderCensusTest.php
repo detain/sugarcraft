@@ -198,14 +198,23 @@ use PHPUnit\Framework\TestCase;
  *    check on the resolved stream and not a check at the call a reader
  *    notices first; delete the sentence and the next person to touch this
  *    method reintroduces the half-fix.
- *  - `candy-core/src/Util/Tty/EnvDetect.php` — WOULD THROW, AND IS DORMANT.
- *    `isConsoleStdin()` is a bare `return stream_isatty(STDIN);` with no
- *    guard, which is the throwing shape above. It has NO caller: grepped
- *    across this package's `src`, `bin` and `tests` and across `src`/`bin` of
- *    every sibling in {@see LIB_SCOPE}, the only occurrence of the name is its
- *    own declaration. Dormant, not dead — it is the Windows console probe
- *    {@see \SugarCraft\Core\Util\Tty} would use if the Windows path were
- *    wired, so it stays (rule 6) and this row is the dormancy record.
+ *  - `candy-core/src/Util/Tty/EnvDetect.php` — WAS THE UNTHRESHOLDED SITE;
+ *    NOW GUARDED AND STILL DORMANT IN PRODUCTION. WHAT THIS ROW SAID: "WOULD
+ *    THROW, AND IS DORMANT. `isConsoleStdin()` is a bare
+ *    `return stream_isatty(STDIN);` with no guard, which is the throwing
+ *    shape above. It has NO caller ... the only occurrence of the name is its
+ *    own declaration." WHAT IS TRUE NOW: the method opens with
+ *    `if (!\defined('STDIN') || !\is_resource(\STDIN)) { return false; }`
+ *    and only then asks `stream_isatty()` - the no-throw half landed. The
+ *    "NO caller" half has aged: production `src` and `bin` still never call
+ *    it - the `EnvDetect` uses in `Tty.php` are `isWsl()`/`isMintty()`/
+ *    `isCygwin()`, a different question entirely - but
+ *    `candy-core/tests/Util/closed_descriptor_zero_probe.php` now drives it
+ *    inside a child that has closed its own descriptor 0, so the guard is
+ *    exercised, not merely present. WHY THE ROW STAYS: the file still names
+ *    the constant, which is what this roster tracks, and the dormancy claim
+ *    is the reason the guard lives in the method rather than at a call site -
+ *    there is no call site to put it at.
  *  - `candy-core/src/Util/Tty.php` and `candy-core/src/Util/RawMode.php` —
  *    DEGRADE. Both resolve `?? STDIN` and then hand the result somewhere that
  *    tests liveness first. `RawMode::enable()`/`disable()` gate on
@@ -223,19 +232,26 @@ use PHPUnit\Framework\TestCase;
  *    so no Windows runner executes this suite. Unjudged for Windows on
  *    purpose: this box is Linux and PHP 8.3.6 only, and a claim about the
  *    Windows path would be reasoning rather than measurement.
- *  - `candy-core/src/Program.php` — GUARDED, BUT ITS GUARD'S FALLBACK IS NOW
- *    ITSELF DEAD, and this is the subtlest row. `runExec()` does
- *    `$childIn = is_resource($this->input) ? $this->input : STDIN;` — a guard
- *    added, per its own comment, for "tests that closed the streams". Once the
- *    suite closes the constant, both arms are dead handles whenever `$input`
- *    came from the constructor's `$options->input ?? STDIN`. MEASURED:
- *    `proc_open()` with a closed resource in the descriptor array throws
- *    `TypeError: proc_open(): supplied resource is not a valid stream
- *    resource`, so this degrades by exception rather than by falling back.
- *    Not reached in this suite — `runExec()` is private and driven only by an
- *    `ExecRequest` Cmd, which nothing in `sugar-crush/src` issues. Recorded
- *    because "no test noticed" is not "the library is fine", which is the same
- *    distinction that made anyone look at `Detect`.
+ *  - `candy-core/src/Program.php` — WAS "GUARDED, BUT THE GUARD'S FALLBACK IS
+ *    ITSELF DEAD"; THE FALLBACK IS NOW A FILE SPEC. WHAT THIS ROW SAID:
+ *    "`runExec()` does `$childIn = is_resource($this->input) ? $this->input
+ *    : STDIN;`", and once the suite closes the constant both arms are dead
+ *    handles whenever `$input` came from the constructor's
+ *    `$options->input ?? STDIN` - so the guard's fallback was the very thing
+ *    the guard was guarding against, and the degradation was by `TypeError`
+ *    rather than by falling back. WHAT IS TRUE NOW: the ternary is gone, and
+ *    with it the dead-fallback. `runExec()` resolves the descriptor through
+ *    `Program::childDescriptor()`, whose ladder is own-handle → constant →
+ *    `['file', $nul, 'r']` (`/dev/null`, `NUL` on Windows) - a last resort
+ *    `proc_open()` opens for itself, which is precisely the property the
+ *    closed `\STDIN` handle lacked. The constant is STILL named, and it is
+ *    still the middle rung, so the row stays on the roster for the same
+ *    reason every other row does: the scanner reports what a file names, not
+ *    what it survives. WHY THE OBSERVATION STILL EARNS ITS PLACE: the
+ *    distinction this row drew between "the fallback exists" and "the
+ *    fallback can itself be dead" is the reason a file spec replaced the
+ *    constant, and a reader who deletes the row loses the argument for
+ *    keeping the third rung.
  *
  * ## THE DEFERRAL THAT USED TO STAND HERE IS SPENT
  *

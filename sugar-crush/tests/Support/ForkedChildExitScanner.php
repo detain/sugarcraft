@@ -157,7 +157,7 @@ final class ForkedChildExitScanner
             if ($openParen === null || self::tokenText($tokens[$openParen]) !== '(') {
                 return self::SHAPE_UNCLASSIFIED;
             }
-            $closeParen = self::matching($tokens, $openParen, '(', ')');
+            $closeParen = TokenFunctionRanges::matching($tokens, $openParen, '(', ')');
             if ($closeParen === null) {
                 return self::SHAPE_UNCLASSIFIED;
             }
@@ -186,7 +186,7 @@ final class ForkedChildExitScanner
             if ($brace === null || self::tokenText($tokens[$brace]) !== '{') {
                 return self::SHAPE_UNCLASSIFIED;
             }
-            $end = self::matching($tokens, $brace, '{', '}');
+            $end = TokenFunctionRanges::matching($tokens, $brace, '{', '}');
             if ($end === null) {
                 return self::SHAPE_UNCLASSIFIED;
             }
@@ -351,18 +351,17 @@ final class ForkedChildExitScanner
             $text = self::tokenText($tokens[$i]);
             $isPunct = \is_string($tokens[$i]);
 
-            if ($isPunct && $text === '{') {
+            // The depth rule is {@see TokenFunctionRanges::opensBraceDepth()}
+            // - bare `{` AND the array tokens PHP opens interpolations with -
+            // shared with the closer walk since E208's fold. An inline copy
+            // here used to name the opener pair a second time in this file,
+            // which is one more place a PHP change would have to be noticed.
+            if (TokenFunctionRanges::opensBraceDepth($tokens[$i])) {
                 $depth++;
 
                 continue;
             }
-            if (\is_array($tokens[$i])
-                && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                $depth++;
-
-                continue;
-            }
-            if ($isPunct && $text === '}') {
+            if (TokenFunctionRanges::closesBraceDepth($tokens[$i])) {
                 $depth--;
                 if ($depth === 0) {
                     if (self::hasCode($tokens, $start, $i)) {
@@ -413,7 +412,7 @@ final class ForkedChildExitScanner
             if ($openParen === null || self::tokenText($tokens[$openParen]) !== '(') {
                 continue;
             }
-            $closeParen = self::matching($tokens, $openParen, '(', ')');
+            $closeParen = TokenFunctionRanges::matching($tokens, $openParen, '(', ')');
             if ($closeParen === null) {
                 continue;
             }
@@ -460,29 +459,6 @@ final class ForkedChildExitScanner
             }
 
             return $i;
-        }
-
-        return null;
-    }
-
-    /** @param list<array{0:int,1:string,2:int}|string> $tokens */
-    private static function matching(array $tokens, int $openAt, string $open, string $close): ?int
-    {
-        $depth = 0;
-        for ($i = $openAt, $n = \count($tokens); $i < $n; $i++) {
-            $text = self::tokenText($tokens[$i]);
-            if (\is_string($tokens[$i]) && $text === $open) {
-                $depth++;
-            } elseif (\is_string($tokens[$i]) && $text === $close) {
-                $depth--;
-                if ($depth === 0) {
-                    return $i;
-                }
-            } elseif ($open === '{' && \is_array($tokens[$i])
-                && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
-                // `{$x}` inside a string opens a brace the closer is a plain '}'.
-                $depth++;
-            }
         }
 
         return null;
