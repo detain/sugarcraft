@@ -59,6 +59,25 @@ namespace SugarCraft\Crush\Permissions;
  * this list is a BLOCKED call rendered as an ordinary tool ERROR on both
  * surfaces — the model told its call failed rather than that it was refused,
  * which is a correctness failure and not a cosmetic one.
+ *
+ * THREE IS NOT YET A CLOSED VOCABULARY, AND UNTIL RECENTLY THE OPEN QUESTION
+ * HAD NO HOME IN THE TREE (E347, E375). The headless prompt refuses an ASK in
+ * two situations — a person answered no, and there was nobody at the keyboard
+ * to answer — and BOTH publish {@see DenialKind::Refused}, because in each an
+ * approver was attached and the answer it gave was not `true`. So a
+ * `--output-format json` consumer cannot tell the two apart, and closing that
+ * means either a fourth case here or a second published field on the refusal
+ * entry. Both change what this enum PUBLISHES, which makes the question a
+ * product decision about the vocabulary, not a formatting change a lane can
+ * make — which is exactly what E375 recorded as unowned. This paragraph is the
+ * record: the question lives here, its answer does not. Until it is answered,
+ * the two arms are deliberately indistinguishable to a machine, and
+ * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} is what says so
+ * — that test's observer pair is the pin a change must argue with, and its
+ * sibling pins in {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} (the
+ * backing values, the kind tokens, the README roster) all name three, so a
+ * fourth case added without the decision goes red in the places that make the
+ * publication visible rather than drifting silently past it.
  */
 enum DenialKind: string
 {

@@ -56,7 +56,11 @@ use SugarCraft\Crush\Tools\ToolResult;
  *     answered no, and the observer never sees that. So the prompt's own text
  *     is the only thing on stderr that distinguishes "a person typed n" from
  *     "there was nobody at the keyboard", which are different problems with
- *     different remedies.
+ *     different remedies. Whether the MACHINE should learn to tell them apart
+ *     is the open vocabulary question E347 leaves over, E375 files, and
+ *     {@see DenialKind}'s own doc-block now carries; this file is the standing
+ *     pin that today the two arms are ONE kind, not where that decision
+ *     stands undecided.
  *
  * This file pins both corrections, so the removal is not re-proposed from the
  * entry's text alone. It deliberately does NOT assert the observer's bytes:

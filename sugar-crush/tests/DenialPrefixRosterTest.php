@@ -183,7 +183,10 @@ final class DenialPrefixRosterTest extends TestCase
      * `(?<![A-Za-z])`, and a hyphen is not a letter, so the tail of a
      * hyphenated compound opens a frame of its own. `Content-Length` supplies
      * `Length`. That property belongs to every term in this vocabulary, not
-     * just this one, and it is filed rather than fixed here.
+     * just this one. E616 files it, and the both-direction fixtures it asked
+     * for BEFORE either side of the hyphen trade is chosen sit in
+     * {@see self::testRuntimeSpellsNoDenialPrefixOutsideItsConstants()} under
+     * that number.
      *
      * None of the four occurred in `src/` when this landed — the only
      * `required` hit anywhere was the roster's own `Permission required:` — so
@@ -742,6 +745,40 @@ final class DenialPrefixRosterTest extends TestCase
             );
         }
 
+        // AND E616'S TWO DIRECTIONS, FIXED BEFORE EITHER IS CHOSEN. The frame's
+        // lookbehind is `(?<![A-Za-z])` and a hyphen is not a letter, so the
+        // TAIL of a hyphenated compound opens a frame of its own — for every
+        // term in the vocabulary, not just the `required` one E570 tripped.
+        // MEASURED on PHP 8.3.6 against the shipped pattern, all three rows
+        // below are REPORTED: `Cache-Control disallowed:` frames as `Control
+        // disallowed:`, `Transfer-Encoding rejected:` as `Encoding rejected:`
+        // (protocol English the guard reads as a denial — the E616 false
+        // positives), and `Auto-Approve denied:` frames as `Approve denied:` —
+        // which is NOT English about headers but a producer hyphenating a
+        // denial, and the one E616 says the naive fix would hide. The fix that
+        // kills the first two, adding `-` to the lookbehind, was MEASURED on
+        // the same strings and reports the third NOWHERE, while the three
+        // roster prefixes frame identically under both spellings — so neither
+        // direction is free and the entry asked for fixtures before either is
+        // chosen. These are them: a lookbehind change reddens all three rows
+        // with their trade named, and the reader who flips it decides row by
+        // row which cost they are signing for. Assembled from parts so this
+        // file is never matched by its own scan set.
+        foreach ([
+            'a cache-control complaint, which is protocol English' => 'Cache-' . 'Control disallowed: purge the CDN entry',
+            'a transfer-encoding complaint, the same' => 'Transfer-' . 'Encoding rejected: nope',
+            'a genuinely invented hyphenated denial, which the hyphen would hide' => 'Auto-' . 'Approve denied: nope',
+        ] as $why => $compound) {
+            self::assertSame(
+                [$compound],
+                self::denialLiteralsIn('<?php $h = ' . var_export($compound, true) . ';'),
+                "the scanner no longer frames the tail of {$why}. If `-` was added to the lookbehind "
+                . 'deliberately, E616 is being decided and each of these three rows should be re-pinned in '
+                . 'the same edit with its side of the trade named — if the pattern moved by accident, every '
+                . 'hyphenated denial prefix is now invisible to the whole-src map',
+            );
+        }
+
         $declared = array_values(self::runtimeDenialPrefixes());
         $found = self::denialLiteralsIn($source);
 
@@ -778,6 +815,16 @@ final class DenialPrefixRosterTest extends TestCase
      * which is where the earning happens. A path listed here with no
      * mechanically checkable reason would be the "a comment saying this one is
      * different" that E247 explicitly rejects.
+     *
+     * THE FILE KEY WAS ALSO THE ONLY FORM, AND THAT IS E541'S RESIDUAL: it
+     * cannot express "this file THROWS a Throwable carrying the string", so a
+     * non-Throwable file whose correct protocol message framed as a denial had
+     * nowhere to go but a reword. There are now two mechanical exclusions and
+     * this list is one of them: {@see self::denialLiteralsOutsideThrownThrowableMessages()}
+     * reads the throw-argument shape from the token stream and needs no row
+     * here at all. A file whose OWN class is the Throwable — where the literal
+     * rides a constructor default, not a `throw` — is the shape only this list
+     * can carry, which is why `TaskBlockedException` stays.
      *
      * @var array<string, class-string<\Throwable>>
      */
@@ -830,8 +877,11 @@ final class DenialPrefixRosterTest extends TestCase
             'src/ spells a denial-shaped literal somewhere other than the two files that have earned one. '
             . 'Every tool-result prefix belongs to a DenialKind case; a second spelling is a second '
             . 'definition, and the one that drifts renders a BLOCKED call as an ordinary tool ERROR on '
-            . 'both surfaces. If the new hit is not a tool-result prefix at all, it needs the mechanical '
-            . 'exclusion OFF_ROSTER_THROWABLE_SHAPES carries, not a row added here',
+            . 'both surfaces. If the new hit is not a tool-result prefix at all, it needs one of the two '
+            . 'MECHANICAL exclusions, not a row added here: argue it into `throw new <Throwable>(...)` and '
+            . 'the E541 argument-list exclusion reads that shape from the token stream by itself, or, when '
+            . 'the literal rides a constructor default in a file whose own class IS the Throwable, it '
+            . 'belongs in OFF_ROSTER_THROWABLE_SHAPES where the earning test can check it',
         );
 
         // AND THE FIVE FILES THE OLD MAP NAMED, called out by name so their
@@ -1009,6 +1059,141 @@ final class DenialPrefixRosterTest extends TestCase
             'the co-occurrence scan cannot find TaskBlockedException in the file that throws it, so it is '
             . 'not reading src/ at all and its empty answer above is what a dead instrument returns rather '
             . 'than evidence that nothing wires this exception to a tool result',
+        );
+    }
+
+    /**
+     * E541's MECHANICAL FORM OF EXCLUSION, PINNED IN BOTH POLARITIES.
+     *
+     * The defect this closes is the LIST'S, not the exclusion's: an off-roster
+     * denial-shaped literal argued into `throw new <Throwable>(...)` is an
+     * exception message, and that fact lives in the token stream, so the walk
+     * can check it without naming a file. Before this, the only mechanical
+     * exclusion ({@see self::OFF_ROSTER_THROWABLE_SHAPES}) was earned by the
+     * FILE BEING a Throwable class — which cannot express "this non-Throwable
+     * file THROWS one carrying the string", the exact shape that reddened this
+     * guard on correct LSP protocol code in E541's round and got that code
+     * REWORDED to dodge the guard. An instrument whose advice pushes readers
+     * into exempting correct behavior is where the next real offender hides;
+     * the message of the whole-src walk now points here.
+     *
+     * THE FIXTURES ARE PAIRED, not stacked: every exclusion claim runs the SAME
+     * source through the raw scanner first, so `[]` from the walk means
+     * "excluded", never "the scanner died" (rule 15). And every polarity that
+     * must NOT be excluded — a thrown ROSTER prefix (Chat::invokeTool()'s
+     * generic `\Throwable` catch carries its message into the field
+     * {@see Chat::isDeniedResult()} reads, so `Permission denied:` is a
+     * tool-result spelling whatever statement holds it), a non-Throwable, an
+     * unresolvable name, a dynamic name, the assignment form — asserts the
+     * literal SURVIVES the walk. The fail-closed direction is the loud one: a
+     * reader this walker could not follow leaves the string reported, where
+     * the whole-src map names it, rather than licensing it silently.
+     */
+    public function testAThrownThrowableMessageIsExcludedFromTheWalkWithoutNamingItsFile(): void
+    {
+        $import = 'use SugarCraft\\Crush\\LSP\\LspProtocolException;';
+        $lit = 'Cache dis' . 'allowed: nope';
+
+        // THE CONSTANT-FORM POSITIVE: scanner sees it, walk drops it.
+        $thrown = "<?php {$import} throw new LspProtocolException('{$lit}');";
+        self::assertSame(
+            [$lit],
+            self::denialLiteralsIn($thrown),
+            'the scanner can no longer see the literal the exclusion below drops, so an empty walk answer '
+            . 'would be what a dead instrument returns',
+        );
+        self::assertSame(
+            [],
+            self::denialLiteralsOutsideThrownThrowableMessages($thrown),
+            "an off-roster denial-shaped literal argued into a resolvable Throwable's throw is still "
+            . 'reported by the walk — E541 asked for exactly this exclusion so the next protocol file '
+            . 'neither rewords correct code nor buys an exemption row',
+        );
+
+        // AND THE INTERPOLATED FORM, which is how this tree actually spells
+        // messages: the run inside `"...: {$why}"` is half of the same argument.
+        $interpolated = "<?php {$import} \$why = 1; throw new LspProtocolException(\"Cache dis"
+            . 'allowed: {$why}' . "\");";
+        self::assertSame(
+            ['Cache disallowed: '],
+            self::denialLiteralsIn($interpolated),
+            'the scanner is blind to an interpolated thrown message, so the empty answer below proves '
+            . 'nothing about the exclusion',
+        );
+        self::assertSame(
+            [],
+            self::denialLiteralsOutsideThrownThrowableMessages($interpolated),
+            'the walk does not exclude the interpolated shape — a T_ENCAPSED run inside a thrown '
+            . 'Throwable message is the same argument as the constant form above',
+        );
+
+        // AND THE ALIAS FORM: resolution follows the file's OWN `as` rename,
+        // because that is how PHP resolves the name at the throw.
+        $aliased = '<?php use SugarCraft\\Crush\\LSP\\LspProtocolException as WireFault; throw new WireFault("'
+            . 'Cache dis' . 'allowed: nope");';
+        self::assertSame(
+            ['Cache disallowed: nope'],
+            self::denialLiteralsIn($aliased),
+            'the scanner cannot see the aliased-source literal, so the drop below is again unread',
+        );
+        self::assertSame(
+            [],
+            self::denialLiteralsOutsideThrownThrowableMessages($aliased),
+            'an `as`-renamed Throwable is not resolved, so a file that imports under a name keeps '
+            . 'buying exemption rows it no longer needs',
+        );
+
+        // THE ROSTER PREFIX IS NOT EXCLUDABLE, whatever statement carries it.
+        $forged = "<?php {$import} throw new LspProtocolException('Permission den" . 'ied: nope' . "');";
+        self::assertSame(
+            ['Permission denied: nope'],
+            self::denialLiteralsOutsideThrownThrowableMessages($forged),
+            'the exclusion now licenses a ROSTER prefix just because a throw carries it — the generic '
+            . "\\Throwable catch in Chat::invokeTool() puts this message where Chat::isDeniedResult() "
+            . 'reads it, which is a forged refusal and not an exemption',
+        );
+
+        // NOT A THROWABLE, NO EXCLUSION: the licence is the CLASS, the throw
+        // is just where its message was spelled.
+        $notThrowable = '<?php use SugarCraft\\Crush\\Hooks\\HookContext; throw new HookContext("'
+            . 'Cache dis' . 'allowed: nope");';
+        self::assertSame(
+            [$lit],
+            self::denialLiteralsOutsideThrownThrowableMessages($notThrowable),
+            'the walk dropped a literal thrown as a NON-Throwable — resolvability to \\Throwable is what '
+            . 'earns the exclusion, and a class this guard cannot check is a string it must keep',
+        );
+
+        // UNRESOLVABLE NAME, NO EXCLUSION (fail closed: an autoload miss is
+        // reported, not waved through as "probably a Throwable").
+        $missing = "<?php throw new LspProtocolExceptionProbably('Cache dis" . 'allowed: nope' . "');";
+        self::assertSame(
+            [$lit],
+            self::denialLiteralsOutsideThrownThrowableMessages($missing),
+            'a name that resolves to no loaded class was treated as a Throwable, so the widest '
+            . 'unresolvable — a typo, a deleted class, a fixture — now buys a licence silently',
+        );
+
+        // DYNAMIC NAME, NO EXCLUSION: `new $e(...)` says nothing statically
+        // about what is thrown.
+        $dynamic = "<?php {$import} \$e = 'LspProtocolException'; throw new \$e('Cache dis"
+            . 'allowed: nope' . "');";
+        self::assertSame(
+            [$lit],
+            self::denialLiteralsOutsideThrownThrowableMessages($dynamic),
+            'the walk excluded a literal behind a dynamic class name — the value of that variable is a '
+            . 'fact about runtime, and this guard only speaks about the token stream',
+        );
+
+        // AND THE ASSIGNMENT FORM, the stated bound: `$ex = new X('…');
+        // throw $ex;` is two statements and the exclusion reads one.
+        $assigned = "<?php {$import} \$ex = new LspProtocolException('Cache dis" . 'allowed: nope'
+            . "'); throw \$ex;";
+        self::assertSame(
+            [$lit],
+            self::denialLiteralsOutsideThrownThrowableMessages($assigned),
+            'the assignment form is now excluded too, which means the walker grew a variable tracker its '
+            . 'doc-block does not have — or the bound moved and this method did not',
         );
     }
 
@@ -1427,7 +1612,14 @@ final class DenialPrefixRosterTest extends TestCase
         $root = \dirname(__DIR__);
         $out = [];
         foreach (self::phpFilesUnder($root . '/src') as $path) {
-            $found = self::denialLiteralsIn(self::sourceOf(substr($path, \strlen($root) + 1)));
+            // The WALK policy, not the raw scan: a thrown Throwable's message
+            // literal is an exception message and earns the mechanical
+            // exclusion (E541) — see
+            // {@see self::denialLiteralsOutsideThrownThrowableMessages()} for
+            // both bounds and their fixtures.
+            $found = self::denialLiteralsOutsideThrownThrowableMessages(
+                self::sourceOf(substr($path, \strlen($root) + 1)),
+            );
             if ($found !== []) {
                 $out[substr($path, \strlen($root) + 1)] = $found;
             }
@@ -1571,8 +1763,67 @@ final class DenialPrefixRosterTest extends TestCase
      */
     private static function denialLiteralsIn(string $source): array
     {
+        return self::denialLiteralsInTokens(token_get_all($source), false);
+    }
+
+    /**
+     * The walk's view of one file: {@see self::denialLiteralsIn()} minus the
+     * one exclusion E541 asked for, applied here and nowhere else.
+     *
+     * THE DEFECT WAS THE LIST ITSELF. {@see self::OFF_ROSTER_THROWABLE_SHAPES}
+     * earns an exclusion by the FILE BEING a Throwable class, which cannot
+     * express "this file THROWS a Throwable carrying the string" — the shape
+     * that reddened this guard on correct LSP protocol code and got that code
+     * reworded to dodge it (E541's own history). The mechanical fact worth
+     * keying on is in the token stream, not in a filename: a literal argued
+     * into `throw new <Throwable>(...)` is an EXCEPTION MESSAGE, and an
+     * exception message is not a tool-result prefix — which is the whole
+     * discriminator E247 reasoned about for the one exception class that had
+     * to be licensed by name. Checking it needs no roster row, so the next
+     * correct thrower buys no exemption row either.
+     *
+     * THE BOUND, stated rather than glossed. (a) The exclusion covers ONLY
+     * literals that do not classify — an exact roster prefix thrown as a
+     * message stays REPORTED, because {@see \SugarCraft\Crush\Chat::invokeTool()}'s
+     * generic `\Throwable` catch carries `$e->getMessage()` verbatim into the
+     * very field {@see Chat::isDeniedResult()} reads, so a thrown
+     * `Permission denied:` IS a tool-result spelling wearing a hat. (b) The
+     * class has to RESOLVE to a loaded `\Throwable` — dynamic names, `self`,
+     * unimported names, and non-Throwables all fail CLOSED, leaving the
+     * literal in the walk, so a missed exclusion is a red and never a licence.
+     * (c) `$e = new X('…'); throw $e;` is the assignment form and is NOT
+     * excluded; `src/` throws its denials inline, and growing an assignment
+     * tracker for the shape nobody writes trades a mechanical check for a
+     * heuristic one. Both polarities are pinned in
+     * {@see self::testAThrownThrowableMessageIsExcludedFromTheWalkWithoutNamingItsFile()}.
+     *
+     * @return list<string>
+     */
+    private static function denialLiteralsOutsideThrownThrowableMessages(string $source): array
+    {
+        return self::denialLiteralsInTokens(token_get_all($source), true);
+    }
+
+    /**
+     * The scan core over an already-tokenized source.
+     *
+     * Split out so both policies run over ONE walk — two readers of this file
+     * disagreed about whether the walk drops what the scanner sees until the
+     * day they shared the token array, and a second scanner written to agree
+     * with the first is rule 15's false positive.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     *
+     * @return list<string>
+     */
+    private static function denialLiteralsInTokens(array $tokens, bool $skipThrownThrowableArguments): array
+    {
+        $skip = $skipThrownThrowableArguments
+            ? self::thrownThrowableArgumentIndices($tokens)
+            : [];
+
         $out = [];
-        foreach (token_get_all($source) as $token) {
+        foreach ($tokens as $index => $token) {
             if (!is_array($token)) {
                 continue;
             }
@@ -1588,6 +1839,17 @@ final class DenialPrefixRosterTest extends TestCase
             } else {
                 continue;
             }
+
+            // THE ONE EXCLUSION THE WALK APPLIES — off-roster denial shapes
+            // inside `throw new <Throwable>(...)` are exception messages, not
+            // tool-result spellings. Bounded as stated on
+            // {@see self::denialLiteralsOutsideThrownThrowableMessages()}:
+            // a literal that CLASSIFIES is never skipped, whatever statement
+            // carries it.
+            if (isset($skip[$index]) && DenialKind::classify($value) === null) {
+                continue;
+            }
+
             if (self::hasADenialFrame($value)) {
                 $out[] = $value;
 
@@ -1600,6 +1862,226 @@ final class DenialPrefixRosterTest extends TestCase
         }
 
         return $out;
+    }
+
+    /**
+     * Index of every string-literal token sitting inside the argument list of
+     * a `throw new <Throwable>(...)`, keyed index => true.
+     *
+     * Single pass, fail-closed by construction: a `throw` whose new-expression
+     * this reader cannot resolve to a LOADED `\Throwable` class contributes
+     * nothing, and the literal stays visible to the walk. Resolution follows
+     * PHP's own name rules — `use` aliases (plain imports and `as` renames),
+     * the file's namespace for unqualified and qualified names, a leading `\`
+     * for fully qualified — which is what makes the fact checkable from the
+     * token stream without a scope tracker or an executed include.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     *
+     * @return array<int, true>
+     */
+    private static function thrownThrowableArgumentIndices(array $tokens): array
+    {
+        $namespace = '';
+        $uses = [];
+        $excluded = [];
+        $count = count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!is_array($token)) {
+                continue;
+            }
+
+            if ($token[0] === \T_NAMESPACE) {
+                $at = self::nextCodeIndex($tokens, $i + 1);
+                if ($at !== null && is_array($tokens[$at])
+                    && in_array($tokens[$at][0], [\T_STRING, \T_NAME_QUALIFIED], true)) {
+                    $namespace = $tokens[$at][1];
+                }
+                continue;
+            }
+
+            if ($token[0] === \T_USE) {
+                [$imported, $i] = self::readImportStatement($tokens, $i);
+                $uses += $imported;
+                continue;
+            }
+
+            if ($token[0] !== \T_THROW) {
+                continue;
+            }
+
+            $thrown = self::thrownThrowableAt($tokens, $i, $namespace, $uses);
+            if ($thrown === null) {
+                continue;
+            }
+
+            $depth = 0;
+            for ($j = $thrown[1]; $j < $count; $j++) {
+                $text = is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+                if ($text === '(') {
+                    $depth++;
+                    continue;
+                }
+                if ($text === ')') {
+                    $depth--;
+                    if ($depth === 0) {
+                        break;
+                    }
+                    continue;
+                }
+                if (is_array($tokens[$j])
+                    && in_array($tokens[$j][0], [\T_CONSTANT_ENCAPSED_STRING, \T_ENCAPSED_AND_WHITESPACE], true)) {
+                    $excluded[$j] = true;
+                }
+            }
+        }
+
+        return $excluded;
+    }
+
+    /**
+     * `throw new <Name>(` — the resolved class and the index of its open paren,
+     * or null when any half of the shape is missing.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array<string, string> $uses
+     *
+     * @return ?array{0: string, 1: int}
+     */
+    private static function thrownThrowableAt(array $tokens, int $throwIndex, string $namespace, array $uses): ?array
+    {
+        $new = self::nextCodeIndex($tokens, $throwIndex + 1);
+        if ($new === null || !is_array($tokens[$new]) || $tokens[$new][0] !== \T_NEW) {
+            return null;
+        }
+
+        $nameAt = self::nextCodeIndex($tokens, $new + 1);
+        if ($nameAt === null || !is_array($tokens[$nameAt])) {
+            return null;
+        }
+
+        $fqn = self::resolveClassName($tokens[$nameAt][0], $tokens[$nameAt][1], $namespace, $uses);
+        if ($fqn === null) {
+            return null;
+        }
+
+        $open = self::nextCodeIndex($tokens, $nameAt + 1);
+        if ($open === null || $tokens[$open] !== '(') {
+            return null;
+        }
+
+        if (!class_exists($fqn) || !is_subclass_of($fqn, \Throwable::class)) {
+            return null;
+        }
+
+        return [$fqn, $open];
+    }
+
+    /**
+     * Resolve a `new`'s class-name token against the file's namespace and
+     * imports; null when this reader will not claim to know it.
+     */
+    private static function resolveClassName(int $id, string $text, string $namespace, array $uses): ?string
+    {
+        if ($id === \T_NAME_FULLY_QUALIFIED) {
+            return ltrim($text, '\\');
+        }
+
+        if ($id === \T_NAME_RELATIVE) {
+            return $namespace . substr($text, \strlen('namespace'));
+        }
+
+        if ($id === \T_NAME_QUALIFIED) {
+            $first = strstr($text, '\\', true);
+            if ($first !== false && isset($uses[$first])) {
+                return $uses[$first] . substr($text, \strlen($first));
+            }
+
+            return ($namespace === '' ? '' : $namespace . '\\') . $text;
+        }
+
+        if ($id !== \T_STRING || in_array($text, ['self', 'static', 'parent'], true)) {
+            // `new self(...)` inside an exception class WOULD be excludable,
+            // but resolving it needs the enclosing class, which is a scope
+            // tracker for a shape `src/` does not throw today. Fail closed.
+            return null;
+        }
+
+        return $uses[$text] ?? (($namespace === '' ? '' : $namespace . '\\') . $text);
+    }
+
+    /**
+     * The class-import statement opening at $useIndex: aliases as short name =>
+     * imported FQN, and the index to resume the outer walk at.
+     *
+     * Plain imports and `as` renames only — every shape `src/` writes.
+     * `use function`, `use const`, group-use, and the closure/trait `use (`
+     * are recognised and answered with NO aliases: a name this reader did not
+     * register resolves through {@see self::resolveClassName()} against the
+     * file's namespace, misses, and fails closed. A skipped import costs a
+     * red walk, never a silent licence.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     *
+     * @return array{0: array<string, string>, 1: int}
+     */
+    private static function readImportStatement(array $tokens, int $useIndex): array
+    {
+        $text = '';
+        for ($i = $useIndex, $n = count($tokens); $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (is_array($token)) {
+                if ($token[0] === \T_WHITESPACE) {
+                    $text .= ' ';
+                } elseif ($token[0] !== \T_COMMENT && $token[0] !== \T_DOC_COMMENT) {
+                    $text .= $token[1];
+                }
+                continue;
+            }
+            if ($token === '(' || $token === '{') {
+                // A closure's `use ($x)` or a group import's brace — not a
+                // class list. Resume the OUTER walk at this token so nothing
+                // between here and the real statement end goes unscanned.
+                return [[], $i];
+            }
+            if ($token === ';') {
+                $uses = [];
+                foreach (explode(',', substr($text, \strlen('use'))) as $segment) {
+                    $parts = preg_split('/\s+as\s+/i', trim($segment));
+                    if (!is_array($parts) || count($parts) > 2 || trim($parts[0]) === '') {
+                        continue;
+                    }
+                    $fqn = ltrim(trim($parts[0]), '\\');
+                    $pos = strrpos($fqn, '\\');
+                    $alias = isset($parts[1]) ? trim($parts[1]) : ($pos === false ? $fqn : substr($fqn, $pos + 1));
+                    if ($fqn !== '' && $alias !== '' && preg_match('/^(function|const)\b/i', $alias) !== 1) {
+                        $uses[$alias] = $fqn;
+                    }
+                }
+
+                return [$uses, $i];
+            }
+            $text .= $token;
+        }
+
+        return [[], count($tokens) - 1];
+    }
+
+    /** The next token that is not whitespace or a comment, or null at the end. */
+    private static function nextCodeIndex(array $tokens, int $from): ?int
+    {
+        for ($i = $from, $n = count($tokens); $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (is_array($token) && in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return $i;
+        }
+
+        return null;
     }
 
     /**
