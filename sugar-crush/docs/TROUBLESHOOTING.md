@@ -159,7 +159,7 @@ diverge.
    outright.
 
 **My hook script cannot find its interpreter, or `$HOME` is empty.** Expected:
-`ScriptHook::execute()` **replaces** the environment with six `CRUSH_*`
+`ScriptHook::execute()` **replaces** the environment with eight `CRUSH_*`
 variables. Nothing from your shell survives — `sh` supplies a default `PATH` and
 that is all. See
 [`HOOKS.md`](HOOKS.md#environment-handed-to-the-script) for the measured

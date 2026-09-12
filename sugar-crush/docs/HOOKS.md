@@ -515,9 +515,9 @@ Two things fall out of that, and neither is the count above.
 `CRUSH_TOOL_OUTPUT` vanishes from the listing when it is empty — the variable is
 implemented and always passed, but an empty value is not something `env` prints.
 **Read an absent `CRUSH_*` variable as empty, never as a missing feature.** (Which
-also means the empty-`toolOutput` run coincidentally shows six lines for a
-completely different reason than the six keys above. Do not read the two sixes as
-the same fact.)
+also means the empty-`toolOutput` run prints one fewer `CRUSH_*` line than it
+has keys — `env` hides empties — while the degraded run's six keys are six for
+the temp-directory reason above. Do not conflate the two counts.)
 
 And `PWD` is the one line the hook did not put there: the command is passed to
 `proc_open()` as a **string**, so it runs under `/bin/sh -c`, and `sh` exports

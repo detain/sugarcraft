@@ -70,6 +70,16 @@ use SugarCraft\Crush\Workflows\Workflow;
  * judged zero FALSE claims: every digit measured this tranche re-derived
  * exactly, which is what the campaign's pinning is FOR.
  *
+ * E686 TRANCHE-4 (round-67, lane dl) moves the HOOKS.md `CRUSH_*` roster
+ * claims onto live derivation from the `$fixed`/`stagePayloads()` arrays
+ * (arms O-S below — the carried "7×/8×" counts were the last hand-typed
+ * environment roster in the docs set) — and judged TWO FALSE sentences:
+ * TROUBLESHOOTING.md still spelled the hook environment six `CRUSH_*` keys
+ * (the pre-`_FILE` count, contradicting this page's eight), and HOOKS.md's
+ * own parenthetical claimed the empty-`toolOutput` run "coincidentally shows
+ * six lines" while the same page's table printed eight. Both fixed in prose
+ * here, and the corrections pinned in both directions — E633's lesson.
+ *
  * @internal
  */
 final class DocFigureProseDriftTest extends TestCase
@@ -1159,6 +1169,322 @@ final class DocFigureProseDriftTest extends TestCase
             (float) $m[1],
             'the cited decimal drifted from WRITE_IDLE_SECONDS',
         );
+    }
+
+    /**
+     * E686 tranche-4 (O): HOOKS.md's roster sentence — "**eight** `CRUSH_*`
+     * keys — six, on the one run where the temp directory will not take a
+     * file" — re-derives live off the arrays that build the child environment
+     * (`$fixed` in `executeStaged()`, the payloads handed to `stagePayloads()`,
+     * and the `_FILE` pointer each payload gains), because a hand-typed env
+     * roster is exactly the disease E583 names for symbol citations. The grid
+     * fence that names the keys must equal the same set, and the paragraph's
+     * closer "Those eight are what the hook sets" must still be counting it.
+     */
+    public function testHookEnvRosterProseSurvivesTheLiveEnvArrays(): void
+    {
+        $roster = self::hookEnvRoster();
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $words = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
+
+        self::assertSame(
+            1,
+            preg_match('/\*\*(\w+)\*\* `CRUSH_\*` keys — (\w+), on the one run where the temp directory/', $hooks, $m),
+            'the roster sentence no longer spells both word-counts with its degraded-run premise — rewrite the pin with the prose, do not delete it',
+        );
+        $full = count($roster['all']);
+        $degraded = count($roster['fixed']) + count($roster['payloads']);
+        self::assertSame($full, $words[$m[1]] ?? -1, 'the spelled total no longer counts the live $fixed + payload + _FILE arrays — flip both together (census-trio lesson)');
+        self::assertSame($degraded, $words[$m[2]] ?? -1, 'the spelled degraded count no longer equals the live arrays minus their _FILE pointers');
+        self::assertSame(count($roster['pointers']), $full - $degraded, 'the degraded case must be exactly the _FILE pointers dropping out');
+
+        self::assertSame(
+            1,
+            preg_match_all('/```\n(CRUSH_[^\n]*(?:\nCRUSH_[^\n]*)+)\n```/', $hooks, $grid),
+            'exactly one fence may open with the CRUSH_* key grid — a second grid is drift, its absence is deletion',
+        );
+        preg_match_all('/CRUSH_[A-Z_]+/', $grid[1][0], $listed);
+        self::assertSame($full, count($listed[0]), 'the grid fence no longer lists one entry per live roster key');
+        self::assertEqualsCanonicalizing($roster['all'], $listed[0], 'the grid fence and the live environment arrays name different keys');
+
+        self::assertSame(
+            1,
+            preg_match('/Those (\w+) are what the hook \*sets\*/', $hooks, $m),
+            'the paragraph closer moved — it is the sentence that retires the grid in prose',
+        );
+        self::assertSame($full, $words[$m[1]] ?? -1, 'the spelled closer no longer counts the live roster');
+    }
+
+    /**
+     * E686 tranche-4 (P): the `env | sort` table is roster arithmetic, not a
+     * remembered measurement — the full run shows every key set plus `PWD`,
+     * the empty-`toolOutput` run hides exactly the payload variables the
+     * listing marks `← only in the second run`, and the pointer-before-empty-
+     * skip order inside `stagePayloads()` is what makes the output pointer
+     * "appear in both runs". The stale parenthetical this tranche fixed —
+     * claiming the empty run "coincidentally shows six lines" while the same
+     * page's table printed eight — is pinned absent, its correction in both
+     * directions.
+     */
+    public function testHookSeenEnvTableSurvivesTheRosterArithmetic(): void
+    {
+        $roster = self::hookEnvRoster();
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $words = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
+
+        self::assertSame(
+            1,
+            preg_match("/\\| `''` \\(empty\\) \\| \\*\\*(\\d+)\\*\\* \\| (\\d+) × `CRUSH_\\*` \\+ `PWD` \\|/", $hooks, $empty),
+            'the empty-toolOutput table row no longer states lines and CRUSH-count together',
+        );
+        self::assertSame(
+            1,
+            preg_match("/\\| `'RESULT-TEXT'` \\| \\*\\*(\\d+)\\*\\* \\| (\\d+) × `CRUSH_\\*` \\+ `PWD` \\|/", $hooks, $full),
+            'the full-payload table row no longer states lines and CRUSH-count together',
+        );
+        self::assertSame(
+            1,
+            preg_match('/```\n((?:CRUSH_[A-Z_]+=.*\n)+)(PWD=[^\n]*)\n```/', $hooks, $run),
+            'the sorted env listing no longer reads as CRUSH_* lines closed by PWD — re-pin with the table',
+        );
+        preg_match_all('/^(CRUSH_[A-Z_]+)=.*$/m', $run[1], $shown);
+        self::assertEqualsCanonicalizing($roster['all'], $shown[1], 'the listing and the live environment arrays diverged');
+        self::assertSame(
+            1,
+            preg_match('/^(CRUSH_[A-Z_]+)=.*← only in the second run/m', $run[1], $hidden),
+            'the listing marks exactly one variable as second-run-only — that single hiding is what the empty row subtracts',
+        );
+        self::assertContains($hidden[1], $roster['payloads'], 'the hidden variable is not a payload — stagePayloads() passes it empty, not absent');
+
+        $total = count($roster['all']);
+        self::assertSame($total - 1, (int) $empty[2], 'the empty-run CRUSH-count drifted from the roster less the hidden payload');
+        self::assertSame($total, (int) $empty[1], 'the empty-run line count drifted from its CRUSH-count plus PWD');
+        self::assertSame($total, (int) $full[2], 'the full-run CRUSH-count drifted from the live roster');
+        self::assertSame($total + 1, (int) $full[1], 'the full-run line count drifted from the roster plus PWD');
+
+        self::assertSame(1, preg_match('/appears in \*\*both\*\* runs/', $hooks), 'the both-runs pointer claim moved — it is why the empty row keeps its pointer line');
+        $stager = self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'stagePayloads', 2000);
+        $pointerWrite = strpos($stager, "\$env[\$pathVariable] = \$path;");
+        $emptySkip = strpos($stager, "if (\$value === '') {");
+        self::assertNotFalse($pointerWrite, 'stagePayloads() no longer commits the _FILE pointer the way the docs name it — the both-runs claim lost its referent');
+        self::assertNotFalse($emptySkip, 'stagePayloads() no longer keeps the empty-payload file the way the docs cite it — the both-runs claim lost its referent');
+        self::assertLessThan($emptySkip, $pointerWrite, 'the pointer is no longer committed before the empty-value skip — an empty payload would lose its _FILE and the table row is false');
+
+        self::assertStringNotContainsString('coincidentally shows six lines', $hooks, 'the pre-pointer stale parenthetical is back — the table above this page says the empty run shows eight lines, not six');
+        self::assertSame(
+            1,
+            preg_match('/prints (\w+) fewer `CRUSH_\*` line than it\s+has keys/', $hooks, $m),
+            'the corrected parenthetical moved — this pin and the sentence retire together',
+        );
+        self::assertSame($total - (int) $empty[2], $words[$m[1]] ?? -1, 'the spelled hide-count no longer equals the CRUSH-count gap the table states');
+    }
+
+    /**
+     * E686 tranche-4 (Q): the boundary pair tranche-3 HELD as measured is in
+     * fact derivable — the doc-block over MAX_ENV_ENTRY_BYTES spells the
+     * kernel's own formula (`NAME=VALUE\0` costs two bytes on top of the name
+     * and the value) — so 131,054 and 131,053 recompute from the live key
+     * names, and the claim that `CRUSH_TOOL_OUTPUT` sits "one byte lower"
+     * "because its name is one byte longer" checks as a strlen difference over
+     * those same names. The "~128 KB" rounding stays held: it paraphrases a
+     * figure that is now pinned exactly.
+     */
+    public function testPayloadBoundaryPairDerivesFromTheLiveKeyNames(): void
+    {
+        $hook = self::sourceOf('Hooks/ScriptHook.php');
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $roster = self::hookEnvRoster();
+        $words = ['one' => 1, 'two' => 2, 'three' => 3];
+
+        self::assertSame(
+            1,
+            preg_match_all("/strlen\\('(CRUSH_[A-Z_]+)'\\) \\+ (\\d+) \\+ value \\+ (\\d+) <= (\\d+)/", $hook, $f),
+            'exactly one doc-block may state the env-entry formula — a second spelling is drift',
+        );
+        $overhead = (int) $f[2][0] + (int) $f[3][0];
+        $cap = (int) $f[4][0];
+        self::assertSame($cap, (int) (new \ReflectionClass(ScriptHook::class))->getConstant('MAX_ENV_ENTRY_BYTES'), 'the formula and the constant it bounds no longer agree');
+        self::assertContains($f[1][0], $roster['payloads'], 'the formula cites a key that is no longer a staged payload');
+
+        self::assertSame(
+            1,
+            preg_match('/([\d,]+) bytes\s+of value allowed, ([\d,]+) denied/', $hooks, $in),
+            'the measured payload boundary pair no longer reads as one sentence — re-pin with the prose',
+        );
+        $allowed = $cap - strlen($f[1][0]) - $overhead;
+        self::assertSame($allowed, (int) str_replace(',', '', $in[1]), 'the allowed figure no longer equals cap minus name minus overhead for the cited key');
+        self::assertSame((int) str_replace(',', '', $in[1]) + 1, (int) str_replace(',', '', $in[2]), 'the denied boundary is no longer one past the allowed figure');
+
+        $other = null;
+        foreach ($roster['payloads'] as $name) {
+            if ($name !== $f[1][0]) {
+                $other = $name;
+            }
+        }
+        self::assertNotNull($other, 'the payload roster needs a second entry before a one-byte-lower sentence can mean anything');
+        self::assertSame(
+            1,
+            preg_match('/behaves the same way (\w+) byte lower,\s+at ([\d,]+)\/([\d,]+)/', $hooks, $out),
+            'the second payload boundary sentence no longer ties its word-gap to its pair — re-pin with the prose',
+        );
+        self::assertSame(strlen($other) - strlen($f[1][0]), $words[$out[1]] ?? -1, 'the spelled byte-gap no longer matches the live key names — flip prose and arrays together');
+        $lower = $cap - strlen($other) - $overhead;
+        self::assertSame($lower, (int) str_replace(',', '', $out[2]), 'the lower pair no longer derives from the second payload name');
+        self::assertSame((int) str_replace(',', '', $out[2]) + 1, (int) str_replace(',', '', $out[3]), 'the lower denied boundary is no longer one past its allowed figure');
+        self::assertSame((int) str_replace(',', '', $out[3]), $allowed, 'one byte lower must put the denied figure exactly on the first pair\'s allowed figure — the two sentences drifted apart');
+    }
+
+    /**
+     * E686 tranche-4 (R): the retry marker is a wire contract in three places
+     * — `OVERSIZE_ENV_MARKER` in src, the fenced example, and the `case` arm
+     * of the guard snippet — and they must spell one literal. The example's
+     * shape re-evaluates through the sprintf `stagePayloads()` itself formats
+     * (extracted from the live body, never retyped), its "read $" target must
+     * be a live pointer key, and the snippet may only name keys the live
+     * arrays set. The example's size digit stays held: it is that call's
+     * payload length, not a constant. "Not a prefix" and "an absent `CRUSH_*`
+     * already means empty" are the contract's semantics and stay pinned.
+     */
+    public function testOversizeMarkerContractSurvivesItsConstant(): void
+    {
+        $marker = (string) (new \ReflectionClass(ScriptHook::class))->getConstant('OVERSIZE_ENV_MARKER');
+        $roster = self::hookEnvRoster();
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+
+        self::assertSame(
+            2,
+            substr_count($hooks, $marker),
+            'the marker must be spelled identically in exactly its two places (example + guard snippet) — a third spelling is drift, a fourth is a fork',
+        );
+
+        $stager = self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'stagePayloads', 2600);
+        self::assertSame(
+            1,
+            preg_match("/sprintf\\(\\s*'([^']*bytes; read [^']*)',/s", $stager, $fmt),
+            'stagePayloads() no longer builds the marker with a "bytes; read $..." sprintf — the docs example lost its generator',
+        );
+        self::assertSame(
+            1,
+            preg_match('/' . preg_quote($marker, '/') . ' (\d+) bytes; read \$(CRUSH_[A-Z_]+)/', $hooks, $m),
+            'the fenced marker example moved — the retry contract the page teaches needs it',
+        );
+        self::assertSame(
+            sprintf($fmt[1], $marker, (int) $m[1], $m[2]),
+            $m[0],
+            'the docs example is no longer what the live sprintf produces — one side moved',
+        );
+        self::assertContains($m[2], $roster['pointers'], 'the marker tells the hook to read a variable that is not in the live _FILE roster');
+
+        self::assertSame(
+            1,
+            preg_match('/if \[ -n "\$\{(CRUSH_[A-Z_]+):-\}" \] && \[ -r "\$\1" \]; then\n\s+input="\$\(cat "\$\1"\)"\nelse\n\s+input="\$(CRUSH_[A-Z_]+)"/', $hooks, $snip),
+            'the guard snippet no longer reads as probe-file-else-variable — the fallback contract this page exists to teach moved',
+        );
+        self::assertContains($snip[1], $roster['pointers'], 'the guard snippet probes a variable that is not a live _FILE pointer');
+        self::assertContains($snip[2], $roster['payloads'], 'the guard snippet falls back to a variable the live payload roster no longer sets');
+        self::assertSame(
+            1,
+            preg_match("/''\\|'" . preg_quote($marker, '/') . "'\\*\\)/", $hooks),
+            'the guard snippet no longer fails closed on the marker — the contract is the marker, not an empty string',
+        );
+        self::assertStringContainsString('Not a prefix of the JSON', $hooks, 'the marker-rationale prose moved (E686: corrections are pinned in both directions)');
+        self::assertStringContainsString('an absent `CRUSH_*` already means "empty" here', $hooks, 'the absent-means-empty premise moved — the whole guard teaches on it');
+    }
+
+    /**
+     * E686 tranche-4 (S): cross-page roster integrity. TROUBLESHOOTING.md
+     * spelled the hook environment six `CRUSH_*` variables — the pre-pointer
+     * count — contradicting HOOKS.md's eight off the same arrays; it now
+     * spells the live total and this arm keeps the two pages counting ONE
+     * roster with ONE number. The launch configuration stays outside the hook
+     * environment: the page names the parallel-calls disable variable by the
+     * very string EngineBackend reads, no quoted `SUGARCRUSH_*` key appears
+     * in the environment assembly, and the "nothing from your shell survives"
+     * sentence stands.
+     */
+    public function testCrossPageRosterAndLaunchVarBoundarySurviveTheRoster(): void
+    {
+        $roster = self::hookEnvRoster();
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $trouble = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
+        $words = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
+
+        self::assertSame(
+            1,
+            preg_match('/\*\*replaces\*\* the environment with (\w+) `CRUSH_\*`\s+variables/', $trouble, $m),
+            'the TROUBLESHOOTING roster sentence moved — re-pin with the prose, do not delete it',
+        );
+        self::assertSame(count($roster['all']), $words[$m[1]] ?? -1, 'TROUBLESHOOTING.md and HOOKS.md must spell one roster with one number — the spelled count drifted from the live arrays');
+        self::assertStringNotContainsString('with six `CRUSH_*`', $trouble, 'the stale pre-pointer count is back — it contradicts the live $fixed + payload + _FILE arrays (E686 tranche-4 fixed it HERE)');
+
+        self::assertSame(
+            1,
+            preg_match('/`(\w*DISABLE_PARALLEL\w*)=1`/', $hooks, $m),
+            'HOOKS.md no longer names the parallel-calls disable variable in a code span',
+        );
+        self::assertSame(
+            (string) (new \ReflectionClass(EngineBackend::class))->getConstant('PARALLEL_TOOL_CALLS_DISABLE_ENV'),
+            $m[1],
+            'the documented disable variable drifted from the name EngineBackend reads',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/none of the `SUGARCRUSH_\*` variables that configured the launch/', $hooks),
+            'the launch-vars-do-not-survive sentence moved — hook authors program against it',
+        );
+        self::assertSame(
+            0,
+            preg_match_all("/['\"]SUGARCRUSH_[A-Z_]+['\"]/", self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'executeStaged', 7000)),
+            'a quoted SUGARCRUSH_* key joined the hook environment assembly — the page promises launch configuration never reaches a hook',
+        );
+    }
+
+    /**
+     * The live roster of CRUSH_* keys a hook child receives, derived from the
+     * source the runtime actually runs: the $fixed array, the payloads handed
+     * to stagePayloads() at its call site, and the _FILE pointer each staged
+     * payload gains. Never a hand-typed list — that is the disease E583 names
+     * for symbol citations, and the 7x/8x counts on this page were the last
+     * hand-typed env roster in the docs set (E686 tranche-4).
+     *
+     * @return array{fixed: list<string>, payloads: list<string>, pointers: list<string>, all: list<string>}
+     */
+    private static function hookEnvRoster(): array
+    {
+        $hook = self::sourceOf('Hooks/ScriptHook.php');
+
+        self::assertSame(
+            1,
+            preg_match('/\$fixed = \[(.*?)\];/s', $hook, $block),
+            'executeStaged() no longer builds a $fixed environment array — the roster sentence has no referent',
+        );
+        preg_match_all("/'(CRUSH_[A-Z_]+)'\s*=>/", $block[1], $fixedKeys);
+        self::assertNotEmpty($fixedKeys[1], '$fixed names not one CRUSH_* key — the grid fence lost its anchor');
+
+        $call = strpos($hook, 'self::stagePayloads([');
+        self::assertNotFalse($call, 'the stagePayloads([...]) call site vanished — the payload roster lost its source');
+        preg_match_all("/'(CRUSH_[A-Z_]+)'\s*=>/", substr($hook, $call, 600), $payloadKeys);
+        self::assertNotEmpty($payloadKeys[1], 'the staged payloads name not one CRUSH_* key — the two-payload split lost its referent');
+
+        self::assertSame(
+            1,
+            preg_match("/\\\$name \\. '_FILE'/", self::bodyExcerpt($hook, 'stagePayloads', 1200)),
+            'the _FILE pointer convention moved — the grid fence, every count, and the marker sentence ride on it',
+        );
+        $pointers = array_map(static fn (string $name): string => $name . '_FILE', $payloadKeys[1]);
+
+        $all = array_merge($fixedKeys[1], $payloadKeys[1], $pointers);
+        self::assertSame(count($all), count(array_unique($all)), 'the hook environment gained a duplicated key');
+
+        preg_match_all("/'(CRUSH_[A-Z_]+)'\s*=>/", $hook, $everywhere);
+        self::assertEqualsCanonicalizing(
+            array_values(array_unique($everywhere[1])),
+            array_merge($fixedKeys[1], $payloadKeys[1]),
+            'ScriptHook.php builds a CRUSH_* key outside the $fixed/stagePayloads pair — the grid fence and every count this tranche pinned must join it, or the _FILE pointers stopped being derived',
+        );
+
+        return ['fixed' => $fixedKeys[1], 'payloads' => $payloadKeys[1], 'pointers' => $pointers, 'all' => $all];
     }
 
     /**
