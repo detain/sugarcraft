@@ -8265,6 +8265,28 @@ final class Chat implements Model
      */
     private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
     {
+        // E199's wiring seam, landed round 70: the per-turn notice budget was
+        // shipped by round 69 with {@see RuntimeNoticeSink::beginTurn()} as its
+        // only armer and no drain-owner call site, deliberately inert until one
+        // existed. This is that call site. ONE DISPATCH, ONE BUDGET — a
+        // tool-continuation re-enters here and re-opens the budget, which is
+        // exactly the rhythm beginTurn()'s doc-block names ("re-calling it per
+        // turn is the intended rhythm"): the cap protects what ONE engine loop
+        // can push into the transcript between reads, and every loop's rows
+        // ride to the model on the turns that follow it.
+        //
+        // GATED ON $drainsRuntimeNotices FOR THE SAME REASON THE POLL AND THE
+        // WAKE ARE: `beginTurn()` is the DRAIN OWNER'S act, not the emitters'
+        // and not any Chat's. A hosted or embedder Chat nobody appointed still
+        // dispatches through here; arming from it would re-open the budget
+        // underneath the appointed owner's turn and hand that turn back rows
+        // its cap had already refused. Unarmed, {@see RuntimeNoticeSink::drain()}
+        // bounds per batch exactly as it did before E199, which is the contract
+        // every non-owner host keeps.
+        if ($this->drainsRuntimeNotices) {
+            RuntimeNoticeSink::beginTurn();
+        }
+
         $backend = $next->backend;
         // E20: thread the session's dollar ceiling DOWN into the engine that
         // will spend it. instanceof rather than a Backend-interface method

@@ -807,7 +807,7 @@ final class ProcessUniqueTempNameTest extends TestCase
                 continue;
             }
 
-            $close = self::matching($tokens, $open);
+            $close = TokenFunctionRanges::matching($tokens, $open, '(', ')');
             if ($close === null) {
                 $problems[] = 'line ' . $token[2] . ': the argument list opened and never closed';
 
@@ -1185,7 +1185,7 @@ final class ProcessUniqueTempNameTest extends TestCase
                 continue;
             }
 
-            $close = self::matching($tokens, $open);
+            $close = TokenFunctionRanges::matching($tokens, $open, '(', ')');
             if ($close === null) {
                 continue;
             }
@@ -1906,6 +1906,16 @@ final class ProcessUniqueTempNameTest extends TestCase
     // =========================================================================
     // Token plumbing
     // =========================================================================
+    //
+    // THE PAREN-CLOSER WALK IS NOT HERE, and used to be. This file carried a
+    // third copy of it (besides AwaitPromiseDiagnosticArmTest's and the
+    // canonical TokenFunctionRanges::matching() — made PUBLIC by E208's fold
+    // as the one home of the rule). Both callers above consume an opener
+    // already proven to be a literal `(` by globalCallName()/
+    // mutatingCallOpener()'s own pre-check, and token_get_all() spells single
+    // characters as bare-string tokens, so the canonical `'('`/`')'` walk and
+    // the old self::text() comparison cannot disagree on this input. The
+    // local copy was deleted, not kept in step (E208's rule).
 
     /** @param list<array{int,string,int}|string> $tokens */
     private static function significantNeighbour(array $tokens, int $from, int $direction): ?int
@@ -1917,33 +1927,6 @@ final class ProcessUniqueTempNameTest extends TestCase
             }
 
             return $j;
-        }
-
-        return null;
-    }
-
-    /**
-     * The index of the `)` matching the `(` at $open, or null.
-     *
-     * @param list<array{int,string,int}|string> $tokens
-     */
-    private static function matching(array $tokens, int $open): ?int
-    {
-        if (!isset($tokens[$open]) || self::text($tokens[$open]) !== '(') {
-            return null;
-        }
-
-        $depth = 0;
-        for ($j = $open, $n = \count($tokens); $j < $n; $j++) {
-            $text = self::text($tokens[$j]);
-            if ($text === '(') {
-                $depth++;
-            } elseif ($text === ')') {
-                $depth--;
-                if ($depth === 0) {
-                    return $j;
-                }
-            }
         }
 
         return null;

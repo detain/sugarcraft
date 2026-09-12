@@ -9,6 +9,8 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Kind;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\KeyType;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Providers\ToolCallParser\DsmlToolCallParser;
@@ -154,6 +156,44 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         return new Chat(inFlight: $inFlight, drainsRuntimeNotices: true);
     }
 
+    /**
+     * Type a one-character prompt and press Enter through the real `update()`
+     * path, so the turn dispatches the way a keystroke dispatches it —
+     * `scheduleBackendCompletion()` runs synchronously while `update()` builds
+     * the Cmd, which is where E199's arm lives. The Cmd itself is DISCARDED:
+     * the Echo backend would answer this same process, and the test is about
+     * the arming at dispatch time, not about the reply.
+     */
+    private static function dispatchOneTurn(Chat $chat): Chat
+    {
+        [$chat] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        return $next;
+    }
+
+    /**
+     * Read/write the sink's private per-turn state (E199 wiring pins).
+     *
+     * REFLECTION, not a new test-only accessor: the three statics ARE the
+     * observable constitution of "armed", the class doc-block refuses to grow
+     * accessors that exist only for tests, and snapshot-restore-by-reflection
+     * is the established idiom for `Bootstrap`'s statics (round 66, lane ce).
+     * `tearDown()`'s `reset()` takes every value back to its default, so the
+     * presets cannot leak past the test that wrote them.
+     */
+    private static function readTurnState(string $field): mixed
+    {
+        return (new \ReflectionProperty(RuntimeNoticeSink::class, $field))->getValue();
+    }
+
+    private static function pinTurnBudgetState(bool $turnAccounting, int $turnSurfaced, bool $turnOverflowAnnounced): void
+    {
+        (new \ReflectionProperty(RuntimeNoticeSink::class, 'turnAccounting'))->setValue(null, $turnAccounting);
+        (new \ReflectionProperty(RuntimeNoticeSink::class, 'turnSurfaced'))->setValue(null, $turnSurfaced);
+        (new \ReflectionProperty(RuntimeNoticeSink::class, 'turnOverflowAnnounced'))->setValue(null, $turnOverflowAnnounced);
+    }
+
     public function testAParserNoticeRaisedInThisProcessReachesTheTranscript(): void
     {
         // arm(false) is the in-process backend on purpose: this is the path an
@@ -218,6 +258,125 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         self::assertNull($cmd);
         self::assertSame($once, $twice, 'an empty pump must return $this rather than repaint');
         self::assertCount(1, $once->history);
+    }
+
+    /**
+     * E199's WIRING, arm one: every dispatch of the appointed drain owner
+     * opens the per-turn budget, and a Chat nobody appointed must not.
+     *
+     * WHY THE POSITIVE ARM PRE-SPENDS THE STATE IT ASSERTS AGAINST: a fresh
+     * process already has `turnAccounting=false, surfaced=0, announced=false`,
+     * so asserting those three values after a dispatch would pass without the
+     * call ever running — the vacuity E199's opt-in shape makes easy. Setting
+     * the budget half-spent and already-overflowed FIRST means a green run
+     * proves `beginTurn()` RE-OPENED the budget, not merely that it was never
+     * closed. Setting `turnAccounting=false` in the fixture is what lets the
+     * same three reads also prove the ARMING, and the negative arm proves the
+     * `drainsRuntimeNotices` gate: an unappointed dispatch must leave every
+     * preset value exactly where the fixture put it.
+     */
+    public function testADrainOwnerDispatchReopensTheTurnBudgetAndAnUnappointedChatDoesNotArmIt(): void
+    {
+        RuntimeNoticeSink::arm(false);
+
+        self::pinTurnBudgetState(turnAccounting: false, turnSurfaced: 3, turnOverflowAnnounced: true);
+        self::dispatchOneTurn(self::ownerChat());
+
+        self::assertTrue(
+            self::readTurnState('turnAccounting'),
+            'a dispatch of the appointed drain owner did not open the per-turn budget (E199 wiring)',
+        );
+        self::assertSame(
+            0,
+            self::readTurnState('turnSurfaced'),
+            'the dispatch left the previous budget spent instead of re-opening it',
+        );
+        self::assertFalse(
+            self::readTurnState('turnOverflowAnnounced'),
+            'the dispatch left the previous turn\'s overflow announced instead of re-allowing the row',
+        );
+
+        // THE NEGATIVE ARM — the gate, not the arming. A hosted or embedder
+        // Chat shares the process-wide sink with the appointed owner; arming
+        // from here would re-open the owner's budget mid-turn.
+        self::pinTurnBudgetState(turnAccounting: false, turnSurfaced: 3, turnOverflowAnnounced: true);
+        self::dispatchOneTurn(new Chat());
+
+        self::assertFalse(
+            self::readTurnState('turnAccounting'),
+            'an unappointed Chat armed the per-turn budget — only the drain owner may',
+        );
+        self::assertSame(3, self::readTurnState('turnSurfaced'), 'the unappointed dispatch spent the preset budget');
+        self::assertTrue(
+            self::readTurnState('turnOverflowAnnounced'),
+            'the unappointed dispatch re-allowed the preset overflow row',
+        );
+    }
+
+    /**
+     * E199's WIRING, end to end: a burst of notices larger than the turn
+     * budget, crossing one armed turn's pumps, lands as the saturated head
+     * plus exactly ONE overflow row — and without the dispatch that armed the
+     * budget, the very same burst lands as ordinary rows and no overflow
+     * exists to lose. This is the transcript shape the seam was withheld for;
+     * the sink-level mechanics are already pinned in
+     * {@see \SugarCraft\Crush\Tests\Diagnostics\RuntimeNoticeSinkTest}, which is
+     * why the burst is driven through a dispatched owner Chat here and not
+     * through a bare `beginTurn()`.
+     *
+     * THE TRANSPORT ON PURPOSE: the array backend caps its queue at
+     * NOTICE_LIMIT before a drain ever sees the batch, so a >budget burst in
+     * ONE read is only reachable on the backend every real interactive launch
+     * uses. The first pump spends the budget exactly (twenty rows); the second
+     * meets `remaining = 0` and truncates.
+     */
+    public function testTheWiredTurnBudgetCollapsesAnOverlongBurstIntoHeadPlusOneOverflowRow(): void
+    {
+        RuntimeNoticeSink::arm(true);
+
+        $chat = self::dispatchOneTurn(self::ownerChat());
+
+        $burst = RuntimeNoticeSink::TURN_NOTICE_LIMIT + 5;
+        for ($i = 0; $i < $burst; $i++) {
+            self::assertTrue(RuntimeNoticeSink::record('flood notice ' . $i));
+        }
+
+        [$afterHead] = $chat->update(new RuntimeNoticePumpMsg());
+        $head = self::systemRows($afterHead);
+        self::assertCount(
+            RuntimeNoticeSink::TURN_NOTICE_LIMIT,
+            $head,
+            'the first pump of an armed turn did not surface exactly the budget',
+        );
+
+        [$afterTail] = $afterHead->update(new RuntimeNoticePumpMsg());
+        $rows = self::systemRows($afterTail);
+
+        // HEAD + ONE ROW, not head + tail: the budget's whole point is that
+        // the excess never reaches the transcript. A `count === $burst` here
+        // would pin the UNWIRED shape — five flood rows instead of the one
+        // announced overflow.
+        self::assertCount(
+            RuntimeNoticeSink::TURN_NOTICE_LIMIT + 1,
+            $rows,
+            'the tail pump added ordinary rows instead of one overflow — the turn budget did not arm through the dispatch',
+        );
+        self::assertSame(
+            \sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 5, 's'),
+            $rows[RuntimeNoticeSink::TURN_NOTICE_LIMIT]->content,
+            'the truncation row is not the single announced overflow of the five dropped notices',
+        );
+        foreach (array_slice($rows, 0, RuntimeNoticeSink::TURN_NOTICE_LIMIT) as $index => $row) {
+            self::assertSame(
+                'flood notice ' . $index,
+                $row->content,
+                'the surfaced head is not the burst in order',
+            );
+        }
+        self::assertFalse(
+            RuntimeNoticeSink::hasPending(),
+            'the truncation left the transport readable — a saturated turn must not repaint',
+        );
     }
 
     /**

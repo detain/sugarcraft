@@ -100,7 +100,7 @@ final class MultiAgentRefactorTest extends TestCase
     {
         parent::setUp();
 
-        $this->tmpRoot = sys_get_temp_dir() . '/sugar-crush-multiagent-refactor-' . uniqid('', true);
+        $this->tmpRoot = sys_get_temp_dir() . '/sugar-crush-multiagent-refactor-' . uniqid((string) getmypid(), true);
         mkdir($this->tmpRoot, 0755, true);
 
         // Override HOME so Team/TeamManager's ~/.sugar-crush/teams/ paths
@@ -172,7 +172,12 @@ final class MultiAgentRefactorTest extends TestCase
             $this->markTestSkipped('pcntl extension not available.');
         }
 
-        $teamId = 'refactor-' . uniqid('', true);
+        // ONE measured leak in: `uniqid()` alone makes the residue anonymous,
+        // so every fixture id here carries the process token — the E281 idiom
+        // Agents/TeamTest adopted (`uniqid((string) getmypid(), true)`), with
+        // the label kept as a suffix so `str_starts_with(basename, token)`
+        // sweeps attribute or ignore the entry to the run that made it.
+        $teamId = uniqid((string) getmypid(), true) . '-refactor';
         $manager = new TeamManager($this->tmpRoot . '/.sugar-crush/teams');
         $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
 
@@ -339,7 +344,8 @@ final class MultiAgentRefactorTest extends TestCase
      */
     public function testACoderTakesAtMostOneTaskSoNoAgentEverAsksForTwoWorktrees(): void
     {
-        $teamId = 'solo-' . uniqid('', true);
+        // E281 pid-token idiom — see the first fixture above.
+        $teamId = uniqid((string) getmypid(), true) . '-solo';
         $manager = new TeamManager($this->tmpRoot . '/.sugar-crush/teams');
         $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
 
@@ -420,7 +426,8 @@ final class MultiAgentRefactorTest extends TestCase
             $this->markTestSkipped('pcntl extension not available.');
         }
 
-        $teamId = 'throwing-' . uniqid('', true);
+        // E281 pid-token idiom — see the first fixture above.
+        $teamId = uniqid((string) getmypid(), true) . '-throwing';
         $manager = new TeamManager($this->tmpRoot . '/.sugar-crush/teams');
         $team = $manager->createTeam($teamId, 'Refactor Team', 'lead-agent', new TeamConfig(maxTeammates: 10));
         $team->getTaskList()->addTask($this->makeTask('task-a', $teamId, 'Extract helper in module A'));

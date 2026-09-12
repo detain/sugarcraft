@@ -52,7 +52,7 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is ELEVEN" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is TWELVE" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:

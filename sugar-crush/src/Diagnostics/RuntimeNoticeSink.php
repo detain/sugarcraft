@@ -61,12 +61,16 @@ use React\EventLoop\Loop;
  * cannot see a turn boundary — truncates the batch, appends
  * {@see OVERFLOW_FORMAT} ONCE, and discards everything else until the inbox
  * reads empty, so a saturated turn cannot leave {@see hasPending()} true and
- * keep Chat's tick repainting forever. The accounting is OPT-IN until the
- * drain-owner's call site lands: an unarmed drain behaves exactly as it
- * always did, which is the honest state of a process nobody has told where a
- * turn begins. Unlike the launch list, this inbox has no point at which it is
- * known to be complete — per-turn is the closest bound a live engine loop can
- * actually re-open.
+     * keep Chat's tick repainting forever. The accounting remains OPT-IN —
+     * armed by {@see beginTurn()} and nothing else — and since round 70 the
+     * call site exists: {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()}
+     * opens a budget on every dispatch, gated on that Chat being the appointed
+     * drain owner. An unarmed drain still behaves exactly as it always did,
+     * which is the honest state of every process nobody has told where a turn
+     * begins: the `-p` one-shot, the `sugarcrush mcp …` subcommands, and every
+     * embedder that never appoints an owner. Unlike the launch list, this inbox
+     * has no point at which it is known to be complete — per-turn is the
+     * closest bound a live engine loop can actually re-open.
  *
  * WHY IT IS STATIC, WHICH IS NOT LAZINESS. Two of the five emitter classes
  * E171 names are `final readonly`
@@ -250,10 +254,13 @@ final class RuntimeNoticeSink
      *
      * TWO OVERFLOWS SPELL THEIR TAIL WITH THIS ONE FORMAT (E199): the
      * in-process backend's per-batch refusals above {@see NOTICE_LIMIT}, and
-     * the turn truncation at {@see TURN_NOTICE_LIMIT}. "this session" stays true
-     * for the second — the dropped rows are gone from the session's surface,
-     * not parked for a later one — and a format constant each lane had to
-     * invent would put two spellings of the same sentence in the transcript.
+     * the turn truncation at {@see TURN_NOTICE_LIMIT}. "this session" in the
+     * spelled sentence describes the DROP, not the budget's scope: the budget
+     * is per turn (round 69's decision, wired in round 70), while the rows a
+     * truncation discards are gone from this session's transcript for good —
+     * the next {@see beginTurn()} re-opens a budget, not those rows. And a
+     * format constant each lane had to invent would put two spellings of the
+     * same sentence in the transcript.
      */
     public const OVERFLOW_FORMAT = '… and %d more runtime notice%s this session; see stderr for the full text.';
 
@@ -536,9 +543,10 @@ final class RuntimeNoticeSink
      * THE DRAIN OWNER CALLS IT, NOT THE EMITTERS. Children write without
      * knowing where a turn begins; the cap is therefore counted at the one
      * parent-side point every row passes — {@see drain()} — and only from a
-     * call site that owns the turn boundary. Until such a caller exists the
-     * cap is armed by nothing, which is what keeps an unbudgeted host
-     * behaving exactly as it did before E199 (see {@see $turnAccounting}).
+     * call site that owns the turn boundary. Since round 70 that call site
+     * exists: {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()},
+     * gated on the Chat's appointment flag, so a host with no appointed owner
+     * keeps the pre-E199 per-batch shape (see {@see $turnAccounting}).
      * {@see reset()} takes the arming back off.
      *
      * IDEMPOTENT WITHIN A CALL, and re-calling it per turn is the intended
@@ -759,13 +767,14 @@ final class RuntimeNoticeSink
     }
 
     /**
-     * Drop everything, including the transport.
+     * Drop everything — queue, transport, and the E199 turn budget — so a
+     * fresh arm starts as unbudgeted as a process that never heard of the cap.
      *
      * DISARMS TOO, so a reset sink is a dropping sink until something arms it
      * again. That is the same statement {@see $armed} makes and not a second
      * policy: a process that has torn the inbox down has no reader either.
      *
-     * TWO CALLERS, AND THE CLAIM THAT THERE IS A THIRD WAS WRONG. This
+     * THE CALLERS — AND THE PHANTOM THIRD THAT USED TO BE CLAIMED. This
      * paragraph said "for tests, and for
      * `\SugarCraft\Crush\Cli\Bootstrap::resetForTests()`". WHAT IS TRUE NOW,
      * checked rather than assumed: `Bootstrap` has no `resetForTests()` and
@@ -775,9 +784,15 @@ final class RuntimeNoticeSink
      * another test's assertion (MEASURED — see this class's doc-block, which
      * names the two `StatusLineSegmentTest` cases that fell to exactly that),
      * and a socket pair that leaks per case exhausts the fd table of a
-     * 9000-test run. The live callers are this suite's `setUp`/`tearDown` and
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}, which resets before it
-     * arms so a second `chat()` in one process starts from an empty inbox.
+     * 9000-test run. The live callers since E194 are
+     * {@see \SugarCraft\Crush\Tests\Support\RuntimeNoticeSinkResetExtension},
+     * registered from `phpunit.xml`, which resets before EVERY test rather
+     * than trusting each suite's good behaviour — the explicit resets in the
+     * sink's own `setUp`/`tearDown`, which the extension makes redundant but
+     * which the files keep as a per-class statement of intent — and
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}, the only caller in
+     * `src/`, which resets before it arms so a second `chat()` in one process
+     * starts from an empty inbox.
      */
     public static function reset(): void
     {
