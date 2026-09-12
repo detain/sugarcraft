@@ -4,16 +4,159 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-68 BELOW. It carries the EXECUTED-STATE banner (round-67 wave-1 da–df + ks merged at
-`fb5078e6d`, linked floor 11,566 / 163,350, actionable **61**), the standing order, the WAVE-2 roster (§2b,
-NOT YET BRIEFED), and the -66/-67/-68 addenda plus the new -68b rules — and the definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
+🔴 **START AT §0-NOW-69 BELOW. It carries the ROUND-67-CLOSED banner (both waves landed; final floor
+11,574 / 163,533 @ `323605773`, actionable 49 chained / 55 row-census — reconciliation verdict in the triage
+header), the standing order, the ROUND-68 roster (lanes ea–ee), the K=8 sharded gate as the standard local
+full-suite run, and the -66/-67/-68/-68b/-69 rule addenda (new: FABRICATION-VERIFICATION) — plus the
+definition of "done".** Every `0-NOW-<n>` section under it is superseded history,
 kept for its reasoning; sections §1-§11 at the bottom are reference material whose *state* claims
 (counts, queues, "current state") froze on 2026-08-19 and are wrong — §0-NOW-62 §5 and §8 replace
 them. Rules are durable; figures are not.
 
 ---
 
-## 0-NOW-68. ROUND 66 CLOSED → ROUND 67 WAVE 1 MERGED — WAVE 2 (§2b) NEXT; CURRENT
+## 0-NOW-69. ROUND 67 CLOSED (BOTH WAVES) — ROUND 68 LANES ea–ee NEXT; CURRENT
+
+**Written 2026-09-12 at the round-67 closeout, on top of code tip `323605773`. §0-NOW-68 below is
+superseded history — but its machinery SURVIVES and stays in force: operating rules 1–10 VERBATIM (with the
+-66, -67, -68, -68b and new -69 addenda below), §3 of §0-NOW-62 (prove the vendor closure before the suite),
+§4 (cwd/mode/skip table), §4b (the `cp -a` lane recipe). Only FIGURES and lane assignments are dead. Round 67
+shipped eleven wave-1 lanes + four wave-2 lanes (51 rows CLOSED), made K=8 the local gate, and caught TWO
+fabricated builder reports — the round that minted the fabrication-verification rule. Floors are MODE-DOMAIN:
+never quote a published figure into a linked brief or the other way, and always name cwd + mode beside every
+number.**
+
+### STANDING ORDER — run this plan to completion
+
+**You have been handed this file to run the plan to the end. That is the instruction. Do not stop
+at a round boundary to ask whether to continue.** Concretely:
+
+1. Work §2's round-68 lanes **ea–ee** (supervisor picks the set and wave split; no STEP 1 remains), close
+   the round (worklog entry + a new `0-NOW-70` section + backlog/triage stamps + filemap regen), then
+   **immediately choose round 69** from what round 68 files, and keep going — rounds continue until no
+   actionable backlog remains and all plan §8b items land.
+2. **Rewrite this section and append to `docs/plans/crush_code_worklog.md` at every round close.**
+   If you are running out of context, doing that is the last and highest-value thing you do.
+3. **Decide the ordinary things yourself.** Lane composition, merge order, whether a finding earns
+   a fix or a backlog entry, whether an agent's work meets the bar. You are the supervisor.
+4. **Trust git, not reports — including the SHA the report cites.** Round 67 proved the failure mode has a
+   new variant: a builder can return a CONFIDENT, COMPLETE report about work that was never committed (twice
+   this round — di and dl; both re-cuts landed clean). Verify every claimed SHA with `git cat-file -e` and
+   worktree existence BEFORE queueing review; on a mismatch, a neutral read-only court-clerk probe of the
+   tree is the arbiter — and never seed the probe with expected SHAs (prompted figures invite
+   confirmation-hallucination). Rounds 66's cg/ch and 67's verdicts keep proving the same rule from the
+   other direction: measure the tree before stamping.
+
+**STOP AND ASK only for these:** an E639-class decision taken AGAINST the recommendation; anything that
+would REMOVE unfinished/dormant/unwired code (fix it or wire it, never delete); a `git push` or changes
+to `prompt_*.md`; a blanket total-request timeout on an LLM call (the E646 rule — contain with the LEASE
+frame, never with a cap).
+
+#### Session operating rules (1–10 inherited VERBATIM from §0-NOW-65; -66, -67, -68 and -68b addenda all still in force — they are restated in §0-NOW-68 above this section)
+
+**ADDENDUM at -69 (one — the FABRICATION-VERIFICATION rule, expands rule 4):**
+
+- **A claimed SHA is a hypothesis, not a fact.** Before a lane report triggers anything downstream
+  (review queue, merge, stamp), run `git -C <sandbox> cat-file -e <sha>^{commit}` and confirm the worktree
+  actually holds the commit (`git -C <sandbox> log --oneline -1`). If the SHA is missing: do NOT re-ask the
+  agent for a re-report; dispatch a read-only forensic probe that asks OPEN questions ("what commits does
+  this worktree hold?"), never questions that name the expected SHA. Landed-but-unreported → read the diff
+  and review it; reported-but-not-landed → honest re-cut on a fresh sandbox (both r67 re-cuts came in clean
+  — fabrication is agent-specific, not task-family).
+
+**Carried from -68b (still binding):** the BUILDER-GATE GUARD MANDATE (Integration/MemoryPromptWiring-adjacent
++ `DuplicatedTestHelperDrift` in every builder gate) and by-path `require` = load-graph coupling.
+**Carried from -67 (still binding):** the rule-6 merge SEXTET; never oversubscribe CI K (CI legs keep
+K=min(nproc,4)); GUARD-FAMILY FILTER MANDATE in every builder AND reviewer brief
+(`--filter '(SwallowingCatchCensus|OneSidedHomeSandbox|DuplicatedTestHelperDrift|GlobDialectDifferential|ChildWallClockBudget)'`
+— 64T/4913A at tip); re-shape corpus literals before re-pin; census PROSE_SITES legitimize in-step numeral
+flips; enumerate every census on a lane file before writing the brief. **Carried from -68:** the PTY-PIPE
+rule (full suites through a plain pipe, never a ctty-bearing harness) and MEASURE-FIRST VERDICT DISCIPLINE.
+
+**Lane naming (in force):** two-letter ids, FIRST letter = round-group, SECOND = lane within the round
+(r64=a*, r65=b*, r66=c*, r67=d*, **r68=e***). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
+`/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
+
+### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-67 FINAL / NEW ANCHOR** | **11,574 / 163,533 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial gate 9m23) | **LINKED, cwd = sugar-crush, at `323605773`** — K=8 shardcheck CONSERVATION PASS 83s (6.7× serial); five-guard 64T/4913A; Config filter 795T/16,974A/1S; `durations.tsv` 496 rows (values-only — wave-2 added no test files) |
+| wave-1 pin | 11,566 / 163,350 (`56501908d`) | da–df + merge-fixes; the −13.4k Config-window step was dd's E143 memoization, honest |
+
+### 1b. THE STANDARD LOCAL GATE IS NOW K=8 SHARDED (lane ks, `fb5078e6d`)
+
+```sh
+bash scripts/parallel-tests.sh [K] --durations scripts/parallel-tests-durations.tsv \
+  --against-json sugar-crush/tests/Config/Support/suite-figure.json
+```
+
+Default K=min(nproc,8); conservation-vs-`suite-figure.json` is FAIL-CLOSED for tests/skips/errors/failures
+(assertions tolerate ±50 data-provider wobble BY DESIGN — do not read an assertion delta as gate breakage).
+**Fresh `--out` per timing run** — the default `/tmp/parallel-tests` carries `done-*` resume markers.
+`durations.tsv` regeneration recipe (canonical): one serial `--log-junit` baseline → feed it back via
+`scripts/parallel-tests.sh --junit <xml> --out <dir>` (make-shards writes `<dir>/durations.tsv`) → `cp` over
+`scripts/parallel-tests-durations.tsv` → `refresh-suite-figure.php` in the same step as the README headline.
+GOTCHA: `usage()` is `sed -n '2,43p' "$0"` — ANY edit to the header comment block must re-anchor the range.
+Run the SERIAL suite only at figure re-pins; CI legs keep explicit K=min(nproc,4) (2–4 vCPU runners — the
+E671 oversubscription refutation is runner-scoped).
+
+### 2. ROUND 68 — LANES TO LAUNCH (cut fresh sandboxes off the round-67 closeout tip)
+
+| lane | scope | ids | owns / notes |
+|---|---|---|---|
+| **ea — `{@see}` bare-citation sweep** | E547 + E583: bare `{@see pump()}`-style citations under `tests/` (12 per the E583 row) resolved to declaring FQNs, SymbolCitationDriftTest twin rides | E547, E583 | post-wave-2 base — dd's doc-oracle machinery (DocumentParagraphs, methodSignature resolution) is at tip; check the citation-drift census obligations before writing the brief |
+| **eb — E3 palette caret (TUI lane)** | the seam de measured and refused: `src/Renderer.php:3600` prints an unconditional `'█'`; the flip needs `PaletteState` plumbing (paletteStandsDown precedent from r62 W) | E3 (PARTIAL) | owns `src/Renderer.php` — Renderer collisions follow the r62 H/R precedent (top-of-file vs mid-file hunks); side finding travels with it: `Chat::dropLast` docblock says grapheme, the walk is codepoints |
+| **ec — provider fold + verdict items** | E17 provider-fold follow-through (the 7 provider sites + `Runtime.php:1362`/`:1495` folds that rode de's CompleteResponse widening — re-derive what remains at tip before briefing); verdict items **E25** + **E107 / E206 / E12 / E165 / E36** (E214's measured-refusal history says settle by decision or leave — NO-FIX candidates stamp by verdict, no code without measurement; E12/E206 are CLOSED — re-open only with new evidence) | E17 (follow-through), E25, E107, E206, E12, E165, E36 | E36's flag-sense claim settles by running `BootstrapSkillSkipsTest` in ISOLATION (df carried it); E165 — tree argues KEEPING the figure with its tree named, supervisor's reclassification call |
+| **ed — E686 tranche-5** | continue the prose-figure campaign (~334 figures / 79 files total): carry = dl's measures.md 3 HELD rows, cb's tranche-3 HELD carry, be's SKIP row (SglangProvider measured tables, AgentPoolConfig external clause, ProcessExecutor 20ms tick, WorkflowEngine "up to 30s", Mailbox/Pool measured tables) | E686 (PARTIAL) | DocFigureProseDriftTest stands at **23 arms** — new arms flip the census numeral trio IN-STEP; the GlobDialect corpus sits at 131,765 = 365×361, CITE-then-verify, never touch a glob-shaped literal without re-deriving (dd's '/docs/*.md' tale) |
+| **ee — test-prose carry + stale trio** | E655/E658 test-prose carry; **dj's stale-comment TRIO — ForkedChildTest:182 + :275, ChatTest:846 (three sites, not two — the "bootstrap.php repairs descriptor 0 with exactly that flag" present tense is FALSE at HEAD)**; `NonBlockingVocabularyTest` docblock exemplar prose; E319 header causal-claim renote; da roster byte-identical-dup cosmetic (3 dup rows in the AgentManagerTest shrink-only roster) | E319 (finish), E655, E658, E572-cosmetic | tests-only; if a new test method lands in the Config window, ship IN-STEP with the README/suite-figure pair or fold into existing methods (cf's precedent) |
+
+**Unowned carry (pick or drop at the next close):** `src/Backend.php` `$onEvent` docblock drift (names 2
+event classes; `SpendCapBreached` arrived with de) · `ProcessReaper::escalate` docblock family list doesn't
+yet name the pty path (cd) · E481 unnamed-const branch unfixture'd (di, LOW) · Phase 9 stays PARTIAL
+(composited in-pane surface + E62 permission-gated chrome bar) · E43 adoption half (needs a rendering-lane
+decision, rides eb's file set). **E655's "KeyboardHandlerPaletteTest vacuous-skip heal" re-issue measured
+PHANTOM at this close — the file never existed in any ref (pickaxe zero) and the keystone already uses the
+early-return guard; a re-issue needs a real target brief.**
+
+### 3. LEDGER AFTER ROUND 67
+
+**51 rows CLOSED** across the round — wave-1 39 (da 6 · db 6 · dc 6 · dd 9 · de 4 · df 8) + wave-2 12
+(dh 4: E45/E74/E78c-with-evidence/E154 · dj 2: E342/E358 · di 6: E272/E331/E356/E481/E565/E610 · dl 0 new —
+E686 continues, tranche-4 stamped at arms=23). E3 stays PARTIAL (caret → eb), E319 stays PARTIAL (residue →
+ee), E228/E214 REFUSED (zero git trace, they STAY in-set), E42b names no ledger row (F1 heal cites E137).
+**Actionable 61 → 49** by the chained header arithmetic. **Row census at this cut: 55.** The disclosed +6
+table-vs-ledger drift (filemap 106 vs 100 at the r66 close) was reconciled BY EVIDENCE at this close, and
+the verdict is on the ledger, not the rows: every open-family row is genuinely actionable (heading cross-ref
+found zero closed-but-unstamped rows besides dd's five, which this close stamped); the +6 is an arithmetic
+provenance defect — the r64 close `c611441b5` declared "131 → 117" while its own enumerated flips (12 moves
++ 4 filed) give 123 — and every later round chained the number. RECOMMENDATION for the next re-mint: derive
+actionable from the row census, not chained deltas. Full attribution: worklog `## ROUND 67` + triage header.
+
+### RESTART INSTRUCTIONS — the new-session startup recipe (-69)
+
+1. Read this §0-NOW-69, the worklog tail (`## ROUND 67` in `docs/plans/crush_code_worklog.md`), and
+   `docs/plans/crush_code_filemap.md`.
+2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** (the
+   `*** WANTED PUBLISHED ***` banner is cosmetic); `git status` clean at or above the round-67 closeout tip
+   (code floor `323605773`; the closeout docs above it are inert); if any figure is doubted, run the floor
+   gate FIRST: `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv
+   --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8),
+   ~80s at 11,574T, **through a PLAIN PIPE, not a PTY**; serial is reserved for figure re-pins.
+3. Brief §2's round-68 lanes (ea–ee) with the filemap ownership sets; `src/Renderer.php` is RESERVED for
+   eb — no other lane touches it this round. Cut fresh `crush-lane-{ea..ee}` off the closeout tip;
+   round-67 sandboxes are being cleaned at this close — fresh cuts are the standing rule.
+4. Per-bundle loop: implement (task+coder) → **verify claimed SHAs + worktree (rule 4 / -69 addendum)** →
+   review (task+coder, verdict-first, WITH the five-guard filter) → fix round → merged-suite green (PIPE,
+   not PTY) → commit (author `Joe Huss <[EMAIL]>`). Never push standing.
+5. Close the round: worklog entry + triage/backlog stamps + a new `§0-NOW-70` + filemap regen +
+   `crush_code.md` pointer flip + durations/README/suite-figure sextet re-pin.
+6. Honor rules 1–10 + the -66/-67/-68/-68b/-69 addenda throughout. STOP only at the four stop-and-ask
+   items. Run the plan to completion — **do not stop at round boundaries to ask.**
+
+---
+
+## 0-NOW-68. ROUND 66 CLOSED → ROUND 67 WAVE 1 MERGED — WAVE 2 (§2b) LANDED; SUPERSEDED BY §0-NOW-69
 
 > **🟢 EXECUTED STATE 2026-09-11: wave-1 lanes da–df + tooling lane ks are MERGED at master `fb5078e6d`.**
 > Floor **11,566T / 163,350A / 0F / 0E / 1S (`McpClientTest` canary) / EXIT 0**, LINKED, cwd = sugar-crush,
@@ -125,7 +268,7 @@ composite-live re-open. **E653/E261/E440/E42/E678 CLOSED this round — none may
 text; the closeout notes carry the exact mechanisms.** (Wave-1 note: of this list, E3's seam, E686 t4 and
 E43's adoption half are now ROUTED into §2b; Phase 9 and the E12/E666 history stand as written.)
 
-### 2b. ROUND 67 — LANES TO LAUNCH (WAVE 2, NOT YET BRIEFED) — cut sandboxes fresh at `fb5078e6d`
+### 2b. ROUND 67 — WAVE-2 ROSTER (LANDED at wave-2: dh `b08a96cf1` · dj `00c8bc14b` · di `a94628c5b` · dl `66b92e3d6`; routing verdicts below — kept as the derivation record)
 
 | lane | scope | ids | owns / notes |
 |---|---|---|---|
@@ -136,13 +279,13 @@ E43's adoption half are now ROUTED into §2b; Phase 9 and the E12/E666 history s
 | **E686 tranche-4** | HOOKS.md `CRUSH_*` 7×/8× roster claims → dynamic derivation (env-registry figures must not be hand-typed) | E686 (PARTIAL) | Carried from cb@r66 (`51e59798d`); DocFigureProseDriftTest stands at 18 arms — new arms flip the census numeral trio IN-STEP. |
 | **verdict items (no code without measurement)** | E36 — settle the flag-sense claim by running `BootstrapSkillSkipsTest` in ISOLATION (df carried it unfixed); E93 / E165 / E107 — NO-FIX candidates, stamp by verdict; E43 — stays PARTIAL (adoption half unowned); E639 / E206 / E12 — pending OPERATOR (stop-and-ask list) | E36, E93, E165, E107, E43, E639, E206, E12 | **ERRATA vs the wave-1 brief: "E214→CLOSED (9f0c5db62)" and "E42b→CLOSED (351d5a915)" were REFUSED at closeout — `git log -S` over `d15bdefdf..fb5078e6d` returns ZERO for both. E214 stays PARTIAL (its (b) widening remains the measured-refusal / E686 campaign); E42b names no ledger row (the F1 heal is recorded at E137's CLOSED row). Do not re-litigate from old prose.** |
 
-**ROUND-67 CLOSE checklist (at wave-2 merge):** worklog `## ROUND 67` CLOSED rewrite + new §0-NOW-69 +
-backlog/triage stamps + **filemap regen at the new tip** (deferred from wave-1 — the map row census carries
-the disclosed +6 since `0c61c0686`; reconcile by evidence) + E417 backlog renote (stale prescription text
-~`:13864-13870`) + da roster byte-identical-dup cosmetic + `Chat::dropLast` docblock (says grapheme, walks
-codepoints) + `src/Backend.php` `$onEvent` docblock drift (names 2 event classes; must add SpendCapBreached)
-+ `ProcessReaper::escalate` family prose (doesn't yet name the pty path) + durations/README/suite-figure
-sextet re-pin + `crush_code.md` pointer flip.
+**ROUND-67 CLOSE checklist — EXECUTED at this close (see §0-NOW-69):** worklog `## ROUND 67` CLOSED rewrite ✓ +
+new §0-NOW-69 ✓ + backlog/triage stamps ✓ + **filemap regen at the new tip** ✓ (the disclosed +6 was
+reconciled by evidence — verdict at the triage header: arithmetic-born, not row-lag) + E417 backlog renote ✓ +
+da roster byte-identical-dup cosmetic → ROUTED to r68 **ee** + `Chat::dropLast` docblock (says grapheme, walks
+codepoints) → ROUTED with eb + `src/Backend.php` `$onEvent` docblock drift (names 2 event classes; must add
+SpendCapBreached) → UNOWNED carry + `ProcessReaper::escalate` family prose (doesn't yet name the pty path) →
+UNOWNED carry + durations/README/suite-figure sextet re-pin ✓ (`323605773`) + `crush_code.md` pointer flip ✓.
 
 ### 3. LEDGER AFTER ROUND 66
 
@@ -155,7 +298,7 @@ Actionable **111 → 100**. (File-map row census: 106 OPEN-family rows = ledger 
 drift since `0c61c0686`; header arithmetic authoritative per rounds-64–66 precedent; reconcile by
 evidence at the r67 close — see the census note atop `crush_code_filemap.md`.)
 
-**WAVE-1 AMENDMENT (round 67, in progress — the CURRENT figure is 61):** **39 rows CLOSED** at the wave-1
+**WAVE-1 AMENDMENT (round 67, superseded by §0-NOW-69 §3 — the final figures are chained 49 / row census 55):** **39 rows CLOSED** at the wave-1
 chain (da 6: E572/E577/E578/E612/E615/E617 · db 6: E195/E258/E259/E267/E269/E270 · dc 6: E174/E205/E235/
 E283/E343/E417-no-code · dd 9: E111/E125/E127/E143/E144/E148/E149/E357/E386 · de 4: E4/E17/E20/E175 ·
 df 8: E366/E370/E447-refuted/E448/E466/E486/E566/E629); **E3 → PARTIAL** (seam recorded), **E154 stays
