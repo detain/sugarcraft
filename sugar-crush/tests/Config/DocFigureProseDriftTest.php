@@ -33,6 +33,7 @@ use SugarCraft\Crush\Providers\SglangProvider;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Support\TimedFileLock;
 use SugarCraft\Crush\Support\ToolIpcFiles;
@@ -76,12 +77,24 @@ use SugarCraft\Crush\Workflows\Workflow;
  * environment roster in the docs set) — and judged TWO FALSE sentences:
  * TROUBLESHOOTING.md still spelled the hook environment six `CRUSH_*` keys
  * (the pre-`_FILE` count, contradicting this page's eight), and HOOKS.md's
- * own parenthetical claimed the empty-`toolOutput` run "coincidentally shows
- * six lines" while the same page's table printed eight. Both fixed in prose
- * here, and the corrections pinned in both directions — E633's lesson.
- *
- * @internal
- */
+  * own parenthetical claimed the empty-`toolOutput` run "coincidentally shows
+  * six lines" while the same page's table printed eight. Both fixed in prose
+  * here, and the corrections pinned in both directions — E633's lesson.
+  *
+  * E686 TRANCHE-5 (round-68, lane ed) judges the carried HELD set. Nothing in
+  * it turned out false, and nothing needed a prose edit; six carries instead
+  * upgraded to pins (arms T-Y), all of them the conclusion half of a measured
+  * figure: the "~128 KB" rounding and the oversize example sizes against the
+  * live entry boundary, EnvironmentBlock's self-described "derivable part"
+  * arithmetic, the splice-history pair both files state, EnhancedSessionStore's
+  * internal sums, the 0.47s window as a cross-page family (arm D's idiom for a
+  * digit no constant owns), and the ARCHITECTURE Chat paragraph's live count.
+  * The digits of genuinely-host-timed sentences stay free — but every RELATION
+  * the prose itself states about them now re-evaluates here, so a half-updated
+  * sentence reds instead of quietly lying (ref: lane cb/be/dl ledgers).
+  *
+  * @internal
+  */
 final class DocFigureProseDriftTest extends TestCase
 {
     /**
@@ -1438,6 +1451,333 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match_all("/['\"]SUGARCRUSH_[A-Z_]+['\"]/", self::bodyExcerpt(self::sourceOf('Hooks/ScriptHook.php'), 'executeStaged', 7000)),
             'a quoted SUGARCRUSH_* key joined the hook environment assembly — the page promises launch configuration never reaches a hook',
         );
+    }
+
+    /**
+     * E686 tranche-5 (T): the oversize-entry narrative in HOOKS.md. "~128 KB"
+     * is the KiB rounding of the entry cap; "200,000 and 1,000,000 denied
+     * identically" and the marker example's "200011 bytes" are size claims
+     * whose contract is that they exceed the live allowed boundary — the same
+     * ScriptHook formula arm Q re-derives the 131,054/131,055 pair from. The
+     * digits stay free (they are example payloads, not constants); what is
+     * pinned is the boundary relation, so the doc cannot quietly start
+     * illustrating the marker with a size that would never have earned it
+     * (dl's two carried HELDs, judged live here).
+     */
+    public function testOversizePayloadNarrativeStaysPastTheLiveEntryBoundary(): void
+    {
+        $hooks = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $hook = self::sourceOf('Hooks/ScriptHook.php');
+
+        self::assertSame(
+            1,
+            preg_match('/exceeded ~(\d+) KB could not run at all/', $hooks, $kb),
+            'the ~128 KB framing sentence moved — it is why the payload now travels both ways',
+        );
+        self::assertSame(
+            1,
+            preg_match("/strlen\\('(CRUSH_[A-Z_]+)'\\) \\+ (\\d+) \\+ value \\+ (\\d+) <= (\\d+)/", $hook, $f),
+            'the MAX_ENV_ENTRY_BYTES doc-block no longer spells the NAME=VALUE formula — arm Q and this arm lost their referent together',
+        );
+        $cap = (int) $f[4];
+        self::assertSame($cap, (int) (new \ReflectionClass(ScriptHook::class))->getConstant('MAX_ENV_ENTRY_BYTES'), 'the formula and the constant it bounds no longer agree');
+        self::assertSame(intdiv($cap, 1024), (int) $kb[1], 'the "~N KB" rounding is no longer the KiB rounding of MAX_ENV_ENTRY_BYTES — move the paraphrase with the cap');
+
+        $allowed = $cap - strlen($f[1]) - ((int) $f[2] + (int) $f[3]);
+
+        self::assertSame(
+            1,
+            preg_match('/([\d,]+) and ([\d,]+) denied identically/', $hooks, $denied),
+            'the denied-identically sentence moved — it is the anecdote the file-backed route exists to close',
+        );
+        foreach ([1, 2] as $i) {
+            self::assertGreaterThan(
+                $allowed,
+                (int) str_replace(',', '', $denied[$i]),
+                'a payload cited as denied is no longer oversize — "denied identically" reads false on its face',
+            );
+        }
+
+        $marker = (string) (new \ReflectionClass(ScriptHook::class))->getConstant('OVERSIZE_ENV_MARKER');
+        self::assertSame(
+            1,
+            preg_match('/' . preg_quote($marker, '/') . ' (\d+) bytes; read \$(CRUSH_[A-Z_]+)_FILE/', $hooks, $example),
+            'the fenced marker example moved — arm R pins its shape, this arm its size claim',
+        );
+        self::assertSame($f[1], $example[2], 'the marker example names a payload other than the formula key — the boundary computed here is not the one that example crossed');
+        self::assertGreaterThan(
+            $allowed,
+            (int) $example[1],
+            'the example is no longer oversize for its own key — the marker it displays could not have fired for a payload that small',
+        );
+    }
+
+    /**
+     * E686 tranche-5 (U): the EnvironmentBlock fixture paragraph declares its
+     * own falsifiability — "NO TEST BUILDS THIS FIXTURE, so nothing downstream
+     * can falsify the absolutes; only the delta below is checkable, and the
+     * derivable part of it checks out" — so this arm checks exactly that
+     * derivable part: the spelled 5 x (7+1+1500+1) = 7,545 formula and its
+     * 4,528 omission, the headroom that must land the absolute on the live
+     * derived 25,600 ceiling, the +93/+102 two-era caption law against the
+     * live GIT_STATE_CAVEAT, the 74 B unexplained gap as stated, and the
+     * ceil(4096 x 120 / 1779) = 277 hedge the prose itself computes. The
+     * fixture absolutes stay free — this is arm K's self-consistency idiom on
+     * a measured narrative (cb's held row, promoted).
+     */
+    public function testEnvironmentBlockFixtureArithmeticChecksItsOwnDerivablePart(): void
+    {
+        $doc = self::docBlockOf(EnvironmentBlock::class, 'SUMMARY_MAX_BYTES');
+        $class = new \ReflectionClass(EnvironmentBlock::class);
+        $ceiling = 2 * (int) $class->getConstant('DIFF_MAX_BYTES') + 2 * (int) $class->getConstant('SUMMARY_MAX_BYTES') + 1024;
+        $caveat = strlen((string) $class->getConstant('GIT_STATE_CAVEAT'));
+
+        self::assertSame(
+            1,
+            preg_match('/five ([\d,]+)-byte\s+\*\s+subjects are (\d+) \* \((\d+) \+ (\d+) \+ (\d+) \+ (\d+)\) = ([\d,]+) B, of which two whole lines\s+\*\s+minus the trailing newline are kept, giving the ([\d,]+) B omitted/s', $doc, $m),
+            'the self-described derivable sentence no longer spells formula and omission together — rewrite the pin with the prose, do not delete it',
+        );
+        self::assertSame((int) $m[5], (int) str_replace(',', '', $m[1]), 'the spelled subject size and the formula\'s 1500 term are no longer the same premise');
+        $perLine = (int) $m[3] + (int) $m[4] + (int) $m[5] + (int) $m[6];
+        $total = (int) str_replace(',', '', $m[7]);
+        self::assertSame((int) $m[2] * $perLine, $total, 'the stated total is no longer count x the formula sum');
+        $omitted = (int) str_replace(',', '', $m[8]);
+        self::assertSame($total - (2 * $perLine - 1), $omitted, 'the omitted figure is no longer total minus two whole lines without their trailing newline');
+
+        self::assertSame(
+            1,
+            preg_match('/`log` \(([\d,]+) of ([\d,]+) B omitted\)/', $doc, $pair),
+            'the first mention of the log omission moved — the prose cites the same pair twice and they must not fork',
+        );
+        self::assertSame([$omitted, $total], [(int) str_replace(',', '', $pair[1]), (int) str_replace(',', '', $pair[2])], 'the two statements of the omitted/total pair diverged');
+
+        self::assertSame(
+            1,
+            preg_match('/the block came to \*\*([\d,]+) B\*\*, i\.e\. ([\d,]+) B\s+\*\s+of headroom under the derived ceiling/s', $doc, $head),
+            'the absolute-plus-headroom sentence moved',
+        );
+        self::assertSame(
+            $ceiling,
+            (int) str_replace(',', '', $head[1]) + (int) str_replace(',', '', $head[2]),
+            'absolute plus stated headroom is no longer the derived 24,576+1,024 ceiling the same doc-block pins',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/(\d+) porcelain lines at ~(\d+) B is a ([\d,]+) B body against\s+\*\s+SUMMARY_MAX_BYTES = (\d+), and clipping it would take about (\d+) such\s+\*\s+lines, more than twice this fixture.s (\d+)/s', $doc, $porcelain),
+            'the Status-cannot-clip hedge no longer spells its lines, body, cap and needed count together',
+        );
+        self::assertSame((int) $class->getConstant('SUMMARY_MAX_BYTES'), (int) $porcelain[4], 'the prose cap drifted from SUMMARY_MAX_BYTES');
+        self::assertSame((int) $porcelain[1], (int) $porcelain[6], 'the fixture size is stated as two different porcelain counts');
+        self::assertSame((int) $porcelain[2], (int) round((int) str_replace(',', '', $porcelain[3]) / (int) $porcelain[1]), 'the "~15 B" per-line premise no longer rounds from the stated body');
+        self::assertSame((int) $porcelain[5], (int) ceil(((int) $porcelain[4] * (int) $porcelain[1]) / (int) str_replace(',', '', $porcelain[3])), 'the needed-lines figure is no longer the ceiling divided through the stated body');
+        self::assertGreaterThan(2 * (int) $porcelain[1], (int) $porcelain[5], 'the prose still says "more than twice this fixture\'s 120" — the figures stopped supporting it');
+
+        self::assertSame(
+            1,
+            preg_match('/rendered ([\d,]+) B\s+\*\s+against master/s', $doc, $master),
+            'the rebuild-against-master figure moved',
+        );
+        self::assertSame(
+            1,
+            preg_match('/The delta is \+(\d+) B — the (\d+)-byte caption plus its blank line/s', $doc, $delta),
+            'the +93 delta sentence moved — the prose calls it the part that reproduces on any fixture',
+        );
+        self::assertSame(
+            (int) str_replace(',', '', $head[1]) - (int) str_replace(',', '', $master[1]),
+            (int) $delta[1],
+            'the stated delta is no longer current absolute minus the master rebuild',
+        );
+        self::assertSame($caveat + 2, (int) $delta[1], 'the caption-plus-blank-line arithmetic (strlen(GIT_STATE_CAVEAT) + 2) no longer produces the stated delta');
+        self::assertSame($caveat, (int) $delta[2], 'the prose\'s caption byte count drifted from the live GIT_STATE_CAVEAT');
+
+        self::assertSame(
+            1,
+            preg_match('/recorded ([\d,]+) B for the fixture it\s+\*\s+described in these same words — (\d+) B above what the rebuild/s', $doc, $gap),
+            'the unexplained 74 B gap sentence moved — the prose deliberately leaves it standing',
+        );
+        self::assertSame(
+            (int) str_replace(',', '', $gap[1]) - (int) str_replace(',', '', $master[1]),
+            (int) $gap[2],
+            'the historical record minus the rebuild is no longer the stated gap',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/recorded ([\d,]+) \/ ([\d,]+) \/ \+(\d+) B here; those are of the (\d+)-byte caption/s', $doc, $older),
+            'the 100-byte-caption-era sentence moved',
+        );
+        self::assertSame(
+            (int) str_replace(',', '', $older[1]) - (int) str_replace(',', '', $older[2]),
+            (int) $older[3],
+            'the earlier revision\'s three figures no longer add up',
+        );
+        self::assertSame((int) $older[4] + 2, (int) $older[3], 'the +2 caption-plus-blank-line law broke across eras — the prose pins "the same +93 B on any fixture" to the same arithmetic');
+        self::assertStringContainsString('"ALL FOUR capped fields', $doc, 'the retracted claim must stay quoted where it is retracted (E633: corrections are pinned in both directions)');
+        self::assertStringContainsString('corrected here rather than dropped', $doc, 'the correction premise moved');
+    }
+
+    /**
+     * E686 tranche-5 (V): the FU5 splice-history pair — 12,724,235 raw,
+     * 20,313,188 after escape — is stated twice, in RuleLoader's class doc and
+     * in Runtime's MAX_STANDING_RULE_BYTES justification, and Runtime adds a
+     * multiplier claim ("the 1.6x lesson") about the pair itself. Neither
+     * digit has an in-repo generator (the escape ratio is data-dependent), but
+     * the two sites quoting ONE history must not fork, the one-decimal ratio
+     * must survive its own pair, and RuleLoader's "can no longer emit" is
+     * backed by live caps: 193 x MAX_FILE_BYTES < 12,724,235 (cb's held row,
+     * promoted).
+     */
+    public function testSpliceHistoryPairAgreesAcrossItsTwoSites(): void
+    {
+        $loader = self::sourceOf('Context/RuleLoader.php');
+        $runtimeDoc = self::docBlockOf(Runtime::class, 'MAX_STANDING_RULE_BYTES');
+
+        self::assertSame(
+            1,
+            preg_match('/the (\d+)-file worst case can no longer emit ([\d,]+) raw bytes\s+\*\s+\(([\d,]+) after escape\)/s', $loader, $m),
+            'the RuleLoader sentence no longer ties the file count to the historical byte pair — re-pin with the prose, do not delete it',
+        );
+        $raw = (int) str_replace(',', '', $m[2]);
+        $escaped = (int) str_replace(',', '', $m[3]);
+
+        self::assertSame(
+            1,
+            preg_match('/unbounded splice at ([\d,]+) emitted bytes becoming ([\d,]+) after escape,\s+\*\s+and a budget priced pre-escape would be the ([\d.]+)x lesson/s', $runtimeDoc, $r),
+            'the Runtime side of the pair or its multiplier sentence moved — both sites quote ONE measured history',
+        );
+        self::assertSame($raw, (int) str_replace(',', '', $r[1]), 'the splice history forked: RuleLoader and Runtime quote different raw figures');
+        self::assertSame($escaped, (int) str_replace(',', '', $r[2]), 'the splice history forked: RuleLoader and Runtime quote different after-escape figures');
+        self::assertSame((float) $r[3], round($escaped / $raw, 1), 'the stated multiplier is no longer the one-decimal ratio of the pair it names');
+
+        $loaderClass = new \ReflectionClass(RuleLoader::class);
+        $files = 3 * (int) $loaderClass->getConstant('MAX_FILES') + 1;
+        self::assertSame($files, (int) $m[1], 'the historical sentence\'s file count drifted from the live walk (3 dirs x MAX_FILES + root) that arm L pins — do not touch one side alone');
+        self::assertLessThan(
+            $raw,
+            $files * (int) $loaderClass->getConstant('MAX_FILE_BYTES'),
+            'the walk caps now admit what the prose says they "can no longer emit" — the FU5 claim needs re-checking, HERE and in the sentence together',
+        );
+    }
+
+    /**
+     * E686 tranche-5 (W): EnhancedSessionStore's "What this buys, measured"
+     * block is honest about being measured — so no absolute here is pinned to
+     * a constant — but the block also states ARITHMETIC: 14 plus 38 is 52,
+     * 49.72 against 37.89 leaves 11.8, and retain minus discard is the ~7 ms
+     * the paragraph calls "real work". Those relations are what a partial
+     * re-measurement breaks, so they are what gets pinned; the multipliers
+     * 18x/46x/77% stay held because the prose itself says "the factor moves
+     * with both turn count and message size", and "~10 s over the session"
+     * stays held because the halving it rests on is left implicit.
+     */
+    public function testSessionStoreMeasuredBlockKeepsItsOwnSums(): void
+    {
+        $doc = (string) (new \ReflectionProperty(EnhancedSessionStore::class, 'messageHashes'))->getDocComment();
+        self::assertNotSame('', $doc, '$messageHashes lost its doc-block — the measured block this pins was deleted, not fixed');
+
+        self::assertSame(
+            1,
+            preg_match('/that measured (\d+) ms of `json_encode` plus\s+\*\s*(\d+) ms of `sha256` — (\d+) ms of dead time/s', $doc, $sum),
+            'the headline sum sentence no longer spells encode, sha and total together — re-pin with the prose',
+        );
+        self::assertSame((int) $sum[1] + (int) $sum[2], (int) $sum[3], 'the two component measurements no longer add to the stated dead time');
+
+        self::assertSame(
+            1,
+            preg_match('/encode-and-discard[\s*]+([\d.]+)[\s*]+ms,[\s*]+encode-and-retain[\s*]+([\d.]+)[\s*]+ms,[\s*]+and[\s*]+the[\s*]+faithful[\s*]+encode\+`sha256`\+retain[\s*]+loop[\s*]+([\d.]+)[\s*]+ms[\s*]+against[\s*]+`sha256`[\s*]+alone[\s*]+at[\s*]+([\d.]+)[\s*]+ms[\s*]+—[\s*]+([\d.]+)[\s*]+ms[\s*]+of[\s*]+encode[\s*]+attributable/s', $doc, $ways),
+            'the three-ways re-measurement no longer spells all five figures in one breath — the prose restructured, rewrite the pin with it',
+        );
+        self::assertSame((int) $sum[1], (int) round((float) $ways[2]), 'the detailed encode-and-retain figure no longer rounds to the headline json_encode figure — "the figures above stand" is now false');
+        self::assertSame((int) $sum[2], (int) round((float) $ways[4]), 'the detailed sha256-alone figure no longer rounds to the headline sha256 figure');
+        self::assertSame((float) $ways[5], round((float) $ways[3] - (float) $ways[4], 1), 'the stated one-decimal attribution is no longer loop minus sha-alone (rounded)');
+
+        self::assertSame(
+            1,
+            preg_match('/is the other ~(\d+) ms/', $doc, $retain),
+            'the retain-costs-more sentence moved',
+        );
+        self::assertSame((int) $retain[1], (int) round((float) $ways[2] - (float) $ways[1]), 'the "~N ms" retention gap is no longer retain minus discard');
+    }
+
+    /**
+     * E686 tranche-5 (X): the 0.47s alt-screen window is pure host timing — no
+     * constant owns it — so the digit stays free, exactly as the 64-KiB
+     * family's host labels do, while every SITE that quotes it must quote the
+     * SAME one: two docs pages state the delay to the user, and the two
+     * src sites that carry the MEASURED label are its provenance. Half an
+     * update (PERMISSIONS moved, ARCHITECTURE didn't) is the failure this
+     * catches (be's held row, judged: TRUE-as-family).
+     */
+    public function testAltScreenPaintDelayFamilyQuotesOneDigit(): void
+    {
+        $arch = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md');
+        $perm = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/PERMISSIONS.md');
+
+        self::assertSame(
+            1,
+            preg_match('/paints over stderr ([\d.]+)s later/', $arch, $a),
+            'ARCHITECTURE.md no longer states the alt-screen paint delay beside the transcript-row rationale',
+        );
+        self::assertSame(
+            1,
+            preg_match('/paints over stderr ([\d.]+)s later/', $perm, $p),
+            'PERMISSIONS.md no longer states the alt-screen paint delay beside the never-silent-refusal bullet',
+        );
+        self::assertSame($p[1], $a[1], 'the two docs pages quote different paint delays — the family must move together or split its premise explicitly');
+
+        $prompt = self::sourceOf('Cli/HeadlessPermissionPrompt.php');
+        $boot = self::sourceOf('Cli/Bootstrap.php');
+        self::assertSame(1, preg_match('/\(MEASURED at ([\d.]+)s on a/', $prompt, $m1), 'HeadlessPermissionPrompt lost the MEASURED label the docs cite through it — the digit may move, the labeling may not');
+        self::assertSame(1, preg_match('/\(MEASURED: ([\d.]+)s on a real pty run\)/', $boot, $m2), 'Bootstrap::warnPermissionConfigInTranscript lost its MEASURED provenance sentence');
+        self::assertSame($a[1], $m1[1], 'the docs paint-delay digit no longer matches the src MEASURED site');
+        self::assertSame($a[1], $m2[1], 'the docs paint-delay digit no longer matches Bootstrap\'s MEASURED site');
+    }
+
+    /**
+     * E686 tranche-5 (Y): the ARCHITECTURE Chat paragraph is this campaign's
+     * own correction idiom in the wild — it de-digitalised a rotted figure and
+     * points at `wc -l` as the instrument. So the surviving claims are the
+     * ones that ARE derivable: "well past ten thousand lines" checks the
+     * spelled word against the live count, "the largest file in the package"
+     * checks a live scan of src/, and the retraction must stay quoted — its
+     * "was stale by the time anyone read it" additionally asserts the quoted
+     * figure is STILL not the live one (be row 22's other half, anchors
+     * re-derived at this base).
+     */
+    public function testArchitectureChatParagraphStaysLive(): void
+    {
+        $arch = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md');
+        $chat = \dirname(__DIR__, 2) . '/src/Chat.php';
+
+        self::assertSame(
+            1,
+            preg_match('/well past ([a-z]+) thousand lines; run\s+`wc -l src\/Chat\.php` rather than trusting a figure here/s', $arch, $m),
+            'the Chat-size sentence no longer pairs its spelled floor with the wc -l instrument it names — rewrite the pin with the prose, do not delete it',
+        );
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
+        self::assertArrayHasKey($m[1], $wordNumbers, "the spelled floor '{$m[1]}' is outside the pinned word map — extend the map deliberately, never let a reworded sentence pass this arm by accident");
+        $statedFloor = $wordNumbers[$m[1]] * 1000;
+        $lines = count((array) file($chat));
+        self::assertGreaterThan($statedFloor, $lines, 'Chat.php no longer sits well past the spelled thousand-line floor — flip the spelled word together with the code');
+
+        self::assertSame(
+            1,
+            preg_match('/used to carry \("([\d,]+) lines, measured on this checkout"\) was stale by/', $arch, $quote),
+            'the retraction quote must stay standing — an unpinned correction rots back into the claim it corrected (E633)',
+        );
+        self::assertNotSame((int) str_replace(',', '', $quote[1]), $lines, 'the "was stale" retraction quotes a figure that is EXACTLY the current count — either the count stopped moving or this sentence needs its own retraction');
+
+        $largest = '';
+        $largestSize = -1;
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__, 2) . '/src', \FilesystemIterator::SKIP_DOTS));
+        foreach ($walk as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php' && $file->getSize() > $largestSize) {
+                $largestSize = $file->getSize();
+                $largest = $file->getPathname();
+            }
+        }
+        self::assertSame($chat, $largest, 'the page still calls Chat the largest file in the package — either the claim or the code moved (E686)');
     }
 
     /**
