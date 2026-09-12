@@ -904,7 +904,9 @@ records them as **survivors**.
   rather than part of moving the draft into the widget"*.
 - **Blocked on** Nothing.
 
-### E3 [PARTIAL] — the Ctrl+P palette has its own hand-rolled append-only query buffer
+### E3 [CLOSED] — the Ctrl+P palette has its own hand-rolled append-only query buffer
+
+**Closed ROUND-69 (lane fj `80dff1595` → pick `c3605f9e6`):** palette-query caret shipped — insert-at-caret / Backspace-erase-before / Delete-erase-after / Left-Right cluster motion / Home / End in `handlePaletteKey`; `PaletteState::queryCursor` 4th ctor param default 0 (verified :30), `withQuery`/`withQueryCursor`/root-reset semantics; append-only `dropLast` deleted (verified — only `dropLastWord` + the :12420 historical comment remain); `PaletteQueryCaretTest` 14T; end-caret byte-identity keeps eb's pin. Reverse-video caret alternative recorded NOT-taken (product). +18T lane-wide. Evidence: triage E3, fj REPORT, worklog ROUND 69.
 
 **Round-67 wave-1 (lane de — lane `bc3e11e1a` → master `2da286745`):** the input-handling half landed with the de cluster; the CARET-PAINT seam was REFUSED on ownership — it needs the unconditional `'█'` at `src/Renderer.php:3600` + `PaletteState`, a TUI lane with Renderer ownership (routed to round-67 wave-2, §0-NOW-68). Side finding filed for closeout: `Chat::dropLast`'s docblock says grapheme but the walk is codepoints. Evidence: triage E3, worklog ROUND 67.
 
@@ -948,7 +950,9 @@ records them as **survivors**.
   see"*), and restore it via `withInputCursor()` (`:6291`).
 - **Blocked on** Nothing.
 
-### E5 [OPEN] — combining marks splice onto the block cursor glyph
+### E5 [CLOSED] — combining marks splice onto the block cursor glyph
+
+**Closed ROUND-69 (fj, same SHAs):** `Renderer::snapToClusterStart` (verified :4173) floors mid-cluster carets to cluster start, used by renderInput AND renderPalette (verified :3634/:4244); boundaries short-circuit byte-identically; `InputCaretGraphemeTest` 3T. Forms-domain note: the TextArea draft widget still walks codepoints (widget seam, not this row). Evidence: triage E5, fj REPORT, worklog ROUND 69.
 
 - **What** The block cursor `█` is spliced into the draft at a character offset,
   so a combining mark immediately after that offset composes onto the **cursor
@@ -1030,7 +1034,9 @@ records them as **survivors**.
   been duplicated. Add the assertion the failure-reporting test lacks.
 - **Blocked on** Nothing.
 
-### E9 [STALE-CITATION] — tracker #86: the `README.md:272` half of lane D's F-3
+### E9 [CLOSED] — tracker #86: the `README.md:272` half of lane D's F-3
+
+**Closed ROUND-69 (lane fh `19eb66001` → pick `d7272bd0a`):** README Tools bullet rewritten (verified :1051) — 'Eleven classes ship on every launch' guard literal KEPT (ReadmeRosterDrift $spelled map + 11-under-null-manager derivation) + explicit twelfth-file clause naming TaskTool/`Task` and the AgentManager feed; hunk-local. F-3's 'by construction' claim already repaired at `b35c0f2df` (verified). Evidence: triage E9, fh REPORT, worklog ROUND 69.
 
 - **What** The second half of lane D round 5's F-3 was a `README.md` claim,
   deferred because `README.md` was owned by a concurrent lane.
@@ -1050,7 +1056,9 @@ records them as **survivors**.
   time on the line number. See *Unresolved references*.
 - **Blocked on** Reconstructing the finding.
 
-### E10 [OPEN] — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
+### E10 [PARTIAL] — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
+
+**PARTIAL ROUND-69 (fc, same SHAs):** record branch shipped — lowercase `doctor` pinned intentional at Doctor.php:45 + BuiltInToolTest.php:194 (assertion byte-unchanged). Rename half stays blocked on the tool-schema owner; seeded to round-70 gc. Evidence: triage E10, fc REPORT.
 
 - **What** The tool-schema name is `'doctor'` while the other built-in tools are
   TitleCase.
@@ -1169,7 +1177,9 @@ records them as **survivors**.
   — record it here only so it is not lost with the worklog.
 - **Blocked on** Nothing, but it belongs to `candy-vcr`, not this plan.
 
-### E16 [OPEN] — `HookManager::applyPreHooks()` and the `ToolStarted`/`ToolFinished` payloads
+### E16 [CLOSED] — `HookManager::applyPreHooks()` and the `ToolStarted`/`ToolFinished` payloads
+
+**Closed ROUND-69 (lane fa `8db951a0b` → pick `a9e7a333c`):** decision + pin. Pre-gate `ToolStarted` carrying the model's RAW arguments is documented design at BOTH emit sites (`src/Runtime.php` :1674/:1784) and behaviour-pinned by `testToolStartedCarriesTheModelArgumentsWhenAHookRewritesThem` (frame=original, executed=rewritten vacuity guard; `ToolFinished` pairs by id and carries no arguments property). +1T/+8A; 2 mutation proofs. Evidence: triage E16, `/home/sites/crush-r61-artifacts/fa/REPORT.md`, worklog ROUND 69.
 
 - **What** Flagged by an early round as *"the same stale-`toolArgs` family as
   `HookDispatcher` was"*, with `ToolStarted`/`ToolFinished` still carrying the
@@ -2308,7 +2318,9 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E43 [PARTIAL] — code blocks and tables are reflowed because nothing can scroll them horizontally
+### E43 [CLOSED] — code blocks and tables are reflowed because nothing can scroll them horizontally
+
+**Closed-DECLINED — CONFIRM FULL DECLINE ROUND-69 (fj, same SHAs):** re-scope measured: adoption is a global fence-budget flip vs `fitToPane` wrap-not-truncate doctrine (:2288-2315) OR per-block Chat state + key routing (out of ownership); the palette renders no code blocks. No reachable half. The r68 eb decline is CONFIRMED; row leaves PARTIAL. Evidence: fj REPORT §E43 (measurements in mutations.md), triage E43, worklog ROUND 69.
 
 - **What** Bundle W1 makes the transcript honour the pane width, which it must —
   a row wider than the terminal breaks candy-core's one-logical-line-per-row model
@@ -2848,7 +2860,9 @@ this project's recurring defect with the sign flipped. `charWidth()` is not dele
 longer sums it, but `joinsPrevious()` reads it for the one bit it needs (does this codepoint own a
 cell), and its docblock now says so.
 
-### E54 [PARTIAL] — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
+### E54 [CLOSED] — `AgentViewPane::render($w)` over-runs its caller's budget below 44 columns
+
+**Closed ROUND-69 (fj, same SHAs):** `renderAgentView` cuts header+strip to cols via `clipRowsToCols` (renamed/generalized from `clipOverlayToCols`, verified :1320-1322/:2057-2069) BEFORE `markPaneHeader` — the cut never splits a `Mark::zone` sentinel (~27-cell overhead solved); `max(40,…)` floor policy KEPT; geometry re-pinned (identity zone 60→80; NEW sweep widest==cols 24..130; MovedTwice(E64,E54) + postE54Frame44 live-verified twice). Seam: AgentStatusBar's own unbounded budget. Evidence: triage E54, fj REPORT, worklog ROUND 69.
 
 **What.** `render(..., $w, ...)` returns rows of **`$w + 4`** cells: `$w` is handed to `Style::width()`,
 which sizes the **content box**, and the rounded border (2 cells) plus `padding(0, 1)` (2 cells) are
@@ -5623,7 +5637,9 @@ the never-remove rule leaves an unpinnable method behind. The 46x54 characterisa
 four-seed differential fuzz described in `SkillRegistry::pathMatches()` are the harness to prove no
 narrowing.
 
-### E93 [OPEN] — a `preg_match()` backtrack-limit hit is silently absorbed by the fallback
+### E93 [NO-FIX] — a `preg_match()` backtrack-limit hit is silently absorbed by the fallback
+
+**NO-FIX (measured) ROUND-69 (fc, same SHAs):** the entry's own Step is conditional on a logging seam SkillRegistry does not have; fresh measurement at tip (PHP 8.3.6): the pathological trio runs 2000 iters in 0.0017/0.0004/0.0004 s with PREG_NO_ERROR — anchored, never backtracks; a misroute answers correctly via the slower predicate. The triage row explicitly offered this stamp. Evidence: fc REPORT §E93, worklog ROUND 69.
 
 **Recorded 2026-08-22 by the round-43 lane-a fix agent.** Severity: low, observability.
 
@@ -6520,7 +6536,9 @@ userland cannot move it at all.
 test cannot relocate itself into a private temp directory after the fact, so attribution has to move
 instead of the directory. `tests/bootstrap.php`'s `putenv('TMPDIR=…')` is not contradicted by this — it
 is documented there as working on **children** only, which is exactly what the measurement above shows.
-### E140 [OPEN] — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
+### E140 [CLOSED] — `ToolIpcFiles`' "the ONLY unlink either of them has" is no longer true of `Runtime`
+
+**Closed ROUND-69 (fa, same SHAs):** `ToolIpcFiles` class doc-block rewritten — the collect side no longer claims 'the ONLY unlink either of them has'; the `sweep()`-as-only-ORPHAN-reaper conclusion STANDS with corrected wording; residual-claim grep zero at tip. Evidence: triage E140, fa REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-22 by round-45 lane b (fix stage), from its own reviewer's finding.** Severity: low,
 documentation accuracy. **Source-verified.**
@@ -6894,7 +6912,9 @@ Recorded so the zero is not shipped as a finding by a later round.
 
 **Step.** Confirm each by mutation before acting on it.
 
-### E158 [PARTIAL] — `BinSugarcrushAutoloadGuardTest`'s "is ELEVEN" census does not say which channel it counts
+### E158 [CLOSED] — `BinSugarcrushAutoloadGuardTest`'s "is ELEVEN" census does not say which channel it counts
+
+**Closed ROUND-69 (lane fe `b6c2c8283` → pick `41b19f5e5`):** the AutoloadGuard doc-block names the fwrite channel as ONE channel and forward-cites the StderrEmitterCensus roster-agreement methods (verified 2 cross-refs); the census regex keeps its exactly-1 match. Seam: StderrEmitterCensusTest :55 still quotes the old 'is ELEVEN' phrase → round-70 ga. Evidence: triage E158, fe REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, prose.
 
@@ -7105,6 +7125,8 @@ because nothing on their paths opens the alternate screen.
 
 ### E172 [PARTIAL] — three CommandLoader `error_log()` sites duplicate a message already on the seam
 
+**PARTIAL renote (fc verified; fc delta +0T):** feeder re-verified — CommandLoader DEBUG_REFUSALS_ENV :95 / skippedFiles :293 (triage cite :283 drifted), dormancy statements accurate, refusal test pins dormancy. Remaining half = Bootstrap-side launch summary row (mirror SKILL_SKIP_NOTICE_FORMAT, summary-row budget) with the BootstrapLaunchFormatConstantsTest sprintf roster owed IN-STEP; seeded round-70 gc. Evidence: fc REPORT §E172.
+
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low. **Verified, not fixed.**
 
 **What.** `CommandLoader`'s `$refusedDirectories` doc-block says, of its `error_log()` calls: *"The
@@ -7185,7 +7207,9 @@ have to rediscover it.
 decide whether anyone is told, never whether the turn survives), amend the integration test to set the
 flag, and add the row `EnvRosterDriftTest` will demand on `docs/ENVIRONMENT.md`. That last one is not
 optional: the page claims to list every variable `src/` reads and a guard enforces it.
-### E176 [PARTIAL] — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
+### E176 [CLOSED] — the E156 attribution is wrong for `tests/Integration/`: the 62 stderr lines are in-process, not inherited
+
+**Closed-MEASURED-STAMP (zero code) ROUND-69 (lane fn `5d050411d` → pick `f2c2c2327`):** single-sink consolidation refused by measurement — Bootstrap.php holds 4 raw fwrite(STDERR) sites (forbidden ownership) whose StderrEmitterCensus flips live in ff's file; collides with E78c's INTENTIONAL stamps (:390-399/:799-807) + noticeRefusal DECISION-REJECTED (:1016-1029); the brief's StdinReaderCensusTest is a PHANTOM (real file tests/StdinConstantReaderCensusTest.php, fd's 3555a3940); ChildStderrCaptureTest 'Cli/' OUT_OF_SCOPE row already landed (verified :203). Evidence: fn REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-22 by round-46 lane b.** Severity: process, and it redirected a whole lane item.
 **Measured at `62f4e5d1`, PHP 8.3.6, one file per `vendor/bin/phpunit <file>` run, counted with
@@ -7615,7 +7639,9 @@ cover a case that does not yet exist is the wrong trade.
 **Step.** Land with `E192`, not before. The likely shape is a one-shot self-cancelling tick armed by
 whatever wakes the loop for a background worker, rather than a permanent one.
 
-### E194 [OPEN] — there is no PHPUnit-level reset for `RuntimeNoticeSink`
+### E194 [CLOSED] — there is no PHPUnit-level reset for `RuntimeNoticeSink`
+
+**Closed ROUND-69 (lane fd `5a9819fc7` → pick `3555a3940`):** `tests/Support/RuntimeNoticeSinkResetExtension.php` + phpunit.xml `<extensions>` (verified :75-77) + 3T pin; shipped gotcha: PHPUnit 10.5's loader reads `extensions/bootstrap` (vendor Loader.php:198) — an `<extension>` child parses and DROPS SILENTLY (throw-probe proved it; the pin asserts the loader spelling). Seam noted: RuntimeNoticeSink :778 'live callers' doc-block now stale (src forbidden to fd). Evidence: triage E194, fd REPORT, worklog ROUND 69.
 
 Appointment (`Chat::drainsRuntimeNotices`) made the leak round 47 found unreachable, but the sink is
 still a process-wide static that any test can arm via `Bootstrap::chat()` and fill via a parser. A
@@ -7678,7 +7704,9 @@ sibling lane that added a `src/` file in the same round has bumped or must bump 
 **Step.** Supervisor re-derives at merge and takes neither side's number. Longer term this is E188's
 problem and wants the figures derived by the test rather than written into the constant.
 
-### E199 [OPEN] — the seam has no session-wide cap on the transport backend
+### E199 [PARTIAL] — the seam has no session-wide cap on the transport backend
+
+**PARTIAL — RULING PER-TURN (decision requested by fc `183474831`, shipped by fn `5d050411d` → pick `f2c2c2327`):** `TURN_NOTICE_LIMIT = 20` (verified :240); armed ONLY by `beginTurn()` (opt-in — every pre-existing drain test stays green); `drain()` truncates the over-budget batch into ONE `OVERFLOW_FORMAT` row (excess + transport remainder + backend refusals), discards-until-empty so `hasPending()` stops repainting; `reset()` disarms; class/NOTICE_LIMIT/OVERFLOW_FORMAT doc-blocks truth-flipped (session-cap judged wrong for a live TUI). The wiring seam is DELIBERATELY left open: `RuntimeNoticeSink::beginTurn()` at the head of `Chat::scheduleBackendCompletion()` (src/Chat.php:8266) — seeded round-70 ga; zero behaviour change until wired, by design. Evidence: triage E199, fn REPORT.
 
 `RuntimeNoticeSink::record()` returns before it reaches `NOTICE_LIMIT` whenever the cross-fork transport
 exists — i.e. on every interactive launch. So `NOTICE_LIMIT` bounds the array backend's queue and
@@ -7880,7 +7908,9 @@ real isolation defect. The brief's `/tmp` prohibition does not cover `$HOME`, an
 the same class of collision for the scratchpad. **Step:** find the `throwing-*` team writer and sandbox
 its `HOME`, or serialise full-suite runs across lanes.
 
-### E208 [OPEN] — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
+### E208 [CLOSED] — `T_DOLLAR_OPEN_CURLY_BRACES` is now referenced from two files, and is 8.2-deprecated
+
+**Closed (fold) ROUND-69 (fd `3555a3940`; fk `c8b8f5437`):** ForkedChildExitScanner's private `matching()` deleted (verified 0 at tip); `TokenFunctionRanges::matching` public (verified :152) + `opensBraceDepth()/closesBraceDepth()` folded; fk deleted the two scanner copies (ChildStderrCaptureScanner + ChildLifetimeScanner, verified) — scanner suite green = behavioural proof; opener-token census re-derived. Carries outside the closure: a third private `matching()` in ProcessUniqueTempNameTest (verified at tip → round-70 ga) and the not-in-tree-judgeable 8.4-CI-confirm half. Evidence: triage E208, fd/fk REPORTs, worklog ROUND 69.
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: low, forward-looking.
 
@@ -7981,7 +8011,9 @@ these two were not re-measured this round because each costs a mutation run.
 **Step.** Mutate both `mcpClient()` messages outside `'could not be fully started'`, record the failing
 test names, and replace the two counts.
 
-### E214 [PARTIAL] — the class-total guard covers two files, and widening it needs a decision first
+### E214 [CLOSED] — the class-total guard covers two files, and widening it needs a decision first
+
+**Closed ROUND-69 (lane ff `899d3f9c9` → pick `664c9cfa5`, CLOSED-VERDICT +0 code):** (a) settled at `68f7af8f4` (anchored-literal ALLOWED, sentence-window). ERRATUM: r67 refused the CLOSURE citing `9f0c5db62` — that commit is indeed not E214 (a +4-line E20 follow-through), but the row's (a) evidence is 68f7af8f4; verdict right, citation wrong. (b) widening measured-refused (503-file probe) — the decision belongs to E686, not this row. Evidence: ff REPORT, triage E214, worklog ROUND 69.
 
 **Recorded 2026-08-22 by round-47 lane c.** Severity: informational.
 
@@ -8262,7 +8294,9 @@ factory shape — over `src/` and `bin/`, and over the provider registry's dispa
 provider is likelier to be reached through a name-keyed table than through a literal `new`. Then either
 pin the dormancy the way `WorktreeManager`'s is pinned, or state the live path in the doc-block.
 
-### E228 [PARTIAL] — the comment fixture that could not fail, and the class of fixture it belongs to
+### E228 [CLOSED] — the comment fixture that could not fail, and the class of fixture it belongs to
+
+**Closed ROUND-69 (ff, same SHAs):** sweep guard `testEveryZeroShapedFixtureInTheCensusFamilyCarriesAKnownPositiveArm` (verified :1603) live-walks the 12-file Census|Roster family; measured 31 policed zeros / 14 subject pairs / 1 unpaired — FIXED via a `census('prefixed')` presence arm, not licensed; ACCEPTED_ZERO_FIXTURES ships EMPTY + staleness-delete arm; floors 12/31. Lexer laws recorded (return-type colon lexes ':'; T_STATIC vs T_STRING scope words). Evidence: ff REPORT + e228-sweep.md + sites table, worklog ROUND 69.
 
 Round 48's first draft of `constructionSites()`'s guard asserted `0` over an all-comments source, with the
 message "constructionSites() reads comments, so it would red on prose about the constructor". That
@@ -8656,7 +8690,9 @@ out of lane c's file list.
 
 ---
 
-### E242 [OPEN] — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
+### E242 [CLOSED] — `tests/bootstrap.php`'s temp sandbox is keyed by uid alone, so concurrent lanes share it
+
+**Closed-DECLINED ROUND-69 (fg, same SHAs, no code):** re-key measured+DECLINED round 49; `tests/SuiteTempSandboxContractTest` pins hold (file verified); root cause settled by E290/E298. Evidence: fg REPORT verdict, worklog ROUND 69.
 
 **Recorded 2026-08-22 by round-48 lane c.** Severity: test-infrastructure. **Observed, not fully diagnosed.**
 
@@ -8760,7 +8796,9 @@ has no generator to catch it.
 
 ---
 
-### E246 [PARTIAL] — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
+### E246 [CLOSED] — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
+
+**Closed ROUND-69 — refuted-plus-replaced (ff, same SHAs, +0 code):** the decision WAS recorded — `2ab990e99` + `463c74699` + doc-block :51-95; tip re-proofs stronger than the row knew: DENIAL_HOOK='Nope:' reddens FOUR arms incl. the derivation pin; case respell reddens exactly the spelled-out backing-values test. Kept tests are load-bearing. Evidence: ff REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: design (the remainder of E239). **Measured.**
 
@@ -9024,7 +9062,9 @@ observer's line".
 
 ---
 
-### E257 [PARTIAL] — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
+### E257 [CLOSED] — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
+
+**Closed ROUND-69 (fe, same SHAs):** cost stated de-digitalized at BuiltInToolCorpusTest.php:19 ('WHAT ADDING A SOURCE FILE COSTS (E257, round 69...)') + crushSourceFiles() provider pointer — no rotting numerals. Evidence: triage E257, fe REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process (merge arithmetic). **Measured.**
 
@@ -9695,7 +9735,9 @@ only place anybody would notice a fourth copy arriving with a fourth number.
 argument. No action is required today; the entry exists so the decision is made deliberately the next time
 a copy is added.
 
-### E281 [OPEN] — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
+### E281 [CLOSED] — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
+
+**Closed ROUND-69 (fe, same SHAs):** TeamTest attribution — `processToken = uniqid(pid, true)` before snapshot (verified :47/:58); IDEMPOTENT `teamId()` across createTeam/createTeammate + 8 direct sites; `isOwnTeamsEntry` filter (verified :134) with both-polarities fixture table incl. the `basename('../..')` traversal trap; +1T. Seam: MultiAgentRefactorTest:423 'throwing-' ids not pid-prefixed → ga. Evidence: triage E281, fe REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: cross-lane harness. **Observed**, then reproduced by
 elimination.
@@ -10027,7 +10069,9 @@ suite's hermeticity.
 
 ---
 
-### E291 [PARTIAL] — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
+### E291 [CLOSED] — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
+
+**Closed ROUND-69 (fg, same SHAs):** census walks src/ too; never-helper tail resolution (BackgroundSessionRunner::run row, E229) + 'forkProcess' FORK_SPELLINGS + return-wrapper rule (AgentWorkerPool::startAgent, E295); ACCEPTED_BARE_EXIT 5 rows with verbatim-verified reasons; cycle/unresolvable fail closed. Evidence: triage E291, fg REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: convention accuracy. **Measured, PHP 8.3.6.**
 
@@ -10617,6 +10661,8 @@ wanting its own step and its own golden-file pass — and functionality comes be
 
 ### E309 [OPEN] — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
 
+**Round-69 re-verification (fb, still OPEN):** DENIAL_TERMS hand-list confirmed live at `tests/DenialPrefixRosterTest.php:228` (row's :226 drifted); the prescribed tree-wide producer factory (`ToolResult` + every refusal producer) lies outside ALL r69 lane files — refused with evidence, seeded to round-70 ge. Evidence: fb REPORT, worklog ROUND 69.
+
 Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
 pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
 widenings were found by someone thinking of a word that was not on the list, which is the point: the
@@ -11061,7 +11107,9 @@ the headline is, rather than where the bucket is.
 
 ---
 
-### E322 [PARTIAL] — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
+### E322 [CLOSED] — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
+
+**Closed ROUND-69 (fe, same SHAs):** TtyStream fix verified present (:603/:683); the real hole was WiringTest's all-green root-scrape — closed with `bareGetcwdSpellingFixtures` (verified :1077) + cross-exclusion (+6 rows); M2: neutered pattern → tree scan GREEN 327T, fixtures RED exactly 1. Tree-wide offender-fixture sweep beyond fe's files carried. Evidence: triage E322, fe REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: this is the round's transferable lesson.
 **Found by mutation, FIXED this round in `tests/TtyStreamArgumentCensusTest.php`.**
@@ -11134,7 +11182,9 @@ and the row must be deleted when they are fixed.
 
 ---
 
-### E325 [OPEN] — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
+### E325 [PARTIAL] — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
+
+**PARTIAL ROUND-69 (fd, same SHAs):** (a) HelpTest asserts the declaring FILE per row — census `DECLARING_FILE_UNCHECKED` row deleted → const `[]` (verified :97); (b) `VhsTapeContractTest::declaredSlice` folded into new `tests/Support/SlicesDeclaredMethodsTrait.php` (verified); census hop widened same-commit (same-file-first, cross-file iff unique, ambiguous fail-closed) + 4 known-answer fixtures. Carry: 12 inline-slice readers keep private array_slices (list in fd REPORT seam 4). Evidence: triage E325, fd REPORT.
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: correctness of an instrument. **Measured**, PHP 8.3.6.
 Half fixed with a census; half deferred with the reason.
@@ -11777,7 +11827,9 @@ on the `[session:` prefix, so a token after the marker is safe against the line 
 
 ---
 
-### E347 [PARTIAL] — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
+### E347 [CLOSED] — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
+
+**Closed ROUND-69 (lane fb `5ea48fe21` → pick `ff2a96306`; residual via the E375 B-QUALIFIER ruling + fn's carrier):** string-compare assertion re-verified live (byte-identical observer rows; :243 drifted to :244-region); the residual 'fourth case vs qualifier' question was ruled and shipped — see E375. Evidence: triage E347, fb/fn REPORTs, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-51 lane b, which implemented E306.** Severity: premise correction.
 **Measured** — asserted by a test rather than argued.
@@ -12598,7 +12650,9 @@ is the wrong number.
 
 ---
 
-### E369 [OPEN] — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
+### E369 [CLOSED] — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
+
+**Closed ROUND-69 (fd, same SHAs):** the three stale rows rewritten rule-7 against tip facts (EnvDetect guarded :187-194 + zero prod callers + new probe caller; Program childDescriptor ladder); RawMode/Tty row already true → closed-claim cites `e163e7bfe` (verified live). Evidence: triage E369, fd REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-52 lane a.** Severity: stale justification. **Out of lane —
 `sugar-crush/tests/StdinConstantReaderCensusTest.php` is on no lane's list this round. Reported, not
@@ -12770,7 +12824,9 @@ was right and is confirmed by mutation: moving the token BEFORE the marker is ki
 
 ---
 
-### E375 [OPEN] — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
+### E375 [CLOSED] — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
+
+**Closed ROUND-69 — RULING B-QUALIFIER (recorded by fb `5ea48fe21`→`ff2a96306` + fc `183474831`→`71cc12f38`; shipped by fn `5d050411d`→`f2c2c2327`):** `DenialKind` keeps exactly three cases, backing values byte-identical (verified :91/:102/:109; fb's diff to the file is a +19-line decision-home doc-block paragraph, enum body untouched). `NonInteractive::$askWasUnattended` carrier — cleared at run(), sole writer at the prompt's no-tty arm, read-and-clear in `refusalFrom()` gated on Refused; refusal rows gain the OPTIONAL `unattended: true` key ONLY on that arm; human/hook/unanswered rows stay 3-key byte-identical; `ToolRefusal.php` zero edits. Pins: unattended+consume-proof vs human-no-qualifier pair; README conditional-key paragraph in-step. Evidence: triage E375, fb/fc/fn REPORTs, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: open design question. Verified, not implemented.
 
@@ -12792,7 +12848,9 @@ qualifier, then implement. Until then the two arms are deliberately indistinguis
 
 ---
 
-### E376 [OPEN] — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
+### E376 [CLOSED] — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
+
+**Closed ROUND-69 (lane fc `183474831` → pick `71cc12f38`):** `$in` now `@var resource|null` (verified :277) naming the stdinDefault()-null cause; `$err` kept `resource` per the entry; behaviour unchanged. Evidence: triage E376, fc REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane b, which caused it.** Severity: doc drift, no runtime effect.
 **Measured**, PHP 8.3.6. Not fixed — `src/Cli/HeadlessPermissionPrompt.php` was outside this lane.
@@ -12854,7 +12912,9 @@ spending the session's context), and `AuditHookRefusalNoticeTest` asserts the re
 
 ---
 
-### E378 [OPEN] — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
+### E378 [CLOSED] — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
+
+**Closed ROUND-69 (lane fg `0dd5a61fa` → pick `bce05c166`):** reaper SCOPE += 'Hooks/' (verified :60); M3 names AuditHookConcurrentAppendTest — row alive. Evidence: triage E378, fg REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-49 lane b, which put the fork there.** Severity: future obligation, no hole
 today. Not fixed — `tests/Support/ForkedChildReaperAdoptionTest.php` is not this lane's file.
@@ -13221,7 +13281,9 @@ decoration and the table only proves the function returned the right TYPE.
 
 ---
 
-### E390 [PARTIAL] — the lane bounding child processes added an unbounded child process, in the same round
+### E390 [DEFERRED] — the lane bounding child processes added an unbounded child process, in the same round
+
+**DEFERRED (dual-guard evidence) ROUND-69 (fk, same SHAs):** consolidation blocked by (1) ChildWallClockBudgetTest::resolveArgument same-file-literal-only reduction and (2) DuplicatedTestHelperDriftTest's ACCEPTED_CONST_DUPLICATION licensé for this exact name (round-67 di) — neither file fk-owned; post-merge both are UNOWNED → round-70 gb one-motion candidate. Values today 20/20 + census 40, DRIFT_BOUND=1 tolerates. Evidence: fk REPORT §E390, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: hygiene, live.
 
@@ -13244,7 +13306,9 @@ cross-lane edit and the ceiling guard's home is not settled.
 
 ---
 
-### E391 [OPEN] — the provenance walk cannot see a test method INHERITED from a base class
+### E391 [CLOSED] — the provenance walk cannot see a test method INHERITED from a base class
+
+**Closed ROUND-69 (fk, same SHAs):** provenance walk climbs in-tree parents (vendor skipped — machinery, ~200 parser calls/file); inherited hits keyed `<declaring FQN>::<method>`, own keep bare keys; class-level directives not inherited; fixture pair DirectiveBearingParent/InheritedDirectiveChild (verified :63/:119); skippedTestsIn upgraded file::name → class::name with the child-run measurement recorded; exact-match set 2→3. Evidence: triage E391, fk REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer.** Severity: coverage gap, unpopulated today.
 
@@ -14061,7 +14125,9 @@ a sugar-crush test-support class so pointing another lib at it means promoting i
 
 ---
 
-### E419 [OPEN] — DEFERRED: the scanner will not follow a handle through an array member
+### E419 [CLOSED] — DEFERRED: the scanner will not follow a handle through an array member
+
+**Closed ROUND-69 (lane fk `3a14a057c` → pick `c8b8f5437`):** `enclosingArrayOpener` (verified :530/:1197) follows array membership ONE level; carrier fates report as the handle's; closers on a carrier buy no SHORT claim; spawnWorker flips unclassified→LONG via $processDescriptor (probe-measured); ACCOUNTED_FOR row rewritten in-step; 6 fixture arms + renamed followed-contract fixture. Evidence: triage E419, fk REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument coverage. Reported, not hidden.
 
@@ -14253,7 +14319,9 @@ Staleness now compares counts rather than membership, so a row is wrong in both 
 
 ---
 
-### E424 [OPEN] — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
+### E424 [CLOSED] — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
+
+**Closed ROUND-69 (fk, same SHAs):** roster keys resolve to same-file class+method pairs in src/ via SourceFileWalkTrait (fi's trait, second consumer); ghost-class/ghost-method controls share the resolver (rule 15); population guard; EXCEPTION paragraph measured in the class header. Evidence: triage E424, fk REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: residual of E422. Reported, not
 hidden.
@@ -14791,7 +14859,9 @@ this may be a documented seam rather than a guarded one.
 
 ## Round 54 — lane c (close the fd inheritance). E445-E449.
 
-### E445 [OPEN] — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
+### E445 [CLOSED] — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
+
+**Closed ROUND-69 (fg, same SHAs):** ACCEPTED_BARE_EXIT + UNTRACKED_FORKS_ALLOWED re-keyed `<file>::<function>` (verified :129+); scanner `functionKey()` one copy; `missingHalves` int → fn=>count map; per-function allowance; M1/M2 name the exact old file-level hole. Evidence: triage E445, fg REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: instrument granularity. **Measured, and it is NOT
 E423's shape.**
@@ -15520,7 +15590,9 @@ match the cases already known. Bare-LF (raw, non-cooked master) and bare-CR (a c
 LF) rows added, plus a whitespace-padded row — the `trim()` arm had the identical hole and no row had ever
 needed trimming. MEASURED after: narrowing the split KILLED; removing `trim()` KILLED.
 
-### E469 [OPEN] — two roster arms are argued and neither is exercised end to end
+### E469 [CLOSED] — two roster arms are argued and neither is exercised end to end
+
+**Closed ROUND-69 (fe, same SHAs):** three pins (+3T): (A) fork e2e — off-roster skip BEFORE `pcntl_fork()`, child exit(7), banner substr_count==1 + CHILD-EXIT: 7, parent never skips (verified :775-:806 region; M4 = the predicted banner×2/EXIT:1 red); (B) real-EXPECTED countsOff with derived-N 'COUNT IS N+1, ROSTER SIZE IS N' red on a planted duplicate (M3); (C) preparability reflection over rostered files (M5). Evidence: triage E469, fe REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: unpinned reasoning. **Not done.**
 
@@ -16124,7 +16196,9 @@ written. Re-read them at launch, not just the figures.
 
 *Provisional lane-prefixed ids (rule 20); the supervisor renumbers at merge.*
 
-### E493 [OPEN] — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
+### E493 [PARTIAL] — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
+
+**PARTIAL ROUND-69 (fa `8db951a0b` → pick `a9e7a333c`):** record re-verified and extended, zero code — COMPLETE_TIMEOUT_SECONDS paragraph carries the E524 measurements (verified :87); the FIX is open in the providers domain (HTTP progress-callback heartbeat seam, src/Providers/) → round-70 gc. Evidence: triage E493, fa REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-25 by lane a.** Severity: medium. This is the defect E456's implementer chose to
 record rather than half-fix, and it needed an id.
@@ -16445,7 +16519,9 @@ verdict would have recorded a sound test as vacuous.
 **STEP:** either collapse the pairs onto one implementation, or leave them and note in the file that any
 mutation of one branch must be anchored, because the harness cannot tell them apart. Prefer the first.
 
-### E505 [PARTIAL] — a 60s fixture lifetime under a 60s `defaultTimeLimit` turns an assertion into an abort
+### E505 [CLOSED] — a 60s fixture lifetime under a 60s `defaultTimeLimit` turns an assertion into an abort
+
+**Closed ROUND-69 (fg, same SHAs):** new `tests/Support/FixtureLifetimeCensusTest.php` (file verified; 3T/15A) — bidirectional 8-row roster, threshold READ from phpunit.xml defaultTimeLimit=60 + pinned, synthetic known-positive tree (arith/usleep/<limit holes pinned-invisible by design); the guard caught fg's own missed 8th site (WriteBounds STORM_PROBE); CENSUS-SLEEPS-ON-ITSELF law recorded. Evidence: triage E505, fg REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: test-shape, general. **Measured.** Fixed in this
 lane's own new file; the pattern is worth checking elsewhere.
@@ -17366,7 +17442,9 @@ The first (`\Throwable` → `\RuntimeException` on the RUNTIME catch) was green 
 assertions, so route 3 had been "closed" by nothing at all. The second was one line away from it, looked
 equivalent for a defensible reason, and was the more serious of the two.
 
-### E541 [PARTIAL] — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
+### E541 [CLOSED] — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
+
+**Closed ROUND-69 (fb, same SHAs):** the mechanical exclusion is BUILT — `denialLiteralsOutsideThrownThrowableMessages()` drops off-roster denial frames inside `throw new <Throwable>(...)` from the walk with the class resolved from the token stream (imports/alias/T_NAME_*; final class_exists + is_subclass_of Throwable); roster prefixes never excluded (forged-refusal surface); unresolvable forms fail CLOSED toward reds. New both-polarities test (11 asserts) + rule-15 pair; 4 mutation families. Evidence: triage E541, fb REPORT, worklog ROUND 69.
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: classifier false positive. **Measured.** Out of
 lane — `tests/DenialPrefixRosterTest.php` is at `tests/` root, which is lane c's this round. Reported,
@@ -17909,7 +17987,9 @@ example (`catch (\Throwable)`), and the alphabet that mattered was "every supert
 `AssertionFailedError`". `AssertionSwallowingCatchTest` had already learned this a round earlier and
 its lesson had not travelled.
 
-### E564 [OPEN] — `RepoMapBlock`'s remaining unpinned figures, with the generator
+### E564 [CLOSED] — `RepoMapBlock`'s remaining unpinned figures, with the generator
+
+**Closed ROUND-69 (fh, same SHAs):** RepoMapBlock MAX_SECTION_BYTES/MAX_ENTRY_BYTES paragraphs recast as DATED RECORDS (verified :238/:274; provenance git log -S `bc7b17f60`/`6c33705c5`), 9 live digits elided, conclusions kept; pin `testTheByteCapDocblocksCarryTheirMeasurementsAsDatedRecords` (verified :938) asserts date-anchors==2 + conclusions + ABSENCE of every retired figure; M1-M5 exactly red; reader-mechanism lesson: no path literals (TreeWideGuardRoster re-grades the test's own walker). Evidence: triage E564, fh REPORT, worklog ROUND 69.
 
 **Round 58, lane a. RECORDED, deliberately not hand-corrected.** `src/Context/RepoMapBlock.php`'s
 `MAX_SECTION_BYTES` and `MAX_ENTRY_BYTES` doc-blocks restate this repository's package count, its
@@ -18233,7 +18313,9 @@ was added. **52 was a mis-measurement, not staleness.** The causal clause is rem
 is making survives it: a figure no test derives rots whether or not anyone also mis-typed it, and the
 reason it is dropped rather than corrected is unchanged.
 
-### E583 [OPEN] — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
+### E583 [CLOSED] — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
+
+**Round-69 addendum (fi, `e30fb540a`→`58d030980`):** the DEFERRED_BARE_CITATIONS roster ea minted is CLEARED to EMPTY in the same commit as its 6-row/7-site qualification (all FQNs verified at fi REPORT); staleness arm kept, loops no-op; no numeric roster-size pin existed; mutation re-bare→guard RED. This heading's [OPEN] stamp lagged the triage row's r68 CLOSED — aligned now. Evidence: fi REPORT, triage E583.
 
 E547 inherited "eight bare `{@see someMethod()}` citations name no method that exists". Re-censused with a
 generator, the answer depends entirely on the alphabet (rule 11):
@@ -18888,7 +18970,9 @@ a rule-25 negative half so that a helper stuck at "yes" cannot satisfy them.
 depends on.** The rule-14 sentence sat on the `if`, and the `if`'s own argument was computed by a
 function that broke the rule three lines away.
 
-### E609 [OPEN] — DEFERRED: two private source walkers, in the package that extracted a trait to stop exactly this
+### E609 [CLOSED] — DEFERRED: two private source walkers, in the package that extracted a trait to stop exactly this
+
+**Closed ROUND-69 (lane fi `e30fb540a` → pick `58d030980`):** new `tests/Support/SourceFileWalkTrait.php` (verified) — `everySourceFileIn(package, roots)` + shebang-aware `isPhp`; both drifted private walkers deleted from DuplicatedDocBlockLineTest (−64 lines) and BackendSignatureNullabilityTest (1-line wrapper); `contractFamily()` untouched. Second consumer arrived the same round (fk E424 resolver). Evidence: triage E609, fi REPORT, worklog ROUND 69.
 
 **Round 59, lane a. NOT DONE — out of lane, and recorded so it does not need re-investigating.**
 `DuplicatedDocBlockLineTest::everySourceFile()` (added this round) and
@@ -18925,6 +19009,8 @@ by-reference case in E605. One line in the skip list plus a fixture. Left out de
 that diff to the population that exists rather than to the population that could.
 
 ### E611 [OPEN] — two of lane b's five brief items commission edits to files lane b does not own
+
+**Design-carry renote (round-69):** the fix is a supervisor-HARNESS tool + machine-readable ownership schema (briefs are prose .md; check-path-repos verifies existence only) — architectural, OUT OF CODE-PLAN SCOPE; mitigation since round-62 = explicit OWNERSHIP blocks in every brief. Stays OPEN as a process item, not a code finding. Evidence: fh REPORT §E611.
 
 🔴 **The round's first finding, and it was visible before any work started.** Round 59's brief gives lane b
 five items. Items 1 and 2 (E572, E577, E578) are entirely about two files:
@@ -19059,7 +19145,9 @@ sentence at `resolve()` saying the fallback answers for a name PHP would not hav
 describes the GLOBAL class and not the clause's real behaviour. Latent either way — zero bare-unimported
 catch types exist in `sugar-crush/tests`.
 
-### E616 [OPEN] — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
+### E616 [PARTIAL] — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
+
+**PARTIAL ROUND-69 (fb `5ea48fe21` → pick `ff2a96306`):** the three tail-frame fixtures (Cache-Control disallowed / Transfer-Encoding rejected / Auto-Approve denied) pinned REPORTED with the named trade (verified :753-756); DENIAL_SHAPE lookbehind DELIBERATELY unchanged — measured: a '-' lookbehind reports all three NOWHERE while roster prefixes frame identically; pattern choice stays OPEN → round-70 gb. Evidence: triage E616, fb REPORT, worklog ROUND 69.
 
 Found while fixing E570 and deliberately not fixed with it, because it is not a `required` problem. The
 shape is `/(?<![A-Za-z])[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/`. A hyphen is not `[A-Za-z]`, so in
@@ -19560,7 +19648,9 @@ whole of `tests/Tools/` before the scanner's domain is widened, or the widening 
 that has nothing to do with `RepoMapBlock`. And see E635: widening this scanner's ALPHABET is a
 different and much worse idea than widening its FILE domain.
 
-### E633 [PARTIAL] — a figure was asserted; the claim the figure supported was not, and it was false
+### E633 [CLOSED] — a figure was asserted; the claim the figure supported was not, and it was false
+
+**Closed ROUND-69 (fh, same SHAs):** the remaining half (guard conclusions, not digits) closed via E564's recast — no Chat/Bootstrap wiring needed; not further PARTIAL. Evidence: fh REPORT, worklog ROUND 69.
 
 `RepoMapBlock`'s WHAT WAS DELIBERATELY NOT BUILT list argued that a per-class listing was rejected
 because at one line each it would be "several times this whole block's budget". The DIGIT in that
@@ -20283,6 +20373,8 @@ assumes `LINES`/`COLUMNS` unset when stdout is piped) is carried in §0-NOW-69/e
 **What:** 2 fixed-by-reword, 1 true claim pinned via the real mutation-able `DocFigureProseDriftTest` generator, 9 held-with-domains; stale `WorkflowEngine.php` cites → symbol-based (lane ae). Repo-wide residual → E686. **Conf:** HIGH. Evidence: triage E685.
 
 ### E686 [PARTIAL] — repo-wide documentation-figure prose campaign
+
+**PARTIAL — tranche-6 landed round-69 (lane fl → pick `d168ddfab`):** arms Z/AA/AB (DocFigure total 32, verified 32 methods): Z live-pane tick three-site equality + word-map product; AA SkillRegistry quotients/retractions/generator product/7x-10x band; AB nudge multiplier labels = bytes/cap quotients + fully-LIVE margin sentence. ZERO FALSE; 7 HELD; 2 carry rows verified CLOSED by prior arms. Tranche-7 = the ~50 figure-file remainder (seed gd). Evidence: fl REPORT + measures.md ledger, triage E686, worklog ROUND 69.
 
 **ROUND-67 wave-2 tranche-4 stamp (lane dl — re-cut lane `c73374dca` → master `66b92e3d6`), stays PARTIAL:**
 ten HOOKS.md/TROUBLESHOOTING.md `CRUSH_*` claims judged — 7 TRUE pinned in 5 new arms **O–S** with a LIVE
