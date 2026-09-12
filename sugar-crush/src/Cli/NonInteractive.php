@@ -232,7 +232,20 @@ final class NonInteractive
         // {@see Bootstrap::backend()} — and it is enough, because a blocked call
         // terminates through {@see \SugarCraft\Crush\Runtime::failure()},
         // which emits a {@see ToolFinished} carrying the reason.
-        /** @var list<array{tool: string, kind: string, reason: string}> $refusals */
+        // THE ARM QUALIFIER (E375). Both prompt arms — nobody at the keyboard,
+        // and a person who answered `n` — settle through the SAME
+        // {@see DenialKind::Refused}, so the `kind` token cannot tell them
+        // apart ({@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()}
+        // pins that they are byte-identical). The no-tty arm therefore records
+        // the fact that it ran ({@see self::noteUnattendedAsk()}) and
+        // {@see self::refusalFrom()} converts that note into an optional
+        // `unattended` key on the row it assembles for exactly that call. The
+        // carrier is scoped to THIS invocation: cleared on entry, consumed on
+        // assembly, so no earlier run — or an approver driven outside this
+        // method — can qualify a row this document carries.
+        self::$askWasUnattended = false;
+
+        /** @var list<array{tool: string, kind: string, reason: string, unattended?: bool}> $refusals */
         $refusals = [];
         $observeRefusals = static function (object $event) use (&$refusals): void {
             $refusal = self::refusalFrom($event);
@@ -678,6 +691,27 @@ final class NonInteractive
     private static $stdinDefault = null;
 
     /**
+     * The E375 arm-qualifier carrier: set by
+     * {@see HeadlessPermissionPrompt::__invoke()}'s no-terminal arm when it
+     * auto-refuses an ASK, read-and-cleared by {@see self::refusalFrom()} when
+     * it assembles a `refused`-kind row, and cleared at the top of every
+     * {@see self::run()} so the note cannot outlive the invocation that wrote
+     * it.
+     *
+     * WHY A CARRIER IS THE ONLY CARRIER. The approver answers
+     * `Runtime::settleAsk()`'s `\Closure(ToolCall, HookResult): bool` — one
+     * bit — and the refusal's `reason` renders in `Runtime.php` behind the
+     * `Permission denied:` prefix whose byte-identity across the two arms the
+     * test cited above pins, so neither the verdict nor the text can carry
+     * WHICH arm ran. The decision (round 69) is a qualifier on the row, not a
+     * fourth {@see DenialKind} case; the only code that knows the arm is the
+     * arm itself, and the only surface that survives to the JSON consumer is
+     * this row. {@see HeadlessPermissionPrompt}'s class doc-block carries the
+     * full decision record.
+     */
+    private static bool $askWasUnattended = false;
+
+    /**
      * Point {@see readStdinIfPiped()}'s DEFAULT at $stream instead of the
      * process's real STDIN (E212).
      *
@@ -878,7 +912,8 @@ final class NonInteractive
      * `json`: `{"result": "<content>"}`, plus a `refusals` array when the turn
      * blocked at least one tool call — see {@see self::emitErrorDocument()}
      * for why that key alone is conditional, and {@see self::refusalFrom()}
-     * for what counts as one.
+     * for what counts as one and for the optional per-row `unattended`
+     * qualifier an auto-refusal carries (E375).
      *
      * `text` CARRIES NO REFUSALS ON STDOUT, AND THE REASON GIVEN FOR THAT HAS
      * BEEN WRONG TWICE.
@@ -1180,7 +1215,19 @@ final class NonInteractive
      * This method is the `refusals`-entry projection of the answer and nothing
      * else.
      *
-     * @return array{tool: string, kind: string, reason: string}|null
+     * THE OPTIONAL FOURTH KEY (E375). A `refused`-kind row additionally
+     * carries `unattended: true` when — and only when — the note left by
+     * {@see HeadlessPermissionPrompt::__invoke()}'s no-terminal arm is
+     * standing, which is the one fact the shared `Permission denied:` reason
+     * cannot spell: nobody was asked, as opposed to somebody was and said no.
+     * The key is CONSUMED by this read, so exactly the row for the call the
+     * arm refused carries it; hook denies and unanswered ASKs never consume
+     * and never qualify, because their `kind` already names what happened.
+     * Human answers (a typed `n`, an EOF at a live prompt) leave the note
+     * unset, so their rows keep the byte-identical three-key shape the
+     * existing pins assert.
+     *
+     * @return array{tool: string, kind: string, reason: string, unattended?: bool}|null
      */
     private static function refusalFrom(object $event): ?array
     {
@@ -1189,10 +1236,45 @@ final class NonInteractive
             return null;
         }
 
-        return [
+        $row = [
             'tool' => $refusal->tool,
             'kind' => $refusal->kind->token(),
             'reason' => $refusal->reason,
         ];
+
+        if ($refusal->kind === DenialKind::Refused && self::takeUnattendedAsk()) {
+            $row['unattended'] = true;
+        }
+
+        return $row;
+    }
+
+    /**
+     * Record that the console approver refused an ASK because there was no
+     * terminal to ask at (E375).
+     *
+     * The ONE write site in `src/` is
+     * {@see HeadlessPermissionPrompt::__invoke()}'s no-tty arm; the only
+     * reader is {@see self::refusalFrom()}, and {@see self::run()} clears the
+     * note before it installs the observer that reads it. This is deliberately
+     * not a constructor argument or a return value: the approver's `bool` is
+     * the grant contract `Runtime::settleAsk()` settles on, and the refusal's
+     * text is rendered by `Runtime` behind a prefix two arms share byte for
+     * byte — the carrier is the only additive route that touches neither.
+     */
+    public static function noteUnattendedAsk(): void
+    {
+        self::$askWasUnattended = true;
+    }
+
+    /**
+     * Read-and-clear the E375 arm note (see {@see self::$askWasUnattended}).
+     */
+    private static function takeUnattendedAsk(): bool
+    {
+        $noted = self::$askWasUnattended;
+        self::$askWasUnattended = false;
+
+        return $noted;
     }
 }

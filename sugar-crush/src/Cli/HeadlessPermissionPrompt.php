@@ -380,6 +380,7 @@ final class HeadlessPermissionPrompt
     public function __invoke(ToolCall $call, HookResult $ask): bool
     {
         if (!$this->isInteractive()) {
+            NonInteractive::noteUnattendedAsk(); // E375: the row qualifier's only write site — see class doc-block
             $this->write($this->refusal($call, $ask));
 
             return false;

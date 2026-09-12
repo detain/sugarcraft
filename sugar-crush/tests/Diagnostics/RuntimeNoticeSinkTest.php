@@ -161,6 +161,146 @@ final class RuntimeNoticeSinkTest extends TestCase
         self::assertSame(['a later, unrelated warning'], RuntimeNoticeSink::drain());
     }
 
+    /**
+     * E199, THE OPT-IN HALF. The per-turn budget is armed by
+     * {@see RuntimeNoticeSink::beginTurn()} and by nothing else — a drain with
+     * no owner announcing turn boundaries keeps the pre-E199 shape even under
+     * load that WOULD have truncated mid-turn. The second drain here is the
+     * discriminator: had the cap leaked into an unarmed process, its batch
+     * would arrive as one overflow row instead of twenty notices.
+     */
+    public function testTheTurnBudgetIsOptInAndAnUnarmedDrainKeepsThePerBatchShapeOnly(): void
+    {
+        RuntimeNoticeSink::arm(false);
+
+        for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT + 3; $i++) {
+            RuntimeNoticeSink::record("notice {$i}");
+        }
+        $first = RuntimeNoticeSink::drain();
+        self::assertCount(RuntimeNoticeSink::NOTICE_LIMIT + 1, $first);
+
+        for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT; $i++) {
+            RuntimeNoticeSink::record("later {$i}");
+        }
+        self::assertCount(
+            RuntimeNoticeSink::NOTICE_LIMIT,
+            RuntimeNoticeSink::drain(),
+            'an unarmed drain truncated the turn — beginTurn() is supposed to be the only thing that arms it',
+        );
+
+        // And arming is not permanent: reset() takes the budget back off, so a
+        // host that began turns and died down to the sink still sees the old
+        // per-batch-only shape on the next arm.
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(false);
+        RuntimeNoticeSink::beginTurn();
+        RuntimeNoticeSink::record('one row');
+        self::assertSame(['one row'], RuntimeNoticeSink::drain());
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(false);
+
+        for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT * 2; $i++) {
+            RuntimeNoticeSink::record("post-reset {$i}");
+        }
+        self::assertCount(RuntimeNoticeSink::NOTICE_LIMIT + 1, RuntimeNoticeSink::drain());
+        for ($i = 0; $i < RuntimeNoticeSink::NOTICE_LIMIT; $i++) {
+            RuntimeNoticeSink::record("post-reset later {$i}");
+        }
+        self::assertCount(
+            RuntimeNoticeSink::NOTICE_LIMIT,
+            RuntimeNoticeSink::drain(),
+            'reset() did not disarm the turn budget; a fresh arm truncates like a budgeted one',
+        );
+    }
+
+    /**
+     * E199, THE BUDGET ITSELF. Within ONE turn the transcript sees at most
+     * {@see RuntimeNoticeSink::TURN_NOTICE_LIMIT} rows: the first batch spends
+     * the budget honestly, the next batch arrives to an empty budget and is
+     * truncated to nothing, announced by exactly one overflow row naming what
+     * the turn will not show. A third batch vanishes WITHOUT a second
+     * announcement — and then, having discarded everything, the inbox reads
+     * empty, because a pending transport with a saturated budget is Chat
+     * repainting on an empty payload forever.
+     *
+     * TURN_NOTICE_LIMIT deliberately EQUALS NOTICE_LIMIT today, so this test
+     * is written against both constants: were they ever separated, the second
+     * batch still overruns a spent budget and the assertions hold unchanged.
+     */
+    public function testTheTurnBudgetTruncatesTheSecondBatchOfATurnAndAnnouncesTheOverflowOnce(): void
+    {
+        RuntimeNoticeSink::arm(false);
+        RuntimeNoticeSink::beginTurn();
+
+        for ($i = 0; $i < RuntimeNoticeSink::TURN_NOTICE_LIMIT; $i++) {
+            RuntimeNoticeSink::record("notice {$i}");
+        }
+        $first = RuntimeNoticeSink::drain();
+        self::assertCount(RuntimeNoticeSink::TURN_NOTICE_LIMIT, $first);
+        self::assertSame(
+            'notice ' . (RuntimeNoticeSink::TURN_NOTICE_LIMIT - 1),
+            $first[RuntimeNoticeSink::TURN_NOTICE_LIMIT - 1],
+            'the budgeted batch did not end where the budget says it ends',
+        );
+
+        $overrun = RuntimeNoticeSink::TURN_NOTICE_LIMIT;
+        for ($i = 0; $i < $overrun; $i++) {
+            RuntimeNoticeSink::record("extra {$i}");
+        }
+        $second = RuntimeNoticeSink::drain();
+        self::assertSame(
+            [sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, $overrun, 's')],
+            $second,
+            'the over-budget batch did not collapse into exactly one overflow row naming its count',
+        );
+        self::assertFalse(RuntimeNoticeSink::hasPending());
+
+        RuntimeNoticeSink::record('late');
+        self::assertTrue(RuntimeNoticeSink::hasPending(), 'a saturated turn stopped accepting at all');
+        self::assertSame([], RuntimeNoticeSink::drain());
+        self::assertFalse(RuntimeNoticeSink::hasPending(), 'the saturated drain deferred the row instead of discarding it');
+
+        // A new turn re-opens the budget AND re-allows the single announcement.
+        RuntimeNoticeSink::beginTurn();
+        RuntimeNoticeSink::record('next turn');
+        self::assertSame(['next turn'], RuntimeNoticeSink::drain());
+    }
+
+    /**
+     * E199, THE TRANSPORT HALF — the backend the session cap was actually
+     * filed for. Thirty datagrams are in flight; the turn budget spends on the
+     * first readable batch, and the truncating drain must read the transport
+     * DRY as it truncates: the ten rows the budget will never surface are
+     * counted into the overflow row and gone from `hasPending()`, not parked
+     * where the next tick re-reads them forever.
+     */
+    public function testTheTurnTruncationDiscardsTheTransportRemainderSoNothingStaysPending(): void
+    {
+        RuntimeNoticeSink::arm(true);
+        RuntimeNoticeSink::beginTurn();
+
+        $inFlight = RuntimeNoticeSink::NOTICE_LIMIT + 10;
+        for ($i = 0; $i < $inFlight; $i++) {
+            RuntimeNoticeSink::record("transport notice {$i}");
+        }
+
+        $first = RuntimeNoticeSink::drain();
+        self::assertCount(RuntimeNoticeSink::NOTICE_LIMIT, $first);
+        self::assertTrue(RuntimeNoticeSink::hasPending(), 'the transport remainder vanished before the budget spent');
+
+        $second = RuntimeNoticeSink::drain();
+        self::assertSame(
+            [sprintf(RuntimeNoticeSink::OVERFLOW_FORMAT, 10, 's')],
+            $second,
+            'the truncating drain did not count the transport remainder into its one overflow row',
+        );
+        self::assertFalse(
+            RuntimeNoticeSink::hasPending(),
+            'a saturated turn left the transport readable — Chat would repaint on rows that never surface',
+        );
+        self::assertSame([], RuntimeNoticeSink::drain());
+    }
+
     public function testALongNoticeIsClippedToTheBudgetWithTheSuffixCountedIn(): void
     {
         RuntimeNoticeSink::arm(false);

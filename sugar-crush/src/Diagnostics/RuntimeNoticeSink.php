@@ -52,9 +52,21 @@ use React\EventLoop\Loop;
  * each resent on every later turn. WHY THE COMPARISON STILL EARNS ITS PLACE:
  * the ARGUMENT is the same one — a transcript row is a recurring token cost,
  * not a line on a terminal — and it is why `MAX_CHARS` and the per-batch bound
- * exist at all. It is the SCOPE of the two caps that differs, and a session
- * cap here is an open design question rather than an oversight: unlike the
- * launch list, this inbox has no point at which it is known to be complete.
+ * exist at all. It is the SCOPE of the two caps that differs — and the scope
+ * question E199 left open is now DECIDED: per TURN, not per session (round 69;
+ * a session cap would let a long session stop surfacing anything, and "never"
+ * was the status quo the entry was filed against). {@see beginTurn()} opens a
+ * budget of {@see TURN_NOTICE_LIMIT} transcript rows; {@see drain()} enforces
+ * it at the PARENT's read side only — children keep writing, because a child
+ * cannot see a turn boundary — truncates the batch, appends
+ * {@see OVERFLOW_FORMAT} ONCE, and discards everything else until the inbox
+ * reads empty, so a saturated turn cannot leave {@see hasPending()} true and
+ * keep Chat's tick repainting forever. The accounting is OPT-IN until the
+ * drain-owner's call site lands: an unarmed drain behaves exactly as it
+ * always did, which is the honest state of a process nobody has told where a
+ * turn begins. Unlike the launch list, this inbox has no point at which it is
+ * known to be complete — per-turn is the closest bound a live engine loop can
+ * actually re-open.
  *
  * WHY IT IS STATIC, WHICH IS NOT LAZINESS. Two of the five emitter classes
  * E171 names are `final readonly`
@@ -186,15 +198,46 @@ final class RuntimeNoticeSink
     /**
      * The most notices the IN-PROCESS backend will hold between drains.
      *
-     * A CAP ON THE BACKEND NOTHING ELSE BOUNDS. The datagram backend is capped
-     * by the kernel's send buffer (measured in this class's doc-block); the
-     * array backend has no such ceiling, and the case that needs one is real —
-     * a `-p` one-shot, or any embedder that never polls, running a model that
-     * emits a malformed tool call on every step. Twenty is above every
-     * plausible honest burst (the parsers emit at most one notice per
-     * parameter of one call) and far below a number that would matter.
+     * A CAP ON THE BACKEND NOTHING ELSE BOUNDED — until E199. The datagram
+     * backend is capped by the kernel's send buffer (measured in this class's
+     * doc-block); the array backend has no such ceiling, and the case that
+     * needs one is real — a `-p` one-shot, or any embedder that never polls,
+     * running a model that emits a malformed tool call on every step. Twenty
+     * is above every plausible honest burst (the parsers emit at most one
+     * notice per parameter of one call) and far below a number that would
+     * matter. WHAT SINCE E199 BOUNDS BOTH BACKENDS ACROSS BATCHES is
+     * {@see TURN_NOTICE_LIMIT}, enforced at the parent's {@see drain()}, so
+     * this constant is now the per-BATCH bound it always was plus a
+     * per-QUEUE bound on the array backend, and no longer the whole story on
+     * either.
      */
     public const NOTICE_LIMIT = 20;
+
+    /**
+     * The most notice rows ONE TURN may add to the transcript (E199, decided
+     * per-turn in round 69 — the session-scoped cap E199 asked for was judged
+     * wrong for a long-lived TUI, which would end up surfacing nothing).
+     *
+     * ENFORCED AT THE DRAIN, NOT THE RECORD. The rows cross a fork on the
+     * interactive path, so a parent-side queue count would miss every child's
+     * contribution; the drain is the one place the whole batch is visible in
+     * one process. Children keep writing (their text is in `error_log()`
+     * whatever this cap does); a drained-past-budget batch is truncated, gets
+     * one {@see OVERFLOW_FORMAT} row for the turn, and the rest of the inbox
+     * is DISCARDED — not deferred, because a transport that stays readable
+     * keeps Chat's notice subscription firing on an empty payload.
+     *
+     * THE NUMBER is the same budget the per-batch cap already argues is
+     * "above every plausible honest burst", now spent across a whole turn:
+     * twenty rows of up to {@see MAX_CHARS} each, every one of them resent to
+     * the model on every later turn, is already a wall no healthy generation
+     * fills — and the row that truncates is the signal, not a loss: the
+     * complete text is on stderr by construction.
+     *
+     * ACTIVE ONLY once a drain owner calls {@see beginTurn()}; until then
+     * {@see drain()} bounds per batch exactly as it did before E199.
+     */
+    public const TURN_NOTICE_LIMIT = 20;
 
     /**
      * How the "and N more" tail row is spelled. `%d` the dropped count, `%s`
@@ -204,6 +247,13 @@ final class RuntimeNoticeSink
      * {@see \SugarCraft\Crush\Cli\Bootstrap::launchNotices()} gives: a marker
      * occupying a slot in the list would make the cap dishonest and a second
      * overflow would have to rewrite it.
+     *
+     * TWO OVERFLOWS SPELL THEIR TAIL WITH THIS ONE FORMAT (E199): the
+     * in-process backend's per-batch refusals above {@see NOTICE_LIMIT}, and
+     * the turn truncation at {@see TURN_NOTICE_LIMIT}. "this session" stays true
+     * for the second — the dropped rows are gone from the session's surface,
+     * not parked for a later one — and a format constant each lane had to
+     * invent would put two spellings of the same sentence in the transcript.
      */
     public const OVERFLOW_FORMAT = '… and %d more runtime notice%s this session; see stderr for the full text.';
 
@@ -238,6 +288,22 @@ final class RuntimeNoticeSink
 
     /** Notices the in-process backend refused because {@see NOTICE_LIMIT} was reached. */
     private static int $dropped = 0;
+
+    /**
+     * Whether the per-turn budget (E199) is armed — true from the first
+     * {@see beginTurn()} until {@see reset()}.
+     *
+     * OPT-IN, AND THAT IS THE POINT: until a drain owner says where its turns
+     * begin, {@see drain()} must not start swallowing rows from callers whose
+     * contract predates the cap.
+     */
+    private static bool $turnAccounting = false;
+
+    /** Notice rows surfaced to the transcript since {@see beginTurn()}, overflow row excluded. */
+    private static int $turnSurfaced = 0;
+
+    /** Whether this turn has already had its single {@see OVERFLOW_FORMAT} row. */
+    private static bool $turnOverflowAnnounced = false;
 
     /** @var resource|null The read end of the transport, owned by this process. */
     private static $transportRead = null;
@@ -387,6 +453,18 @@ final class RuntimeNoticeSink
      */
     public static function drain(): array
     {
+        if (self::$turnOverflowAnnounced) {
+            // E199: this turn already got its overflow row. Everything after
+            // it is DISCARDED at the read, in this call — not deferred —
+            // because a transport left readable keeps hasPending() true and
+            // Chat's notice subscription firing on rows that will never
+            // surface. The turn's complete record is on stderr by
+            // construction; the budget protects the transcript, not the log.
+            self::discardPendingNotices();
+
+            return [];
+        }
+
         $notices = self::$queue;
         self::$queue = [];
         $dropped = self::$dropped;
@@ -397,6 +475,8 @@ final class RuntimeNoticeSink
             // child in a loop could otherwise hand one update() an unbounded
             // batch, and the tick that follows will pick the rest up. The
             // socket keeps them in the meantime — it is the queue.
+            // (The one exception is E199's truncation path below, where the
+            // rest is deliberately NOT picked up.)
             for ($i = 0; $i < self::NOTICE_LIMIT; $i++) {
                 $datagram = @stream_socket_recvfrom(self::$transportRead, self::DATAGRAM_BYTES);
                 if ($datagram === false || $datagram === '') {
@@ -413,11 +493,90 @@ final class RuntimeNoticeSink
             }
         }
 
+        if (self::$turnAccounting) {
+            $remaining = self::TURN_NOTICE_LIMIT - self::$turnSurfaced;
+
+            if (count($unique) > $remaining) {
+                $excess = count($unique) - max(0, $remaining);
+                $unique = $remaining > 0 ? array_slice($unique, 0, $remaining) : [];
+                self::$turnSurfaced += count($unique);
+                self::$turnOverflowAnnounced = true;
+
+                // ONE row for everything the turn will not surface: this
+                // batch's unique excess, the transport's unread remainder,
+                // and any array-backend refusals taken with it. Within-batch
+                // duplicates are not counted — they were never rows, which is
+                // what the de-duplication paragraph above has always meant.
+                // Not a second row per later drain — the budget is announced,
+                // then it holds.
+                $discarded = $excess + self::discardPendingNotices() + $dropped;
+                $unique[] = sprintf(
+                    self::OVERFLOW_FORMAT,
+                    $discarded,
+                    $discarded === 1 ? '' : 's',
+                );
+
+                return $unique;
+            }
+
+            self::$turnSurfaced += count($unique);
+        }
+
         if ($dropped > 0) {
             $unique[] = sprintf(self::OVERFLOW_FORMAT, $dropped, $dropped === 1 ? '' : 's');
         }
 
         return $unique;
+    }
+
+    /**
+     * Open a per-turn notice budget of {@see TURN_NOTICE_LIMIT} transcript
+     * rows (E199).
+     *
+     * THE DRAIN OWNER CALLS IT, NOT THE EMITTERS. Children write without
+     * knowing where a turn begins; the cap is therefore counted at the one
+     * parent-side point every row passes — {@see drain()} — and only from a
+     * call site that owns the turn boundary. Until such a caller exists the
+     * cap is armed by nothing, which is what keeps an unbudgeted host
+     * behaving exactly as it did before E199 (see {@see $turnAccounting}).
+     * {@see reset()} takes the arming back off.
+     *
+     * IDEMPOTENT WITHIN A CALL, and re-calling it per turn is the intended
+     * rhythm: each call re-opens the budget and re-allows the single overflow
+     * row.
+     */
+    public static function beginTurn(): void
+    {
+        self::$turnAccounting = true;
+        self::$turnSurfaced = 0;
+        self::$turnOverflowAnnounced = false;
+    }
+
+    /**
+     * Take everything still waiting and throw it away; return how many rows
+     * went (E199).
+     *
+     * Reads the transport DRY, not just up to a bound: this runs from the
+     * saturation paths, where the point is precisely that `hasPending()` must
+     * go false afterwards or Chat repaints on a payload nobody will show.
+     */
+    private static function discardPendingNotices(): int
+    {
+        $discarded = count(self::$queue) + self::$dropped;
+        self::$queue = [];
+        self::$dropped = 0;
+
+        if (self::$transportRead !== null) {
+            while (true) {
+                $datagram = @stream_socket_recvfrom(self::$transportRead, self::DATAGRAM_BYTES);
+                if ($datagram === false || $datagram === '') {
+                    break;
+                }
+                $discarded++;
+            }
+        }
+
+        return $discarded;
     }
 
     /**
@@ -631,6 +790,13 @@ final class RuntimeNoticeSink
         self::$armed = false;
         self::$queue = [];
         self::$dropped = 0;
+
+        // The per-turn budget (E199) is torn down with the inbox: a fresh
+        // arm starts as unbudgeted as a process that never heard of the cap,
+        // and the drain owner re-arms it with its next beginTurn().
+        self::$turnAccounting = false;
+        self::$turnSurfaced = 0;
+        self::$turnOverflowAnnounced = false;
 
         foreach ([self::$transportRead, self::$transportWrite] as $handle) {
             if (is_resource($handle)) {

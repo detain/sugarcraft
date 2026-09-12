@@ -419,7 +419,12 @@ blocked a tool call — a permission ASK that nothing could answer, an explicit
 `n` at the prompt, a hook that denied the call outright — adds
 `"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
 "<why it was stopped>"}, …]` to whichever document it emits, the answer and
-the error one alike. `kind` is one of exactly three tokens and says which of
+the error one alike. A row for an ASK that the run answered by refusing it
+because there was no terminal to ask at carries one extra key,
+`"unattended": true`; a refusal a human answered — with `n`, or an EOF at a
+live prompt — never does. One `kind` covers both nobody-being-there and a
+person-saying-no, whose reason texts are byte-identical, so this key is a
+qualifier on the row, not a fourth `kind`. `kind` is one of exactly three tokens and says which of
 those three things happened: `hook` (a hook denied the call outright),
 `refused` (an approver was asked and answered no) and `unanswered` (the call
 needed permission and there was nobody to ask). It is there so a consumer does

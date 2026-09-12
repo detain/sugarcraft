@@ -10,11 +10,14 @@ use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\ArgvParser;
+use SugarCraft\Crush\Cli\HeadlessPermissionPrompt;
 use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\DenialKind;
+use SugarCraft\Crush\Permissions\PermissionGate;
+use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
@@ -541,6 +544,119 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     }
 
     /**
+     * E375, THE QUALIFIER. An ASK that the console approver refuses because
+     * there is no terminal to ask at arrives in the document carrying
+     * `unattended: true` on its row — the one fact the shared
+     * `Permission denied:` reason cannot spell, because fb's
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins that
+     * nobody-being-asked and a-person-saying-`n` are byte-identical.
+     *
+     * Real EngineBackend, real policy ASK (`requireAskForToolNames`), real
+     * {@see HeadlessPermissionPrompt} with `interactive: false` — nothing in
+     * this shape is hand-built except the provider's two answers. The key
+     * ORDER is asserted too, so a qualifier that arrives on hook rows or
+     * answers is named by the failure, not by a diff of passing arrays.
+     */
+    public function testAnAskRefusedWithNoTerminalCarriesTheUnattendedQualifier(): void
+    {
+        $tool = $this->recordingEditTool();
+        $err = \fopen('php://memory', 'w+');
+        self::assertIsResource($err);
+        $prompt = new HeadlessPermissionPrompt(PermissionMode::Default, null, $err, false);
+        $backend = EngineBackend::new($this->providerAskingToEditATextFile(), 'bash')
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover($prompt->approver());
+
+        $document = $this->documentFrom($backend, NonInteractive::EXIT_OK);
+
+        self::assertSame(0, $tool->calls, 'the unattended arm reported a refusal and the tool ran anyway');
+        self::assertArrayHasKey('refusals', $document);
+        self::assertCount(1, $document['refusals']);
+        $row = $document['refusals'][0];
+        self::assertSame(
+            ['tool', 'kind', 'reason', 'unattended'],
+            \array_keys($row),
+            'the unattended row is not the four keys this ruling chose; the test above it (no-qualifier '
+            . 'rows) pins the three-key shape, so a drift here means the qualifier moved, not the roster',
+        );
+        self::assertSame('Edit', $row['tool']);
+        self::assertSame(DenialKind::Refused->token(), $row['kind']);
+        self::assertTrue($row['unattended']);
+        self::assertStringStartsWith(DenialKind::Refused->value, $row['reason']);
+        \rewind($err);
+        self::assertStringContainsString(
+            'stdin is not a terminal',
+            (string) \stream_get_contents($err),
+            'the qualifier fired on a row the no-terminal arm did NOT write — wrong arm, wrong test',
+        );
+
+        // THE NOTE IS CONSUMED, NOT STANDING. One more clean turn through the
+        // same run machinery must not resurrect a qualifier no arm wrote —
+        // the carrier's whole scope claim in one extra assertion.
+        $quiet = EngineBackend::new(
+            new class implements ProviderInterface {
+                public function name(): string { return 'quiet'; }
+                public function supportsStreaming(): bool { return false; }
+                public function supportsFunctionCalling(): bool { return true; }
+                public function supportsVision(): bool { return false; }
+                public function supportsJsonSchema(): bool { return false; }
+                public function contextWindow(): int { return 1000; }
+                public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+                public function complete(CompleteRequest $r): CompleteResponse { return new CompleteResponse(content: 'done'); }
+                public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+                public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+            },
+            'bash',
+        )->withTools([$this->recordingEditTool()]);
+        $second = $this->documentFrom($quiet, NonInteractive::EXIT_OK);
+        self::assertArrayNotHasKey('refusals', $second, 'a turn that refused nothing carries rows anyway');
+    }
+
+    /**
+     * E375, THE OTHER ARM. The same ASK, the same `n`, at a terminal that
+     * exists: the human refused and the row says exactly that — three keys,
+     * no qualifier. This is the test that makes the key above a DISCRIMINATOR
+     * rather than a stamp every `refused` row wears; without it, "always set"
+     * and "arm-scoped" would both pass, and the ruling's whole point (nobody
+     * being asked vs. being asked and refused) would be unaudited prose.
+     */
+    public function testAHumanAnsweredRefusalCarriesNoQualifier(): void
+    {
+        $tool = $this->recordingEditTool();
+        $in = \fopen('php://memory', 'w+');
+        $err = \fopen('php://memory', 'w+');
+        self::assertIsResource($in);
+        self::assertIsResource($err);
+        \fwrite($in, "n\n");
+        \rewind($in);
+        $prompt = new HeadlessPermissionPrompt(PermissionMode::Default, $in, $err, true);
+        $backend = EngineBackend::new($this->providerAskingToEditATextFile(), 'bash')
+            ->withTools([$tool])
+            ->withPermissionGate(new PermissionGate(PermissionMode::Default))
+            ->withPermissionApprover($prompt->approver());
+
+        $document = $this->documentFrom($backend, NonInteractive::EXIT_OK);
+
+        self::assertSame(0, $tool->calls);
+        self::assertArrayHasKey('refusals', $document);
+        self::assertCount(1, $document['refusals']);
+        self::assertSame(
+            ['tool', 'kind', 'reason'],
+            \array_keys($document['refusals'][0]),
+            'a refusal a human answered now carries a fourth key; the unattended qualifier has leaked off '
+            . 'the arm that writes it, and the byte-identical reason text no longer marks it',
+        );
+        self::assertSame(DenialKind::Refused->token(), $document['refusals'][0]['kind']);
+        \rewind($err);
+        self::assertStringContainsString(
+            'refused Edit',
+            (string) \stream_get_contents($err),
+            'the human arm did not run, so this test proves nothing about which arm the qualifier tracks',
+        );
+    }
+
+    /**
      * Run one `NonInteractive::run()` turn in a child PHP process and return
      * `[stdout, stderr, exit code]`.
      *
@@ -789,6 +905,67 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
 
             public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
             public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
+    /**
+     * E375 pair fixture: two round-trips whose first asks for an `Edit` — the
+     * tool the shipped {@see PermissionGate} in Default mode raises a real ASK
+     * for, which is what routes the verdict through
+     * {@see HeadlessPermissionPrompt}'s arms rather than a hand-built
+     * HookResult. Shaped like {@see self::providerAskingToDeleteABuildTree()}
+     * for the same reason that one is: the fixture has to be one the shipped
+     * gate recognises.
+     */
+    private function providerAskingToEditATextFile(): ProviderInterface
+    {
+        return new class implements ProviderInterface {
+            public int $visits = 0;
+
+            public function name(): string { return 'edit-tc'; }
+            public function supportsStreaming(): bool { return false; }
+            public function supportsFunctionCalling(): bool { return true; }
+            public function supportsVision(): bool { return false; }
+            public function supportsJsonSchema(): bool { return false; }
+            public function contextWindow(): int { return 1000; }
+            public function costPer1kTokens(string $m, string $d): float { return 0.0; }
+
+            public function complete(CompleteRequest $r): CompleteResponse
+            {
+                $this->visits++;
+
+                return $this->visits === 1
+                    ? new CompleteResponse(
+                        content: 'editing',
+                        toolCalls: [new ToolCall('c1', 'Edit', ['file_path' => 'notes.txt'])],
+                    )
+                    : new CompleteResponse(content: 'done');
+            }
+
+            public function completeStream(CompleteRequest $r): \Generator { yield new CompleteResponse(content: ''); }
+            public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { return new EmbeddingsResponse([]); }
+        };
+    }
+
+    /**
+     * E375 pair fixture: an `Edit` tool that counts its invocations and never
+     * touches a filesystem. `$calls` is asserted on by both arm tests.
+     */
+    private function recordingEditTool(): Tool
+    {
+        return new class implements Tool {
+            public int $calls = 0;
+
+            public function name(): string { return 'Edit'; }
+            public function description(): string { return 'counts edits'; }
+            public function inputSchema(): array { return []; }
+
+            public function execute(array $args): ToolResult
+            {
+                $this->calls++;
+
+                return new ToolResult(toolCallId: '', content: 'edited');
+            }
         };
     }
 
