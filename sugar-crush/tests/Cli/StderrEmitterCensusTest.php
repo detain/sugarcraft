@@ -9,6 +9,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
 use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
+use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
 
 /**
  * Every place in `src/` and `bin/` that can put a line on the user's stderr,
@@ -255,6 +256,15 @@ final class StderrEmitterCensusTest extends TestCase
      * doc-block gives: sharing the code is not sharing the control.
      */
     use FlattensSourceProseTrait;
+
+    /**
+     * E228's sweep —
+     * {@see testEveryZeroShapedFixtureInTheCensusFamilyCarriesAKnownPositiveArm()}
+     * — reads assertion argument lists whose subjects are heredoc fixtures,
+     * the exact shape the trait's array-token openers (E161) and index-span
+     * contract exist for. This is a named consumer, not a fourth copy (E174).
+     */
+    use SplitsTopLevelArgumentsTrait;
 
     /**
      * Channel 1: a literal `fwrite(STDERR, …)`.
@@ -1486,6 +1496,17 @@ final class StderrEmitterCensusTest extends TestCase
      * tree, blinded the scanner, and watched "nothing is stale" pass with
      * 18,228 assertions green. If the scanner below stops working, the
      * synthetic source reds here before the zero can be believed.
+     *
+     * THE CONTROL WAS STILL HALF-BLIND (E228). The two synthetic arms above
+     * prove `scan()` sees its channel — but the `[]` belongs to `census()`,
+     * which is `scan()` plus the `sources()` walk plus the aggregation loop,
+     * and a scanner with its eyes open still reports nothing when the walk or
+     * the accumulator is what broke. So the census's own pipeline gets a
+     * known-positive here too: `census('prefixed')` is non-empty by
+     * construction (the channel-5 roster this file maintains credits dozens
+     * of prefixed sites), and the arm deliberately refuses to pin HOW many —
+     * a numeral there would make this control move with every unrelated
+     * emitter edit, which is how controls get loosened to `>= 0` in a hurry.
      */
     public function testNoStderrChannelOutsideTheScannedOnesHasAppeared(): void
     {
@@ -1499,6 +1520,12 @@ final class StderrEmitterCensusTest extends TestCase
             self::scan('other', '<?php error_log("x"); fwrite(STDERR, "y");'),
             'the other-channel scanner reports channels 1 and 3 as unscanned ones',
         );
+        self::assertNotSame(
+            [],
+            self::census('prefixed'),
+            'census() itself has gone blind — every channel answers empty, so the [] below cannot tell '
+                . '"no new channel" from "no reading at all" (round 44\'s shape, and E228\'s)',
+        );
 
         self::assertSame(
             [],
@@ -1508,6 +1535,149 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'counts is exactly what this file exists to prevent.',
         );
     }
+
+    /**
+     * THE SWEEP E228 ASKED FOR, MADE MACHINE-CHECKABLE.
+     *
+     * WHAT E228 IS. A census assertion whose expected value is zero — `0`,
+     * `[]`, `''` — passes when the instrument is working AND when the
+     * instrument is dead, and round 44 proved the tree cannot tell those
+     * apart from the outside. The step's prescription: sweep the census tests
+     * for FIXTURES that expect zero, ask of each "what mutation survives?",
+     * and where the honest answer is "all of them", pair the fixture with a
+     * known-positive arm of the same instrument in the same test method.
+     *
+     * WHY A GUARD AND NOT A ONE-TIME SWEEP (R67's refusal, measured). A
+     * findings file says the sweep ran until something re-runs it. This test
+     * re-runs it on every suite execution: it walks every census/roster test
+     * file in the tree, pairs each zero-shaped fixture with same-method
+     * evidence, and reds on any unpaired site. The tree-wide claim — "the
+     * sweep ran" — is then a property the suite maintains, not a promise a
+     * log makes.
+     *
+     * THE PAIRING RULE, stated so a judged exception can disagree precisely.
+     * A POLICED site is `assertSame`/`assertEquals`/`assertCount` whose
+     * expected argument is a zero shape (`0`, `''`, `[]`) and whose SUBJECT is
+     * an instrument of the file's own family — the LEADING `self::`/`static::`
+     * call of the subject expression, or a bare `$var` the method assigned
+     * from such a call. TREE accumulators (`$built`, `$offenders` — lists
+     * assembled in a foreach over real files) are NOT policed here: their
+     * known-positive is the separate fixture test that names the same
+     * instrument, and policing them would demand a synthetic source in every
+     * tree census, which is a different discipline than the one E228 found
+     * wanting. A site is PAIRED when the same method holds any assertion
+     * whose RANGE invokes that instrument with a NON-zero expected — a
+     * known-positive in the E228 sense, whatever its shape — or a
+     * `assertNotSame`/`assertNotEquals`/`assertNotCount` of a zero: a
+     * must-not-be-empty claim already fails when the instrument dies, so it
+     * is itself a presence arm and never itself policed, and it credits both
+     * every instrument inside its range and its leading subject — or an
+     * `expectException` arm (a throw the instrument fires is the strongest
+     * presence proof there is; see
+     * {@see testTheConstructionScanRedsOnAnAnonymousClassItCannotAttribute()},
+     * whose zero-control is paired exactly this way).
+     *
+     * THE ACCEPTED ROSTER IS EMPTY AS SHIPPED, and the sweep measured why:
+     * at this tip the family policed 31 zero-shaped fixtures and exactly one
+     * was unpaired — `census()` answering blind in
+     * {@see testNoStderrChannelOutsideTheScannedOnesHasAppeared()} — and it
+     * was FIXED by adding the positive arm rather than licensed, which is the
+     * disposition E228 asked for ("where the answer is 'all mutations
+     * survive', add a positive component"). Four earlier candidates the
+     * first-pass rule flagged were the RULE'S defects, not the tree's: two
+     * were presence claims (`assertNotSame([], …)` fails when the instrument
+     * dies — they became evidence rather than policed sites) and two credited
+     * a nested fixture-BUILDER inside `self::scanSource(self::fixture(…))`
+     * instead of the leading subject. A licence row therefore needs both a
+     * violation to match and a judgement sentence for why the pair would
+     * lie; the staleness arm below deletes the licence with the violation it
+     * covered, so an accepted row cannot outlive its argument.
+     *
+     * THE FLOORS ARE THE ANTI-BLINDNESS HALF (dc's lower-bound semantics:
+     * growth stays silent, shrinkage reds). If the family walk matches fewer
+     * than {@see VACUITY_FAMILY_FLOOR} files or polices fewer than
+     * {@see VACUITY_POLICED_FLOOR} sites, the sweep is not clean, it is
+     * blind — a renamed pattern would otherwise report an empty violation
+     * list as the greenest result on the board.
+     */
+    public function testEveryZeroShapedFixtureInTheCensusFamilyCarriesAKnownPositiveArm(): void
+    {
+        $files = self::vacuityFamilyFiles();
+        self::assertGreaterThanOrEqual(
+            self::VACUITY_FAMILY_FLOOR,
+            count($files),
+            'the census-family walk found ' . count($files) . ' test files; it polices '
+                . self::VACUITY_FAMILY_FLOOR . ' as a floor and an empty family is exactly the blind-sweep '
+                . 'shape this guard exists to refuse',
+        );
+
+        $policed = 0;
+        $violations = [];
+        $liveKeys = [];
+        foreach ($files as $relative => $absolute) {
+            $sweep = self::sweepZeroFixtures($relative, $absolute);
+            $policed += $sweep['policed'];
+            foreach ($sweep['violations'] as $key => $line) {
+                $liveKeys[$key] = true;
+                if (!isset(self::ACCEPTED_ZERO_FIXTURES[$key])) {
+                    $violations[] = $line;
+                }
+            }
+        }
+
+        self::assertGreaterThanOrEqual(
+            self::VACUITY_POLICED_FLOOR,
+            $policed,
+            'the sweep policed only ' . $policed . ' zero-shaped fixtures across ' . count($files)
+                . ' files (floor ' . self::VACUITY_POLICED_FLOOR . ') — the detection went blind before '
+                . 'the emptiness it reports could mean anything',
+        );
+
+        self::assertSame([], $violations, implode("\n", $violations));
+
+        $stale = array_diff_key(self::ACCEPTED_ZERO_FIXTURES, $liveKeys);
+        self::assertSame(
+            [],
+            $stale,
+            'these ACCEPTED_ZERO_FIXTURES licences cover no live violation — the pairing was added or the '
+                . 'fixture deleted, and a licence outliving its violation is how rosters fossilise: '
+                . implode(', ', array_keys($stale)),
+        );
+    }
+
+    /**
+     * Floor for the family walk: census/roster test files seen at shipping.
+     * MEASURED (E228 sweep, this commit): twelve —
+     * BootstrapTranscriptSeamCallSite, EnvRosterDrift, ReadmeRosterDrift,
+     * this one, DenialPrefixRoster, StdinConstantReader, SuiteSkipRoster,
+     * ReadPath, ReflectionLineSliceReader, SwallowingCatch, TreeWideGuard,
+     * TtyStreamArgument.
+     */
+    private const VACUITY_FAMILY_FLOOR = 12;
+
+    /**
+     * Floor for policed sites: MEASURED 31 at this tip under the shipped
+     * rule (the sweep's own counts come from {@see sweepZeroFixtures()};
+     * this is only the tripwire under which the sweep is suspected of
+     * blindness rather than cleanliness). The census() positive arm this
+     * commit adds is a PRESENCE claim, not a policed absence — the number
+     * counts `assertSame(0, …)`/`assertCount(0, …)` sites.
+     */
+    private const VACUITY_POLICED_FLOOR = 31;
+
+    /**
+     * Judged exceptions to the pairing rule: site key
+     * `relative path::method::instrument` => the sentence that licenses it.
+     *
+     * EMPTY AS SHIPPED, deliberately: every unpaired zero the sweep measured
+     * was fixed with a positive arm rather than licensed, and an empty
+     * accepted roster is the roster that proves the sweep actually looked.
+     * Adding a row is allowed only with the violation it covers reproduced
+     * first — the staleness arm deletes it otherwise.
+     *
+     * @var array<string, string>
+     */
+    private const ACCEPTED_ZERO_FIXTURES = [];
 
     /**
      * EVERY `other`-CHANNEL FIXTURE IS REAL PHP, not merely lexable text.
@@ -3989,5 +4159,399 @@ final class StderrEmitterCensusTest extends TestCase
         }
 
         return ltrim($token[1], '\\');
+    }
+
+    /**
+     * Every census/roster test file in this package: relative path => absolute.
+     *
+     * THE FAMILY IS A NAME CONVENTION, and it is deliberately wider than this
+     * file: a NEW census test that adopts the naming joins the sweep without
+     * anyone editing this guard, which is the difference between a rule the
+     * tree maintains and a rule one lane maintained. The floor in
+     * {@see testEveryZeroShapedFixtureInTheCensusFamilyCarriesAKnownPositiveArm()}
+     * is what keeps a silent match failure from passing for a clean sweep.
+     *
+     * @return array<string, string>
+     */
+    private static function vacuityFamilyFiles(): array
+    {
+        $root = \dirname(__DIR__, 2);
+        $out = [];
+
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/tests')) as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $name = $file->getFilename();
+            if (
+                \str_ends_with($name, 'Test.php')
+                && (\str_contains($name, 'Census') || \str_contains($name, 'Roster'))
+            ) {
+                $out[ltrim(str_replace($root, '', $file->getPathname()), '/')] = $file->getPathname();
+            }
+        }
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * The E228 sweep over one family file: policed-site count and the
+     * violations, keyed `relative::method::instrument`.
+     *
+     * TWO PASSES PER METHOD — collect evidence and sites first, evaluate
+     * pairing after. A one-pass walk orders by source position and would call
+     * a zero "unpaired" merely because its known-positive is written BELOW it
+     * in the method (the shape that briefly red-flagged five fixtures in
+     * SwallowingCatchCensusTest during the probe, before the two-pass rule
+     * settled them).
+     *
+     * @return array{policed: int, violations: array<string, string>, sites: array<string, array<string, int>>}
+     */
+    private static function sweepZeroFixtures(string $relative, string $absolute): array
+    {
+        $tokens = self::significantTokens(self::censusSource($absolute));
+        $policed = 0;
+        $violations = [];
+        $allSites = [];
+
+        foreach (self::namedMethodTokenRanges($tokens) as [$method, $start, $end]) {
+            $varMap = self::instrumentAssignments($tokens, $start, $end);
+            $evidence = [];
+            $throwArm = false;
+            $sites = [];
+
+            for ($i = $start; $i <= $end; $i++) {
+                $token = $tokens[$i];
+                if (!\is_array($token) || $token[0] !== T_STRING) {
+                    continue;
+                }
+                if (\str_starts_with($token[1], 'expectException')) {
+                    $throwArm = true;
+
+                    continue;
+                }
+                if (!\str_starts_with($token[1], 'assert') || ($tokens[$i + 1] ?? null) !== '(') {
+                    continue;
+                }
+
+                $close = self::balancedClose($tokens, $i + 1);
+                if ($close === null) {
+                    continue;
+                }
+                $args = array_values(
+                    array_filter(
+                        self::topLevelArguments($tokens, $i + 1, $close),
+                        static fn (array $span): bool => $span[0] <= $span[1],
+                    ),
+                );
+                if ($args === []) {
+                    continue;
+                }
+
+                $zero = self::zeroShapedExpected($tokens, $args[0]);
+                $inRange = self::scopedInstruments($tokens, $i, $close);
+                $subject = isset($args[1])
+                    ? self::leadingSubjectInstrument($tokens, $args[1], $varMap)
+                    : null;
+
+                if (!$zero || \in_array($token[1], ['assertNotSame', 'assertNotCount', 'assertNotEquals'], true)) {
+                    // THE PRESENCE ARM, in either of its two shapes: a NON-zero
+                    // expectation, or a negated zero (`assertNotSame([], …)`) —
+                    // a must-not-be-empty claim fails when the instrument dies,
+                    // so it is itself the counterpart E228 demands and never a
+                    // policed site. Every instrument the call's RANGE invokes
+                    // is proven alive by it (a dead inner builder empties the
+                    // outer result); a bare-`$var` subject credits whatever
+                    // instrument assigned it earlier in the method.
+                    foreach ($inRange as $instrument) {
+                        $evidence[$instrument] = $token[2];
+                    }
+                    if ($subject !== null) {
+                        $evidence[$subject] = $token[2];
+                    }
+                }
+
+                if (
+                    $zero
+                    // assertEquals rides with assertSame: an `assertEquals(0, …)`
+                    // is the same emptiness claim wearing the loose-compare
+                    // spelling, and neither exists in the family today
+                    // (MEASURED) — the alphabet widens for the shape, not for
+                    // a hit (E195's own lesson).
+                    && \in_array($token[1], ['assertSame', 'assertEquals', 'assertCount'], true)
+                    && $subject !== null
+                ) {
+                    // THE ABSENCE CLAIM: `assertSame(0, X)`/`assertCount(0, X)`
+                    // — pass-word for a dead instrument, and policed only when
+                    // the instrument IS the subject's leading call (or the
+                    // variable one assigned). `array_diff(self::scan(...), …)`
+                    // and the tree accumulators answer to the presence arms
+                    // over their range without being policed themselves: their
+                    // emptiness is a claim about SET RELATIONS, and demanding a
+                    // same-method synthetic twin of every set relation would
+                    // license a fixture theatre the two-polarity tests already
+                    // provide elsewhere (the scan/fixture/prefix arms in
+                    // SwallowingCatchCensusTest are the measured example).
+                    $policed++;
+                    $sites[$subject] = $token[2];
+                }
+            }
+
+            foreach ($sites as $instrument => $line) {
+                if (isset($evidence[$instrument]) || $throwArm) {
+                    continue;
+                }
+                $violations[$relative . '::' . $method . '::' . $instrument] =
+                    $relative . ':' . $line . '  ' . $method . '(): ' . $instrument
+                    . "() answered a zero this sweep found no known-positive for — add a positive arm of the "
+                    . 'same instrument to the method, or an adjudicated ACCEPTED_ZERO_FIXTURES row saying why '
+                    . 'the pair would lie';
+            }
+            $allSites[$method] = $sites;
+        }
+
+        return ['policed' => $policed, 'violations' => $violations, 'sites' => $allSites];
+    }
+
+    /**
+     * The `[name, start, end]` token ranges of every NAMED function/method in
+     * a significant-token list, outermost only.
+     *
+     * Closures contribute no range of their own (their asserts are swept as
+     * part of the enclosing method), and a nested named function inside a
+     * recorded body is absorbed the same way — the pairing unit is the test
+     * method a reader runs, not the innermost lexical scope.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return list<array{0: string, 1: int, 2: int}>
+     */
+    private static function namedMethodTokenRanges(array $tokens): array
+    {
+        $ranges = [];
+        $n = \count($tokens);
+
+        for ($i = 0; $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_FUNCTION) {
+                continue;
+            }
+
+            $nameToken = $tokens[$i + 1] ?? null;
+            if (!\is_array($nameToken) || $nameToken[0] !== T_STRING) {
+                continue;
+            }
+
+            $open = $i + 2;
+            if (($tokens[$open] ?? null) !== '(') {
+                continue;
+            }
+            $paren = self::balancedClose($tokens, $open);
+            if ($paren === null) {
+                continue;
+            }
+
+            // MEASURED at this tip (PHP 8.3.6): the return-type colon lexes
+            // as the STRING ':', not an array token — a skip loop written
+            // over "type-ish array tokens" terminates on it, mistakes the
+            // method for un-bodied, and the sweep goes blind to every method
+            // in the tree. Walk forward instead, stopping at whichever of
+            // `;` (no body: abstract/interface) or `{` (body) arrives first.
+            $body = $paren + 1;
+            while ($body < $n && ($tokens[$body] ?? null) !== '{' && ($tokens[$body] ?? null) !== ';') {
+                $body++;
+            }
+            if (($tokens[$body] ?? null) !== '{') {
+                continue;
+            }
+            $end = self::balancedClose($tokens, $body);
+            if ($end === null) {
+                continue;
+            }
+
+            $nested = false;
+            foreach ($ranges as [$_name, $rs, $re]) {
+                if ($i > $rs && $i < $re) {
+                    $nested = true;
+
+                    break;
+                }
+            }
+            if (!$nested) {
+                $ranges[] = [$nameToken[1], $i, $end];
+            }
+        }
+
+        return $ranges;
+    }
+
+    /**
+     * `$var = self::instrument(` / `$var = static::instrument(` inside the
+     * method: variable name => the instruments ever assigned to it this way.
+     *
+     * A site whose subject is a bare `$var` resolves through the LAST such
+     * assignment — by the time an assertion reads the variable, the last
+     * write is what its value came from. Methods that reuse one variable for
+     * two instruments between asserts would defeat that reading, and the
+     * sweep found none in the family as shipped (MEASURED here rather than
+     * assumed: the resolution is visible in {@see leadingSubjectInstrument()}).
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return array<string, list<string>>
+     */
+    private static function instrumentAssignments(array $tokens, int $start, int $end): array
+    {
+        $map = [];
+
+        for ($i = $start; $i <= $end; $i++) {
+            $var = $tokens[$i] ?? null;
+            if (!\is_array($var) || $var[0] !== T_VARIABLE) {
+                continue;
+            }
+            if (($tokens[$i + 1] ?? null) !== '=') {
+                continue;
+            }
+            // ONE scope-word alphabet for the whole sweep (the T_STATIC
+            // lesson above): the assignment shape is the same scoped-call
+            // test, four tokens later.
+            if (!self::isScopeResolutionInstrument($tokens, $i + 4)) {
+                continue;
+            }
+            $instrument = self::callableName($tokens[$i + 4] ?? null);
+            if ($instrument === null) {
+                continue;
+            }
+            $map[ltrim($var[1], '$')][] = $instrument;
+        }
+
+        return $map;
+    }
+
+    /**
+     * Names of every `self::x(` / `static::x(` call inside the token range:
+     * the instruments an assertion's range proves alive.
+     *
+     * TOKEN-level on purpose. A text scan over a rendered argument would also
+     * find `self::` prose inside heredoc fixtures — sources this file feeds
+     * TO its scanners — and credit an instrument that was never called.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @return list<string>
+     */
+    private static function scopedInstruments(array $tokens, int $from, int $to): array
+    {
+        $found = [];
+
+        for ($i = $from + 1; $i <= $to; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_STRING) {
+                continue;
+            }
+            if (!self::isScopeResolutionInstrument($tokens, $i)) {
+                continue;
+            }
+            $found[$token[1]] = true;
+        }
+
+        return array_keys($found);
+    }
+
+    /**
+     * Whether the T_STRING at $i opens a `self::`/`static::` CALL — scope
+     * operator before, `(` after, and the scope word is exactly `self` or
+     * `static`.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private static function isScopeResolutionInstrument(array $tokens, int $i): bool
+    {
+        $scope = $tokens[$i - 2] ?? null;
+        $operator = $tokens[$i - 1] ?? null;
+        $next = $tokens[$i + 1] ?? null;
+
+        // MEASURED at this tip (PHP 8.3.6): `self` lexes T_STRING but the
+        // `static` of `static::` is the T_STATIC keyword — an alphabet of
+        // scope words that forgets the keyword half silently drops every
+        // static-scoped fixture the self-scoped rule would have caught.
+        $scopeIsSelf = \is_array($scope) && $scope[0] === T_STRING && $scope[1] === 'self';
+        $scopeIsStatic = \is_array($scope) && $scope[0] === T_STATIC;
+
+        return ($scopeIsSelf || $scopeIsStatic)
+            && \is_array($operator)
+            && $operator[0] === T_DOUBLE_COLON
+            && $next === '(';
+    }
+
+    /**
+     * The instrument an assertion's SUBJECT expression IS: the leading
+     * `self::x(`/`static::x(` of the span, or — for a bare-`$var` subject —
+     * the LAST instrument assigned to that variable in the method.
+     *
+     * LEADING, not first-found: `self::scanSource(self::fixture(...), 'n')`
+     * answers a claim about `scanSource`'s verdicts, and crediting the zero to
+     * the inner builder would demand a known-positive of a string-concat
+     * helper that exists precisely to have no assertions of its own. Nested
+     * instruments still get their presence credit from the RANGE scan in
+     * {@see sweepZeroFixtures()} — asymmetry is the point: being called inside
+     * someone's known-positive proves liveness; asserting emptiness THROUGH
+     * someone is the claim that needs a counterpart.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array{0: int, 1: int} $span
+     * @param array<string, list<string>> $varMap
+     */
+    private static function leadingSubjectInstrument(array $tokens, array $span, array $varMap): ?string
+    {
+        [$s, $e] = $span;
+
+        if ($s + 3 <= $e && self::isScopeResolutionInstrument($tokens, $s + 2)) {
+            // The span opens with the scope word, `::`, the name, `(` — the
+            // helper re-checks all four positions, so this is the leading
+            // requirement expressed once.
+            $name = self::callableName($tokens[$s + 2]);
+            if ($name !== null) {
+                return $name;
+            }
+        }
+
+        $only = $tokens[$s] ?? null;
+        if ($s === $e && \is_array($only) && $only[0] === T_VARIABLE) {
+            $assigned = $varMap[ltrim($only[1], '$')] ?? [];
+
+            return $assigned === [] ? null : $assigned[array_key_last($assigned)];
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether the expected-value span is a zero shape: `0`, `''`, `""`, `[]`
+     * in any whitespace spelling.
+     *
+     * The empty-array test renders and STRIPS rather than matches a pattern —
+     * a `/.../` literal with a wildcard in this file would be harvested by the
+     * glob-dialect differential as a glob to keep in sync with PathGlob, and
+     * this claim has nothing to do with globbing (E228's own near-miss).
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array{0: int, 1: int} $span
+     */
+    private static function zeroShapedExpected(array $tokens, array $span): bool
+    {
+        $rendered = '';
+        for ($i = $span[0]; $i <= $span[1]; $i++) {
+            $rendered .= \is_array($tokens[$i]) ? $tokens[$i][1] : $tokens[$i];
+        }
+        $text = trim($rendered);
+
+        if ($text === '0' || $text === "''" || $text === '""') {
+            return true;
+        }
+
+        return \strlen($text) >= 2
+            && $text[0] === '['
+            && substr($text, -1) === ']'
+            && trim(substr($text, 1, -1), " \t\n") === '';
     }
 }
