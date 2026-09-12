@@ -450,8 +450,9 @@ honest state of affairs, since the model is the party whose tools were taken.
 The three warnings this paragraph used to name as still-stderr-only — an
 unusable provider, a skipped hook file, a rejected permission pattern — have
 since migrated through the same seam, along with the agent-preset degradations,
-the refused project directories, the skipped skill files and the empty tool set:
-**twenty-one** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
+the refused project directories, the skipped skill files, the skipped command
+files (E172) and the empty tool set:
+**twenty-two** call sites in total (`grep -c 'self::warnPermissionConfigInTranscript('
 src/Cli/Bootstrap.php`, which agrees with the token scan in
 `BootstrapTranscriptSeamCallSiteCensusTest` today; `grep` for the bare
 identifier does **not** — it reports roughly double, because most occurrences in

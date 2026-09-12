@@ -87,7 +87,11 @@ final class CommandLoader
      * per-FILE and are collected on {@see skippedFiles()} instead. Nothing is
      * dropped either way — see {@see $refusedDirectories} for the routing
      * argument and {@see \SugarCraft\Crush\Skills\SkillLoader::DEBUG_SKIPS_ENV}
-     * for the contract this copies.
+     * for the contract this copies. Since E172 (round 70) the skipped-file
+     * group also reaches the transcript UNCONDITIONALLY as one aggregate count
+     * row ({@see \SugarCraft\Crush\Cli\Bootstrap::reportCommandSkips()}); what
+     * this gate still owns exclusively is the per-PATH detail behind that
+     * count, which is exactly the split the skills surface runs on.
      *
      * `unset`, empty and `0` all read as off, matching every other
      * `SUGARCRUSH_*` switch.
@@ -154,9 +158,12 @@ final class CommandLoader
      * record, and the gated copy adds a duplicate rather than a fuller one.
      * WHY THEY STILL EARN THEIR PLACE, and the reason is not the same for all
      * five: the two per-FILE refusals ({@see loadFromDirectory()}'s containment
-     * skip and its parse failure) reach no other channel at all — they go on
-     * {@see $skippedFiles}, which nothing drains, so with the gate off this
-     * loader's own accessor is their only reader. The three collector-paired
+     * skip and its parse failure) reach no other channel as PER-FILE rows —
+     * they go on {@see $skippedFiles}, which
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportCommandSkips()} drains as
+     * ONE aggregate count row (E172), so with the gate off the user learns that
+     * files were skipped and this loader's own accessor remains the only reader
+     * of WHICH ones. The three collector-paired
      * ones survive as a copy — and since E154 NOT a raw unprefixed one:
      * {@see report()} funnels every row through `error_log('sugarcrush: ' .
      * $message)`, so a consumer grepping this loader's wording matches the
@@ -234,17 +241,22 @@ final class CommandLoader
      * SEE is not the command they wrote. These two are answers about one
      * malformed or misplaced `*.md`, which is an authoring mistake.
      *
-     * NOT DRAINED ANYWHERE YET, and that is deliberate rather than unfinished.
-     * The natural consumer is {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}'s
-     * `$projectTierRefusals` spread, and the reason not to add it there in the
-     * same change is that the launch report prints one line per entry: a
-     * directory holding twenty unparseable `*.md` files would push twenty rows
-     * into a transcript bounded at `LAUNCH_NOTICE_LIMIT` and evict the
-     * capability warnings the seam exists for. Draining it wants a summary row
-     * — "N command files could not be read" — of the shape
-     * {@see \SugarCraft\Crush\Skills\SkillLoader} already built for skills.
-     * {@see \SugarCraft\Crush\Tests\Commands\CommandLoaderRefusalReportingTest}
-     * pins the dormancy so it cannot be mistaken for an oversight.
+     * THIS IS DRAINED (E172, round 70), and NOT through the door this
+     * paragraph originally refused. WHAT IT SAID: "NOT DRAINED ANYWHERE YET",
+     * naming {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}'s
+     * `$projectTierRefusals` spread as the natural consumer and declining it
+     * because the launch report prints one line per entry — a directory
+     * holding twenty unparseable `*.md` files would push twenty rows into a
+     * transcript bounded at `LAUNCH_NOTICE_LIMIT` and evict the capability
+     * warnings the seam exists for; draining it "wants a summary row of the
+     * shape {@see \SugarCraft\Crush\Skills\SkillLoader} already built for
+     * skills". WHAT IS TRUE NOW: the drain took exactly that shape, not the
+     * spread — {@see \SugarCraft\Crush\Cli\Bootstrap::reportCommandSkips()}
+     * puts ONE aggregate count row on the seam per launch, whatever the count,
+     * and points at {@see DEBUG_REFUSALS_ENV} for the paths. The dormancy pin
+     * in {@see \SugarCraft\Crush\Tests\Commands\CommandLoaderRefusalReportingTest}
+     * — which existed precisely so this could not be mistaken for an
+     * oversight — was flipped in-step into a drain pin.
      *
      * @var array<string, string>
      */
@@ -282,8 +294,9 @@ final class CommandLoader
     }
 
     /**
-     * `*.md` files this loader skipped, path => reason — see
-     * {@see $skippedFiles} for why nothing drains it yet.
+     * `*.md` files this loader skipped, path => reason — drained at launch
+     * by {@see \SugarCraft\Crush\Cli\Bootstrap::reportCommandSkips()} as
+     * ONE aggregate count row (E172), never per-file.
      *
      * CUMULATIVE ACROSS CALLS on one instance, like {@see refusedDirectories()}:
      * one loader serves both tiers.

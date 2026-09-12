@@ -6,19 +6,20 @@ namespace SugarCraft\Crush\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
+use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
 use SugarCraft\Crush\Skills\SkillLoader;
 
 /**
  * Round 39 built {@see Bootstrap::warnPermissionConfigInTranscript()} and
- * migrated ONE caller onto it. This file is the guard for the other twenty.
+ * migrated ONE caller onto it. This file is the guard for the other twenty-one.
  *
  * HOW THAT NUMBER IS OBTAINED — not by `grep`, which overstates it by roughly
  * double because the identifier is mostly prose in `Bootstrap.php`'s
- * doc-blocks. `Bootstrap.php` holds TWENTY-ONE calls to the seam by a token scan
+ * doc-blocks. `Bootstrap.php` holds TWENTY-TWO calls to the seam by a token scan
  * (`token_get_all()`, whitespace and comments stripped, T_STRING of that name
  * both preceded by `::` and followed by `(`); one of them is round 39's, so
- * this file guards the other twenty. Re-derive it in one command:
+ * this file guards the other twenty-one. Re-derive it in one command:
  * `vendor/bin/phpunit --filter BootstrapTranscriptSeamCallSiteCensusTest`,
  * which also fails on this sentence by name if the count moves.
  *
@@ -30,8 +31,9 @@ use SugarCraft\Crush\Skills\SkillLoader;
  * `Bootstrap::promptEnabledSkills()` as the seventeenth and eighteenth, and
  * the same step's two `enabledSkills` shape notices in that method as the
  * nineteenth and twentieth, and E653 (round 65) routed the narrowed-grant
- * aggregate drain as the twenty-first, so "the other" is twenty and not
- * nineteen. WHY THE
+ * aggregate drain as the twenty-first, and E172 (round 70) routed the
+ * command-file skip aggregate as the twenty-second, so "the other" is
+ * twenty-one and not twenty. WHY THE
  * HISTORY STILL EARNS ITS PLACE: it records that this file's scope GROWS with
  * the seam — a reader who adds a further call site and does not add a case
  * here has left it unguarded, and the ordinals are what make that obligation
@@ -210,8 +212,8 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * have, and the user meets it as `/skill` not offering something they wrote.
      *
      * ONE ROW WHATEVER THE COUNT — this message is an aggregate, and that is
-     * what makes it safe to seat in a transcript that also carries twenty
-     * other sources (twenty-one seam call sites by the token scan in
+     * what makes it safe to seat in a transcript that also carries
+     * twenty-one other sources (twenty-two seam call sites by the token scan in
      * {@see BootstrapTranscriptSeamCallSiteCensusTest}, of which this is one;
      * `grep` gives about double and is the wrong tool). Two unreadable files,
      * one notice, and the notice says two.
@@ -235,6 +237,56 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $notices[0],
         );
         self::assertSame(1, substr_count($stderr, 'could not be read'));
+    }
+
+    /**
+     * A command file the loader could not read is a `/command` the user typed
+     * and did not get — the same class of loss as the skill row above, and
+     * E172's drain half wired it with the same one-row shape for the same
+     * flood argument (the map is per-FILE; the transcript is bounded).
+     *
+     * TWO SYMLINKS LEAVING `.sugar-crush/commands`, which lands both entries
+     * on the containment skip without any permission theater — a chmod-based
+     * fixture would run blind as root, and the escape IS the failure the
+     * loader exists to refuse. Two files, one notice, and the notice says
+     * two; the paths ride only behind the loader's debug gate, which this
+     * launch does not enable.
+     */
+    public function testSkippedCommandFilesReachBothChannelsAsOneAggregateRow(): void
+    {
+        $outside = $this->tmpDir . '/outside-commands';
+        mkdir($outside, 0o700, true);
+        mkdir($this->projectRoot . '/.sugar-crush/commands', 0o700, true);
+
+        foreach (['alpha', 'beta'] as $name) {
+            $target = $outside . '/' . $name . '.md';
+            file_put_contents($target, "---\nname: {$name}\n---\nbody\n");
+            symlink($target, $this->projectRoot . '/.sugar-crush/commands/' . $name . '.md');
+        }
+
+        [$stderr, $notices] = $this->launch(
+            '\\SugarCraft\\Crush\\Cli\\Bootstrap::chat(' . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        self::assertCount(1, $notices);
+        self::assertStringContainsString(
+            sprintf(
+                Bootstrap::COMMAND_SKIP_NOTICE_FORMAT,
+                2,
+                's',
+                'were',
+                CommandLoader::DEBUG_REFUSALS_ENV,
+                'them',
+            ),
+            $notices[0],
+        );
+        self::assertSame(1, substr_count($stderr, 'could not be read'));
+
+        // The unbounded half stays off both channels: the row COUNTS, the
+        // paths are the gated detail, and an aggregate that leaked them
+        // would re-open the flood the summary exists to prevent.
+        self::assertStringNotContainsString('alpha.md', $notices[0]);
+        self::assertStringNotContainsString('beta.md', $notices[0]);
     }
 
     /**

@@ -18,7 +18,11 @@ use SugarCraft\Crush\Commands\CommandLoader;
  * the same sentence on the same channel twice. The other two are per-FILE and
  * had no collector at all, which is why one was added rather than the line
  * simply removed: gating a diagnostic that has nowhere else to go is a deletion
- * wearing a flag.
+ * wearing a flag. WHAT IS TRUE NOW FOR THAT PAIR (E172, round 70): the
+ * collector they land on is drained — not per-path, but as
+ * {@see \SugarCraft\Crush\Cli\Bootstrap::reportCommandSkips()}'s ONE aggregate
+ * row on the seam — so with the gate off the user now learns the count, and
+ * the gate keeps exclusive ownership of the paths.
  *
  * THE COLLECTOR ASSERTIONS ARE THE POINT, and the env one is not optional
  * either. WHAT THIS SAID: "a gate can be tested with two `putenv()`s and prove
@@ -220,21 +224,32 @@ final class CommandLoaderRefusalReportingTest extends TestCase
     }
 
     /**
-     * THE DORMANCY OF {@see CommandLoader::skippedFiles()}, PINNED.
+     * THE DRAIN OF {@see CommandLoader::skippedFiles()}, PINNED TO ITS ONE
+     * READER (E172).
      *
-     * Nothing in `src/` drains it, and that is a decision with a reason —
-     * see the property's doc-block: the launch report prints one row per entry
-     * and a directory of twenty unparseable `*.md` files would evict the
-     * capability warnings the transcript seam is bounded for. Wiring it wants a
-     * SUMMARY row first, of the shape `SkillLoader` already built for skills.
+     * THIS TEST USED TO PIN THE OPPOSITE: "Nothing in `src/` drains it, and
+     * that is a decision with a reason," it said, holding the empty roster
+     * `[]` against the walk so the accessor could not be read as an oversight
+     * (rule 6) and pointing the day someone wired it at the summary-row shape
+     * the property's doc-block demanded. That day is round 70:
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::reportCommandSkips()} drains the
+     * map as ONE aggregate seam row, exactly the shape the old paragraph
+     * asked for, and the test flipped with it — the roster it now pins has
+     * one named entry, and the entry is the drain.
      *
-     * THIS TEST IS NOT A VETO. Draining it is the intended next step; the test
-     * exists so the accessor cannot be read as an oversight and quietly deleted
-     * (rule 6), and so the day someone does wire it, they are pointed at the
-     * paragraph explaining what shape the drain has to have. Deleting this test
-     * as part of wiring it is the correct move.
+     * WHY KEEP THE WALK AT ALL. The scanner answers a question no
+     * single-file assertion can: whether a SECOND drain has appeared in
+     * `src/` beside the sanctioned one. A per-path row smuggled into
+     * `$projectTierRefusals` — the flood the property doc-block's whole
+     * history is about — would land here as a second caller, red, and named.
+     * The same-name ambiguity the walk cannot see is stated rather than
+     * papered over: {@see \SugarCraft\Crush\Context\RuleLoader} declares a
+     * `skippedFiles()` too, and this scanner matches CALLS BY NAME, so the
+     * day the rules surface grows its own Bootstrap-side drain the roster
+     * gains a row HERE — which is correct: this is now the census of
+     * `skippedFiles()` readers in `src/`, whatever produced the entries.
      */
-    public function testNothingDrainsTheSkippedFilesCollectorYet(): void
+    public function testTheSkippedFilesCollectorIsDrainedOnlyByBootstrap(): void
     {
         $root = \dirname(__DIR__, 2);
         $callers = [];
@@ -250,10 +265,11 @@ final class CommandLoaderRefusalReportingTest extends TestCase
             }
         }
 
-        // KNOWN-POSITIVE ON THE SAME SCANNER, in the same test: an assertion of
-        // `[]` proves nothing unless something here proves the instrument still
-        // matches. Round 44 shipped an empty census whose scanner was dead and
-        // it was entirely green.
+        // KNOWN-POSITIVE ON THE SAME SCANNER, in the same test: the roster
+        // below names one real file, and a scanner dead in the water would
+        // read that as `[]` and pass by deletion rather than by measurement.
+        // Round 44 shipped an empty census whose scanner was dead and it was
+        // entirely green.
         //
         // ONE FIXTURE PER DISPATCH OPERATOR, and not just `->`. A fixture that
         // exercises only the shape the scanner already handles cannot reveal
@@ -264,16 +280,18 @@ final class CommandLoaderRefusalReportingTest extends TestCase
         // written `$loader?->skippedFiles()` would have left this census green.
         self::assertTrue(
             self::callsSkippedFiles('<?php $loader->skippedFiles();'),
-            'the scanner below no longer recognises a call to skippedFiles(); the [] is vacuous',
+            'the scanner below no longer recognises a call to skippedFiles(); the roster pin would '
+                . 'be green on a dead instrument',
         );
         self::assertTrue(
             self::callsSkippedFiles('<?php $loader?->skippedFiles();'),
-            'the scanner no longer recognises a NULLSAFE call to skippedFiles(); the [] is vacuous for '
-                . 'every `?->` in src/',
+            'the scanner no longer recognises a NULLSAFE call to skippedFiles(); it is blind to every '
+                . '`?->` in src/',
         );
         self::assertTrue(
             self::callsSkippedFiles('<?php CommandLoader::skippedFiles();'),
-            'the scanner no longer recognises a static call to skippedFiles(); the [] is vacuous',
+            'the scanner no longer recognises a static call to skippedFiles(); a drain through one '
+                . 'would leave the roster blind',
         );
         self::assertFalse(
             self::callsSkippedFiles("<?php /** {@see skippedFiles()} */\n\$x = 1;"),
@@ -285,11 +303,16 @@ final class CommandLoaderRefusalReportingTest extends TestCase
         );
 
         self::assertSame(
-            [],
+            ['src/Cli/Bootstrap.php'],
             $callers,
-            'something in src/ now drains CommandLoader::skippedFiles(). That is the intended next step, '
-                . 'not a mistake — read the property\'s doc-block for the summary-row shape the drain needs, '
-                . 'then delete this test.',
+            'the roster of `skippedFiles()` readers in src/ moved. One entry is the E172 drain — '
+                . 'Bootstrap::chat() hoists the map onto Bootstrap::$commandSkips and '
+                . 'Bootstrap::reportCommandSkips() puts the aggregate row on the seam. A SECOND entry '
+                . 'means a new reader appeared: if it is a per-path drain into $projectTierRefusals, '
+                . 'that is the flood the property doc-block\'s history is about, and it wants the '
+                . 'aggregate\'s shape, not a new row form; if it is genuinely a second consumer '
+                . '(RuleLoader shares the method name — see this test\'s doc-block), name it and its '
+                . 'routing decision here.',
         );
 
         // A DISPATCH THE SCANNER CANNOT READ MUST RED, NOT PASS. `$l->$m()` and

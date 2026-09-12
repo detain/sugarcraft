@@ -197,7 +197,7 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — TWENTY-EIGHT call sites in `src/Cli/Bootstrap.php`, each producing a
+ * it — TWENTY-NINE call sites in `src/Cli/Bootstrap.php`, each producing a
  * distinct `sugarcrush: ` line, against a channel-4 credit of four for that
  * file. Off by roughly four times, in the blind direction.
  *
@@ -422,7 +422,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const PREFIXED_WRITER_SITES = [
-        'src/Cli/Bootstrap.php' => 28,
+        'src/Cli/Bootstrap.php' => 29,
     ];
 
     /**
@@ -686,6 +686,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-six' => 26,
         'twenty-seven' => 27,
         'twenty-eight' => 28,
+        'twenty-nine' => 29,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
         'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,

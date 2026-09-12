@@ -301,6 +301,24 @@ final class Bootstrap
         '%d skill file%s could not be read and %s skipped; set %s=1 to list %s';
 
     /**
+     * The aggregate row {@see reportCommandSkips()} raises for unreadable
+     * command files (E172).
+     *
+     * THE SKILL ROW'S TWIN, byte-for-byte in shape: same five conversion
+     * slots — `%d` the count, `%s` the noun plural, `%s` the was/were verb,
+     * `%s` the env var that lists the paths, `%s` the object pronoun — because
+     * the failure the two sentences answer is the same class of thing (some of
+     * the files that WOULD have been a capability could not be read) and the
+     * plural machinery is the part that drifts when the two are edited
+     * separately. PROMOTED BECAUSE A SECOND PARTY READS IT (E164):
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapLaunchNoticeRoutingTest::testSkippedCommandFilesReachBothChannelsAsOneAggregateRow()}
+     * reproduces the rendered span through this constant, plural slots
+     * included.
+     */
+    public const COMMAND_SKIP_NOTICE_FORMAT =
+        '%d command file%s could not be read and %s skipped; set %s=1 to list %s';
+
+    /**
      * The tail row {@see launchNotices()} synthesises when this launch raised
      * more warnings than {@see LAUNCH_NOTICE_LIMIT} could seat.
      *
@@ -516,7 +534,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 21;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 22;
 
     /**
      * Project hook files this process has already reported as skipped, keyed
@@ -702,6 +720,38 @@ final class Bootstrap
      * @var array<string, true>
      */
     private static array $reportedSkillSkips = [];
+
+    /**
+     * Every `*.md` command file this process's command walks could not read,
+     * keyed by path (E172) — the `Bootstrap`-side twin of {@see $skillSkips},
+     * fed by {@see chat()} from {@see \SugarCraft\Crush\Commands\CommandLoader::skippedFiles()}
+     * and surfaced by {@see reportCommandSkips()} as ONE aggregate row.
+     *
+     * HOISTED off the loader instance for the same reason {@see $skillSkips}
+     * is hoisted off the skill manager: the object that produced the
+     * diagnostic does not outlive the construction that ran it, and a
+     * diagnostic nothing can reach after the fact is the same as no
+     * diagnostic. PATH-KEYED, which is what makes
+     * {@see reportCommandSkips()}'s once-per-path reporting work across a
+     * process that builds more than one Chat.
+     *
+     * NOT a ninth feeder of {@see $projectTierRefusals}, deliberately: that
+     * collector's readers print one line per entry, and the whole point of
+     * this map is that command skips need a COUNT row instead (the per-entry
+     * flood argument runs on {@see LAUNCH_NOTICE_LIMIT}).
+     *
+     * @var array<string, string> sourcePath => why it was skipped
+     */
+    private static array $commandSkips = [];
+
+    /**
+     * The subset of {@see $commandSkips} already put in front of the user —
+     * process-scoped noise control, same contract as
+     * {@see $reportedSkillSkips}.
+     *
+     * @var array<string, true>
+     */
+    private static array $reportedCommandSkips = [];
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1234,6 +1284,18 @@ final class Bootstrap
             ...$commandLoader->refusedCommands(),
         ];
 
+        // And the skipped per-FILE refusals — contained-outside and
+        // unparseable `*.md` — which are NOT spread above (E172): that
+        // collector prints one row per entry, and a directory of twenty
+        // malformed files would evict the capability warnings the seam exists
+        // to carry. They hoist onto {@see $commandSkips} instead and surface
+        // as ONE aggregate row below, the shape
+        // {@see reportSkillSkips()} already established for skills.
+        self::$commandSkips = [
+            ...self::$commandSkips,
+            ...$commandLoader->skippedFiles(),
+        ];
+
         // AFTER the construction above, not beside reportSkillSkips() further
         // up: the workflow registry that decides whether this project's
         // `.sugar-crush/workflows` is readable is built inside
@@ -1243,9 +1305,16 @@ final class Bootstrap
         // states.
         self::reportProjectTierRefusals();
 
+        // The command-file skips, immediately after the directory refusals
+        // and for the identical reasons: construction time, deduplicated
+        // per-path against {@see $reportedCommandSkips}, and ONE row whatever
+        // the count (E172 — the drain half of the finding whose feeder half
+        // landed in round 46 and stood dormant behind a pin that pointed here).
+        self::reportCommandSkips();
+
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // TWENTY-ONE call sites now routed onto the transcript seam. This said
+        // TWENTY-TWO call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -1253,7 +1322,8 @@ final class Bootstrap
         // promptEnabledSkills(), plus its nineteenth and twentieth, the two
         // `enabledSkills` shape notices in that same method; it said twenty
         // until E653 (round 65) added the twenty-first, the narrowed-grant
-        // drain below. All five are the reason
+        // drain below; it said twenty-one until E172 (round 70) added the
+        // twenty-second, the command-file skip aggregate just above. All six are the reason
         // this line is LAST rather than merely tidy: the retention summary is
         // raised from sessionStore() far EARLIER in this method, and the MCP
         // one is raised far LATER, transitively through backend() -> tools() ->
@@ -3599,10 +3669,10 @@ final class Bootstrap
         $count = \count($new);
         // BOTH CHANNELS — see {@see warnPermissionConfigInTranscript()}. A skill
         // that did not load is a capability the session does not have, and the
-        // user meets that as `/skill` not offering something they wrote. ONE
-        // ROW, whatever the count: this message is already an aggregate, which
-        // is what makes it safe to put in a transcript that also has to carry
-        // twenty other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // user meets that as `/skill` not offering something they wrote. ONE
+            // ROW, whatever the count: this message is already an aggregate, which
+            // is what makes it safe to put in a transcript that also has to carry
+            // twenty-one other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -3616,6 +3686,75 @@ final class Bootstrap
             $count === 1 ? '' : 's',
             $count === 1 ? 'was' : 'were',
             SkillLoader::DEBUG_SKIPS_ENV,
+            $count === 1 ? 'it' : 'them',
+        ));
+    }
+
+    /**
+     * Every `*.md` command file this process's command walks could not read,
+     * keyed by path (E172).
+     *
+     * The seam that replaced silence for {@see \SugarCraft\Crush\Commands\CommandLoader}'s
+     * two per-FILE skips — a symlink leaving its directory and a file that
+     * would not parse. Like {@see skillSkips()} this is the record a doctor
+     * report or a debug pane can reach after the walk; unlike that map, whose
+     * paths have no other reader while the debug gate stays off, every entry
+     * here is ALSO counted on stderr verbatim behind
+     * {@see \SugarCraft\Crush\Commands\CommandLoader::DEBUG_REFUSALS_ENV} —
+     * this accessor is the always-on answer to "how many", the gate is the
+     * answer to "which".
+     *
+     * @return array<string, string> sourcePath => why it was skipped
+     */
+    public static function commandSkips(): array
+    {
+        return self::$commandSkips;
+    }
+
+    /**
+     * Tell the user, once and in one line, that some command files were
+     * skipped.
+     *
+     * THE COMMAND TWIN OF {@see reportSkillSkips()} (E172's drain half), and
+     * it inherits that method's whole argument for existing: a `*.md` the
+     * loader could not read is a `/command` the user typed and did not get,
+     * ONE row regardless of how many — the per-entry flood the
+     * {@see $commandSkips} property names is exactly why this map was never
+     * spread into {@see $projectTierRefusals}`'s one-line-per-entry reader —
+     * and construction time only, before Program takes the terminal.
+     *
+     * PRIVATE unlike its skill twin, whose PUBLIC-ness was earned by two
+     * extra construction paths that bypass {@see chat()}: the command loader
+     * is built in exactly one place in `src/` (the {@see chat()} call this
+     * method sits inside), so a second caller today would be a new seam to
+     * report, not a route to reuse.
+     */
+    private static function reportCommandSkips(): void
+    {
+        // Only what has not been reported yet, keyed the same way
+        // {@see reportSkillSkips()} keys its own guard: a process that builds
+        // more than one Chat must not re-print, and a second walk that found
+        // something NEW still says so.
+        $new = array_diff_key(self::$commandSkips, self::$reportedCommandSkips);
+        if ($new === []) {
+            return;
+        }
+
+        foreach (array_keys($new) as $path) {
+            self::$reportedCommandSkips[$path] = true;
+        }
+
+        $count = \count($new);
+        // BOTH CHANNELS — the aggregate's own safety argument is
+        // reportSkillSkips()'s, and the refusal this row answers is the one
+        // CommandLoader's property doc-block recorded in round 46: the count
+        // belongs on the seam, the paths behind the debug gate.
+        self::warnPermissionConfigInTranscript(sprintf(
+            self::COMMAND_SKIP_NOTICE_FORMAT,
+            $count,
+            $count === 1 ? '' : 's',
+            $count === 1 ? 'was' : 'were',
+            CommandLoader::DEBUG_REFUSALS_ENV,
             $count === 1 ? 'it' : 'them',
         ));
     }
@@ -5784,7 +5923,7 @@ final class Bootstrap
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // twenty call sites: {@see chat()} holds no `self::tools(` call of
+            // twenty-one call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

@@ -249,7 +249,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'BootstrapLaunchNoticeRoutingTest class doc-block, "the other N"' => [
             'file' => 'tests/Cli/BootstrapLaunchNoticeRoutingTest.php',
-            'anchor' => '/this file is the guard for the other ([a-z]+)\b/i',
+            'anchor' => '/this file is the guard for the other ([a-z-]+)\b/i',
             'offset' => 1,
         ],
         'BootstrapLaunchNoticeRoutingTest class doc-block, "holds N calls"' => [
@@ -259,7 +259,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'BootstrapLaunchNoticeRoutingTest skipped-skills case, "carries N other sources"' => [
             'file' => 'tests/Cli/BootstrapLaunchNoticeRoutingTest.php',
-            'anchor' => '/safe to seat in a transcript that also carries\s+\*?\s*([a-z]+)\b/i',
+            'anchor' => '/safe to seat in a transcript that also carries\s+\*?\s*([a-z-]+)\b/i',
             'offset' => 1,
         ],
         'BootstrapLaunchNoticeRoutingTest skipped-skills case, "N seam call sites"' => [
@@ -269,12 +269,12 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'McpToolWiringTest partly-started-config case' => [
             'file' => 'tests/Integration/McpToolWiringTest.php',
-            'anchor' => '/is not inherited from the other\s+\*?\s*([a-z]+) call sites/i',
+            'anchor' => '/is not inherited from the other\s+\*?\s*([a-z-]+) call sites/i',
             'offset' => 1,
         ],
         'Bootstrap::reportSkillSkips(), "carries N other sources"' => [
             'file' => 'src/Cli/Bootstrap.php',
-            'anchor' => '/also has to carry\s+(?:\/\/)?\s*([a-z]+) other sources/i',
+            'anchor' => '/also has to carry\s+(?:\/\/)?\s*([a-z-]+) other sources/i',
             'offset' => 1,
         ],
         'Bootstrap::chat(), the last-read comment' => [
@@ -284,7 +284,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         ],
         'Bootstrap::mcpClient() catch, the driven-reachability comment' => [
             'file' => 'src/Cli/Bootstrap.php',
-            'anchor' => '/not inherited from the other\s+(?:\/\/)?\s*([a-z]+) call sites/i',
+            'anchor' => '/not inherited from the other\s+(?:\/\/)?\s*([a-z-]+) call sites/i',
             'offset' => 1,
         ],
         'docs/SETTINGS.md, the transcript-seam paragraph' => [
@@ -411,7 +411,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
     private const NUMBER_WORDS = [
         'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13,
         'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
-        'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21,
+        'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21, 'twenty-two' => 22,
     ];
 
     /**

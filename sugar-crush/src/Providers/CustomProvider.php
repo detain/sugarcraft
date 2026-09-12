@@ -176,10 +176,12 @@ final readonly class CustomProvider implements ProviderInterface
         try {
             // 'headers' here (not client defaults) so the affinity header also
             // rides injected clients - see SessionAffinity::sessionAffinityHeaders().
+            // heartbeatOptions() is [] unless E493's caller supplied a
+            // progress closure, so the spread is byte-neutral otherwise.
             $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
                 'headers' => $this->sessionAffinityHeaders(),
-            ]);
+            ] + self::heartbeatOptions($request->onHeartbeat));
 
             $data = json_decode($response->getBody()->getContents(), true);
             return $this->parseResponse($data);

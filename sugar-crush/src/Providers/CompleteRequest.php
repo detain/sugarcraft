@@ -138,5 +138,52 @@ final readonly class CompleteRequest
          * rather than making each provider re-derive it.
          */
         public ?array $systemBlocks = null,
+        /**
+         * Optional progress heartbeat for a BATCH (non-streaming) completion.
+         *
+         * WHY (E493): a batch `complete()` blocks inside `curl_exec()` for as
+         * long as the server thinks - minutes on a loaded host with a long
+         * agentic transcript - and during that window the process looks dead
+         * to whoever is watching it. E524 measured the naive remedy and it
+         * does not exist: pcntl-dispatched signals cannot interrupt a blocking
+         * libcurl read (PHP only runs signal handlers at VM tick points, and
+         * there are none inside `curl_exec()`), so a SIGALRM-driven writer
+         * gets ZERO beats exactly when they are needed. What DOES fire inside
+         * the blocking transfer is libcurl's own progress callback - measured
+         * 18 callbacks across a 3s transfer, including at t=1.001s and
+         * t=2.002s with no bytes moving - which Guzzle exposes as the
+         * `progress` request option. This closure is what {@see
+         * \SugarCraft\Crush\Providers\Concerns\HttpClientDefaults::heartbeatOptions()}
+         * wires into that option, throttled to at most one call per second.
+         *
+         * CONTRACT, and each half is load-bearing:
+         *   - FAIL-SOFT. The wrapper swallows every Throwable this closure
+         *     throws: a broken heartbeat must never fail an in-flight paid
+         *     completion. It also must never RETURN truthy-as-abort - Guzzle
+         *     discards the curl handler's progress return, but the throttled
+         *     wrapper returns void regardless.
+         *   - NOT a timeout. Installing a heartbeat arms nothing that kills
+         *     or bounds the request (standing ban on new wall-clock kills);
+         *     it is telemetry only, and a consumer that receives beats is
+         *     observing liveness, not granting one.
+         *   - BATCH path only. `completeStream()` is self-announcing - every
+         *     SSE frame is a heartbeat - so no provider reads this field on
+         *     the streaming path, and leaving it set for one is inert.
+         *
+         * WHO CAN ACTUALLY DELIVER ONE: SglangProvider and CustomProvider
+         * (plain Guzzle, they take request options). Not OpenAIProvider
+         * (openai-php's `Chat::create()` exposes no per-request transport
+         * options), not BedrockProvider (the AWS SDK owns its curl handles),
+         * not VertexProvider (Google SDK owns its transport), not
+         * ClaudeCodeProvider (proc_open child, no HTTP transfer) or
+         * EchoProvider (no I/O). Those gaps are properties of the SDKs,
+         * recorded honestly rather than papered over.
+         *
+         * WHO CALLS IT: nothing in-tree yet. Threading a writer from
+         * `EngineBackend`/`Runtime` through `complete()` to here is the
+         * consumer half of E493 and lives outside `src/Providers/`; this
+         * seam ships the carrier plus the two providers that can honour it.
+         */
+        public ?\Closure $onHeartbeat = null,
     ) {}
 }

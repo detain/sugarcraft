@@ -159,6 +159,68 @@ trait HttpClientDefaults
     private const STREAM_BOUNDS_MIDDLEWARE = 'sugarcrush.stream_connect_bounds';
 
     /**
+     * Minimum seconds between two deliveries of a {@see
+     * \SugarCraft\Crush\Providers\CompleteRequest::$onHeartbeat} beat.
+     *
+     * libcurl's progress callback fires many times per second during an
+     * active transfer (measured 18x in 3s); the consumer's job is "something
+     * is alive", which one beat per second states plainly. Throttling here
+     * rather than in every caller keeps a confused consumer from being
+     * hammered, and keeps the E524 guarantee (a beat lands while the socket
+     * is silent) intact - the first tick of every request fires immediately,
+     * because the throttle clock starts one full interval in the past.
+     */
+    private const HEARTBEAT_MIN_INTERVAL_SECONDS = 1.0;
+
+    /**
+     * Request options carrying a batch completion's progress heartbeat.
+     *
+     * Returns `[]` for no callback - so `+ self::heartbeatOptions(...)` on a
+     * request-options array is byte-neutral for every request that does not
+     * ask to be watched, which is all of them until the consumer seam lands.
+     * Otherwise one `progress` entry: Guzzle hands it to
+     * `CURLOPT_PROGRESSFUNCTION` on the curl path and drives it from body
+     * reads on the stream path, which is the ONLY mechanism E524 measured to
+     * fire inside a blocking transfer (pcntl signals cannot).
+     *
+     * The wrapper is fail-soft twice over: every throw from the consumer's
+     * closure is swallowed (a broken heartbeat must never fail a paid
+     * completion), and the wrapper always returns `false` - the libcurl
+     * "keep transferring" value - so even a consumer that accidentally
+     * returns truthy cannot abort its own request. Guzzle's CurlFactory
+     * discards the return on one transport; this covers both anyway.
+     */
+    private static function heartbeatOptions(?\Closure $onHeartbeat): array
+    {
+        if ($onHeartbeat === null) {
+            return [];
+        }
+
+        // Seeded one interval in the past so the first callback tick delivers.
+        $last = -self::HEARTBEAT_MIN_INTERVAL_SECONDS;
+
+        return [
+            'progress' => static function (int $downloadTotal, int $downloadedBytes, int $uploadTotal, int $uploadedBytes) use ($onHeartbeat, &$last): bool {
+                $now = \microtime(true);
+
+                if ($now - $last < self::HEARTBEAT_MIN_INTERVAL_SECONDS) {
+                    return false;
+                }
+
+                $last = $now;
+
+                try {
+                    $onHeartbeat();
+                } catch (\Throwable) {
+                    // Fail-soft by contract - see CompleteRequest::$onHeartbeat.
+                }
+
+                return false;
+            },
+        ];
+    }
+
+    /**
      * Builds a Guzzle client carrying this library's connect-bound policy on
      * both of Guzzle's transports.
      *
