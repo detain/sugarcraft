@@ -35,8 +35,11 @@ use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillPathNudge;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Support\TimedFileLock;
 use SugarCraft\Crush\Support\ToolIpcFiles;
+use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Crush\Workflows\Workflow;
@@ -92,6 +95,18 @@ use SugarCraft\Crush\Workflows\Workflow;
   * The digits of genuinely-host-timed sentences stay free — but every RELATION
   * the prose itself states about them now re-evaluates here, so a half-updated
   * sentence reds instead of quietly lying (ref: lane cb/be/dl ledgers).
+  *
+  * E686 TRANCHE-6 (round-69, lane fl) judges the 12-row carry and splits holds
+  * the way arm W split ESS's: a measured absolute stays free while every
+  * arithmetic RELATION the sentence itself hangs on it re-evaluates. The
+  * live-pane tick family (Z) gets pinned to the probe's own `addPeriodicTimer`
+  * literal — the carry's premise that the tick had no referent was wrong, it
+  * just lives one file away; SkillRegistry's byte tables (AA) re-derive their
+  * per-entry quotients, generator product and microsecond subtraction while
+  * honoring the paragraph's explicit refusal to tie a total to an allocator's
+  * answer; the nudge cost table (AB) pins its multiplier labels to the bytes
+  * they divide and its margin sentence to three live constants. Nothing judged
+  * FALSE; the two retracted-figure laws (stale-vs-live) follow arm Y.
   *
   * @internal
   */
@@ -1781,6 +1796,168 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * E686 tranche-6 (Z): the live-pane timing family. THREE sites — the
+     * ProcessExecutor simulation paragraph, the AgentWorkerPool forkedExecutor
+     * rationale, and the WorkflowLivePaneTest comment above the probe — quote
+     * the same two numbers: "7 runs in 20" and "20ms". The tick has a live
+     * referent the carry said it lacked: the test file's single
+     * `addPeriodicTimer(0.02, ...` painter, which the three prose digits must
+     * keep matching, and "over about a second — roughly fifty ticks" closes
+     * the loop at fifty × 20 ms = 1,000 ms. A failure count is measured, so
+     * its digits are free to be RE-TAKEN — but only everywhere at once; half
+     * the family moving is the corruption this catches (ed#12 hold promoted).
+     */
+    public function testLivePaneTimingFamilyQuotesOneTickAndOneFailureRate(): void
+    {
+        $worker = self::proseOf(self::sourceOf('Agents/ProcessExecutor.php'));
+        $pool = self::proseOf(self::sourceOf('Agents/AgentWorkerPool.php'));
+        $pane = self::proseOf((string) file_get_contents(\dirname(__DIR__, 2) . '/tests/Workflows/WorkflowLivePaneTest.php'));
+
+        self::assertSame(1, preg_match('/made it fail (\d+) runs in (\d+), because/', $worker, $w), 'ProcessExecutor no longer states the measured failure rate beside the tick that explains it');
+        self::assertSame(1, preg_match('/inside one (\d+)ms sampling tick/', $worker, $wt), 'ProcessExecutor no longer names the sampling tick beside the failure rate');
+        self::assertSame(1, preg_match('/two `streaming` frames spaced by `usleep\(\)`, about a second end to end/', $worker, $wf), 'the fixed-known-shape sentence moved — "about a second" is half of the fifty-ticks arithmetic the pane test states');
+
+        self::assertSame(1, preg_match('/suite failed (\d+) runs in (\d+);/', $pool, $p), 'AgentWorkerPool::forkedExecutor no longer carries the same 7-in-20 history');
+        self::assertSame(1, preg_match('/on a (\d+)ms timer and that accessor goes empty/', $pool, $pt), 'the pool rationale no longer names the tick its window collapses under');
+
+        self::assertSame(1, preg_match('/on a (\d+)ms timer and that accessor empties/', $pane, $l), 'WorkflowLivePaneTest no longer names the tick its probe runs on');
+        self::assertSame(1, preg_match('/this test failed (\d+) runs in (\d+)/', $pane, $lt), 'the pane test comment no longer quotes its own measured flake rate');
+        self::assertSame((int) $w[1], (int) $p[1], 'the simulated-worker history forked: ProcessExecutor and AgentWorkerPool quote different failure counts');
+        self::assertSame((int) $p[1], (int) $lt[1], 'the simulated-worker history forked again: the suite quoting the failure moved away from both src rationales');
+        self::assertSame((int) $w[2], (int) $p[2], 'the three sites quote different denominators for the same measured run-count');
+        self::assertSame((int) $wt[1], (int) $pt[1], 'the tick forked between the two src doc-blocks');
+        self::assertSame((int) $pt[1], (int) $l[1], 'the tick in the src rationales no longer matches the one the probe\'s own file states');
+
+        self::assertSame(1, preg_match('/addPeriodicTimer\(\s*([0-9.]+),/', $pane, $lit), 'WorkflowLivePaneTest no longer passes its painter interval as a plain decimal — the prose tick lost its live referent');
+        self::assertSame((int) $wt[1], (int) round((float) $lit[1] * 1000), 'the prose tick and the live addPeriodicTimer interval diverged — either the painter moved (rewrite all three sentences together) or the prose drifted (fix the prose)');
+
+        self::assertSame(1, preg_match('/over about a second — roughly (\w+) ticks/', $pane, $ft), 'the fifty-ticks sentence moved — its product with the tick is the arithmetic this pins');
+        $wordNumbers = ['forty' => 40, 'fifty' => 50, 'sixty' => 60, 'eighty' => 80, 'hundred' => 100];
+        self::assertArrayHasKey($ft[1], $wordNumbers, "the spelled tick count '{$ft[1]}' is outside the pinned word map — extend the map deliberately, never let a reworded sentence pass this arm by accident (the ?? -1 vacuity trap, ref lane ed)");
+        self::assertSame(1000, $wordNumbers[$ft[1]] * (int) $wt[1], '"roughly N ticks over about a second" no longer multiplies out to a second — move the spelled word and the tick together or not at all');
+    }
+
+    /**
+     * E686 tranche-6 (AA): SkillRegistry's byte tables carry the campaign's
+     * rarest beast — a paragraph that EXPLICITLY refuses to let its totals be
+     * pinned ("a byte count is an allocator's answer") — while stating
+     * arithmetic that pins cleanly regardless of allocator: every per-entry
+     * figure is the total it names over the entry count in the same breath,
+     * the generator is a product, the retraction's subtraction lands on its
+     * own microsecond quotient, and the honest "roughly 7x and 10x" band must
+     * still contain every ratio printed above it. The retracted totals follow
+     * arm Y's stale-vs-live law: neither may ever equal its replacement, or
+     * "Neither byte figure reproduces" rots into a lie. ed#15's whole-table
+     * hold splits here the way arm W split ESS's measured block. The
+     * 20,000-mod-cap entry counts are deliberately NOT repeated —
+     * CompiledPatternCacheBoundTest already derives them from the live cap.
+     */
+    public function testSkillRegistryMeasuredBlockKeepsItsOwnQuotients(): void
+    {
+        $cap = (int) (new \ReflectionClass(SkillRegistry::class))->getConstant('MAX_COMPILED_PATTERNS');
+        $tables = self::proseOf(self::docBlockOf(SkillRegistry::class, 'MAX_COMPILED_PATTERNS'));
+
+        self::assertSame(1, preg_match('/20,000 entries cost ([\d,]+) B \(([\d.]+) B\/entry\) and ([\d,]+) cost ([\d,]+) B \(([\d.]+) B\/entry\)/', $tables, $cur), 'the current byte pair no longer spells totals and per-entry figures in one breath');
+        self::assertSame($cap, (int) str_replace(',', '', $cur[3]), 'the prose\'s capped entry count is no longer the live MAX_COMPILED_PATTERNS');
+        self::assertSame((float) $cur[2], round((int) str_replace(',', '', $cur[1]) / 20000, 1), 'the 20,000-entry per-entry figure is no longer the one-decimal quotient of its own total');
+        self::assertSame((float) $cur[5], round((int) str_replace(',', '', $cur[4]) / $cap, 1), 'the capped per-entry figure is no longer the quotient of its own total');
+        self::assertLessThan((float) $cur[2], (float) $cur[5], 'the prose claims per-entry cost "goes UP with n" — the current pair no longer obeys its own conclusion');
+
+        self::assertSame(1, preg_match('/hashtable alone \(same keys and values, pre-built outside the measured window\) is ([\d.]+) B\/entry at 1,024 and ([\d.]+) B\/entry at 20,000/', $tables, $ht), 'the hashtable-only sentence moved — its two figures are the same direction claim in smaller magnitudes');
+        self::assertLessThan((float) $ht[2], (float) $ht[1], 'the hashtable per-entry figures no longer rise with n either — the stated generator explanation needs re-reading');
+
+        self::assertSame(1, preg_match('/"Uncapped … ([\d,]+) bytes of PHP heap \((\d+) B\/entry\); capped … ([\d,]+) bytes \((\d+) B\/entry/s', $tables, $old), 'the retracted quotation no longer stands intact — corrections are pinned in both directions (E633)');
+        self::assertSame((int) $old[2], (int) round((int) str_replace(',', '', $old[1]) / 20000), 'the retracted uncapped figure is no longer the integer quotient of the total it quotes');
+        self::assertSame((int) $old[4], (int) round((int) str_replace(',', '', $old[3]) / $cap), 'the retracted capped figure is no longer the integer quotient of the total it quotes');
+        self::assertGreaterThan((int) $old[2], (int) $old[4], 'the retraction calls the old explanation "inverted" — the quoted pair no longer contradicts the current direction');
+        self::assertNotSame((int) str_replace(',', '', $old[1]), (int) str_replace(',', '', $cur[1]), '"Neither byte figure reproduces" now quotes the CURRENT total — the retraction went stale and needs its own retraction');
+        self::assertNotSame((int) str_replace(',', '', $old[3]), (int) str_replace(',', '', $cur[4]), 'the retracted capped total equals the current one — same rot on the capped side');
+
+        $perf = self::proseOf((string) (new \ReflectionClass(SkillRegistry::class))->getProperty('compiledPathPatterns')->getDocComment());
+        self::assertNotSame('', $perf, '$compiledPathPatterns lost its doc-block — the perf paragraph this pins was deleted, not fixed');
+
+        self::assertSame(1, preg_match('/(\d+) patterns x (\d+) paths x (\d+) trials = ([\d,]+) pairs/', $perf, $gen), 'the generator sentence no longer spells its factors and product together');
+        $pairs = (int) str_replace(',', '', $gen[4]);
+        self::assertSame($pairs, (int) $gen[1] * (int) $gen[2] * (int) $gen[3], 'the stated pair count is no longer the product of the stated generator dimensions');
+
+        self::assertSame(1, preg_match('/([\d.]+)s minus ([\d.]+)s over ([\d,]+) pairs is ([\d.]+) us per translation/', $perf, $sub), 'the retraction\'s subtraction sentence moved — it is the arithmetic proof that the OLD microsecond pair could not share a run');
+        self::assertSame($pairs, (int) str_replace(',', '', $sub[3]), 'the subtraction now divides by a pair count the generator sentence does not state — the two figures cite different runs');
+        self::assertSame((float) $sub[4], round(((float) $sub[1] - (float) $sub[2]) * 1000000 / $pairs, 2), 'the per-translation microseconds are no longer the difference of the two wall figures over the stated pairs');
+
+        preg_match_all('/(\d+\.\d+)x \/ (\d+\.\d+)x \/ (\d+\.\d+)x/', $perf, $rows);
+        $ratios = [];
+        foreach ([1, 2, 3] as $group) {
+            foreach ($rows[$group] as $r) {
+                $ratios[] = (float) $r;
+            }
+        }
+        self::assertSame(6, count($ratios), 'the ratio table no longer states two runs-triples — re-read the block before changing this pin');
+        self::assertSame(1, preg_match('/give ([\d.]+)x-([\d.]+)x and ([\d.]+)x-([\d.]+)x/', $perf, $alt), 'the distinct-patterns re-take sentence moved — its four endpoints ride in the same band the conclusion claims');
+        foreach ([1, 2, 3, 4] as $group) {
+            $ratios[] = (float) $alt[$group];
+        }
+        self::assertSame(1, preg_match('/between roughly (\d+)x and (\d+)x/', $perf, $band), 'the honest-band conclusion moved — containing the stated ratios IS its claim');
+        self::assertGreaterThanOrEqual((float) $band[1], min($ratios), 'a stated ratio now sits BELOW the "between roughly" floor the same paragraph concludes');
+        self::assertLessThanOrEqual((float) $band[2], max($ratios), 'a stated ratio now sits ABOVE the "between roughly" ceiling the same paragraph concludes');
+    }
+
+    /**
+     * E686 tranche-6 (AB): SkillPathNudge's cost table and margin sentences
+     * were carried as fixture-domain — and the byte ABSOLUTES stay exactly
+     * that, free — but the multiplier LABELS the prose hangs on them are
+     * quotients (returned bytes over the cap named in the same sentence, one
+     * decimal; the Read case integer-rounds), the "Linear in" conclusion is a
+     * slope claim over the four table rows, and the shipped-margin sentence is
+     * fully live: at MAX_ENTRIES the ceiling is maxBytes() against
+     * Grep::DEFAULT_MAX_OUTPUT_BYTES divided by CALLER_BUDGET_DIVISOR — 8,192
+     * — with 3.1x the one-decimal quotient of the last two. The two prose
+     * ceilings bracket that budget (the 20-era price under it, the 27-era
+     * ceiling over it), which is exactly what "20 does not red / the first
+     * value that reds is 27" claims. The tipping count itself is derived live
+     * by SkillPathScopingWiringTest and deliberately not repeated here.
+     */
+    public function testNudgeCostTableLabelsDivideTheirOwnFigures(): void
+    {
+        $entry = self::proseOf(self::docBlockOf(SkillPathNudge::class, 'MAX_ENTRY_BYTES'));
+
+        preg_match_all('/(\d+) skills? x ([\d,]+)-byte descriptions? -> ([\d,]+) bytes/', $entry, $rows);
+        self::assertCount(4, $rows[0], 'the four-row cost table changed shape — re-read the block (fixture absolutes stay free, but this arm\'s slopes and labels index its rows)');
+        $points = [];
+        for ($i = 0; $i < 4; ++$i) {
+            $points[] = [(int) $rows[1][$i] * (int) str_replace(',', '', $rows[2][$i]), (int) str_replace(',', '', $rows[3][$i])];
+        }
+        for ($i = 1; $i < 4; ++$i) {
+            $slope = ($points[$i][1] - $points[$i - 1][1]) / ($points[$i][0] - $points[$i - 1][0]);
+            self::assertGreaterThan(1.0, $slope, "table rows {$i}/".($i + 1)." went backwards — the nudge no longer grows with (matching skills x description length) while the prose still claims it does");
+            self::assertLessThan(1.02, $slope, "the marginal cost per description byte exceeded 1.02 between rows {$i}/".($i + 1)." — \"linear in (matching skills x description length)\" needs re-deriving with the framing it prices");
+        }
+
+        self::assertSame(1, preg_match('/cap ([\d,]+) with 1 skill x 200 returned ([\d,]+) bytes \(([\d.]+)x\)/', $entry, $q1), 'the Grep end-to-end first case no longer states cap, returned bytes, and margin together');
+        self::assertSame((float) $q1[3], round((int) str_replace(',', '', $q1[2]) / (int) str_replace(',', '', $q1[1]), 1), 'the 1.3x label is no longer the one-decimal quotient of its own returned bytes over its own cap');
+        self::assertSame(1, preg_match('/5 x 5,000 returned ([\d,]+) \(([\d.]+)x\)/', $entry, $q2), 'the second Grep case moved');
+        self::assertSame((float) $q2[2], round((int) str_replace(',', '', $q2[1]) / (int) str_replace(',', '', $q1[1]), 1), 'the 26.2x label no longer divides by the cap the paragraph named one sentence earlier');
+        self::assertSame(1, preg_match('/20 x 20,000 returned ([\d,]+) \(([\d.]+)x\)/', $entry, $q3), 'the third Grep case moved');
+        self::assertSame((float) $q3[2], round((int) str_replace(',', '', $q3[1]) / (int) str_replace(',', '', $q1[1]), 1), 'the 401.4x label no longer divides by the stated cap');
+        self::assertSame(1, preg_match('/Read\} at maxBytes (\d+) returned ([\d,]+) bytes on the last of those — ([\d,]+)x/', $entry, $q4), 'the Read over-read sentence moved');
+        self::assertSame((int) str_replace(',', '', $q4[3]), (int) round((int) str_replace(',', '', $q4[2]) / (int) $q4[1]), 'the 2,002x label is no longer the integer-rounded quotient of returned bytes over maxBytes');
+
+        $cap = self::proseOf(self::docBlockOf(SkillPathNudge::class, 'MAX_ENTRIES'));
+        self::assertSame(1, preg_match('/at (\d+) the ceiling is ([\d,]+) bytes against a Grep\/Glob budget of ([\d,]+), a ([\d.]+)x margin/', $cap, $ship), 'the shipped-margin sentence no longer spells count, ceiling, budget and margin in one breath');
+        self::assertSame((int) (new \ReflectionClass(SkillPathNudge::class))->getConstant('MAX_ENTRIES'), (int) $ship[1], 'the prose entry count drifted from live MAX_ENTRIES');
+        self::assertSame(SkillPathNudge::maxBytes(), (int) str_replace(',', '', $ship[2]), 'the prose ceiling drifted from live maxBytes()');
+        $budget = (int) ((new \ReflectionClassConstant(Grep::class, 'DEFAULT_MAX_OUTPUT_BYTES'))->getValue() / SkillPathNudge::CALLER_BUDGET_DIVISOR);
+        self::assertSame($budget, (int) str_replace(',', '', $ship[3]), 'the prose budget is no longer the live Grep cap over the live CALLER_BUDGET_DIVISOR');
+        self::assertSame((float) $ship[4], round($budget / (int) str_replace(',', '', $ship[2]), 1), 'the stated margin is no longer the one-decimal quotient of the two figures it names');
+
+        self::assertSame(1, preg_match('/it is (\d+) — the first value that reds the guard is (\d+), where the ceiling reaches ([\d,]+)/', $cap, $tip), 'the tipping-pair sentence moved — the red/not-red bracketing IS its claim');
+        self::assertSame((int) $tip[1] + 1, (int) $tip[2], '"the first value that reds" is no longer one past the stated tipping point');
+        self::assertSame(1, preg_match('/It does not: (\d+) prices the ceiling at ([\d,]+), comfortably/', $cap, $era), 'the round-43 retraction sentence moved — its figure is the other half of the bracket');
+        self::assertLessThan((int) $tip[1], (int) $era[1], 'the retracted 20-era count is no longer below the tipping point the prose just established');
+        self::assertLessThan($budget, (int) str_replace(',', '', $era[2]), 'the prose still says the 20-era ceiling does NOT red the guard, but its figure now reaches the live budget');
+        self::assertGreaterThan($budget, (int) str_replace(',', '', $tip[3]), 'the prose still says 27 reds the guard, but its ceiling figure no longer clears the live budget');
+    }
+
+    /**
      * The live roster of CRUSH_* keys a hook child receives, derived from the
      * source the runtime actually runs: the $fixed array, the payloads handed
      * to stagePayloads() at its call site, and the _FILE pointer each staged
@@ -1850,6 +2027,20 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsString($text, "src/{$relative} vanished — a prose pin lost its file");
 
         return $text;
+    }
+
+    /**
+     * Strip doc-block/comment continuation markers and collapse whitespace, so
+     * a sentence wrapped at column eighty matches in one breath. A pin blind
+     * to the wrapping would pass on any rewrap; this normalizer is what makes
+     * the single-breath patterns honest (ref: the margin doc test's
+     * docBlock() preamble — the family already ships this idiom).
+     */
+    private static function proseOf(string $text): string
+    {
+        $stripped = (string) preg_replace('/^\s*(?:\*|\/\/) ?/m', '', $text);
+
+        return (string) preg_replace('/\s+/', ' ', $stripped);
     }
 
     private static function bodyExcerpt(string $fileText, string $method, int $window = 3000): string
