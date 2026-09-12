@@ -23,8 +23,14 @@ use SugarCraft\Crush\Context\MemoryBlock;
 use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Hooks\HookConfig;
+use SugarCraft\Crush\Hooks\HookDispatcher;
+use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Hooks\ScriptHook;
+use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Support\HookContextFiles;
+use SugarCraft\Crush\Tests\Support\SourceFileWalkTrait;
 use SugarCraft\Crush\LSP\LspConnection;
 use SugarCraft\Crush\MCP\StdioMcpServer;
 use SugarCraft\Crush\Providers\ClaudeCodeProvider;
@@ -106,12 +112,25 @@ use SugarCraft\Crush\Workflows\Workflow;
   * honoring the paragraph's explicit refusal to tie a total to an allocator's
   * answer; the nudge cost table (AB) pins its multiplier labels to the bytes
   * they divide and its margin sentence to three live constants. Nothing judged
-  * FALSE; the two retracted-figure laws (stale-vs-live) follow arm Y.
-  *
-  * @internal
-  */
+   * FALSE; the two retracted-figure laws (stale-vs-live) follow arm Y.
+   *
+   * E686 TRANCHE-7 (round-70, lane gd) closes E353's decision by FOLDING: the
+   * HOOKS.md tables that restate code — entry keys, the delimiter alphabet, the
+   * exit-code contract and its match arms, the events enum and the dormant/wired
+   * dispatch partition, the built-in registration roster and the refusal grid —
+   * are pinned to live derivation here (arms AC-AF), the cheap inventory E353
+   * itself proposed: each named symbol still exists and still has the property
+   * the row claims, never a golden-file comparison. The SKILLS.md nudge sentence
+   * (AG) joins figures already pinned inside src to their cross-page restatement,
+   * and the ENVIRONMENT.md streaming table (AH) keeps its measured absolutes free
+   * while pinning the relations its own preamble states.
+   *
+   * @internal
+   */
 final class DocFigureProseDriftTest extends TestCase
 {
+    use SourceFileWalkTrait;
+
     /**
      * ToolIpcFiles::STALE_AFTER_SECONDS justifies the hour against three named
      * budgets and a "~Nx the largest" multiplier. Every figure in that
@@ -1958,6 +1977,461 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * E686 tranche-7 (AC, closing E353's decision by FOLD): the HOOKS.md tables
+     * that restate code — the name()/event() table, the built-ins table, the
+     * refusal grid, the registration roster, and the six-mode clause — are
+     * re-derived from the BuiltIn classes, registerBuiltIns(), and the
+     * PermissionMode enum. Every row's property becomes a live lookup: names,
+     * events and matchers come from each class's return literal, the
+     * registered/NOT-registered split from the registrar body against the
+     * directory roster, and the grid's refused/accepted verdicts recomputed
+     * from the live (name, event) pair-set (ref: E353, docs/HOOKS.md).
+     */
+    public function testBuiltInHookTablesSurviveRegistrationAndNaming(): void
+    {
+        $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $hooks = self::markdownProse($hooksRaw);
+        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
+
+        $live = [];
+        // The wildcard rides as its own literal on purpose: a single-quoted
+        // '/…/*Hook.php' string is glob-shaped and would leak into the
+        // GlobDialectDifferentialTest corpus figure (lane-dd/-fj lesson, -70).
+        foreach (glob(\dirname(__DIR__, 2) . '/src/Hooks/BuiltIn/' . '*' . 'Hook.php') ?: [] as $path) {
+            $class = 'SugarCraft\\Crush\\Hooks\\BuiltIn\\' . basename($path, '.php');
+            $text = (string) file_get_contents($path);
+            $live[basename($path, '.php')] = [
+                'name' => self::hookMethodLiteral($text, $class, 'name'),
+                'event' => self::hookMethodLiteral($text, $class, 'event'),
+                'matcher' => self::hookMethodLiteral($text, $class, 'matcher'),
+            ];
+        }
+        ksort($live);
+        self::assertCount(5, $live, 'the BuiltIn hook roster changed — the name table, the built-ins table, and BOTH bullet halves of the registration claim move together');
+
+        self::assertSame(
+            1,
+            preg_match('/registers (\w+) unconditionally, ahead of anything from a file and ahead of the permission gate/', $hooks, $three),
+            'the registration sentence no longer names its count and both ordering claims in one breath — re-pin with the prose, do not delete it',
+        );
+        $registrar = self::bodyExcerpt(self::sourceOf('Hooks/HookManager.php'), 'registerBuiltIns', 900);
+        $registerNeedle = '$this->registry->register(new BuiltIn\\';
+        self::assertSame($words[$three[1]] ?? -1, substr_count($registrar, $registerNeedle), 'the spelled register count no longer matches registerBuiltIns()');
+        preg_match_all('/register\(new BuiltIn\\\\(\w+)\(\)\)/', $registrar, $registered);
+        self::assertCount(3, $registered[1], 'the registrar body no longer builds its hooks with new BuiltIn\X() — re-derive this pin');
+
+        // Built-ins table: the three rows, their event cells, and whichever
+        // matchers they spell out.
+        $tableStart = strpos($hooksRaw, '## The built-in hooks');
+        $tableEnd = strpos($hooksRaw, 'Two more exist');
+        self::assertIsInt($tableStart);
+        self::assertIsInt($tableEnd);
+        $table = substr($hooksRaw, $tableStart, $tableEnd - $tableStart);
+        preg_match_all('/^\| `(\w+)` \| `(\w+)`[^\n]*/m', $table, $rows, PREG_SET_ORDER);
+        self::assertEqualsCanonicalizing($registered[1], array_column($rows, 1), 'docs/HOOKS.md built-ins rows no longer name exactly the classes registerBuiltIns() registers');
+        foreach ($rows as $row) {
+            self::assertSame($live[$row[1]]['event'], $row[2], "the built-ins table still gives {$row[1]} event {$row[2]} — its live event() moved");
+            if (str_contains($row[0], ' on `') || str_contains($row[0], 'matcher `')) {
+                self::assertStringContainsString('`' . str_replace('|', '\|', $live[$row[1]]['matcher']) . '`', $row[0], "the row that spells {$row[1]}'s matcher no longer carries its live matcher() literal");
+            }
+        }
+        self::assertSame(1, preg_match('/`AuditHook::(\w+)\(\)`/', $table, $audits), 'the audit row no longer cites a method instead of restating the path — that citation IS the E353 mitigation');
+        self::assertTrue(method_exists('SugarCraft\\Crush\\Hooks\\BuiltIn\\AuditHook', $audits[1]), "AuditHook::{$audits[1]}() is gone but the table still cites it");
+
+        // name()/event() table: every cell equals its class's return literal.
+        $nameRowsStart = strpos($hooksRaw, '### A loaded hook may only add');
+        $nameRowsEnd = strpos($hooksRaw, 'So `name: confirm-remove`');
+        self::assertIsInt($nameRowsStart);
+        self::assertIsInt($nameRowsEnd);
+        $namesTable = substr($hooksRaw, $nameRowsStart, $nameRowsEnd - $nameRowsStart);
+        preg_match_all('/^\| `BuiltIn\\\\(\w+)` \| \*{0,2}`([^`]+)`\*{0,2} \| \*{0,2}`(\w+)`\*{0,2} \|/m', $namesTable, $nameRows, PREG_SET_ORDER);
+        self::assertEqualsCanonicalizing($registered[1], array_column($nameRows, 1), 'the name table no longer covers exactly the registered three');
+        foreach ($nameRows as $row) {
+            self::assertSame($live[$row[1]]['name'], $row[2], "the table still says BuiltIn\\{$row[1]} is named {$row[2]} — its name() moved (E353's exact failure mode)");
+            self::assertSame($live[$row[1]]['event'], $row[3], "the table still says BuiltIn\\{$row[1]} fires on {$row[3]} — its event() moved");
+        }
+
+        // Refusal grid: verdicts RECOMPUTED from the live (name, event) pairs.
+        $gridStart = strpos($hooksRaw, 'Measured on this tree, with `registerBuiltIns()`');
+        $gridEnd = strpos($hooksRaw, 'is the row worth reading twice');
+        self::assertIsInt($gridStart);
+        self::assertIsInt($gridEnd);
+        $grid = substr($hooksRaw, $gridStart, $gridEnd - $gridStart);
+        self::assertSame(1, preg_match('/\| `name:` \| on `event: (\w+)` \| on `event: (\w+)` \|/', $grid, $head), 'the grid header no longer names its two event coordinates');
+        preg_match_all('/^\| `([a-z-]+)` \| \*{0,2}(\w+)\*{0,2} \| \*{0,2}(\w+)\*{0,2} \|/m', $grid, $cells, PREG_SET_ORDER);
+        self::assertNotEmpty($cells, 'the refusal grid lost its rows');
+        $pairs = array_map(static fn (string $class): string => $live[$class]['name'] . '|' . $live[$class]['event'], $registered[1]);
+        foreach ($cells as $cell) {
+            self::assertSame(\in_array($cell[1] . '|' . $head[1], $pairs, true) ? 'refused' : 'accepted', $cell[2], "grid row {$cell[1]} vs {$head[1]}: the registered pairs say otherwise");
+            self::assertSame(\in_array($cell[1] . '|' . $head[2], $pairs, true) ? 'refused' : 'accepted', $cell[3], "grid row {$cell[1]} vs {$head[2]}: the registered pairs say otherwise");
+        }
+        $liveNames = array_map(static fn (string $class): string => $live[$class]['name'], $registered[1]);
+        $extras = array_values(array_diff(array_column($cells, 1), $liveNames));
+        $confirmRemove = (string) current(array_filter($registered[1], static fn (string $c): bool => str_contains($c, 'Confirm')));
+        self::assertSame(
+            [strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', substr($confirmRemove, 0, -4)))],
+            $extras,
+            'the grid gained or lost its class-name-sounding example — `name()` vs class-name confusion IS the row\'s claim (census-trio lesson: flip the grid with the naming)',
+        );
+
+        // The two bullets = the roster minus the registered three, set-equal.
+        self::assertSame(1, preg_match('/(\w+) more exist and are/', $hooks, $two), 'the not-registered sentence lost its spelled count');
+        self::assertSame(count(array_diff(array_keys($live), $registered[1])), $words[strtolower($two[1])] ?? -1, 'the unregistered half of the roster no longer matches BuiltIn-minus-registered');
+        $bulletStart = strpos($hooksRaw, 'Two more exist');
+        self::assertIsInt($bulletStart);
+        $bullets = substr($hooksRaw, $bulletStart);
+        self::assertSame(1, preg_match('/`(\w+)` — registered by `Bootstrap::(\w+)\(\)` when a gate exists,\s*which is every CLI launch\. It is what makes the (\w+)-mode gate/', $bullets, $gateRow), 'the gate bullet no longer names its class, its Bootstrap seam, and the gate mode count together');
+        self::assertSame(1, preg_match('/`(\w+)` — opt-in, constructed with a jail root/', $bullets, $jailRow), 'the opt-in bullet moved');
+        self::assertEqualsCanonicalizing(array_keys(array_diff_key($live, array_flip($registered[1]))), [$gateRow[1], $jailRow[1]], 'the two bullets no longer name exactly the unregistered BuiltIn classes');
+        self::assertTrue(method_exists(Bootstrap::class, $gateRow[2]), "Bootstrap::{$gateRow[2]}() no longer exists — the bullet names the wrong seam");
+        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 6000);
+        foreach (['registerBuiltIns()', 'loadEntries(', 'new ' . $gateRow[1] . '('] as $needle) {
+            self::assertStringContainsString($needle, $hooksBody, "Bootstrap::{$gateRow[2]}() no longer contains {$needle} — the ordering and gate claims lost their referent");
+        }
+        self::assertLessThan((int) strpos($hooksBody, 'loadEntries('), (int) strpos($hooksBody, 'registerBuiltIns()'), 'built-ins are no longer registered AHEAD of file entries — the page says the order is the point');
+        self::assertLessThan((int) strpos($hooksBody, 'new ' . $gateRow[1] . '('), (int) strpos($hooksBody, 'loadEntries('), 'the gate hook no longer lands after file entries either — the precedence sentence inverted');
+        self::assertSame(count(PermissionMode::cases()), $words[$gateRow[3]] ?? -1, 'the spelled gate-mode count no longer matches PermissionMode::cases()');
+        self::assertStringNotContainsString('new ' . $jailRow[1] . '(', self::sourceOf('Hooks/HookManager.php'), 'the jail-root hook is now constructed inside the registrar — the page says an embedder must register it explicitly');
+    }
+
+    /**
+     * E686 tranche-7 (AD, closing E353's decision by FOLD): the events table and
+     * its dormancy paragraph. The spelled enum count, the one-dispatch-method-per
+     * case claim, the wired attribution column (every cited `Class::method()` and
+     * nothing else reaches each wired event in src/), the dash-row partition, the
+     * no-call-site quartet versus the guarded trio, `src/ constructs that class
+     * nowhere`, the lone `new TaskList(…)` leaving the dispatcher defaulted, and
+     * `submit()` as the sole turn-hook caller — all re-derived from live code
+     * (ref: E353, docs/HOOKS.md *Events*).
+     */
+    public function testHookEventsTableSurvivesTheLiveEnumAndDispatchSites(): void
+    {
+        $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $cases = HookEvent::cases();
+        $caseNames = array_map(static fn (HookEvent $case): string => $case->name, $cases);
+
+        $sectionStart = strpos($hooksRaw, '## Events');
+        $sectionEnd = strpos($hooksRaw, 'The `—` rows are');
+        self::assertIsInt($sectionStart);
+        self::assertIsInt($sectionEnd);
+        $section = substr($hooksRaw, $sectionStart, $sectionEnd - $sectionStart);
+
+        self::assertSame(1, preg_match('/defines (\w+):/', $section, $eleven), 'the enum count sentence moved — the table lost its head number');
+        self::assertSame(count($cases), $words[$eleven[1]] ?? -1, 'the spelled event count no longer counts HookEvent::cases() — flip the word and the enum together (census-trio lesson)');
+        foreach ($cases as $case) {
+            self::assertTrue(
+                method_exists(HookDispatcher::class, 'dispatch' . $case->name),
+                'HookDispatcher no longer carries dispatch' . $case->name . '() — the page says it carries one for each',
+            );
+        }
+
+        preg_match_all('/^\|(.+)\|\s*$/m', $section, $tableLines);
+        $citations = [];
+        $dashes = [];
+        foreach ($tableLines[1] as $line) {
+            $cells = array_map('trim', explode('|', $line));
+            if (!str_starts_with($cells[0], '`')) {
+                continue; // header
+            }
+            preg_match_all('/`(\w+)`/', $cells[0], $rowEvents);
+            if (($cells[2] ?? '') === '—') {
+                array_push($dashes, ...$rowEvents[1]);
+                continue;
+            }
+            preg_match_all('/`([A-Za-z]+)::([a-zA-Z]+)\(\)`/', $cells[2], $pairs, PREG_SET_ORDER);
+            self::assertNotEmpty($pairs, 'a non-dash row cites no Class::method() symbol — the attribution column changed shape');
+            foreach ($rowEvents[1] as $event) {
+                foreach ($pairs as $pair) {
+                    $citations[$event][] = $pair[1] . '::' . $pair[2];
+                }
+            }
+        }
+        self::assertEqualsCanonicalizing($caseNames, array_merge(array_keys($citations), $dashes), 'the table no longer covers every HookEvent case exactly once');
+
+        // Wired rows: the cited methods are EXACTLY where each event is reached.
+        foreach ($citations as $event => $cited) {
+            $toolScoped = str_contains($event, 'ToolUse');
+            $token = $toolScoped ? '->' . lcfirst($event) . '(' : 'HookEvent::' . $event;
+            $found = [];
+            foreach (self::srcTexts() as $relative => $text) {
+                if (str_starts_with($relative, 'src/Hooks/')) {
+                    continue; // Hooks/ internals are the wiring the table describes, not the origin it cites
+                }
+                $cursor = 0;
+                while (false !== ($pos = strpos($text, $token, $cursor))) {
+                    $cursor = $pos + 1;
+
+                    $found[] = basename($relative, '.php') . '::' . self::enclosingMethodName($relative, $text, $pos);
+                }
+            }
+            self::assertNotEmpty($found, "the table dispatches {$event} from cited code, but {$token} occurs nowhere in src/ any more");
+            self::assertEqualsCanonicalizing($cited, $found, "docs/HOOKS.md's Dispatched-from column for {$event} no longer matches where {$token} is actually called in src/");
+        }
+
+        // Dormancy paragraph: the two halves, told apart exactly as the page does.
+        $paraEnd = strpos($hooksRaw, 'What a **block**');
+        self::assertIsInt($paraEnd);
+        $para = self::markdownProse(substr($hooksRaw, $sectionEnd, $paraEnd - $sectionEnd));
+        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)`, `(\w+)` and `(\w+)` have no dispatch call site at all/', $para, $quartet), 'the no-call-site half of the dormancy split moved');
+        self::assertSame(1, preg_match('/`(\w+)`, `(\w+)` and `(\w+)` do have call sites, all three in `(\w+)`, but each is guarded on an injected `HookDispatcher`, and `src\/` constructs that class nowhere/', $para, $trio), 'the guarded-trio half of the dormancy split moved');
+        self::assertEqualsCanonicalizing($dashes, [$quartet[1], $quartet[2], $quartet[3], $quartet[4], $trio[1], $trio[2], $trio[3]], 'the two dormancy halves no longer split the dash rows');
+        foreach ([$quartet[1], $quartet[2], $quartet[3], $quartet[4]] as $event) {
+            self::assertSame([], self::srcOccurrences('->dispatch' . $event . '('), "{$event} gained a dispatch call site — the page still lists it under no-call-site-at-all");
+        }
+        $trioFile = $trio[4];
+        foreach ([$trio[1], $trio[2], $trio[3]] as $event) {
+            $hits = self::srcOccurrences('$this->hookDispatcher->dispatch' . $event . '(');
+            self::assertCount(1, $hits, "{$event}: the page says all three trio call sites sit guarded in {$trioFile}, one dispatch each");
+            [$relative, $pos] = $hits[0];
+            self::assertSame(basename($relative), $trioFile . '.php', "{$event} is now dispatched from " . basename($relative) . " — the page names {$trioFile} as the only host");
+            self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its injected-dispatcher guard — the page's whole dormant-not-removed argument rests on it");
+        }
+        self::assertSame([], self::srcOccurrences('new HookDispatcher('), 'src/ constructs a HookDispatcher somewhere — the dormancy explanation ("the dispatcher that is never built") is now false');
+        self::assertSame(
+            1,
+            preg_match('/`(\w+)\.php`, the only production `new TaskList/', $para, $teamCite),
+            'the sole-TaskList-host sentence moved',
+        );
+        $taskListHits = self::srcOccurrences('new TaskList(');
+        self::assertCount(1, $taskListHits, 'a second production new TaskList appeared — the sentence calls Team.php the only one');
+        self::assertSame('src/Agents/' . $teamCite[1] . '.php', $taskListHits[0][0], 'the lone new TaskList(…) moved off the class the page names');
+        [$teamText] = [self::srcTexts()[$taskListHits[0][0]]];
+        $argStart = $taskListHits[0][1] + \strlen('new TaskList(');
+        $argText = self::balancedArguments($teamText, $argStart);
+        self::assertStringNotContainsString(',', $argText, 'the only production new TaskList(…) no longer passes a single argument — the dispatcher is no longer left at its default');
+        self::assertSame(1, preg_match('/\?HookDispatcher \$hookDispatcher = null/', self::sourceOf('Agents/TaskList.php')), 'TaskList lost the defaulted injected-dispatcher parameter the page explains dormancy with');
+
+        // Turn events: one call site, reached from the method the page names.
+        self::assertSame(1, preg_match('/`Chat::dispatchTurnHooks\(\)` is the only production call site for both, reached\s+from `(\w+)\(\)`/', $hooksRaw, $turn), 'the sole-call-site sentence no longer names its reaching method');
+        $turnHits = self::srcOccurrences('->dispatchTurnHooks(');
+        self::assertCount(1, $turnHits, 'dispatchTurnHooks() gained or lost a production call site — the page calls it the only one');
+        self::assertSame($turn[1], self::enclosingMethodName($turnHits[0][0], self::srcTexts()[$turnHits[0][0]], $turnHits[0][1]), 'the turn hooks are no longer reached from the method the page names');
+
+        // The documented divergence cites a real method; pin the symbol (E353 shape).
+        self::assertSame(1, preg_match('/the strict\s*`HookEvent::(\w+)\(\)`\s*reading/', self::markdownProse($hooksRaw), $diverge), 'the divergence sentence no longer cites the HookEvent method it diverges from');
+        self::assertTrue(method_exists(HookEvent::class, $diverge[1]), "HookEvent::{$diverge[1]}() vanished but the page still reads against it");
+    }
+
+    /**
+     * E686 tranche-7 (AE, closing E353's decision by FOLD): the file-format and
+     * exit-code sections of HOOKS.md. The six entry keys against
+     * HookConfig::ENTRY_KEYS, the delimiter alphabet against DELIMITERS, and the
+     * four worked matcher results against REAL HookConfig::pattern() calls; the
+     * four-arm match, its digits, and the exit table against the ScriptHook
+     * constants and the live match block; plus the line-number retraction's own
+     * staleness law (arm Y idiom).
+     */
+    public function testHookEntryAndExitSectionsSurviveTheirSources(): void
+    {
+        $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $hooks = self::markdownProse($hooksRaw);
+        $words = ['four' => 4, 'five' => 5, 'six' => 6];
+
+        self::assertSame(1, preg_match('/Those (\w+) are the \*\*only\*\* keys an entry may carry/', $hooks, $six), 'the entry-key sentence lost its spelled count');
+        $entryKeys = (new \ReflectionClassConstant(HookConfig::class, 'ENTRY_KEYS'))->getValue();
+        self::assertSame(\count($entryKeys), $words[$six[1]] ?? -1, 'the spelled key count no longer counts HookConfig::ENTRY_KEYS — flip both together');
+        $formatStart = strpos($hooksRaw, '## The file format');
+        self::assertIsInt($formatStart);
+        self::assertSame(1, preg_match('/```yaml\n(.*?)```/s', substr($hooksRaw, $formatStart), $fence), 'the format example lost its fenced block');
+        preg_match_all('/^ {4,6}(?:- )?(\w+):/m', $fence[1], $shown);
+        self::assertSame([], array_values(array_diff($shown[1], $entryKeys)), 'the YAML example demonstrates a key ENTRY_KEYS would refuse — "unrecognised key is refused" is a lie or the example moved');
+        $firstEntryStart = strpos($fence[1], 'PreToolUse:');
+        $secondEntryStart = strpos($fence[1], 'PostToolUse:');
+        self::assertIsInt($firstEntryStart);
+        self::assertIsInt($secondEntryStart);
+        preg_match_all('/^ {4,6}(?:- )?(\w+):/m', substr($fence[1], $firstEntryStart, $secondEntryStart - $firstEntryStart), $full);
+        self::assertEqualsCanonicalizing($entryKeys, $full[1], 'the example entry no longer demonstrates every key "Those six" counts');
+
+        self::assertSame(1, preg_match('/picks the first of `([^`]+)` that your pattern does not contain/', $hooks, $alphabet), 'the delimiter sentence no longer spells the alphabet in one code span');
+        $delimiters = (new \ReflectionClassConstant(HookConfig::class, 'DELIMITERS'))->getValue();
+        self::assertSame($delimiters, explode(' ', $alphabet[1]), 'the delimiter alphabet drifted from HookConfig::DELIMITERS — content AND order are the claim');
+
+        // The four worked results, each side live: doc needle vs pattern() call.
+        self::assertSame(1, preg_match("/holds no delimiter either, so it compiles to `([^`]+)`/", $hooks, $matchAll), 'the empty-matcher sentence moved — its worked result is the claim');
+        self::assertSame($matchAll[1], HookConfig::pattern(''), "the page still says '' compiles to {$matchAll[1]}, but pattern() answers otherwise");
+        self::assertSame(1, preg_match('/`matcher: \x27([^\x27]+)\x27` works/', $hooks, $slashed), 'the Read|Write/Edit example moved');
+        $firstAbsent = null;
+        foreach ($delimiters as $delimiter) {
+            if (!str_contains($slashed[1], $delimiter)) {
+                $firstAbsent = $delimiter;
+                break;
+            }
+        }
+        self::assertIsString($firstAbsent, 'the example matcher now contains every delimiter in the alphabet — the walk needs a new worked case');
+        self::assertSame($firstAbsent . $slashed[1] . $firstAbsent . 'i', HookConfig::pattern($slashed[1]), 'pattern() no longer wraps in the first delimiter the matcher lacks');
+        self::assertSame(1, preg_match('/Under a fixed `\/` delimiter it compiled to `([^`]+)`/', $hooks, $broken), 'the historical broken form vanished from the sentence that explains WHY the alphabet exists');
+        self::assertNotSame(HookConfig::pattern($slashed[1]), $broken[1], 'the page still narrates the fixed-delimiter form as the bug, yet pattern() now produces exactly it');
+        self::assertSame(1, preg_match('/`matcher: \x27(\S)\x27` becomes `([^`]+)`, PCRE refuses it/', $hooks, $globStar), 'the glob-instinct sentence moved');
+        self::assertSame($globStar[2], HookConfig::pattern($globStar[1]), 'the wrapped glob form no longer equals pattern() of the single character the example names');
+        self::assertFalse(@preg_match($globStar[2], 'anytool'), 'the page still says PCRE refuses the wrapped glob — but the pattern compiles now');
+        self::assertSame(1, preg_match('/it lands on `([^`]+)`, which matches everything/', $hooks, $omission), 'the omitted-key sentence moved');
+        self::assertSame(1, preg_match("/\[(\x27matcher\x27)\] \?\? \x27([^\x27]*)\x27/", self::bodyExcerpt(self::sourceOf('Hooks/HookConfig.php'), 'parse', 12000), $fallback), 'parse() no longer defaults a missing matcher with a ?? literal — the omission route changed shape');
+        self::assertSame($omission[1], $fallback[2], 'the page still says an omitted matcher lands on ' . $omission[1] . ' — the live default moved');
+
+        // The exit-code contract: match block, constants, and table rows.
+        $scriptText = self::sourceOf('Hooks/ScriptHook.php');
+        self::assertSame(1, preg_match('/with a (\w+)-arm `match`: `(\d+)`, `(\d+)`, `(\d+)`, and `default`/', $hooks, $arms), 'the four-arm sentence no longer names the count and all three digits in one breath');
+        self::assertSame(1, preg_match('/return match \(\$exitCode\) \{(.*?)default =>/s', $scriptText, $block), 'ScriptHook no longer resolves the exit code through a match that defaults to deny');
+        preg_match_all('/self::(EXIT_\w+) =>/', $block[1], $armNames);
+        self::assertSame($words[$arms[1]] ?? -1, \count($armNames[1]) + 1, 'the spelled arm count no longer matches the live match block (EXIT_ arms plus default)');
+        $armValues = array_map(static fn (string $name) => (string) (new \ReflectionClassConstant(ScriptHook::class, $name))->getValue(), $armNames[1]);
+        self::assertSame([$arms[2], $arms[3], $arms[4]], $armValues, 'the digits in the four-arm sentence no longer ride the EXIT_ constants, in the order the match lists them');
+        preg_match_all('/^\| `(\d+)` \| \*\*(allow|ask|modify)\*\*/m', $hooksRaw, $exitRows, PREG_SET_ORDER);
+        self::assertCount(3, $exitRows, 'the exit table lost a verdict row — its digits and the constants are pinned pairwise');
+        foreach ($exitRows as $row) {
+            self::assertSame((int) $row[1], (int) (new \ReflectionClassConstant(ScriptHook::class, 'EXIT_' . strtoupper($row[2])))->getValue(), "the exit table still gives {$row[2]} code {$row[1]} — ScriptHook::EXIT_{$row[2]} moved");
+        }
+        self::assertStringContainsString('$this->executeStaged(', self::bodyExcerpt($scriptText, 'execute', 1500), 'the page attributes the verdict to execute(), which no longer delegates to the staging run where the match lives');
+        self::assertSame(1, preg_match('/be printed, `line (\d+)`, had drifted by more than a hundred/', $hooks, $staleLine), 'the no-line-numbers-here retraction moved — its own staleness claim is the pin');
+        $matchStart = strpos($scriptText, 'match ($exitCode)');
+        self::assertIsInt($matchStart);
+        self::assertGreaterThan((int) $staleLine[1] + 100, substr_count(substr($scriptText, 0, $matchStart), "\n") + 1, 'the retraction still claims the printed line had drifted by MORE than a hundred — the match moved back near it and the sentence now rots');
+    }
+
+    /**
+     * E686 tranche-7 (AF, closing E353's decision by FOLD): the three runtime
+     * sentences in HOOKS.md that restate constants or whole-tree absence — the
+     * stream_select retry budget against DRAIN_SELECT_RETRIES, the sweep's
+     * bare-temp prefix list against ToolIpcFiles::sweep()'s own constant list
+     * (why sc-hook-ctx/ can never be swept, re-derived from the same values),
+     * and the [exit-1] non-blocking marker against every src/ line outside the
+     * dispatcher that reads it.
+     */
+    public function testHookDrainSweepAndMarkerSentencesSurviveTheirSources(): void
+    {
+        $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
+        $hooks = self::markdownProse($hooksRaw);
+        $words = ['three' => 3, 'four' => 4, 'six' => 6];
+
+        self::assertSame(1, preg_match('/retried up to (\d+) consecutive times/', $hooks, $retries), 'the EINTR ride-out sentence no longer states its budget');
+        self::assertSame((int) $retries[1], (int) (new \ReflectionClassConstant(ScriptHook::class, 'DRAIN_SELECT_RETRIES'))->getValue(), 'the retry figure drifted from ScriptHook::DRAIN_SELECT_RETRIES');
+
+        self::assertSame(1, preg_match('/matches only its (\w+) bare-temp prefixes \(([^)]+)\)/', $hooks, $sweep), 'the never-swept argument no longer counts and names the prefixes in one breath');
+        $sweepBody = self::bodyExcerpt(self::sourceOf('Support/ToolIpcFiles.php'), 'sweep', 900);
+        self::assertSame(1, preg_match('/foreach \(\[([^\]]+)\] as \$prefix\)/', $sweepBody, $list), 'sweep() no longer walks a bracketed constant list — the prose cannot name what the code does not enumerate');
+        preg_match_all('/self::(\w+)/', $list[1], $constNames);
+        $prefixes = array_map(static fn (string $name) => (string) (new \ReflectionClassConstant(ToolIpcFiles::class, $name))->getValue(), $constNames[1]);
+        $cells = array_map(static fn (string $cell): string => trim($cell, " `\t"), explode(',', $sweep[2]));
+        self::assertSame($words[$sweep[1]] ?? -1, \count($cells), 'the spelled prefix count no longer matches the live sweep() list');
+        self::assertSame(\count($prefixes), \count($cells), 'the doc list and the sweep constant list stopped having one entry each');
+        foreach ($prefixes as $i => $prefix) {
+            self::assertSame($prefix . '*', $cells[$i], "prefix cell {$cells[$i]} no longer equals a ToolIpcFiles constant plus the star the sweep globs with");
+            self::assertStringNotContainsString('/', $cells[$i], 'a sweep prefix gained a directory separator — "bare-temp" and the never-crossed-separator argument both rot');
+        }
+        self::assertSame(1, preg_match('/live in a `([^`]+)` directory inside the system temp/', $hooks, $ctxDir), 'the retained-overflow directory sentence moved');
+        $dirName = (string) (new \ReflectionClassConstant(HookContextFiles::class, 'DIR_NAME'))->getValue();
+        self::assertSame($dirName . '/', $ctxDir[1], 'the page names a directory HookContextFiles no longer creates');
+        foreach ($prefixes as $prefix) {
+            self::assertFalse(str_starts_with($dirName, $prefix), 'the retained directory now shares a prefix with a swept temp family — nothing under it is safe from the sweep any more');
+        }
+
+        self::assertSame(1, preg_match('/no shipped `HookInterface` implementation emits that prefix/', $hooks, $marker), 'the [exit-1] absence claim moved — the whole non-blocking-path paragraph rests on it');
+        $needle = '[exit-' . '1]';
+        $commentMentions = 0;
+        foreach (self::srcTexts() as $relative => $text) {
+            if ($relative === 'src/Hooks/HookDispatcher.php') {
+                continue; // the dispatcher RECOGNIZES the marker; that is its job
+            }
+            foreach (explode("\n", $text) as $line) {
+                if (!str_contains($line, $needle)) {
+                    continue;
+                }
+                $trimmed = ltrim($line);
+                if (str_starts_with($trimmed, '*') || str_starts_with($trimmed, '//') || str_starts_with($trimmed, '/*') || str_starts_with($trimmed, '#')) {
+                    ++$commentMentions;
+                    continue;
+                }
+                self::fail("{$relative} emits the {$needle} marker outside a comment — the dispatcher docblock and docs/HOOKS.md both claim no shipped implementation does");
+            }
+        }
+        self::assertGreaterThan(0, $commentMentions, 'nothing in src/ even NAMES the marker in prose any more — the absence claim lost its witnesses and needs re-derivation, not silence');
+    }
+
+    /**
+     * E686 tranche-7 (AG): SKILLS.md's paths-cell restates figures the src
+     * already owns — the entry cap and byte cap against SkillPathNudge's private
+     * constants, the class ceiling against live maxBytes() AND the docblock that
+     * spells the same digit (cross-page family, dl arm S idiom), the eighth
+     * against CALLER_BUDGET_DIVISOR, and the stated 1.375x against the exact
+     * cap + cap/4 + cap/8 the Read and TruncatesOutput comments derive. The
+     * inside-the-cap versus beside-the-cap split is pinned mechanically: Grep and
+     * Glob subtract $nudgeCost, Read appends.
+     */
+    public function testSkillsPageNudgeSentenceDividesTheSameBudgetsAsTheTools(): void
+    {
+        $skillsRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md');
+        self::assertSame(1, preg_match('/^\| `paths` \|.*$/m', $skillsRaw, $line), 'the paths row moved out of the frontmatter table — the nudge sentence lost its home');
+        $cell = self::markdownProse($line[0]);
+        $ordinals = ['quarter' => 4, 'third' => 3, 'half' => 2, 'eighth' => 8];
+
+        self::assertSame(1, preg_match('/at most (\d+) entries, each at most (\d+) bytes/', $cell, $shape), 'the bounded-nudge sentence no longer states both caps in one breath');
+        self::assertSame((int) (new \ReflectionClassConstant(SkillPathNudge::class, 'MAX_ENTRIES'))->getValue(), (int) $shape[1], 'the page still says at most this many entries — live MAX_ENTRIES moved');
+        self::assertSame((int) (new \ReflectionClassConstant(SkillPathNudge::class, 'MAX_ENTRY_BYTES'))->getValue(), (int) $shape[2], 'the page still says this many bytes per entry — live MAX_ENTRY_BYTES moved');
+
+        self::assertSame(1, preg_match('/the class ceiling of ([\d,]+) bytes is the whole bound/', $cell, $ceiling), 'the Edit/Write half of the depends-on-the-tool sentence lost its figure');
+        $live = SkillPathNudge::maxBytes();
+        self::assertSame($live, (int) str_replace(',', '', $ceiling[1]), 'SKILLS.md restates a class ceiling the live maxBytes() no longer computes');
+        $nudgeSource = self::sourceOf('Skills/SkillPathNudge.php');
+        self::assertSame(1, preg_match('/the ceiling is ([\d,]+) bytes against/', $nudgeSource, $sibling), 'the SkillPathNudge docblock no longer states the same ceiling — the two pages drift apart silently');
+        self::assertSame((int) str_replace(',', '', $sibling[1]), $live, 'the src ceiling and the SKILLS.md ceiling no longer equal live maxBytes()');
+
+        self::assertSame(1, preg_match('/`Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap/', $cell, $inside), 'the inside-the-cap half of the split moved');
+        foreach (['Tools/BuiltIn/Grep.php', 'Tools/BuiltIn/Glob.php'] as $tool) {
+            self::assertStringContainsString('maxOutputBytes - $nudgeCost', self::sourceOf($tool), basename($tool) . ' no longer subtracts the nudge cost from its own cap — INSIDE the cap is now a lie');
+        }
+        self::assertSame(1, preg_match('/`Read` takes an (\w+) BESIDE its cap \(hence its stated ([\d.]+)x/', $cell, $beside), 'the beside-the-cap half moved — word and digit are one claim');
+        self::assertSame(SkillPathNudge::CALLER_BUDGET_DIVISOR, $ordinals[$beside[1]] ?? -1, 'the spelled share no longer equals the live CALLER_BUDGET_DIVISOR — flip word and constant together');
+        $readSource = self::sourceOf('Tools/BuiltIn/Read.php');
+        self::assertStringContainsString('$content .= "\n\n" . $nudge;', $readSource, 'Read no longer appends the nudge BESIDE the capped content — the beside-vs-inside split the page draws is gone');
+        foreach (['Tools/BuiltIn/Edit.php', 'Tools/BuiltIn/Write.php'] as $tool) {
+            self::assertStringContainsString('No budget passed, so', self::sourceOf($tool), basename($tool) . ' now passes a nudge budget — the page says the class ceiling is the whole bound there');
+        }
+
+        $truncateText = self::sourceOf('Tools/Concerns/TruncatesOutput.php');
+        self::assertSame(1, preg_match('/intdiv\(\$maxOutputBytes, (\d+)\)/', self::bodyExcerpt($truncateText, 'instructionBudget', 400), $quarter), 'instructionBudget() no longer divides by a literal — the quarter the 1.375x sums over lost its referent');
+        $cap = (int) (new \ReflectionClassConstant(TruncatesOutput::class, 'DEFAULT_MAX_OUTPUT_BYTES'))->getValue();
+        $total = $cap + intdiv($cap, (int) $quarter[1]) + intdiv($cap, SkillPathNudge::CALLER_BUDGET_DIVISOR);
+        self::assertSame(8 * $total, 11 * $cap, 'cap + quarter + eighth is no longer exactly 11/8 of the cap — every 1.375x on two pages rots at once');
+        self::assertSame((float) $beside[2], $total / $cap, 'the SKILLS.md multiple is no longer the quotient of the three shares it names');
+        self::assertSame(1, preg_match('/bounded at ([\d.]+)x \$maxBytes/', $readSource, $stated), 'the Read comment no longer states the total multiple');
+        self::assertSame((float) $stated[1], (float) $beside[2], 'the src-stated multiple and the SKILLS.md restatement drifted apart');
+        self::assertSame(1, preg_match('/so the stated total is \$maxBytes \+ (\d+)\/(\d+)/', $readSource, $fraction), 'the Read derivation no longer names its fraction');
+        self::assertSame(1 / (int) $quarter[1] + 1 / SkillPathNudge::CALLER_BUDGET_DIVISOR, (int) $fraction[1] / (int) $fraction[2], 'the stated fraction is no longer the sum of the two shares the code divides by');
+    }
+
+    /**
+     * E686 tranche-7 (AH): ENVIRONMENT.md's streaming table reports a measured
+     * before/after, and the measured absolutes (36 ticks, 50 ms, the first
+     * offset) stay free — but the preamble itself states the table's shape:
+     * SIX tokens, 300 ms apart. Both columns are re-counted and their
+     * successive deltas re-differenced against that spacing, so a half-updated
+     * table reds instead of quietly lying (arm W's measured-sums idiom).
+     */
+    public function testEnvironmentPageStreamingTableKeepsItsOwnSpacing(): void
+    {
+        $env = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md'));
+        self::assertSame(1, preg_match('/a wrapper emitting (\w+) tokens (\d+)ms apart/', $env, $claim), 'the probe preamble no longer states the token count and spacing the table rests on');
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
+        $tokens = $words[$claim[1]] ?? -1;
+        self::assertGreaterThan(0, $tokens, "the spelled token count '{$claim[1]}' sits outside the pinned word map — extend it deliberately");
+        $spacing = (float) $claim[2];
+
+        self::assertSame(1, preg_match('/callback invocations \| (\d+, at [^|]+) \| (\d+, at [^|]+) \|/', $env, $row), 'the callback-invocations row changed shape — the before/after pair is what the preamble measures');
+        self::assertStringContainsString('Measured on this tree', $env, 'the table lost its measurement label — free absolutes are licensed by it (arm AB law)');
+        foreach ([$row[1], $row[2]] as $column => $cell) {
+            self::assertSame(1, preg_match('/^(\d+), at /', $cell, $head), 'a column no longer leads with its invocation count');
+            preg_match_all('/([0-9]+\.[0-9]+)s/', $cell, $stamps);
+            $times = array_map('floatval', $stamps[1]);
+            self::assertSame($tokens, (int) $head[1], 'the stated invocation count no longer equals the digit leading the list');
+            self::assertCount($tokens, $times, 'the timestamp list no longer holds one entry per emitted token the preamble names');
+            for ($i = 1; $i < \count($times); $i++) {
+                self::assertLessThanOrEqual(10.0, abs(($times[$i] - $times[$i - 1]) * 1000 - $spacing), "consecutive stamps in column {$column} drifted more than 10 ms from the {$spacing}ms spacing the prose itself states");
+            }
+        }
+    }
+
+    /**
      * The live roster of CRUSH_* keys a hook child receives, derived from the
      * source the runtime actually runs: the $fixed array, the payloads handed
      * to stagePayloads() at its call site, and the _FILE pointer each staged
@@ -2072,5 +2546,185 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsString($doc, "{$class}::{$constant} lost its doc-block — the claim this pins was deleted, not fixed");
 
         return $doc;
+    }
+
+    /**
+     * Collapse markdown to one breath WITHOUT proseOf's comment-marker strip —
+     * table rows and **bold** cells are the payload here, not decoration (the
+     * proseOf stripper would eat the first star of a leading bold run).
+     */
+    private static function markdownProse(string $text): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $text);
+    }
+
+    /**
+     * The single literal a hook's name()/event()/matcher() returns, resolving
+     * self::CONST through reflection and HookEvent::Case to its case name.
+     * These ARE the table cells; a reworded return statement reddens here, not
+     * in a reader's browser (E353's inventory shape).
+     */
+    private static function hookMethodLiteral(string $fileText, string $class, string $method): string
+    {
+        self::assertSame(
+            1,
+            preg_match('/function ' . $method . '\(\)[^;{]*\{\s*return (?:self::([A-Z_]+)|HookEvent::(\w+)|\'([^\']*)\');/', $fileText, $m),
+            "{$class}::{$method}() no longer ends in a single literal return — the HOOKS.md tables quote that literal",
+        );
+        if (($m[1] ?? '') !== '') {
+            $value = (new \ReflectionClassConstant($class, $m[1]))->getValue();
+            self::assertIsString($value, "{$class}::{$m[1]} is no longer a string — the name table cannot quote it");
+
+            return $value;
+        }
+
+        return ($m[2] ?? '') !== '' ? $m[2] : $m[3];
+    }
+
+    /**
+     * @return array<string,string> every src/ PHP file, keyed by its
+     *                         package-relative path, text included
+     */
+    private static function srcTexts(): array
+    {
+        static $cache = null;
+        if ($cache !== null) {
+            return $cache;
+        }
+        $cache = [];
+        foreach (self::everySourceFileIn(\dirname(__DIR__, 2), ['src']) as $relative => $path) {
+            $text = file_get_contents($path);
+            self::assertIsString($text, "src file {$relative} vanished mid-scan");
+            $cache[$relative] = $text;
+        }
+
+        return $cache;
+    }
+
+    /**
+     * @return list<array{0:string,1:int}> [relative path, offset] per literal
+     *                                    occurrence of $token across all of src/
+     */
+    private static function srcOccurrences(string $token): array
+    {
+        $hits = [];
+        foreach (self::srcTexts() as $relative => $text) {
+            $cursor = 0;
+            while (false !== ($pos = strpos($text, $token, $cursor))) {
+                $hits[] = [$relative, $pos];
+                $cursor = $pos + 1;
+            }
+        }
+
+        return $hits;
+    }
+
+    /**
+     * @var array<string, list<array{name:string,begin:int,end:int}>>
+     */
+    private static array $functionSpansCache = [];
+
+    /**
+     * The innermost NAMED function enclosing an offset — tokenized once per
+     * file, so a doc-block mention of another function never impersonates the
+     * enclosing frame (why the text-only strrpos shortcut stays out).
+     */
+    private static function enclosingMethodName(string $relative, string $text, int $offset): string
+    {
+        $spans = self::$functionSpansCache[$relative] ??= self::functionSpans($text);
+        $best = null;
+        foreach ($spans as $span) {
+            if ($span['begin'] <= $offset && $offset <= $span['end'] && ($best === null || $span['begin'] > $best['begin'])) {
+                $best = $span;
+            }
+        }
+        self::assertIsArray($best, 'no named function encloses the cited occurrence — the call-site shape changed');
+
+        return $best['name'];
+    }
+
+    private static function enclosingFunctionSlice(string $relative, int $offset): string
+    {
+        $text = self::srcTexts()[$relative];
+        $spans = self::$functionSpansCache[$relative] ??= self::functionSpans($text);
+        $best = null;
+        foreach ($spans as $span) {
+            if ($span['begin'] <= $offset && $offset <= $span['end'] && ($best === null || $span['begin'] > $best['begin'])) {
+                $best = $span;
+            }
+        }
+        self::assertIsArray($best, 'no named function encloses the cited occurrence — the guard slice has no frame');
+
+        return substr($text, $best['begin'], $best['end'] - $best['begin']);
+    }
+
+    /**
+     * The argument text of a `f(` whose open paren sits just before $argStart,
+     * balanced through nested calls, stopped at the matching close paren.
+     */
+    private static function balancedArguments(string $text, int $argStart): string
+    {
+        $depth = 1;
+        for ($i = $argStart, $length = \strlen($text); $i < $length; $i++) {
+            if ($text[$i] === '(') {
+                ++$depth;
+            } elseif ($text[$i] === ')') {
+                --$depth;
+                if ($depth === 0) {
+                    return substr($text, $argStart, $i - $argStart);
+                }
+            }
+        }
+        self::fail('unbalanced parentheses after a call site — the scan cannot attribute its arguments');
+    }
+
+    /**
+     * @return list<array{name:string,begin:int,end:int}>
+     */
+    private static function functionSpans(string $text): array
+    {
+        $spans = [];
+        $tokens = \PhpToken::tokenize($text);
+        $count = \count($tokens);
+        for ($i = 0; $i < $count; $i++) {
+            if (!$tokens[$i]->is(T_FUNCTION)) {
+                continue;
+            }
+            $j = $i + 1;
+            while ($j < $count && $tokens[$j]->is(T_WHITESPACE)) {
+                ++$j;
+            }
+            if ($j >= $count || !$tokens[$j]->is(T_STRING)) {
+                continue; // anonymous function/arrow-fn has no name token here
+            }
+            $name = $tokens[$j]->text;
+            $brace = null;
+            for ($k = $j; $k < $count; $k++) {
+                if ($tokens[$k]->is('{')) {
+                    $brace = $k;
+                    break;
+                }
+                if ($tokens[$k]->is(';')) {
+                    break; // abstract/interface signature
+                }
+            }
+            if ($brace === null) {
+                continue;
+            }
+            $depth = 0;
+            for ($k = $brace; $k < $count; $k++) {
+                if ($tokens[$k]->is('{')) {
+                    ++$depth;
+                } elseif ($tokens[$k]->is('}')) {
+                    --$depth;
+                    if ($depth === 0) {
+                        break;
+                    }
+                }
+            }
+            $spans[] = ['name' => $name, 'begin' => $tokens[$i]->pos, 'end' => $tokens[$k]->pos + 1];
+        }
+
+        return $spans;
     }
 }
