@@ -41,6 +41,14 @@ final class Doctor implements Tool
      */
     private static ?Mosaic $mosaic = null;
 
+    /**
+     * `doctor`, lowercase on purpose (E10, tracker #78): sibling built-ins
+     * answer in TitleCase and this name deliberately stays out of step,
+     * because the model has been trained on prompts containing `doctor` — the
+     * rename is the risky half and belongs to whoever owns the tool schema,
+     * not to a review round. The status quo is pinned as intentional in
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolTest::testDoctorToolHasCorrectName()}.
+     */
     public function name(): string
     {
         return 'doctor';

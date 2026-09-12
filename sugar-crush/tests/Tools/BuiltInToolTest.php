@@ -191,6 +191,12 @@ final class BuiltInToolTest extends TestCase
     {
         $tool = new Doctor();
 
+        // THE STATUS QUO, PINNED AS INTENTIONAL (E10, tracker #78). `doctor`
+        // is lowercase where its TitleCase siblings are not, and that stays:
+        // the model has been trained on prompts containing `doctor`, so the
+        // rename is the risky half and belongs to whoever owns the tool
+        // schema. This assertion is the record — if the schema round ever
+        // renames the tool, this line moves WITH the rename, not before it.
         $this->assertSame('doctor', $tool->name());
         $this->assertNotSame('', $tool->description());
     }

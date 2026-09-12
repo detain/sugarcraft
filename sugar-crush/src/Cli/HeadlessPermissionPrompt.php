@@ -218,6 +218,39 @@ use SugarCraft\Crush\Tools\ToolCall;
  * the narrower half of a pair that is jointly exhaustive.
  * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins both
  * measurements, so the removal is not re-proposed from the entry's text alone.
+ *
+ * ## The arms get a QUALIFIER, decided 2026-09-12 — and it is not this class's
+ * ## line to carry (E375, decided; implementation seams out of this file)
+ *
+ * THE QUESTION E347/E375 left open — fourth case or qualifier — has been
+ * DECIDED: the two arms become ONE KIND WITH A QUALIFIER, not a fourth case.
+ * What that rules out, so nobody re-litigates it here: `DenialKind` keeps
+ * exactly three
+ * cases and `permission-denied` keeps its bytes — the enum's roster pins, the
+ * README vocabulary table and every backing-value assertion stay as they are,
+ * by design. What it requires instead: the `--output-format json` refusal row
+ * gains an ADDITIVE machine-readable qualifier — `unattended`-shaped, present
+ * only on the no-terminal arm — so a consumer that previously saw the same
+ * `{tool, kind, reason}` triple from both arms can now branch on the one fact
+ * stderr alone carried: whether a person said no or nobody was there to say it.
+ *
+ * WHY THE FACT CANNOT CROSS THROUGH THIS CLASS'S OWN CONTRACT, measured rather
+ * than assumed: the approver answers `Runtime::settleAsk()`'s
+ * `\Closure(ToolCall, HookResult): bool` — one bit, and widening it edits
+ * `Runtime.php` and the engine seam, neither of which is this file; and the
+ * refusal's `reason` TEXT is rendered in `Runtime.php` behind the
+ * `Permission denied:` prefix whose byte-identity across the two arms
+ * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins — a reason
+ * tag there would move the observer line the same test exists to keep shared.
+ * The only carrier that stays additive is a prompt-recorded fact the lifecycle
+ * observer consults when it assembles the row — which lives in
+ * {@see NonInteractive::refusalFrom()}. Recording the arm, and consuming it,
+ * are therefore BOTH implementation seams outside this class: the row
+ * assembly, its `@var list<array{...}>` shape annotation, the exact-array pins
+ * in {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest}, and
+ * the README `refusals` documentation ride with the lane that takes them.
+ * Until that lane lands, the arms stay indistinguishable on the wire — and
+ * that is now a DECIDED qualifier awaiting its consumer, not an open question.
  */
 final class HeadlessPermissionPrompt
 {
@@ -241,7 +274,7 @@ final class HeadlessPermissionPrompt
      */
     private const MAX_RENDERED_ARGUMENT_BYTES = 4096;
 
-    /** @var resource */
+    /** @var resource|null Answer stream; `NonInteractive::stdinDefault()` can answer null (E376). */
     private $in;
 
     /** @var resource */
