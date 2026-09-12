@@ -105,6 +105,19 @@ use PHPUnit\Framework\TestCase;
  *     reason it always gave; what has gone is the assumption that the core was
  *     the only place the signature could be looked at. The RETURN TYPE is still
  *     out of both — see {@see signatureOf()} for why.
+ *   * CLASS CONSTANTS WERE THE LAST UNPOLICED VALUE (E481). What the method
+ *     walk reads is `T_FUNCTION`, so a fixture const shared by two suites and
+ *     re-valued in one of them stayed invisible even after the `test*` arm
+ *     landed — E481 named exactly such a pair. {@see constReport()} now walks
+ *     every class constant in two polities: files sharing a BYTE-IDENTICAL
+ *     value (the copy that has not drifted yet) and files whose values sit
+ *     within {@see DRIFT_BOUND} token of each other (the half-fixed copy).
+ *     A short const value makes the second polity unable to tell a drift from
+ *     two unrelated consts that merely share a word, so the current pairs are
+ *     rostered per polity and per name — {@see ACCEPTED_CONST_DUPLICATION} and
+ *     {@see ACCEPTED_CONST_DRIFT} — and, as with every map here, both
+ *     directions are checked: a new name arrives as a red, and a row whose
+ *     pair stopped existing is deleted rather than kept as history.
  */
 final class DuplicatedTestHelperDriftTest extends TestCase
 {
@@ -2119,7 +2132,21 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             $name = null;
             for ($j = $i + 1; $j < $count; $j++) {
                 $candidate = $tokens[$j];
-                if (\is_array($candidate) && $candidate[0] === \T_WHITESPACE) {
+                // A COMMENT BETWEEN `function` AND THE NAME IS STEPPED OVER, NOT READ
+                // AS THE END OF THE SEARCH (E610). `function` then a block comment
+                // then a name is legal PHP; before this arm the walk broke on the
+                // comment, named nothing, and the no-modifier spelling fell to the
+                // closure exclusion below and was DROPPED IN SILENCE — the same
+                // unsafe half E605 recorded for the `&`, wearing a comment instead.
+                // With an explicit keyword the same shape at least reddened as
+                // unreadable (rule 14); written implicitly-public it was invisible
+                // to every alphabet. Measured on this base: zero live sites in
+                // `tests/`, so the hole was untriggered rather than live (E363's
+                // shape), and {@see testACommentBetweenFunctionAndItsNameIsSteppedOver()}
+                // is what keeps the arm from rotting.
+                if (\is_array($candidate)
+                    && \in_array($candidate[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+                ) {
                     continue;
                 }
                 // A BY-REFERENCE `&` SITS BETWEEN `function` AND THE NAME and
@@ -2450,5 +2477,539 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * A COMMENT BETWEEN `function` AND ITS NAME IS STEPPED OVER, NOT READ AS THE
+     * END OF THE SEARCH (E610).
+     *
+ * MEASURED BEFORE THE FIX, at the base of this lane and with an in-tree temp
+     * pair that this nowdoc replaces permanently: `function` then a block
+     * comment then a name is legal PHP, and the name walk broke on the comment.
+     * The half that mattered is the no-modifier one — the walk named nothing, the
+     * closure exclusion saw no explicit keyword, and the declaration was DROPPED
+     * IN SILENCE, invisible to every alphabet this class passes. Written with an
+     * explicit keyword the same shape at least reddened as unreadable (rule 14,
+     * the safe half). The census of `tests/` on this base found zero live sites,
+     * so this is E363's untriggered shape — and it is why the fixtures are
+     * synthetic: there is no drifted pair in the tree to point at yet.
+     */
+    public function testACommentBetweenFunctionAndItsNameIsSteppedOver(): void
+    {
+        $bodyA = '{ $x = 1; return $x; }';
+        $bodyB = '{ $x = 2; return $x; }';
+
+        // THE UNSAFE HALF, PINNED FOUND: implicitly public, comment-named, one
+        // token apart. Before the fix this fixture is the hole — the guard
+        // reports nothing about it at all, green suite intact.
+        [$drifted, $unparseable] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { function /* gap */ testCopied() " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { function /* gap */ testCopied() " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame(
+            [],
+            $unparseable,
+            'a comment between `function` and the name was filed as a declaration this scanner '
+                . 'cannot read, instead of being stepped over as the whitespace-shaped token it is',
+        );
+        $this->assertArrayHasKey(
+            'testCopied',
+            $drifted,
+            'the E610 miss: two copies of one implicitly-public test method, separated from '
+                . 'their names by a comment and from each other by one token, were dropped '
+                . 'silently — the closure exclusion cannot tell an unnamed declaration from an '
+                . 'anonymous function, and a declaration dropped is a method this guard has '
+                . 'stopped comparing',
+        );
+
+        // THE SAFE HALF, PINNED READABLE: with an explicit keyword the same shape
+        // used to RED as unreadable. Post-fix it reads, so the unparseable list
+        // must now be empty for it — this is the arm that distinguishes the fix
+        // from merely widening the closure exclusion until it swallows this too.
+        [$private, $privateUnparseable] = self::driftReport([
+            'a/A.php' => "<?php\nclass A { private function /** gap */ copied() " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { private function /** gap */ copied() " . $bodyB . " }\n",
+        ]);
+        $this->assertSame(
+            [],
+            $privateUnparseable,
+            'a privately-declared, comment-separated name still reaches the unparseable report '
+                . '— the explicit half of E610 is fixed only when both spellings read',
+        );
+        $this->assertArrayHasKey('copied', $private, 'a comment-separated private pair was not compared');
+
+        // THE POLARITY THE FIX MUST NOT BREAK: an anonymous function whose `(` is
+        // what the name walk reaches after stepping over whitespace AND a comment
+        // is still not a declaration. Reading comments is not the same as reading
+        // any token; the walk still breaks on `(` and the closure exclusion still
+        // gets its answer from the explicit-keyword question.
+        [, $closureUnparseable] = self::driftReport(
+            ['c/C.php' => "<?php\nclass C { public function testA() { \$f = function /* anon */ () { return 1; }; return \$f; } }\n"],
+            [\T_PUBLIC],
+        );
+        $this->assertSame(
+            [],
+            $closureUnparseable,
+            'a closure carrying a comment after `function` was filed as a declaration whose '
+                . 'name cannot be read — the comment skip widened the search, it did not '
+                . 'retire the closure exclusion',
+        );
+    }
+
+    /**
+     * ROSTER (duplication polity): class constants whose value at least two test
+     * files declare BYTE-IDENTICALLY.
+     *
+     * WHY IDENTICAL COPIES ARE POLICED AT ALL, when identical method bodies are
+     * not. A copied method with an identical body is two helpers a bound-zero
+     * comparison calls clean, and the drift report catches the day one is fixed
+     * and the other is not; the same holds here. What E481 measured was that
+     * even that day came and went unseen, because a const was not in the
+     * alphabet at all. A row here licenses the duplicate, not the drift: the
+     * moment one copy is re-valued, the pair leaves this polity — and if the
+     * name carries no row on {@see ACCEPTED_CONST_DRIFT} too, it arrives as a
+     * red naming both files. Rows are keyed by name and checked in both
+     * directions by {@see testNoDuplicatedConstIsUnrecordedInEitherPolity()}.
+     *
+     * @var array<string,string>
+     */
+    private const ACCEPTED_CONST_DUPLICATION = [
+        'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
+        'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'Two provenance suites pin the same budget; the census copy documents a different one.',
+        'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
+        'EOF_EXIT_BOUND_SECONDS' => 'THE PAIR E481 NAMED: both stdio EOF suites wait the same half-second, and re-valuing one of them now leaves this polity.',
+        'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the pump/drain pair each pin one lifetime; the odd values are the drift polity.',
+        'FLOODING_STDERR_BYTES' => 'The two shutdown suites flood the same byte count.',
+        'HANDSHAKE_BOUND_SECONDS' => 'The two LSP handshake-waiting suites pin the same bound.',
+        'INTO_SHELL' => 'Both permission-gate suites feed the same command string to the classifier.',
+        'KILLED_BY_THE_BUDGET' => 'The budget-kill exit code both provenance suites assert.',
+        'LIB_SCOPE' => 'The census suites scope their walks to the same vendor path.',
+        'MARKER' => 'The two image suites use the same private-use-area sentinel; the unrelated MARKER strings are the drift polity.',
+        'MEASURED_PIPE_CAPACITY_BYTES' => 'One property of the host pipe, measured once and shared by the wedging families.',
+        'OVERSIZED_BYTES' => 'The oversized-write bound several stdio families test is shared verbatim.',
+        'QUIET_STDERR_BYTES' => 'The quiet-side byte count the two shutdown suites assert.',
+        'README' => 'The documentation-census suites point at the same repository file path.',
+        'SAFE_BYTES' => 'The under-capacity byte count the drain and wedge families share.',
+        'SETTINGS_DOC' => 'The suites point at the same settings documentation path.',
+        'SHAPE_UNCLASSIFIED' => 'The two child-lifetime scanners emit the same token for an unclassified shape; it is a wire string, so the copies must move together.',
+        'SMALL_BYTES' => 'The small-write byte count the stdin-wedge pair shares.',
+        'STORM_BOUND_SECONDS' => 'The storm bound the write-bounds and stdin-wedge suites wait alike.',
+        'VARS' => 'The environment roster the wiring suites pin is one list duplicated per suite; it belongs in a provider, and until it moves this row says so out loud.',
+        'WEDGE_BYTES' => 'The stdin-wedge pair wedges the same volume; the drain suite wedges less.',
+        'STUBBORN_SERVER' =>
+            'The two shutdown suites drive the same stubborn child stub verbatim; the fixture belongs behind a provider, and the row says so until it moves.',
+    ];
+
+    /**
+     * ROSTER (drift polity): same-named class constants whose values sit within
+     * {@see DRIFT_BOUND} token of each other across two files WITHOUT being
+     * identical.
+     *
+     * THIS POLITY IS THE ONE E481 COULD NOT FULLY POLICE, and the honest
+     * sentence is why: for a one-token value there is no structural difference
+     * between "a copy fixed in only one file" and "two unrelated consts that
+     * share a word" — `MARKER = 'a'` against `MARKER = 'b'` is both readings at
+     * once. The method walk escapes this because bodies are long; consts are
+     * short. So the population is answered name by name, and every row below
+     * is a claim that the difference is deliberate — re-checked against the
+     * tree so a stale claim dies.
+     *
+     * @var array<string,string>
+     */
+    private const ACCEPTED_CONST_DRIFT = [
+        'BODY_SENTINEL' => 'Each containment suite plants its own payload under the same word; the names collide, the fixtures do not.',
+        'BOUND_SECONDS' => 'Per-suite waits: a reap test and a shutdown test legitimately bound differently. THE SEMANTIC DIFFERENCES LIVE HERE, which is why this map is per-polity and not a widening of the other.',
+        'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'The census documents a different budget than the suites enforce; that difference is the claim being tested.',
+        'COLS' => 'Per-fixture terminal geometry from unrelated suites that named one constant the same.',
+        'DESCRIPTION_SENTINEL' => 'Each containment suite plants its own description sentinel; same word, different payloads.',
+        'FIXTURE_LIFETIME_SECONDS' => 'Per-suite lifetimes against each other; the identical pairs live on the duplication map.',
+        'FLAG' => 'A file-mode literal against a flag emoji — pure name collision.',
+        'HELPER' => 'Each seam test names the helper it inspects inside its own string.',
+        'MARKER' => 'Unrelated sentinels sharing a word; the one identical pair lives on the duplication map.',
+        'ROWS' => 'Per-fixture terminal geometry from unrelated suites that named one constant the same.',
+        'SSE_BODY' => 'Each provider suite feeds its own SSE payload under a shared name.',
+        'WEDGE_BYTES' => 'The drain suite wedges less than the stdin-wedge suites — different pipes, different bounds.',
+        'SENTINEL' => 'Unrelated suites plant their own sentinel payload under one word; the values differ because the claims under test do.',
+        'SECRET' =>
+            'Two containment suites plant their own smuggled-secret sentinel under one word; the payloads differ because the suites test different imports.',
+    ];
+
+    /**
+     * NO CLASS CONSTANT IS DUPLICATED OR DRIFTED WITHOUT A ROW SAYING SO, in
+     * either polity, and no row outlives the pair it was written for.
+     *
+     * THE E481 HALF THAT WAS LEFT OPEN when its `test*` arm landed: the alphabet
+     * was widened to public test methods and a constant was still not one of
+     * those. E481's preferred remedy was to widen the walk; this is that
+     * widening, with the split E481 did not foresee — a const has no body to
+     * anchor on, so its report is its value, and for a short value "identical"
+     * and "one edit away" are different questions with different honest answers
+     * (the census of the shared fixture versus the per-polity roster above).
+     *
+     * THE LIVENESS FIXTURES COME FIRST because every tree assertion below is an
+     * absence over a report that SUBTRACTS nothing — a const walk returning two
+     * empty arrays would otherwise pass it with no comparison ever made.
+     */
+    public function testNoDuplicatedConstIsUnrecordedInEitherPolity(): void
+    {
+        $twin = [
+            'a/A.php' => "<?php\nclass A { private const PROBE_BOUND = 0.5; }\n",
+            'b/B.php' => "<?php\nclass B { private const PROBE_BOUND = 0.5; }\n",
+        ];
+        [$duplication, $drift, $unreadable] = self::constReport($twin);
+        $this->assertSame([], $unreadable, 'two well-formed const declarations were filed as unparseable');
+        $this->assertArrayHasKey(
+            'PROBE_BOUND',
+            $duplication,
+            'two byte-identical copies of one constant were not counted as duplicated. Until '
+                . 'this passes, every absence below is a statement about a walk that is not '
+                . 'running, and the pair E481 named by name is still unpoliced',
+        );
+        $this->assertSame([], $drift, 'an identical pair landed in the drift polity');
+
+        $reValued = ['b/B.php' => \str_replace('0.5', '0.6', $twin['b/B.php'])];
+        [$duplication, $drift] = self::constReport(['a/A.php' => $twin['a/A.php']] + $reValued);
+        $this->assertSame([], $duplication, 'a re-valued copy was still called identical');
+        $this->assertArrayHasKey(
+            'PROBE_BOUND',
+            $drift,
+            'the half-fixed copy — the shape E481 exists for — was not reported at bound one',
+        );
+
+        // THE POLITY BOUND: values more than one token apart are two different
+        // constants that share a word, and this file has always declined to
+        // compare those. The control is two multi-token values.
+        [$duplication, $drift] = self::constReport([
+            'a/A.php' => "<?php\nclass A { private const PROBE = ['x', 'y']; }\n",
+            'b/B.php' => "<?php\nclass B { private const PROBE = ['p', 'q']; }\n",
+        ]);
+        $this->assertSame(
+            [],
+            $duplication + $drift,
+            'two consts whose values differ by MORE than the bound were reported; the bound is '
+                . 'what separates a copy from a namesake and the rosters argue only the shape '
+                . 'inside it',
+        );
+
+        // RULE 14, CONST EDITION: a value the walk cannot close, and a name
+        // declared twice in one file, are REPORTED rather than dropped — the
+        // first is an unreadable declaration, the second has nowhere to go in a
+        // name => file => value report.
+        [, , $truncated] = self::constReport(['c/C.php' => "<?php\nclass C { private const PROBE =\n"]);
+        $this->assertNotSame([], $truncated, 'a const whose value never terminates was silently dropped');
+        [, , $twice] = self::constReport(['d/D.php' => "<?php\nclass D { private const PROBE = 1; private const PROBE = 2; }\n"]);
+        $this->assertNotSame([], $twice, 'one file declared the same constant name twice and the report kept one without saying so');
+
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) \file_get_contents($path);
+        }
+
+        [$duplication, $drift, $unreadable] = self::constReport($sources);
+
+        $this->assertSame(
+            [],
+            $unreadable,
+            'this walk could not read a class constant in the tree. A declaration silently '
+                . 'dropped is a constant this guard has stopped comparing, which is '
+                . 'indistinguishable from one it has cleared.',
+        );
+
+        $pairCount = static fn (array $report): int => \array_sum(\array_map('count', $report));
+        $this->assertGreaterThan(
+            0,
+            $pairCount($duplication) + $pairCount($drift),
+            'the const walk found no cross-file pair of either polity anywhere under tests/. '
+                . 'That is either a consolidation nobody ran or a dead walk — and a dead one '
+                . 'satisfies the two absences below perfectly',
+        );
+
+        $polities = [
+            'duplication' => [$duplication, self::ACCEPTED_CONST_DUPLICATION],
+            'drift' => [$drift, self::ACCEPTED_CONST_DRIFT],
+        ];
+
+        $unrecorded = [];
+        $stale = [];
+        foreach ($polities as $polity => [$report, $roster]) {
+            foreach ($report as $name => $pairs) {
+                if (isset($roster[$name])) {
+                    continue;
+                }
+                $unrecorded[] = $polity . ' ' . $name . ': ' . \implode('; ', $pairs);
+            }
+            foreach ($roster as $name => $reason) {
+                $this->assertNotSame('', \trim($reason), $name . ' is rostered without a reason');
+                if (!isset($report[$name])) {
+                    $stale[] = $polity . ' ' . $name;
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $unrecorded,
+            'two files declare a class constant of the same name, either byte-identically (the '
+                . 'copy that has not drifted yet) or within ' . self::DRIFT_BOUND . ' token of '
+                . 'each other (the copy fixed in only one place). A short value cannot tell '
+                . 'those apart from two unrelated consts that share a word, so the difference '
+                . 'is decided by a human once, per polity: consolidate the copies behind one '
+                . 'provider, or add the name to ACCEPTED_CONST_DUPLICATION or '
+                . 'ACCEPTED_CONST_DRIFT with the reason — the wrong map reds, because the row '
+                . 'claims which shape the pair has.',
+        );
+
+        $this->assertSame(
+            [],
+            $stale,
+            'a const roster row whose pair no longer exists in its polity. The rows are '
+                . 'per-polity on purpose: an identical pair that was re-valued in one file '
+                . 'belongs to the drift map now, a drifted pair someone equalised belongs to '
+                . 'the duplication map, and a consolidated pair belongs to neither. MOVE OR '
+                . 'DELETE the row — a licence nobody needs is a hole with paperwork.',
+        );
+    }
+
+    /**
+     * THE `significantTokens()` FAMILY STAYS ONE CANONICAL TRAIT PLUS THE ONE
+     * RECORDED OUTLIER (E331, E356).
+     *
+     * E331 counted five copies; E356 folded them into
+     * {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait} and
+     * measured that the Config census file's copy is not the same helper wearing
+     * a different spelling but a different contract — it returns `list<PhpToken>`
+     * from `PhpToken::tokenize()` and its every walk reads `$t->text` and
+     * `$t->is([...])`, so folding it in would be a rewrite of that file, not a
+     * consolidation. E356 left the choice on the table: port it, or pin the
+     * divergence. THIS IS THE PIN. A third copy arrives as a red naming the
+     * file: use the trait —PhpToken shape included, no new spelling of
+     * significantTokens() may enter `tests/` without editing this list and the
+     * reason it is allowed to exist.
+     */
+    public function testTheSignificantTokensFamilyStaysCanonicalPlusTheRecordedOutlier(): void
+    {
+        $declared = [];
+        $phpTokenShaped = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $source = (string) \file_get_contents($path);
+            if (\preg_match('/function\s+significantTokens\s*\(/', $source) !== 1) {
+                continue;
+            }
+            $declared[] = $relative;
+            // THE SHAPE IS READ FROM THE DECLARATION DOWN, not from the whole
+            // file: the trait's doc-block NAMES the outlier's `PhpToken::tokenize()`
+            // — it is explaining exactly which copy it is not — so a file-wide
+            // substring test calls both files PhpToken-shaped. What the pin asks
+            // is which helper each file DECLARES, and that lives after the name.
+            $declaration = \substr($source, (int) \strpos($source, 'function significantTokens'));
+            if (\str_contains($declaration, 'PhpToken::tokenize')) {
+                $phpTokenShaped[] = $relative;
+            }
+        }
+        \sort($declared);
+
+        $this->assertSame(
+            ['Config/ReadmeJsonErrorContractDriftTest.php', 'Support/DropsInsignificantTokensTrait.php'],
+            $declared,
+            'the significantTokens() family is a canonical trait plus exactly one recorded '
+                . 'PhpToken-shaped outlier. This assertion is also the pin that keeps the '
+                . 'search honest: a roster that matches nothing (a rename, a deleted outlier) '
+                . 'reddens here rather than quietly shrinking the population it guards. A new '
+                . 'copy must consume DropsInsignificantTokensTrait — five copies and one '
+                . 'inline spelling is what E331/E356 measured before the extraction, and the '
+                . 'mutation afterwards proved three of five consumers were not testing the '
+                . 'comment half of their own helper. If the outlier is being ported, delete '
+                . 'the pin and the divergence together.',
+        );
+
+        $this->assertSame(
+            ['Config/ReadmeJsonErrorContractDriftTest.php'],
+            $phpTokenShaped,
+            'the file the divergence was recorded FOR is no longer the PhpToken-shaped copy, '
+                . 'which means either the port happened (retire this whole test — the trait is '
+                . 'the family now) or the pin is describing a pair of files that have since '
+                . 'swapped shapes for no argued reason',
+        );
+    }
+
+    /**
+     * The two const polities over a map of path => source.
+     *
+     * Same shape as {@see driftReport()} on purpose: sources in, reports out,
+     * so the synthetic fixtures and the tree run go through exactly this walk
+     * and there is no second definition of "duplicated const" to slip between.
+     * Every class constant is read regardless of modifier — a constant is a
+     * VALUE, and the visibility keyword changes who may read it, not whether a
+     * second file carries a copy of it.
+     *
+     * @param array<string,string> $sources
+     *
+     * @return array{array<string,list<string>>, array<string,list<string>>, list<string>}
+     *         name => identical-value pair descriptions, name => within-bound
+     *         pair descriptions, unparseable declarations.
+     */
+    private static function constReport(array $sources): array
+    {
+        $byName = [];
+        $unreadable = [];
+
+        foreach ($sources as $relative => $source) {
+            $tokens = \token_get_all($source);
+            $count = \count($tokens);
+
+            for ($i = 0; $i < $count; $i++) {
+                if (!\is_array($tokens[$i]) || $tokens[$i][0] !== \T_CONST) {
+                    continue;
+                }
+
+                // ONE STATEMENT CAN DECLARE SEVERAL CONSTANTS
+                // (`const A = 1, B = 2;`), and a walk that read only the first
+                // name after T_CONST would drop the rest in silence — the exact
+                // unsafe half E610 and E565 each recorded for the method walk.
+                // The inner loop consumes names until the statement's `;`.
+                for ($j = $i + 1; ; $j++) {
+                    $name = null;
+                    for (; $j < $count; $j++) {
+                        $candidate = $tokens[$j];
+                        if (\is_array($candidate)
+                            && \in_array($candidate[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+                        ) {
+                            continue;
+                        }
+                        if (\is_array($candidate) && self::isIdentifier($candidate[1])) {
+                            $name = $candidate[1];
+                        }
+                        $j++;
+
+                        break;
+                    }
+                    if ($name === null) {
+                        $unreadable[] = $relative
+                            . ': a const declaration whose name this walk cannot read';
+
+                        break;
+                    }
+
+                    $value = [];
+                    $depth = 0;
+                    $closed = false;
+                    $statementEnds = false;
+                    for (; $j < $count; $j++) {
+                        $token = $tokens[$j];
+                        $id = \is_array($token) ? $token[0] : null;
+                        $text = \is_array($token) ? $token[1] : $token;
+                        if ($id === \T_END_HEREDOC) {
+                            // THE `;` THAT ENDS A HEREDOC VALUED CONST RIDES INSIDE THE
+                            // CLOSING LABEL TOKEN, so no later token can ever equal the
+                            // bare `;` this walk watches for. Without this arm every
+                            // heredoc const in the tree arrives as truncated — the shape
+                            // a wrong instrument makes green look like red, and the
+                            // reason this arm has a known-answers control in the test
+                            // above rather than only in the tree run.
+                            $value[] = $id . ':' . $text;
+                            $closed = true;
+                            $statementEnds = true;
+
+                            break;
+                        }
+                        if ($text === '(' || $text === '['
+                            || $text === '{' || $id === \T_CURLY_OPEN
+                            || $id === \T_DOLLAR_OPEN_CURLY_BRACES) {
+                            $depth++;
+                        } elseif ($text === ')' || $text === ']' || $text === '}') {
+                            $depth--;
+                        } elseif ($depth === 0 && $text === ';') {
+                            $closed = true;
+                            $statementEnds = true;
+
+                            break;
+                        } elseif ($depth === 0 && $text === ',') {
+                            $closed = true;
+
+                            break;
+                        }
+                        if ($id !== null
+                            && \in_array($id, [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+                        ) {
+                            continue;
+                        }
+                        // A HEREDOC CHUNK IS ONE TOKEN THE LEXER HANDS BACK FOR A
+                        // WHOLE SCRIPT, and a divergence measured in tokens would
+                        // then read two entirely different fixtures — a rewrite of
+                        // every line — as ONE edit apart, inside the bound, next to
+                        // the literal that really moved. The method walk cannot hit
+                        // this because bodies walk token by token; the value walk
+                        // has to say so. Split on newlines and the unit of
+                        // comparison is the line the author edited, which is what
+                        // the bound has always counted.
+                        if ($id === \T_ENCAPSED_AND_WHITESPACE) {
+                            foreach (\explode("\n", $text) as $line) {
+                                if ($line !== '') {
+                                    $value[] = $id . ':' . $line;
+                                }
+                            }
+
+                            continue;
+                        }
+                        $value[] = $id === null ? $text : $id . ':' . $text;
+                    }
+
+                    if (!$closed) {
+                        $unreadable[] = $relative . ': ' . $name
+                            . ': the const value walk met no top-level `;` — the declaration '
+                            . 'is truncated and its value reaches no comparison';
+
+                        break;
+                    }
+
+                    if (isset($byName[$name][$relative])) {
+                        $unreadable[] = $relative . ': ' . $name
+                            . ' is declared twice in this file, and this report keeps one value '
+                            . 'per file per name - so one of the two would be compared and the '
+                            . 'other silently dropped';
+                    }
+                    $byName[$name][$relative] = $value;
+
+                    if ($statementEnds) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        $duplication = [];
+        $drift = [];
+
+        foreach ($byName as $name => $byFile) {
+            $files = \array_keys($byFile);
+            $count = \count($files);
+            for ($a = 0; $a < $count; $a++) {
+                for ($b = $a + 1; $b < $count; $b++) {
+                    $left = $byFile[$files[$a]];
+                    $right = $byFile[$files[$b]];
+                    if ($left === $right) {
+                        // The pair description carries the fact, not the whole value:
+                        // the roster row beside it already says what the shared
+                        // literal is, and an 11-element array in failure text helps
+                        // nobody read the red.
+                        $duplication[$name][] = $files[$a] . ' [identical] vs '
+                            . $files[$b] . ' [identical]';
+
+                        continue;
+                    }
+                    [$leftCore, $rightCore] = self::divergenceCore($left, $right);
+                    if (\count($leftCore) > self::DRIFT_BOUND || \count($rightCore) > self::DRIFT_BOUND) {
+                        continue;
+                    }
+                    $drift[$name][] = $files[$a] . ' [' . \implode(' ', $leftCore) . '] vs '
+                        . $files[$b] . ' [' . \implode(' ', $rightCore) . ']';
+                }
+            }
+        }
+
+        return [$duplication, $drift, $unreadable];
     }
 }
