@@ -129,7 +129,12 @@ final class ShellContrastTest extends TestCase
     {
         MenuBar::closeMenu();
         TerminalBackground::forget();
-        Renderer::setSize(self::COLS, self::ROWS);
+        // Re-pin the documented non-tty fallback exactly as tests/bootstrap.php
+        // does — NOT this suite's own 120x40. The cache is process-global: leaving
+        // it sized here poisons anything that later asserts the pinned default in
+        // the same process (the sharded LPT order exposed exactly this against
+        // TerminalSizeFallbackIsolationTest, which the serial order happened to hide).
+        Renderer::setSize(200, 60);
     }
 
     /**
