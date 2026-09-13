@@ -11676,6 +11676,36 @@ final class Chat implements Model
     }
 
     /**
+     * Resolve a memory id against BOTH stores in the order the fold uses.
+     *
+     * E25 piece 2 moved `--scope project` writes into the repo-local store,
+     * which made the per-id commands self-contradictory: the surface could
+     * answer "Memory created with ID: X" and then "Memory `X` not found.".
+     * Resolution order is {@see \SugarCraft\Crush\Context\MemoryBlock::capture()}'s
+     * fold law restated for ops — the repo copy claims shared ids, so the
+     * entry the prompt SHOWS is the entry the command removes; a home-first
+     * lookup would delete an invisible twin and leave the shown note standing.
+     * The OWNING store rides back with the entry so delete()/update() mutate
+     * the file the operator saw. No repo store resolvable (absent dir,
+     * `''`-root, read-only tree, symlink escape — every {@see ProjectMemoryWriter::forRoot()}
+     * refusal) degrades to the home-only behaviour that predates E25p2.
+     *
+     * @return array{0: ?\SugarCraft\Crush\Memory\MemoryEntry, 1: MemoryStore} the entry (null when in neither store) and its owner
+     */
+    private function memoryLocate(string $id): array
+    {
+        $repo = ProjectMemoryWriter::forRoot($this->projectRoot())?->store();
+        if ($repo !== null) {
+            $entry = $repo->get($id);
+            if ($entry !== null) {
+                return [$entry, $repo];
+            }
+        }
+
+        return [$this->memoryStore->get($id), $this->memoryStore];
+    }
+
+    /**
      * Handle /memory delete <id>.
      *
      * @return array{0:Chat,1:?\Closure}
@@ -11688,11 +11718,11 @@ final class Chat implements Model
         }
 
         try {
-            $entry = $this->memoryStore->get($id);
+            [$entry, $store] = $this->memoryLocate($id);
             if ($entry === null) {
                 $response = "Memory `{$id}` not found.";
             } else {
-                $this->memoryStore->delete($id);
+                $store->delete($id);
                 $response = "Memory `{$id}` deleted.";
             }
         } catch (\InvalidArgumentException $e) {
@@ -11749,11 +11779,11 @@ final class Chat implements Model
         }
 
         try {
-            $entry = $this->memoryStore->get($id);
+            [$entry, $store] = $this->memoryLocate($id);
             if ($entry === null) {
                 $response = "Memory `{$id}` not found.";
             } else {
-                $this->memoryStore->update($id, $entry->withContent($newContent));
+                $store->update($id, $entry->withContent($newContent));
                 $response = "Memory `{$id}` updated.";
             }
         } catch (\InvalidArgumentException $e) {

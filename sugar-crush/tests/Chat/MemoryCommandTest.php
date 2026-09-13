@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Memory\MemoryEntry;
 use SugarCraft\Crush\Memory\MemoryStore;
@@ -252,6 +253,140 @@ final class MemoryCommandTest extends TestCase
         $lastMsg = $next->history[count($next->history) - 1];
         $this->assertSame(Role::Assistant, $lastMsg->role);
         $this->assertStringContainsString('not found', $lastMsg->content);
+    }
+
+    // ---- cross-store resolution (lane jb, r75): per-id ops follow capture()'s fold law ----
+
+    /** Repo-local memory dir of the sandboxed project root, as the writer lays it out. */
+    private function repoMemoryPath(): string
+    {
+        return $this->tempDir . '/' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '/project';
+    }
+
+    /** The single entry id living in a store directory ('' when there is none). */
+    private function soleEntryIdIn(string $scopeDir): string
+    {
+        $files = glob($scopeDir . '/*.md') ?: [];
+        $files = array_values(array_filter($files, static fn (string $f): bool => !str_ends_with($f, 'MEMORY.md')));
+        $this->assertCount(1, $files, 'expected exactly one note in ' . $scopeDir);
+
+        return basename($files[0], '.md');
+    }
+
+    public function testProjectNoteAddedByCommandIsDeletableFromRepoStore(): void
+    {
+        [$created, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory add --scope project note the repo will hold',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $id = $this->soleEntryIdIn($this->repoMemoryPath());
+        $this->assertStringContainsString($id, $created->history[count($created->history) - 1]->content);
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('deleted', $next->history[count($next->history) - 1]->content);
+        $this->assertSame([], array_filter(glob($this->repoMemoryPath() . '/*.md') ?: [], static fn (string $f): bool => !str_ends_with($f, 'MEMORY.md')));
+        // The home store never held this note and must not have gained one.
+        $this->assertSame([], $this->memoryStore->list('project'));
+    }
+
+    public function testSharedIdResolvesRepoFirstSoTheShownEntryDiesAndTheTwinSurvives(): void
+    {
+        // capture() folds the REPO copy when both stores hold one id (E25p2's
+        // documented law). Ops must claim the same entry — otherwise deleting
+        // the note the prompt shows silently kills its invisible home twin and
+        // the shown note survives its own deletion.
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $id = $writer->write('Repo note - the one the prompt shows');
+        $this->memoryStore->update($id, MemoryEntry::new(
+            type: 'pattern',
+            content: 'Home twin - invisible behind the repo copy',
+            scope: 'project',
+            tags: [],
+            id: $id,
+        ));
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('deleted', $next->history[count($next->history) - 1]->content);
+        $this->assertNull($writer->store()->get($id), 'the repo copy the fold SHOWS must be the copy delete removes');
+        $twin = $this->memoryStore->get($id);
+        $this->assertNotNull($twin, 'the hidden home twin must survive the repo-first delete');
+        $this->assertSame('Home twin - invisible behind the repo copy', $twin->content());
+    }
+
+    public function testHomeOnlyIdStillDeletesFromHomeWithRepoStorePresent(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $occupant = $writer->write('repo occupant');
+
+        $id = $this->memoryStore->add('Home only', 'user');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory delete {$id}",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('deleted', $next->history[count($next->history) - 1]->content);
+        $this->assertNull($this->memoryStore->get($id));
+        $this->assertNotNull($writer->store()->get($occupant), 'the repo store must be untouched by a home-only delete');
+    }
+
+    public function testEditResolvesRepoStore(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $id = $writer->write('original repo body');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: "/memory edit {$id} edited repo body",
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('updated', $next->history[count($next->history) - 1]->content);
+        $entry = $writer->store()->get($id);
+        $this->assertNotNull($entry);
+        $this->assertSame('edited repo body', $entry->content());
+        $this->assertNull($this->memoryStore->get($id), 'edit must not mint a home copy');
+    }
+
+    public function testEditNotFoundWithBothStoresResolvable(): void
+    {
+        $this->assertNotNull(ProjectMemoryWriter::createForRoot($this->tempDir));
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory edit 00000000000000000000000000000000 New content',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertStringContainsString('not found', $next->history[count($next->history) - 1]->content);
     }
 
     public function testMemoryClearRequiresConfirm(): void
