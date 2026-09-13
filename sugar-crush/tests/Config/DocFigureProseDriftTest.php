@@ -4432,6 +4432,518 @@ final class DocFigureProseDriftTest extends TestCase
 
 
     /**
+     * E686 tranche-11 (AI): a bare line anchor is the one doc figure that rots
+     * in total silence — no guard resolves it and every reader trusts it. The
+     * five ARCHITECTURE anchors this tranche healed had drifted by up to a
+     * thousand lines with the suite green, so from now on every
+     * `File.php:NNN`, `(line NNN)`/`at line NNN`/`on line NNN` and backticked
+     * `line NNN` anywhere in docs/ must resolve against real source (file
+     * found, number inside the file, and — when the same markdown line cites
+     * a `Class::method` — that method declared within forty lines of the
+     * number) or sit in the named exemption roster, which is itself checked
+     * both ways so a licensed self-narrative that moves reddens here.
+     */
+    public function testEveryBareLineAnchorInTheDocsResolvesToItsSource(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $exemptions = [
+            'HOOKS.md' => ['`line 181`'],
+        ];
+        $seenExemptions = [];
+
+        $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
+        self::assertCount(13, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+
+        $patterns = [
+            '/[A-Za-z0-9_\/\\\\.\-]+\.php:[0-9]+(?:-[0-9]+)?/',
+            '/(?:\(|\bat |\bon )lines? [0-9]+(?:-[0-9]+)?/',
+            '/`lines? [0-9]+(?:-[0-9]+)?`/',
+        ];
+
+        foreach ($pages as $page) {
+            $text = (string) file_get_contents($root . '/docs/' . $page);
+            self::assertNotEmpty($text, "docs/{$page} reads empty — the anchor census over it is void");
+            foreach ($patterns as $pattern) {
+                preg_match_all($pattern, $text, $hits, PREG_OFFSET_CAPTURE);
+                foreach ($hits[0] as [$hit, $offset]) {
+                    if (in_array($hit, $exemptions[$page] ?? [], true)) {
+                        $seenExemptions[$page][] = $hit;
+                        continue;
+                    }
+                    $line = substr_count(substr($text, 0, $offset), "\n");
+                    $context = explode("\n", $text)[$line];
+                    self::resolveBareAnchor($root, "docs/{$page}", $hit, $context, $line);
+                }
+            }
+        }
+
+        foreach ($exemptions as $page => $listed) {
+            foreach ($listed as $entry) {
+                self::assertContains($entry, $seenExemptions[$page] ?? [], "the anchor exemption roster still licenses {$entry} on {$page} — the self-narrative it describes is gone; delete the row");
+            }
+        }
+    }
+
+    /**
+     * Resolve one bare-anchor hit: name the file it points at (the path for a
+     * `File.php:NNN` hit, the class-shaped backtick cite on the same markdown
+     * line otherwise), require the number to sit inside that file, and when a
+     * method is cited require its declaration within forty lines of the
+     * number. Fail-closed with the page, the hit and the reason.
+     */
+    private static function resolveBareAnchor(string $root, string $page, string $hit, string $context, int $docLine): void
+    {
+        $numbers = [];
+        preg_match_all('/([0-9]+)(?:-([0-9]+))?/', $hit, $numbers);
+        $from = (int) ($numbers[1][count($numbers[1]) - 1] ?? 0);
+
+        $relative = null;
+        $method = null;
+        if (preg_match('/([A-Za-z0-9_\/.\-]+)\.php:/', $hit, $path)) {
+            $relative = $path[1] . '.php';
+            if (!is_file($root . '/' . $relative)) {
+                $relative = self::anchorFindFile($root, basename($relative), $page, $hit);
+            }
+        }
+        preg_match('/`([A-Za-z0-9_\\\\]+)(?:::([a-zA-Z_][A-Za-z0-9_]*))?(?:\(\))?`/', $context, $cite);
+        if ($relative === null && isset($cite[1]) && $cite[1] !== '') {
+            $class = ltrim(str_replace('\\\\', '\\', $cite[1]), '\\');
+            $short = substr(strrchr('\\' . $class, '\\'), 1);
+            $relative = self::anchorFindFile($root, $short . '.php', $page, $hit);
+            $method = $cite[2] ?? null;
+        }
+        if ($method === null && preg_match('/::([a-z][a-zA-Z0-9_]*)\(\)?`/', $context, $mx)) {
+            $method = $mx[1];
+        }
+
+        self::assertNotNull($relative, "the bare anchor {$hit} on {$page} line " . ($docLine + 1) . ' names no file and no class-shaped cite around it — nothing can resolve it');
+
+        $lines = file($root . '/' . $relative);
+        self::assertIsArray($lines, "the bare anchor {$hit} points into {$relative}, which does not exist");
+        self::assertGreaterThanOrEqual($from, count($lines), "the bare anchor {$hit} on {$page} points past the end of {$relative} (" . count($lines) . ' lines)');
+
+        if ($method !== null) {
+            $window = implode('', \array_slice($lines, max(0, $from - 1), 40));
+            self::assertMatchesRegularExpression(
+                '/function\s+' . preg_quote($method, '/') . '\s*\(/',
+                $window,
+                "the bare anchor {$hit} on {$page} claims {$method}() lives at line {$from} of {$relative} — no such declaration within forty lines"
+            );
+        }
+    }
+
+    private static function anchorFindFile(string $root, string $basename, string $page, string $hit): ?string
+    {
+        $found = [];
+        foreach (array_keys(self::srcTexts()) as $relative) {
+            if (basename($relative) === $basename) {
+                $found[] = $relative;
+            }
+        }
+        if (\count($found) === 1) {
+            return $found[0];
+        }
+        self::fail("the bare anchor {$hit} on {$page} cannot resolve {$basename}: " . (\count($found) === 0 ? 'no such file under src/' : count($found) . ' same-named files — cite the path'));
+    }
+
+    /**
+     * E686 tranche-11 (AJ): the Providers section's seven-name roster, its
+     * type→Class table, the two "easy to get wrong" routing rows and the echo
+     * degradation path are re-derived from ProviderFactory/Bootstrap sources —
+     * the section this tranche found standing free of any guard while its
+     * five numeric anchors rotted.
+     */
+    public function testProvidersSectionRosterDividesTheFactoryItDocuments(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/ARCHITECTURE.md');
+        $start = strpos($raw, '## Providers');
+        self::assertIsInt($start, 'the Providers heading moved — the seven-name table lost its home');
+        $end = strpos($raw, '## ', $start + 5);
+        self::assertIsInt($end, 'no heading follows Providers — the window this arm reads became the page tail');
+        $window = substr($raw, $start, $end - $start);
+        $segment = self::markdownProse($window);
+
+        $factory = self::sourceOf('Providers/ProviderFactory.php');
+        $typesWindow = self::bodyExcerpt($factory, 'availableTypes', 400);
+        self::assertSame(1, preg_match("/return \[([^\]]*)\];/", $typesWindow, $lits), 'availableTypes() no longer returns one literal array — the documented roster lost its single source');
+        preg_match_all("/'([a-z-]+)'/", $lits[1], $live);
+        $liveTypes = $live[1];
+
+        self::assertSame(1, preg_match('/returns \*\*(\w+)\*\* selectable names/', $segment, $word), 'the paragraph no longer spells its count beside "selectable names"');
+        $wordNumbers = ['five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
+        self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
+        self::assertCount($wordNumbers[$word[1]], $liveTypes, "the page still says the factory offers {$word[1]} selectable names — availableTypes() returns another count");
+
+        preg_match_all('/^\| `([a-z-]+)` \| (.+?) \|\s*$/m', $window, $rows, PREG_SET_ORDER);
+        self::assertNotEmpty($rows, 'the type→Class table is gone — the roster this arm derives from it has nothing left to read');
+        $rows = array_values(array_filter($rows, static fn(array $r): bool => $r[1] !== 'type')); // the markdown header row cites `type` too
+        $docTypes = array_map(static fn(array $r): string => $r[1], $rows);
+        self::assertSame($liveTypes, $docTypes, 'the documented type column no longer matches availableTypes() in name or order — the page promises exactly what the factory returns');
+
+        foreach ($rows as $row) {
+            self::assertSame(
+                1,
+                preg_match('/`([A-Z][A-Za-z0-9]*)`/', $row[2], $cls),
+                "the `{$row[1]}` row no longer names its built class in backticks — the table cell is the claim"
+            );
+            self::assertTrue(
+                class_exists('SugarCraft\Crush\Providers\\' . $cls[1]),
+                "the `{$row[1]}` row cites {$cls[1]} — no class by that name lives in Providers"
+            );
+        }
+
+        self::assertMatchesRegularExpression('/\| `anthropic` \| \*\*`CustomProvider`\*\*, named `anthropic` \|/', $window, 'the anthropic row no longer states its CustomProvider-named-anthropic surprise — the section exists to keep this row from being re-simplified');
+        $anthropic = self::bodyExcerpt($factory, 'createAnthropic', 3000);
+        foreach (['x-api-key', 'anthropic-version', 'CustomProvider'] as $token) {
+            self::assertStringContainsString($token, $anthropic, "createAnthropic() no longer touches {$token} — the paragraph flatly states this row builds that");
+        }
+
+        self::assertStringContainsString('a **separate, seventh** provider', $segment, 'the separate-seventh framing is gone — claude-code was repeatedly collapsed into anthropic');
+        self::assertContains('claude-code', $liveTypes, 'the page still calls claude-code one of the seven — the factory no longer offers it');
+        $claude = self::bodyExcerpt($factory, 'createClaudeCode', 1500);
+        self::assertStringContainsString('new ClaudeCodeProvider', $claude, 'createClaudeCode() no longer returns the real ClaudeCodeProvider the row promises');
+        self::assertStringContainsString('ClaudeCodeInvocation', $segment, 'the table no longer says the claude-code row rides over ClaudeCodeInvocation');
+        self::assertTrue(class_exists('SugarCraft\Crush\Providers\ClaudeCodeInvocation'), 'ClaudeCodeInvocation, cited as the claude-code row carrier, is gone');
+
+        self::assertStringContainsString('**`echo` is not one of the seven.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
+        self::assertNotContains('echo', $liveTypes, 'echo joined availableTypes() — the exclusion this paragraph stakes out is no longer true');
+        self::assertStringContainsString('Unknown provider type:', $factory, 'the factory no longer throws the named rejection the echo paragraph quotes');
+        $provider = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), 'provider', 6000);
+        self::assertStringContainsString('new EchoProvider()', $provider, 'Bootstrap::provider() no longer hands out EchoProvider on the degradation path the paragraph describes');
+    }
+
+    /**
+     * E686 tranche-11 (AK): the preset page's tool claims are re-read against
+     * the built-in directory and the delegation code. The pre-E675 sentence
+     * ("no `Task` ... eleven ... none of them delegates") survived a whole
+     * campaign because the page was never parsed; this arm pins the flipped
+     * truth AND the absence of the old refusal wording, so a revert that
+     * re-imports stale prose from history reddens here.
+     */
+    public function testAgentsAuthoringToolClaimsSurviveTheBuiltInDirectory(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/AGENTS_AUTHORING.md');
+        $start = strpos($raw, '## What you can actually do with a preset today');
+        self::assertIsInt($start, 'the section heading moved — the Task bullet lost its home');
+        $end = strpos($raw, "\n---", $start);
+        self::assertIsInt($end, 'no rule closes the section — the bullet window this arm reads became the page tail');
+        $segment = self::markdownProse(substr($raw, $start, $end - $start));
+
+        self::assertSame(1, preg_match('/ships (\w+) built-in tools and one of them — `Task` — is exactly the delegation seam/', $segment, $word), 'the Task bullet no longer spells its built-in count beside the delegation sentence');
+        $wordNumbers = ['ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
+        self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
+
+        $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
+        self::assertCount($wordNumbers[$word[1]], $files, 'the page still counts this many built-in tools — src/Tools/BuiltIn/ moved (the ARCHITECTURE tree row counts the same directory in digit form)');
+        self::assertContains('TaskTool.php', $files, 'the page says Task delegates — TaskTool.php is no longer in the built-in directory');
+        self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\TaskTool'), 'TaskTool, the one delegate the page credits, no longer exists');
+
+        $task = self::sourceOf('Tools/BuiltIn/TaskTool.php');
+        self::assertStringContainsString('AgentManager::executeAll()', $task, 'Task no longer dispatches through the governed path the closing paragraph promises');
+        self::assertTrue(class_exists('SugarCraft\Crush\Agents\AgentManager'), 'AgentManager, the refusal subject of the Task bullet, is gone');
+
+        self::assertStringNotContainsString('none of them delegates', $segment, 'the pre-E675 refusal sentence is back — the model CAN delegate now, via Task');
+        self::assertStringNotContainsString('There is no `Task`', $raw, 'a reworded copy of the stale no-Tool claim returned to the page');
+        self::assertStringContainsString('`Chat::executeAgents()` drives', $segment, 'the closing paragraph no longer names the governed pool Task rides — that equivalence is the sentence');
+        foreach (['AgentWorkerPool', 'ProcessExecutor', 'SubAgent'] as $executor) {
+            self::assertTrue(class_exists('SugarCraft\Crush\Agents\\' . $executor), "the paragraph still lists {$executor} among the executor paths src/Agents/ owns");
+        }
+    }
+
+    /**
+     * E686 tranche-11 (AK²): "which fields reach the roster" is stated per
+     * value and this arm reads every number back from the two files it cites
+     * — AgentPreset's promoted readonly count, the distinct fields
+     * fromPreset() actually reads, the provenance gate on permissionMode, the
+     * registry heading the phantom quote was healed to, and the six built-in
+     * agent definitions.
+     */
+    public function testAgentsAuthoringPresetRosterDividesTheRegistryItNames(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $flat = self::markdownProse((string) file_get_contents($root . '/docs/AGENTS_AUTHORING.md'));
+        $words = ['six' => 6, 'seven' => 7, 'sixteen' => 16];
+
+        self::assertSame(1, preg_match('/carries (\w+) fields and the path/', $flat, $w1), 'the intro no longer spells what AgentPreset carries');
+        self::assertArrayHasKey($w1[1], $words, "spelled count '{$w1[1]}' outside the pinned map — extend it deliberately");
+
+        $presetSrc = self::sourceOf('Agents/AgentPreset.php');
+        preg_match_all('/public readonly [^;{]*?\$([a-zA-Z]+)\s*(?:=[^,;]*)?[,;]/', $presetSrc, $props);
+        $fields = array_values(array_unique($props[1]));
+        self::assertCount($words[$w1[1]], $fields, "the intro still says AgentPreset carries {$w1[1]} fields — the promoted readonly census moved");
+
+        self::assertSame(1, preg_match('/carries \*\*all (\w+)\*\* `AgentPreset` fields onto the `Agent` row:(.*?)Native and imported presets/s', $flat, $list), 'the per-field enumeration moved — the roster this arm derives from it has no home');
+        self::assertSame($w1[1], $list[1], 'the intro count and the per-field count stopped agreeing with each other');
+        preg_match_all('/`([a-z][a-zA-Z]+)`/', $list[2], $cited);
+        self::assertEqualsCanonicalizing(
+            [...$fields, 'inherit'],
+            array_values(array_unique($cited[1])),
+            'the enumerated fields no longer match what fromPreset() reads plus the parenthetical inherit vocabulary'
+        );
+
+        $body = self::bodyExcerpt(self::sourceOf('Agents/Agent.php'), 'fromPreset', 2200);
+        preg_match_all('/\$preset->([a-zA-Z]+)/', $body, $reads);
+        self::assertEqualsCanonicalizing($fields, array_values(array_unique($reads[1])), 'fromPreset() no longer reads exactly the fields the page enumerates — the per-field account drifted from the wiring');
+        self::assertMatchesRegularExpression('/source === SkillSource::Native\s*\?\s*\$preset->permissionMode\s*:\s*PermissionMode::Default/', $body, 'the provenance gate on permissionMode is no longer one Native-check beside a Default collapse — the section stakes its exception on this shape');
+        self::assertStringContainsString('source: $preset->source', $body, 'the page says source rides along — fromPreset() stopped copying it');
+        self::assertStringContainsString('collapses to `PermissionMode::Default`', $flat, 'the gate paragraph no longer names the collapse target in backticks — the byte the code cites');
+
+        self::assertStringContainsString('WHY THIS IS NOT COSMETIC', self::sourceOf('Agents/ForeignAgentPresetRegistry.php'), 'the registry heading the two-axes note cites is gone — heal the prose and this arm together');
+        self::assertStringContainsString('headed WHY THIS IS NOT COSMETIC', $flat, 'the page no longer points at the registry heading by its own words — the phantom quote this heals must not return');
+
+        self::assertSame(1, preg_match('/the (\w+) built-in definitions/', $flat, $w2), 'the roster-precedence fence no longer spells the built-in count inside the ordering claim');
+        self::assertSame(1, preg_match('/The (\w+) built-in definitions \(`src\/Agents\/AgentDefinition\.php`\) are (.*?)\./s', $flat, $w3), 'the definitions sentence lost its per-name enumeration — the roster leg has nothing to divide');
+        self::assertSame($w2[1], $w3[1], 'the fence word and the prose word for the built-in definitions disagree');
+        $definitionSrc = self::sourceOf('Agents/AgentDefinition.php');
+        preg_match_all("/public const TYPE_[A-Z_]+ = '([a-z-]+)';/", $definitionSrc, $types);
+        preg_match_all('/`([a-z-]+)`/', $w3[2], $names);
+        self::assertSame($words[$w2[1]], count($types[1]), "the page still calls them {$w2[1]} — AgentDefinition declares another number of TYPE_ constants");
+        self::assertEqualsCanonicalizing($types[1], $names[1], 'the documented definition names no longer match the TYPE_ constant values in word');
+    }
+
+    /**
+     * E686 tranche-11 (AL): the whole COMMANDS surface table is the roster —
+     * every row, its S (slash) and P (palette) ticks, and the
+     * "blank on new and docs alone" sentence are re-derived from
+     * CommandRegistry::all() spec blocks. The page carried zero test
+     * citations for its entire existence (even the /notices row shipped
+     * self-declaring as unguarded).
+     */
+    public function testCommandsSurfaceTableSurvivesTheLiveRegistry(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/COMMANDS.md');
+        preg_match_all('/^\| `\/([a-z-]+)` \| ?(✓)? ?\| ?(✓)? ?\|/m', $raw, $rows, PREG_SET_ORDER);
+        self::assertNotEmpty($rows, 'the surface table shape changed — this arm parses name + S + P cells');
+
+        $registry = self::sourceOf('Commands/CommandRegistry.php');
+        self::assertSame(1, preg_match('/CONTROL_PLANE = \[((?:[^\]]*))\];/', $registry, $plane), 'the CONTROL_PLANE constant no longer carries a literal name list — the CP column derives from it');
+        preg_match_all("/'([a-z-]+)'/", $plane[1], $reserved);
+        $allWindow = self::bodyExcerpt($registry, 'all', 30000);
+        $fragments = explode('CommandSpec::new(', $allWindow);
+        $live = [];
+        foreach (array_slice($fragments, 1) as $fragment) {
+            if (preg_match("/^\s*'([a-z-]+)',/", $fragment, $n) === 1) {
+                $live[$n[1]] = [
+                    'slash' => !str_contains($fragment, 'slashVisible: false'),
+                    'plane' => in_array($n[1], $reserved[1], true),
+                ];
+            }
+        }
+        self::assertCount(count($live), $rows, 'the surface table row count no longer equals the parsed CommandSpec::new( block count — either the registry grew untabulated or the spec-block walk is broken');
+        self::assertSame(
+            array_map(static fn(array $r): string => $r[1], $rows),
+            array_keys($live),
+            'the documented surface table no longer matches CommandRegistry::all() in name or order — a command was added, renamed or reordered without the table'
+        );
+        foreach ($rows as $row) {
+            self::assertSame($live[$row[1]]['slash'], ($row[2] ?? '') === '✓', "the S column on /{$row[1]} disagrees with its slashVisible spec — the / and Ctrl+P columns ARE the two filters");
+            self::assertSame($live[$row[1]]['plane'], ($row[3] ?? '') === '✓', "the CP column on /{$row[1]} disagrees with CommandRegistry::CONTROL_PLANE — the intro states CP marks exactly the reserved names");
+        }
+        self::assertSame(
+            ['new', 'docs'],
+            array_keys(array_filter($live, static fn(array $spec): bool => !$spec['slash'])),
+            'the page says S is blank on new and docs ALONE — the palette-only pair changed shape'
+        );
+        self::assertStringContainsString('(`slashVisible: false`)', self::markdownProse($raw), 'the asymmetry paragraph no longer quotes the spec flag the S column proves');
+        self::assertStringContainsString('**CP** marks a reserved name', self::markdownProse($raw), 'the intro no longer states what the CP column marks — that derivation is the sentence');
+        self::assertTrue((new \ReflectionClass('SugarCraft\Crush\Commands\CommandSpec'))->hasProperty('slashVisible'), 'CommandSpec::$slashVisible, the property the table proves, is gone');
+    }
+
+    /**
+     * E686 tranche-11 (AM): the Template forms section counts itself against
+     * CommandSpec::TEMPLATE_PATTERN — three top-level alternation branches,
+     * the quoted first branch byte-for-byte, its three spells against the
+     * five table rows — plus the acknowledged "all four template forms"
+     * docblock erratum, the shared ten-second shell budget and its
+     * sixty-forms arithmetic, and the /websearch flag row against the tool
+     * schema it must match.
+     */
+    public function testCommandsTemplateSectionSurvivesThePatternItQuotes(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/COMMANDS.md');
+        $start = strpos($raw, '## Template forms');
+        self::assertIsInt($start, 'the Template forms heading moved');
+        $end = strpos($raw, "\n## ", $start + 5);
+        self::assertIsInt($end, 'no level-2 section follows Template forms — the window (which spans its subsections to the wedge bullets) became the page tail');
+        $window = substr($raw, $start, $end - $start);
+        $segment = self::markdownProse($window);
+        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'ten' => 10, 'sixty' => 60];
+
+        $spec = self::sourceOf('Commands/CommandSpec.php');
+        $patternAt = strpos($spec, 'const TEMPLATE_PATTERN');
+        self::assertIsInt($patternAt, 'TEMPLATE_PATTERN is gone — every count in this section is derived from it');
+        preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", substr($spec, $patternAt, 420), $frags);
+        $pattern = implode('', $frags[1] ?? []);
+        self::assertGreaterThan(10, strlen($pattern), 'the pattern literal no longer parses as concatenated fragments');
+
+        $depth = 0;
+        $inClass = false;
+        $escaped = false;
+        $branches = 1;
+        $firstBranchAlt = 0;
+        $body = substr($pattern, 1, -1);
+        for ($i = 0; $i < strlen($body); $i++) {
+            $c = $body[$i];
+            if ($escaped) {
+                $escaped = false;
+                continue;
+            }
+            if ($c === '\\') {
+                $escaped = true;
+                continue;
+            }
+            if ($inClass) {
+                if ($c === ']') {
+                    $inClass = false;
+                }
+                continue;
+            }
+            if ($c === '[') {
+                $inClass = true;
+            } elseif ($c === '(') {
+                $depth++;
+            } elseif ($c === ')') {
+                $depth--;
+            } elseif ($c === '|') {
+                if ($depth === 0) {
+                    $branches++;
+                } elseif ($branches === 1) {
+                    $firstBranchAlt++;
+                }
+            }
+        }
+        self::assertSame(1, preg_match('/the \*(\w+)\* alternation branches/', $segment, $w), 'the page no longer italic-spells its branch count');
+        self::assertSame($words[$w[1]], $branches, "the page still says *{$w[1]}* alternation branches — TEMPLATE_PATTERN walks to another number");
+        self::assertSame(1, preg_match('/\*\*([Ff]ive|[A-Za-z]+)\*\* substitutions/', $segment, $five), 'the opening sentence no longer bold-spells the substitution count');
+        self::assertSame(1, preg_match('/spells (\w+) of the five/', $segment, $three), 'the first-branch sentence no longer states how many forms it spells');
+        self::assertSame($words[$three[1]], $firstBranchAlt + 1, 'the first branch no longer spells this many forms by its inner alternation');
+        self::assertSame($words[strtolower($five[1])], $firstBranchAlt + 1 + ($branches - 1), 'five substitutions must be the first branch spells plus one form per later branch');
+        self::assertSame($words[strtolower($five[1])], substr_count($window, "\n| `"), 'the substitutions table stopped carrying one row per spelled substitution (window-local literal counts, not a roster)');
+        self::assertSame(1, preg_match('/first branch, `(\$\(\\\\\$\|ARGUMENTS\|\[1-9\]\))`,/', $segment, $quote), 'the quoted first branch lost its backticked literal');
+        self::assertStringContainsString($quote[1], $pattern, 'the doc-quoted branch literal is no longer a byte-for-byte piece of TEMPLATE_PATTERN');
+
+        self::assertStringContainsString('all four template forms', $spec, 'the source docblock no longer carries the acknowledged-wrong count — and then the page sentence naming it as wrong goes stale with it');
+        self::assertStringContainsString('that count is wrong in the source too', $segment, 'the page stopped flagging the source erratum it quotes');
+
+        $budget = (int) (new \ReflectionClassConstant('SugarCraft\Crush\Commands\CommandSpec', 'SHELL_BUDGET_SECONDS'))->getValue();
+        self::assertSame(1, preg_match('/(\w+) `` !`sleep 30` `` forms with a (\w+)-second per-command timeout wedges the single-threaded TUI for (\w+) minutes/', $segment, $math), 'the wedge arithmetic lost its sentence shape');
+        self::assertSame($budget, $words[$math[2]], "the page still narrates a {$math[2]}-second command bound — SHELL_BUDGET_SECONDS moved");
+        self::assertSame(intdiv($words[$math[1]] * $budget, 60), $words[$math[3]], 'sixty forms at this budget no longer divide to the stated wedge duration');
+        self::assertStringContainsString('budget is shared by ALL of an', $segment, 'the per-expansion framing this arithmetic defends has been reworded away');
+
+        $tool = self::sourceOf('Tools/BuiltIn/WebSearch.php');
+        self::assertSame(1, preg_match('/^\| `\/websearch` \|.*?\[--safesearch ([0-9\\\\|]+)\] \[--time-range ([a-z\\\\|]+)\]/m', $raw, $flag), 'the /websearch row lost its flag cells');
+        $ladder = explode('\\|', $flag[1]);
+        self::assertSame(['0', '1', '2'], $ladder, 'the safesearch ladder no longer spells 0|1|2');
+        self::assertSame(1, preg_match("/'safesearch' => \[.*?'minimum' => (\d+), 'maximum' => (\d+)/s", $tool, $range), 'the WebSearch schema no longer bounds safesearch by minimum/maximum');
+        self::assertSame([$ladder[0], $ladder[2]], [$range[1], $range[2]], 'the documented safesearch ends no longer match the schema minimum/maximum');
+        self::assertSame(['day', 'month', 'year'], explode('\\|', $flag[2]), 'the time-range ladder changed spelling');
+        self::assertSame(1, preg_match("/'time_range' => \[.*?'enum' => \[([^\]]+)\]/s", $tool, $enum), 'the WebSearch schema no longer declares a time_range enum');
+        preg_match_all("/'([a-z]+)'/", $enum[1], $enumValues);
+        self::assertSame(['day', 'month', 'year'], $enumValues[1], 'the documented time-range values no longer match the schema enum in word or order');
+    }
+
+    /**
+     * E686 tranche-11 (AN): PROMPT_ENGINEERING's eleven-slot list is the
+     * parallel copy of the ARCHITECTURE assembly order — same count word,
+     * same ordinal range, matching item-for-item — and its Stability
+     * partition sentence must still divide the list contiguously with three
+     * enum cases behind it.
+     */
+    public function testPromptEngineeringSlotsMirrorTheArchitectureAssembly(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md');
+        $start = strpos($raw, '## The eleven slots, in order of record');
+        self::assertIsInt($start, 'the eleven-slots heading moved — the count word lives in its own text');
+        $end = strpos($raw, "\n## ", $start + 5);
+        self::assertIsInt($end, 'no heading follows the slots section — the window became the page tail');
+        $window = substr($raw, $start, $end - $start);
+
+        self::assertSame(1, preg_match('/there are (\w+) slots:/', $window, $word), 'the intro no longer spells the slot count beside "slots:"');
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        self::assertArrayHasKey($word[1], $words, "spelled count '{$word[1]}' outside the pinned map — extend it deliberately");
+        preg_match_all('/^(\d+)\. \*\*/m', $window, $ordinals);
+        self::assertSame(range(1, $words[$word[1]]), array_map('intval', $ordinals[1]), 'the numbered list stopped being exactly 1..N with N the spelled count');
+
+        $archRaw = (string) file_get_contents($root . '/docs/ARCHITECTURE.md');
+        $archStart = strpos($archRaw, '### The system prompt, in assembly order');
+        self::assertIsInt($archStart, 'the ARCHITECTURE assembly heading moved — arm AP anchors on the same string and this cross-page leg anchors with it');
+        $archEnd = strpos($archRaw, 'Item 10 is what makes', $archStart);
+        self::assertIsInt($archEnd, 'the assembly follow-up paragraph moved — the cross-page item count lost its window');
+        preg_match_all('/^(\d+)\. /m', substr($archRaw, $archStart, $archEnd - $archStart), $archOrdinals);
+        self::assertCount(count($ordinals[1]), $archOrdinals[1], 'the two slot lists no longer carry the same number of items — one page was updated and the mirror left behind');
+
+        self::assertSame(1, preg_match('/Slots (\d+).*?(\d+) are the Static prefix; (\d+).*?(\d+) are PerSession; (\d+).*?(\d+) are PerTurn\./s', $window, $split), 'the stability partition sentence lost its shape — the volatility story has no arithmetic left to check');
+        self::assertSame(1, (int) $split[1], 'the Static prefix no longer starts at slot 1');
+        self::assertSame((int) $split[2] + 1, (int) $split[3], 'the PerSession band does not open where the Static prefix closes');
+        self::assertSame((int) $split[4] + 1, (int) $split[5], 'the PerTurn band does not open where PerSession closes');
+        self::assertSame($words[$word[1]], (int) $split[6], 'the bands do not close on the spelled slot count');
+        self::assertCount(3, \SugarCraft\Crush\Context\Stability::cases(), 'Stability grew a tier — every per-item stability label in the list needs re-reading, starting with this partition');
+
+        self::assertSame(1, preg_match('/^11\. \*\*Environment\*\* \(`EnvironmentBlock`\).*\*\*LAST\*\*/m', $window), 'item eleven is no longer Environment LAST — the P3.S1 invariant this page exists to carry has moved');
+        self::assertTrue(method_exists('SugarCraft\Crush\Runtime', 'systemPromptSections'), 'the intro cites Runtime::systemPromptSections() — gone');
+        foreach (['basePrompt', 'toolGuidanceSection'] as $method) {
+            self::assertTrue(method_exists('SugarCraft\Crush\Runtime', $method), "slot prose cites Runtime::{$method}() — gone");
+        }
+        self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'slot 10 cites SkillMatcher::listForPrompt() — gone');
+        self::assertTrue(class_exists('SugarCraft\Crush\Context\EnvironmentBlock'), 'slot 11 names EnvironmentBlock — gone');
+    }
+
+    /**
+     * E686 tranche-11 (AO): the fence-tag roster, the breakpoint budget pair,
+     * the "nothing consults CacheBreakpoints" census, the six-item
+     * prohibition register and the five-subprocess cost claim all divide
+     * their sources. The prohibition count stays internal (this page's own
+     * list); the §9.12 bullet census in the plan document keeps its dated
+     * "at base" framing and is HELD-external by the campaign's own law.
+     */
+    public function testPromptEngineeringTagsBreakpointsAndRegisterReadTheirSources(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md');
+        $flat = self::markdownProse($raw);
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
+
+        self::assertSame(1, preg_match('/The roster is the (\w+) tags `PromptFence::tags\(\)` returns/', $flat, $tagWord), 'the tags sentence no longer spells its count beside PromptFence::tags()');
+        $tags = PromptFence::tags();
+        self::assertCount($words[$tagWord[1]], $tags, "the page still says {$tagWord[1]} tags — PromptFence::tags() returns another count");
+        self::assertSame(1, preg_match('/read at this base: (.*?)\. Two entries/s', $flat, $listed), 'the inline tag list lost its boundaries');
+        preg_match_all('/`([^`]+)`/', $listed[1], $docTags);
+        self::assertSame($tags, $docTags[1], 'the documented tag list no longer matches PromptFence::tags() in word or order — cross-page: MEMORY.md arm BD pins the same authority against its own page');
+
+        self::assertSame(1, preg_match('/budget of `CacheBreakpoints::MAX_BREAKPOINTS` — (\w+) —/', $flat, $bp), 'the breakpoint budget no longer spells its number between em-dashes');
+        $max = (int) (new \ReflectionClassConstant('SugarCraft\Crush\Providers\CacheBreakpoints', 'MAX_BREAKPOINTS'))->getValue();
+        self::assertSame($words[$bp[1]], $max, "the page still budgets {$bp[1]} breakpoints — MAX_BREAKPOINTS moved");
+        $withAutomatic = (int) (new \ReflectionClassConstant('SugarCraft\Crush\Providers\CacheBreakpoints', 'BUDGET_WITH_AUTOMATIC'))->getValue();
+        self::assertSame($max - 1, $withAutomatic, 'BUDGET_WITH_AUTOMATIC is no longer the explicit budget minus one, which the same paragraph states');
+        self::assertStringContainsString('explicit budget minus one', $flat, 'the minus-one framing the constant pair is pinned to has been reworded away');
+
+        foreach (self::srcTexts() as $relative => $text) {
+            if ($relative === 'src/Providers/CacheBreakpoints.php') {
+                continue;
+            }
+            $bare = (string) preg_replace('#(/\*.*?\*/|//[^\n]*)#s', '', $text);
+            self::assertStringNotContainsString('CacheBreakpoints', $bare, "the page stakes its not-armed paragraph on no src/ file consulting CacheBreakpoints — {$relative} now does");
+        }
+        $bin = (string) file_get_contents($root . '/bin/sugarcrush');
+        self::assertStringNotContainsString('CacheBreakpoints', (string) preg_replace('~(/\*.*?\*/|//[^\n]*|^\s*\#[^\n]*)~s', '', $bin), 'bin/sugarcrush now consults CacheBreakpoints — the unwired claim is dead prose');
+
+        self::assertSame(1, preg_match('/§9\.12 enumerates (\w+) standing prohibitions/', $flat, $regWord), 'the register sentence no longer spells the prohibition count');
+        $registerStart = strpos($raw, '## The "do not do this" register');
+        self::assertIsInt($registerStart, 'the register heading moved — its item list is the count the page cites');
+        preg_match_all('/^(\d+)\. \*\*Do not /m', substr($raw, $registerStart), $items);
+        self::assertCount($words[$regWord[1]], $items[1], "the page still enumerates {$regWord[1]} standing prohibitions — the numbered list moved");
+
+        self::assertSame(1, preg_match('/pays its (\w+) git subprocess/', $flat, $gitWord), 'the one-render-per-build sentence no longer spells its subprocess count');
+        self::assertMatchesRegularExpression('/those ' . strtoupper($gitWord[1]) . ' subprocesses run per step/', self::sourceOf('Context/EnvironmentBlock.php'), "the page says {$gitWord[1]} git subprocess polls — EnvironmentBlock's own docblock counts them in capitals and no longer agrees");
+    }
+
+    /**
      * The live roster of CRUSH_* keys a hook child receives, derived from the
      * source the runtime actually runs: the $fixed array, the payloads handed
      * to stagePayloads() at its call site, and the _FILE pointer each staged

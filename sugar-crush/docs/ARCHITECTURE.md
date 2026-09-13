@@ -137,7 +137,7 @@ unwired `Chat`.
 > this page exists, and until now the page did not carry it.
 >
 > `SugarCraft\Crush\App\App` is **the live engine state object** —
-> `Runtime::run(App $app, …)` (`src/Runtime.php:154`) and `EngineBackend` both
+> `Runtime::run(App $app, …)` (`src/Runtime.php`) and `EngineBackend` both
 > take it, and it carries the tools, hooks and skills — **and**, since the
 > pane-shell migration, **the root TUI `Model`** (`src/App/App.php`,
 > `final class App implements Model`). Both hats are live. Any plan document
@@ -360,7 +360,7 @@ own source that it is not a security boundary.
 
 ## Providers
 
-`ProviderFactory::availableTypes()` (line 311) returns **seven** selectable
+`ProviderFactory::availableTypes()` returns **seven** selectable
 names, and each builds a different class. Measured by constructing every one of
 them on this tree:
 
@@ -376,17 +376,17 @@ them on this tree:
 
 Two rows are easy to get wrong, so they are worth stating flatly.
 `anthropic` does **not** go through `ClaudeCodeProvider`:
-`ProviderFactory::createAnthropic()` (lines 564-595) builds a Guzzle client
+`ProviderFactory::createAnthropic()` builds a Guzzle client
 carrying `x-api-key` + `anthropic-version` — the Messages API authenticates with
 those, not with a bearer token — and hands it to a `CustomProvider`. And
 `claude-code` is a **separate, seventh** provider, not an implementation detail
-of `anthropic`: `createClaudeCode()` at line 601 returns the real
+of `anthropic`: `createClaudeCode()` returns the real
 `ClaudeCodeProvider`, and `php bin/sugarcrush models` prints
 `claude-code claude-sonnet-4-6` as its own row.
 
 **`echo` is not one of the seven.** `$factory->create(['type' => 'echo'])`
 raises `Unknown provider type: echo`. `EchoProvider` is nonetheless live, from a
-different direction: `Cli\Bootstrap::provider()` (line 1292) returns
+different direction: `Cli\Bootstrap::provider()` returns
 `new EchoProvider()` whenever the run selected no provider, or the selected one
 threw while being constructed. So "echo" in the status bar is a degradation
 path, not a configuration you can ask for by name.

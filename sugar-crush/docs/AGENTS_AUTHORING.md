@@ -5,11 +5,12 @@ delegation target and tunes it. Presets are discovered at launch, merged into a
 roster, and shown by `/agents`.
 
 This page documents what the frontmatter *does* on this checkout, which is
-narrower than what it declares. `AgentPreset` carries sixteen fields; the path
-that puts a preset onto the roster reads six of them. That is stated per field
-rather than implied, because a preset whose `permissionMode: bypass-permissions`
-is silently dropped and a preset whose `permissionMode` is honoured are very
-different objects to reason about.
+narrower than what it declares. `AgentPreset` carries sixteen fields and the path that puts a preset onto
+the roster now reads every one of them onto the `Agent` row. The per-field
+account is below rather than implied, because a preset whose
+`permissionMode: bypass-permissions` is honoured by a cloned checkout and one
+where that mode collapses to the safe default are very different objects to
+reason about.
 
 ---
 
@@ -33,8 +34,9 @@ anything ambiguous is recorded on `warnings()`.
 #### Foreign agent presets do NOT resolve the way foreign skills do
 
 Two axes, and **both** point the opposite way from the skills side. This is not a
-doc simplification; `ForeignAgentPresetRegistry`'s own doc-block (lines 136-159)
-spells it out and calls one of the two "not merely cosmetic".
+doc simplification; `ForeignAgentPresetRegistry`'s own doc-block
+spells it out; the section that measures why the ordering difference matters
+is headed WHY THIS IS NOT COSMETIC.
 
 | Axis | Foreign **agent presets** | Foreign **skills** |
 |---|---|---|
@@ -151,29 +153,28 @@ carrying both is asking for the declared one.
 ### Which fields reach the roster
 
 `Bootstrap::agentRoster()` maps each preset through `Agent::fromPreset()`, which
-reads **six** fields and nothing else:
+now carries **all sixteen** `AgentPreset` fields onto the `Agent` row:
+`name`, `description`, `initialPrompt`, `model` (`inherit`/empty → the
+launch's model), `tools`, `skills`, `disallowedTools`, `maxTurns`,
+`mcpServers`, `memory`, `background`, `effort`, `isolation`, `color`,
+`source`, and — gated on provenance, alone among them — `permissionMode`.
 
-| Reaches the roster | Dropped on this path |
-|---|---|
-| `name` | `permissionMode` |
-| `description` | `maxTurns` |
-| `initialPrompt` (or the body) | `mcpServers` |
-| `model` (`inherit`/empty → the launch's model) | `memory` |
-| `tools` | `background` |
-| `skills` | `effort`, `isolation`, `color`, `disallowedTools`, `source` |
+Native and imported presets take the same path — the wiring neither widens
+nor narrows it — with that one deliberate exception, stated per value because
+it matters more than the rest combined:
 
-This is the same for native and imported presets — the wiring neither widens
-nor narrows it. It bounds *this* path only: `AgentPreset` still carries every
-field, so a future consumer reading presets directly inherits them.
+A **native** preset's `permissionMode` rides through; a foreign preset's
+collapses to `PermissionMode::Default`, because `permissionMode:` is the only
+carried field that is a privilege decision rather than a description, and a
+cloned repository must not grant itself one. The gate is one `SkillSource`
+check inside `fromPreset()`, written next to the source copy it reads, so the
+two cannot drift apart. The launch's own permission mode is still decided by
+`SUGARCRUSH_PERMISSION_MODE` or the `permissionMode` key in
+`~/.sugar-crush/config.json` — see [`PERMISSIONS.md`](PERMISSIONS.md).
 
-`permissionMode` is the one worth naming out loud. A preset can declare
-`bypass-permissions`; nothing on the roster path can act on it. The launch's
-permission mode is decided by `SUGARCRUSH_PERMISSION_MODE` or the
-`permissionMode` key in `~/.sugar-crush/config.json` — see
-[`PERMISSIONS.md`](PERMISSIONS.md).
-
-`AgentPreset::$source` has no reader either: `Agent` carries no source field, so
-an imported row is not visually distinguishable from a native one yet.
+`source` rides along now, so an imported row carries its provenance in state;
+whether any surface renders it differently is a `/agents` question, not a
+wiring one.
 
 ---
 
@@ -182,9 +183,12 @@ an imported row is not visually distinguishable from a native one yet.
 Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
-- **There is no `Task` or `Agent` tool.** `Bootstrap::tools()` ships eleven
-  built-in tools and none of them delegates. The model cannot spawn a
-  sub-agent.
+- **`Task` delegates.** `Bootstrap::tools()` ships twelve
+  built-in tools and one of them — `Task` — is exactly the delegation seam:
+  it hands a bounded task to a sub-agent named from the session's agent
+  roster and returns that worker's final text. With no session
+  `AgentManager` bound it refuses rather than fabricating, and a call can
+  never widen what the named agent declared.
 - **`/agents` is inspect-only.** `AgentsCommand::execute()` lists the agents
   currently *working* (normally none) and, with a name, shows one agent's
   details. It does not start anything.
@@ -200,9 +204,10 @@ one":
   preset roster.
 
 So a preset's practical effect today is: it appears in the roster, `/agent
-<name>` describes it, and it carries a prompt ready for the executor paths that
-already exist in `src/Agents/` (`AgentWorkerPool`, `ProcessExecutor`,
-`SubAgent`) but that no chat command routes to.
+<name>` describes it, and `Task` dispatches it by name onto the executor
+paths that already exist in `src/Agents/` (`AgentWorkerPool`,
+`ProcessExecutor`, `SubAgent`) — the same governed pool
+`Chat::executeAgents()` drives.
 
 That is a seam with a finished payload, not an accident, and it is written down
 here rather than marketed as delegation.
