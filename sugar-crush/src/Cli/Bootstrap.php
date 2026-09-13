@@ -6099,18 +6099,19 @@ final class Bootstrap
      * runs the real CLI binary.
      *
      * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is
-     * ELEVEN entries as of this writing — it was ten until {@see LspTool} was
-     * added — and THAT count, not this array's length, is the domain for every
-     * "N built-in tools" figure in `README.md`. `src/Tools/BuiltIn/` holds
-     * exactly those eleven concrete `Tool` classes.
+     * TWELVE entries as of this writing — it was ten until {@see LspTool} was
+     * added and eleven until {@see TaskTool} was — and THAT count, not this
+     * array's length, is the domain for every "N built-in tools" figure in
+     * `README.md`. `src/Tools/BuiltIn/` holds
+     * exactly those twelve concrete `Tool` classes.
      *
-     * ELEVEN IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
+     * TWELVE IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
      * on every launch today: `LspTool` is reachable and answers every call with a
      * "no language server configured" error, because nothing in `src/` reads a
-     * server command yet ({@see lspTool()}). A figure that said "eleven working
+     * server command yet ({@see lspTool()}). A figure that said "twelve working
      * tools" would be the wrong claim about this array.
      *
-     * The array is longer than eleven only when the project ships a `.mcp.json` AND
+     * The array is longer than twelve only when the project ships a `.mcp.json` AND
      * the user has listed this root under `trustedProjectMcp` — both conditions,
      * see {@see mcpClient()} for why the second one exists. Then one
      * {@see McpToolBridge} per tool the configured MCP servers advertise is
