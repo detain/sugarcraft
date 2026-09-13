@@ -6389,10 +6389,23 @@ resolves and **caches on first use** and does NOT honour a runtime `putenv('TMPD
 directly by lane c. A test therefore cannot isolate itself into a private temp directory after the fact,
 which is why attribution moved instead of the directory being narrowed.
 
-### E134 [PARTIAL] — a mutation harness must refuse a dirty tree, not merely revert
+### E134 [CLOSED] — a mutation harness must refuse a dirty tree, not merely revert
 
 **Recorded 2026-08-22 by the supervisor.** Severity: low, process. **Round 44 produced two independent
 instances, in opposite directions.**
+
+**CLOSED-BY-PRACTICE (supervisor disposition 2026-09-13, post round-70 close).** The harness contract now HAS a tree
+artifact: `docs/plans/crush_code_RESUME.md` APPENDIX V carries the law in three places — section (t) keeps E168's
+three parts (the backup is written **BEFORE** the mutation; the restore is **VERIFIED** by `git status --porcelain`
+returning empty; the supervisor checks every lane tree for a dirty worktree BEFORE merging), section (u) keeps the
+revert technique (`git show <sha>:<path> > <path>`, **never** `git checkout <sha> -- <path>`), and the
+"never git-mutate in a non-commit step" digest item carries the dirty-tree prohibition (never
+`git checkout --`/`git restore`/`git stash` a lane to "clean up"). The trim (`f0d0d2ea1`) had truncated that last
+item mid-sentence and dropped the prohibition; it is restored **VERBATIM** from the trim anchor
+`/home/sites/crush-r61-artifacts/resume-trim/BEFORE.md` (line 3820) with this disposition, and the r64 lane-ab
+mutation-revert incident (`git checkout <file>` destroying uncommitted lane edits — revert with `cp` from a
+pre-mutation backup, never `git checkout` a dirty file) is recorded there as the law's third instance. Model harness
+(refuses a dirty tree, `git clean -fdq`, scratchpad copy, exits 94 on a no-op): worklog:11116–11121.
 
 **What.** Lane b ran a mutation (`R4b`) that created a **directory**; `git checkout -- .` does not remove
 one, and the harness's pre-flight **refused** the next three mutations rather than attributing their
@@ -7805,12 +7818,20 @@ in `classifySpec()`, require fd 2's entry to be a literal array before answering
 out this round because it was not measured against the whole tree and rule 16 says a prescription is a
 hypothesis until it is.
 
-### E204 [PARTIAL] — three lanes share ONE scratchpad directory, and two of them collided in round 47
+### E204 [CLOSED] — three lanes share ONE scratchpad directory, and two of them collided in round 47
 
 **Recorded 2026-08-22 by round-47 lane b.** Severity: process. **Observed, cost one four-minute run.**
 **PARTIAL (round-70 launch ruling 2026-09-12):** the per-lane `scratchpad/lane-<x>/` brief mandate has been
 in force since round 48; the remaining enforcement half is a supervisor-owned harness/docs item — judged at
 round-70 close, NOT lane work.
+
+**CLOSED-BY-PRACTICE (supervisor disposition 2026-09-13, post round-70 close).** The enforcement half now HAS a tree
+artifact. `docs/plans/crush_code_RESUME.md` rule 10 (APPENDIX I, carried VERBATIM through the trim `f0d0d2ea1`):
+"Evidence to `/home/sites/crush-r61-artifacts/<lane>/` — the artifacts root KEEPS its round-61 name across rounds",
+restated in §0-NOW-72; rule 9 adds "briefs demand absolute paths". Every lane since round 61 has written to its own
+evidence dir (live at stamp time: `gf/`, `gd/`, `resume-trim/` under the artifacts root), so the shared-scratchpad
+collision class is structurally extinct; the older `scratchpad/lane-<x>/` naming is superseded by the evidence-dir
+rule. The dupe E218 was already SUPERSEDED against this row.
 
 **What.** All three round-47 implementers were given the same
 `/tmp/claude-1000/-home-sites-sugarcraft/<session>/scratchpad` path. Lane a and lane b both wrote a

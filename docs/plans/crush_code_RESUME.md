@@ -1176,6 +1176,18 @@ with no measure step would have rewritten six perfectly good prompts and called 
 *(was THE WORKFLOW, line 6314 (item 41))*
 
 - **Never** `git stash`/`checkout`/`reset`/`commit`/`clean` in a non-commit step. **Never**
+  `composer install`/`update` (it silently replaces `vendor/sugarcraft/*` symlinks with Packagist copies
+  — the only signal is the skip count going 1 → 2). **Never** a global `pkill`. **Never** `caliber`.
+
+⚠️ **STANDING CHANGE — agents commit incrementally in-lane.** A network drop killed both round-38 agents
+mid-flight, one holding **626 uncommitted insertions across 4 files**. Nothing was lost only because the
+lane was snapshotted by **file copy + `git diff` patch** before anything else touched it. Never
+`git checkout --`/`git restore`/`git stash` a lane to "clean up"; a resumed agent must be told its dirty
+tree is its own work. Several small commits on a branch cost nothing — the supervisor squashes at merge.
+*(was the round-38 STANDING CHANGE block, pre-trim line 3820 — bullet completion + this paragraph promoted
+back VERBATIM at the 2026-09-13 E134 supervisor disposition: the trim had truncated the bullet mid-sentence
+and dropped the dirty-tree law; the r64 lane-ab incident is this law's third instance — revert a mutation
+with `cp` from a pre-mutation backup, never `git checkout` a dirty file.)*
 
 ### if a workflow run reports green and a personal run disagrees, believe the personal run
 *(was THE WORKFLOW, lines 6282–6284 (item 41))*
