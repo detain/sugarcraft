@@ -46,6 +46,17 @@ r72=ha–hb, r73=hc–hd — the h block spans two rounds — r74=ie–if, r75=j
 each closed their round). Branch `lane/<id>`, sandbox `crush-lane-<id>`, artifacts
 `/home/sites/crush-r61-artifacts/<id>/` (the artifacts root keeps its round-61 name across rounds).
 
+**PHASE-2 DECIDED 2026-09-13** — the operator selected §2(d) option 3 (MCP/E642-class product work);
+this paragraph SUPERSEDES the §2(d) "no lanes — decision point" line below. The phase-2 kickoff mints
+E695–E703 (probe-measured at `9e4d4fee7`; line citations in the backlog entries). The E642-family
+"seam" turned out ALREADY-LANDED — the E199 RuntimeNoticeSink wiring is live since r70 lane ga (14
+emitters + the TUI drain) — so notice-drain work is OUT of scope for this phase. Round-77 lanes:
+**la** (E695 OAuth token attachment) and **lc** (E697 palette-label truth + E700 heading-hygiene
+sweep) wave-1; **lb** (E696 per-preset MCP routing) wave-2 behind la. E698, E701, E702, E703 are
+minted-UNASSIGNED (scope in later rounds; E701 is sequenced behind E695). E699 awaits the OPERATOR —
+dormant-code removal is STOP-class, the keep-as-is recommendation is on record. Census re-run at this
+mint returns exactly 9 survivors, all `OPEN` (E695–E703).
+
 ### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
 
 | figure | value | domain |

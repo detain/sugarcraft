@@ -20511,3 +20511,39 @@ TOTAL w.r.t. every visible project note, and an empty repo has no committed half
 store-present polarity rejected — this repo TRACKS `.sugar-crush/`, making the legacy byte-green test
 env-dependent). Step 3 (agent memory tool) stays DECLINED-BY-RULING, moved to the trigger-watch
 roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.
+
+### E695 [OPEN] — OAuth tokens are registered by /mcp add but never attached to any HTTP request
+
+**What:** phase-2 kickoff probe, measured at `9e4d4fee7`: `OAuthClientRegistration::getValidAuth()` (src/MCP/OAuthClientRegistration.php:237) has ZERO production callers; `HttpMcpServer` builds headers from static config only (src/MCP/HttpMcpServer.php:94-105); `Authorization` appears nowhere in HttpMcpServer/McpClient/Bootstrap. `McpAuthStore::hasCredentials` is hard-coded true (src/MCP/McpAuthStore.php:47,:80), making the `ServerAuthStatus` "no credentials" branch unreachable (self-noted src/Commands/McpAuthCommand.php:44-48). Net: `/mcp add` performs a full RFC7591 registration + token fetch and stores a token nothing consumes — an inert write-only store. **Acceptance:** the fetched/refreshed token attaches to the matching server's requests via `getValidAuth()` (refresh honored); `hasCredentials` becomes real; docs/MCP.md auth section truth-flipped IN-STEP with its DocFigure arms; `/mcp add` reporting states what the token now does. **Conf:** HIGH.
+
+### E696 [OPEN] — per-preset MCP routing has the mechanism and fail-closed tests but no production caller
+
+**What:** `McpRouter::setAgentPreset`/`setDenyPatterns` have zero src/ callers outside McpClient's own internals (src/MCP/McpClient.php:58,:70); the main launch path builds the router `unrestricted: true` (src/Cli/Bootstrap.php:5760-5798); README.md:1072 claims the allowlists "are enforced by `McpClient` against `McpRouter`, not just decorative config" — enforcement is tested (tests/MCP/McpClientTest.php:740+) but never invoked end-to-end. Enforced-if-wired ≠ enforced-today. **Acceptance:** design-first — thread the active agent preset (and deny patterns) into the MCP client construction on the sub-agent/per-preset materialization path, or if the wiring is judged out-of-scope, correct the README sentence in-step and carry the wiring under this id. **Conf:** HIGH.
+
+### E697 [OPEN] — palette action labeled "Toggle MCPs" only lists
+
+**What:** `PaletteAction::ToggleMcp` (src/Commands/CommandRegistry.php:149-156, paletteLabel "Toggle MCPs") dispatches to `handleMcpAuthCommand('mcp auth list')` (src/Chat.php:12839) — nothing toggles. The interactive trust WRITE was DECLINED at E689 (src/Tui/McpPanel.php:27-35: would invent a second persistence seam); the decline stands, the label does not. **Acceptance:** rename the label to the truthful behavior (e.g. "List MCP servers") and update EVERY derived pin in-step — grep `Toggle MCP` tree-wide first (docs/COMMANDS.md, README rosters, DocFigure/ReadmeRoster/KeyBinding guard families) and run those guards. **Conf:** HIGH.
+
+### E698 [OPEN] — no MCP liveness surface: list and doctor reflect config, never running state
+
+**What:** `mcpServerInventory()` provably calls no proc_open (src/Cli/Bootstrap.php:5563-5602; docs/MCP.md:142-144) and `doctor` is read-only by contract ("a health check must not launch programs", src/Cli/Subcommands.php:347-351) — deliberate. But no surface reports "server X is running with N tools" during a live session. **Acceptance:** a non-launching liveness readout over the already-built clients, or a documented stance closing the question. Unassigned; scope in a later round. **Conf:** MED.
+
+### E699 [OPEN] — ClaudeCodeMcpClient: dormant 983-line stdio spawner, disposition pending
+
+**What:** "constructed by nothing but its own test" (src/ClaudeCodeMcpClient.php:45-47); no ContainedPath/PermissionGate; its own docblock records it is "survivable ONLY while it stays unreachable" (:54-62), pinned by ClaudeCodeMcpClientTest::testNothingInSrcBinOrExamplesReachesThisDormantSeam. Deleting dormant code is a STOP-class action requiring the operator; wiring-with-gates grows surface. Recommendation ON RECORD: keep as-is. **Acceptance:** operator ruling. **Conf:** HIGH (state), decision pending.
+
+### E700 [OPEN] — 36 backlog headings still stamped [OPEN]/[PARTIAL] while their triage rows are CLOSED
+
+**What:** measured 2026-09-13 — the one-word stamps lag the ledger for E1, E14, E15, E27, E29, E30, E37, E40, E47, E48, E49, E50, E107, E115, E116, E124, E165, E319, E475, E547, E575, E631, E632, E636, E637, E639, E641, E642, E643, E644, E645, E646, E647, E649, E650, E651 (all CLOSED in triage; E107/E165/E319/E547 CLOSED-in-place per the rows-stay-put doctrine). E642's body still asserts "STILL OPEN: ... caught by nothing" (backlog :20027) and E643's "was NOT fixed" (:20036) — contradicting their round-61 closure rows; residuals rode E653/E654/E660 (all since closed). **Acceptance:** flip all 36 headings; rewrite the four contradicting body paragraphs as closed-notation pointing at the successor ids. **Conf:** HIGH.
+
+### E701 [OPEN] — no interactive OAuth authorization-code/PKCE flow
+
+**What:** `/mcp add` implements well-known discovery + client-credentials fetch only (src/Commands/McpAuthCommand.php:188-262); MCP servers requiring a browser auth-code flow cannot authenticate. Size L; sequenced behind E695 (attachment must exist before a richer flow means anything). Unassigned. **Conf:** HIGH.
+
+### E702 [OPEN] — SSE transport is spec-mentioned, unimplemented (throws), and nowhere listed as a supported-transport table
+
+**What:** `McpClient.php:172-181` throws for `sse` with an honest comment; docs/MCP.md never gives users a supported-transports table (stdio/http/git real, sse not). **Acceptance:** a docs transport-table naming what ships + honest sse line (DocFigure arm in-step). Small. Unassigned. **Conf:** MED.
+
+### E703 [OPEN] — no in-session MCP config reload/restart; the server list is frozen per launch
+
+**What:** docs/MCP.md:49-55 records the frozen read-once behavior as a decision; an `mcp restart`/reload is an open product question (size M-L, touches the shutdown seam `registerMcpShutdown`). Unassigned, decision pending. **Conf:** MED.
