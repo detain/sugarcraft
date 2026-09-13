@@ -212,18 +212,20 @@ socket, which is what keeps the TUI's event loop free. Details that matter:
 
 `Runtime::run()` is a generator, and it resolves **exactly one** assistant turn
 plus that turn's tool calls: call the model, execute the tool calls it returned
-through the hook gate, yield the results. It has no step counter — `maxSteps`
-appears nowhere in `src/Runtime.php` except one doc-comment at line 1433, and
-`Runtime::__construct` (lines 101-107) takes no such parameter.
+through the hook gate, yield the results. It has no step counter — every
+`maxSteps` mention inside `src/Runtime.php` sits in a doc-comment, and
+`Runtime::__construct` takes no such parameter.
 
 **The multi-step ceiling belongs to the caller, not to `Runtime`.**
 `private readonly int $maxSteps = 8` is a constructor parameter of
-`src/Backend/EngineBackend.php` (line 126), and the bound it arms is
-`for ($step = 0; $step < $this->maxSteps; $step++)` at `EngineBackend.php:462`
+`src/Backend/EngineBackend.php`, and the bound it arms is the loop
+`for ($step = 0; $step < $this->maxSteps; $step++)`
 — the loop that feeds each turn's tool results back and re-runs the `Runtime`
 until the model answers without tools. `EngineBackend::withMaxSteps()` clamps
 its argument with `max(1, $maxSteps)`, so the ceiling can be raised or lowered
 but never set to zero, which would make a turn produce nothing at all.
+(E686 tranche-8: every line-number anchor this paragraph carried had rotted
+within rounds — the page's own rule is to cite symbols by name, never by line.)
 
 The two type worlds meet at the `EngineBackend` seam: the chassis works in the
 root `Message`/`ToolCall` value objects, the engine in the typed
@@ -504,8 +506,9 @@ PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `candy-mosaic`, `candy-mouse`,
 `candy-focus`, `candy-kit`.
 
-`ext-sqlite3` is declared and **called by nothing in `src/`** — the session
-store uses PDO. `doctor` probes `pdo_sqlite` for exactly that reason.
+`ext-sqlite3` is declared, and `src/` constructs it in exactly one place:
+`Agents\TaskList`'s task database. The session store reaches SQLite through
+**PDO**, which is why `doctor` probes `pdo_sqlite` rather than the extension.
 
 ---
 

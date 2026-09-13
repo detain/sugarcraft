@@ -123,10 +123,22 @@ use SugarCraft\Crush\Workflows\Workflow;
    * the row claims, never a golden-file comparison. The SKILLS.md nudge sentence
    * (AG) joins figures already pinned inside src to their cross-page restatement,
    * and the ENVIRONMENT.md streaming table (AH) keeps its measured absolutes free
-   * while pinning the relations its own preamble states.
-   *
-   * @internal
-   */
+    * while pinning the relations its own preamble states.
+    *
+    * E686 TRANCHE-8 (round-71, lane gg) works the gd carry: every HELD row was
+    * re-adjudicated and stays held (reasons in the gg ledger — external facts,
+    * self-labeled measurements, fixture domains), while the named next slices
+    * (ARCHITECTURE prose figures, ENVIRONMENT per-var rows) produced nine new
+    * arms (AI-AR) and the campaign's rare event: TWO FALSE paragraphs. The
+    * maxSteps-ownership paragraph had rotted its four line-number anchors (and
+    * Runtime had grown a second doc-comment mention), and "ext-sqlite3 is
+    * called by nothing in src/" was refuted by TaskList's own `new \SQLite3`
+    * task database — both sentences rewritten truthfully IN-STEP here, per the
+    * page's own E686 rule that symbols are cited by name, never by line, and
+    * their surviving claims pinned live.
+    *
+    * @internal
+    */
 final class DocFigureProseDriftTest extends TestCase
 {
     use SourceFileWalkTrait;
@@ -2429,6 +2441,469 @@ final class DocFigureProseDriftTest extends TestCase
                 self::assertLessThanOrEqual(10.0, abs(($times[$i] - $times[$i - 1]) * 1000 - $spacing), "consecutive stamps in column {$column} drifted more than 10 ms from the {$spacing}ms spacing the prose itself states");
             }
         }
+    }
+
+    /**
+     * E686 tranche-8 (AI): the ARCHITECTURE maxSteps-ownership paragraph. This
+     * tranche's first FALSE — every line-number anchor the paragraph carried
+     * had rotted (and Runtime.php had grown a second doc-comment mention), so
+     * the prose was corrected symbol-only per this page's own E686 rule. What
+     * survives is checkable: every `maxSteps` mention in Runtime.php is a
+     * comment, its constructor has no such parameter, the EngineBackend
+     * default is 8, and the armed loop and the max(1, ...) clamp are literal
+     * code the page quotes verbatim.
+     */
+    public function testArchitectureMaxStepsOwnershipParagraphSurvivesItsSymbols(): void
+    {
+        $arch = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/It has no step counter — every\s+`maxSteps` mention inside `src\/Runtime\.php` sits in a doc-comment, and\s+`Runtime::__construct` takes no such parameter/', $arch),
+            'the corrected no-counter sentence moved — rewrite the pin with it, and remember WHY the old line-numbered form was deleted (E686)',
+        );
+        foreach (['line 1433', 'lines 101-107', '(line 126)', 'EngineBackend.php:462'] as $rottenAnchor) {
+            self::assertStringNotContainsString($rottenAnchor, $arch, "the rotted line-number anchor '{$rottenAnchor}' is back — this page cites symbols by name, never by line (E686)");
+        }
+        self::assertStringContainsString('every line-number anchor this paragraph carried had rotted', $arch, 'the corrective clause that licenses the de-anchored paragraph moved — an unpinned correction rots back (E633)');
+
+        self::assertSame(
+            1,
+            preg_match('/`private readonly int \$maxSteps = (\d+)` is a constructor parameter of\s+`src\/Backend\/EngineBackend\.php`, and the bound it arms is the loop\s+`for \(\$step = 0; \$step < \$this->maxSteps; \$step\+\+\)`/', $arch, $owner),
+            'the ownership sentence no longer quotes the promoted parameter and its loop verbatim in one breath',
+        );
+        self::assertSame(
+            (int) $owner[1],
+            self::promotedParamDefault(EngineBackend::class, 'maxSteps'),
+            'the page still states this default for EngineBackend::$maxSteps — the promoted default moved',
+        );
+
+        $engine = self::sourceOf('Backend/EngineBackend.php');
+        self::assertStringContainsString('for ($step = 0; $step < $this->maxSteps; $step++)', $engine, 'the quoted armed loop is no longer EngineBackend code — ownership moved back to Runtime?');
+        self::assertStringContainsString('max(1, $maxSteps)', self::bodyExcerpt($engine, 'withMaxSteps'), 'withMaxSteps() no longer clamps with the literal the page quotes');
+        self::assertStringContainsString('clamps its argument with `max(1, $maxSteps)`', $arch, 'the clamp sentence moved — its quoted literal and the code are pinned above');
+
+        $runtimeText = self::sourceOf('Runtime.php');
+        $all = substr_count($runtimeText, 'maxSteps');
+        self::assertGreaterThan(0, $all, 'Runtime.php no longer mentions maxSteps at all — the doc-comment-only claim is vacuous, delete or rewrite the sentence');
+        $inComments = 0;
+        foreach (\PhpToken::tokenize($runtimeText) as $token) {
+            if ($token->is(T_DOC_COMMENT) || $token->is(T_COMMENT)) {
+                $inComments += substr_count($token->text, 'maxSteps');
+            }
+        }
+        self::assertSame($all, $inComments, 'a maxSteps mention escaped into RUNTIME CODE in Runtime.php — the page says every mention is a comment and Runtime has no step counter');
+        foreach ((new \ReflectionClass(Runtime::class))->getConstructor()->getParameters() as $param) {
+            self::assertNotSame('maxSteps', $param->getName(), 'Runtime::__construct gained a maxSteps parameter — the step-less premise is gone');
+        }
+    }
+
+    /**
+     * E686 tranche-8 (AJ): the dependencies page counts "ten SugarCraft
+     * siblings" and names each one. The count and the name set are re-derived
+     * from composer.json's require block; candy-pty's exclusion is not an
+     * oversight but the runtime/dev split, so both sides are pinned.
+     */
+    public function testArchitectureSiblingRosterDividesRuntimeFromDevRequires(): void
+    {
+        $arch = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md'));
+        self::assertSame(
+            1,
+            preg_match('/(\w+) SugarCraft siblings: (.*?)\. `ext-sqlite3` is declared/s', $arch, $m),
+            'the siblings sentence no longer runs from a spelled count through the named list into the ext-sqlite3 paragraph that follows',
+        );
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        self::assertArrayHasKey($m[1], $words, "the spelled count '{$m[1]}' is outside the pinned word map — extend it deliberately");
+
+        preg_match_all('/`(candy-[a-z]+|sugar-veil|sugar-[a-z-]+)`/', $m[2], $named);
+        $composer = json_decode((string) file_get_contents(\dirname(__DIR__, 2) . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
+        $required = array_values(array_map(
+            static fn (string $package): string => substr($package, \strlen('sugarcraft/')),
+            array_keys(array_filter($composer['require'], static fn (string $key): bool => str_starts_with($key, 'sugarcraft/'), \ARRAY_FILTER_USE_KEY)),
+        ));
+
+        self::assertCount($words[$m[1]], $required, 'the spelled sibling count no longer matches composer.json require entries');
+        self::assertSame(count($required), count($named[1]), 'the page names a different number of siblings than composer requires');
+        self::assertEqualsCanonicalizing($required, $named[1], 'the page\'s named sibling list and composer.json require no longer describe the same set');
+
+        $devPackages = array_map(
+            static fn (string $package): string => substr($package, \strlen('sugarcraft/')),
+            array_keys(array_filter($composer['require-dev'] ?? [], static fn (string $key): bool => str_starts_with($key, 'sugarcraft/'), \ARRAY_FILTER_USE_KEY)),
+        );
+        self::assertNotEmpty($devPackages, 'the page\'s runtime/dev split has no dev side — this pin presumes sugarcraft siblings live in require-dev too');
+        foreach ($devPackages as $package) {
+            self::assertNotContains($package, $named[1], "a require-dev sibling is now listed among the runtime siblings — either the page moved it or composer did");
+        }
+    }
+
+    /**
+     * E686 tranche-8 (AK): the Sessions-and-state table, the `/bg` `/fork`
+     * sentence, and this tranche's SECOND FALSE: "ext-sqlite3 is called by
+     * nothing in src/" was refuted by TaskList's own `new \SQLite3` task
+     * database, so the sentence was corrected to name the one real user. The
+     * corrected shape is what gets pinned: code-level SQLite3 use == exactly
+     * TaskList, the store's PDO type declaration, the composer declaration,
+     * doctor's pdo_sqlite probe, and every table cell against its literal.
+     */
+    public function testArchitectureSessionsTableAndSqliteSentenceSurviveTheirSources(): void
+    {
+        $archRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md');
+        $arch = self::markdownProse($archRaw);
+
+        self::assertStringNotContainsString('called by nothing in', $arch, 'the refuted claim is back — TaskList constructs \\SQLite3; see the corrected sentence this arm pins');
+        self::assertSame(
+            1,
+            preg_match('/`ext-sqlite3` is declared, and `src\/` constructs it in exactly one place: `Agents\\\\TaskList`\'s task database\. The session store reaches SQLite through\s+\*\*PDO\*\*, which is why `doctor` probes `pdo_sqlite` rather than the extension/', $arch),
+            'the corrected sqlite sentence moved — pin the replacement here rather than deleting the guard',
+        );
+
+        $users = [];
+        foreach (self::srcTexts() as $relative => $text) {
+            $tokens = \PhpToken::tokenize($text);
+            foreach ($tokens as $index => $token) {
+                if (!$token->is(T_NEW)) {
+                    continue;
+                }
+                $next = $tokens[$index + 1] ?? null;
+                if ($next !== null && $next->is(T_WHITESPACE)) {
+                    $next = $tokens[$index + 2] ?? null;
+                }
+                if ($next !== null && ($next->text === '\\SQLite3' || $next->text === 'SQLite3')) {
+                    $users[$relative] = true;
+                }
+            }
+        }
+        self::assertSame(['src/Agents/TaskList.php'], array_keys($users), 'code-level `new \\SQLite3` spread beyond (or out of) TaskList — the page names exactly one place');
+
+        $composer = json_decode((string) file_get_contents(\dirname(__DIR__, 2) . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
+        self::assertArrayHasKey('ext-sqlite3', $composer['require'], 'the page still says ext-sqlite3 is declared — composer stopped declaring it');
+        self::assertStringContainsString("'pdo_sqlite'", self::sourceOf('Cli/Subcommands.php'), 'doctor no longer probes pdo_sqlite — the page\'s rationale sentence is a lie');
+        self::assertSame('PDO', (new \ReflectionProperty(EnhancedSessionStore::class, 'pdo'))->getType()->getName(), 'the session store no longer reaches SQLite through PDO — which is what makes the doctor probe the right one');
+
+        $tableStart = strpos($arch, '## Sessions and state');
+        // Wildcard split deliberately: a glued `*` literal here would be
+        // harvested as glob-shaped and drift the PathGlob corpus figure
+        // (E686 tranche-7's M7 lesson).
+        $tableEnd = strpos($arch, '`Sessions\\Background' . '*' . '`');
+        self::assertIsInt($tableStart);
+        self::assertIsInt($tableEnd);
+        $segment = substr($arch, $tableStart, $tableEnd - $tableStart);
+        preg_match_all('/\| `([^`]+)` \| `([^`]+)`/', $segment, $rows, \PREG_SET_ORDER);
+        self::assertCount(4, $rows, 'the sessions table no longer has its four directory/class rows');
+        $orderedDirs = [
+            '~/.sugar-crush/session.db',
+            '~/.sugar-crush/memory/',
+            '~/.sugar-crush/teams/',
+            '<workflowsPath>/.running/',
+        ];
+        self::assertSame($orderedDirs, array_column($rows, 1), 'the table\'s directory column changed — re-derive each referent below before re-pinning');
+        foreach ($rows as $row) {
+            self::assertTrue(class_exists('SugarCraft\\Crush\\' . $row[2]), "the table cites SugarCraft\\Crush\\{$row[2]} which does not exist");
+        }
+        $bootstrap = self::sourceOf('Cli/Bootstrap.php');
+        self::assertStringContainsString("configDir() . '/session.db'", $bootstrap, 'session.db is no longer the store file under the config dir — table cell drifted');
+        self::assertStringContainsString("configDir() . '/memory'", $bootstrap, 'memory/ is no longer the store directory under the config dir — table cell drifted');
+        self::assertStringContainsString("'~/.sugar-crush/teams'", self::sourceOf('Agents/TeamManager.php'), 'TeamManager no longer defaults to ~/.sugar-crush/teams — table cell drifted');
+        self::assertSame('.running', (new \ReflectionClassConstant('SugarCraft\Crush\Workflows\WorkflowEngine', 'PAUSE_DIR'))->getValue(), 'the pause directory constant no longer spells .running — table cell drifted');
+
+        self::assertSame(
+            1,
+            preg_match('/runs a task in a detached session \(`\/bg`, `\/fork`\)/', $arch),
+            'the background-session sentence no longer names its two slash commands — check the registry below',
+        );
+        $slashNames = array_map(static fn (CommandSpec $spec): string => $spec->name, CommandRegistry::slashCommands());
+        self::assertContains('bg', $slashNames, 'the page still cites /bg — the command left the registry');
+        self::assertContains('fork', $slashNames, 'the page still cites /fork — the command left the registry');
+    }
+
+    /**
+     * E686 tranche-8 (AL): the retention row quotes its own output sentence and
+     * its own cap. The sentence is Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT
+     * filled with the row's example figures, the SAME sentence the constant's
+     * doc-block carries, and 36500 is exactly 100×365. Three sites, one truth
+     * (arm X's family idiom).
+     */
+    public function testEnvironmentRetentionRowQuotesTheLiveFormatAndCap(): void
+    {
+        $env = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/The one-line summary \(`([^`]+)`\) is seeded into the transcript/', $env, $quote),
+            'the retention row no longer quotes its transcript summary — the format it copies may have moved',
+        );
+        self::assertSame(
+            1,
+            preg_match('/^retention removed (\d+) unnamed (\w+) untouched for (\d+)\+ days \(ids on stderr\)$/', $quote[1], $parts),
+            'the quoted summary no longer matches the shape the live format produces — update the example with the format',
+        );
+        $format = Bootstrap::SESSION_RETENTION_SUMMARY_FORMAT;
+        self::assertSame(
+            \sprintf($format, (int) $parts[1], $parts[2], (int) $parts[3]),
+            $quote[1],
+            'the row\'s example is no longer the live format filled with its own figures',
+        );
+        $doc = self::proseOf(self::docBlockOf(Bootstrap::class, 'SESSION_RETENTION_SUMMARY_FORMAT'));
+        self::assertStringContainsString($quote[1], $doc, 'ENVIRONMENT.md and the format\'s own doc-block now quote different sentences — the family moved half');
+
+        self::assertSame(
+            1,
+            preg_match('/values are capped at `(\d+)` \((\d+) years\)/', $env, $cap),
+            'the cap sentence no longer states days and years together',
+        );
+        $maxDays = (int) (new \ReflectionClassConstant('SugarCraft\Crush\Session\SessionStore', 'MAX_RETENTION_DAYS'))->getValue();
+        self::assertSame($maxDays, (int) $cap[1], 'the row still caps at this many days — live MAX_RETENTION_DAYS moved');
+        self::assertSame((int) $cap[2] * 365, $maxDays, "the '(N years)' gloss is no longer the day cap divided by 365");
+
+        self::assertSame(
+            1,
+            preg_match('/`SUGARCRUSH_SESSION_RETENTION_DAYS` \| `(\d+)` — retention is/', $env, $off),
+            'the unset-default cell no longer states the off value',
+        );
+        self::assertSame(0, (int) $off[1], 'the row still says 0 means off — if the default moved, so did this claim\'s referent');
+    }
+
+    /**
+     * E686 tranche-8 (AM): ENVIRONMENT's per-var rows for the two HTTP bounds
+     * and ARCHITECTURE's parenthetical restatement of the parallel deadline.
+     * 15.0/0.001 belong to HttpClientDefaults (arm A only ever pinned the SRC
+     * sentences), and the 90 on both doc pages must equal Runtime's constant.
+     */
+    public function testEnvironmentTimeoutRowsQuoteTheirOwnConstants(): void
+    {
+        $env = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md'));
+        $arch = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/`SUGARCRUSH_CONNECT_TIMEOUT` \| `([\d.]+)` seconds/', $env, $connect),
+            'the connect-timeout row no longer leads with its default seconds figure',
+        );
+        self::assertSame(
+            (float) (new \ReflectionClassConstant('SugarCraft\Crush\Providers\Concerns\HttpClientDefaults', 'CONNECT_TIMEOUT_SECONDS'))->getValue(),
+            (float) $connect[1],
+            'the row still defaults to this many seconds — live CONNECT_TIMEOUT_SECONDS moved',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/anything below `([\d.]+)`, fall back to the default/', $env, $floor),
+            'the fractional-floor sentence moved — the floor it names guards MIN_CONNECT_TIMEOUT_SECONDS',
+        );
+        self::assertSame(
+            (float) (new \ReflectionClassConstant('SugarCraft\Crush\Providers\Concerns\HttpClientDefaults', 'MIN_CONNECT_TIMEOUT_SECONDS'))->getValue(),
+            (float) $floor[1],
+            'the row\'s floor is no longer MIN_CONNECT_TIMEOUT_SECONDS',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/`SUGARCRUSH_PARALLEL_TOOL_DEADLINE` \| `(\d+)` seconds/', $env, $deadlineRow),
+            'the parallel-deadline row no longer states its default in seconds',
+        );
+        self::assertSame(
+            1,
+            preg_match('/`SUGARCRUSH_PARALLEL_TOOL_DEADLINE` \((\d+)s\)/', $arch, $deadlineArch),
+            'the parallel-dispatch paragraph no longer restates the deadline in parentheses',
+        );
+        $live = (int) (new \ReflectionClassConstant(Runtime::class, 'PARALLEL_TOOL_DEADLINE_SECONDS'))->getValue();
+        self::assertSame($live, (int) $deadlineRow[1], 'the ENVIRONMENT row\'s deadline drifted from Runtime::PARALLEL_TOOL_DEADLINE_SECONDS');
+        self::assertSame($live, (int) $deadlineArch[1], 'the ARCHITECTURE restatement drifted from the constant the env row also quotes — cross-page family (arm S idiom)');
+        self::assertStringContainsString("'parallelToolDeadlineSeconds'", self::sourceOf('Backend/EngineBackend.php'), 'the config-key fallback the row promises is no longer read at launch');
+    }
+
+    /**
+     * E686 tranche-8 (AN): three ENVIRONMENT roster sentences. The deprecated
+     * aliases table counts itself against the two legacy names src still
+     * pairs; the permission-mode cell enumerates exactly the live enum values;
+     * and the DEBUG_COMMANDS row's "five ... the two ... the per-file ... and
+     * the control-plane" decomposition is re-counted from CommandLoader's own
+     * report sites.
+     */
+    public function testEnvironmentAliasAndModeListsDivideTheirRosters(): void
+    {
+        $envRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md');
+        $env = self::markdownProse($envRaw);
+        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
+
+        self::assertSame(1, preg_match('/for the (\w+) that briefly differed/', $env, $pair1), 'the app-variables preamble no longer previews the alias count');
+        self::assertSame(1, preg_match('/^(\w+) app variables originally carried an underscore/m', $envRaw, $pair2), 'the aliases section no longer opens with its own count');
+        preg_match_all('/^\| `(SUGAR_CRUSH_[A-Z_]+)` \| `(SUGARCRUSH_[A-Z_]+)` \|/m', $envRaw, $table, \PREG_SET_ORDER);
+        self::assertCount($words[$pair1[1]] ?? -1, $table, 'the spelled "briefly differed" count no longer matches the table — flip word and rows together');
+        self::assertSame($words[$pair1[1]] ?? -1, $words[strtolower($pair2[1])] ?? -2, 'the preamble and the section header state different alias counts');
+        self::assertCount(2, $table, 'the alias table grew — this arm\'s word maps cover it, but the src pairing scan below must gain the pair too');
+        foreach ($table as $row) {
+            self::assertSame('SUGAR' . substr($row[1], \strlen('SUGAR_')), $row[2], 'the canonical column is no longer the legacy name with CRUSH_ folded out');
+        }
+
+        $legacy = [];
+        foreach (self::srcTexts() as $text) {
+            preg_match_all("/'(SUGAR_CRUSH_[A-Z_]+)'/", $text, $hits);
+            $legacy = array_merge($legacy, $hits[1]);
+        }
+        $legacy = array_values(array_unique($legacy));
+        self::assertEqualsCanonicalizing(array_column($table, 1), $legacy, 'src\'s legacy SUGAR_CRUSH_* spellings and the table\'s deprecated column drifted apart');
+        foreach ($table as $row) {
+            self::assertNotEmpty(self::srcOccurrences("'{$row[2]}', '{$row[1]}'"), "src no longer reads {$row[1]} as a fallback beside {$row[2]} — the alias stopped working or moved shape");
+        }
+
+        self::assertSame(
+            1,
+            preg_match('/The launch\'s permission mode: (.+?)\. Same vocabulary/', $env, $modes),
+            'the permission row no longer enumerates the mode vocabulary inline',
+        );
+        preg_match_all('/`([a-z-]+)`/', $modes[1], $listed);
+        $live = array_map(static fn (PermissionMode $mode): string => $mode->value, PermissionMode::cases());
+        self::assertEqualsCanonicalizing($live, $listed[1], 'the permission row\'s vocabulary is no longer exactly PermissionMode::cases()');
+
+        self::assertSame(
+            1,
+            preg_match('/`CommandLoader`\'s (\w+) refusal lines back on stderr: the (\w+) tier-directory refusals, the per-file containment skip, the per-file parse failure, and the control-plane name refusal/', $env, $refusals),
+            'the DEBUG_COMMANDS row no longer decomposes its five refusals in one breath',
+        );
+        $loader = self::sourceOf('Commands/CommandLoader.php');
+        $reported = substr_count($loader, '$this->report(');
+        self::assertSame($words[$refusals[1]] ?? -1, $reported, 'the row\'s spelled total no longer counts CommandLoader\'s report() sites');
+        $perFile = substr_count($loader, '$this->skippedFiles[');
+        self::assertSame(2, $perFile, 'the two per-file refusals are no longer the two skippedFiles sinks — recount the decomposition');
+        self::assertSame(2, substr_count($loader, '$this->refusedDirectories['), 'the tier-directory half is no longer the two refusedDirectories sinks');
+        self::assertSame($words[$refusals[2]] ?? -2, substr_count($loader, '$this->refusedDirectories['), 'the row\'s spelled tier-directory count no longer matches the refusedDirectories sinks');
+        self::assertSame(
+            1,
+            preg_match('/(\w+) of the five are paired with a collector.*?other (\w+) are per-file/s', $env, $splitDoc),
+            'the collector/per-file split sentence moved — its numbers ride the same five sites',
+        );
+        self::assertSame($reported - $perFile, $words[strtolower($splitDoc[1])] ?? -3, 'the drained trio is no longer report sites minus per-file sites');
+        self::assertSame($perFile, $words[strtolower($splitDoc[2])] ?? -2, 'the "other N are per-file" count drifted from the skippedFiles sinks');
+        self::assertStringContainsString('Three of the five', $loader, 'the class docblock\'s own "three of the five" agreement with the row is gone');
+    }
+
+    /**
+     * E686 tranche-8 (AO): ENVIRONMENT's provider row restates the repo's own
+     * shipped dev fixture — name, URL, model, no-auth, effort vocabulary and
+     * templateKwargs policy — every one of them readable from
+     * .sugar-crush/config.dev.json and SglangProvider's sanitizer constants.
+     */
+    public function testEnvironmentDevSglangRowMatchesTheShippedConfigFile(): void
+    {
+        $env = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md'));
+        $config = json_decode((string) file_get_contents(\dirname(__DIR__, 2) . '/.sugar-crush/config.dev.json'), true, 512, \JSON_THROW_ON_ERROR);
+
+        self::assertSame(
+            1,
+            preg_match('/declared in a project `\.sugar-crush\/config\.dev\.json` \(the repo ships `([^`]+)`\)\. That block points at `([^`]+)` serving `([^`]+)` with no auth/', $env, $row),
+            'the row no longer names the shipped provider, its URL and its model in one breath',
+        );
+        $name = $row[1];
+        self::assertSame('sglang', $config['providers'][$name]['type'] ?? null, "the row's block {$name} is no longer an sglang provider in the shipped file");
+        self::assertSame($row[2], $config['providers'][$name]['baseUrl'] ?? null, 'ENVIRONMENT restates a baseUrl the shipped config.dev.json no longer holds');
+        self::assertSame($row[3], $config['providers'][$name]['model'] ?? null, 'ENVIRONMENT restates a served model the shipped config.dev.json no longer names');
+        self::assertArrayHasKey('apiKey', $config['providers'][$name], 'the row still says "with no auth" — the shipped file dropped the explicit null the no-auth reading rests on');
+        self::assertNull($config['providers'][$name]['apiKey'], 'the row still says "with no auth" — the shipped file gained a key');
+        self::assertSame($name, $config['defaultProvider'] ?? null, 'the row presents this block as the repo\'s shipped default provider — defaultProvider moved');
+
+        self::assertSame(
+            1,
+            preg_match('/sanitized per request into the template\'s exact vocabulary — `xhigh` \(default\), `medium`, `low`, nothing else/', $env),
+            'the effort-vocabulary sentence moved — it ties the page to the sanitizer\'s accepted set and default',
+        );
+        $templateEfforts = (new \ReflectionClassConstant(SglangProvider::class, 'QWEN3_NEXT_TEMPLATE_EFFORTS'))->getValue();
+        self::assertEqualsCanonicalizing(['xhigh', 'medium', 'low'], $templateEfforts, 'the template vocabulary the page spells is no longer the sanitizer\'s accepted set');
+        $shippedEffort = $config['providers'][$name]['reasoningEffort'] ?? null;
+        self::assertSame(
+            (new \ReflectionClassConstant(SglangProvider::class, 'QWEN3_NEXT_REASONING_EFFORT'))->getValue(),
+            $shippedEffort,
+            'the row calls xhigh the default on both sides — shipped file and sanitizer constant no longer agree',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/shipped policy is `\{"preserve_thinking": (true|false)\}`/', $env, $policy),
+            'the preserve_thinking sentence lost its figure — it restates the shipped templateKwargs verbatim',
+        );
+        self::assertSame($policy[1] === 'true', ($config['providers'][$name]['templateKwargs']['preserve_thinking'] ?? null), 'the page\'s shipped policy is no longer the shipped file\'s');
+    }
+
+    /**
+     * E686 tranche-8 (AP): the eleven-slot system-prompt list. The live method
+     * appends conditionally ("a session that qualifies none of the optional
+     * ones assembles fewer" — the page itself refuses to pin 11 to a runtime
+     * count), so what IS pinned is the list's own arithmetic — spelled word,
+     * item count, sequential ordinals — plus every named layer still existing.
+     */
+    public function testArchitectureSystemPromptSlotsCountTheirOwnList(): void
+    {
+        $archRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md');
+        $start = strpos($archRaw, '### The system prompt, in assembly order');
+        self::assertIsInt($start, 'the assembly-order heading moved — the eleven-slot paragraph lost its home');
+        $end = strpos($archRaw, 'Item 10 is what makes', $start);
+        self::assertIsInt($end, 'the follow-up paragraphs moved — the ordinals they cite stop being checkable');
+        $segment = substr($archRaw, $start, $end - $start);
+
+        self::assertSame(1, preg_match('/sections — (\w+) slots/', $segment, $word), 'the paragraph no longer spells its slot count beside the word "slots"');
+        $words = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        self::assertArrayHasKey($word[1], $words, "the spelled slot count '{$word[1]}' is outside the pinned word map — extend it deliberately");
+
+        preg_match_all('/^(\d+)\. /m', $segment, $ordinals);
+        self::assertSame(range(1, $words[$word[1]]), $ordinals[1] === [] ? [] : array_map('intval', $ordinals[1]), 'the numbered list is no longer exactly 1..N with N the spelled slot count');
+        self::assertSame(1, preg_match('/^11\. `EnvironmentBlock` LAST/m', $segment), 'item eleven is no longer EnvironmentBlock LAST — the volatility-last ordering claim rots with it');
+
+        $layers = [
+            'SugarCraft\Crush\Context\Sections\MaximsSection',
+            'SugarCraft\Crush\Context\RepoMapBlock',
+            'SugarCraft\Crush\Context\RuleLoader',
+            'SugarCraft\Crush\Context\MemoryBlock',
+            'SugarCraft\Crush\Context\EnvironmentBlock',
+            'SugarCraft\Crush\Skills\SkillMatcher',
+            'SugarCraft\Crush\Tools\BuiltIn\SkillTool',
+        ];
+        foreach ($layers as $layer) {
+            self::assertTrue(class_exists($layer), "a layer the assembly list names by symbol ({$layer}) no longer exists");
+        }
+        self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'item 10 cites SkillMatcher::listForPrompt() which is gone');
+        self::assertTrue(method_exists(Runtime::class, 'basePrompt'), 'item 1 is the base instructions — Runtime::basePrompt() is gone');
+    }
+
+    /**
+     * E686 tranche-8 (AR): three ARCHITECTURE engine/TUI digits the earlier
+     * arms left standing free of doc-page pins — the 64 MiB frame cap, the
+     * 100 ms reap window, and the 80-column split threshold — plus the split
+     * doc-block's own division arithmetic (its 26/53 are quoted from the
+     * constants in that same comment).
+     */
+    public function testArchitectureEngineAndSplitDigitsSurviveTheirConstants(): void
+    {
+        $arch = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ARCHITECTURE.md'));
+
+        self::assertSame(1, preg_match('/A frame is capped at (\d+) MiB/', $arch, $frame), 'the frame-cap bullet no longer states its MiB figure');
+        $frameCap = (int) (new \ReflectionClassConstant(EngineBackend::class, 'MAX_FRAME_BYTES'))->getValue();
+        self::assertSame((int) $frame[1] * 1024 * 1024, $frameCap, 'the page still caps a frame at this many MiB — live MAX_FRAME_BYTES moved');
+        self::assertSame(
+            $frameCap,
+            (int) (new \ReflectionClassConstant('SugarCraft\Crush\MCP\StdioMcpServer', 'MAX_FRAME_BYTES'))->getValue(),
+            'StdioMcpServer no longer derives the same ceiling EngineBackend owns — the family the docblock promises split',
+        );
+
+        self::assertSame(1, preg_match('/bounded (\d+) ms `WNOHANG` poll/', $arch, $reap), 'the reap bullet no longer states its millisecond budget');
+        $attempts = (int) (new \ReflectionClassConstant(Runtime::class, 'REAP_ATTEMPTS'))->getValue();
+        $micros = (int) (new \ReflectionClassConstant(Runtime::class, 'REAP_POLL_MICROSECONDS'))->getValue();
+        self::assertSame((int) $reap[1], intdiv($attempts * $micros, 1000), 'the stated WNOHANG ceiling is no longer Runtime REAP_ATTEMPTS × REAP_POLL_MICROSECONDS');
+
+        self::assertSame(1, preg_match('/the terminal is at least (\d+)\s+columns/', $arch, $split), 'the split sentence no longer states its minimum width');
+        $renderer = new \ReflectionClass('SugarCraft\Crush\Tui\Renderer');
+        self::assertSame((int) $split[1], (int) $renderer->getConstant('SPLIT_MIN_TOTAL_COLS'), 'the documented split threshold drifted from SPLIT_MIN_TOTAL_COLS');
+        $tui = self::sourceOf('Tui/Renderer.php');
+        self::assertSame(
+            1,
+            preg_match('/intdiv\(80, 3\) = (\d+)` for the agent column.*?80 - (\d+) - 1 = (\d+)/s', $tui, $math),
+            'the split doc-block no longer works its own division arithmetic — the 80 inside it is a second quote of the constant',
+        );
+        self::assertSame(80, (int) $renderer->getConstant('SPLIT_MIN_TOTAL_COLS'), 'the doc-block still computes with a literal 80 while the constant is something else');
+        self::assertSame(intdiv(80, 3), (int) $math[1], 'the doc-block quotient is no longer intdiv(80, 3)');
+        self::assertSame((int) $math[1], (int) $math[2], 'the subtraction repeats a different agent-column width than the division above it');
+        self::assertSame(80 - (int) $math[1] - 1, (int) $math[3], 'the shell band is no longer total minus agent minus one gutter');
+        self::assertGreaterThanOrEqual((int) $renderer->getConstant('SPLIT_MIN_AGENT_COLS'), (int) $math[1], 'the agent column fell under SPLIT_MIN_AGENT_COLS — the doc-block asserts the split fits at 80 and it no longer does');
+        self::assertGreaterThanOrEqual((int) $renderer->getConstant('SPLIT_MIN_BAND_COLS'), (int) $math[3], 'the band fell under SPLIT_MIN_BAND_COLS — same premise, other side');
     }
 
     /**
