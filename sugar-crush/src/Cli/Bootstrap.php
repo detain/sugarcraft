@@ -6368,18 +6368,21 @@ final class Bootstrap
             // dormant-but-reachable tool is shipped instead of an unreachable
             // finished subsystem.
             self::lspTool($root, $lsp),
-            // APPENDED, so the eleven built-ins keep the wire order the model has
+            // APPENDED, so the built-ins keep the wire order the model has
             // learned and an MCP config can only ever ADD names. Empty unless
             // this project ships a `.mcp.json` AND the user trusted this root —
             // see {@see mcpTools()} and {@see mcpClient()}.
             //
-            // The doc-block above deliberately says ELEVEN, not "eleven plus
-            // whatever this call returned": that count is the BUILT-IN set, which
-            // is what `README.md`'s figure and `BinSugarcrushWiringTest`'s scanned
-            // assertion are both about. What this array returns is that set PLUS
-            // whatever the project's MCP servers advertise, which is a per-project
-            // number nothing in `src/` can know. It said TEN until `LspTool` was
-            // wired above; if you add a twelfth, this number, the README figure
+            // This array wires the ELEVEN STATIC built-in positions; the
+            // BUILT-IN set — which is what `README.md`'s figure and
+            // `BinSugarcrushWiringTest`'s scanned assertion are both about —
+            // counts TWELVE since TaskTool (E675) joined it OUTSIDE this
+            // literal, appended to the filtered tool list only when an
+            // AgentManager is bound. What this array returns is its static set
+            // PLUS whatever the project's MCP servers advertise, which is a
+            // per-project number nothing in `src/` can know. The static wiring
+            // said TEN until `LspTool` was added above; if you grow the
+            // built-in set to a thirteenth, the count here, the README figure
             // and `BuiltInToolCorpusTest`'s wired-count assertion all move
             // together.
             ...self::mcpTools($root),
@@ -6543,14 +6546,18 @@ final class Bootstrap
      * a value you can see when you read the file". That is false, and it is
      * false because {@see PermissionRule::matchesToolName()} is bare
      * `fnmatch()`: measured end-to-end, a project-tier
-     * `{"disabledTools": ["[!B]*"]}` leaves exactly `Bash` out of eleven.
+     * `{"disabledTools": ["[!B]*"]}` leaves exactly `Bash` out of the eleven
+     * then wired — and still exactly `Bash` out of the twelve wired since
+     * TaskTool (E675): `Task` starts with `T`, so every shape below matches it.
      *
      * THE RESTRICTION THE BACKLOG PROPOSED WAS NOT TAKEN, and the measurement
      * says why. "Refuse negated character classes at the project tier" closes
      * the `[!B]*` spelling and nothing else: `["[C-Z]*", "[a-z]*"]` contains no
      * negation, is one character longer per glob, and also leaves only `Bash`.
      * MEASURED end-to-end on PHP 8.3.6, 2026-08-22, against the eleven-tool
-     * ceiling this file builds — both values leave exactly `Bash`; PHP 8.4 was
+     * ceiling this file built then — both values leave exactly `Bash`, and
+     * still do against today's twelve (`Task`'s initial `T` matches both
+     * globs); PHP 8.4 was
      * NOT exercised, because this box has only 8.3.6 while CI runs both.
      * Shipping that restriction would have replaced a false claim about the
      * dialect with a false claim about the fix. Restricting the tier to LITERAL
