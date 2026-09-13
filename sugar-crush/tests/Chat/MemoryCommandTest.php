@@ -389,6 +389,156 @@ final class MemoryCommandTest extends TestCase
         $this->assertStringContainsString('not found', $next->history[count($next->history) - 1]->content);
     }
 
+    // ---- E694 slice-A: store-aware list/search, loud project-clear refusal ----
+
+    public function testListGroupsRepoAndHomeProjectNotesUnderStoreBanners(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('repo note for grouping');
+        $homeId = $this->memoryStore->add('home note for grouping', 'project');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString('**Memories (project):**', $content);
+        $this->assertStringContainsString('*In this repository (`' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '`):*', $content);
+        $this->assertStringContainsString('*In your home store:*', $content);
+        $this->assertLessThan(
+            strpos($content, $homeId),
+            strpos($content, $repoId),
+            'the repo section must lead — the same fold order capture() and memoryLocate claim',
+        );
+        // Row bytes are the pre-grouping shape, unchanged.
+        $this->assertStringContainsString("- **[pattern]** `{$repoId}`\n  repo note for grouping", $content);
+        $this->assertStringContainsString("- **[pattern]** `{$homeId}`\n  home note for grouping", $content);
+    }
+
+    public function testListProjectWithEmptyHomeShowsOnlyTheRepoSection(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('sole repo note');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString($repoId, $content);
+        $this->assertStringContainsString('In this repository', $content);
+        $this->assertStringNotContainsString('In your home store', $content, 'an empty home section must not be announced');
+    }
+
+    public function testListIsByteStableWhenTheRepoStoreContributesNothing(): void
+    {
+        $this->memoryStore->add('plain project note', 'project');
+
+        [$noRepoDir, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        // The repo corner exists but holds no notes: same answer, byte for byte.
+        mkdir($this->tempDir . '/' . ProjectMemoryWriter::RELATIVE_DIRECTORY, 0700, true);
+
+        [$emptyRepoDir, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(
+            $noRepoDir->history[1]->content,
+            $emptyRepoDir->history[1]->content,
+            'a repo store with nothing to show must not reshape the home listing',
+        );
+        $this->assertStringNotContainsString('In this repository', $noRepoDir->history[1]->content);
+    }
+
+    public function testSearchGroupsHitsFromBothStores(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('needle resting in the repo');
+        $homeId = $this->memoryStore->add('a needle at home', 'user');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory search needle',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString('**Search results for `needle` (2 matches):**', $content);
+        $this->assertStringContainsString('In this repository', $content);
+        $this->assertStringContainsString('In your home store', $content);
+        $this->assertLessThan(strpos($content, $homeId), strpos($content, $repoId), 'repo hits lead the grouped answer');
+        $this->assertStringContainsString('(scope: project)', $content);
+        $this->assertStringContainsString('(scope: user)', $content);
+    }
+
+    public function testClearProjectRefusedLoudlyWhileRepoHoldsNotesAndNothingDies(): void
+    {
+        $writer = ProjectMemoryWriter::createForRoot($this->tempDir);
+        $this->assertNotNull($writer);
+        $repoId = $writer->write('repo note that must survive a bulk clear');
+        $this->memoryStore->add('home project note that must also survive', 'project');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory clear --scope project --confirm',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString('Not cleared', $content);
+        $this->assertStringContainsString(ProjectMemoryWriter::RELATIVE_DIRECTORY, $content);
+        $this->assertStringNotContainsString('All memories cleared', $content);
+        $this->assertNotNull($writer->store()->get($repoId), 'the refusal must not wipe a single repo note');
+        $this->assertCount(1, $this->memoryStore->list('project'), 'nor may it half-wipe the home store behind the refusal');
+    }
+
+    public function testClearProjectStaysHomeOnlyAndByteIdenticalWhenRepoHoldsNothing(): void
+    {
+        $this->assertNotNull(ProjectMemoryWriter::createForRoot($this->tempDir));
+        $this->memoryStore->add('doomed home note', 'project');
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory clear --scope project --confirm',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame(
+            'All memories cleared for scope `project`.',
+            $next->history[count($next->history) - 1]->content,
+            'the home clear wording must ride through the store-aware slice byte-identical',
+        );
+        $this->assertSame([], $this->memoryStore->list('project'));
+    }
+
     public function testMemoryClearRequiresConfirm(): void
     {
         $this->memoryStore->add('Memory 1', 'project');

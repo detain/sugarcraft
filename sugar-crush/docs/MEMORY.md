@@ -84,7 +84,12 @@ also have a repo-local home: `ProjectMemoryWriter` (`src/Context/ProjectMemoryWr
 persists `/memory add --scope project` into `<repo>/.sugar-crush/memory/` when the
 tree can host one — git-visible, reviewable, like `AGENTS.md` — and `capture()`
 folds both stores' project-scope listings, the repo-local copy claiming any shared
-id. A root that is empty, missing, or whose `.sugar-crush` resolves outside the
+id. Since r75 `/memory delete` and `/memory edit` claim the same precedence — an id
+resolves in the repo store first, so the entry the prompt shows is the entry the
+command removes. `/memory list` and `/memory search` read both stores and group their
+rows under a banner naming the store each row lives in; bulk clear remains a home-store
+command and REFUSES, touching nothing, while the repo store holds project notes (E694).
+A root that is empty, missing, or whose `.sugar-crush` resolves outside the
 tree degrades the write to the home store and contributes nothing to the read. **User-scope and agent-scope
 entries never reach the prompt**
 (`MemoryPromptWiringTest::testAUserScopeNoteDoesNotReachThePrompt`,

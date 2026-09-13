@@ -11619,18 +11619,36 @@ final class Chat implements Model
         }
 
         try {
+            // E694 slice-A: project notes can live in EITHER store since E25p2,
+            // so the listing reads both, grouped and store-named — an id does
+            // not say which tree holds the file. The repo store is consulted
+            // only for the scope that can host repo notes, and when it has
+            // nothing to show the pre-grouping home-only bytes come back
+            // verbatim (the same degradation memoryLocate promises per id).
+            $repoEntries = $scope === 'project'
+                ? (ProjectMemoryWriter::forRoot($this->projectRoot())?->store()->list($scope) ?? [])
+                : [];
             $entries = $this->memoryStore->list($scope);
-            if ($entries === []) {
-                $response = "No memories found for scope `{$scope}`.";
+            if ($repoEntries === []) {
+                if ($entries === []) {
+                    $response = "No memories found for scope `{$scope}`.";
+                } else {
+                    $lines = ["**Memories ({$scope}):**", ''];
+                    foreach ($entries as $entry) {
+                        $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: false)];
+                    }
+                    $response = implode("\n", $lines);
+                }
             } else {
-                $lines = ["**Memories ({$scope}):**", ''];
-                foreach ($entries as $entry) {
-                    $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
-                    $preview = mb_strlen($entry->content()) > 80
-                        ? mb_substr($entry->content(), 0, 80) . '…'
-                        : $entry->content();
-                    $lines[] = '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $tags;
-                    $lines[] = '  ' . $preview;
+                $lines = ["**Memories ({$scope}):**", '', $this->memoryStoreBanner(isRepo: true)];
+                foreach ($repoEntries as $entry) {
+                    $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: false)];
+                }
+                if ($entries !== []) {
+                    $lines = [...$lines, '', $this->memoryStoreBanner(isRepo: false)];
+                    foreach ($entries as $entry) {
+                        $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: false)];
+                    }
                 }
                 $response = implode("\n", $lines);
             }
@@ -11653,18 +11671,30 @@ final class Chat implements Model
         }
 
         try {
+            // E694 slice-A: repo notes are searchable too. Same byte-stability
+            // rule as memoryList() — the grouped banners join the answer only
+            // when the repo store actually contributes a hit.
+            $repoEntries = ProjectMemoryWriter::forRoot($this->projectRoot())?->store()->search($query) ?? [];
             $entries = $this->memoryStore->search($query);
-            if ($entries === []) {
+            $total = count($repoEntries) + count($entries);
+            if ($total === 0) {
                 $response = "No memories found matching `{$query}`.";
-            } else {
-                $lines = ["**Search results for `{$query}` ({$this->pluralize(count($entries), 'match')}):**", ''];
+            } elseif ($repoEntries === []) {
+                $lines = ["**Search results for `{$query}` ({$this->pluralize($total, 'match')}):**", ''];
                 foreach ($entries as $entry) {
-                    $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
-                    $preview = mb_strlen($entry->content()) > 80
-                        ? mb_substr($entry->content(), 0, 80) . '…'
-                        : $entry->content();
-                    $lines[] = '- **[' . $entry->type() . ']** `' . $entry->id() . '` (scope: ' . $entry->scope() . ')' . $tags;
-                    $lines[] = '  ' . $preview;
+                    $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: true)];
+                }
+                $response = implode("\n", $lines);
+            } else {
+                $lines = ["**Search results for `{$query}` ({$this->pluralize($total, 'match')}):**", '', $this->memoryStoreBanner(isRepo: true)];
+                foreach ($repoEntries as $entry) {
+                    $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: true)];
+                }
+                if ($entries !== []) {
+                    $lines = [...$lines, '', $this->memoryStoreBanner(isRepo: false)];
+                    foreach ($entries as $entry) {
+                        $lines = [...$lines, ...$this->memoryEntryRows($entry, withScope: true)];
+                    }
                 }
                 $response = implode("\n", $lines);
             }
@@ -11690,7 +11720,14 @@ final class Chat implements Model
      * `''`-root, read-only tree, symlink escape — every {@see ProjectMemoryWriter::forRoot()}
      * refusal) degrades to the home-only behaviour that predates E25p2.
      *
-     * @return array{0: ?\SugarCraft\Crush\Memory\MemoryEntry, 1: MemoryStore} the entry (null when in neither store) and its owner
+     * @return array{0: ?\SugarCraft\Crush\Memory\MemoryEntry, 1: MemoryStore} the resolved
+     *         pair: [0] the located entry, or NULL when the id lives in neither store;
+     *         [1] the OWNING store — the one whose delete()/update() mutates the file
+     *         behind the entry the operator saw. No-owner sentinel: when [0] is null the
+     *         tuple is always [null, $this->memoryStore] — the HOME store rides back as a
+     *         placeholder so the shape stays a pair, and callers MUST branch on element 0
+     *         before touching the returned store (mutating the sentinel would aim at the
+     *         wrong tree).
      */
     private function memoryLocate(string $id): array
     {
@@ -11703,6 +11740,43 @@ final class Chat implements Model
         }
 
         return [$this->memoryStore->get($id), $this->memoryStore];
+    }
+
+    /**
+     * The two display lines one entry claims in a list/search answer — the
+     * exact row shape both commands shipped before store grouping. Search has
+     * always named the scope inside the row; list never has, so $withScope is
+     * the only dial the grouping needed.
+     *
+     * @return list<string>
+     */
+    private function memoryEntryRows(\SugarCraft\Crush\Memory\MemoryEntry $entry, bool $withScope): array
+    {
+        $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
+        $preview = mb_strlen($entry->content()) > 80
+            ? mb_substr($entry->content(), 0, 80) . '…'
+            : $entry->content();
+        $scope = $withScope ? ' (scope: ' . $entry->scope() . ')' : '';
+
+        return [
+            '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $scope . $tags,
+            '  ' . $preview,
+        ];
+    }
+
+    /**
+     * Section header naming the store the rows beneath it live in (E694
+     * slice-A) — an id does not say which tree holds its file, so the group
+     * says it. The repo banner spells the path through
+     * {@see ProjectMemoryWriter::RELATIVE_DIRECTORY}: the dot-path literal
+     * stays in exactly one source file, which is what the containment
+     * inventories enumerate.
+     */
+    private function memoryStoreBanner(bool $isRepo): string
+    {
+        return $isRepo
+            ? '*In this repository (`' . ProjectMemoryWriter::RELATIVE_DIRECTORY . '`):*'
+            : '*In your home store:*';
     }
 
     /**
@@ -11747,6 +11821,28 @@ final class Chat implements Model
         }
 
         $scope = $m[1];
+
+        // E694 ruling (round-76): bulk clear NEVER touches the repo store.
+        // When the tree holds repo-local project notes, a `--scope project`
+        // clear would wipe only the home half of "project memory" — exactly
+        // the silent partial wipe of possibly-committed files the ruling
+        // forbids. The refusal is unconditional (no escape flag exists);
+        // per-id delete is the door. With the repo store empty there is
+        // nothing to half-wipe and the pre-E25p2 home clear stands.
+        if ($scope === 'project') {
+            $repoNotes = ProjectMemoryWriter::forRoot($this->projectRoot())?->store()->list('project') ?? [];
+            if ($repoNotes !== []) {
+                return $this->memoryResponse(
+                    $inputText,
+                    '**Not cleared:** bulk clear never reaches the repository — this tree '
+                    . 'holds project-scope notes under `' . ProjectMemoryWriter::RELATIVE_DIRECTORY
+                    . '` that only the per-id commands touch. Clearing the home half alone '
+                    . 'would silently leave "project memory" half-wiped, so nothing moved. '
+                    . 'Remove repo notes by id with `/memory delete <id>` (list them with '
+                    . '`/memory list project`).'
+                );
+            }
+        }
 
         try {
             $this->memoryStore->clear($scope);

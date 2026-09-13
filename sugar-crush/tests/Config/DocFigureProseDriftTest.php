@@ -4010,6 +4010,68 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * E694 slice-A (AQ): MEMORY.md's store-ops sentences must keep reading the
+     * Chat arms they state. Every referent is derived LIVE from the Chat.php
+     * bodies — no hand-typed roster beside the prose (the gg2 MAJOR's failure
+     * mode): precedence is the forRoot-before-home-get order inside
+     * memoryLocate's span; delete/edit route THROUGH memoryLocate; list/search
+     * consult the repo resolver and group under the shared banner builder;
+     * clear keeps EXACTLY ONE store-mutating call (the home one) behind a
+     * refusal that carries no '--force'-shaped escape — the r76 ruling's
+     * "unconditional" in code shape.
+     */
+    public function testMemoryStoreOpsSentenceReadsTheChatArmsItStates(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+        self::assertSame(
+            1,
+            preg_match('/Since r75 `\/memory delete` and `\/memory edit` claim the same precedence — an id resolves in the repo store first, so the entry the prompt shows is the entry the command removes/u', $doc),
+            'the store-precedence sentence left MEMORY.md — this arm and the doc-debt sentence land or revert together',
+        );
+        self::assertSame(
+            1,
+            preg_match('/read both stores and group their rows under a banner naming the store each row lives in/u', $doc),
+            'the grouped-listing sentence left its pinned shape',
+        );
+        self::assertSame(
+            1,
+            preg_match('/bulk clear remains a home-store command and REFUSES, touching nothing, while the repo store holds project notes/u', $doc),
+            'the bulk-clear refusal sentence left its pinned shape',
+        );
+
+        $chatText = self::sourceOf('Chat.php');
+        $locate = self::bodyExcerpt($chatText, 'memoryLocate');
+        $repoAt = strpos($locate, 'forRoot');
+        $homeAt = strpos($locate, '$this->memoryStore->get($id)');
+        self::assertNotFalse($repoAt, 'memoryLocate no longer consults the repo resolver — the "resolves in the repo store first" clause lost its code home');
+        self::assertNotFalse($homeAt, 'memoryLocate no longer reads the home store — the precedence sentence names a two-store walk');
+        self::assertLessThan($homeAt, $repoAt, 'memoryLocate flipped to home-first — the page and the fold law both say repo-first');
+
+        foreach (['memoryDelete', 'memoryEdit'] as $arm) {
+            self::assertStringContainsString(
+                'memoryLocate(',
+                self::bodyExcerpt($chatText, $arm),
+                sprintf('the page says the per-id commands claim the shared precedence, yet %s() stopped routing through memoryLocate', $arm),
+            );
+        }
+        foreach (['memoryList', 'memorySearch'] as $arm) {
+            $body = self::bodyExcerpt($chatText, $arm);
+            self::assertStringContainsString('forRoot', $body, sprintf('the page says list and search read both stores, yet %s() stopped consulting the repo resolver', $arm));
+            self::assertStringContainsString('memoryStoreBanner(', $body, sprintf('%s() no longer groups rows under the store banners the page names', $arm));
+        }
+
+        $clear = self::bodyExcerpt($chatText, 'memoryClear');
+        self::assertStringContainsString('forRoot', $clear, 'memoryClear no longer probes the repo store — the refusal the page promises has no code home');
+        self::assertStringContainsString('Not cleared', $clear, 'the refusal wording left the arm — the page still promises a loud, total refusal');
+        self::assertSame(
+            1,
+            substr_count($clear, '->clear('),
+            'memoryClear grew a second clear() call site — the page promises bulk clear touches ONLY the home store',
+        );
+        self::assertStringNotContainsString('--force', $clear, 'a force-shaped escape hatch appeared — the r76 ruling records the project-clear refusal as unconditional');
+    }
+
+    /**
      * E686 tranche-10 (BD): MEMORY.md's three-bounds table and the marker
      * arithmetic hanging off it. The rows are matched by the live class's own
      * public MAX_* names — no hand-typed roster — and the "exactly 512 bytes,
