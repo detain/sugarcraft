@@ -4482,6 +4482,33 @@ final class DocFigureProseDriftTest extends TestCase
                 self::assertContains($entry, $seenExemptions[$page] ?? [], "the anchor exemption roster still licenses {$entry} on {$page} — the self-narrative it describes is gone; delete the row");
             }
         }
+
+        // r75-rv-ja MINOR-3: the forty-line method window was the one leg of
+        // this guard no planted mismatch had ever proven. A synthetic file
+        // (built here, committed nowhere) whose cited method is declared far
+        // outside the window must be refused, and the SAME anchor re-pointed
+        // inside it must resolve — the window discriminates, it does not wave
+        // every in-file number through.
+        $synthRoot = \sys_get_temp_dir() . '/ja2-anchors-' . \uniqid((string) \getmypid(), true);
+        mkdir($synthRoot, 0700);
+        file_put_contents(
+            $synthRoot . '/Widget.php',
+            "<?php\nclass Widget {\n" . implode('', array_fill(0, 57, "    // padding\n")) . "    public function late(): void\n    {\n    }\n}\n",
+        );
+        try {
+            $windowRejection = null;
+            try {
+                self::resolveBareAnchor($synthRoot, 'synthetic', 'Widget.php:2', '`Widget::late()` at line 2', 1);
+            } catch (\PHPUnit\Framework\ExpectationFailedException $failure) {
+                $windowRejection = $failure->getMessage();
+            }
+            self::assertIsString($windowRejection, 'the resolver stopped rejecting an anchor whose cited method sits outside the forty-line window — the window leg went blind');
+            self::assertStringContainsString('forty lines', (string) $windowRejection, 'the window rejection changed shape — update this planted leg along with it');
+            self::resolveBareAnchor($synthRoot, 'synthetic', 'Widget.php:58', '`Widget::late()` at line 58', 1);
+        } finally {
+            unlink($synthRoot . '/Widget.php');
+            rmdir($synthRoot);
+        }
     }
 
     /**
@@ -4636,7 +4663,19 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
-        self::assertCount($wordNumbers[$word[1]], $files, 'the page still counts this many built-in tools — src/Tools/BuiltIn/ moved (the ARCHITECTURE tree row counts the same directory in digit form)');
+        self::assertCount($wordNumbers[$word[1]], $files, 'the page still counts this many built-in tools — src/Tools/BuiltIn/ moved');
+
+        // r75-rv-ja MAJOR-1: this page flipped to twelve while ARCHITECTURE
+        // still spelled the stale eleven two paragraphs over from its own tree
+        // row (that row keeps its digit pin in tranche-2 H) — one directory,
+        // two contradicting pages. The agreement leg derives EACH page's
+        // spelled count from its own text and requires both to equal the
+        // scandir, so neither page can drift alone again.
+        $architecture = self::markdownProse((string) file_get_contents($root . '/docs/ARCHITECTURE.md'));
+        self::assertSame(1, preg_match('/holds \*\*(\w+)\*\* concrete `Tool` classes/', $architecture, $archWord), 'the ARCHITECTURE Tools sentence no longer spells its directory count beside the class list — re-anchor this agreement leg');
+        self::assertArrayHasKey($archWord[1], $wordNumbers, "the ARCHITECTURE spelled count '{$archWord[1]}' is outside the pinned word map — extend it deliberately");
+        self::assertSame($wordNumbers[$archWord[1]], count($files), 'ARCHITECTURE spelled a count the built-in directory no longer holds — flip the page and the census together');
+        self::assertSame($wordNumbers[$word[1]], $wordNumbers[$archWord[1]], 'AGENTS_AUTHORING and ARCHITECTURE count src/Tools/BuiltIn/ differently — the two pages drifted apart');
         self::assertContains('TaskTool.php', $files, 'the page says Task delegates — TaskTool.php is no longer in the built-in directory');
         self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\TaskTool'), 'TaskTool, the one delegate the page credits, no longer exists');
 

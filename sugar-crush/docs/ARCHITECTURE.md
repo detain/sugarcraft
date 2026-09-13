@@ -333,15 +333,16 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **eleven** concrete `Tool` classes: `Bash`,
-`Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `Read`, `SkillTool`, `WebFetch`,
-`WebSearch`, `Write`. `Bootstrap::tools()` lists all eleven and appends one
+`src/Tools/BuiltIn/` holds **twelve** concrete `Tool` classes: `Bash`,
+`Doctor`, `Edit`, `Glob`, `Grep`, `LspTool`, `Read`, `SkillTool`, `TaskTool`,
+`WebFetch`, `WebSearch`, `Write`. `Bootstrap::tools()` ships all twelve —
+`Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool.
 
-Domain matters here: **eleven is the count of *wired* tools, not of *usable*
+Domain matters here: **twelve is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable and answers every call with a "no language server
 configured" error, because nothing in `src/` reads a server command. A figure
-saying "eleven working tools" would be the wrong claim.
+saying "twelve working tools" would be the wrong claim.
 
 The array and the directory are two hand-maintained halves. They agree because a
 test globs the directory —
@@ -530,7 +531,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Eleven tools" means wired built-ins.
+4. **A count carries its domain.** "Twelve tools" means wired built-ins.
    "Twelve skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are
