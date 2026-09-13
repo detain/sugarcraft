@@ -65,6 +65,8 @@ use PHPUnit\Metadata\Parser\Registry;
  */
 final class RequirementDirectiveProvenanceTest extends TestCase
 {
+    use RunsWallClockBoundedChildTrait;
+
     /**
      * Tests that carry a requirement PHPUnit reads, each with the reason.
      *
@@ -83,27 +85,12 @@ final class RequirementDirectiveProvenanceTest extends TestCase
     /** The suffix `phpunit.xml`'s test suite collects. */
     private const COLLECTED_SUFFIX = 'Test.php';
 
-    /**
-     * THE WALL CLOCK FOR THE ONE REAL CHILD THIS FILE SPAWNS.
-     *
-     * The child below is a whole second `phpunit`. An unbounded one that hangs
-     * stalls this test until PHPUnit's own per-test alarm aborts it, which
-     * sheds the assertions and replaces a specific red with "aborted after N
-     * seconds" — the failure mode this suite has spent a round arguing about,
-     * reproduced here in the same round by a file that added a new spawn
-     * without a bound. So it is bounded, and the bound is named.
-     *
-     * Measured on this host, PHP 8.3.6 / PHPUnit 10.5.64: the child run costs
-     * 0.079s, so this is ~250x the thing it bounds. It stays well under
-     * `phpunit.xml`'s per-test limit for the reason
-     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapSkillSkipsTest} sets out
-     * and pins: a budget at or above that limit loses the race to PHPUnit's
-     * alarm, and the alarm's verdict is the generic one.
-     */
-    private const CHILD_WALL_CLOCK_BUDGET_SECONDS = 20;
-
-    /** What a shell reports when `timeout -s KILL` kills the child: 128 + SIGKILL. */
-    private const KILLED_BY_THE_BUDGET = 137;
+    // THE BUDGET AND ITS `timeout` WRAPPER LIVE IN ONE COPY, in
+    // {@see RunsWallClockBoundedChildTrait} (E390) — the trait doc-block
+    // says why the wrapper and the constant must share a file for the
+    // census to read them. This suite's child is a whole second phpunit;
+    // the runner below bounds it, and the refusal after it stays here
+    // because what the child leaves behind is a JUnit log, not silence.
 
     /** The suffix the fixtures below carry, chosen so the suite does NOT collect them. */
     private const FIXTURE_SUFFIX = 'Fixture.php';
@@ -311,19 +298,19 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         $log = sys_get_temp_dir() . '/sc_requirement_provenance_' . getmypid() . '_' . bin2hex(random_bytes(8)) . '.xml';
         $root = \dirname(__DIR__, 2);
 
-        $status = 0;
-        $output = [];
-        exec(\sprintf(
-            'timeout -s KILL %d %s %s --no-configuration --bootstrap %s --test-suffix %s '
-            . '--log-junit %s %s 2>&1',
-            self::CHILD_WALL_CLOCK_BUDGET_SECONDS,
-            escapeshellarg(\PHP_BINARY),
-            escapeshellarg($root . '/vendor/bin/phpunit'),
-            escapeshellarg($root . '/vendor/autoload.php'),
-            escapeshellarg(self::FIXTURE_SUFFIX),
-            escapeshellarg($log),
-            escapeshellarg($root . '/' . self::FIXTURE_DIR),
-        ), $output, $status);
+        [$status, $output] = $this->runWallClockBoundedChild(
+            '',
+            \sprintf(
+                '%s %s --no-configuration --bootstrap %s --test-suffix %s '
+                . '--log-junit %s %s 2>&1',
+                escapeshellarg(\PHP_BINARY),
+                escapeshellarg($root . '/vendor/bin/phpunit'),
+                escapeshellarg($root . '/vendor/autoload.php'),
+                escapeshellarg(self::FIXTURE_SUFFIX),
+                escapeshellarg($log),
+                escapeshellarg($root . '/' . self::FIXTURE_DIR),
+            ),
+        );
 
         try {
             self::assertNotSame(self::KILLED_BY_THE_BUDGET, $status, \sprintf(

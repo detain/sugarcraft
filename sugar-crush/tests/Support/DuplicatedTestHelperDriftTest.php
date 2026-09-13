@@ -2578,14 +2578,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      */
     private const ACCEPTED_CONST_DUPLICATION = [
         'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
-        'CHILD_WALL_CLOCK_BUDGET_SECONDS' => 'Two provenance suites pin the same budget; the census copy documents a different one.',
         'DSML' => 'The suites that parse the DSML delimiter feed the same string to their fixtures.',
         'EOF_EXIT_BOUND_SECONDS' => 'THE PAIR E481 NAMED: both stdio EOF suites wait the same half-second, and re-valuing one of them now leaves this polity.',
         'FIXTURE_LIFETIME_SECONDS' => 'The frame-cap pair and the pump/drain pair each pin one lifetime; the odd values are the drift polity.',
         'FLOODING_STDERR_BYTES' => 'The two shutdown suites flood the same byte count.',
         'HANDSHAKE_BOUND_SECONDS' => 'The two LSP handshake-waiting suites pin the same bound.',
         'INTO_SHELL' => 'Both permission-gate suites feed the same command string to the classifier.',
-        'KILLED_BY_THE_BUDGET' => 'The budget-kill exit code both provenance suites assert.',
         'LIB_SCOPE' => 'The census suites scope their walks to the same vendor path.',
         'MARKER' => 'The two image suites use the same private-use-area sentinel; the unrelated MARKER strings are the drift polity.',
         'MEASURED_PIPE_CAPACITY_BYTES' => 'One property of the host pipe, measured once and shared by the wedging families.',

@@ -10,6 +10,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\RunsWallClockBoundedChildTrait;
 
 /**
  * The seam that replaced {@see SkillLoader}'s per-skip `error_log()`.
@@ -33,71 +34,17 @@ final class BootstrapSkillSkipsTest extends TestCase
 {
     use BackendSelectionEnvSandboxTrait;
     use HomeSandboxTrait;
+    use RunsWallClockBoundedChildTrait;
 
-    /**
-     * THE WALL-CLOCK BUDGET FOR THE REAL CHILD PROCESSES THIS FILE SPAWNS, AND
-     * IT IS A CONSTANT SO THE NEXT READER CAN RAISE IT KNOWINGLY.
-     *
-     * WHAT IT IS FOR. Both helpers below run a real PHP process. A hang there —
-     * a launch that waits on a terminal it does not have, a provider that waits
-     * on a socket — would otherwise stall the whole suite with no verdict, so
-     * `timeout -s KILL` bounds it.
-     *
-     * WHY IT IS NOT SIXTY, WHICH IS WHAT IT WAS. `phpunit.xml` sets
-     * `enforceTimeLimit` with a per-test limit of its own, and PHPUnit enforces
-     * that with `pcntl_alarm()` plus a handler that throws. A budget EQUAL to
-     * that limit means the two clocks expire together and PHPUnit's wins, since
-     * its clock starts before `setUp()` and the child's starts after. When it
-     * wins, the test is ABORTED rather than failed, and recorded RISKY.
-     *
-     * WHAT AN ABORT COSTS — CORRECTED, BECAUSE THE FIRST VERSION OF THIS
-     * PARAGRAPH GOT THE POLARITY WRONG. WHAT IT SAID: an abort is "strictly
-     * worse than a red" because risky still exits zero, so above the ceiling
-     * this file "can no longer fail at all". WHAT IS TRUE NOW, AND WAS TRUE
-     * WHEN THAT WAS WRITTEN: `phpunit.xml` ALSO sets `failOnRisky`, which is
-     * the attribute that decides this, and the paragraph was written from the
-     * two attributes above it without reading the third. Measured on this host,
-     * PHP 8.3.6 / PHPUnit 10.5.64, with two configurations differing ONLY in
-     * that attribute and one test whose child outlives a three-second limit:
-     * `failOnRisky="true"` exits **1** and `"false"` exits 0, both printing the
-     * same "OK, but there were issues!" banner. So an abort here IS a red, and
-     * PHPUnit names the aborted test and the file it lives in.
-     *
-     * WHY A BUDGET UNDER THE CEILING STILL EARNS ITS PLACE. What the abort
-     * actually costs is two things, both real. (1) The assertions the arm would
-     * have made are SHED — the probe reported `Assertions: 1` where two would
-     * otherwise have been made — and a moved assertion count is the signal this
-     * project reads as evidence its dependency closure is intact. (2) The
-     * diagnosis becomes "This test was aborted after N seconds / This test did
-     * not perform any assertions" instead of the sentence
-     * {@see assertTheChildRanToCompletion()} writes, which names this constant,
-     * names the child, and says what to do. Trading a specific red for a
-     * generic one is a smaller loss than the sentence above claimed, and still
-     * a loss worth one constant.
-     *
-     * Measured on this host, PHP 8.3.6 / PHPUnit 10.5.64, at load average 6
-     * with sibling suites running: one `-p` child costs 0.28s (three takes:
-     * 0.28 / 0.28 / 0.28), and the whole file runs in 0.41s. So this budget is
-     * ~70x the real cost of the thing it bounds, and sits far enough under the
-     * per-test limit that a child which genuinely hangs is SIGKILLed first and
-     * reported by {@see assertTheChildRanToCompletion()} as a red that names
-     * this constant.
-     *
-     * RAISING IT IS A REAL TRADE AND IT HAS A CEILING. At or above the per-test
-     * limit every genuine hang in this file reports as a generic abort with its
-     * assertions shed instead of as the specific red below — which is the state
-     * it was in.
-     * {@see testTheChildBudgetStaysUnderThePerTestLimitPhpunitEnforces()} pins
-     * that ceiling against `phpunit.xml` so the relation cannot rot silently,
-     * and {@see testAnAbortAtThatCeilingStillFailsTheRun()} pins the attribute
-     * that decides what the abort costs.
-     */
-    private const CHILD_WALL_CLOCK_BUDGET_SECONDS = 20;
-
-    /**
-     * What a shell reports when `timeout -s KILL` kills the child: 128 + SIGKILL.
-     */
-    private const KILLED_BY_THE_BUDGET = 137;
+    // THE BUDGET AND ITS `timeout` WRAPPER LIVE IN ONE COPY, in
+    // {@see \SugarCraft\Crush\Tests\Support\RunsWallClockBoundedChildTrait}
+    // (E390): the census in
+    // {@see \SugarCraft\Crush\Tests\Support\ChildWallClockBudgetTest}
+    // resolves a `self::` budget against the ONE file that spells the
+    // wrapper, so the constant and the wrapper share that trait and this
+    // file reaches both through it. BUDGET_HEADROOM_SECONDS stays HERE
+    // because the half-the-clock policy it states is this file's ceiling
+    // argument, pinned by the guards below.
 
     /**
      * How much of the per-test limit must remain unspent by the child budget.
@@ -207,18 +154,16 @@ final class BootstrapSkillSkipsTest extends TestCase
     {
         $errFile = $this->tempDir . '/oneshot-stderr.txt';
 
-        $status = 0;
-        $output = [];
-        exec(sprintf(
-            'cd %s && HOME=%s timeout -s KILL %d %s %s -p %s >/dev/null 2>%s',
-            escapeshellarg($this->project),
-            escapeshellarg($this->home),
-            self::CHILD_WALL_CLOCK_BUDGET_SECONDS,
-            escapeshellarg(PHP_BINARY),
-            escapeshellarg(dirname(__DIR__, 2) . '/bin/sugarcrush'),
-            escapeshellarg('hello'),
-            escapeshellarg($errFile),
-        ), $output, $status);
+        [$status] = $this->runWallClockBoundedChild(
+            'cd ' . escapeshellarg($this->project) . ' && HOME=' . escapeshellarg($this->home),
+            \sprintf(
+                '%s %s -p %s >/dev/null 2>%s',
+                escapeshellarg(PHP_BINARY),
+                escapeshellarg(dirname(__DIR__, 2) . '/bin/sugarcrush'),
+                escapeshellarg('hello'),
+                escapeshellarg($errFile),
+            ),
+        );
 
         $this->assertTheChildRanToCompletion($status, 'the one-shot run');
 
@@ -249,16 +194,15 @@ final class BootstrapSkillSkipsTest extends TestCase
             var_export($this->project, true),
         ));
 
-        $status = 0;
-        $output = [];
-        exec(sprintf(
-            'HOME=%s timeout -s KILL %d %s %s >/dev/null 2>%s',
-            escapeshellarg($this->home),
-            self::CHILD_WALL_CLOCK_BUDGET_SECONDS,
-            escapeshellarg(PHP_BINARY),
-            escapeshellarg($script),
-            escapeshellarg($errFile),
-        ), $output, $status);
+        [$status] = $this->runWallClockBoundedChild(
+            'HOME=' . escapeshellarg($this->home),
+            \sprintf(
+                '%s %s >/dev/null 2>%s',
+                escapeshellarg(PHP_BINARY),
+                escapeshellarg($script),
+                escapeshellarg($errFile),
+            ),
+        );
 
         $this->assertTheChildRanToCompletion($status, 'the launch');
 
