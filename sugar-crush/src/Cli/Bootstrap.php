@@ -6547,8 +6547,11 @@ final class Bootstrap
      * false because {@see PermissionRule::matchesToolName()} is bare
      * `fnmatch()`: measured end-to-end, a project-tier
      * `{"disabledTools": ["[!B]*"]}` leaves exactly `Bash` out of the eleven
-     * then wired — and still exactly `Bash` out of the twelve wired since
-     * TaskTool (E675): `Task` starts with `T`, so every shape below matches it.
+     * then wired — and still does: the project tier reaches only what
+     * {@see filterToolSet()} filters, which is exactly those eleven filterable
+     * static positions; TaskTool (E675) rides a separate manager-gated append
+     * AFTER the filter — on purpose, its gate is the caller holding an
+     * AgentManager, not a config key — so no project glob can reach it.
      *
      * THE RESTRICTION THE BACKLOG PROPOSED WAS NOT TAKEN, and the measurement
      * says why. "Refuse negated character classes at the project tier" closes
@@ -6556,9 +6559,10 @@ final class Bootstrap
      * negation, is one character longer per glob, and also leaves only `Bash`.
      * MEASURED end-to-end on PHP 8.3.6, 2026-08-22, against the eleven-tool
      * ceiling this file built then — both values leave exactly `Bash`, and
-     * still do against today's twelve (`Task`'s initial `T` matches both
-     * globs); PHP 8.4 was
-     * NOT exercised, because this box has only 8.3.6 while CI runs both.
+     * still do among the eleven positions the project tier can filter; the
+     * twelfth wired since TaskTool (E675) sits outside that reach (appended
+     * after {@see filterToolSet()}, manager-gated); PHP 8.4 was NOT exercised,
+     * because this box has only 8.3.6 while CI runs both.
      * Shipping that restriction would have replaced a false claim about the
      * dialect with a false claim about the fix. Restricting the tier to LITERAL
      * names closes it completely, but it also deletes the legitimate use the
