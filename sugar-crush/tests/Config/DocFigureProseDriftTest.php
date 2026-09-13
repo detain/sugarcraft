@@ -3250,9 +3250,11 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/Depth is capped at (\d+)\*\* and \*\*breadth at (\d+) directories/', $skills),
+            preg_match('/Depth is capped at (\d+)\*\* and \*\*breadth at (\d+) directories/', $skills, $walkCaps),
             'the depth/breadth sentence no longer carries both digits in one breath',
         );
+        self::assertSame((int) $walkCaps[1], (int) $loader->getConstant('MAX_DEPTH'), 'the page depth figure drifted from SkillLoader::MAX_DEPTH');
+        self::assertSame((int) $walkCaps[2], (int) $loader->getConstant('MAX_DIRECTORIES'), 'the page breadth figure drifted from SkillLoader::MAX_DIRECTORIES');
         self::assertSame(6, (int) $loader->getConstant('MAX_DEPTH'), 'MAX_DEPTH moved — the page still caps the walk at 6');
         self::assertSame(2000, (int) $loader->getConstant('MAX_DIRECTORIES'), 'MAX_DIRECTORIES moved — the page still caps breadth at 2000');
 
