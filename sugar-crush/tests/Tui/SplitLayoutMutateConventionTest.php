@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tui\SplitLayout;
 
 /**
@@ -22,6 +23,8 @@ use SugarCraft\Crush\Tui\SplitLayout;
  */
 final class SplitLayoutMutateConventionTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     public function testWithMethodsDelegateThroughPrivateMutateHelper(): void
     {
         $class = new \ReflectionClass(SplitLayout::class);
@@ -69,6 +72,6 @@ final class SplitLayoutMutateConventionTest extends TestCase
         $lines = file($file);
         $this->assertNotFalse($lines, "failed to read source file $file");
 
-        return implode('', array_slice($lines, $start - 1, $end - $start + 1));
+        return self::declaredSlice($lines, $method->getName(), $start, $end);
     }
 }

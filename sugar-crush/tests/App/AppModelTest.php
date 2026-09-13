@@ -30,6 +30,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
 use SugarCraft\Crush\Tui\Commands\GroupInputCmd;
 use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
@@ -56,6 +57,8 @@ use SugarCraft\Crush\Tui\TerminalBackground;
  */
 final class AppModelTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     private ProviderInterface $provider;
 
     protected function setUp(): void
@@ -209,11 +212,12 @@ final class AppModelTest extends TestCase
         $file = $method->getFileName();
         $this->assertIsString($file);
 
-        $body = implode('', array_slice(
+        $body = self::declaredSlice(
             file($file) ?: [],
-            $method->getStartLine() - 1,
-            $method->getEndLine() - $method->getStartLine() + 1,
-        ));
+            'observeBackground',
+            $method->getStartLine(),
+            $method->getEndLine(),
+        );
 
         $this->assertSame(
             1,

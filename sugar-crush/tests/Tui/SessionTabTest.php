@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Tui;
 
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tui\SessionTab;
 
 /**
@@ -15,6 +16,8 @@ use SugarCraft\Crush\Tui\SessionTab;
  */
 final class SessionTabTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     // =========================================================================
     // withDetached() Tests
     // =========================================================================
@@ -331,6 +334,6 @@ final class SessionTabTest extends TestCase
         $lines = file($file);
         $this->assertNotFalse($lines, "failed to read source file $file");
 
-        return implode('', array_slice($lines, $start - 1, $end - $start + 1));
+        return self::declaredSlice($lines, $method->getName(), $start, $end);
     }
 }

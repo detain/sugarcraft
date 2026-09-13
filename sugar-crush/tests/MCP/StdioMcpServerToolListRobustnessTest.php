@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\MCP\HttpMcpServer;
 use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\MCP\StdioMcpServer;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * ONE MISTYPED TOOL IN A `tools/list` REPLY MUST NOT TAKE THE SESSION'S WHOLE
@@ -59,6 +60,8 @@ use SugarCraft\Crush\MCP\StdioMcpServer;
  */
 final class StdioMcpServerToolListRobustnessTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     private string $tempDir = '';
 
     protected function setUp(): void
@@ -383,13 +386,15 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
 
         // ---- The real comparison.
         $reader = new \ReflectionMethod(McpTool::class, 'fromArray');
-        $source = (string) file_get_contents((string) $reader->getFileName());
-        $lines = explode("\n", $source);
-        $body = implode("\n", array_slice(
-            $lines,
-            $reader->getStartLine() - 1,
-            $reader->getEndLine() - $reader->getStartLine() + 1,
-        ));
+        // Routed through the shared guard (E325): explode/implode("\n") read
+        // vs file()/implode("") differ only in the slice's trailing newline,
+        // and dataSubscriptsIn() matches inside single lines.
+        $body = self::declaredSlice(
+            (array) file((string) $reader->getFileName()),
+            'fromArray',
+            $reader->getStartLine(),
+            $reader->getEndLine(),
+        );
 
         $read = self::dataSubscriptsIn($body);
         $this->assertNotSame([], $read, 'no $data subscripts found in fromArray() at all');

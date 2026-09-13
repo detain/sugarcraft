@@ -39,6 +39,7 @@ use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
 use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
@@ -55,6 +56,7 @@ final class RuntimeTest extends TestCase
     use FlattensSourceProseTrait;
     use DropsInsignificantTokensTrait;
     use HomeSandboxTrait;
+    use SlicesDeclaredMethodsTrait;
 
     private ProviderInterface $provider;
     private HookRegistry $hookRegistry;
@@ -4033,11 +4035,18 @@ DOC;
             'testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt',
         ] as $method) {
             $reflected = new \ReflectionMethod(self::class, $method);
-            $body = implode('', \array_slice(
-                file((string) $reflected->getFileName()),
+            // The slice now includes the signature line (it used to start one
+            // line later): every assertion below is a containment over the
+            // body, and the guard that makes routing worth it - refusing
+            // offsets that do not land on the declaration - needs the first
+            // line to BE the declaration. Measured: neither signature can
+            // contain the string the loop hunts for.
+            $body = self::declaredSlice(
+                (array) file((string) $reflected->getFileName()),
+                $method,
                 $reflected->getStartLine(),
-                $reflected->getEndLine() - $reflected->getStartLine(),
-            ));
+                $reflected->getEndLine(),
+            );
 
             $this->assertStringContainsString(
                 'pinDispatchConfigToASandboxHome()',

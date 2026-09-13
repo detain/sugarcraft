@@ -10,9 +10,12 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\Help;
 use SugarCraft\Crush\Tests\Config\EnvRosterDriftTest;
 use SugarCraft\Crush\Tests\Config\Support\EnvReadScanner;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 final class HelpTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     public function testScreenReturnsNonEmptyString(): void
     {
         $screen = Help::screen();
@@ -335,8 +338,8 @@ final class HelpTest extends TestCase
     public static function backendSelectionVariables(): array
     {
         $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
-        $source = (string) \file_get_contents($bootstrapFile);
-        $lines = \explode("\n", $source);
+        $lines = file($bootstrapFile);
+        self::assertIsArray($lines, 'cannot read ' . $bootstrapFile . ' - the scrape would be about nothing');
 
         $vars = [];
         // Reflection gives the BODY's line span, which excludes the docblock —
@@ -395,11 +398,12 @@ final class HelpTest extends TestCase
                 . ' numbers do not address the lines scraped here. Read the body from'
                 . ' $reflected->getFileName(), or keep the method where the scrape expects it.',
             );
-            $body = \implode("\n", \array_slice(
+            $body = self::declaredSlice(
                 $lines,
-                $reflected->getStartLine() - 1,
-                $reflected->getEndLine() - $reflected->getStartLine() + 1,
-            ));
+                $method,
+                $reflected->getStartLine(),
+                $reflected->getEndLine(),
+            );
 
             \preg_match_all("/'(SUGARCRUSH_[A-Z0-9_]+)'/", $body, $found);
             foreach ($found[1] as $var) {

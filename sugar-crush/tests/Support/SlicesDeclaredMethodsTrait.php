@@ -20,7 +20,10 @@ namespace SugarCraft\Crush\Tests\Support;
  * E325 lifted the fix out so the other readers can be routed through it one
  * at a time instead of each re-deriving the guard - the round that adds a
  * shared `declaredSlice()` to the readers themselves rather than a census
- * over them.
+ * over them. ROUND 71 (E325 step (b) completion) IS that round: the fd
+ * seam-4 reader list and `Cli/HelpTest.php` call through here; the open
+ * remainder at the cut was `SuiteSkipRosterTest`'s rostered-skip body,
+ * recorded on that census's class doc-block.
  *
  * ONE LINE IS ENOUGH TO CATCH THE SHIFT because the slice starts at the
  * declaration: if the first line does not spell `function <name>`, the

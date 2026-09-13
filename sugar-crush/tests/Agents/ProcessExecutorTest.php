@@ -16,6 +16,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -23,6 +24,8 @@ use SugarCraft\Crush\Tools\Tool;
  */
 final class ProcessExecutorTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     private ProcessExecutor $executor;
     private SubAgent $agent;
     private CompleteRequest $request;
@@ -1136,11 +1139,12 @@ final class ProcessExecutorTest extends TestCase
         $method = new \ReflectionMethod(ProcessExecutor::class, 'autoloadPath');
         $lines = file((string) $method->getFileName());
         $this->assertIsArray($lines);
-        $body = implode('', \array_slice(
+        $body = self::declaredSlice(
             $lines,
-            $method->getStartLine() - 1,
-            $method->getEndLine() - $method->getStartLine() + 1,
-        ));
+            'autoloadPath',
+            $method->getStartLine(),
+            $method->getEndLine(),
+        );
 
         $this->assertTrue(
             $delegates($body),

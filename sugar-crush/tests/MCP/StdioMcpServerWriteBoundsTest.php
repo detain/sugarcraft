@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\MCP\StdioMcpServer;
 use SugarCraft\Crush\McpMessage;
 use SugarCraft\Crush\Support\ProcessContainment;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * {@see StdioMcpServer::writeLine()} MUST ALWAYS BE ABLE TO GIVE UP — on a
@@ -54,6 +55,8 @@ use SugarCraft\Crush\Support\ProcessContainment;
  */
 final class StdioMcpServerWriteBoundsTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     /**
      * Over the 65536-byte pipe capacity, so a child that never reads stdin
      * leaves the write loop genuinely stuck rather than completing trivially.
@@ -985,11 +988,12 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         );
 
         $file = (array) file((string) $start->getFileName());
-        $flat = self::flattened(implode('', array_slice(
+        $flat = self::flattened(self::declaredSlice(
             $file,
-            $start->getStartLine() - 1,
-            $start->getEndLine() - $start->getStartLine() + 1,
-        )));
+            $start->getName(),
+            $start->getStartLine(),
+            $start->getEndLine(),
+        ));
 
         $this->assertStringContainsString(
             "0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],",

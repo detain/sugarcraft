@@ -18,12 +18,15 @@ use SugarCraft\Crush\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Providers\VertexProvider;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * Tests for ProviderFactory - factory for creating providers from configuration.
  */
 final class ProviderFactoryTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     private ProviderFactory $factory;
 
     protected function setUp(): void
@@ -1551,11 +1554,12 @@ final class ProviderFactoryTest extends TestCase
     {
         $method = new \ReflectionMethod(ProviderFactory::class, 'toolCallParser');
         $lines = (array) file((string) $method->getFileName());
-        $body = implode('', \array_slice(
+        $body = self::declaredSlice(
             $lines,
-            $method->getStartLine() - 1,
-            $method->getEndLine() - $method->getStartLine() + 1,
-        ));
+            'toolCallParser',
+            $method->getStartLine(),
+            $method->getEndLine(),
+        );
 
         preg_match_all('/self::(TOOL_CALL_PARSER_[A-Z0-9_]+)/', $body, $matches);
 

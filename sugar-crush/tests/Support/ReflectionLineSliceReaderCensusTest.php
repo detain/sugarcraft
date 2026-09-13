@@ -61,16 +61,22 @@ use PHPUnit\Framework\TestCase;
  * it costs nothing until the day it is the only thing standing between a moved
  * helper and a census that has quietly stopped covering anything.
  *
- * THE SECOND HALF OF THE ORIGINAL DEFECT IS NOT COVERED BY THIS FILE, and the
- * omission is deliberate and recorded. Reflection's line numbers are fixed
- * when the class loads while `file()` is read on every call, so an edit to the
- * file in between shifts every slice WHILE THE FILE NAME STILL MATCHES. That
- * half was the one actually OBSERVED. Only `VhsTapeContractTest` guards it,
- * through {@see SlicesDeclaredMethodsTrait::declaredSlice()}, which refuses
- * unless the slice's first line spells `function <name>`. Every other reader
- * here is open to it. Rostering every reader by `<file>::<method>` across five
- * concurrently-merging lanes would red on every rename, so it is a backlog
- * entry rather than a guard — see the round-49 lane c report and E325.
+ * THE SECOND HALF OF THE ORIGINAL DEFECT IS GUARDED BY THE READERS
+ * THEMSELVES, not by this file. Reflection's line numbers are fixed when the
+ * class loads while `file()` is read on every call, so an edit to the file in
+ * between shifts every slice WHILE THE FILE NAME STILL MATCHES. That half was
+ * the one actually OBSERVED, and the guard against it is
+ * {@see SlicesDeclaredMethodsTrait::declaredSlice()}, which refuses any slice
+ * whose first line does not spell `function <name>`. E325 step (b) opened
+ * that route at the exemplar and round 71 closed it for the fd seam-4 reader
+ * list plus `Cli/HelpTest.php`. WHAT THIS CENSUS STILL DOES NOT SEE: a reader
+ * that indexes with its OWN array_slice passes direction one and is invisible
+ * to the shift — direction one is all this file judges, and one such reader
+ * remained open at the fold, `SuiteSkipRosterTest`'s rostered-skip body,
+ * outside that fold's ownership. Rostering every reader by `<file>::<method>`
+ * from here across five concurrently-merging lanes would red on every rename,
+ * which is why the line guard lives in the shared trait and not in a roster
+ * in this file — see the round-49 lane c report and E325.
  */
 final class ReflectionLineSliceReaderCensusTest extends TestCase
 {

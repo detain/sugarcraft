@@ -16,6 +16,7 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * `Chat::submit()`'s slash-command dispatch (crush_code.md Phase 4 items 1, 2
@@ -30,6 +31,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 final class SlashDispatchTest extends TestCase
 {
     use HomeSandboxTrait;
+    use SlicesDeclaredMethodsTrait;
 
     private string $sandbox = '';
 
@@ -234,11 +236,12 @@ final class SlashDispatchTest extends TestCase
     {
         $method = new \ReflectionMethod(Chat::class, 'dispatchCommand');
         $file = (string) $method->getFileName();
-        $source = implode('', array_slice(
+        $source = self::declaredSlice(
             (array) file($file),
-            $method->getStartLine() - 1,
-            $method->getEndLine() - $method->getStartLine() + 1,
-        ));
+            'dispatchCommand',
+            $method->getStartLine(),
+            $method->getEndLine(),
+        );
 
         $tokens = [];
         foreach (token_get_all('<?php ' . $source) as $token) {

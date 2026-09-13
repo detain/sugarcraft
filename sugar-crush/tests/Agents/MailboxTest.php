@@ -9,6 +9,7 @@ use SugarCraft\Crush\Agents\Mailbox;
 use SugarCraft\Crush\Agents\TeamMessage;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * Tests for Mailbox — append-only JSON-lines inter-teammate messaging.
@@ -16,6 +17,7 @@ use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 final class MailboxTest extends TestCase
 {
     use ReapsForkedChildrenTrait;
+    use SlicesDeclaredMethodsTrait;
 
     private string $basePath;
 
@@ -460,11 +462,12 @@ final class MailboxTest extends TestCase
 
         $lines = file($filename);
         $this->assertNotFalse($lines);
-        $body = implode('', array_slice(
+        $body = self::declaredSlice(
             $lines,
-            $reflection->getStartLine() - 1,
-            $reflection->getEndLine() - $reflection->getStartLine() + 1,
-        ));
+            'waitForMessage',
+            $reflection->getStartLine(),
+            $reflection->getEndLine(),
+        );
 
         // Match the actual call sites ("$this->…(") rather than a bare
         // method-name substring, so a comment mentioning either method by

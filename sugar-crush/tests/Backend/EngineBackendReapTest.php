@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * crush_code.md Phase 0 item 5: `completeAsync()`'s cancel teardown used to
@@ -27,6 +28,7 @@ use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
 final class EngineBackendReapTest extends TestCase
 {
     use ReapsForkedChildrenTrait;
+    use SlicesDeclaredMethodsTrait;
 
     /**
      * The four children below are each waited for by the test that forked
@@ -387,9 +389,14 @@ final class EngineBackendReapTest extends TestCase
 
     private static function methodSource(\ReflectionMethod $method): string
     {
-        $lines = file((string) $method->getFileName(), FILE_IGNORE_NEW_LINES);
-        $start = (int) $method->getStartLine() - 1;
-
-        return implode("\n", array_slice((array) $lines, $start, (int) $method->getEndLine() - $start));
+        // Routed through the shared guard (E325): the slice now keeps the
+        // trailing newlines file() carries, which every consumer here is
+        // insensitive to - they all match inside a single line.
+        return self::declaredSlice(
+            (array) file((string) $method->getFileName()),
+            $method->getName(),
+            (int) $method->getStartLine(),
+            (int) $method->getEndLine(),
+        );
     }
 }

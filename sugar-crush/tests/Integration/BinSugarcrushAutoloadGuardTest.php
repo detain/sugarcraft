@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\NonInteractive;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
  * The ONE launch warning in this project that provably cannot be migrated onto
@@ -181,6 +182,8 @@ use SugarCraft\Crush\Cli\NonInteractive;
  */
 final class BinSugarcrushAutoloadGuardTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     private string $tmpDir = '';
 
     /**
@@ -581,11 +584,12 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         $file = (string) $method->getFileName();
         $lines = file($file) ?: [];
 
-        return implode('', array_slice(
+        return self::declaredSlice(
             $lines,
-            $method->getStartLine() - 1,
-            $method->getEndLine() - $method->getStartLine() + 1,
-        ));
+            'encodeDocument',
+            $method->getStartLine(),
+            $method->getEndLine(),
+        );
     }
 
     /**
