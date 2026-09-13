@@ -3983,8 +3983,8 @@ final class DocFigureProseDriftTest extends TestCase
         $onceNumbers = ['once' => 1];
         self::assertSame(
             1,
-            preg_match('/captured (\w+) per `Runtime` — not (\w+) per step/u', $doc, $memo),
-            'the once-per-Runtime memo sentence is gone',
+            preg_match('/captured (\w+) per `Runtime` — not once per step/u', $doc, $memo),
+            'the once-per-Runtime memo sentence left its shape — the negative half is contrast prose with no live counterpart (the memo census below IS its refutation), so it is pinned as sentence shape only',
         );
         self::assertArrayHasKey($memo[1], $onceNumbers, 'the memo count is now a word this arm cannot judge');
         self::assertSame($onceNumbers[$memo[1]], substr_count($runtimeText, '$this->memoryBlock ??='), 'the memo count the page spells no longer matches the memoization sites in src');
