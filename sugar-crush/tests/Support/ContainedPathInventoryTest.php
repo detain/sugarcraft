@@ -182,6 +182,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Commands/CommandSpec.php' => 1,
         'Config/LayeredSettings.php' => 2,
         'Context/InstructionFileLoader.php' => 6,
+        'Context/ProjectMemoryWriter.php' => 1,
         'Context/RepoMapBlock.php' => 3,
         'Context/RuleLoader.php' => 3,
         'Memory/ForeignMemoryImporter.php' => 2,
@@ -340,7 +341,7 @@ final class ContainedPathInventoryTest extends TestCase
             'TWENTY-SEVEN' => 27, 'TWENTY-EIGHT' => 28, 'TWENTY-NINE' => 29,
             'THIRTY' => 30, 'THIRTY-ONE' => 31, 'THIRTY-TWO' => 32,
             'THIRTY-THREE' => 33, 'THIRTY-FOUR' => 34, 'THIRTY-FIVE' => 35,
-            'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38,
+            'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
         ];
 
         $source = (string) file_get_contents($this->srcDir . '/Support/ContainedPath.php');

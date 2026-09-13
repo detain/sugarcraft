@@ -94,7 +94,7 @@ namespace SugarCraft\Crush\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - THIRTY-EIGHT call sites in SIXTEEN files ask this class. THIS SENTENCE
+ *   - THIRTY-NINE call sites in SEVENTEEN files ask this class. THIS SENTENCE
  *     WAS FIVE SITES AND THREE FILES STALE when a reviewer measured it — it
  *     read "TWENTY-SEVEN in ELEVEN" while
  *     {@see \SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest}'s

@@ -241,6 +241,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // temp-create + rename for the file, so no write ever follows a planted
         // symlink — which is why no collector entry is owed here.
         'Chat.php|.sugar-crush/memory' => self::REPOSITORY,
+        'Context/ProjectMemoryWriter.php|.sugar-crush/memory' => self::REPOSITORY,
         'Memory/ForeignMemoryImporter.php|.opencode/memory' => self::REPOSITORY,
         'Skills/ForeignSkillDiscovery.php|.opencode/skills' => self::REPOSITORY,
         'Skills/SkillLoader.php|.sugar-crush/skills' => self::REPOSITORY,
@@ -346,8 +347,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is THIRTY-EIGHT occurrences — one per entry
-     * in {@see DOT_PATHS} — of TWENTY-SIX distinct paths. EIGHTEEN of those
+     * APPEARS IN. On this tree that is THIRTY-NINE occurrences — one per entry
+     * in {@see DOT_PATHS} — of TWENTY-SIX distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are FIFTEEN distinct paths — which is the figure
@@ -535,11 +536,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // a digit here would pass against a paragraph that says something else.
         $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE',
-            36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT'];
+            36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT',
+            39 => 'THIRTY-NINE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
-            16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN'];
+            16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;
