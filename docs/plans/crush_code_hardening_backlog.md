@@ -1056,9 +1056,9 @@ records them as **survivors**.
   time on the line number. See *Unresolved references*.
 - **Blocked on** Reconstructing the finding.
 
-### E10 [PARTIAL] — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
+### E10 [CLOSED] — tracker #78: `Doctor::name()` is lowercase where nine sibling tools are TitleCase
 
-**PARTIAL ROUND-69 (fc, same SHAs):** record branch shipped — lowercase `doctor` pinned intentional at Doctor.php:45 + BuiltInToolTest.php:194 (assertion byte-unchanged). Rename half stays blocked on the tool-schema owner; seeded to round-70 gc. Evidence: triage E10, fc REPORT.
+**Closed ROUND-70 (lane gc `9de0e3fd6` → pick `d7be5733f`) — DECIDED keep-lowercase, ZERO code:** the row's own evidence (model trained on "doctor"; tracker #78 "belongs to whoever owns the tool schema") favors the status quo. fc shipped both rationale pins (Doctor.php:45 + BuiltInToolTest) and gc — holding the round's providers/tool-file ownership — confirmed NO reversal, exactly matching the row recommendation. The inconsistency stays recorded, deliberately. Evidence: gc REPORT, triage E10, worklog ROUND 70. **Prior PARTIAL (fc round-69, same SHAs):** record branch shipped — lowercase `doctor` pinned intentional; rename half seeded to round-70 gc.
 
 - **What** The tool-schema name is `'doctor'` while the other built-in tools are
   TitleCase.
@@ -7123,9 +7123,9 @@ because nothing on their paths opens the alternate screen.
 **Step.** A `Chat`-side notice inbox reachable from a `Cmd`, or a process-wide sink `Chat` polls in
 `subscriptions()`. Design it once; the five classes above queue behind it.
 
-### E172 [PARTIAL] — three CommandLoader `error_log()` sites duplicate a message already on the seam
+### E172 [CLOSED] — three CommandLoader `error_log()` sites duplicate a message already on the seam
 
-**PARTIAL renote (fc verified; fc delta +0T):** feeder re-verified — CommandLoader DEBUG_REFUSALS_ENV :95 / skippedFiles :293 (triage cite :283 drifted), dormancy statements accurate, refusal test pins dormancy. Remaining half = Bootstrap-side launch summary row (mirror SKILL_SKIP_NOTICE_FORMAT, summary-row budget) with the BootstrapLaunchFormatConstantsTest sprintf roster owed IN-STEP; seeded round-70 gc. Evidence: fc REPORT §E172.
+**Closed ROUND-70 (lane gc `9de0e3fd6` → pick `d7be5733f`):** the drain half shipped. `Bootstrap::chat()` feeds `CommandLoader::skippedFiles()` into the `$commandSkips` dedup set and `reportCommandSkips()` emits ONE aggregate transcript row via `COMMAND_SKIP_NOTICE_FORMAT` (count-only; paths stay behind `SUGARCRUSH_DEBUG_COMMANDS=1`, shared with the loader feeder). The dormancy pin flipped to a drain-pin (roster `['src/Cli/Bootstrap.php']`); keystone `RoutingTest` asserts the transcript+stderr pair, count 1, no paths. Census trio flipped IN-STEP (seam census 21→22, StderrEmitterCensus Bootstrap 28→29, BootstrapLaunchFormatConstants 15→16). +1T. Evidence: gc REPORT, triage E172, worklog ROUND 70. **Prior PARTIAL (fc round-69):** feeder verified — CommandLoader DEBUG_REFUSALS_ENV :95 / skippedFiles :293, dormancy statements accurate.
 
 **Recorded 2026-08-22 by round-46 lane a.** Severity: low. **Verified, not fixed.**
 
@@ -7704,9 +7704,11 @@ sibling lane that added a `src/` file in the same round has bumped or must bump 
 **Step.** Supervisor re-derives at merge and takes neither side's number. Longer term this is E188's
 problem and wants the figures derived by the test rather than written into the constant.
 
-### E199 [PARTIAL] — the seam has no session-wide cap on the transport backend
+### E199 [CLOSED] — the seam has no session-wide cap on the transport backend
 
-**PARTIAL — RULING PER-TURN (decision requested by fc `183474831`, shipped by fn `5d050411d` → pick `f2c2c2327`):** `TURN_NOTICE_LIMIT = 20` (verified :240); armed ONLY by `beginTurn()` (opt-in — every pre-existing drain test stays green); `drain()` truncates the over-budget batch into ONE `OVERFLOW_FORMAT` row (excess + transport remainder + backend refusals), discards-until-empty so `hasPending()` stops repainting; `reset()` disarms; class/NOTICE_LIMIT/OVERFLOW_FORMAT doc-blocks truth-flipped (session-cap judged wrong for a live TUI). The wiring seam is DELIBERATELY left open: `RuntimeNoticeSink::beginTurn()` at the head of `Chat::scheduleBackendCompletion()` (src/Chat.php:8266) — seeded round-70 ga; zero behaviour change until wired, by design. Evidence: triage E199, fn REPORT.
+**Closed ROUND-70 (lane ga `77b4883b3` → pick `109293485`):** the wiring seam landed. `Chat::scheduleBackendCompletion()` (src/Chat.php:8266) calls `RuntimeNoticeSink::beginTurn()` at the top, GATED on `$this->drainsRuntimeNotices` — the class contract names the DRAIN OWNER as the only armer, and an unappointed/host Chat arming would re-open the owner's budget mid-turn. 2 new pins in RuntimeNoticeSinkDeliveryTest: budget re-arm pre-spent via reflection (vacuity-proof) + unappointed negative arm; transport burst 25→pump→pump = saturated 20-head + ONE overflow row, `hasPending()` false. Pump/delivery machinery verified already-live. +2T. Evidence: ga REPORT, triage E199, worklog ROUND 70.
+
+**PARTIAL — RULING PER-TURN (decision requested by fc `183474831`, shipped by fn `5d050411d` → pick `f2c2c2327`):** `TURN_NOTICE_LIMIT = 20` (verified :240); armed ONLY by `beginTurn()` (opt-in — every pre-existing drain test stays green); `drain()` truncates the over-budget batch into ONE `OVERFLOW_FORMAT` row (excess + transport remainder + backend refusals), discards-until-empty so `hasPending()` stops repainting; `reset()` disarms; class/NOTICE_LIMIT/OVERFLOW_FORMAT doc-blocks truth-flipped (session-cap judged wrong for a live TUI). The wiring seam was DELIBERATELY left open at r69: `RuntimeNoticeSink::beginTurn()` at the head of `Chat::scheduleBackendCompletion()` (src/Chat.php:8266) — seeded round-70 ga, CLOSED there. Evidence: triage E199, fn REPORT.
 
 `RuntimeNoticeSink::record()` returns before it reaches `NOTICE_LIMIT` whenever the cross-fork transport
 exists — i.e. on every interactive launch. So `NOTICE_LIMIT` bounds the array backend's queue and
@@ -10662,9 +10664,9 @@ wanting its own step and its own golden-file pass — and functionality comes be
 
 ---
 
-### E309 [OPEN] — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
+### E309 [CLOSED] — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
 
-**Round-69 re-verification (fb, still OPEN):** DENIAL_TERMS hand-list confirmed live at `tests/DenialPrefixRosterTest.php:228` (row's :226 drifted); the prescribed tree-wide producer factory (`ToolResult` + every refusal producer) lies outside ALL r69 lane files — refused with evidence, seeded to round-70 ge. Evidence: fb REPORT, worklog ROUND 69.
+**CLOSED-VERDICT ROUND-70 (ge — measure-and-verdict, ZERO code; disposition OPEN-BY-DESIGN with a named TRIGGER):** verdict (b) taken. The literal factory prescription stays un-shipped and expensive (~95 construction sites, 18+ files; measured at `55de6e269`: engine-class split 72 sites / 15 files after the [r70 audit-fix] re-attribution of Chat.php's 3 bare `new ToolResult(` to the ROOT class) — and its PROTECTIVE OUTCOME is already largely enforced by the whole-`src/` exact-map guard fb's lineage completed; the residual is zero-runtime-benefit typing ceremony today. TRIGGER: fold refusal-factory typing into the crush_feat §1D two-class `ToolResult` unification, or mint when a 4th `DenialKind` case is adopted via the E375 product-decision route. The round-69 premise read was FALSE-TO-TREE in two ways: the tree has TWO `ToolResult` classes (engine `src/Tools/ToolResult.php`, ctor-only; chat-side `src/ToolResult.php` with `ok()`/`error()`/`okWithImage()`/`fromEngineResult()`), and the refusal producers are ALREADY enum-routed — a duplicate frame-spelling is machine-impossible since E246/E541/fb. Not NO-FIX: the refactor becomes cheap and right when §1D forces the class merge anyway. The guard's alphabet (DENIAL_TERMS) remains hand-written exactly as the entry says. Evidence: ge REPORT (full construction census, 3 audit-fix errata), fb REPORT, triage E309, worklog ROUND 70. **Prior re-verification (fb round-69, still OPEN):** DENIAL_TERMS hand-list confirmed live at `tests/DenialPrefixRosterTest.php:228`; prescribed factory refused with evidence, seeded to ge.
 
 Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
 pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
@@ -11993,11 +11995,10 @@ gives the same entropy with no period.
 
 ---
 
-### E353 [OPEN] — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
+### E353 [CLOSED] — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
-**FOLDED INTO round-70 gd per supervisor (2026-09-12):** the guard/no-guard decision rides gd's E686-tranche-7
-brief (with docs/HOOKS.md in its touch-list); row stays OPEN until gd lands, then gets stamped there.
+**Closed ROUND-70 (lane gd `8b639e092` → pick `80806b39f`) — CLOSED-BY-FOLD:** the guard/no-guard decision resolved as FOLD: HOOKS.md's built-in-hook and Events tables, entry/exit key/delimiter/exit-row sections, and drain/sweep/marker claims are now read LIVE by `DocFigureProseDriftTest` arms AC–AH (dynamic derivation, zero rosters; no golden file, no new test file). All adjudicated claims were TRUE — docs/HOOKS.md stayed byte-untouched. The E686 tranche-7 fold carried this row to closure in-step. Evidence: gd REPORT + gd/measures.md (22 claim rows), triage E353, worklog ROUND 70.
 
 E328 changed a user-facing default and `HOOKS.md`'s built-in table went on documenting the old path for
 a full round. Grepped `tests/` for the filename: the only hits are `ScriptHook`/`Bootstrap` guards, none
@@ -12831,7 +12832,7 @@ was right and is confirmed by mutation: moving the token BEFORE the marker is ki
 
 ### E375 [CLOSED] — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
 
-**Closed ROUND-69 — RULING B-QUALIFIER (recorded by fb `5ea48fe21`→`ff2a96306` + fc `183474831`→`71cc12f38`; shipped by fn `5d050411d`→`f2c2c2327`):** `DenialKind` keeps exactly three cases, backing values byte-identical (verified :91/:102/:109; fb's diff to the file is a +19-line decision-home doc-block paragraph, enum body untouched). `NonInteractive::$askWasUnattended` carrier — cleared at run(), sole writer at the prompt's no-tty arm, read-and-clear in `refusalFrom()` gated on Refused; refusal rows gain the OPTIONAL `unattended: true` key ONLY on that arm; human/hook/unanswered rows stay 3-key byte-identical; `ToolRefusal.php` zero edits. Pins: unattended+consume-proof vs human-no-qualifier pair; README conditional-key paragraph in-step. Evidence: triage E375, fb/fc/fn REPORTs, worklog ROUND 69.
+**Closed ROUND-69 — RULING B-QUALIFIER (recorded by fb `5ea48fe21`→`ff2a96306` + fc `183474831`→`71cc12f38`; shipped by fn `5d050411d`→`f2c2c2327`):** `DenialKind` keeps exactly three cases, backing values byte-identical (verified :91/:102/:109; fb's diff to the file is a +19-line decision-home doc-block paragraph, enum body untouched). `NonInteractive::$askWasUnattended` carrier — cleared at run(), sole writer at the prompt's no-tty arm, read-and-clear in `refusalFrom()` gated on Refused; refusal rows gain the OPTIONAL `unattended: true` key ONLY on that arm; human/hook/unanswered rows stay 3-key byte-identical; `ToolRefusal.php` zero edits. Pins: unattended+consume-proof vs human-no-qualifier pair; README conditional-key paragraph in-step. Evidence: triage E375, fb/fc/fn REPORTs, worklog ROUND 69. **ROUND-70 confirmation (lane gb `fdeddc1f3` → pick `a852eb2ba`):** the DECIDED stamp landed in the `DenialKind` class doc-block (src/Permissions/DenialKind.php — the decision's home): three cases FROZEN, qualifier = optional 4th envelope key `unattended`, NonInteractive carrier lifecycle named, fn SHAs cited; the doc-block no longer reads undecided. No census move (row already CLOSED r69).
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: open design question. Verified, not implemented.
 
@@ -13286,9 +13287,9 @@ decoration and the table only proves the function returned the right TYPE.
 
 ---
 
-### E390 [DEFERRED] — the lane bounding child processes added an unbounded child process, in the same round
+### E390 [PARTIAL] — the lane bounding child processes added an unbounded child process, in the same round
 
-**DEFERRED (dual-guard evidence) ROUND-69 (fk, same SHAs):** consolidation blocked by (1) ChildWallClockBudgetTest::resolveArgument same-file-literal-only reduction and (2) DuplicatedTestHelperDriftTest's ACCEPTED_CONST_DUPLICATION licensé for this exact name (round-67 di) — neither file fk-owned; post-merge both are UNOWNED → round-70 gb one-motion candidate. Values today 20/20 + census 40, DRIFT_BOUND=1 tolerates. Evidence: fk REPORT §E390, worklog ROUND 69.
+**PARTIAL — law-pin SHIPPED ROUND-70 (lane gb `fdeddc1f3` → pick `a852eb2ba`):** the same-file-literal-only law is now PINNED with a TRIPWIRE: `ChildWallClockBudgetTest::testTheResolverRefusesCrossFileLiteralShapesToKeepTheSameFileLaw` (positive same-file control + cross-file `Other::B` refusal reason `cannot reduce` + same-file alias `const B = Other::B` refusal reason `not an integer literal` — refusals localize the boundary, arm non-vacuous by construction) reddens any future resolver widening unless the `DuplicatedTestHelperDrift` licensé drop rides the SAME commit. The full one-motion unblock is BLOCKED on a non-owned byte-identical pair — `tests/Cli/BootstrapSkillSkipsTest.php` vs `tests/Support/RequirementDirectiveProvenanceTest.php` both declare `private const CHILD_WALL_CLOCK_BUDGET_SECONDS = 20` (:95/:103); the drop-probe went RED naming exactly that pair (gb evidence `gb-probe-drop.log`, DuplicatedTestHelperDriftTest:2751). Per "both halves or neither" the fallback shipped. CARRY r71 (lane gf): dedupe that pair, then drop licensé + flip the roster trio IN-STEP. +1T. Evidence: gb REPORT/REVIEW + gb-probe-drop.log, triage E390, worklog ROUND 70. **Prior DEFERRED (round-69 fk, same SHAs):** consolidation blocked by (1) ChildWallClockBudgetTest::resolveArgument same-file-literal-only reduction and (2) DuplicatedTestHelperDriftTest's ACCEPTED_CONST_DUPLICATION licensé — post-merge both unowned → gb.
 
 **Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: hygiene, live.
 
@@ -16203,7 +16204,7 @@ written. Re-read them at launch, not just the figures.
 
 ### E493 [PARTIAL] — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
 
-**PARTIAL ROUND-69 (fa `8db951a0b` → pick `a9e7a333c`):** record re-verified and extended, zero code — COMPLETE_TIMEOUT_SECONDS paragraph carries the E524 measurements (verified :87); the FIX is open in the providers domain (HTTP progress-callback heartbeat seam, src/Providers/) → round-70 gc. Evidence: triage E493, fa REPORT, worklog ROUND 69.
+**PARTIAL — providers-half SHIPPED ROUND-70 (lane gc `9de0e3fd6` → pick `d7be5733f`):** `CompleteRequest::$onHeartbeat` (tail `?\Closure`, default null — older readers untouched) + `HttpClientDefaults::heartbeatOptions()`: Guzzle `progress` option (E524: the ONLY carrier that fires inside the blocking curl call), 1/s throttle with immediate first beat, fail-soft Throwable swallow, the wrapper always returns false (libcurl keep-transferring). Wired on the Sglang + Custom batch `complete()` paths; +8T in the new `tests/Providers/ProviderHeartbeatProgressTest.php` (first-tick / throttle / fail-soft arms; M2/M3 mutation-discriminated). SEAM carried r71 (lane gh): EngineBackend/Runtime must thread the closure from the child frame-writer; OpenAI/Bedrock/Vertex SDKs own their transports — the gaps are documented in the DTO doc-block, and the `src/Backend.php` `$onEvent` doc-block drift rides the same seam. Evidence: gc REPORT, triage E493, worklog ROUND 70. **Prior PARTIAL (fa round-69, `8db951a0b` → pick `a9e7a333c`):** record re-verified and extended, zero code — COMPLETE_TIMEOUT_SECONDS paragraph carries the E524 measurements; the FIX was seeded to gc.
 
 **Recorded 2026-08-25 by lane a.** Severity: medium. This is the defect E456's implementer chose to
 record rather than half-fix, and it needed an id.
@@ -19150,9 +19151,9 @@ sentence at `resolve()` saying the fallback answers for a name PHP would not hav
 describes the GLOBAL class and not the clause's real behaviour. Latent either way — zero bare-unimported
 catch types exist in `sugar-crush/tests`.
 
-### E616 [PARTIAL] — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
+### E616 [CLOSED] — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
 
-**PARTIAL ROUND-69 (fb `5ea48fe21` → pick `ff2a96306`):** the three tail-frame fixtures (Cache-Control disallowed / Transfer-Encoding rejected / Auto-Approve denied) pinned REPORTED with the named trade (verified :753-756); DENIAL_SHAPE lookbehind DELIBERATELY unchanged — measured: a '-' lookbehind reports all three NOWHERE while roster prefixes frame identically; pattern choice stays OPEN → round-70 gb. Evidence: triage E616, fb REPORT, worklog ROUND 69.
+**Closed ROUND-70 (lane gb `fdeddc1f3` → pick `a852eb2ba`) — DECIDED: DENIAL_SHAPE bytes UNCHANGED, hyphen-tail visibility ACCEPTED:** fb's measurement is the ruling's basis — adding `'-'` to the lookbehind reports all three tail fixtures NOWHERE while the roster prefixes frame identically; the compound-tail trade is the cheaper law. The choice is now pinned BOTH ways: the three tail frames (`Cache-Control disallowed:` / `Transfer-Encoding rejected:` / `Auto-Approve denied:`) stay pinned REPORTED, and a dated DECIDED block sits in `DenialPrefixRosterTest` (~:748, comment-only hunk — DENIAL_SHAPE byte-untouched, diff-verified). Evidence: gb REPORT/REVIEW, fb `5ea48fe21` measurement, triage E616, worklog ROUND 70. **Prior PARTIAL (fb round-69):** the three tail-frame fixtures pinned REPORTED with the named trade (verified :753-756); DENIAL_SHAPE lookbehind DELIBERATELY unchanged — measured: a '-' lookbehind reports all three NOWHERE while roster prefixes frame identically; pattern choice was left OPEN → round-70 gb.
 
 Found while fixing E570 and deliberately not fixed with it, because it is not a `required` problem. The
 shape is `/(?<![A-Za-z])[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/`. A hyphen is not `[A-Za-z]`, so in
@@ -20379,7 +20380,9 @@ assumes `LINES`/`COLUMNS` unset when stdout is piped) is carried in §0-NOW-69/e
 
 ### E686 [PARTIAL] — repo-wide documentation-figure prose campaign
 
-**PARTIAL — tranche-6 landed round-69 (lane fl → pick `d168ddfab`):** arms Z/AA/AB (DocFigure total 32, verified 32 methods): Z live-pane tick three-site equality + word-map product; AA SkillRegistry quotients/retractions/generator product/7x-10x band; AB nudge multiplier labels = bytes/cap quotients + fully-LIVE margin sentence. ZERO FALSE; 7 HELD; 2 carry rows verified CLOSED by prior arms. Tranche-7 = the ~50 figure-file remainder (seed gd). Evidence: fl REPORT + measures.md ledger, triage E686, worklog ROUND 69.
+**PARTIAL — tranche-7 LANDED round-70 (lane gd `8b639e092` → pick `80806b39f`):** 22 claim rows judged (HOOKS.md / SKILLS.md / ENVIRONMENT.md + E353's fold surface) — ALL TRUE under live re-derivation, ZERO FALSE (docs byte-untouched); 6 arms AC–AH, DocFigure roster 32→**38** methods: AC built-in-hook tables (grid RECOMPUTED from live name|event pairs, registrar trio order), AD Events-vs-`HookEvent::cases()` eleven + Dispatched-from call-site scan skipping src/Hooks/ internals, AE entry/exit ENTRY_KEYS/DELIMITERS/parse/match/exit-rows, AF DRAIN_SELECT_RETRIES/sweep-prefixes/marker-absence, AG SKILLS.md paths-cell 8/300/2,636/eighth/1.375 divided through Grep/Glob/Read/Edit/Write, AH ENVIRONMENT.md six-tokens-300ms ±10ms spacing law. GlobDialect hazard caught+fixed: a glued glob literal drifted the corpus to 366×362; split restored 131,765=365×361 (M7 proves the split load-bearing). **Carry tranche-8: ~9.5 HELD figures per gd/measures.md carry-dispositions** (9 carry HELDs confirmed + 3 fresh HOOKS.md external/labeled holds; dispositions named per row). +6T. Evidence: gd REPORT + gd/measures.md, triage E686, worklog ROUND 70.
+
+**PARTIAL — tranche-6 landed round-69 (lane fl → pick `d168ddfab`):** arms Z/AA/AB (DocFigure total 32, verified 32 methods): Z live-pane tick three-site equality + word-map product; AA SkillRegistry quotients/retractions/generator product/7x-10x band; AB nudge multiplier labels = bytes/cap quotients + fully-LIVE margin sentence. ZERO FALSE; 7 HELD; 2 carry rows verified CLOSED by prior arms. Tranche-7 = the ~50 figure-file remainder (seeded gd — LANDED above). Evidence: fl REPORT + measures.md ledger, triage E686, worklog ROUND 69.
 
 **ROUND-67 wave-2 tranche-4 stamp (lane dl — re-cut lane `c73374dca` → master `66b92e3d6`), stays PARTIAL:**
 ten HOOKS.md/TROUBLESHOOTING.md `CRUSH_*` claims judged — 7 TRUE pinned in 5 new arms **O–S** with a LIVE
