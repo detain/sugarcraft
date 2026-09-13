@@ -270,7 +270,40 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'open: under `phpunit | tail` an inherited dup of PHPUnit\'s stdout pipe kept '
                 . 'the reader from ever seeing EOF, turning a 1.6s run into 27s. A stderr file '
                 . 'this test could read would be one more descriptor with the same problem, and '
-                . 'nothing would ever read it.',
+                .             'nothing would ever read it.',
+        ],
+    ];
+
+    /**
+     * The sibling licens for the `inherited` shape, same discipline as
+     * {@see ACCEPTED_DISCARDED_STDERR}: keyed by file, carrying the exact COUNT of
+     * inherited spawns it excuses plus the argued reason, and re-verified
+     * bidirectionally so a row cannot outlive or overstate its sites. The shape
+     * shipped WITHOUT a roster on purpose - an inherited fd 2 is usually one
+     * literal away from being captured - and this row exists because of the one
+     * shape the scanner structurally cannot see: a wrapper that forwards the
+     * caller's redirect through a parameter. Round-71 (gf, E390) created the
+     * first such site by folding two provenance suites' `timeout -s KILL`
+     * wrappers into a trait; hoisting any redirect into the wrapper would
+     * OVERRIDE a caller-side `2>file` and vacate the error-file assertions it
+     * feeds. Any second inherited site anywhere in SCOPE still goes red.
+     *
+     * @var array<string,array{count:int,reason:string}>
+     */
+    private const ACCEPTED_INHERITED_STDERR = [
+        'Support/RunsWallClockBoundedChildTrait.php' => [
+            'count' => 1,
+            'reason'
+                => 'runWallClockBoundedChild()\'s timeout -s KILL wrapper (round-71 gf, E390). The '
+                . 'exec() reads as inherited because the stderr redirect is spelled INSIDE the '
+                . 'caller-passed $command - verified at every live call site: '
+                . 'Cli/BootstrapSkillSkipsTest.php (two `>/dev/null 2>file` split-forms) and '
+                . 'Support/RequirementDirectiveProvenanceTest.php (one `2>&1` merged-form). The '
+                . 'wrapper must stay in this file (ChildWallClockBudgetTest\'s same-file %d law), '
+                . 'so no caller-side literal the scanner could follow exists; count=1 keeps the '
+                . 'spawn cardinality policed. The honest upgrade is a fail-fast in the wrapper '
+                . 'requiring 2>&1|2> in $command - it needs its own pin set, so it is left to the '
+                . 'owner.',
         ],
     ];
 
@@ -918,6 +951,7 @@ final class ChildStderrCaptureTest extends TestCase
             }
 
             $discardAllowance = self::ACCEPTED_DISCARDED_STDERR[$relative]['count'] ?? 0;
+            $inheritAllowance = self::ACCEPTED_INHERITED_STDERR[$relative]['count'] ?? 0;
 
             foreach (ChildStderrCaptureScanner::scan((string) file_get_contents($file->getPathname())) as $site) {
                 if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_CAPTURED) {
@@ -930,6 +964,14 @@ final class ChildStderrCaptureTest extends TestCase
                 // exempted file is still reported.
                 if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_DISCARDED && $discardAllowance > 0) {
                     $discardAllowance--;
+
+                    continue;
+                }
+
+                // Same spend-one-at-a-time discipline for argued pass-through
+                // wrappers; see ACCEPTED_INHERITED_STDERR.
+                if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_INHERITED && $inheritAllowance > 0) {
+                    $inheritAllowance--;
 
                     continue;
                 }
@@ -1004,6 +1046,27 @@ final class ChildStderrCaptureTest extends TestCase
                     . "{$discarded}. Re-argue the exemption or delete it - a count that no longer "
                     . 'matches is a licence nobody checked.',
             );
+
+        foreach (self::ACCEPTED_INHERITED_STDERR as $file => $exemption) {
+            $path = $root . '/' . $file;
+            $this->assertFileExists($path, "{$file} is inherited-exempted but no longer exists");
+            $this->assertNotSame('', trim($exemption['reason']), "{$file} is inherited-exempted without a reason");
+
+            $inherited = 0;
+            foreach (ChildStderrCaptureScanner::scan((string) file_get_contents($path)) as $site) {
+                if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_INHERITED) {
+                    $inherited++;
+                }
+            }
+
+            $this->assertSame(
+                $exemption['count'],
+                $inherited,
+                "{$file} is exempted for {$exemption['count']} inherited-stderr spawn(s) but has "
+                    . $inherited . '. Re-argue the exemption or delete it - a count that no longer '
+                    . 'matches is a licence nobody checked.',
+            );
+        }
         }
     }
 
@@ -1092,7 +1155,8 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'WHAT EACH SHAPE ABOVE ASKS OF YOU, since the answer is different for all '
                 . 'three: `inherited` means the command names no destination for fd 2 at all - '
                 . 'send it to a file the helper reads back, or to the same pipe as fd 1 if '
-                . 'nothing parses that pipe. `discarded` means fd 2 goes to /dev/null - capture '
+                . 'nothing parses that pipe; a wrapper whose redirect is spelled by its CALLER '
+                . 'argues a row in ACCEPTED_INHERITED_STDERR instead. `discarded` means fd 2 goes to /dev/null - capture '
                 . 'it instead, or, if the discard is the point, add a row to '
                 . 'ACCEPTED_DISCARDED_STDERR keyed by this file with the COUNT of discards it '
                 . 'covers and the reason. `unclassified` means this scanner could not read the '
@@ -1328,6 +1392,7 @@ final class ChildStderrCaptureTest extends TestCase
     private static function offendingSites(string $relative, string $source): array
     {
         $allowance = self::ACCEPTED_DISCARDED_STDERR[$relative]['count'] ?? 0;
+        $inheritAllowance = self::ACCEPTED_INHERITED_STDERR[$relative]['count'] ?? 0;
         $offenders = [];
 
         foreach (ChildStderrCaptureScanner::scan($source) as $site) {
@@ -1337,6 +1402,12 @@ final class ChildStderrCaptureTest extends TestCase
 
             if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_DISCARDED && $allowance > 0) {
                 $allowance--;
+
+                continue;
+            }
+
+            if ($site['shape'] === ChildStderrCaptureScanner::SHAPE_INHERITED && $inheritAllowance > 0) {
+                $inheritAllowance--;
 
                 continue;
             }
