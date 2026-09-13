@@ -120,6 +120,15 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * and a hardcoded count here would turn this file into the decayed figure
      * it exists to prevent.
      *
+     * WHAT THE CENSUS DOMAINS ARE: {@see Bootstrap::tools()} is called with NO
+     * manager, so this is exactly the eleven FILTERABLE static positions — the
+     * set `filterToolSet()` (and therefore any project `disabledTools` glob)
+     * can see. `src/Tools/BuiltIn/` holds twelve concrete `Tool` classes since
+     * TaskTool (E675); `Task` rides a separate manager-gated append AFTER the
+     * filter, so it is deliberately outside this census and outside every
+     * project glob's reach — which is why the README's counterexample sentence
+     * is scoped to the filterable eleven rather than the wired twelve.
+     *
      * @return list<string>
      */
     private function toolCeiling(): array
@@ -154,10 +163,13 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * `assertCount(1, …)` is really "exactly one B-named built-in exists".
      * Adding `BashOutput` or `BashBackground` makes it two and REDS THIS TEST.
      * WHY IT STILL EARNS ITS PLACE: that red is correct rather than incidental.
-     * README.md's retraction says the counterexample "leaves exactly `Bash` out
-     * of the eleven built-in tools", and its launch-report sample says
-     * "disabled 10 of the 11" — a twelfth B-named tool falsifies both, so the
-     * test and the prose have to move together. The census-derived assertion
+      * README.md's retraction says the counterexample "leaves exactly `Bash`
+      * out of the eleven built-in tools the project tier can filter", and its
+      * launch-report sample says "disabled 10 of the 11" — a twelfth B-named
+      * FILTERABLE tool falsifies both, so the test and the prose have to move
+      * together (the wired twelfth, `Task`, never enters either domain: it is
+      * appended after the filter and outside project reach — see
+      * {@see toolCeiling()}). The census-derived assertion
      * below pins that sample against the measured count for the same reason.
      *
      * The day someone teaches {@see PermissionRule::matchesToolName()} to
@@ -225,7 +237,8 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         }
 
         // The README quotes this census twice — "out of the eleven built-in
-        // tools" and a launch-report sample reading "disabled 10 of the 11".
+        // tools the project tier can filter" and a launch-report sample
+        // reading "disabled 10 of the 11".
         // Both are figures, so both get a generator rather than a proof-read.
         //
         // THIS BLOCK USED TO SAY "both get a generator" WHILE GENERATING ONE.
@@ -248,7 +261,7 @@ final class ReadmeSettingsTierClaimTest extends TestCase
             . 'add the word, and check that README.md now uses it',
         );
         self::assertStringContainsString(
-            'out of the ' . self::SPELLED_COUNTS[count($ceiling)] . ' built-in tools',
+            'out of the ' . self::SPELLED_COUNTS[count($ceiling)] . ' built-in tools the project tier can filter',
             $flat,
             "README.md's retraction spells a built-in tool count that is not the measured one",
         );

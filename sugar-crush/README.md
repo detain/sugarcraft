@@ -221,7 +221,11 @@ the reason this section used to give.
 > { "disabledTools": ["[!B]*"] }
 > ```
 >
-> leaves exactly `Bash` out of the eleven built-in tools. The glob is five
+> leaves exactly `Bash` out of the eleven built-in tools the project tier can filter.
+> `Task`, the twelfth concrete `Tool` class wired since E675, is
+> appended after `filterToolSet()` and gated on the launch holding an
+> `AgentManager` — outside every project glob's reach — so on a manager-bound
+> chat launch it stands there too. The glob is five
 > characters and names none of the ten it removes. The negation is not the
 > trick either: `["[C-Z]*", "[a-z]*"]` leaves exactly `Bash` too, measured the
 > same way, so no restriction on *pattern shape* could make the old sentence
@@ -230,7 +234,7 @@ the reason this section used to give.
 > `disabledTools` cannot express the same thing.
 
 **Two things narrow it, and both are measured.** An *untrusted* project's
-`disabledTools` never reaches the merge at all — all eleven tools survive — so
+`disabledTools` never reaches the merge at all — all eleven filterable tools survive, and `Task`, being post-filter, was never in this setting's reach to lose — so
 this needs a `trustedProjectSettings` grant you made yourself. And the layers
 merge key by key rather than as a union: if *you* name any `disabledTools`,
 yours replaces the project's outright — your `["Read"]` against a trusted

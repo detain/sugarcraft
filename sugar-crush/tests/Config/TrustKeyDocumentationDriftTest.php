@@ -54,7 +54,8 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
  *    project file" (the {@see LayeredSettings::userTierOnlyKeys()} enumeration).
  *
  * THE BUILT-IN TOOL CENSUS IS NOT THIS FILE'S JOB. "out of the eleven built-in
- * tools" and the launch-report sample in the same page are numbers about
+ * tools the project tier can filter" and the launch-report sample in the same
+ * page are numbers about
  * `Bootstrap::tools()`, not about layered keys, and they are already derived by
  * {@see ReadmeSettingsTierClaimTest} (its `SPELLED_COUNTS` map) and by
  * {@see ReadmeRosterDriftTest}. Nothing here reads or constrains either of
