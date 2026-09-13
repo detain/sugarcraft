@@ -79,7 +79,13 @@ only one prompt tier: **`project` is the only scope that reaches the prompt.**
 
 `Runtime::buildSystemPrompt()` folds in a `MemoryBlock`
 (`src/Context/MemoryBlock.php`), captured once per `Runtime` — not once per step —
-from `MemoryStore::list(MemoryScope::Project)`. **User-scope and agent-scope
+from `MemoryStore::list(MemoryScope::Project)`. Since E25 piece 2 project notes
+also have a repo-local home: `ProjectMemoryWriter` (`src/Context/ProjectMemoryWriter.php`)
+persists `/memory add --scope project` into `<repo>/.sugar-crush/memory/` when the
+tree can host one — git-visible, reviewable, like `AGENTS.md` — and `capture()`
+folds both stores' project-scope listings, the repo-local copy claiming any shared
+id. A root that is empty, missing, or whose `.sugar-crush` resolves outside the
+tree degrades the write to the home store and contributes nothing to the read. **User-scope and agent-scope
 entries never reach the prompt**
 (`MemoryPromptWiringTest::testAUserScopeNoteDoesNotReachThePrompt`,
 `MemoryPromptWiringTest::testTheMemoryDirectoryIsReadOncePerRuntimeNotOncePerStep`).

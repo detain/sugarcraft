@@ -3960,7 +3960,17 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertNotNull($foldCase, sprintf('the only prompt scope the page names (%s) is no longer an enum value', $onlyScope[1]));
         $captureBody = self::bodyExcerpt(self::sourceOf('Context/MemoryBlock.php'), 'capture');
         self::assertStringContainsString('list(MemoryScope::' . $foldCase . ')', $captureBody, 'capture() no longer reads the scope list the policy sentence names');
-        self::assertSame(1, substr_count($captureBody, 'MemoryScope::'), 'capture() reads more than one scope — the page\'s "only one prompt tier" is now a fold policy and its prose must say so');
+        // E25 piece 2 grew capture() a SECOND read of the same scope (the
+        // repo-local store alongside the home one), so the census is of
+        // DISTINCT scopes, not of call shapes — "only one prompt tier" stays
+        // the policy the page states, and any foreign scope joining the fold
+        // still reddens here.
+        preg_match_all('/MemoryScope::(\w+)/', $captureBody, $foldScopes);
+        self::assertSame(
+            [$foldCase],
+            array_values(array_unique($foldScopes[1])),
+            'capture() reads more than one scope — the page\'s "only one prompt tier" is now a fold policy and its prose must say so',
+        );
 
         self::assertSame(
             1,

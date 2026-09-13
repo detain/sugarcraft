@@ -179,11 +179,19 @@ final readonly class MemoryBlock implements PromptSection
     ) {}
 
     /**
-     * Read the project-scope entries out of a store.
+     * Read the project-scope entries out of one or two stores.
      *
      * A snapshot, exactly like {@see EnvironmentBlock::capture()}: the caller
      * takes one and reuses it, rather than this class re-reading the directory
      * once per step of the agentic loop.
+     *
+     * Since E25 piece 2 there are two sources of project notes: the shared
+     * home store ($store, written since Phase 5) and the repo-local tree an
+     * {@see ProjectMemoryWriter} maintains ($projectStore, absent until the
+     * project grows its own `.sugar-crush/memory/`). The repo-local store is
+     * listed FIRST and wins any id collision — when the project owns a copy
+     * of a note, that copy is the project's statement about itself. The
+     * optional parameter keeps every pre-E25 call site byte-identical.
      *
      * Newest-first by {@see MemoryEntry::modifiedAt()} because when the cap
      * bites, the note most recently written is the one most likely to still be
@@ -202,9 +210,15 @@ final readonly class MemoryBlock implements PromptSection
      * `tests/Context/MemoryBlockTest::testTheIdTieBreakOutranksTheOnDiskDiscoveryOrder()`,
      * which is the only place the clause can be observed at all.
      */
-    public static function capture(MemoryStore $store): self
+    public static function capture(MemoryStore $store, ?MemoryStore $projectStore = null): self
     {
-        $entries = $store->list(MemoryScope::Project);
+        $byId = [];
+
+        foreach ([...($projectStore?->list(MemoryScope::Project) ?? []), ...$store->list(MemoryScope::Project)] as $entry) {
+            $byId[$entry->id()] ??= $entry;
+        }
+
+        $entries = array_values($byId);
 
         usort($entries, static function (MemoryEntry $a, MemoryEntry $b): int {
             return [$b->modifiedAt()->getTimestamp(), $a->id()]

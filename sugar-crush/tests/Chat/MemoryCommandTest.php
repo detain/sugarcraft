@@ -118,6 +118,10 @@ final class MemoryCommandTest extends TestCase
     {
         $chat = new Chat(
             history: [],
+            // Explicit sandbox root: a project-scope ADD now lands in the
+            // ROOT's repo-local corner (E25 piece 2), so a Chat left without a
+            // root would write notes into whatever tree runs the suite.
+            projectRoot: $this->tempDir,
             inputBuf: '/memory add --scope project This is a project memory',
             backend: new EchoBackend(),
             memoryStore: $this->memoryStore,

@@ -74,6 +74,7 @@ use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
+use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Context\RulesState;
@@ -11382,7 +11383,17 @@ final class Chat implements Model
         }
 
         try {
-            $id = $this->memoryStore->add($content, $scope);
+            // E25 piece 2: a project-scope note belongs with the project, so
+            // it goes to the repo-local `.sugar-crush/memory/` whenever the
+            // tree can host one. The degradation to the shared home store is
+            // deliberate — a headless `--root ''`, a read-only checkout, or a
+            // `.sugar-crush` planted as a symlink out of the tree should cost
+            // the user their note, not their command. The response wording is
+            // byte-identical either way; the id names the file.
+            $id = $scope === 'project'
+                ? (ProjectMemoryWriter::createForRoot($this->projectRoot())?->write($content)
+                    ?? $this->memoryStore->add($content, $scope))
+                : $this->memoryStore->add($content, $scope);
             $response = "Memory created with ID: `{$id}` (scope: {$scope})";
         } catch (\Throwable $e) {
             $response = "**Error:** {$e->getMessage()}";

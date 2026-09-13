@@ -11,6 +11,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -245,6 +246,33 @@ final class MemoryPromptWiringTest extends TestCase
         $this->store->add('second note', MemoryScope::Project);
 
         $this->assertStringContainsString('second note', $this->promptFor($app, $provider));
+    }
+
+    public function testARepoLocalProjectNoteReachesTheSystemPrompt(): void
+    {
+        // E25 piece 2: the writer half of the round trip. A note persisted by
+        // ProjectMemoryWriter into the fixture repository's `.sugar-crush/memory/`
+        // surfaces in the next session's fold through the SAME hop chain
+        // buildSystemPrompt -> assemblePrompt -> memorySnapshot -> capture,
+        // with the home store none the wiser.
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+
+        $writer = ProjectMemoryWriter::createForRoot($fixture->root());
+        $this->assertNotNull($writer, 'the fixture root hosts the repo-local corner');
+        $writer?->write('Ship with a clean git status.');
+        // The home store is asked for but left EMPTY, so the note below can
+        // only arrive through the repo-local half of the fold.
+        $fixture->memoryStore();
+
+        $provider = new PromptCapturingProvider();
+        $prompt = $this->promptFor(
+            $fixture->app()->withMessages([new UserMessage('hi')]),
+            $provider,
+        );
+
+        $this->assertStringContainsString('<project-memory>', $prompt);
+        $this->assertStringContainsString('Ship with a clean git status.', $prompt);
     }
 
     // -------------------------------------------------------------------------
@@ -516,6 +544,11 @@ final class MemoryPromptWiringTest extends TestCase
         $provider = new PromptCapturingProvider();
         $prompt = $this->promptFor(
             App::new($provider, 'test-model')
+                // Explicit root, not the ambient CWD fallback: since E25 piece 2
+                // a null root would let whatever `.sugar-crush/memory/` the suite
+                // happens to be standing under join the fold, and this
+                // byte-identity claim is about the class, not the neighborhood.
+                ->withRoot($this->dir)
                 ->withMessages([new UserMessage('hi')])
                 ->withMemoryStore($this->store),
             $provider,

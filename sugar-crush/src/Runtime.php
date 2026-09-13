@@ -9,6 +9,7 @@ use SugarCraft\Crush\Context\ContextWindow;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\IdleCompactionPolicy;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\ProjectMemoryWriter;
 use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\PromptSection;
 use SugarCraft\Crush\Context\RepoMapBlock;
@@ -26,6 +27,7 @@ use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ToolIpcFiles;
@@ -3463,7 +3465,20 @@ final class Runtime
     {
         return $this->memoryBlock ??= $app->memoryStore === null
             ? MemoryBlock::empty()
-            : MemoryBlock::capture($app->memoryStore);
+            : MemoryBlock::capture($app->memoryStore, $this->projectMemoryStore($app));
+    }
+
+    /**
+     * The repo-local project-note store for this App's root, if one exists.
+     *
+     * Resolved through {@see ProjectMemoryWriter::forRoot()} — the read-side
+     * resolver that never creates the tree, so opening any repository does
+     * not litter it with `.sugar-crush/`. Null (the ordinary case) folds
+     * exactly the home store's project scope, as before E25 piece 2.
+     */
+    private function projectMemoryStore(App $app): ?MemoryStore
+    {
+        return ProjectMemoryWriter::forRoot(self::projectRoot($app))?->store();
     }
 
     /**

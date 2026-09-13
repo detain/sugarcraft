@@ -78,6 +78,29 @@ final class MemoryBlockTest extends TestCase
         $this->assertStringContainsString('<project-memory>', $rendered);
         $this->assertStringContainsString('</project-memory>', $rendered);
         $this->assertStringContainsString('Always run vendor/bin/phpunit from the lib root.', $rendered);
+
+        // E25 piece 2 merge contract: the optional repo-local store defaults
+        // to nothing — a single-store fold stays byte-identical — and when one
+        // IS passed, its notes join the fold and its copy claims any shared
+        // id. The twin is planted at a fixed id through writeRawEntry()
+        // precisely because the two stores' own generators could not collide.
+        $this->assertSame($rendered, MemoryBlock::capture($this->store, null)->render());
+
+        $localDir = $this->dir . '_local';
+        mkdir($localDir, 0o700, true);
+        $local = new MemoryStore($localDir);
+        $local->add('Repo-local build note.', MemoryScope::Project);
+
+        $twin = str_repeat('e', 32);
+        $this->writeRawEntry("{$this->dir}/project/{$twin}.md", $twin, 'shared-pile twin', '2026-01-02T03:04:05+00:00');
+        $this->writeRawEntry("{$localDir}/project/{$twin}.md", $twin, 'repo-local twin wins', '2026-01-02T03:04:05+00:00');
+
+        $merged = MemoryBlock::capture($this->store, $local)->render();
+
+        $this->assertStringContainsString('Repo-local build note.', $merged);
+        $this->assertStringContainsString('repo-local twin wins', $merged);
+        $this->assertStringNotContainsString('shared-pile twin', $merged);
+        $this->rmrf($localDir);
     }
 
     /**
