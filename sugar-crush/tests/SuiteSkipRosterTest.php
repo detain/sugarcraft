@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Crush\Tests\Support\SuiteSkipRoster;
 
 /**
@@ -45,6 +46,8 @@ use SugarCraft\Crush\Tests\Support\SuiteSkipRoster;
 #[CoversClass(SuiteSkipRoster::class)]
 final class SuiteSkipRosterTest extends TestCase
 {
+    use SlicesDeclaredMethodsTrait;
+
     private const SYNTHETIC_ROSTER = [
         'Acme\\Tests\\ExampleTest::testAlwaysSkips' => 'a placeholder, for the fixture',
     ];
@@ -508,11 +511,13 @@ final class SuiteSkipRosterTest extends TestCase
                 );
             }
 
-            $body = implode('', array_slice(
+            $rostered = $reflection->getMethod($method);
+            $body = self::declaredSlice(
                 (array) file($reflection->getFileName()),
-                $reflection->getMethod($method)->getStartLine() - 1,
-                $reflection->getMethod($method)->getEndLine() - $reflection->getMethod($method)->getStartLine() + 1,
-            ));
+                $method,
+                $rostered->getStartLine(),
+                $rostered->getEndLine(),
+            );
             self::assertStringContainsString(
                 'markTestSkipped',
                 $body,
@@ -522,11 +527,15 @@ final class SuiteSkipRosterTest extends TestCase
 
             if ($reflection->hasMethod('setUpBeforeClass')) {
                 $gate = $reflection->getMethod('setUpBeforeClass');
-                $gateBody = implode('', array_slice(
+                // The gate is INHERITED for both rostered classes today, so the
+                // slice reads the gate's own declaring file, not the class's —
+                // reflection's line numbers are that file's lines.
+                $gateBody = self::declaredSlice(
                     (array) file($gate->getFileName()),
-                    $gate->getStartLine() - 1,
-                    $gate->getEndLine() - $gate->getStartLine() + 1,
-                ));
+                    'setUpBeforeClass',
+                    $gate->getStartLine(),
+                    $gate->getEndLine(),
+                );
                 self::assertStringNotContainsString(
                     'markTestSkipped',
                     $gateBody,

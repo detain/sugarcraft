@@ -71,9 +71,10 @@ use PHPUnit\Framework\TestCase;
  * that route at the exemplar and round 71 closed it for the fd seam-4 reader
  * list plus `Cli/HelpTest.php`. WHAT THIS CENSUS STILL DOES NOT SEE: a reader
  * that indexes with its OWN array_slice passes direction one and is invisible
- * to the shift — direction one is all this file judges, and one such reader
- * remained open at the fold, `SuiteSkipRosterTest`'s rostered-skip body,
- * outside that fold's ownership. Rostering every reader by `<file>::<method>`
+ * to the shift — direction one is all this file judges. One such reader
+ * remained open at that fold, `SuiteSkipRosterTest`'s rostered-skip body,
+ * outside its ownership; E693 (round 72) routed both of its inline slices
+ * through the trait. Rostering every reader by `<file>::<method>`
  * from here across five concurrently-merging lanes would red on every rename,
  * which is why the line guard lives in the shared trait and not in a roster
  * in this file — see the round-49 lane c report and E325.
