@@ -185,6 +185,10 @@ alone, so however many entries pile into `agent` the captured block is unchanged
 There is accordingly **no entry cap on `/memory import`** and no prompt-cap clamp
 on its response — none is needed once imports and the prompt share no scope.
 
+A project-scope write is stricter than a home one: the project store REFUSES an
+oversized note outright, while the same note filed to the home store would have
+landed — a deliberate, loud asymmetry rather than a silent truncation.
+
 Imports are **not idempotent** (`MemoryStore::add()` mints a fresh UUID per call),
 which is why de-duplication lives at the trigger point rather than in the importer:
 the command writes a sentinel at `.sugar-crush/memory/.imported-<target>` in the
