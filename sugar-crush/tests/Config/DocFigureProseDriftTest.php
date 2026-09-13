@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\AgentPoolConfig;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\Mailbox;
+use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Agents\TaskList;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
@@ -20,6 +21,7 @@ use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\MemoryBlock;
+use SugarCraft\Crush\Context\PromptFence;
 use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Context\RuleLoader;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
@@ -151,6 +153,25 @@ use SugarCraft\Crush\Workflows\Workflow;
     * fixed IN-STEP: MCP.md's drifted `line 175` anchor (E686's own
     * symbols-not-lines rule) and Backend.php's stale "tool-lifecycle observer"
     * on completeAsync, one word the tranche-8-era rewrite left behind.
+    *
+    * E686 TRANCHE-10 (round-73, lane hc) finally works docs/MEMORY.md — the
+    * one page the earlier tranches inventoried and left for last. Seven arms
+    * (BB-BH): the private index constants and the scope vocabulary (invoking
+    * normalizeScope() itself, and honoring the page's `local`-appears-nowhere
+    * claim with a comment-stripped literal census), the entry-type roster and
+    * the project-only fold read through reflection and the live call shapes,
+    * the three-bounds table re-derived by the class's OWN public MAX_* names
+    * with the 512/527 marker arithmetic recomputed, the fence section's three
+    * behavioural promises replayed against PromptFence::escape() directly, the
+    * importer's tag/scope/sentinel literals against their construction sites,
+    * the spelled SIX containment sites pinned three ways (doc word, token
+    * census, ContainedPathInventoryTest roster row), and the loader-threading
+    * paragraph matched list-for-list against the constructor calls that
+    * actually receive the named argument. TWO FALSE sentences fixed IN-STEP:
+    * the containment paragraph still said five call sites and left
+    * loadAncestorRoots()' ancestor entry unnamed (the census grew to six
+    * before the page did),  and the threading sentence omitted Grep — the fifth tool that
+    * receives the loader. Both corrections are pinned by the arms above them.
     *
     * @internal
     */
@@ -3727,6 +3748,678 @@ final class DocFigureProseDriftTest extends TestCase
         $async = (string) preg_replace('/^.*\@param callable\|null \$onEvent Optional turn-lifecycle/s', '', $backendSource);
         self::assertStringContainsString('{@see complete()}', $async, 'completeAsync() no longer defers its union to complete() — the single-source property this pin asserts');
     }
+
+    /**
+     * E686 tranche-10 (BB): MEMORY.md's index bounds and scope vocabulary. The
+     * page went unguarded for nine tranches because its figures are private —
+     * MAX_INDEX_LINES/MAX_INDEX_BYTES are private consts, the scope mapping is
+     * the body of a private method, and the `local` sentence is an absence
+     * claim. All three re-derive cleanly: the constants through reflection,
+     * the mapping by invoking normalizeScope() itself, and the absence through
+     * a comment-stripped literal scan over every src/ file.
+     */
+    public function testMemoryIndexBoundsAndScopeVocabularyNameTheStoreTheyDescribe(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+        $store = new \ReflectionClass('SugarCraft\Crush\Memory\MemoryStore');
+
+        self::assertSame(
+            1,
+            preg_match('/`MAX_INDEX_LINES = (\d+)` and `MAX_INDEX_BYTES = (\d+) \* (\d+)`/', $doc, $bounds),
+            'MEMORY.md no longer states the index bounds pair in the sentence this arm pins',
+        );
+        self::assertSame(
+            (int) $bounds[1],
+            (int) $store->getReflectionConstant('MAX_INDEX_LINES')->getValue(),
+            'MAX_INDEX_LINES drifted from the figure the page quotes without the page following',
+        );
+        self::assertSame(
+            (int) $bounds[2] * (int) $bounds[3],
+            (int) $store->getReflectionConstant('MAX_INDEX_BYTES')->getValue(),
+            'MAX_INDEX_BYTES no longer equals the product the page itself spells out',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/enum.s cases are ((?:`\w+`, )+`\w+`) — but/', $doc, $casesCite),
+            'the MemoryScope cases sentence left its pinned shape — re-point the arm, do not delete the claim',
+        );
+        preg_match_all('/`(\w+)`/', $casesCite[1], $documentedCases);
+        self::assertSame(
+            array_map(static fn (\UnitEnum $case): string => $case->name, MemoryScope::cases()),
+            $documentedCases[1],
+            'the documented case roster no longer matches MemoryScope::cases() in word or order',
+        );
+
+        $normalize = $store->getMethod('normalizeScope');
+        $normalize->setAccessible(true);
+        $bare = $store->newInstanceWithoutConstructor();
+        $derivedDirs = [];
+        foreach (MemoryScope::cases() as $case) {
+            $derivedDirs[$case->name] = (string) $normalize->invoke($bare, $case);
+        }
+
+        self::assertSame(
+            1,
+            preg_match('/string-based caller says ((?:`\w+`, )+`\w+`), and/', $doc, $stringCallers),
+            'the string-vocabulary half of the naming note is gone',
+        );
+        preg_match_all('/`(\w+)`/', $stringCallers[1], $documentedDirs);
+        self::assertSame(
+            array_values($derivedDirs),
+            $documentedDirs[1],
+            'the documented caller strings no longer match what normalizeScope() answers per case',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/store has (\w+) scopes — ((?:`\w+`(?:, | and )?)+)\./u', $doc, $tiers),
+            'the three-tier sentence left its pinned shape',
+        );
+        $wordNumbers = ['three' => 3];
+        self::assertArrayHasKey($tiers[1], $wordNumbers, 'the spelled scope count is now a word this arm cannot judge — re-read it into the map deliberately');
+        preg_match_all('/`(\w+)`/', $tiers[2], $documentedTiers);
+        self::assertCount($wordNumbers[$tiers[1]], $documentedTiers[1], 'the spelled scope count and the listed directory names no longer agree');
+        self::assertEqualsCanonicalizing(
+            array_values($derivedDirs),
+            $documentedTiers[1],
+            'the tier section lists directories normalizeScope() no longer answers',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/and `(\w+)` appears nowhere\s+else in the codebase/u', $doc, $absence),
+            'the absence claim lost its sentence — the naming note needs re-arming, not silence',
+        );
+        $needle = $absence[1];
+        $sites = [];
+        foreach (self::srcTexts() as $relative => $text) {
+            foreach (\PhpToken::tokenize($text) as $token) {
+                if ($token->is(T_COMMENT) || $token->is(T_DOC_COMMENT)) {
+                    continue;
+                }
+                if ($token->is(T_CONSTANT_ENCAPSED_STRING) && trim($token->text, "'\"") === $needle) {
+                    $sites[$relative] = true;
+                }
+            }
+        }
+        self::assertSame(
+            ['src/Agents/MemoryScope.php'],
+            array_keys($sites),
+            sprintf('the page claims `%s` appears nowhere else, yet a live string literal carries it elsewhere in src/', $needle),
+        );
+        self::assertSame($needle, MemoryScope::Local->value, 'MemoryScope::Local no longer backs onto the string the absence claim quotes');
+    }
+
+    /**
+     * E686 tranche-10 (BC): MEMORY.md's entry vocabulary and folding policy —
+     * the scope union signature, the no-scope pair, the four entry types, the
+     * `type: pattern` no-tags add shape, the `/memory add` default, and the
+     * project-only fold are each re-derived from reflection or the call sites
+     * themselves, and the two wiring tests the page cites must still exist.
+     */
+    public function testMemoryPromptFoldingPolicyReadsTheCallShapesItStates(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+        $store = new \ReflectionClass('SugarCraft\Crush\Memory\MemoryStore');
+
+        self::assertSame(
+            1,
+            preg_match('/takes a scope accepts `(\w+)\|(\w+)`/', $doc, $union),
+            'the union-signature sentence is gone from the naming note',
+        );
+        $enumClass = 'SugarCraft\Crush\Agents\\' . $union[2];
+        self::assertTrue(class_exists($enumClass), sprintf('the quoted union names %s, which no longer resolves under SugarCraft\Crush\Agents — the cite rotted, not (just) the doc', $union[2]));
+        $scopeMethods = [];
+        foreach ($store->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            foreach ($method->getParameters() as $parameter) {
+                if ($parameter->getName() !== 'scope') {
+                    continue;
+                }
+                $scopeMethods[] = $method->getName();
+                $declared = explode('|', (string) $parameter->getType());
+                sort($declared);
+                $quoted = [$union[1], $enumClass];
+                sort($quoted);
+                self::assertSame(
+                    $quoted,
+                    $declared,
+                    sprintf('%s() no longer takes the union the page quotes', $method->getName()),
+                );
+            }
+        }
+        self::assertNotEmpty($scopeMethods, 'no public MemoryStore method takes a scope parameter at all — the naming note became fiction');
+
+        self::assertSame(
+            1,
+            preg_match('/`(\w+)\(\)` and `(\w+)\(\)` take no scope at all/u', $doc, $noScope),
+            'the no-scope pair sentence is gone',
+        );
+        foreach ([$noScope[1], $noScope[2]] as $method) {
+            foreach ($store->getMethod($method)->getParameters() as $parameter) {
+                self::assertNotSame('scope', $parameter->getName(), sprintf('the page says %s() takes no scope, yet it grew a scope parameter', $method));
+            }
+        }
+
+        self::assertSame(
+            1,
+            preg_match('/supports ((?:`\w+`(?:, | and )?)+), but/u', $doc, $typesCite),
+            'the MemoryEntry type-roster sentence left its pinned shape',
+        );
+        preg_match_all('/`(\w+)`/', $typesCite[1], $documentedTypes);
+        $entryDoc = (string) (new \ReflectionClass('SugarCraft\Crush\Memory\MemoryEntry'))->getConstructor()->getDocComment();
+        self::assertSame(
+            1,
+            preg_match("/Entry type: ('(?:\w+)',(?: '(?:\w+)',?)*(?: or '(?:\w+)')?)/", $entryDoc, $rosterLine),
+            'MemoryEntry no longer lists its four types in the @param the page derives from',
+        );
+        preg_match_all("/'(\w+)'/", $rosterLine[1], $derivedTypes);
+        self::assertSame($derivedTypes[1], $documentedTypes[1], 'the page roster and MemoryEntry\'s @param roster no longer match in word or order');
+
+        self::assertSame(
+            1,
+            preg_match('/creates the entry with `type: (\w+)`/u', $doc, $addShape),
+            'the add-shape sentence is gone',
+        );
+        self::assertSame(
+            $derivedTypes[1][0],
+            $addShape[1],
+            'the page says the chat command writes only the FIRST roster type, yet the quoted type is no longer first',
+        );
+        $addBody = self::bodyExcerpt(self::sourceOf('Memory/MemoryStore.php'), 'add');
+        self::assertStringContainsString("type: '" . $addShape[1] . "'", $addBody, 'MemoryStore::add() no longer stamps the type the page quotes');
+
+        $chatAdd = self::bodyExcerpt(self::sourceOf('Chat.php'), 'memoryAdd');
+        self::assertStringContainsString('->add($content, $scope)', $chatAdd, 'the chat command no longer calls add() in the two-argument no-tags shape the page states');
+        self::assertStringNotContainsString('->add($content, $scope,', $chatAdd, 'the chat command started passing tags — the "and no tags" sentence needs rewriting in the same change');
+
+        self::assertSame(
+            1,
+            preg_match('/`\/memory add` defaults to `(\w+)`/u', $doc, $default),
+            'the add-default sentence is gone',
+        );
+        $defaultScope = null;
+        foreach ($store->getMethod('add')->getParameters() as $parameter) {
+            if ($parameter->getName() === 'scope') {
+                $defaultScope = $parameter->getDefaultValue();
+            }
+        }
+        self::assertSame($default[1], $defaultScope, '/memory add no longer defaults to the scope the page names');
+
+        self::assertSame(
+            1,
+            preg_match('/\*\*`(\w+)` is the only scope that reaches the prompt\.\*\*/u', $doc, $onlyScope),
+            'the bolded one-prompt-tier policy sentence is gone',
+        );
+        $foldCase = null;
+        foreach (MemoryScope::cases() as $case) {
+            if ($case->value === $onlyScope[1]) {
+                $foldCase = $case->name;
+            }
+        }
+        self::assertNotNull($foldCase, sprintf('the only prompt scope the page names (%s) is no longer an enum value', $onlyScope[1]));
+        $captureBody = self::bodyExcerpt(self::sourceOf('Context/MemoryBlock.php'), 'capture');
+        self::assertStringContainsString('list(MemoryScope::' . $foldCase . ')', $captureBody, 'capture() no longer reads the scope list the policy sentence names');
+        self::assertSame(1, substr_count($captureBody, 'MemoryScope::'), 'capture() reads more than one scope — the page\'s "only one prompt tier" is now a fold policy and its prose must say so');
+
+        self::assertSame(
+            1,
+            preg_match('/`Runtime::(\w+)\(\)` folds in a `MemoryBlock`/u', $doc, $fold),
+            'the folding sentence left its pinned shape',
+        );
+        $runtimeText = self::sourceOf('Runtime.php');
+        self::assertSame(
+            1,
+            preg_match('/assemblePrompt\(\$this->(\w+)\(/', self::bodyExcerpt($runtimeText, $fold[1]), $hop),
+            sprintf('%s() no longer assembles through a single sections generator — the page attributes the fold to it by name', $fold[1]),
+        );
+        $runtimeSpans = [];
+        foreach (self::functionSpans($runtimeText) as $runtimeSpan) {
+            $runtimeSpans[$runtimeSpan['name']] = $runtimeSpan;
+        }
+        self::assertArrayHasKey($hop[1], $runtimeSpans, 'the sections generator the prompt assembly delegates to no longer exists on Runtime');
+        $sectionsText = (string) substr($runtimeText, $runtimeSpans[$hop[1]]['begin'], $runtimeSpans[$hop[1]]['end'] - $runtimeSpans[$hop[1]]['begin']);
+        self::assertStringContainsString('memorySnapshot(', $sectionsText, 'the sections generator no longer folds the memoized snapshot — the attribution of the fold to the named entry point runs through exactly this hop');
+        $onceNumbers = ['once' => 1];
+        self::assertSame(
+            1,
+            preg_match('/captured (\w+) per `Runtime` — not (\w+) per step/u', $doc, $memo),
+            'the once-per-Runtime memo sentence is gone',
+        );
+        self::assertArrayHasKey($memo[1], $onceNumbers, 'the memo count is now a word this arm cannot judge');
+        self::assertSame($onceNumbers[$memo[1]], substr_count($runtimeText, '$this->memoryBlock ??='), 'the memo count the page spells no longer matches the memoization sites in src');
+
+        preg_match_all('/`(MemoryPromptWiringTest)::(\w+)`/u', $doc, $wiringCites, PREG_SET_ORDER);
+        self::assertNotEmpty($wiringCites, 'the wiring-test cites vanished from the folding section');
+        foreach ($wiringCites as $cite) {
+            self::assertTrue(
+                method_exists('SugarCraft\Crush\Tests\Integration\\' . $cite[1], $cite[2]),
+                sprintf('%s::%s no longer exists — the page names a test that never runs', $cite[1], $cite[2]),
+            );
+        }
+    }
+
+    /**
+     * E686 tranche-10 (BD): MEMORY.md's three-bounds table and the marker
+     * arithmetic hanging off it. The rows are matched by the live class's own
+     * public MAX_* names — no hand-typed roster — and the "exactly 512 bytes,
+     * not 527" sentence is re-derived from MAX_ENTRY_BYTES plus the byte length
+     * of the private TRUNCATION_MARKER.
+     */
+    public function testMemoryBoundsTableRowsAndMarkerArithmeticMatchTheConstants(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+        $block = new \ReflectionClass(MemoryBlock::class);
+
+        self::assertSame(
+            1,
+            preg_match('/(\w+) bounds, not (\w+) — all three are `public const`/u', $doc, $countClaim),
+            'the bounds preamble lost its count claim',
+        );
+        $wordNumbers = ['three' => 3, 'two' => 2];
+        $boundsWord = strtolower($countClaim[1]);
+        $counterWord = strtolower($countClaim[2]);
+        self::assertArrayHasKey($boundsWord, $wordNumbers, 'the spelled bounds count is now a word this arm cannot judge — re-read it deliberately');
+        self::assertArrayHasKey($counterWord, $wordNumbers, 'the spelled counter-claim ("not two") is now a word this arm cannot judge');
+        $publicBounds = [];
+        $privateBounds = [];
+        foreach ($block->getReflectionConstants() as $constant) {
+            if (!str_starts_with($constant->getName(), 'MAX_')) {
+                continue;
+            }
+            if ($constant->isPublic()) {
+                $publicBounds[$constant->getName()] = (int) $constant->getValue();
+            } else {
+                $privateBounds[] = $constant->getName();
+            }
+        }
+        self::assertSame($wordNumbers[$boundsWord], count($publicBounds), sprintf('the page counts its bounds in words (%s), yet MemoryBlock now exposes %d public MAX_* constants', $countClaim[1], count($publicBounds)));
+        self::assertNotSame($wordNumbers[$boundsWord], $wordNumbers[$counterWord], 'the preamble\'s two spelled counts collapsed onto each other');
+        self::assertSame([], $privateBounds, 'a MAX_* bound went private — the page\'s "all three are public const" sentence is now false');
+
+        $marker = (string) $block->getReflectionConstant('TRUNCATION_MARKER')->getValue();
+        $rowValues = [];
+        foreach (array_keys($publicBounds) as $name) {
+            self::assertSame(
+                1,
+                preg_match('/`' . $name . '` \| (\d+) \|/u', $doc, $row),
+                sprintf('the bounds table no longer carries the %s row this family pins', $name),
+            );
+            $rowValues[$name] = (int) $row[1];
+            self::assertSame($publicBounds[$name], $rowValues[$name], sprintf('%s\'s table figure drifted from its public const', $name));
+        }
+        self::assertSame(1, substr_count($doc, '`' . $marker . '`'), sprintf('the visible %s marker is not quoted in the table exactly once (the table row carries it with its leading space)', var_export($marker, true)));
+        self::assertSame(
+            1,
+            preg_match('/ends `XXXXX (\[…truncated\])`,? not/u', $doc, $ends),
+            'the measured ends-with sentence is gone — the 512-vs-527 relation below needs a new home',
+        );
+        self::assertSame($marker, ' ' . $ends[1], 'the quoted marker no longer equals the byte-exact private const, leading space included');
+
+        $entryName = null;
+        $totalName = null;
+        foreach (array_keys($publicBounds) as $name) {
+            if (str_contains($name, '_ENTRY_BYTES')) {
+                $entryName = $name;
+            }
+            if ($name === 'MAX_BYTES' || str_ends_with($name, '_BYTES')) {
+                $totalName ??= $name;
+            }
+        }
+        self::assertSame(
+            1,
+            preg_match('/`(\w+) <= (\w+)`/u', $doc, $relation),
+            'the <= relation between the per-entry and total bounds left the prose',
+        );
+        self::assertArrayHasKey($relation[1], $rowValues, sprintf('the %s side of the quoted <= relation names %s, which is no longer one of this class\'s public bounds', $entryName, $relation[1]));
+        self::assertArrayHasKey($relation[2], $rowValues, sprintf('the %s side of the quoted <= relation names %s, which is no longer one of this class\'s public bounds', $totalName, $relation[2]));
+        self::assertLessThanOrEqual($rowValues[$totalName], $rowValues[$entryName], sprintf('%s <= %s stopped holding — the total bound is no longer a real ceiling with no first-entry exemption', $entryName, $totalName));
+
+        self::assertSame(
+            1,
+            preg_match('/"(\d+), or one note, whichever is larger"/u', $doc, $fallback),
+            'the quoted fallback-ceiling sentence is gone',
+        );
+        self::assertSame($rowValues[$totalName], (int) $fallback[1], 'the quoted fallback ceiling no longer names the total bound\'s value');
+
+        self::assertSame(
+            1,
+            preg_match('/\*\*exactly (\d+) bytes\*\*/u', $doc, $cap),
+            'the bolded exact-cap figure is gone from the marker paragraph',
+        );
+        self::assertSame($rowValues[$entryName], (int) $cap[1], 'the bolded cap no longer equals the per-entry bound');
+        self::assertSame(
+            1,
+            preg_match('/not at the (\d+) it would be if the marker were added on top of the ceiling/u', $doc, $sum),
+            'the 527-style counterfactual sentence is gone',
+        );
+        self::assertSame((int) $cap[1] + strlen($marker), (int) $sum[1], 'the stated counterfactual no longer equals cap + marker bytes — the paragraph\'s arithmetic is false');
+        self::assertNotSame((int) $cap[1], (int) $sum[1], 'the paragraph now claims cap and cap+marker are the same number');
+    }
+
+    /**
+     * E686 tranche-10 (BE): the `<project-memory>` fence section. The doc calls
+     * PromptFence the single authority for the tag roster and makes three
+     * behavioural promises about escape() — recognised tags rewrite only their
+     * leading `<`, clean bodies pass through byte-for-byte, the function is
+     * idempotent — all of which are replayed against the live class, while the
+     * order-before-clip claim reads renderEntry()'s own nesting.
+     */
+    public function testProjectMemoryFenceRosterAndEscapePromiseHoldAgainstTheAuthority(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/roster — ((?:`[\w-]+`, )+`[\w-]+`) — and/u', $doc, $rosterCite),
+            'the fence-tag roster sentence left its pinned shape',
+        );
+        preg_match_all('/`([\w-]+)`/', $rosterCite[1], $documentedTags);
+        $tags = (array) (new \ReflectionClass(PromptFence::class))->getReflectionConstant('TAGS')->getValue();
+        self::assertSame($tags, $documentedTags[1], 'the documented roster no longer matches PromptFence::TAGS in word or order — the page names PromptFence as the single authority');
+
+        self::assertSame(
+            1,
+            preg_match('/### The `(<[\w-]+>)` fence/u', $doc, $heading),
+            'the fence section heading stopped naming the tag it pins',
+        );
+        $blockText = self::sourceOf('Context/MemoryBlock.php');
+        $fenceBody = self::bodyExcerpt($blockText, 'fence');
+        self::assertSame(1, preg_match("/return '([^']+)'/", $fenceBody, $ret), 'MemoryBlock::fence() no longer answers a bare literal return');
+        self::assertSame($heading[1], $ret[1], 'fence() answers a different tag than the section heading quotes');
+
+        self::assertSame(
+            1,
+            preg_match('/leading `(<)` of a recognised open\/close tag to `([^`]+)`/u', $doc, $rewrite),
+            'the rewrite promise lost its literal pair',
+        );
+        foreach ($tags as $tag) {
+            self::assertSame($rewrite[2] . $tag . '>', PromptFence::escape($rewrite[1] . $tag . '>'), sprintf('an open %s<%s> no longer escapes to the documented form', $rewrite[1], $tag));
+            self::assertSame($rewrite[2] . '/' . $tag . '>', PromptFence::escape($rewrite[1] . '/' . $tag . '>'), sprintf('a close %s</%s> no longer escapes to the documented form', $rewrite[1], $tag));
+        }
+        self::assertSame('plain note body where 3 < 4 holds', PromptFence::escape('plain note body where 3 < 4 holds'), 'a bare < inside a clean body is being rewritten — "touches nothing else" broke');
+
+        $fenceTag = trim($heading[1], '<>');
+        $forged = $rewrite[1] . '/' . $fenceTag . '>';
+        self::assertSame(
+            1,
+            preg_match('/arrives as `([^`]+)` and cannot close/u', $doc, $arrival),
+            'the forging sentence lost its arrival literal',
+        );
+        self::assertSame($arrival[1], PromptFence::escape($forged), 'a note forging its fence no longer arrives as the doc promises');
+        self::assertSame(PromptFence::escape($forged), PromptFence::escape(PromptFence::escape($forged)), 'escape() stopped being idempotent — the page promises it plainly');
+
+        self::assertSame(
+            1,
+            preg_match('/once each `<` costs (\w+) bytes/u', $doc, $cost),
+            'the four-byte cost claim is gone from the escape-before-clip paragraph',
+        );
+        $costNumbers = ['four' => 4];
+        self::assertArrayHasKey($cost[1], $costNumbers, 'the byte cost is now a word this arm cannot judge');
+        self::assertSame($costNumbers[$cost[1]], strlen($rewrite[2]), 'the rewrite target no longer costs the bytes the page states per <');
+
+        self::assertSame(1, preg_match('/runs \*before\* the clip/u', $doc), 'the order promise left the prose');
+        $renderEntry = self::bodyExcerpt($blockText, 'renderEntry');
+        self::assertSame(1, preg_match('/clip\(PromptFence::escape\(/', $renderEntry), 'renderEntry() no longer nests escape INSIDE the clip — the escape-before-clip sentence must be rewritten in the same change');
+
+        preg_match_all('/`(MemoryBlockTest)::(\w+)`/u', $doc, $fenceCites, PREG_SET_ORDER);
+        self::assertGreaterThanOrEqual(3, count($fenceCites), 'the fence section lost cites — the escape promises now stand untested-by-name');
+        foreach ($fenceCites as $cite) {
+            self::assertTrue(
+                method_exists('SugarCraft\Crush\Tests\Context\\' . $cite[1], $cite[2]),
+                sprintf('%s::%s no longer exists — the page names a test that never runs', $cite[1], $cite[2]),
+            );
+        }
+    }
+
+    /**
+     * E686 tranche-10 (BF): the foreign-import section. The `source:` tag, the
+     * Local-scope-only write policy, the landing directory, the Chat sentinel
+     * literal and the per-call UUID minting all re-derive from the importer,
+     * the enum, the normalizer and the sentinel call site itself.
+     */
+    public function testForeignImportTagScopeAndSentinelNameTheLiveCode(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/tagged `(\w+:)<skill-source>` — the same `(\w+)` vocabulary/u', $doc, $tag),
+            'the tagging sentence left its pinned shape',
+        );
+        self::assertTrue(class_exists('SugarCraft\Crush\Skills\\' . $tag[2]), sprintf('%s no longer resolves — the vocabulary the page leans on moved', $tag[2]));
+        $importer = self::sourceOf('Memory/ForeignMemoryImporter.php');
+        self::assertStringContainsString("'" . $tag[1] . "' . \$source->value", $importer, sprintf('the importer no longer stamps the %s prefix the page quotes', $tag[1]));
+
+        self::assertSame(
+            1,
+            preg_match('/writes every entry with `MemoryScope::(\w+)`, which `MemoryStore::normalizeScope\(\)` lands in the `(\w+)` directory/u', $doc, $scope),
+            'the scope-landing sentence left its pinned shape',
+        );
+        $scopeWrites = preg_match_all('/scope: MemoryScope::(\w+)/', $importer, $written);
+        self::assertGreaterThan(0, $scopeWrites, 'the importer no longer spells its scope at the construction sites the page describes');
+        self::assertSame([$scope[1]], array_values(array_unique($written[1])), 'the importer writes more than one scope — "every entry" needs rewriting alongside it');
+        $scopeCase = null;
+        foreach (MemoryScope::cases() as $case) {
+            if ($case->name === $scope[1]) {
+                $scopeCase = $case;
+            }
+        }
+        self::assertNotNull($scopeCase, sprintf('MemoryScope::%s, spelled by the page, is no longer an enum case', $scope[1]));
+        $store = new \ReflectionClass('SugarCraft\Crush\Memory\MemoryStore');
+        $normalize = $store->getMethod('normalizeScope');
+        $normalize->setAccessible(true);
+        self::assertSame(
+            $scope[2],
+            (string) $normalize->invoke($store->newInstanceWithoutConstructor(), $scopeCase),
+            sprintf('normalizeScope() no longer lands %s in the `%s` directory the page states', $scope[1], $scope[2]),
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/`\/memory list (\w+)` and `\/memory \w+`/u', $doc, $listable),
+            'the list-and-search sentence is gone',
+        );
+        self::assertSame($scope[2], $listable[1], 'the directory the imports land in and the directory the page says /memory list can read have come apart');
+
+        self::assertSame(
+            1,
+            preg_match('/mints a fresh (\w+) per call/u', $doc, $uuid),
+            'the non-idempotence explanation is gone',
+        );
+        self::assertStringContainsString('generate' . ucfirst(strtolower($uuid[1])) . '(', self::bodyExcerpt(self::sourceOf('Memory/MemoryStore.php'), 'add'), 'MemoryStore::add() no longer mints per-call identifiers — the "imports are not idempotent" paragraph needs re-reading');
+
+        self::assertSame(
+            1,
+            preg_match('/sentinel at `([^`]+)<target>` in the project/u', $doc, $sentinel),
+            'the sentinel-path sentence left its pinned shape',
+        );
+        self::assertStringContainsString("'/" . $sentinel[1] . "'", self::sourceOf('Chat.php'), 'the sentinel path the page quotes no longer matches the literal at the Chat trigger site');
+
+        preg_match_all('/`(MemoryImportCommandTest)::(\w+)`/u', $doc, $importCites, PREG_SET_ORDER);
+        self::assertGreaterThanOrEqual(2, count($importCites), 'the import section lost its named-test cites');
+        foreach ($importCites as $cite) {
+            self::assertTrue(
+                method_exists('SugarCraft\Crush\Tests\Commands\\' . $cite[1], $cite[2]),
+                sprintf('%s::%s no longer exists — the page names a test that never runs', $cite[1], $cite[2]),
+            );
+        }
+    }
+
+    /**
+     * E686 tranche-10 (BG): the containment section's counted claim. The page
+     * spells SIX ContainedPath call sites "one per read decision" and names
+     * five methods; the number is pinned three ways — the doc word, the token
+     * census with comments stripped, and ContainedPathInventoryTest's public
+     * roster row — and every census site must fall inside a method the sentence
+     * names. The shared-set paragraph re-counts the four routes it lists.
+     */
+    public function testContainmentSitesAndSharedEmittedSetCountWhatThePageClaims(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/through `ContainedPath` — (\w+) call sites, one per read decision: (.*?)\. The gate closure/u', $doc, $contain),
+            'the containment count sentence left its pinned shape',
+        );
+        $wordNumbers = ['six' => 6, 'five' => 5, 'four' => 4];
+        self::assertArrayHasKey($contain[1], $wordNumbers, 'the spelled call-site count is now a word this arm cannot judge — re-read it deliberately');
+        preg_match_all('/`(\w+)\(\)`\'\w+/u', $contain[2], $named);
+        self::assertNotEmpty($named[1], 'the containment sentence stopped naming its read decisions');
+        self::assertSame(5, count($named[1]), 'the sentence names a different number of methods than the five decisions this arm walks — re-read the sentence, do not bend the walk');
+
+        $loaderText = self::sourceOf('Context/InstructionFileLoader.php');
+        self::assertTrue(class_exists('SugarCraft\Crush\Context\InstructionFileLoader'));
+        $tokens = \PhpToken::tokenize($loaderText);
+        $significant = [];
+        foreach ($tokens as $index => $token) {
+            if ($token->is([T_COMMENT, T_DOC_COMMENT, T_WHITESPACE])) {
+                continue;
+            }
+            $significant[] = ['token' => $token, 'index' => $index];
+        }
+        $sites = [];
+        $count = count($significant);
+        for ($i = 1; $i < $count - 2; $i++) {
+            if (
+                $significant[$i]['token']->is(T_STRING)
+                && $significant[$i]['token']->text === 'within'
+                && $i >= 2
+                && $significant[$i - 1]['token']->is(T_DOUBLE_COLON)
+                && $significant[$i - 2]['token']->is(T_STRING)
+                && $significant[$i - 2]['token']->text === 'ContainedPath'
+                && $significant[$i + 1]['token']->text === '('
+            ) {
+                $sites[] = $significant[$i]['token']->pos;
+            }
+        }
+        $roster = (array) (new \ReflectionClass('SugarCraft\Crush\Tests\Support\ContainedPathInventoryTest'))->getConstant('ROUTED_CALL_SITES');
+        self::assertArrayHasKey('Context/InstructionFileLoader.php', $roster, 'the inventory roster lost this file\'s row — the sentence and the census need re-deriving together');
+        self::assertSame($wordNumbers[$contain[1]], count($sites), sprintf('the page spells its containment count (%s), yet the comment-stripped census finds %d call sites', $contain[1], count($sites)));
+        self::assertSame($wordNumbers[$contain[1]], $roster['Context/InstructionFileLoader.php'], 'the inventory roster row no longer agrees with the page\'s spelled count');
+
+        $spans = self::functionSpans($loaderText);
+        $byName = [];
+        foreach ($spans as $span) {
+            $byName[$span['name']] = $span;
+        }
+        $covered = 0;
+        foreach ($named[1] as $method) {
+            self::assertArrayHasKey($method, $byName, sprintf('the containment sentence names %s(), which no longer exists on the loader', $method));
+            $inside = 0;
+            foreach ($sites as $position) {
+                if ($position >= $byName[$method]['begin'] && $position < $byName[$method]['end']) {
+                    $inside++;
+                }
+            }
+            self::assertGreaterThan(0, $inside, sprintf('%s() no longer performs a contained read the sentence credits it with', $method));
+            $covered += $inside;
+        }
+        self::assertSame(count($sites), $covered, 'a containment call site now lives OUTSIDE every method the sentence names — the per-decision claim became false');
+
+        self::assertSame(
+            1,
+            preg_match('/shared "already emitted" set covers all (\w+) routes — root, forced, `@import` inlining and on-touch/u', $doc, $routes),
+            'the shared-set sentence left its pinned shape',
+        );
+        self::assertArrayHasKey($routes[1], $wordNumbers, 'the spelled route count is now a word this arm cannot judge');
+        $routeMethods = 0;
+        foreach (['loadRoot', 'loadForced', 'expandImports', 'loadForPath'] as $route) {
+            self::assertArrayHasKey($route, $byName, sprintf('a route the shared-set sentence lists (%s) disappeared from the loader', $route));
+            $slice = (string) substr($loaderText, $byName[$route]['begin'], $byName[$route]['end'] - $byName[$route]['begin']);
+            if (str_contains($slice, 'emittedPaths')) {
+                $routeMethods++;
+            }
+        }
+        self::assertSame($wordNumbers[$routes[1]], $routeMethods, 'the routes touching the shared emitted-set no longer number what the sentence spells');
+
+        $propertyDeclarations = 0;
+        foreach ($significant as $j => $row) {
+            if ($row['token']->is(T_VARIABLE) && $row['token']->text === '$emittedPaths' && $j > 0 && $significant[$j - 1]['token']->is(T_ARRAY)) {
+                $propertyDeclarations++;
+            }
+        }
+        self::assertSame(1, $propertyDeclarations, 'the "one loader ... share one dedup map" promise needs exactly one $emittedPaths property — a second appeared');
+
+        self::assertSame(
+            1,
+            preg_match('/`(\w+)\(\)` is the pull-based seam/u', $doc, $seam),
+            'the refusal-seam sentence is gone',
+        );
+        self::assertTrue(
+            (new \ReflectionMethod('SugarCraft\Crush\Context\InstructionFileLoader', $seam[1]))->isPublic(),
+            sprintf('%s() went non-public — the page still presents it as the pull-based seam', $seam[1]),
+        );
+    }
+
+    /**
+     * E686 tranche-10 (BH): the loader-threading and `@import` sections. The
+     * tool list the page prints must equal, in order, the constructor calls
+     * inside Bootstrap::unfilteredTools() that actually pass the named
+     * argument; every name must still resolve; and the import resolver's depth
+     * cap plus the two regex-shape claims (`.md`-only, code-span-skipped)
+     * re-derive from the live pattern.
+     */
+    public function testLoaderThreadingNamesEveryToolThatReceivesTheLoader(): void
+    {
+        $doc = self::markdownProse((string) file_get_contents(dirname(__DIR__, 2) . '/docs/MEMORY.md'));
+
+        self::assertSame(
+            1,
+            preg_match('/`Bootstrap::(\w+)\(\)` threads \*\*one\*\* loader into ((?:`\w+`(?:, | and )?)+) so/u', $doc, $thread),
+            'the threading sentence left its pinned shape',
+        );
+        preg_match_all('/`(\w+)`/', $thread[2], $documentedTools);
+        $bootstrap = self::sourceOf('Cli/Bootstrap.php');
+        self::assertTrue(method_exists(Bootstrap::class, $thread[1]), sprintf('Bootstrap::%s() no longer exists — the sentence naming it as the threader is stale', $thread[1]));
+
+        $threaderBody = self::bodyExcerpt($bootstrap, $thread[1], 6000);
+        self::assertStringContainsString('self::unfilteredTools(', $threaderBody, sprintf('%s() no longer delegates to unfilteredTools() — the authority the wiring moved under needs re-reading', $thread[1]));
+
+        $span = null;
+        foreach (self::functionSpans($bootstrap) as $candidate) {
+            if ($candidate['name'] === 'unfilteredTools') {
+                $span = $candidate;
+            }
+        }
+        self::assertNotNull($span, 'Bootstrap::unfilteredTools() no longer exists — this arm and the delegation above both lost their authority');
+        $spanText = (string) substr($bootstrap, $span['begin'], $span['end'] - $span['begin']);
+        $wiredCount = preg_match_all('/new (\w+)\((?:(?!new )[^;])*?instructionLoader: \$loader/', $spanText, $wired);
+        self::assertGreaterThan(0, (int) $wiredCount, 'no constructor call in unfilteredTools passes the named loader argument anymore — the page\'s whole threading paragraph became fiction');
+        self::assertSame($documentedTools[1], $wired[1], 'the documented tool list and the constructor calls that actually receive the loader no longer agree in membership or order');
+        foreach ($wired[1] as $tool) {
+            self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\\' . $tool), sprintf('%s, listed by the page and wired at Bootstrap, no longer resolves under Tools\BuiltIn', $tool));
+        }
+        self::assertSame(
+            $wiredCount,
+            substr_count($bootstrap, 'instructionLoader: $loader'),
+            'a second site outside unfilteredTools started threading the loader — the single-thread claim this arm pins needs re-reading',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/depth is capped at (\d+)/u', $doc, $depth),
+            'the depth-cap bullet is gone',
+        );
+        $resolver = self::sourceOf('Context/ImportResolver.php');
+        self::assertSame(
+            (int) $depth[1],
+            (int) (new \ReflectionClass('SugarCraft\Crush\Context\ImportResolver'))->getReflectionConstant('MAX_DEPTH')->getValue(),
+            'ImportResolver::MAX_DEPTH drifted from the digit the bullet states',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/Only `([^`]+)` targets are matched/u', $doc, $target),
+            'the .md-only sentence is gone',
+        );
+        self::assertTrue(str_starts_with($target[1], '.'), 'the quoted target stopped being an extension — this arm derives the escaped-needle from a leading dot');
+        self::assertStringContainsString('\\' . $target[1], $resolver, sprintf('the resolver pattern no longer anchors on the %s target the page states', $target[1]));
+        self::assertStringContainsString('(?<!`', $resolver, 'the code-span skip vanished from the pattern — documenting the syntax would start triggering it');
+        self::assertStringContainsString('(?!`', $resolver, 'the code-span skip vanished from the closing side — same hazard');
+    }
+
 
     /**
      * The live roster of CRUSH_* keys a hook child receives, derived from the

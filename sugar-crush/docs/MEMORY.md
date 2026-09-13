@@ -202,8 +202,8 @@ repository* chooses, so the directory is contained against the checkout and each
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` in a subdirectory is injected when
   a tool touches a path under it, at most once per session.
 
-`Bootstrap::tools()` threads **one** loader into `Read`, `Edit`, `Glob` and
-`Write` so the engine's root reads and the tools' on-touch reads share one
+`Bootstrap::tools()` threads **one** loader into `Read`, `Edit`, `Glob`, `Grep`
+and `Write` so the engine's root reads and the tools' on-touch reads share one
 dedup map. Handing them separate loaders would emit the same bytes twice.
 
 ### `@import`
@@ -230,9 +230,10 @@ protection — a file that imports itself is marked before its own expansion run
 
 ### Containment
 
-Every read is bounded by the repo root through `ContainedPath` — five call
-sites, one per read decision: `loadRoot()`'s root entry, `loadForced()`'s glob
-match, `loadForPath()`'s starting directory and its per-level candidate, and
+Every read is bounded by the repo root through `ContainedPath` — six call
+sites, one per read decision: `loadRoot()`'s root entry,
+`loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
+`loadForPath()`'s starting directory and its per-level candidate, and
 `expandImports()`'s gate closure. The gate closure is threaded through **every**
 recursion level, so an allowed file that imports something that imports
 something disallowed is still refused.
