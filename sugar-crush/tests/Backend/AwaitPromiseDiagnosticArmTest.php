@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
+use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
 
 /**
  * **The narrowed `catch` arms around `awaitPromise()` are pinned, because
@@ -265,7 +266,7 @@ final class AwaitPromiseDiagnosticArmTest extends TestCase
 
                 continue;
             }
-            $close = self::matching($tokens, $open, '{', '}');
+            $close = TokenFunctionRanges::matching($tokens, $open, '{', '}');
             if ($close === null) {
                 $sites[] = ['line' => $line, 'ok' => false, 'why' => 'this try body never closes'];
 
@@ -286,14 +287,14 @@ final class AwaitPromiseDiagnosticArmTest extends TestCase
 
                     break;
                 }
-                $parenEnd = self::matching($tokens, $paren, '(', ')');
+                $parenEnd = TokenFunctionRanges::matching($tokens, $paren, '(', ')');
                 $bodyOpen = $parenEnd === null ? null : $parenEnd + 1;
                 if ($bodyOpen === null || self::text($tokens[$bodyOpen] ?? '') !== '{') {
                     $unparsed = 'a catch clause whose body this scanner cannot find';
 
                     break;
                 }
-                $bodyEnd = self::matching($tokens, $bodyOpen, '{', '}');
+                $bodyEnd = TokenFunctionRanges::matching($tokens, $bodyOpen, '{', '}');
                 if ($bodyEnd === null) {
                     $unparsed = 'a catch body that never closes';
 
@@ -517,51 +518,6 @@ final class AwaitPromiseDiagnosticArmTest extends TestCase
     private static function text(array|string $token): string
     {
         return \is_array($token) ? $token[1] : $token;
-    }
-
-    /**
-     * @param list<array{0:int,1:string,2:int}|string> $tokens
-     */
-    private static function matching(array $tokens, int $from, string $open, string $close): ?int
-    {
-        $depth = 0;
-        for ($i = $from, $n = \count($tokens); $i < $n; $i++) {
-            $token = $tokens[$i];
-
-            // BOTH INTERPOLATION OPENERS COUNT WHEN THE PAIR IS BRACES.
-            // `"{$x}"` opens with T_CURLY_OPEN - an ARRAY token - and closes
-            // with a bare `}`, so a brace walk that reads only one-byte strings
-            // decrements on a level it never incremented and closes the
-            // enclosing block early. Here that would truncate a `try` body at
-            // the first interpolated string in it, hiding both the
-            // awaitPromise() call and every catch clause after it: a guard that
-            // reports "nothing to see" for exactly the files that interpolate.
-            // {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
-            // names this defect and did NOT flag this method - its detector
-            // reads this file as "not a brace walker" - so this is its
-            // prescription applied where its census could not reach.
-            if ($open === '{'
-                && \is_array($token)
-                && \in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)
-            ) {
-                $depth++;
-
-                continue;
-            }
-            if (!\is_string($token)) {
-                continue;
-            }
-            if ($token === $open) {
-                $depth++;
-            } elseif ($token === $close) {
-                $depth--;
-                if ($depth === 0) {
-                    return $i;
-                }
-            }
-        }
-
-        return null;
     }
 
     /**

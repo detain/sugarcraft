@@ -179,10 +179,16 @@ final readonly class CompleteRequest
          * EchoProvider (no I/O). Those gaps are properties of the SDKs,
          * recorded honestly rather than papered over.
          *
-         * WHO CALLS IT: nothing in-tree yet. Threading a writer from
-         * `EngineBackend`/`Runtime` through `complete()` to here is the
-         * consumer half of E493 and lives outside `src/Providers/`; this
-         * seam ships the carrier plus the two providers that can honour it.
+         * WHO CALLS IT: the consumer half landed at round 71 (lane gh).
+         * {@see \SugarCraft\Crush\Backend\EngineBackend::runCompleteInChild()}
+         * — the forked child of `completeAsync()` — passes a closure that
+         * writes one bare `reasoning` frame per beat, threaded through
+         * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()} and
+         * {@see \SugarCraft\Crush\Runtime::run()}'s `$onHeartbeat` onto this
+         * field, so the parent's idle deadline survives a BATCH turn whose
+         * transport can fire. No other in-tree caller passes one; a turn with
+         * no heartbeat keeps `heartbeatOptions()` answering `[]`, which is the
+         * pre-E493 wire byte-for-byte.
          */
         public ?\Closure $onHeartbeat = null,
     ) {}

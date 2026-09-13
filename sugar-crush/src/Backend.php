@@ -24,14 +24,19 @@ use SugarCraft\Crush\Backend\CancellationToken;
  * streaming, it must still return a valid Message (synchronous
  * fallback).
  *
- * **Tool lifecycle:** Pass an optional `$onEvent` callback to observe
- * the tool calls a backend makes *during* a turn
- * ({@see Events\ToolStarted} / {@see Events\ToolFinished}). It exists
+ * **Turn-lifecycle events:** Pass an optional `$onEvent` callback to observe
+ * what a backend does *during* a turn: each tool call as it starts and ends
+ * ({@see Events\ToolStarted} / {@see Events\ToolFinished}) and, for an agentic
+ * backend that refuses to make the NEXT call mid-loop, the refusal itself
+ * ({@see Events\SpendCapBreached}). The roster is exactly what
+ * {@see Backend\EngineBackend::encodeEvent()} admits — the wire encoder's
+ * parameter type, not a prose list, is the authority, and a consumer that
+ * type-matches these three covers the channel. It exists
  * because the returned Message is a single opaque final answer: an
  * agentic backend such as {@see Backend\EngineBackend} can run several
  * rounds of tool calls behind it, and without this callback none of
  * them are observable by the caller at all (crush_feat.md §1 E1).
- * A backend that never calls tools ignores it.
+ * A backend that never calls tools and never refuses emits nothing here.
  *
  * **Reasoning:** deliberately NOT a fifth parameter here. The model's thinking
  * is a channel of its own — see {@see Events\ReasoningDelta} for why it must
@@ -61,9 +66,9 @@ interface Backend
      *                                each token as it arrives when
      *                                streaming is enabled. Signature:
      *                                `function(string $token): void`
-     * @param callable|null $onEvent optional tool-lifecycle observer.
+     * @param callable|null $onEvent optional turn-lifecycle observer.
      *                                Signature:
-     *                                `function(Events\ToolStarted|Events\ToolFinished $event): void`
+     *                                `function(Events\ToolStarted|Events\ToolFinished|Events\SpendCapBreached $event): void`
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message;
 

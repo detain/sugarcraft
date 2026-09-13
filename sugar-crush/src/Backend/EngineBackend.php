@@ -661,8 +661,25 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *                           of $onToken on purpose - see E456 on
      *                           {@see COMPLETE_TIMEOUT_SECONDS}, and the note
      *                           beside `$progressSink` below.
+     *
+     * @param ?callable $onHeartbeat Optional batch-progress heartbeat, signature
+     *                           `function(): void`, threaded untouched into
+     *                           {@see \SugarCraft\Crush\Runtime::run()}'s
+     *                           `$onHeartbeat` and from there onto
+     *                           {@see \SugarCraft\Crush\Providers\CompleteRequest::$onHeartbeat}
+     *                           (E493's consumer half). THIS METHOD NEVER FIRES
+     *                           IT and arms nothing — the provider's HTTP layer
+     *                           does, from inside the blocking batch transfer,
+     *                           at most once per second. Its only in-tree caller
+     *                           that passes one is {@see runCompleteInChild()},
+     *                           where each beat writes a bare `reasoning` frame
+     *                           so the parent's idle deadline survives a batch
+     *                           turn; sync callers without that deadline have no
+     *                           reason to pass one, and leaving it null keeps
+     *                           this call byte-identical to what it did before
+     *                           E493 landed.
      */
-    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): Message
     {
         // Read once and hand to both resolvers, so a turn touches the config
         // file at most one time however many settings are resolved off it.
@@ -733,7 +750,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $assistant = null;
             $toolResults = [];
 
-            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink) as $message) {
+            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink, $onHeartbeat) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
                 } elseif ($message instanceof ToolResultMessage) {
@@ -1036,7 +1053,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * provider's stream produces it, every OTHER chunk off the wire as a
      * `reasoning` frame (E456 - the model's thinking when the chunk carries
      * any, an empty `text` when it carries only tool-call structure or only
-     * usage figures), and the final result as the last frame. The parent drains
+     * usage figures), one more of those same empty-`text` `reasoning` frames
+     * per heartbeat when a BATCH turn's transport can fire one from inside the
+     * blocking call (E493 - the child's frame-writer threaded through
+     * {@see complete()}; see {@see \SugarCraft\Crush\Providers\CompleteRequest::$onHeartbeat}
+     * for which transports can and which cannot), and the final result as the
+     * last frame. The parent drains
      * whatever whole frames have arrived on every readable edge and hands each
      * straight to $onEvent/$onToken/$onReasoning, so a turn running
      * eight rounds of tools renders them as they happen instead of showing
@@ -1408,6 +1430,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // display.
                 static function (string $delta) use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => $delta]);
+                },
+                // E493's consumer half, and the reason it lives HERE rather than
+                // with any caller: on a BATCH turn the child blocks inside one
+                // provider HTTP call for as long as the server thinks, and the
+                // parent's idle deadline measures silence on this socket. The
+                // provider's transport fires this closure from libcurl's own
+                // progress callback - the one carrier E524 measured as running
+                // INSIDE the blocking transfer, which no signal handler does -
+                // at most once per second, and each beat crosses as a bare
+                // `reasoning` frame: the SAME shape E456 already established for
+                // "a chunk with nothing to show". No new frame kind, so nothing
+                // on the parent side changes - every frame already resets the
+                // deadline, and the reasoning branch already drops an empty text
+                // before it could reach a painter. Not a timeout: this arms
+                // nothing and bounds nothing (standing rule); if the provider's
+                // transport cannot fire (the SDK-owned ones), no beat comes, no
+                // frame comes, and the ceiling bounds the turn exactly as it did
+                // before this argument existed.
+                static function () use ($childSocket): void {
+                    self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => '']);
                 },
             );
             // imageBytes/imageProtocol survive this fork boundary too - PHP's

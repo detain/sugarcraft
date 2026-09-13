@@ -177,7 +177,9 @@ trait HttpClientDefaults
      *
      * Returns `[]` for no callback - so `+ self::heartbeatOptions(...)` on a
      * request-options array is byte-neutral for every request that does not
-     * ask to be watched, which is all of them until the consumer seam lands.
+     * ask to be watched (the E493 consumer half landed at round 71: the
+     * forked batch turn is the first caller that asks; everything else -
+     * sync paths and un-forked callers - still answers `[]` here).
      * Otherwise one `progress` entry: Guzzle hands it to
      * `CURLOPT_PROGRESSFUNCTION` on the curl path and drives it from body
      * reads on the stream path, which is the ONLY mechanism E524 measured to

@@ -1151,9 +1151,24 @@ final class Runtime
      *                           would corrupt the CONVERSATION and not merely
      *                           the display.
      *
+     * @param ?callable $onHeartbeat Optional batch-progress heartbeat, signature
+     *                           `function(): void`, forwarded into
+     *                           {@see CompleteRequest::$onHeartbeat} so the
+     *                           providers that can honour it (Sglang, Custom —
+     *                           the plain-Guzzle ones that take request options;
+     *                           the SDK-owned transports cannot, and that gap is
+     *                           written in the DTO) fire it from libcurl's
+     *                           progress callback INSIDE the blocking batch
+     *                           `complete()` (E493/E524: the only carrier that
+     *                           runs during the transfer — a signal-dispatched
+     *                           timer does not). Telemetry only: this method
+     *                           never invokes the callback itself, arms nothing,
+     *                           and bounds nothing; a consumer that receives
+     *                           beats is observing liveness, not granting it.
+     *
      * @return \Generator yields CompleteResponse chunks
      */
-    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
+    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null, ?callable $onHeartbeat = null): \Generator
     {
         $messages = $this->buildMessages($app);
 
@@ -1171,6 +1186,12 @@ final class Runtime
             tools: $app->tools ?: null,
             systemPrompt: $systemPrompt,
             systemBlocks: $systemBlocks,
+            // Parsed at the boundary: the DTO's field is a ?\Closure because the
+            // provider wrapper type-checks it, and `?\callable` would let an
+            // array-callable through the signature only to fatal at the assign.
+            // Closure::fromCallable() returns an already-Closure callable
+            // unchanged, so the child's frame-writer costs nothing here.
+            onHeartbeat: $onHeartbeat === null ? null : \Closure::fromCallable($onHeartbeat),
         );
 
         // foreach-reyield instead of `yield from`: `yield from` preserves
@@ -1477,18 +1498,24 @@ final class Runtime
         // check to know whether any will arrive. There is nothing incremental
         // to offer here, so it is the whole think as one delta.
         //
-        // This does NOT make a batch provider's turn idle-timeout-proof, and it
-        // cannot: `$this->provider->complete()` above is one blocking call that
-        // returns everything at once, so a batch provider that takes longer
-        // than EngineBackend's ceiling to answer still dies with nothing having
-        // crossed the fork. That is a separate defect with a separate fix (a
-        // heartbeat the child raises on a timer rather than on a chunk) and it
-        // is recorded rather than half-done here. E493 re-stamped that record
-        // at round 69; E524 measured why this side cannot raise the timer
-        // itself — an async signal does not dispatch inside the blocking
-        // provider call, and a second writer on the result socket would
-        // interleave with its length-prefixed frames — so the fix belongs to
-        // the providers' HTTP layer, not to this announcement.
+        // WHAT THIS SAID: that a batch provider's turn is NOT idle-timeout-
+        // proof, and cannot be — `$this->provider->complete()` above is one
+        // blocking call that returns everything at once, so a batch provider
+        // slower than EngineBackend's ceiling dies with nothing having crossed
+        // the fork; E524 measured why this side cannot raise the timer itself,
+        // and the fix was left recorded rather than half-done.
+        // WHAT IS TRUE NOW: E493's fix has landed, one layer down and one
+        // argument over. The announcement below still cannot save the turn —
+        // it still runs after the blocking call — and this method still raises
+        // no timer of its own. What changed is that the child now forwards a
+        // heartbeat through {@see CompleteRequest::$onHeartbeat} (threaded in
+        // run(), fired by libcurl's progress callback INSIDE the transfer), so
+        // a provider whose transport can honour it — the plain-Guzzle Sglang
+        // and Custom paths — keeps frames crossing the fork for the whole
+        // duration of this call, and the parent's idle deadline rides them.
+        // SDK-owned transports (OpenAI/Bedrock/Vertex) still cannot fire, so
+        // the ceiling still bounds those; the gap is the providers', written
+        // in the DTO, not a silence here.
         if ($onProgress !== null && $response->reasoning !== null && $response->reasoning !== '') {
             $onProgress($response->reasoning);
         }
