@@ -20470,7 +20470,7 @@ one). **Conf:** HIGH. Evidence: triage E687, worklog ROUND 66.
 
 **What:** residue minted at the round-71 close from gi E325 step-(b) fold — the rostered-skip check in `tests/SuiteSkipRosterTest.php` (:513-514) calls `$reflection->getMethod($method)` twice where the canonical `tests/Support/SlicesDeclaredMethodsTrait.php` owns the pattern once; the slice-reader census docblock names it the SOLE remaining un-folded reader (the fold is convention, not instrument — reviewer F-1). Rides a future tests/ lane (round-72 hb smalls bundle). **Conf:** LOW. Evidence: triage E693, r71-rv-gi REVIEW, worklog ROUND 71.
 
-### E694 [OPEN] — project-scope memory discovery ops (list/search) and bulk clear ignore the repo store
+### E694 [CLOSED] — project-scope memory discovery ops (list/search) and bulk clear ignore the repo store
 
 Minted at r75 closeout from lane jb's design (`/home/sites/crush-r61-artifacts/jb/design.md` :105-124,
 text reproduced below with the orchestrator ruling folded in). jb landed the PER-ID half
@@ -20496,3 +20496,18 @@ immune to `/memory clear`.
   command removes. Listing, search, and bulk clear remain home-store commands (E694)." — plus a
   corresponding DocFigure arm. The r75 closeout deliberately shipped NEITHER (DocFigure 71T held).
 - rv-jb MINOR-1 carried: `memoryLocate` array-shape tuple — document the shape at the signature.
+
+**CLOSED (round-76, lane ka — step-1 landed, step-2 shipped-by-absence, step-3 declined-by-ruling;
+evidence `/home/sites/crush-r61-artifacts/{ka,r76-rv-ka}/`):** Step 1 landed via lane `6b113f67e` →
+pick `35489b1d1` (r76-rv-ka APPROVE 0C/0M/2MINOR): `/memory list` + `/memory search` consult
+`ProjectMemoryWriter::forRoot`'s store alongside home and group rows under a banner naming the owning
+store (repo-first, mirroring `capture()`'s fold law); the home-only output shape stays byte-stable;
+MEMORY.md carries the pinned sentence (first sentence VERBATIM, the falsified trailing clause replaced
+truthful — deviation disclosed) + DocFigure arm AQ in the SAME commit; `memoryLocate`'s tuple +
+no-owner sentinel documented (rv-jb MINOR-1). Step 2's loud refusal SHIPPED-BY-ABSENCE: `/memory clear`
+at project scope REFUSES while the repo store holds >=1 note — nothing is touched, `--force` is not
+parsed; rv-ka's item-2 ruling KEPT the entry-present polarity (the operation is `--confirm`-gated,
+TOTAL w.r.t. every visible project note, and an empty repo has no committed half to strand;
+store-present polarity rejected — this repo TRACKS `.sugar-crush/`, making the legacy byte-green test
+env-dependent). Step 3 (agent memory tool) stays DECLINED-BY-RULING, moved to the trigger-watch
+roster: revisit ONLY on an E25 re-severity review + built-in-tool corpus census.

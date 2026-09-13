@@ -11598,6 +11598,70 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 76 (2026-09-13) — E694a store-aware discovery ops + E611 CLOSED-BY-PRACTICE + the README built-ins family healed with its quoted-pin test; the actionable queue empties; floor 11,734/169,328 @ ea61174b5
+
+**Two lanes, both reviewed BEFORE merge; zero pre-landed work at salvage audit (clean chain).**
+
+- **ka — E694 slice-A** (lane `6b113f67e` → pick `35489b1d1`; r76-rv-ka **APPROVE 0C/0M/2MINOR**):
+  `/memory list`/`/memory search` for project scope now consult `ProjectMemoryWriter::forRoot`'s store
+  alongside home and group rows under a banner naming the owning store, repo-first (mirrors
+  `capture()`'s fold law); home-path output is BYTE-STABLE whenever the repo contributes nothing.
+  `/memory clear` at project scope REFUSES LOUDLY while the repo store holds >=1 note — the
+  entry-present polarity was RULED IN by the review and kept by the orchestrator: `--confirm`-gated,
+  TOTAL with respect to every project note the operator can see, doc-pinned as a home-store command;
+  store-present polarity REJECTED because it would make the legacy byte-green test env-dependent on
+  any tree carrying `.sugar-crush/memory` — and this repo TRACKS it (the if-lane pollution incident).
+  `--force` NOT implemented = unconditional refusal per the r75 ruling. `memoryLocate`'s docblock now
+  spells the `[entry, store]` tuple + the `[null, home]` no-owner sentinel (rv-jb MINOR-1). MEMORY.md
+  sentence landed first-sentence-VERBATIM with the falsified trailing clause REPLACED truthful —
+  deviation disclosed (a verbatim pin beside a live-derived arm that contradicts its own commit is a
+  doc trap); DocFigure arm AQ derives every referent live (forRoot-before-home ordering, delete/edit
+  routing, exactly ONE `->clear(`, `--force` absence). +7T/+56A. rv-ka serial on a fully-linked rv
+  tree: 11,734T/169,360A with ONLY the README/figure staleness pair red (pair is merge-owned,
+  red-by-design at a lane tip); the builder's 5 pty-env reds vanished under full refresh-deps —
+  confirmed sandbox-env, see HARNESS NOTES. rv-ka also caught a live census coupling: transcript
+  literals must dodge DenialPrefixRosterTest AND GlobDialectDifferentialTest token shapes at once
+  ("**Refused:**" accused both ways; banners build paths via `ProjectMemoryWriter::RELATIVE_DIRECTORY`).
+- **kb — E611 verdict lane + ELEVEN-family heals** (lane `53bf60534` + `0b60af42e` + fix `a56d9014c`
+  → picks `c27178e0c` + `fefd95468`/`252dea07b`; r76-rv-kb **APPROVE-WITH-FIX 0C/1MAJOR**):
+  E611 ruled **DROP / CLOSED-BY-PRACTICE** — re-derived at tip `f8eba0f34`: (Q1) no machine check
+  exists (ownership grep hits only a durations-file NAME; check-path-repos is existence-only);
+  (Q2) the OWNERSHIP-block practice demonstrably catches out-of-ownership commissions (worklog :3069
+  SkillLoader half REPORTED-not-implemented, :5437, :11010, r69-close fj Chat.php breach);
+  (Q3) the residual harness-tool + schema needs a stable machine-readable lane registry that does not
+  exist in-repo — minting it IS the excluded supervisor-harness design. Tripwire: reopen if a round
+  ever ships out-of-ownership CODE edits un-reported. The MAJOR: `0b60af42e`'s rewrite of the
+  `tools()` docblock at :6546/:6552 was ITSELF false — Task is appended AFTER `filterToolSet()`,
+  manager-gated, so "every shape below matches it"/"exactly Bash out of the twelve" named a
+  non-existent glob mechanism; fix-lane `a56d9014c` (comment-only, gates 113T/6385A + five-guard
+  113T/6939A green) landed the post-filter/out-of-project-reach truth. rv-kb item-10 seam: these
+  Bootstrap tool-count docblocks are pinned by NO guard (E686 family, src-side).
+- **Merge companion** (a001bd9ce, brief STEP 3): README :224/:233 eleven-family prose scoped to the
+  eleven FILTERABLE positions with the Task truth (mirrors ARCHITECTURE.md r75 wording), and
+  `tests/Config/ReadmeSettingsTierClaimTest.php` moved IN-STEP — its census-domain docblock now states
+  null-manager `tools()` = the eleven filterable positions vs twelve wired since TaskTool (E675), the
+  quoted-needle assertion matches the healed sentence, and the TrustKey locator comment follows.
+  rv-kb MINOR-8's "apply-safe" pairing satisfied in ONE commit. First run of the needle caught the
+  blockquote-wrap hazard: `>` markers survive whitespace-flattening, so a pinned phrase must fit one
+  physical line.
+- **Picks/salvage:** STEP 0 audit clean (no partial prior work; all four commits '-' unmerged).
+  Cherry-pick conflicts: ONLY the triage E611 row (master carried the r75 "verdict SLIPS" sentence
+  the kb cut predated) — resolved keeping BOTH (kb's flip + master's r75 sentence). Backlog E611
+  auto-merged. E686 heading verified already normalized to [CLOSED] by r75 closeout — rv-kb's
+  MINOR-9 seam was true of f8eba0f34, obsolete at master; E694 ledger row existed (contrary to the
+  seam claim "no ledger row").
+- **Floor / re-pin:** sextet cadence on master — see §0-NOW-78 figures. Durations 506 rows HELD
+  (zero new *Test.php files). config.json md5 05480c74…2210 stable.
+- **HARNESS NOTES for future briefs:** (1) a fresh lane sandbox has NO root `vendor/` — gates run via
+  `sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml`; (2) an incompletely linked sandbox
+  (candy-pty `--libs` gap) deterministically poisons 5 InteractivePromptContainmentTest env reds —
+  briefs must verify `refresh-deps --mode=linked` reaches 18/18 before building; (3) a lane-tip brief
+  cannot promise "0F/EXIT=0" while the staleness pair is merge-owned — expect PAIR-ONLY red at tips.
+- **Carries:** E309 watch, E611 reopen-tripwire, E694/E25 re-severity trigger (agent memory tool),
+  E655 VOID phantom, LspClientDispatchPumpTest ambient flake.
+
+---
+
 ## ROUND 75 (2026-09-13) — E686 tranche-11 execution + review-fix lane + memory-ops first slice; the doc-figure campaign CLOSES; floor 11,727/169,276
 
 **Closed at this closeout (docs atop re-pin `f8eba0f34`).** Chain: docs tip `fff97295d` (atop code `ab7f3726a`) → picks `99cc68e02`(ja `51e5b9b39`) `332e6fdd7`(ja2 `ddf761169`) `90b7d1ae7`(jb `c79d69cfd`) → companion `02c65e6eb` → re-pin `f8eba0f34`. NEVER pushed. Rules 1–10 + addenda -66…-73 in force; K=8 sharded gate standard; five-guard filter in every brief. ja was reviewed BEFORE merge (r75-rv-ja REQUEST-CHANGES 1 MAJOR → fix-lane ja2; the reviewer's written close condition "fix-lane lands :336 heal + AK1 erratum" verified SATISFIED by the orchestrator — the conditional-close pattern worked end-to-end for the first time); jb reviewed BEFORE merge (r75-rv-jb APPROVE 0C/0M).
