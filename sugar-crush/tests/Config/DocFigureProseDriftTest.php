@@ -137,6 +137,21 @@ use SugarCraft\Crush\Workflows\Workflow;
     * page's own E686 rule that symbols are cited by name, never by line, and
     * their surviving claims pinned live.
     *
+    * E686 TRANCHE-9 (round-72, lane ha) works the two pages the tranche-8 seed
+    * named that actually exist — SKILLS.md and MCP.md (the ledger records the
+    * PROVIDERS/ANTHROPICS/TOOLS names as phantom files; their claim domains
+    * live in the merge-owned README, guarded by ReadmeRosterDriftTest). Nine
+    * arms (AS-BA): tier counts and merge orders the SKILLS page cites, the
+    * dormant-skill-call census, the glob page's own MEASURED pairs replayed
+    * through the live matcher, loader bounds against their constants, the MCP
+    * status/verdict tables against the constants and the doctor closure, the
+    * server-type factory and the env-interpolation pattern, the bridge naming
+    * and permission matrix, the command surface, and Backend.php's $onEvent
+    * trio against the wire encoder's own unions. Two FALSE sentences were
+    * fixed IN-STEP: MCP.md's drifted `line 175` anchor (E686's own
+    * symbols-not-lines rule) and Backend.php's stale "tool-lifecycle observer"
+    * on completeAsync, one word the tranche-8-era rewrite left behind.
+    *
     * @internal
     */
 final class DocFigureProseDriftTest extends TestCase
@@ -2933,6 +2948,782 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(80 - (int) $math[1] - 1, (int) $math[3], 'the shell band is no longer total minus agent minus one gutter');
         self::assertGreaterThanOrEqual((int) $renderer->getConstant('SPLIT_MIN_AGENT_COLS'), (int) $math[1], 'the agent column fell under SPLIT_MIN_AGENT_COLS — the doc-block asserts the split fits at 80 and it no longer does');
         self::assertGreaterThanOrEqual((int) $renderer->getConstant('SPLIT_MIN_BAND_COLS'), (int) $math[3], 'the band fell under SPLIT_MIN_BAND_COLS — same premise, other side');
+    }
+
+    /**
+     * E686 tranche-9 (AS): the SKILLS.md tier counts and the merge orders the
+     * page's precedence paragraphs state are re-counted from the walks they
+     * cite — three native directory calls in priority order in
+     * {@see SkillLoader::loadAllManifests()}, four foreign tree suffixes
+     * across the two discoverers in {@see ForeignSkillDiscovery}, the
+     * foreign-first/native-over-top registration order in
+     * {@see SkillManager::loadAll()}, and the user-after-project append
+     * inside tiers() that decides every within-convention collision.
+     */
+    public function testSkillsPageTierCountsMatchTheWalksTheyCite(): void
+    {
+        $skills = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md'));
+        $bold = \chr(42) . \chr(42);
+
+        self::assertSame(
+            1,
+            preg_match('/walks ' . \preg_quote($bold, '/') . 'three' . \preg_quote($bold, '/') . ' native locations; a separate discovery class walks ' . \preg_quote($bold, '/') . 'four' . \preg_quote($bold, '/') . ' foreign ones/', $skills),
+            'the opening sentence no longer states both tier counts in one breath — re-pin with the prose, do not delete it',
+        );
+        $wordNumbers = ['three' => 3, 'four' => 4];
+
+        $loaderBody = self::bodyExcerpt(self::sourceOf('Skills/SkillLoader.php'), 'loadAllManifests');
+        self::assertSame(
+            3,
+            preg_match_all('/\$this->(\w+SkillsDir)\(/', $loaderBody, $native),
+            'the native walk no longer calls its three directory methods through $this — the pin lost its ground',
+        );
+        self::assertSame(3, $wordNumbers['three'] ?? -1, 'the sentence spelled its native count as something other than three');
+        self::assertSame(
+            ['builtInSkillsDir', 'userSkillsDir', 'projectSkillsDir'],
+            $native[1],
+            'loadAllManifests() changed its native tier order or arity — the page names these three calls in this order',
+        );
+        self::assertSame(2, preg_match_all('/array_merge\(/', $loaderBody), 'the three tiers are no longer joined by exactly two array_merge calls — the "merged lowest-priority-first with array_merge" sentence describes a different shape');
+        self::assertSame(
+            1,
+            preg_match('/The three are the three calls `SkillLoader::loadAllManifests\(\)` makes/', $skills),
+            'the sentence stopped naming the method whose calls it counts',
+        );
+
+        $foreign = self::sourceOf('Skills/ForeignSkillDiscovery.php');
+        self::assertSame(
+            2,
+            preg_match_all('/self::tiers\(([^)]*)\)/', $foreign, $tierCalls),
+            'ForeignSkillDiscovery no longer builds its trees through tiers() — the four-suffix count lost its ground',
+        );
+        self::assertCount(2, $tierCalls[0], 'a third foreign convention arrived — the page names exactly two discoverers');
+        $suffixes = [];
+        foreach ($tierCalls[1] as $arguments) {
+            preg_match_all("/'([^']+)'/", $arguments, $quoted);
+            foreach ($quoted[1] as $suffix) {
+                $suffixes[] = $suffix;
+            }
+        }
+
+        self::assertSame(4, count($suffixes), 'the two discoverers no longer pass four tree suffixes between them — "four foreign ones" went stale');
+        self::assertSame(
+            1,
+            preg_match('/' . \preg_quote($bold, '/') . 'four' . \preg_quote($bold, '/') . ' foreign ones/', $skills),
+            'the foreign count left the opening sentence',
+        );
+        self::assertStringContainsString('`<root>/.claude/skills`, `~/.claude/skills`, `<root>/.opencode/skills`, `~/.config/opencode/skills`', $skills, 'the page no longer enumerates the four foreign trees the discoverers walk');
+        self::assertStringContainsString('`src/Skills/ForeignSkillDiscovery.php`', $skills, 'the page lost its pointer to the discovery class');
+
+        $managerBody = self::bodyExcerpt(self::sourceOf('Skills/SkillManager.php'), 'loadAll');
+        $claudeAt = strpos($managerBody, 'discoverClaude(');
+        $opencodeAt = strpos($managerBody, 'discoverOpencode(');
+        $nativeAt = strpos($managerBody, 'registerFromManifest(');
+        self::assertIsInt($claudeAt);
+        self::assertIsInt($opencodeAt);
+        self::assertIsInt($nativeAt);
+        self::assertTrue($claudeAt < $opencodeAt, 'loadAll() no longer registers Claude before opencode — the page says opencode wins cross-convention, which needs this order');
+        self::assertTrue($opencodeAt < $nativeAt, 'the native manifests no longer land AFTER the foreign trees — "Native always wins a name collision" is this order');
+
+        $tiersBody = self::bodyExcerpt($foreign, 'tiers');
+        $projectAt = strpos($tiersBody, '$projectRoot . $projectSuffix =>');
+        $userAt = strpos($tiersBody, '$tiers[$home . $userSuffix] = [');
+        self::assertIsInt($projectAt);
+        self::assertIsInt($userAt);
+        self::assertTrue($projectAt < $userAt, 'tiers() no longer appends the user tree after the project tree — the page says project LOSES to user within one convention');
+    }
+
+    /**
+     * E686 tranche-9 (AT): the two dormancy paragraphs of SKILLS.md — the
+     * auto-match chain that "reach[es] no production path" and the
+     * "three methods consult" sentence for isContextFork(). Every call-site
+     * count below is a live token scan of src/ plus bin/, definitions
+     * excluded by the `->` needle.
+     */
+    public function testDormantSkillPathsStayUnreachableThroughTheWholeChain(): void
+    {
+        $skills = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md'));
+        self::assertSame(
+            1,
+            preg_match('/implements the test and three methods consult it/', $skills),
+            'the context paragraph no longer states its consulting-method count',
+        );
+        self::assertStringContainsString('and **reach no production path.**', $skills, 'the dormancy claim the pin polices left the page');
+        self::assertStringContainsString('zero production call sites', $skills, 'the wrapper sentence left the page');
+
+        $src = self::srcTexts();
+        $binTexts = '';
+        foreach (glob(\dirname(__DIR__, 2) . '/bin/' . '*') ?: [] as $path) {
+            if (is_file($path)) {
+                $binTexts .= (string) file_get_contents($path);
+            }
+        }
+
+        $fork = [];
+        foreach (self::srcOccurrences('->isContextFork(') as [$relative, $offset]) {
+            $fork[] = self::enclosingMethodName($relative, $src[$relative], $offset);
+        }
+        sort($fork);
+        self::assertCount(3, $fork, 'the number of methods consulting isContextFork() changed — the page names three');
+        self::assertSame(['applySkillsToSystemPrompt', 'dispatchSkill', 'handleSelectSkill'], $fork, 'the page names these exact three consulters of isContextFork()');
+
+        foreach (['->applySkillsToSystemPrompt(', '->dispatchSkill('] as $needle) {
+            self::assertCount(0, self::srcOccurrences($needle), $needle . ' gained a caller in src/ — the page still says the method has none');
+            self::assertSame(0, substr_count($binTexts, $needle), $needle . ' gained a caller under bin/ — the page still says src/ or bin/ has none');
+        }
+
+        $wrappers = [];
+        foreach (self::srcOccurrences('->findForPrompt(') as [$relative, $offset]) {
+            $wrappers[] = self::enclosingMethodName($relative, $src[$relative], $offset);
+        }
+        sort($wrappers);
+        self::assertSame(
+            ['findSkillsForTask', 'getSkillsForTask'],
+            $wrappers,
+            'findForPrompt() gained or lost a caller — the page says its only callers are exactly the two wrappers',
+        );
+        self::assertTrue(method_exists(SkillRegistry::class, 'findForPrompt'), 'SkillRegistry::findForPrompt() vanished — the dormant chain lost a link');
+        self::assertTrue(method_exists('SugarCraft\Crush\Skills\Skill', 'matchesPrompt'), 'Skill::matchesPrompt() vanished — the page still names it');
+        $matcher = self::srcOccurrences('->matchesPrompt(');
+        self::assertCount(1, $matcher, 'matchesPrompt() call sites drifted — the page chains it under findForPrompt() only');
+        self::assertSame(
+            'findForPrompt',
+            self::enclosingMethodName($matcher[0][0], $src[$matcher[0][0]], $matcher[0][1]),
+            'the one remaining matchesPrompt() caller is no longer findForPrompt() — the sentence describing the chain went stale',
+        );
+        self::assertCount(0, self::srcOccurrences('->getSkillsForTask('), 'getSkillsForTask() gained a caller — its zero-production-call-site sentence (and this pin) must flip together');
+        self::assertCount(0, self::srcOccurrences('->findSkillsForTask('), 'findSkillsForTask() gained a caller — its zero-production-call-site sentence (and this pin) must flip together');
+    }
+
+    /**
+     * E686 tranche-9 (AU): the glob page's MEASURED lines are replayed, not
+     * quoted — each `pattern` vs `path` → true pair parsed out of SKILLS.md is
+     * re-answered through the live {@see SkillRegistry::pathMatches()}, and
+     * each was/is pair through the private legacyPathMatch() the page says the
+     * fallback still runs. The leading-** built-in roster is re-scanned from
+     * the shipped SKILL.md frontmatter.
+     */
+    public function testSkillsGlobPageMeasuresMatchTheLiveMatcher(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md');
+        $blocks = preg_split('/\n\n/', $raw) ?: [];
+        $measured = null;
+        $oldVersusNew = null;
+        foreach ($blocks as $block) {
+            if (!str_contains($block, 'MEASURED on PHP')) {
+                continue;
+            }
+
+            if (str_contains($block, 'was ') && str_contains($block, 'and is ')) {
+                $oldVersusNew = $block;
+            } else {
+                $measured ??= $block;
+            }
+        }
+
+        self::assertIsString($measured, 'the four-way MEASURED paragraph left SKILLS.md — the pin against the live matcher lost its claim');
+        self::assertSame(
+            1,
+            preg_match('/through `SkillRegistry::pathMatches\(\)`/', $measured),
+            'the paragraph stopped naming the matcher it was measured through',
+        );
+        preg_match_all('/`([^`]+)` vs `([^`]+)` → true/', self::markdownProse($measured), $pairs, PREG_SET_ORDER);
+        self::assertCount(4, $pairs, 'the MEASURED paragraph no longer lists four true verdicts — re-pin with the prose');
+        foreach ($pairs as $pair) {
+            self::assertTrue(
+                SkillRegistry::pathMatches($pair[1], $pair[2]),
+                "SKILLS.md claims pathMatches({$pair[1]}, {$pair[2]}) is true and the live matcher disagrees",
+            );
+        }
+
+        self::assertIsString($oldVersusNew, 'the old-predicate paragraph left SKILLS.md — the was/is polarity pin lost its claim');
+        preg_match_all('/`([^`]+)` vs `([^`]+)` was (true|false) and is (true|false)/', self::markdownProse($oldVersusNew), $flips, PREG_SET_ORDER);
+        self::assertCount(2, $flips, 'the old-versus-new paragraph no longer states two was/is pairs');
+        $legacy = new \ReflectionMethod(SkillRegistry::class, 'legacyPathMatch');
+        $legacy->setAccessible(true);
+        foreach ($flips as $flip) {
+            self::assertSame(
+                'false' === $flip[3],
+                !$legacy->invoke(null, $flip[1], $flip[2]),
+                "SKILLS.md says {$flip[1]} vs {$flip[2]} was {$flip[3]} under the legacy predicate and the shipped legacyPathMatch() disagrees",
+            );
+            self::assertSame(
+                'true' === $flip[4],
+                SkillRegistry::pathMatches($flip[1], $flip[2]),
+                "SKILLS.md says {$flip[1]} vs {$flip[2]} is {$flip[4]} now and the live matcher disagrees",
+            );
+        }
+
+        self::assertStringContainsString('self::legacyPathMatch($pattern, $path)', self::bodyExcerpt(self::sourceOf('Skills/SkillRegistry.php'), 'pathMatches'), 'pathMatches() no longer routes uncompileable patterns to the legacy predicate — the page calls the fallback reachable');
+
+        $star = \chr(42);
+        $leading = $star . $star;
+        $builtInRoot = \dirname(__DIR__, 2) . '/src/Skills/BuiltIn';
+        $declaring = [];
+        foreach (scandir($builtInRoot) ?: [] as $entry) {
+            $file = $builtInRoot . '/' . $entry . '/SKILL.md';
+            if (!is_dir($builtInRoot . '/' . $entry) || !is_file($file)) {
+                continue;
+            }
+            $lines = file($file);
+            $inside = false;
+            $paths = [];
+            foreach ($lines ?: [] as $line) {
+                $rtrimmed = rtrim($line);
+                if ('---' === $rtrimmed) {
+                    if (!$inside) {
+                        $inside = true;
+
+                        continue;
+                    }
+                    break;
+                }
+                if (!$inside) {
+                    continue;
+                }
+                if (preg_match('/^paths:$/', $rtrimmed)) {
+                    continue;
+                }
+                if (preg_match('/^  - "(.+)"$/', $rtrimmed, $m)) {
+                    $paths[] = $m[1];
+                }
+            }
+            foreach ($paths as $path) {
+                if (str_starts_with($path, $leading . '/')) {
+                    $declaring[$entry][] = $path;
+                }
+            }
+        }
+
+        self::assertSame(
+            1,
+            preg_match('/Three shipped built-in skills declare a leading/', $raw),
+            'the leading-** paragraph no longer states its count',
+        );
+        self::assertCount(3, $declaring, 'the number of shipped built-ins with a leading-** path changed — flip the page sentence and this pin together');
+        ksort($declaring);
+        self::assertSame(['php-best-practices', 'phpunit-master', 'security-audit'], array_keys($declaring), 'a different built-in now leads with ** — the page names security-audit, php-best-practices and phpunit-master');
+        foreach ($declaring as $name => $patterns) {
+            self::assertStringContainsString('`' . $name . '`', $raw, "the page stopped naming {$name} in the leading-** paragraph");
+            self::assertStringContainsString('(`paths: ' . json_encode($patterns, \JSON_UNESCAPED_SLASHES) . '`)', $raw, "the page no longer quotes {$name}'s shipped paths value verbatim");
+        }
+    }
+
+    /**
+     * E686 tranche-9 (AV): the staging section and the containment section of
+     * SKILLS.md against SkillLoader — stage methods exist, the asset whitelist
+     * equals its constant, and the two numeric bounds read
+     * MAX_DEPTH/MAX_DIRECTORIES; the foreign user-tier door reads the
+     * HomeDirectory::owned() guard tiers() opens it on.
+     */
+    public function testSkillsStagingAndContainmentBoundsReadTheirOwnConstants(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md');
+        $skills = self::markdownProse($raw);
+        $bold = \chr(42) . \chr(42);
+
+        self::assertStringContainsString('## The three loading stages', $raw, 'the staging heading moved or reworded its count');
+        foreach (['loadSkillManifest', 'loadSkillBody', 'loadSkillAsset'] as $stage) {
+            self::assertTrue(method_exists(SkillLoader::class, $stage), "SkillLoader::{$stage}() vanished — the loading-stages section of SKILLS.md names it");
+        }
+        $loader = new \ReflectionClass(SkillLoader::class);
+        self::assertSame(
+            ['scripts', 'references', 'assets'],
+            $loader->getConstant('ASSET_SUBDIRS'),
+            'the asset whitelist changed — the page names scripts/, references/ and assets/ as the only stage-3 roots',
+        );
+        self::assertStringContainsString('one file from `scripts/`, `references/` or `assets/`', $skills, 'the stage-3 sentence no longer enumerates the whitelist');
+        self::assertStringContainsString(
+            '!in_array($firstComponent, self::ASSET_SUBDIRS, true)',
+            self::bodyExcerpt(self::sourceOf('Skills/SkillLoader.php'), 'loadSkillAsset'),
+            'loadSkillAsset() no longer refuses non-whitelisted first components — the page says any other is refused',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/the walk is bounded in four separate ways \(`SkillLoader::skillFilesIn\(\)`\)/', $skills),
+            'the containment sentence no longer states its bound count with its method cite',
+        );
+        $containment = self::markdownProse((string) preg_replace('/^.*## Containment\n/s', '', $raw));
+        $containment = (string) explode('## Diagnostics', $containment)[0];
+        self::assertSame(4, preg_match_all('/- ' . \preg_quote($bold, '/') . '/', $containment), 'the containment bullet count changed — the sentence above it says four separate ways');
+
+        self::assertSame(
+            1,
+            preg_match('/Depth is capped at (\d+)\*\* and \*\*breadth at (\d+) directories/', $skills),
+            'the depth/breadth sentence no longer carries both digits in one breath',
+        );
+        self::assertSame(6, (int) $loader->getConstant('MAX_DEPTH'), 'MAX_DEPTH moved — the page still caps the walk at 6');
+        self::assertSame(2000, (int) $loader->getConstant('MAX_DIRECTORIES'), 'MAX_DIRECTORIES moved — the page still caps breadth at 2000');
+
+        $tiersBody = self::bodyExcerpt(self::sourceOf('Skills/ForeignSkillDiscovery.php'), 'tiers');
+        self::assertStringContainsString('HomeDirectory::owned()', $tiersBody, 'tiers() no longer asks who owns the home — the dropped-user-tier bullet lost its referent');
+        self::assertStringContainsString('if ($home !== null) {', $tiersBody, 'the user-tier entry is no longer behind the owned() guard');
+        self::assertStringContainsString('is dropped entirely**', $skills, 'the page stopped claiming the whole-tier drop — re-check against the guard above');
+    }
+
+    /**
+     * E686 tranche-9 (AW): MCP.md's trust-gate table against the four
+     * Bootstrap status constants (selected by their doc-block anchor to
+     * mcpConfigDecision(), so message-format MCP_* constants cannot join),
+     * the "contains no proc_open()" inventory claim against the method's own
+     * token slice, the doctor verdict row against the closure that produces
+     * it, and the "other three" cross-page count against PERMISSIONS.md's own
+     * table.
+     */
+    public function testMcpTrustGateStatusesAndDoctorVerdictsReadTheirConstants(): void
+    {
+        $mcp = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md'));
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        self::assertSame(
+            1,
+            preg_match('/It returns one of four statuses:/', $mcp),
+            'the trust-gate sentence no longer states its status count',
+        );
+
+        $bootstrap = new \ReflectionClass(Bootstrap::class);
+        $statuses = [];
+        foreach ($bootstrap->getReflectionConstants(\ReflectionClassConstant::IS_PUBLIC) as $constant) {
+            if (preg_match('/^MCP_/', $constant->getName()) === 1 && str_contains((string) $constant->getDocComment(), 'mcpConfigDecision()')) {
+                $statuses[$constant->getName()] = $constant->getValue();
+            }
+        }
+        self::assertSame(
+            ['absent', 'outside-tree', 'untrusted', 'trusted'],
+            array_values($statuses),
+            'the status constants (doc-block-anchored to mcpConfigDecision) no longer spell the page\'s four-row table — flip constant, table and this pin together',
+        );
+        self::assertCount(4, $statuses);
+
+        $rows = (string) preg_replace('/^.*\| Status \| Meaning \| What happens \|\n\|---\|---\|---\|\n/s', '', $raw);
+        $rows = (string) explode("\n\n", $rows)[0];
+        preg_match_all('/^\| `([a-z-]+)` \|/m', $rows, $table);
+        self::assertSame($statuses, array_combine(array_keys($statuses), $table[1]), 'the status table rows drifted from the constants in value or order');
+
+        $inventory = null;
+        foreach (self::functionSpans(self::sourceOf('Cli/Bootstrap.php')) as $span) {
+            if ('mcpServerInventory' === $span['name']) {
+                $inventory = $span;
+            }
+        }
+        self::assertIsArray($inventory, 'Bootstrap::mcpServerInventory() vanished — the no-proc_open claim lost its referent');
+        $slice = (string) substr(self::sourceOf('Cli/Bootstrap.php'), $inventory['begin'], $inventory['end'] - $inventory['begin']);
+        self::assertStringContainsString('mcpConfigDecision(', $slice, 'the slice no longer routes through the shared decision path — the zero-exec needles below would prove nothing without this anchor');
+        foreach (['proc_open(', 'popen(', 'shell_exec(', 'passthru(', 'system(', 'exec('] as $sink) {
+            self::assertSame(0, substr_count($slice, $sink), "mcpServerInventory() now calls {$sink} — the page claims the listing contains NO proc_open and starts nothing");
+        }
+        self::assertStringContainsString(
+            'contains ' . \chr(42) . \chr(42) . 'no `proc_open()`' . \chr(42) . \chr(42),
+            $mcp,
+            'the inventory claim sentence reworded — the zero-sink pin above needs to keep citing it',
+        );
+
+        $probes = null;
+        foreach (self::functionSpans(self::sourceOf('Cli/Subcommands.php')) as $span) {
+            if ('doctorProbes' === $span['name']) {
+                $probes = $span;
+            }
+        }
+        self::assertIsArray($probes, 'doctorProbes() vanished — the doctor verdict row lost its closure');
+        $probeText = (string) substr(self::sourceOf('Cli/Subcommands.php'), $probes['begin'], $probes['end'] - $probes['begin']);
+        self::assertSame(
+            3,
+            preg_match_all('/Bootstrap::(MCP_[A-Z_]+)\s*\n\s*=> \[.status. => .(OK|WARN|FAIL)./', $probeText, $verdicts),
+            'the mcp config row no longer matches its three named status constants to verdicts arm by arm',
+        );
+        self::assertSame(
+            ['MCP_ABSENT' => 'OK', 'MCP_OUTSIDE_TREE' => 'FAIL', 'MCP_UNTRUSTED' => 'WARN'],
+            array_combine($verdicts[1], $verdicts[2]),
+            'a named status changed its doctor verdict — the page sentence and this pin must flip together',
+        );
+        self::assertSame(
+            1,
+            preg_match('/default\s*\n\s*=> \[.status. => .OK./', $probeText),
+            'the trusted/default verdict is no longer OK',
+        );
+        self::assertSame(
+            1,
+            preg_match('/\[.error.\] !== null\s*\n\s*=> \[.status. => .FAIL./', $probeText),
+            'the undecodable-config verdict is no longer FAIL',
+        );
+        self::assertStringContainsString(
+            '`OK` for absent or trusted, `WARN` for untrusted, `FAIL` for out-of-tree or undecodable',
+            $mcp,
+            'the doctor verdict sentence reworded while the closure above still answers — re-pin with the prose',
+        );
+
+        $permissions = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/PERMISSIONS.md');
+        self::assertSame(
+            1,
+            preg_match('/^## The four `trustedProject[^`]*` keys$/m', $permissions),
+            'the PERMISSIONS.md heading no longer states its four-key count',
+        );
+        preg_match_all('/^\| `trustedProject([A-Za-z]+)` \|/m', $permissions, $keys);
+        self::assertSame(['Hooks', 'Mcp', 'Commands', 'Settings'], $keys[1], 'the trustedProject* table rows changed — this family feeds two pages');
+        self::assertCount(4, $keys[1]);
+        foreach ($keys[1] as $suffix) {
+            $literal = "'trustedProject" . $suffix . "'";
+            $found = false;
+            foreach (self::srcTexts() as $text) {
+                if (str_contains($text, $literal)) {
+                    $found = true;
+                    break;
+                }
+            }
+            self::assertTrue($found, "PERMISSIONS.md lists trustedProject{$suffix} but no src/ literal reads that config key any more");
+        }
+        self::assertSame(
+            1,
+            preg_match('/the other three `trustedProject[^`]*` keys/', $mcp),
+            'MCP.md stopped claiming exactly three REMAINING keys — the count is the PERMISSIONS table minus the MCP row',
+        );
+        self::assertSame(\count($keys[1]) - 1, 3, 'the cross-page arithmetic broke: "other three" must equal the PERMISSIONS table count minus one');
+    }
+
+    /**
+     * E686 tranche-9 (AX): MCP.md's type table against the factory that
+     * builds it — match arms, classes, per-type config keys, the absent-type
+     * default and the throw for anything else — plus the env-interpolation
+     * section: the two resolveEnv call sites, the anchored pattern quoted
+     * byte-for-byte, and the getenv ?: default form.
+     */
+    public function testMcpServerTypesKeysAndEnvInterpolationMatchTheFactory(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $mcp = self::markdownProse($raw);
+        self::assertSame(
+            1,
+            preg_match('/Three types, and they are the three `McpClient::startServer\(\)` constructs/', $mcp),
+            'the type-table lead-in no longer states the count with its factory cite',
+        );
+
+        $clientSource = self::sourceOf('MCP/McpClient.php');
+        $build = null;
+        $start = null;
+        $resolve = null;
+        foreach (self::functionSpans($clientSource) as $span) {
+            $build ??= 'buildServer' === $span['name'] ? $span : null;
+            $start ??= 'startServer' === $span['name'] ? $span : null;
+            $resolve ??= 'resolveEnv' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($build);
+        self::assertIsArray($start);
+        self::assertIsArray($resolve);
+        $buildText = (string) substr($clientSource, $build['begin'], $build['end'] - $build['begin']);
+        $startText = (string) substr($clientSource, $start['begin'], $start['end'] - $start['begin']);
+
+        self::assertStringContainsString('$this->buildServer(', $startText, 'startServer() no longer delegates to buildServer() — the page credits it with the constructs');
+        self::assertSame(
+            1,
+            preg_match("/\\\$type = \\\$config\['type'\] \?\? 'stdio'/", $startText),
+            'the absent-type default is no longer stdio — the table row says it is',
+        );
+        self::assertStringContainsString('(the default when `type` is absent)', $mcp, 'the stdio row lost its default note');
+        self::assertSame(
+            3,
+            preg_match_all("/'(stdio|http|git)' => new ([A-Za-z]+)/", $buildText, $arms, PREG_SET_ORDER),
+            'buildServer() no longer constructs one named class per match arm — the pin lost its ground',
+        );
+        self::assertCount(3, $arms, 'the factory gained or lost a server type — the page table carries three rows');
+        $built = [];
+        foreach ($arms as $arm) {
+            $built[$arm[1]] = $arm[2];
+        }
+
+        preg_match_all('/^\| `(stdio|http|git)`(?: \(the default when `type` is absent\))? \| `([A-Za-z]+)` \| ([^|]+) \|$/m', $raw, $rows, PREG_SET_ORDER);
+        self::assertCount(3, $rows, 'the type table no longer carries three parseable rows — re-pin with the prose');
+        $documented = [];
+        $documentedKeys = [];
+        foreach ($rows as $row) {
+            $documented[$row[1]] = $row[2];
+            preg_match_all('/`([a-zA-Z]+)`/', $row[3], $cells);
+            $documentedKeys[$row[1]] = $cells[1];
+        }
+        self::assertSame($documented, $built, 'the factory classes and the table disagree — the page says the types ARE the three constructs');
+        foreach ($documented as $type => $class) {
+            self::assertTrue(class_exists('SugarCraft\Crush\MCP\\' . $class), "the table row for {$type} names {$class}, which no longer exists");
+        }
+
+        $armPositions = [];
+        foreach (['stdio', 'http', 'git'] as $type) {
+            $armPositions[$type] = strpos($buildText, "'{$type}' =>");
+            self::assertIsInt($armPositions[$type]);
+        }
+        $defaultAt = strpos($buildText, 'default =>');
+        self::assertIsInt($defaultAt);
+        $order = $armPositions;
+        $order['default'] = $defaultAt;
+        asort($order);
+        $boundary = array_values($order);
+        foreach (array_slice($boundary, 0, 3) as $index => $begin) {
+            $type = array_keys($order)[$index];
+            $armSlice = substr($buildText, $begin, $boundary[$index + 1] - $begin);
+            preg_match_all("/\\\$config\['(\w+)'\]/", $armSlice, $reads);
+            self::assertEqualsCanonicalizing(
+                $documentedKeys[$type],
+                array_values(array_unique($reads[1])),
+                "the {$type} row's key cell and the factory's \$config reads for that arm disagree",
+            );
+        }
+        self::assertStringContainsString('$this->resolveEnv(', $buildText, 'buildServer() no longer interpolates at all — the two-key claim lost its ground');
+        preg_match_all('/resolveEnv\(\$config\[.([a-z]+).\]/', $buildText, $interpolated);
+        self::assertSame(['env', 'headers'], $interpolated[1], 'resolveEnv is applied to more or fewer config keys than the page\'s two');
+        self::assertStringContainsString('applied to ' . \chr(42) . \chr(42) . 'two keys only' . \chr(42) . \chr(42), $mcp, 'the two-keys claim reworded while the call-site census above still answers — re-pin together');
+        self::assertStringContainsString(
+            'applied to `command`, `args`, `url` or `path`',
+            $mcp,
+            'the negative half of the interpolation claim left the page',
+        );
+        self::assertSame(
+            1,
+            preg_match('/default =>\s*throw new \\\\RuntimeException\(/', $buildText),
+            'an unknown type no longer throws — the page says any other type throws',
+        );
+        self::assertStringContainsString(\chr(42) . \chr(42) . 'throws' . \chr(42) . \chr(42), $mcp, 'the throw claim reworded — this pin and the default arm must move together');
+
+        $resolveText = (string) substr($clientSource, $resolve['begin'], $resolve['end'] - $resolve['begin']);
+        self::assertSame(
+            1,
+            preg_match('/preg_match\(.(\/[^\/]+\/).,/', $resolveText, $anchored),
+            'resolveEnv() no longer matches one quoted anchored pattern — the page quotes it verbatim',
+        );
+        self::assertSame(
+            1,
+            preg_match('/The pattern is anchored \(`([^`]+)`\)/', $mcp, $quoted),
+            'the page stopped quoting the anchored pattern',
+        );
+        self::assertSame($anchored[1], $quoted[1], 'the anchored pattern in resolveEnv() and the one MCP.md quotes no longer match byte for byte');
+        self::assertSame(
+            1,
+            preg_match('/getenv\(\$matches\[1\]\) \?: \(/', $resolveText),
+            'the resolution is no longer the getenv-then-?: form the page paraphrases as `getenv($name) ?: $default` — flip paraphrase and code together',
+        );
+        self::assertStringContainsString('`getenv($name) ?: $default`', $mcp, 'the page stopped quoting the resolution form');
+    }
+
+    /**
+     * E686 tranche-9 (AY): the bridge-name convention and the permission
+     * matrix the MCP.md page summarizes — NAME_PREFIX and its concatenation,
+     * the McpToolBridge class doc-block's own six-row table against the
+     * PermissionMode enum, exactly one divergence (plan), and the isWriteTool
+     * mcp__ clause the divergence runs through.
+     */
+    public function testBridgeNamingAndPermissionMatrixCoincideWithThePage(): void
+    {
+        $mcp = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md'));
+        $bridgeSource = self::sourceOf('Tools/McpToolBridge.php');
+        self::assertSame('mcp__', constant('SugarCraft\Crush\Tools\McpToolBridge::NAME_PREFIX'));
+        self::assertStringContainsString('`mcp__<server>__<tool>`', $mcp, 'the naming-convention claim left the page');
+        $rawPage = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        self::assertTrue(
+            str_contains($rawPage, '`mcp__git__' . \chr(42) . '`'),
+            'the page stopped citing a mcp__git__ rule pattern alongside the convention',
+        );
+        self::assertSame(
+            1,
+            preg_match('/self::NAME_PREFIX\s*\n?\s*\. self::sanitize\(/', $bridgeSource),
+            'the bridge no longer builds its name by prefix + sanitize(server) — the convention the page quotes is this concatenation',
+        );
+        self::assertStringContainsString(". '__'", $bridgeSource, 'the double-underscore separator between server and tool is gone');
+
+        self::assertSame(
+            1,
+            preg_match("/coincides with `Bash`'s in five of the six permission modes and diverges under `plan`/", $mcp),
+            'the coincidence sentence no longer states five-of-six with its diverging mode',
+        );
+        $wordNumbers = ['five' => 5, 'six' => 6];
+        $cases = PermissionMode::cases();
+        self::assertCount($wordNumbers['six'], $cases, 'PermissionMode gained or lost a case — every mode matrix on the page and in the bridge doc-block must move together');
+
+        $bridgeDoc = (string) (new \ReflectionClass('SugarCraft\Crush\Tools\McpToolBridge'))->getDocComment();
+        preg_match_all('/^\s*\* {5}([a-z][a-z-]*) {2,}(\S+) {2,}(\S+)(.*)$/m', $bridgeDoc, $rows, PREG_SET_ORDER);
+        $values = array_map(static fn ($case): string => $case->value, $cases);
+        $byMode = [];
+        foreach ($rows as $row) {
+            if (in_array($row[1], $values, true)) {
+                $byMode[$row[1]] = [$row[2], $row[3], trim($row[4])];
+            }
+        }
+        self::assertCount(6, $byMode, 'the bridge doc-block matrix no longer carries one row per permission mode (its header row never counts)');
+        self::assertEqualsCanonicalizing($values, array_keys($byMode), 'the matrix rows and PermissionMode::cases() values disagree — this is the same enum-equality gate the permission page carries, now also under the bridge note');
+        $divergent = array_values(array_filter($byMode, static fn (array $row): bool => str_contains($row[2], 'diverges')));
+        self::assertCount(1, $divergent, 'exactly one row may diverge — the page says five of six coincide');
+        self::assertSame('plan', array_key_first(array_filter($byMode, static fn (array $row): bool => str_contains($row[2], 'diverges'))), 'the divergence moved off plan — MCP.md names plan as the diverging mode');
+        self::assertSame(['DENIED', 'ALLOWED'], array_slice($byMode['plan'], 0, 2), 'plan no longer denies the mcp__ name while allowing Bash — the conservative-direction paragraph depends on this shape');
+        $coincident = 0;
+        foreach ($byMode as $row) {
+            if ($row[0] === $row[1]) {
+                ++$coincident;
+            }
+        }
+        self::assertSame($wordNumbers['five'], $coincident, 'the column count of coinciding verdicts stopped matching the page and the bridge note ("Five of six coincide.")');
+        self::assertStringContainsString('Five of six coincide.', self::proseOf($bridgeDoc), 'the bridge note\'s own count sentence drifted from its table — flip note and page together');
+
+        $gate = self::bodyExcerpt(self::sourceOf('Permissions/PermissionGate.php'), 'isWriteTool');
+        self::assertStringContainsString("'mcp__'", $gate, 'isWriteTool() no longer treats mcp__ names as writes — the plan-row divergence and the page sentence both run through this clause');
+        self::assertStringContainsString('str_starts_with($call->name', $gate, 'isWriteTool() stopped prefix-matching the tool name');
+    }
+
+    /**
+     * E686 tranche-9 (AZ): the commands surface — /mcp's three sub-commands
+     * against the command's own match, the five help-listed subcommands
+     * against ParsedArgs::SUBCOMMANDS (the second-class-in-file ParsedArgs is
+     * touched through ArgvParser, per the lane-be autoload law), the server
+     * halves the page enumerates, the no-`serve` negative, and `run` as the
+     * sixth word argv treats specially (with the line-number anchor the page
+     * carried until this tranche deleted).
+     */
+    public function testMcpCommandsSurfaceCountsHelpRowsAndTheRunArm(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $mcp = self::markdownProse($raw);
+        $wordNumbers = ['three' => 3, 'five' => 5, 'six' => 6];
+
+        self::assertSame(
+            1,
+            preg_match('/with three\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
+            'the /mcp lead-in no longer states its count with both backing classes',
+        );
+        $authSource = self::sourceOf('Commands/McpAuthCommand.php');
+        $execute = self::bodyExcerpt($authSource, 'execute', 1200);
+        preg_match_all("/'(list|add|remove)' =>/", $execute, $subs);
+        self::assertCount($wordNumbers['three'], $subs[1], 'the /mcp match arms changed — the page fence and this count move together');
+        preg_match_all('/^\/mcp (list|add|remove)\b/m', $raw, $fence);
+        self::assertSame(['list', 'add', 'remove'], $fence[1], 'the page fence no longer lists the three commands in code order');
+        self::assertStringContainsString('Use: list, add, remove', $authSource, 'the unknown-sub-command message stopped enumerating the roster');
+        self::assertTrue(class_exists('SugarCraft\Crush\MCP\McpAuthStore'), 'McpAuthStore vanished — the page credits it as backing');
+        self::assertTrue(class_exists('SugarCraft\Crush\MCP\OAuthClientRegistration'), 'OAuthClientRegistration vanished — the page credits it as backing');
+
+        $bold = \chr(42) . \chr(42);
+        self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
+        $commands = constant('SugarCraft\Crush\Cli\ParsedArgs::SUBCOMMANDS');
+        sort($commands);
+        self::assertCount($wordNumbers['five'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+
+        $helpSource = self::sourceOf('Cli/Help.php');
+        self::assertSame(
+            1,
+            preg_match('/lists exactly five under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            'the exactly-five sentence reworded — the help block below must keep carrying five rows',
+        );
+        $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
+        $block = explode("\n\n", $block)[0];
+        preg_match_all('/^  ([a-z]+)\b/m', $block, $helpRows);
+        $helpWords = array_values(array_unique($helpRows[1]));
+        sort($helpWords);
+        self::assertSame($commands, $helpWords, 'the help Subcommands block and ParsedArgs::SUBCOMMANDS diverged — the page quotes both agreeing');
+        self::assertSame(6, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the six leaf rows the page enumerates (session and completion hold their own second words)');
+        foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'completion bash|zsh|fish'] as $row) {
+            self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
+        }
+        self::assertStringContainsString('each answers and exits; none of them opens the TUI or needs a provider, an API key or a terminal', self::markdownProse($block), 'the help heading lost the promise the page repeats verbatim ("answer and exit without a provider, an API key or a terminal")');
+
+        self::assertFalse(in_array('serve', $commands, true), 'a serve subcommand arrived — the page states there is none');
+        self::assertStringContainsString('There is no `sugarcrush serve` subcommand', $mcp, 'the no-serve claim left the page');
+        foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'StdioMcpServer'] as $class) {
+            $half = 'SugarCraft\Crush\MCP\\' . $class;
+            self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
+        }
+
+        self::assertSame(
+            1,
+            preg_match('/`run` is a sixth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            'the run-is-a-sixth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
+        );
+        self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
+        self::assertStringContainsString("\$arg === 'run' && !\$promptRequested", self::sourceOf('Cli/ArgvParser.php'), 'the bare-run arm the sentence cites is no longer shaped this way');
+        self::assertFalse(in_array('run', $commands, true), 'run joined the subcommand roster — the five-vs-six split the page draws collapses');
+        self::assertSame(
+            1,
+            preg_match('/sugarcrush run "<prompt>".*Alias for -p/s', $helpSource),
+            'the Usage block stopped labelling run as an alias for -p',
+        );
+        self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
+        self::assertCount($wordNumbers['six'], array_merge($commands, ['run']), 'the five-plus-run-is-a-sixth arithmetic broke against the live roster');
+    }
+
+    /**
+     * E686 tranche-9 (BA): the $onEvent roster of src/Backend.php. Four
+     * sources of truth collapse to one set — the class doc-block's
+     * {@see Events\...} cites, complete()'s literal `@param` union,
+     * EngineBackend::encodeEvent()'s parameter union (which the page itself
+     * names as the authority) and decodeEvent()'s return union — each short
+     * name resolved through EngineBackend's use-imports and checked to exist.
+     * encodeEvent admits the ToolStarted/ToolFinished pair AND SpendCapBreached,
+     * so the FULL trio is bound here; the narrower tool-pair unions in
+     * Runtime::emit()/Chat::enqueueToolEvent() are emission sites, not the
+     * channel authority, and are deliberately NOT what this arm compares.
+     */
+    public function testOnEventRosterIsTheWireEncodersOwnUnion(): void
+    {
+        $backendSource = self::sourceOf('Backend.php');
+        $engineSource = self::sourceOf('Backend/EngineBackend.php');
+        $wordNumbers = ['three' => 3];
+
+        self::assertSame(
+            1,
+            preg_match('/\*\*Turn-lifecycle events:\*\*/', self::markdownProse($backendSource)),
+            'the class doc-block section the roster claim lives in was reworded — re-pin with it',
+        );
+        $section = (string) preg_replace('/^.*\*\*Turn-lifecycle events:\*\*/s', '', $backendSource);
+        $section = explode(\chr(42) . \chr(42) . 'Reasoning:' . \chr(42) . \chr(42), $section)[0];
+        preg_match_all('/\{\@see Events\\\\([A-Za-z]+)\}/', $section, $cited);
+        self::assertCount(3, $cited[1], 'the doc-block section stopped naming exactly three event classes');
+        self::assertSame(
+            ['ToolStarted', 'ToolFinished', 'SpendCapBreached'],
+            array_values(array_unique($cited[1])),
+            'the prose trio in the class doc-block drifted — the encoder union below is the authority the page itself names',
+        );
+        self::assertStringContainsString('not a prose list, is the authority', self::markdownProse($section), 'the sentence naming the encoder as authority left — this arm exists to make it true');
+
+        $param = (string) preg_replace('/^.*?\@param callable\|null \$onEvent/s', '', $backendSource);
+        $param = (string) explode('public function complete(', $param)[0];
+        self::assertSame(
+            1,
+            preg_match('/`function\(Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+) \$event\): void`/', $param, $union),
+            'complete()\'s @param no longer states a three-class union inline — the page promise this arm guards is that union',
+        );
+        $documentedUnion = [$union[1], $union[2], $union[3]];
+        self::assertStringContainsString('type-matches these three covers the channel', self::markdownProse($section), 'the "these three" count word left the section — flip it with the roster, census-trio law');
+        self::assertCount($wordNumbers['three'], $documentedUnion);
+
+        $encode = null;
+        $decode = null;
+        foreach (self::functionSpans($engineSource) as $span) {
+            $encode ??= 'encodeEvent' === $span['name'] ? $span : null;
+            $decode ??= 'decodeEvent' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($encode, 'EngineBackend::encodeEvent() vanished — the interface names it as the roster authority');
+        self::assertIsArray($decode, 'EngineBackend::decodeEvent() vanished — the replay side of the same channel');
+        $encodeText = (string) substr($engineSource, $encode['begin'], $encode['end'] - $encode['begin']);
+        $decodeText = (string) substr($engineSource, $decode['begin'], $decode['end'] - $decode['begin']);
+        self::assertSame(
+            1,
+            preg_match('/function encodeEvent\(([A-Za-z|]+) \$event\)/', $encodeText, $encodeUnion),
+            'encodeEvent() no longer takes a bare class union — the authority stopped being a type',
+        );
+        $admitted = explode('|', $encodeUnion[1]);
+        self::assertSame(
+            1,
+            preg_match('/function decodeEvent\([^)]*\): ([A-Za-z|]+)\|null/', $decodeText, $decodeUnion),
+            'decodeEvent() no longer returns the union-or-null shape the interface documents',
+        );
+        $decoded = explode('|', $decodeUnion[1]);
+
+        preg_match_all('/^use SugarCraft\\\\Crush\\\\Events\\\\([A-Za-z]+);$/m', $engineSource, $imports);
+        foreach (array_merge($admitted, $decoded) as $short) {
+            self::assertTrue(in_array($short, $imports[1], true), "encode/decode union names {$short} without a matching Events import — the resolution below would be a guess");
+            self::assertTrue(class_exists('SugarCraft\Crush\Events\\' . $short), "SugarCraft\\Crush\\Events\\{$short} no longer exists — the wire channel's roster lost a member");
+        }
+
+        self::assertEqualsCanonicalizing($admitted, $decoded, 'the encoder admits one roster and the decoder replays another');
+        self::assertEqualsCanonicalizing($admitted, $documentedUnion, 'complete()\'s @param union drifted from what encodeEvent() admits — the parameter type, not prose, is the authority');
+        self::assertEqualsCanonicalizing($admitted, array_values(array_unique($cited[1])), 'the class doc-block cites stopped matching the encoder union — the page names encodeEvent() as authority');
+
+        $observers = preg_match_all('/@param callable\|null \$onEvent [a-z]+ turn-lifecycle observer/i', $backendSource);
+        self::assertSame(2, $observers, 'the two $onEvent @param lines no longer BOTH read turn-lifecycle — completeAsync carried the stale "tool-lifecycle" wording this tranche fixed IN-STEP');
+        $async = (string) preg_replace('/^.*\@param callable\|null \$onEvent Optional turn-lifecycle/s', '', $backendSource);
+        self::assertStringContainsString('{@see complete()}', $async, 'completeAsync() no longer defers its union to complete() — the single-source property this pin asserts');
     }
 
     /**

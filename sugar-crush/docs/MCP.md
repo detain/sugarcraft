@@ -209,9 +209,10 @@ serving git operations to itself. There is no `sugarcrush serve` subcommand.
 without a provider, an API key or a terminal.
 
 Five is the subcommand count, not the count of bare words argv treats specially:
-`run` is a sixth (`Cli\ArgvParser` line 175, `sugarcrush run "<prompt>"` in the
-help's Usage block), but it is an alias for `-p` and therefore a turn of
-conversation rather than a question about the install.
+`run` is a sixth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
+`sugarcrush run "<prompt>"` in the help's Usage block), but it is an alias for
+`-p` and therefore a turn of conversation rather than a question about the
+install.
 
 ## See also
 

@@ -87,7 +87,7 @@ interface Backend
      *                                and reject early instead of running to
      *                                completion. A backend that can't act on
      *                                this may ignore it.
-     * @param callable|null $onEvent Optional tool-lifecycle observer, see
+     * @param callable|null $onEvent Optional turn-lifecycle observer, see
      *                                {@see complete()}. A backend that moves the
      *                                work off-process MUST still deliver these
      *                                in the CALLER's process (replayed if it
