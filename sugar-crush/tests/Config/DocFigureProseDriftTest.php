@@ -2829,7 +2829,11 @@ final class DocFigureProseDriftTest extends TestCase
      * appends conditionally ("a session that qualifies none of the optional
      * ones assembles fewer" — the page itself refuses to pin 11 to a runtime
      * count), so what IS pinned is the list's own arithmetic — spelled word,
-     * item count, sequential ordinals — plus every named layer still existing.
+     * item count, sequential ordinals — and the layer roster is DERIVED FROM
+     * THE PROSE, not hand-typed beside it: every class-shaped backtick cite in
+     * the list must resolve to a declared type, and every roster symbol must
+     * still be cited (r71 review M10: a prose rename survived the hand-typed
+     * existence checks — the doc could lie about a layer and nothing reddened).
      */
     public function testArchitectureSystemPromptSlotsCountTheirOwnList(): void
     {
@@ -2848,20 +2852,45 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(range(1, $words[$word[1]]), $ordinals[1] === [] ? [] : array_map('intval', $ordinals[1]), 'the numbered list is no longer exactly 1..N with N the spelled slot count');
         self::assertSame(1, preg_match('/^11\. `EnvironmentBlock` LAST/m', $segment), 'item eleven is no longer EnvironmentBlock LAST — the volatility-last ordering claim rots with it');
 
+        // The roster is the doc's own vocabulary: the short symbol as the list
+        // backticks it => the declared type it must resolve to. Every
+        // class-shaped cite (optional ::method and () included) is checked both
+        // ways below — cited-but-unknown is a prose rename, roster-but-uncited
+        // is a prose deletion; either one stops the arm by name.
         $layers = [
-            'SugarCraft\Crush\Context\Sections\MaximsSection',
-            'SugarCraft\Crush\Context\RepoMapBlock',
-            'SugarCraft\Crush\Context\RuleLoader',
-            'SugarCraft\Crush\Context\MemoryBlock',
-            'SugarCraft\Crush\Context\EnvironmentBlock',
-            'SugarCraft\Crush\Skills\SkillMatcher',
-            'SugarCraft\Crush\Tools\BuiltIn\SkillTool',
+            'Runtime' => 'SugarCraft\Crush\Runtime',
+            'MaximsSection' => 'SugarCraft\Crush\Context\Sections\MaximsSection',
+            'PromptGuidance' => 'SugarCraft\Crush\Tools\PromptGuidance',
+            'RepoMapBlock' => 'SugarCraft\Crush\Context\RepoMapBlock',
+            'RuleLoader' => 'SugarCraft\Crush\Context\RuleLoader',
+            'InstructionFileLoader' => 'SugarCraft\Crush\Context\InstructionFileLoader',
+            'PromptFence' => 'SugarCraft\Crush\Context\PromptFence',
+            'MemoryBlock' => 'SugarCraft\Crush\Context\MemoryBlock',
+            'SkillMatcher' => 'SugarCraft\Crush\Skills\SkillMatcher',
+            'EnvironmentBlock' => 'SugarCraft\Crush\Context\EnvironmentBlock',
         ];
-        foreach ($layers as $layer) {
-            self::assertTrue(class_exists($layer), "a layer the assembly list names by symbol ({$layer}) no longer exists");
+
+        preg_match_all('/`([A-Z][A-Za-z0-9]*)((?:::[A-Za-z_][A-Za-z0-9_]*)?)(?:\(\))?`/', $segment, $cites, PREG_SET_ORDER);
+        self::assertNotEmpty($cites, 'the assembly list backticks not one class-shaped symbol — the derive-from-text binding has nothing left to check');
+        $cited = [];
+        foreach ($cites as $cite) {
+            self::assertArrayHasKey($cite[1], $layers, "the assembly list cites `{$cite[1]}` as a layer — no declared type answers to that name (the prose renamed it, or invented it)");
+            self::assertTrue(
+                interface_exists($layers[$cite[1]]) || class_exists($layers[$cite[1]]),
+                "a layer the assembly list names by symbol ({$layers[$cite[1]]}) no longer exists"
+            );
+            if ($cite[2] !== '') {
+                $citedMethod = ltrim($cite[2], ':');
+                self::assertTrue(method_exists($layers[$cite[1]], $citedMethod), "the assembly list cites {$cite[1]}::{$citedMethod}() — the code declares no such method");
+            }
+            $cited[$cite[1]] = true;
+        }
+        foreach (array_keys($layers) as $symbol) {
+            self::assertArrayHasKey($symbol, $cited, "the assembly list stopped naming {$symbol} — the roster the arm derives from the prose lost a layer");
         }
         self::assertTrue(method_exists('SugarCraft\Crush\Skills\SkillMatcher', 'listForPrompt'), 'item 10 cites SkillMatcher::listForPrompt() which is gone');
         self::assertTrue(method_exists(Runtime::class, 'basePrompt'), 'item 1 is the base instructions — Runtime::basePrompt() is gone');
+        self::assertTrue(class_exists('SugarCraft\Crush\Tools\BuiltIn\SkillTool'), 'the Skill tool that item 10 exists to advertise no longer exists');
     }
 
     /**
