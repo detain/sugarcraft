@@ -44,7 +44,7 @@ final class McpAuthStore
         foreach ($authData as $serverUrl => $entry) {
             $result[$serverUrl] = new ServerAuthStatus(
                 serverUrl: $serverUrl,
-                hasCredentials: true,
+                hasCredentials: $entry->accessToken !== '',
                 isExpired: $entry->isExpired(),
                 expiresAt: $entry->expiresAt,
                 scopes: $entry->scopes,
@@ -77,7 +77,7 @@ final class McpAuthStore
 
         return new ServerAuthStatus(
             serverUrl: $serverUrl,
-            hasCredentials: true,
+            hasCredentials: $entry->accessToken !== '',
             isExpired: $entry->isExpired(),
             expiresAt: $entry->expiresAt,
             scopes: $entry->scopes,

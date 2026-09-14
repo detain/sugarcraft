@@ -195,7 +195,18 @@ sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 
 This store maps **server URLs to auth entries**. It is independent of
 `.mcp.json` — registering auth for a URL does not declare a server, and
-declaring an `http` server does not register auth for it.
+declaring an `http` server does not register auth for it. It is no longer
+inert: when an `http` server's `url` in `.mcp.json` exactly matches one of
+its stored keys, every JSON-RPC request to that server carries the stored
+access token as a bearer `Authorization` header. Before attaching, the entry
+goes through `OAuthClientRegistration::getValidAuth()`, so a token inside its
+expiry buffer is refreshed against the endpoints saved with it and the
+rotated token is persisted. An `Authorization` header you configured in
+`.mcp.json` yourself (after env resolution) wins — the store is then not
+consulted for that server at all. The key match is exact-string: change the
+server URL in your config and you must re-run `mcp auth add` for the new URL.
+Credentials registered mid-session take effect at the next launch, the same
+stance under which the server list itself is frozen per launch.
 
 ## Serving MCP
 

@@ -398,4 +398,111 @@ final class OAuthClientRegistrationTest extends TestCase
         $data = $ocr->loadAuth();
         $this->assertArrayHasKey('https://example.com/mcp', $data);
     }
+
+    // =========================================================================
+    // E695: validAuthFor + persisted endpoints
+    // =========================================================================
+
+    public function testValidAuthForReturnsNullForUnknownServer(): void
+    {
+        $ocr = new OAuthClientRegistration(new Client(), $this->authFilePath);
+        $this->assertNull($ocr->validAuthFor('https://never-registered.example.com/mcp'));
+    }
+
+    public function testValidAuthForServesFreshEntryWithoutTouchingTheNetwork(): void
+    {
+        // Empty MockHandler queue: ANY token-endpoint request trips
+        // \OutOfBoundsException — the absence-of-network proof.
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create(new MockHandler([]))]),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://fresh.example.com/mcp', new AuthEntry(
+            clientId: 'c1',
+            clientSecret: 's1',
+            registrationAccessToken: 'r1',
+            accessToken: 'fresh-access',
+            refreshToken: 'rt1',
+            expiresAt: time() + 3600,
+            tokenUrl: 'https://fresh.example.com/token',
+            registrationUrl: 'https://fresh.example.com/register',
+        ));
+
+        $entry = $ocr->validAuthFor('https://fresh.example.com/mcp');
+
+        $this->assertNotNull($entry);
+        $this->assertSame('fresh-access', $entry->accessToken);
+    }
+
+    public function testValidAuthForRefreshesExpiredEntryUsingPersistedEndpoints(): void
+    {
+        $mock = new MockHandler([new Response(200, ['Content-Type' => 'application/json'], json_encode([
+            'access_token' => 'rotated-access',
+            'refresh_token' => 'rotated-refresh',
+            'expires_in' => 3600,
+        ]))]);
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create($mock)]),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://rot.example.com/mcp', new AuthEntry(
+            clientId: 'c2',
+            clientSecret: 's2',
+            registrationAccessToken: 'r2',
+            accessToken: 'stale-access',
+            refreshToken: 'old-refresh',
+            expiresAt: time() - 10,
+            tokenUrl: 'https://rot.example.com/token',
+            registrationUrl: 'https://rot.example.com/register',
+        ));
+
+        $entry = $ocr->validAuthFor('https://rot.example.com/mcp');
+
+        $this->assertSame('rotated-access', $entry->accessToken);
+        $this->assertSame('https://rot.example.com/token', (string) $mock->getLastRequest()->getUri());
+
+        $reloaded = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+        $this->assertSame('rotated-access', $reloaded['https://rot.example.com/mcp']->accessToken);
+        $this->assertSame('https://rot.example.com/token', $reloaded['https://rot.example.com/mcp']->tokenUrl);
+    }
+
+    public function testValidAuthForServesLegacyRowWithoutEndpointsAsIs(): void
+    {
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create(new MockHandler([]))]),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://legacy.example.com/mcp', new AuthEntry(
+            clientId: 'c3',
+            clientSecret: '',
+            registrationAccessToken: 'r3',
+            accessToken: 'legacy-access',
+            refreshToken: '',
+            expiresAt: time() - 10,
+        ));
+
+        $entry = $ocr->validAuthFor('https://legacy.example.com/mcp');
+
+        $this->assertSame('legacy-access', $entry->accessToken);
+    }
+
+    public function testAuthEntryPersistsEndpointsThroughSaveAndLoad(): void
+    {
+        $ocr = new OAuthClientRegistration(new Client(), $this->authFilePath);
+        $ocr->saveAuth('https://roundtrip.example.com/mcp', new AuthEntry(
+            clientId: 'c4',
+            clientSecret: 's4',
+            registrationAccessToken: 'r4',
+            accessToken: 'a4',
+            refreshToken: 'rt4',
+            expiresAt: null,
+            tokenUrl: 'https://roundtrip.example.com/token',
+            registrationUrl: 'https://roundtrip.example.com/reg',
+        ));
+
+        $reloaded = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+
+        $this->assertSame('https://roundtrip.example.com/token', $reloaded['https://roundtrip.example.com/mcp']->tokenUrl);
+        $this->assertSame('https://roundtrip.example.com/reg', $reloaded['https://roundtrip.example.com/mcp']->registrationUrl);
+    }
 }

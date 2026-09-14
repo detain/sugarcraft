@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\MCP;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\MockObject\MockObject;
+use SugarCraft\Crush\MCP\AuthEntry;
 use SugarCraft\Crush\MCP\HttpMcpServer;
+use SugarCraft\Crush\MCP\McpAuthStore;
 use SugarCraft\Crush\MCP\McpTool;
+use SugarCraft\Crush\MCP\OAuthClientRegistration;
 
 /**
  * @see HttpMcpServer
@@ -591,5 +596,174 @@ final class HttpMcpServerTest extends TestCase
             );
 
         $server->start();
+    }
+
+    // =========================================================================
+    // E695: stored OAuth tokens attach to requests (store was write-only)
+    // =========================================================================
+
+    private ?string $e695AuthFile = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->e695AuthFile !== null && file_exists($this->e695AuthFile)) {
+            unlink($this->e695AuthFile);
+            rmdir(dirname($this->e695AuthFile));
+        }
+        $this->e695AuthFile = null;
+        parent::tearDown();
+    }
+
+    /**
+     * A store backed by a throwaway file, with an optional token-endpoint
+     * double for the refresh leg.
+     */
+    private function e695Store(array $responses = []): McpAuthStore
+    {
+        $dir = sys_get_temp_dir() . '/e695_http_' . uniqid((string) getmypid(), true);
+        mkdir($dir, 0700, true);
+        $this->e695AuthFile = $dir . '/auth.json';
+
+        return new McpAuthStore(new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create(new MockHandler($responses))]),
+            $this->e695AuthFile,
+        ));
+    }
+
+    /**
+     * @param array<string, string> $configHeaders
+     * @return array<string, mixed> the captured request options of the FIRST post
+     */
+    private function e695StartAndCapture(array $configHeaders, ?McpAuthStore $store, string $url = 'http://localhost:9777/mcp'): array
+    {
+        $captured = null;
+        $this->mockHttpClient->method('post')
+            ->willReturnCallback(static function (string $uri, array $options) use (&$captured): Response {
+                $captured ??= $options;
+                $method = $options['json']['method'] ?? '';
+                if ($method === 'initialize') {
+                    return new Response(200, [], json_encode(['result' => ['capabilities' => []]]));
+                }
+
+                return new Response(200, [], json_encode(['result' => ['tools' => []]]));
+            });
+
+        $server = new HttpMcpServer(
+            name: 'e695',
+            url: $url,
+            headers: $configHeaders,
+            httpClient: $this->mockHttpClient,
+            authStore: $store,
+        );
+        $server->start();
+
+        $this->assertNotNull($captured, 'no request reached the HTTP client');
+
+        return $captured;
+    }
+
+    public function testStoredTokenAttachesAsBearerHeaderAlongsideConfiguredOnes(): void
+    {
+        $store = $this->e695Store();
+        $store->oauth()->saveAuth('http://localhost:9777/mcp', new AuthEntry(
+            clientId: 'c1',
+            clientSecret: '',
+            registrationAccessToken: 'r1',
+            accessToken: 'stored-access-1',
+            refreshToken: '',
+            expiresAt: time() + 3600,
+            tokenUrl: 'http://localhost:9777/token',
+        ));
+
+        $options = $this->e695StartAndCapture(['X-Api-Key' => 'k'], $store);
+
+        $this->assertSame('Bearer stored-access-1', $options['headers']['Authorization']);
+        $this->assertSame('k', $options['headers']['X-Api-Key']);
+    }
+
+    public function testStaticAuthorizationHeaderWinsOverTheStore(): void
+    {
+        $store = $this->e695Store();
+        $store->oauth()->saveAuth('http://localhost:9777/mcp', new AuthEntry(
+            clientId: 'c2',
+            clientSecret: '',
+            registrationAccessToken: 'r2',
+            accessToken: 'ambient-token-must-not-appear',
+            refreshToken: 'rt-must-not-refresh',
+            expiresAt: time() - 10,
+            tokenUrl: 'http://localhost:9777/token',
+        ));
+
+        $options = $this->e695StartAndCapture(['authorization' => 'Static operator-header'], $store);
+
+        $this->assertSame('Static operator-header', $options['headers']['authorization']);
+        $this->assertArrayNotHasKey('Authorization', $options['headers']);
+    }
+
+    public function testServerWithoutAuthStoreSendsConfiguredHeadersByteIdentical(): void
+    {
+        $options = $this->e695StartAndCapture(['X-Api-Key' => 'k', 'Accept' => 'application/json'], null);
+
+        $this->assertSame(['X-Api-Key' => 'k', 'Accept' => 'application/json'], $options['headers']);
+    }
+
+    public function testServerWithStoreHoldingNoEntrySendsConfiguredHeadersByteIdentical(): void
+    {
+        $options = $this->e695StartAndCapture(['X-Api-Key' => 'k'], $this->e695Store());
+
+        $this->assertSame(['X-Api-Key' => 'k'], $options['headers']);
+    }
+
+    public function testExpiredTokenIsRefreshedThroughTheStoreBeforeAttaching(): void
+    {
+        $store = $this->e695Store([new Response(200, ['Content-Type' => 'application/json'], json_encode([
+            'access_token' => 'rotated-access-3',
+            'refresh_token' => 'rotated-refresh-3',
+            'expires_in' => 3600,
+        ]))]);
+        $store->oauth()->saveAuth('http://localhost:9777/mcp', new AuthEntry(
+            clientId: 'c3',
+            clientSecret: '',
+            registrationAccessToken: 'r3',
+            accessToken: 'stale-access-3',
+            refreshToken: 'old-refresh-3',
+            expiresAt: time() - 5,
+            tokenUrl: 'http://localhost:9777/token',
+        ));
+
+        $options = $this->e695StartAndCapture([], $store);
+
+        $this->assertSame('Bearer rotated-access-3', $options['headers']['Authorization']);
+        $fresh = (new OAuthClientRegistration(new Client(), $this->e695AuthFile))->loadAuth();
+        $this->assertSame('rotated-access-3', $fresh['http://localhost:9777/mcp']->accessToken);
+    }
+
+    public function testTokenBytesNeverReachFailureMessages(): void
+    {
+        $store = $this->e695Store();
+        $store->oauth()->saveAuth('http://localhost:9777/mcp', new AuthEntry(
+            clientId: 'c4',
+            clientSecret: '',
+            registrationAccessToken: 'r4',
+            accessToken: 'secret-access-must-stay-hidden',
+            refreshToken: '',
+            expiresAt: time() - 5,
+            tokenUrl: 'http://localhost:9777/token',
+        ));
+
+        try {
+            $server = new HttpMcpServer(
+                name: 'e695-leak-check',
+                url: 'http://localhost:9777/mcp',
+                headers: [],
+                httpClient: $this->mockHttpClient,
+                authStore: $store,
+            );
+            $server->start();
+            $this->fail('expected the un-refreshable entry to fail the start');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('e695-leak-check', $e->getMessage());
+            $this->assertStringNotContainsString('secret-access-must-stay-hidden', $e->getMessage());
+        }
     }
 }

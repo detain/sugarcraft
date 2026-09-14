@@ -40,6 +40,7 @@ final class McpClient
         ?AgentPreset $agentPreset = null,
         bool $unrestricted = false,
         array $denyPatterns = [],
+        private readonly ?McpAuthStore $authStore = null,
     ) {
         // Injectable so tests can supply a MockHandler-backed client; defaults to
         // a real client for production use.
@@ -263,6 +264,11 @@ final class McpClient
                 url: $config['url'] ?? '',
                 headers: $this->resolveEnv($config['headers'] ?? []),
                 httpClient: $this->httpClient,
+                // E695: the http arm is the ONLY consumer of the auth store —
+                // it is created lazily here so stdio/git-only configs never
+                // touch ~/.local/share/sugar-crush/mcp-auth.json. Tests pass
+                // an explicit store backed by a temp path for hermeticity.
+                authStore: $this->authStore ?? McpAuthStore::create(),
             ),
             'git' => new GitMcpServer(
                 name: $name,

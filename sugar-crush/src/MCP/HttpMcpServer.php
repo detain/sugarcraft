@@ -21,6 +21,7 @@ final class HttpMcpServer implements McpServer
         private string $url,
         private array $headers,
         private Client $httpClient,
+        private readonly ?McpAuthStore $authStore = null,
     ) {}
 
     public function start(): void
@@ -100,8 +101,65 @@ final class HttpMcpServer implements McpServer
                 'method' => $method,
                 'params' => $params,
             ],
-            'headers' => $this->headers,
+            'headers' => $this->requestHeaders(),
         ]);
+    }
+
+    /**
+     * E695: the request headers for THIS request — the configured statics,
+     * plus the stored OAuth bearer token when one exists for this server URL.
+     *
+     * WHY PER-REQUEST and not snapshotted at construction: {@see
+     * OAuthClientRegistration::validAuthFor()} consults {@see
+     * OAuthClientRegistration::getValidAuth()}, which REFRESHES a token inside
+     * its expiry buffer and persists the rotation through the store's existing
+     * save path. A launch-time snapshot would freeze the first token and send
+     * an expired bearer for the rest of the session — the exact inert-store
+     * defect this change closes. The steady-state cost is a memoized in-memory
+     * lookup ({@see OAuthClientRegistration::loadAuth()}); network traffic
+     * happens only on an actual refresh.
+     *
+     * PRECEDENCE: an `Authorization` header the operator put in `.mcp.json`
+     * (already env-resolved by {@see McpClient::resolveEnv()}) WINS over the
+     * store — explicit per-launch configuration beats ambient stored state,
+     * and the store is not consulted at all in that case (no refresh, no
+     * surprise rotation while an operator is deliberately hand-rolling the
+     * header). The name is matched case-insensitively because HTTP field
+     * names are case-insensitive and the config array is operator-typed.
+     *
+     * LEAK HYGIENE: the token is placed ONLY into the Guzzle request options
+     * — the wire. No message, log, or exception path here interpolates it.
+     *
+     * @return array<string, string>
+     */
+    private function requestHeaders(): array
+    {
+        if ($this->authStore === null || $this->hasStaticAuthorization()) {
+            return $this->headers;
+        }
+
+        $entry = $this->authStore->oauth()->validAuthFor($this->url);
+        if ($entry === null || $entry->accessToken === '') {
+            return $this->headers;
+        }
+
+        $headers = $this->headers;
+        $headers['Authorization'] = 'Bearer ' . $entry->accessToken;
+        return $headers;
+    }
+
+    /**
+     * True when the static config headers already carry an Authorization field.
+     */
+    private function hasStaticAuthorization(): bool
+    {
+        foreach (array_keys($this->headers) as $headerName) {
+            if (strcasecmp((string) $headerName, 'Authorization') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -3663,6 +3663,32 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
         self::assertCount($wordNumbers['six'], array_merge($commands, ['run']), 'the five-plus-run-is-a-sixth arithmetic broke against the live roster');
+
+        // E695 in-step: the auth section's new attachment truth, bound to the
+        // code that makes it true — the page may only claim what the request
+        // path actually does.
+        self::assertSame(
+            1,
+            preg_match('/carries the stored\s+access token as a bearer `Authorization` header/', $mcp),
+            'the page stopped stating that http requests carry the stored bearer token — E695 made the store read-bearing, keep prose and wiring moving together',
+        );
+        $httpSource = self::sourceOf('MCP/HttpMcpServer.php');
+        self::assertStringContainsString('validAuthFor($this->url)', $httpSource, 'the request path no longer consults the store by server URL — the page exact-URL key claim is unfounded');
+        self::assertTrue(
+            method_exists(\SugarCraft\Crush\MCP\OAuthClientRegistration::class, 'validAuthFor'),
+            'validAuthFor vanished — the page names getValidAuth as the refresh leg it rides',
+        );
+        self::assertStringContainsString(
+            'getValidAuth(',
+            self::sourceOf('MCP/OAuthClientRegistration.php'),
+            'the store stopped delegating to getValidAuth — the page refresh-before-attach sentence drifts',
+        );
+        self::assertSame(
+            1,
+            preg_match('/wins — the store is then not\s+consulted/', $mcp),
+            'the precedence sentence reworded — pin both doc and the case-insensitive guard beside it',
+        );
+        self::assertStringContainsString('strcasecmp((string) $headerName, \'Authorization\')', $httpSource, 'the static-header precedence guard changed shape — the page precedence sentence needs re-measuring');
     }
 
     /**

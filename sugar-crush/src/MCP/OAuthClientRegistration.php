@@ -264,6 +264,8 @@ final class OAuthClientRegistration
                     refreshToken: '',
                     expiresAt: null,
                     scopes: $entry->scopes,
+                    tokenUrl: $entry->tokenUrl,
+                    registrationUrl: $entry->registrationUrl,
                 );
                 $this->saveAuth($serverUrl, $newEntry);
 
@@ -298,6 +300,42 @@ final class OAuthClientRegistration
         }
 
         return $entry;
+    }
+
+    /**
+     * E695: the server-keyed read path for request-time attachment.
+     *
+     * Loads the stored entry for a server URL and hands it to
+     * {@see getValidAuth()} using the token/registration endpoints that entry
+     * PERSISTS — so a caller holding only the server URL (an
+     * {@see HttpMcpServer} composing its request headers) gets the refresh
+     * behavior for free, and a rotated token is written back through
+     * {@see refreshAndSave()}'s existing save path.
+     *
+     * A legacy row saved before endpoints were persisted carries an empty
+     * tokenUrl: there is nothing to refresh against, so the stored entry is
+     * served exactly as-is — if its token has since expired, the server's own
+     * 401 is the honest outcome, and re-running `mcp auth add` records the
+     * endpoints. This asymmetry is deliberate: inventing an endpoint is worse
+     * than a visible rejection.
+     */
+    public function validAuthFor(string $serverUrl): ?AuthEntry
+    {
+        $entry = $this->loadAuth()[$serverUrl] ?? null;
+
+        if ($entry === null) {
+            return null;
+        }
+
+        if ($entry->tokenUrl === '') {
+            return $entry;
+        }
+
+        return $this->getValidAuth(
+            $serverUrl,
+            $entry->tokenUrl,
+            $entry->registrationUrl !== '' ? $entry->registrationUrl : null,
+        );
     }
 
     /**
@@ -346,6 +384,8 @@ final class OAuthClientRegistration
             refreshToken: $refreshed['refreshToken'],
             expiresAt: $now + $refreshed['expiresIn'],
             scopes: $entry->scopes,
+            tokenUrl: $entry->tokenUrl,
+            registrationUrl: $entry->registrationUrl,
         );
 
         $this->saveAuth($serverUrl, $newEntry);
@@ -448,6 +488,8 @@ final readonly class AuthEntry
         public string $refreshToken,
         public ?int $expiresAt,
         public array $scopes = [],
+        public string $tokenUrl = '',
+        public string $registrationUrl = '',
     ) {}
 
     /**
@@ -463,6 +505,8 @@ final readonly class AuthEntry
             refreshToken: $data['refreshToken'] ?? '',
             expiresAt: isset($data['expiresAt']) ? (int) $data['expiresAt'] : null,
             scopes: $data['scopes'] ?? [],
+            tokenUrl: $data['tokenUrl'] ?? '',
+            registrationUrl: $data['registrationUrl'] ?? '',
         );
     }
 
@@ -479,6 +523,8 @@ final readonly class AuthEntry
             'refreshToken' => $this->refreshToken,
             'expiresAt' => $this->expiresAt,
             'scopes' => $this->scopes,
+            'tokenUrl' => $this->tokenUrl,
+            'registrationUrl' => $this->registrationUrl,
         ];
     }
 

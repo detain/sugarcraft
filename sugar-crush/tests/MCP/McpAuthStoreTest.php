@@ -365,4 +365,55 @@ final class McpAuthStoreTest extends TestCase
         $this->assertSame($expiresAt, $arr['expiresAt']);
         $this->assertSame(['read'], $arr['scopes']);
     }
+
+    // =========================================================================
+    // E695: hasCredentials is a real store reading
+    // =========================================================================
+
+    public function testListServersReportsNoCredentialsForEntryWithoutAccessToken(): void
+    {
+        $oauth = $this->createOAuthClient();
+        $oauth->saveAuth('https://tokenless.example.com/mcp', new AuthEntry(
+            clientId: 'c-tokenless',
+            clientSecret: '',
+            registrationAccessToken: 'r-tokenless',
+            accessToken: '',
+            refreshToken: '',
+            expiresAt: null,
+        ));
+        $oauth->saveAuth('https://with-token.example.com/mcp', new AuthEntry(
+            clientId: 'c-token',
+            clientSecret: '',
+            registrationAccessToken: 'r-token',
+            accessToken: 'a-real-token',
+            refreshToken: '',
+            expiresAt: null,
+        ));
+
+        $servers = (new McpAuthStore($oauth))->listServers();
+
+        $this->assertFalse($servers['https://tokenless.example.com/mcp']->hasCredentials);
+        $this->assertSame('no credentials', $servers['https://tokenless.example.com/mcp']->statusLabel());
+        $this->assertTrue($servers['https://with-token.example.com/mcp']->hasCredentials);
+        $this->assertSame('active', $servers['https://with-token.example.com/mcp']->statusLabel());
+    }
+
+    public function testGetServerStatusDerivesCredentialsPresenceFromTheStoredToken(): void
+    {
+        $oauth = $this->createOAuthClient();
+        $oauth->saveAuth('https://empty-token.example.com/mcp', new AuthEntry(
+            clientId: 'c-empty',
+            clientSecret: '',
+            registrationAccessToken: 'r-empty',
+            accessToken: '',
+            refreshToken: '',
+            expiresAt: time() + 3600,
+        ));
+
+        $status = (new McpAuthStore($oauth))->getServerStatus('https://empty-token.example.com/mcp');
+
+        $this->assertNotNull($status);
+        $this->assertFalse($status->hasCredentials);
+        $this->assertSame('no credentials', $status->statusLabel());
+    }
 }

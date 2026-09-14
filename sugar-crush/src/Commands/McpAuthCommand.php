@@ -40,12 +40,13 @@ final class McpAuthCommand
      * {@see formatStatus()} emits, and `Expires` is 16 because that is the
      * width of `Y-m-d H:i`; NEITHER IS EVER CLIPPED, which is the point of
      * sizing them at their maximum rather than at a round number. Sized for
-     * `no credentials` even though this command cannot currently produce it:
-     * both {@see McpAuthStore} constructions of `ServerAuthStatus` hard-code
-     * `hasCredentials: true`, so the widest label a `list` renders today is
-     * `● expiring soon` at 15. Budgeting for the label the formatter CAN emit
-     * rather than the one the store happens to reach means wiring that case
-     * up later cannot silently start clipping a column.
+     * `no credentials` because E695 made it REAL: both {@see McpAuthStore}
+     * constructions of `ServerAuthStatus` now derive `hasCredentials` from the
+     * stored entry carrying a non-empty access token, so a row without a
+     * usable token renders exactly this label — the widest the formatter
+     * emits. The column was budgeted for the label the formatter CAN emit
+     * rather than the one the store reached at the time, and the wiring
+     * arrived without a clip.
      *
      * These sum — with {@see TranscriptTable::maxCells()}'s border overhead —
      * to 88 cells, well past the **74** an 80-column terminal's transcript
@@ -234,7 +235,11 @@ final class McpAuthCommand
                 $registered['clientSecret'],
             );
 
-            // Step 3: Save the auth entry
+            // Step 3: Save the auth entry — endpoints INCLUDED, because the
+            // E695 request-time refresh path (OAuthClientRegistration::
+            // validAuthFor()) reads the token/registration URLs back off this
+            // row; a store entry without them can be attached but never
+            // refreshed.
             $entry = new \SugarCraft\Crush\MCP\AuthEntry(
                 clientId: $registered['clientId'],
                 clientSecret: $registered['clientSecret'],
@@ -242,6 +247,8 @@ final class McpAuthCommand
                 accessToken: $token['accessToken'],
                 refreshToken: $token['refreshToken'],
                 expiresAt: time() + $token['expiresIn'],
+                tokenUrl: $tokenUrl,
+                registrationUrl: $registrationUrl,
             );
 
             $oauth->saveAuth($serverUrl, $entry);
@@ -249,6 +256,9 @@ final class McpAuthCommand
             echo "\n";
             echo "  ✓ Successfully registered `{$serverUrl}`\n";
             echo "  Client ID: `{$registered['clientId']}`\n";
+            echo "  Requests to an http MCP server with this exact URL now carry this\n";
+            echo "  token automatically, refreshed before expiry; servers started before\n";
+            echo "  this command pick it up on the next launch.\n";
             echo "\n";
 
             return 0;
