@@ -23,6 +23,9 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
     /** @var array<int, array<string, McpClient>> */
     private array $memoBefore;
 
+    /** @var array<int, array<string, array{sha256: string, mtime: int}>> */
+    private array $digestsBefore;
+
     private string $ocGrantHome;
 
     private string $ocGrantTmp;
@@ -46,6 +49,16 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
         /** @var array<int, array<string, McpClient>> $bucket */
         $bucket = $memo->getValue();
         $this->memoBefore = $bucket;
+
+        // mcpClient() writes the config-digest memo too (E703-α); a launch
+        // here leaves rows behind, so the digest bucket is snapshotted and
+        // restored exactly like BootstrapMcpLivenessTest does — otherwise
+        // this file pollutes the liveness suite's cold-process assertions.
+        $digests = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $digests->setAccessible(true);
+        /** @var array<int, array<string, array{sha256: string, mtime: int}>> $dig */
+        $dig = $digests->getValue();
+        $this->digestsBefore = $dig;
     }
 
     protected function tearDown(): void
@@ -53,6 +66,10 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
         $memo = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
         $memo->setAccessible(true);
         $memo->setValue(null, $this->memoBefore);
+
+        $digests = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $digests->setAccessible(true);
+        $digests->setValue(null, $this->digestsBefore);
 
         $this->ocRemoveTree($this->ocGrantTmp);
         $this->ocRemoveTree($this->ocGrantHome);
