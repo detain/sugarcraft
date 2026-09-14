@@ -263,13 +263,14 @@ still minted and unwired, because no settings producer feeds it (E696).
 
 ## Server auth (`/mcp`)
 
-`src/Commands/McpAuthCommand.php` is a separate, in-chat surface with three
+`src/Commands/McpAuthCommand.php` is a separate, in-chat surface with four
 sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 
 ```
 /mcp list                                        show registered servers + auth status
 /mcp add <server> [registration-url] [token-url] trigger OAuth registration
 /mcp remove <server>                             drop stored credentials
+/mcp login <server>                              print the shell command for a real login
 ```
 
 This store maps **server URLs to auth entries**. It is independent of
@@ -286,6 +287,38 @@ consulted for that server at all. The key match is exact-string: change the
 server URL in your config and you must re-run `mcp auth add` for the new URL.
 Credentials registered mid-session take effect at the next launch, the same
 stance under which the server list itself is frozen per launch.
+
+### Authorization-code login (`sugarcrush mcp auth login`)
+
+In chat, `mcp login` only prints the command — the interactive flow needs the
+terminal for itself, and the TUI owns this one. From a plain shell:
+
+```
+sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]
+```
+
+It is the OAuth 2.0 authorization-code flow with PKCE, `S256` only. Step by
+step: it fetches the server's `/.well-known/oauth-authorization-server` document
+(RFC 8414) and reads `registration_endpoint`
+(a server without dynamic registration cannot be used with this command —
+`mcp auth add` stays the door for those), `token_endpoint` and
+`authorization_endpoint`; positional overrides fill in any endpoint the
+document omits. It binds an ephemeral loopback listener on `127.0.0.1` only
+(never a wildcard interface), registers the client with that exact
+`http://127.0.0.1:<port>/callback` redirect URI, prints the authorization URL
+— which carries only public values: the client id, the state, and the SHA-256
+challenge, never the verifier — and waits for the browser to bounce back.
+The callback is judged on GET method, exact `/callback` path, and a
+`hash_equals()` state comparison, and the browser is answered with a static
+page that echoes nothing of the request. The code is then exchanged with the
+verifier, and the entry is stored in exactly the shape `mcp auth add` writes
+— including the endpoint carries, so refresh works from the next launch.
+The wait is bounded by 300 s; `--timeout` (as a verb operand after the `--`
+separator) changes the budget. It bounds a human leg, not a provider request,
+which is why it is a plain socket deadline. An entry that arrives without a
+refresh token is served as-is until it expires, and then re-registration
+takes over — if the server will not re-issue credentials, re-run
+`sugarcrush mcp auth login <server>`.
 
 ## Serving MCP
 

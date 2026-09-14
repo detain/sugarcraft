@@ -1114,6 +1114,8 @@ final class BinSugarcrushDispatchTest extends TestCase
             'session delete with no id' => [['session', 'delete'], 'no session id given'],
             'mcp with no action'     => [['mcp'], 'no action given'],
             'mcp unknown action'     => [['mcp', 'bogus'], 'unknown action'],
+            'mcp auth with no action' => [['mcp', 'auth'], 'no action given'],
+            'mcp auth unknown action' => [['mcp', 'auth', 'bogus'], 'unknown action'],
             'completion with no shell' => [['completion'], 'no shell given'],
             'completion unknown shell' => [['completion', 'tcsh'], 'unsupported shell'],
         ];

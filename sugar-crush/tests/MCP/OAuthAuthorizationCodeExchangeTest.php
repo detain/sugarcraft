@@ -148,12 +148,14 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         foreach (['{"access_token":"a"}', '{"expires_in":10}', '[]'] as $body) {
             $oauth = $this->registration([new Response(200, [], $body)]);
 
+            $caught = null;
             try {
                 $oauth->exchangeAuthorizationCode('https://auth.invalid/token', 'cid', '', 'code', 'http://127.0.0.1:1/c', 'v');
-                self::fail('an entry that cannot say WHEN it dies must not be minted from body: ' . $body);
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString('access_token or expires_in', $e->getMessage());
+                $caught = $e;
             }
+            self::assertNotNull($caught, 'an entry that cannot say WHEN it dies must not be minted from body: ' . $body);
+            self::assertStringContainsString('access_token or expires_in', $caught->getMessage());
         }
     }
 

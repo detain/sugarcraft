@@ -393,7 +393,10 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/Bootstrap.php' => 4,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         'src/Cli/NonInteractive.php' => 7,
-        'src/Cli/Subcommands.php' => 11,
+        // E701: mcpAuth's five failUsage shapes (no action, unknown action,
+        // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
+        // stderr-only decision: malformed CLI usage, session intact.
+        'src/Cli/Subcommands.php' => 16,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,

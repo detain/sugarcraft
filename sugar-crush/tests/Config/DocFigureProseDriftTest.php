@@ -3601,20 +3601,20 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'five' => 5, 'six' => 6];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
 
         self::assertSame(
             1,
-            preg_match('/with three\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
+            preg_match('/with four\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
             'the /mcp lead-in no longer states its count with both backing classes',
         );
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         $execute = self::bodyExcerpt($authSource, 'execute', 1200);
-        preg_match_all("/'(list|add|remove)' =>/", $execute, $subs);
-        self::assertCount($wordNumbers['three'], $subs[1], 'the /mcp match arms changed — the page fence and this count move together');
-        preg_match_all('/^\/mcp (list|add|remove)\b/m', $raw, $fence);
-        self::assertSame(['list', 'add', 'remove'], $fence[1], 'the page fence no longer lists the three commands in code order');
-        self::assertStringContainsString('Use: list, add, remove', $authSource, 'the unknown-sub-command message stopped enumerating the roster');
+        preg_match_all("/'(list|add|remove|login)' =>/", $execute, $subs);
+        self::assertCount($wordNumbers['four'], $subs[1], 'the /mcp match arms changed — the page fence and this count move together');
+        preg_match_all('/^\/mcp (list|add|remove|login)\b/m', $raw, $fence);
+        self::assertSame(['list', 'add', 'remove', 'login'], $fence[1], 'the page fence no longer lists the four commands in code order');
+        self::assertStringContainsString('Use: list, add, remove, login', $authSource, 'the unknown-sub-command message stopped enumerating the roster');
         self::assertTrue(class_exists('SugarCraft\Crush\MCP\McpAuthStore'), 'McpAuthStore vanished — the page credits it as backing');
         self::assertTrue(class_exists('SugarCraft\Crush\MCP\OAuthClientRegistration'), 'OAuthClientRegistration vanished — the page credits it as backing');
 
@@ -3690,6 +3690,88 @@ final class DocFigureProseDriftTest extends TestCase
             'the precedence sentence reworded — pin both doc and the case-insensitive guard beside it',
         );
         self::assertStringContainsString('strcasecmp((string) $headerName, \'Authorization\')', $httpSource, 'the static-header precedence guard changed shape — the page precedence sentence needs re-measuring');
+    }
+
+    /**
+     * E701 (BI): the discovery key roster. The loopback flow reads exactly
+     * three metadata keys, and docs/MCP.md may only name what the flow
+     * actually asks for. The roster is DERIVED from the flow's own source —
+     * `$metadata['...']` reads — not copied, so renaming a key in code and
+     * not in prose goes red at the prose leg, and adding a fourth key goes
+     * red at the count leg the same step.
+     */
+    public function testLoginDiscoveryNamesExactlyTheKeysTheFlowReads(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $mcp = self::markdownProse($raw);
+        $flowSource = self::sourceOf('MCP/OAuthLoopbackFlow.php');
+
+        preg_match_all("/\\\$metadata\['([a-z_]+)'\]/", $flowSource, $reads);
+        $keys = array_values(array_unique($reads[1]));
+        sort($keys);
+        self::assertSame(
+            ['authorization_endpoint', 'registration_endpoint', 'token_endpoint'],
+            $keys,
+            'the discovery roster moved — the page and this pin ride the same three keys',
+        );
+
+        foreach ($keys as $key) {
+            self::assertStringContainsString('`' . $key . '`', $mcp, "the page stopped naming the endpoint key `{$key}` the flow reads");
+        }
+
+        self::assertStringContainsString(
+            "'/.well-known/oauth-authorization-server'",
+            $flowSource,
+            'the well-known path literal left the flow — the page sentence about discovery must move with it',
+        );
+        self::assertStringContainsString('/.well-known/oauth-authorization-server', $mcp, 'the page no longer states the discovery path the flow uses');
+    }
+
+    /**
+     * E701 (BJ): the wait budget. The 300 s figure the page prints is the
+     * class constant the flow defaults to, and the `-- --timeout N` form the
+     * page shows is the exact usage hint the verb emits — one number, three
+     * surfaces, zero copies.
+     */
+    public function testLoginWaitBudgetIsTheConstantTheProsePrints(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $mcp = self::markdownProse($raw);
+
+        $budget = constant('SugarCraft\Crush\MCP\OAuthLoopbackFlow::DEFAULT_TIMEOUT_SECONDS');
+        self::assertSame(300.0, $budget, 'the default wait moved — the page figure moves with it');
+        self::assertSame(1, preg_match('/bounded by 300 s/', $mcp), 'the page no longer prints the 300 s the constant holds');
+
+        self::assertStringContainsString('[-- --timeout N]', $raw, 'the page fence stopped showing the separator-qualified flag form');
+        $hint = "Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]";
+        self::assertSame(3, substr_count(self::sourceOf('Cli/Subcommands.php'), $hint), 'the verb usage hints no longer state the same invocation the page fence shows');
+    }
+
+    /**
+     * E701 (BK): the command word itself. The page prints
+     * `sugarcrush mcp auth login` as THE way to log in; this pins that the
+     * dispatch actually reaches an auth verb (gate literals), that the
+     * completion roster carries the noun under mcp, and that the chat arm
+     * stays pure guidance — a flow call from the chat surface would mean the
+     * page and the terminal contract both lied.
+     */
+    public function testTheLoginCommandWordRoutesThroughTheVerbGateAndGuidanceArm(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $mcp = self::markdownProse($raw);
+        self::assertSame(2, substr_count($mcp, 'sugarcrush mcp auth login <server>'), 'the page shell form changed count (fence + the re-login instruction) — re-measure this arm beside Subcommands and the page');
+
+        $subcommands = self::sourceOf('Cli/Subcommands.php');
+        self::assertStringContainsString("if (\$verb === 'auth') {", $subcommands, 'the auth verb gate left mcp() — the page command word reaches nothing');
+        self::assertStringContainsString("if (\$action !== 'login') {", $subcommands, 'the verb gate stopped demanding login — an unknown action could reach the flow');
+
+        $roster = (new \ReflectionClass(\SugarCraft\Crush\Cli\Subcommands::class))->getConstant('SUBCOMMAND_ACTIONS');
+        self::assertSame(['list', 'auth'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
+
+        $authSource = self::sourceOf('Commands/McpAuthCommand.php');
+        self::assertStringContainsString("'login' => \$this->printLoginGuidance(),", $authSource, 'the chat arm no longer routes login to guidance');
+        self::assertStringNotContainsString('new OAuthLoopbackFlow(', $authSource, 'the chat surface must only MENTION the flow, never construct it');
+        self::assertStringContainsString('sugarcrush mcp auth login <server>', $authSource, 'the guidance stopped printing the very form the page names');
     }
 
     /**

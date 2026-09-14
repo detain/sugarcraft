@@ -568,7 +568,9 @@ final class Subcommands
 
     /**
      * `sugarcrush mcp list` — what `.mcp.json` declares, and whether this
-     * launch would start it.
+     * launch would start it — and, since E701, `sugarcrush mcp auth login`,
+     * the interactive OAuth flow handed off whole to {@see self::mcpAuth()}
+     * at the verb gate below.
      *
      * READ-ONLY BY CONSTRUCTION. It goes through
      * {@see Bootstrap::mcpServerInventory()}, which shares its path,
@@ -579,13 +581,16 @@ final class Subcommands
     private static function mcp(ParsedArgs $args): int
     {
         $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb === 'auth') {
+            return self::mcpAuth($args);
+        }
         if ($verb !== 'list') {
             return NonInteractive::failUsage(
                 $verb === null
                     ? 'sugarcrush: mcp: no action given'
                     : \sprintf('sugarcrush: mcp %s: unknown action', $verb),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp list',
+                'Usage: sugarcrush mcp list | sugarcrush mcp auth login <server>',
             );
         }
 
@@ -707,9 +712,87 @@ final class Subcommands
         return NonInteractive::EXIT_OK;
     }
 
-    // ---------------------------------------------------------------------
-    // completion
-    // ---------------------------------------------------------------------
+    /**
+     * `sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]`
+     * — E701's interactive authorization-code + PKCE login.
+     *
+     * INTERACTIVE BY DESIGN, and the JSON door says so rather than half-
+     * answering: a `--output-format json` consumer gets a machine-readable
+     * usage refusal at exit 2, because a flow whose only progress channel is
+     * "open this URL in a browser, come back when the tab says so" cannot be
+     * streamed as a contract document.
+     *
+     * `--timeout` is read here, from the verb's own operands, and not by
+     * `ArgvParser`: it bounds a human leg of THIS command, the same stance
+     * `session`/`mcp` take toward every other operand, and the completion
+     * census that every parser-branched flag must reach the OPTIONS table
+     * stays honest — a flag the parser does not branch on belongs to no
+     * OPTIONS row. The parser does not know the word, so it must arrive as
+     * a post-`--` operand: `sugarcrush mcp auth login <server> -- --timeout
+     * 60`. A bare `--timeout` dies earlier, at the parser's
+     * unknown-options gate, which is the parser being honest about a flag
+     * it does not implement rather than this verb silently eating it.
+     */
+    private static function mcpAuth(ParsedArgs $args): int
+    {
+        $action = $args->subcommandArgs[1] ?? null;
+        if ($action !== 'login') {
+            return NonInteractive::failUsage(
+                $action === null
+                    ? 'sugarcrush: mcp auth: no action given'
+                    : \sprintf('sugarcrush: mcp auth %s: unknown action', $action),
+                $args->outputFormat,
+                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]',
+            );
+        }
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage(
+                'sugarcrush: mcp auth login: login is interactive by design',
+                $args->outputFormat,
+                'Run it as a plain command: it prints a URL, waits for your browser, and stores the tokens.',
+            );
+        }
+
+        $operands = [];
+        $timeout = \SugarCraft\Crush\MCP\OAuthLoopbackFlow::DEFAULT_TIMEOUT_SECONDS;
+        $count = \count($args->subcommandArgs);
+        for ($i = 2; $i < $count; $i++) {
+            $token = (string) $args->subcommandArgs[$i];
+            if ($token !== '--timeout') {
+                $operands[] = $token;
+                continue;
+            }
+            $value = $args->subcommandArgs[$i + 1] ?? null;
+            if ($value === null || !\is_numeric($value) || (float) $value <= 0.0) {
+                return NonInteractive::failUsage(
+                    'sugarcrush: mcp auth login: --timeout needs a positive number of seconds',
+                    $args->outputFormat,
+                    'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]',
+                );
+            }
+            $timeout = (float) $value;
+            $i++;
+        }
+
+        $serverUrl = $operands[0] ?? null;
+        if ($serverUrl === null) {
+            return NonInteractive::failUsage(
+                'sugarcrush: mcp auth login: no server URL given',
+                $args->outputFormat,
+                'Usage: sugarcrush mcp auth login <server> [token-url] [authorize-url] [-- --timeout N]',
+            );
+        }
+
+        // The flow owns every echo of the browser leg and returns the exit
+        // code; the store is the same file `mcp auth add` writes, so a
+        // login's entry attaches exactly like an add's does (E695 path).
+        $flow = new \SugarCraft\Crush\MCP\OAuthLoopbackFlow(
+            \SugarCraft\Crush\MCP\McpAuthStore::create()->oauth(),
+        );
+
+        return $flow->login($serverUrl, $operands[1] ?? null, $operands[2] ?? null, $timeout);
+    }
 
     /**
      * `sugarcrush completion bash|zsh|fish` — a completion script on stdout,
@@ -803,7 +886,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_ACTIONS = [
         'session' => ['list', 'delete'],
-        'mcp' => ['list'],
+        'mcp' => ['list', 'auth'],
         'completion' => self::SHELLS,
     ];
 

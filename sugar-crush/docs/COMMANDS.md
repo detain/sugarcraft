@@ -271,7 +271,7 @@ it does not; the *What the row says* column is its `description`.
 | `/exit` | ✓ | ✓ | — | Quit the app |
 | `/theme` | ✓ | | — | Switch the color theme |
 | `/agents` | ✓ | | — | List active agents, or inspect one by name |
-| `/mcp` | ✓ | | `<list\|add\|remove> [server]` | Manage MCP server auth (list/add/remove) |
+| `/mcp` | ✓ | | `<list\|add\|remove\|login> [server]` | Manage MCP server auth (list/add/remove; login guides to `sugarcrush mcp auth login`) |
 | `/keys` | ✓ | | — | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |

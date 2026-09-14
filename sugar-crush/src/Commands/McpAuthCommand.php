@@ -14,6 +14,11 @@ use SugarCraft\Crush\MCP\McpAuthStore;
  *   mcp auth list                    — show all registered servers and their auth status
  *   mcp auth add <server>           — trigger OAuth registration for a server
  *   mcp auth remove <server>         — remove stored credentials for a server
+ *   mcp auth login <server>          — E701: print the shell command for the
+ *                                      interactive authorization-code + PKCE
+ *                                      login (guidance only — the flow runs
+ *                                      in {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow}
+ *                                      from `sugarcrush mcp auth login`)
  *
  * The command delegates token lifecycle (registration, fetch, refresh) to
  * {@see McpAuthStore} which wraps {@see \SugarCraft\Crush\MCP\OAuthClientRegistration}.
@@ -109,8 +114,35 @@ final class McpAuthCommand
             'list' => $this->listWithProjectPanel($chat, TranscriptTable::paneWidth($chat)),
             'add' => $this->addServer($args),
             'remove' => $this->removeServer($args),
-            default => $this->printError("Unknown sub-command '{$subCommand}'. Use: list, add, remove"),
+            'login' => $this->printLoginGuidance(),
+            default => $this->printError("Unknown sub-command '{$subCommand}'. Use: list, add, remove, login"),
         };
+    }
+
+    /**
+     * E701: the in-chat `login` arm GUIDES and never runs. The loopback
+     * login owns a terminal for the whole browser leg — it prints a URL,
+     * waits up to its timeout, and answers a local HTTP callback — and the
+     * TUI owns this terminal; blocking its loop here would freeze the
+     * renderer the human needs in order to copy the URL at all. So this
+     * prints the exact shell command and returns; {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow}
+     * runs from a plain CLI invocation instead. No Chat change is needed:
+     * `parseMcpArgs` already routes both `/mcp login` and `/mcp auth login`
+     * here as the `login` sub-command.
+     */
+    private function printLoginGuidance(): int
+    {
+        echo "\n";
+        echo "  Interactive login is a shell command, not a chat turn:\n";
+        echo "\n";
+        echo "    sugarcrush mcp auth login <server> [token-url] [authorize-url]\n";
+        echo "\n";
+        echo "  It runs the OAuth authorization-code flow with PKCE: your browser\n";
+        echo "  returns the code to a loopback listener in the shell, and the stored\n";
+        echo "  tokens are attached to matching http servers from the next launch.\n";
+        echo "\n";
+
+        return 0;
     }
 
     /**
@@ -209,7 +241,7 @@ final class McpAuthCommand
         if ($registrationUrl === null) {
             $wellKnown = rtrim($serverUrl, '/') . '/.well-known/oauth-authorization-server';
             try {
-                $metadata = $this->fetchOAuthMetadata($wellKnown);
+                $metadata = self::fetchOAuthMetadata($wellKnown);
                 $registrationUrl = $metadata['registration_endpoint'] ?? null;
                 $tokenUrl = $metadata['token_endpoint'] ?? null;
             } catch (\Throwable) {
@@ -311,9 +343,20 @@ final class McpAuthCommand
     /**
      * Fetch OAuth authorization server metadata from a well-known URL.
      *
+     * E701: PUBLIC, because the authorization-code login discovers the same
+     * document and must not grow a second copy of this curl path. The
+     * per-request options are byte-unchanged since `add` shipped them —
+     * timeout, redirects, peer verification, and the Accept header are one
+     * policy for one endpoint, and drift between two fetchers would be a
+     * silent security difference. `add` reads `registration_endpoint` and
+     * `token_endpoint` out of the returned document; the login flow in
+     * {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow} additionally reads
+     * `authorization_endpoint` — the raw array is the whole document, the
+     * consumers choose.
+     *
      * @return array<string, mixed>
      */
-    private function fetchOAuthMetadata(string $url): array
+    public static function fetchOAuthMetadata(string $url): array
     {
         $ch = curl_init($url);
         if ($ch === false) {
@@ -389,6 +432,7 @@ final class McpAuthCommand
         echo "    mcp auth list                    — list registered servers\n";
         echo "    mcp auth add <server> [reg-url] [token-url]  — register a server\n";
         echo "    mcp auth remove <server>         — remove a server's credentials\n";
+        echo "    mcp auth login <server>          — print the shell command for interactive login\n";
         echo "\n";
 
         return 1;
