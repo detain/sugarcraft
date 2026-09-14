@@ -99,6 +99,24 @@ entry are never reached. The throw is caught in `Bootstrap::mcpClient()`,
 reported through `error_log()`, and the launch continues with fewer tools rather
 than dying over a live TUI.
 
+### Supported transports
+
+The MCP specification names more transports than this port builds. The honest
+census, table first:
+
+| Transport | Works here | Config it takes | How it runs |
+|---|---|---|---|
+| Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`) | spawned child, JSON-RPC over pipes |
+| HTTP | yes | `url` (+ optional `headers`) | stateless POSTs; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
+| Git | yes | `path` (omit → this project) | in-process — no transport, no child, no socket |
+| SSE | **no** | — | spec-named and not implemented: `"type": "sse"` falls to the factory's default arm and throws `Unknown MCP server type: sse` — a config-error report, deferred until every OTHER entry has been attempted, so one `sse` entry costs only its own server |
+
+The `sse` row is written because the failure used to be silent-fast: before
+`startServer()`'s guard was widened, that one unrecognized entry disabled
+every server listed after it in the same file, with no report at all. An
+`http` entry whose URL happens to end in `/sse` is unaffected — the transport
+is the `type`, never the URL.
+
 `startTimeout` is **seconds, per server, and bounds the handshake only** — a
 `tools/call` is unbounded. Only a positive number is honoured; a string, `0` or
 a negative falls back to `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS`, which

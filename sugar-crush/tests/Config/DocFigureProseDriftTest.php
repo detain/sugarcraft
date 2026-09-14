@@ -5359,6 +5359,59 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(method_exists(Bootstrap::class, 'mcpConfigChangedSinceLaunch'));
     }
 
+    /**
+     * E702: the supported-transports census on MCP.md against the factory
+     * itself — every yes-row names a real buildServer arm and every arm has
+     * its yes-row, the no-row is exactly `sse` and quotes the throw its
+     * entry actually reaches, and the http row's bearer-attach / static
+     * precedence sentence names the two methods that implement it.
+     */
+    public function testMcpTransportCensusRowsAreTheFactoryArmsPlusTheNamedUnimplemented(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $prose = self::markdownProse($raw);
+        $clientSource = self::sourceOf('MCP/McpClient.php');
+
+        $build = null;
+        foreach (self::functionSpans($clientSource) as $span) {
+            $build ??= 'buildServer' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($build, 'buildServer() vanished — the transport census lost its ground');
+        $buildText = (string) substr($clientSource, $build['begin'], $build['end'] - $build['begin']);
+        preg_match_all("/'(stdio|http|git)' => new /", $buildText, $arms);
+        $implemented = $arms[1];
+        sort($implemented);
+        self::assertSame(
+            ['git', 'http', 'stdio'],
+            $implemented,
+            'the factory gained or lost a constructed transport — the census table and this pin move together',
+        );
+
+        preg_match_all('/^\| (Stdio|HTTP|Git|SSE) \| (yes|\*\*no\*\*) \|/m', $raw, $rows, \PREG_SET_ORDER);
+        self::assertCount(4, $rows, 'the transport census no longer carries its four named rows (three built, one spec-named-unimplemented)');
+        $yes = [];
+        $no = [];
+        foreach ($rows as $row) {
+            if ($row[2] === 'yes') {
+                $yes[] = strtolower($row[1]);
+            } else {
+                $no[] = strtolower($row[1]);
+            }
+        }
+        sort($yes);
+        self::assertSame($implemented, $yes, 'a yes-row stopped matching a constructed arm (or an arm lost its row)');
+        self::assertSame(['sse'], $no, 'the named-unimplemented row moved — sse is the transport the spec carries and this port does not');
+
+        self::assertStringContainsString('Unknown MCP server type: sse', $prose, 'the page no longer quotes the concrete message an sse entry raises');
+        self::assertStringContainsString('"Unknown MCP server type: $type"', $buildText, 'the default-arm message was reworded — the page quotes its sse instance');
+        self::assertStringContainsString('spec-named and not implemented', $prose, 'the page stopped calling sse what it is: named by the specification, not built here');
+
+        $http = self::sourceOf('MCP/HttpMcpServer.php');
+        self::assertStringContainsString('wins over the store', $prose, 'the http row stopped stating the static-header precedence');
+        self::assertStringContainsString('function hasStaticAuthorization', $http, 'the precedence the row describes lost its method');
+        self::assertStringContainsString('validAuthFor', $http, 'the per-request bearer attach the row describes lost its call');
+    }
+
     private static function sourceOf(string $relative): string
     {
         $text = file_get_contents(\dirname(__DIR__, 2) . '/src/' . $relative);
