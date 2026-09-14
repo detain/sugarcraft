@@ -157,8 +157,10 @@ patterns like `mcp__git__*` match — see [`PERMISSIONS.md`](PERMISSIONS.md).
 
 The client is built `unrestricted: true`, which is the opposite of what it looks
 like. `McpClient::listTools()` fails *closed* without an `AgentPreset`, and the
-main agent has no preset — that mechanism scopes sub-agents. So the two options
-were "the main agent gets zero MCP tools" or "synthesize a fake preset for it".
+main agent has no preset — that mechanism is *meant* to scope sub-agents, and
+today it reaches none of them: no production path calls `setAgentPreset()`, so
+per-preset `mcpServers` allowlists are carried and enforced nowhere (E696). The two options
+at construction were "the main agent gets zero MCP tools" or "synthesize a fake preset for it".
 What the flag bypasses is `McpRouter`'s per-preset allowlist, which is sub-agent
 scoping, not your safety boundary: the main agent is not preset-scoped for
 `Bash` either.
@@ -178,7 +180,8 @@ in the conservative direction.
 
 No `denyPatterns` are passed on this path, deliberately: `McpClient` consults
 them only through `router()`, which only the `AgentPreset` arm reaches, so they
-would be inert here. Deny patterns belong to the sub-agent path.
+would be inert here. Deny patterns belong to the sub-agent path — which is
+unwired today, same as the allowlist (E696).
 
 ---
 
