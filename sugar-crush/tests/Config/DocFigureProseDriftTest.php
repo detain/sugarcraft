@@ -4003,6 +4003,16 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/and `(\w+)` appears nowhere\s+else in the codebase/u', $doc, $absence),
             'the absence claim lost its sentence — the naming note needs re-arming, not silence',
         );
+        // r81-rv MAJOR-1: the sentence must stay SCOPED. E708 put a live
+        // `'local'` outside the memory vocabulary, so the un-scoped tree-wide
+        // reading of this claim is false — and without this leg a revert to
+        // that wording survived the whole arm (the regex ends at 'codebase',
+        // matching both shapes; the roster scan reads code, not prose).
+        self::assertStringContainsString(
+            'as a memory spelling',
+            $doc,
+            'the absence claim shed its memory-vocabulary scope while this arm kept judging it as if scoped — the tree-wide sentence is false since E708',
+        );
         $needle = $absence[1];
         $sites = [];
         foreach (self::srcTexts() as $relative => $text) {

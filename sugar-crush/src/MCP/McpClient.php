@@ -411,7 +411,11 @@ final class McpClient
         }
 
         if (array_key_exists('environment', $config)) {
-            if (!array_key_exists('env', $config)) {
+            // A null `env` is a declared-but-empty slot, not an explicit
+            // spelling that won the precedence — honouring its mere presence
+            // would drop BOTH maps, the silent-drop class this normalisation
+            // exists to end (r81-rv MINOR-1).
+            if (!array_key_exists('env', $config) || $config['env'] === null) {
                 $config['env'] = $config['environment'];
             }
             // Gone either way, won or lost: a slot that keeps two spellings

@@ -247,6 +247,23 @@ final class McpConfigToleranceTest extends TestCase
             $entry['env'],
             'the opencode env map no longer lands where resolveEnv reads',
         );
+
+        // r81-rv MINOR-1: `"env": null` is a declared-but-empty slot, not the
+        // explicit spelling that wins precedence — `environment` must survive,
+        // never both maps die to the key's mere presence.
+        $nullSlot = $this->tolNormalize([
+            'command' => 'run',
+            'env' => null,
+            'environment' => ['SEARXNG_URL' => 'http://skynet2.interserver.net:8080/'],
+        ]);
+
+        self::assertIsArray($nullSlot);
+        self::assertSame(
+            ['SEARXNG_URL' => 'http://skynet2.interserver.net:8080/'],
+            $nullSlot['env'],
+            'a null "env" must not silence a live "environment" map',
+        );
+        self::assertArrayNotHasKey('environment', $nullSlot, 'the winner still leaves the loser un-set for a second reader');
     }
 
     public function testEnvWinsWhenBothSpellingsArePresent(): void
