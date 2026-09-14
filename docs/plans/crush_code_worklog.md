@@ -11598,6 +11598,45 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 78 (2026-09-14) — PHASE 2 (MCP product) wave-2: E696-α narrowing shipped, MCP liveness surface built, transports documented, freeze made loud; the actionable queue drops to 2; floor 11,784/169,799 @ a594f073b
+
+**Design-first round.** mc re-verified every r77 stamp at `fcbf19d43` (all 7 clusters HOLD — the census-six
+starting point was proven, not assumed), and mz's design lane produced the E698 liveness proposal before any
+code was cut. Both r78 implementation lanes then closed review **0-CRITICAL/0-MAJOR**.
+
+- **ma — E696-α** (lane `c4d08c169` → pick `f64399c82`; r78-rv-ma **APPROVE 0C/0M/4MINOR-info**): per-preset
+  MCP narrowing enforced at grant-resolution in AgentManager — the α seam the lb architecture verdict
+  recommended (β stays rejected: set/restore race on the memoized process-singleton client). EMPTY allowlist
+  keeps ALLOW-ALL semantics (declaring-nothing presets are zero-blast); README:1072 + docs/MCP.md enforcement
+  wording re-armed IN-STEP with its DocFigure arm. **Residual recorded under CLOSED-notation:** the deny half
+  is still minted-unwired — no `denyPatterns` config producer exists; trigger-watch armed for the day one is.
+  WAVE-1 ALONE (it owns the armed docs), weld `41ad0bc93` floor 11,756/169,439, +7T prediction hit exact.
+- **mb — E698 + E702 + E703** (lane `b5c0eaee9`/`9246add03`/`9ce806a56`/`01a275887` + fix `4d1672b75` → picks
+  `4854c86a3`/`1f9e6fec8`/`4ed2924a8`/`15d57cc84`/`4eca19378`, ALL CLEAN — sole wave, zero conflicts;
+  r78-rv-mb **APPROVE-WITH-FIX 0C/0M/2MINOR**, both healed): **E698** the liveness surface —
+  `McpClient::startedSnapshot()` + Bootstrap memo-read panel suffixes: the panel now reports running clients
+  with tool counts, NEVER launches, and is BYTE-STABLE when cold; the cold-render negative pins (`01a275887`)
+  make the byte-identity arm m2-discriminating (the m5a vacuity catch rode the lineage: reviewer, not
+  builder, found the first-pass pin passed on absence). **E703** α shipped: config-DIGEST + changed-since-
+  launch lines make a mid-session config edit loud instead of silently frozen; β (reload/relaunch) REJECTED
+  and recorded — relaunching under a still-valid root grant re-arms the prompt-injection→`proc_open` threat
+  the launch-freeze bounds, second-seam prohibition (E689 precedent) bars a parallel trust path. **E702**
+  supported-transports table in docs/MCP.md — stdio/http/git real, sse named-unimplemented with its honest
+  throw line, DocFigure arm in-step. rv MINOR-1 (orphan-row suppression polarity) + MINOR-2 (α-line doc
+  honesty) fixed in `4d1672b75`. Two new test files (McpClientStartedSnapshotTest, BootstrapMcpLivenessTest).
+
+**Floor 11,784T/169,799A/0F/0E/1S (McpClientTest canary)/exit0** LINKED cwd=sugar-crush @ weld `a594f073b`;
++28T vs wave-1 exact; assertions -31 vs the builder serial = tree-scan census wobble (green-serial-is-weld-
+truth, r77 law); K=8 CONSERVATION PASS tests=+0 assertions=+0 (83s wall); five-guard 119T, DocFigure alone
+77T, Config window 856T/19122A/1S, citation+roster+swallow combined 216T, Glob pair green (corpus 131,765
+intact); durations **506→508** rows (both new files land a row); config md5 `05480c74…2210` stable start==end.
+
+**Process notes:** the r77 SwallowingCatch gate-law HELD CLEAN this wave — zero fail-in-catch violations across
+both weld serials. The m5a vacuity lesson paid off: the reviewer caught the first-pass byte-identity pin's
+pass-on-absence shape before merge; hardening landed as negative pins in-lane. Design-first lanes (mz→mb,
+mc→census) delivered 0-CRITICAL/0-MAJOR on both r78 lanes. Actionables after this close: **2** by row census
+(E699 operator disposition pending — keep-as-is ON RECORD; E701 PKCE). NEVER pushed.
+
 ## ROUND 77 (2026-09-14) — PHASE 2 (MCP product) wave-1: E695 token-attachment flagship shipped, label honesty + stamp hygiene landed, E696 architecture verdict defers wiring to a seam ruling; floor 11,749/169,388 @ f895f03c5
 
 **Phase-2 kickoff.** The r76 closeout declared the hardening plan complete (0 actionables); the operator chose
