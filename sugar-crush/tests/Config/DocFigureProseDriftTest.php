@@ -4880,6 +4880,50 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * E697: the /mcp palette row LISTS (its dispatch is `mcp auth list`; the
+     * toggle WRITE was declined at E689 and that decline stands). The
+     * registry label and the COMMANDS.md no-leading-slash paragraph are one
+     * truth - the row carries the honest string, the page names the action by
+     * that truth, and toggle wording may not return to either side without
+     * reddening here. Before this arm neither side was pinned at all: every
+     * existing palette guard derives from the registry and so survives any
+     * relabel, truthful or not.
+     */
+    public function testCommandsMcpPaletteSentenceTracksTheTruthfulLabel(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $raw = (string) file_get_contents($root . '/docs/COMMANDS.md');
+        $start = strpos($raw, 'One name reaches a handler');
+        self::assertIsInt($start, 'the no-leading-slash paragraph moved - this arm reads it by its opening words');
+        $end = strpos($raw, "\n\n", $start);
+        self::assertIsInt($end, 'the no-leading-slash paragraph now runs to the file tail - the window shape this arm reads changed');
+        $paragraph = self::markdownProse(substr($raw, $start, $end - $start));
+
+        $mcp = null;
+        foreach (\SugarCraft\Crush\Commands\CommandRegistry::all() as $spec) {
+            if ($spec->name === 'mcp') {
+                $mcp = $spec;
+            }
+        }
+        self::assertNotNull($mcp, 'the /mcp registry row is gone - the palette action and the page sentence lost their subject together');
+        self::assertSame(
+            'List MCP servers',
+            $mcp->label(),
+            'E697: the palette row dispatches `mcp auth list` and nothing else - a relabel, back to a toggle or otherwise, must flip this figure, the registry row, and the page together',
+        );
+        self::assertStringContainsString(
+            "the palette's MCP list action",
+            $paragraph,
+            'the page no longer names the palette action by its truthful list shape - E697 corrected this sentence together with the label',
+        );
+        self::assertStringNotContainsStringIgnoringCase(
+            'toggle',
+            $paragraph,
+            'toggle wording returned to the no-leading-slash paragraph - the action has never toggled anything (E689 declined the write), so the sentence must not imply it again',
+        );
+    }
+
+    /**
      * E686 tranche-11 (AM): the Template forms section counts itself against
      * CommandSpec::TEMPLATE_PATTERN — three top-level alternation branches,
      * the quoted first branch byte-for-byte, its three spells against the

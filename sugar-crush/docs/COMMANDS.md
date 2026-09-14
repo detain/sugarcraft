@@ -320,8 +320,8 @@ reach the toggle.
 
 One name reaches a handler with no leading slash at all: a draft starting
 `mcp auth` is routed to `Chat::handleMcpAuthCommand()` ahead of the parse, because
-that spelling predates the discoverable `/mcp` row and the palette's MCP toggle
-still uses it.
+that spelling predates the discoverable `/mcp` row and the palette's MCP list
+action still uses it.
 
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,
