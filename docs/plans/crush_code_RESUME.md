@@ -43,6 +43,25 @@ CONSERVATION +0/+0; durations 515→518, exactly +3). SwallowingCatch gate-law H
 **Lane naming (in force):** two-letter ids, FIRST letter = round-group (r80=o* closed; r81=p*). Branch
 `lane/<id>`, sandbox `crush-lane-<id>`, artifacts `/home/sites/crush-r61-artifacts/<id>/`.
 
+**PHASE-3 MINTED 2026-09-14** — this paragraph SUPERSEDES the §2(c) "MINT PENDING" candidate list below.
+The three operator UX findings are probed (read-only investigators at `ce501c86a`; reports archived at
+`/home/sites/crush-r61-artifacts/phase3/` as `input-probe.md` (only-yellow-mink), `reasoning-probe.md`
+(bad-gold-ferret), `mcp-compat-probe.md` (injured-aquamarine-squirrel)) and the phase-3 kickoff mints
+**E704–E710** (7 rows; file:line citations in the backlog entries): E704 bracketed paste never enabled +
+PasteMsg dropped (HIGH), E705 Kitty keyboard protocol never negotiated — modified Enter indistinguishable
+(MED), E706 reasoning display hard-truncates at 120 chars — operator rule on record: WRAP, never truncate
+(HIGH), E707 provider length-stops silent — `$truncated` consumed nowhere (MED), E708 opencode MCP config
+shapes silently dropped — `environment`/`enabled` read nowhere (HIGH), E709 `/mcp` discovery UX — auth is
+the only visible verb (MED), E710 no foreign MCP importer (LOW). **Round-81 lanes** (file-disjointness
+binds): **wave-1 pa** (E704 — Chat.php input region) ∥ **pb** (E708 — src/MCP normalization) ∥ **pc**
+(E706 — src/Renderer reasoning paint); **wave-2 pd** (E709 — docs/MCP.md + DocFigure/AX re-cut AFTER pb
+touches the same arms) ∥ **pe** (E705 — Chat.php AFTER pa); **wave-3 pf** (E707 — Chat.php + Providers
+AFTER pe) ∥ **pg** (E710 — Subcommands AFTER pd). E706 vs E707 are two INDEPENDENT halves of the same
+reported symptom (render cap vs provider length-stop) — they can co-occur; the probe's ground-truth
+procedure distinguishes them (reasoning-probe.md). **Operator answer TODAY** for the four opencode
+servers (works at tip, project-root `.mcp.json`, plus one `trustedProjectMcp` grant in
+`~/.sugar-crush/config.json`): `{"mcpServers":{"searxng":{"type":"stdio","command":"npx","args":["-y","mcp-searxng"],"env":{"SEARXNG_URL":"http://skynet2.interserver.net:8080/"}},"context7":{"type":"http","url":"https://mcp.context7.com/mcp"},"exa":{"type":"http","url":"https://mcp.exa.ai/mcp"},"gh_grep":{"type":"http","url":"https://mcp.grep.app"}}}` (mcp-compat-probe §A). The §2(b) trigger-watch roster carries UNCHANGED. Census re-run at this mint returns exactly 7 survivors, all `OPEN` (E704–E710).
+
 ### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
 
 | figure | value | domain |
