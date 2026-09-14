@@ -41,16 +41,23 @@ final class OAuthClientRegistration
      * @param string $registrationUrl The server's dynamic client registration endpoint
      * @param string $clientName Human-readable name for this client
      * @param array<string, string> $scopes Requested OAuth scopes
+     * @param list<string>|null $redirectUris Loopback callback URIs for the E701
+     *                                        authorization-code login, known only AFTER
+     *                                        the ephemeral socket is bound. NULL keeps
+     *                                        today's out-of-band list byte-stable — the
+     *                                        `add` path never had a redirect to declare
+     *                                        and must not start advertising one.
      * @return array{clientId: string, clientSecret: string, registrationAccessToken: string}
      */
     public function registerClient(
         string $registrationUrl,
         string $clientName,
         array $scopes = [],
+        ?array $redirectUris = null,
     ): array {
         $metadata = [
             'client_name' => $clientName,
-            'redirect_uris' => ['urn:ietf:wg:oauth:2.0:oob'],
+            'redirect_uris' => $redirectUris ?? ['urn:ietf:wg:oauth:2.0:oob'],
             'grant_types' => ['authorization_code', 'client_credentials'],
             'response_types' => ['code'],
             'token_endpoint_auth_method' => 'client_secret_basic',
@@ -178,6 +185,80 @@ final class OAuthClientRegistration
     }
 
     /**
+     * E701: exchange an authorization code (plus the PKCE verifier that
+     * produced the challenge the authorize URL carried) for tokens.
+     *
+     * The response validation mirrors {@see fetchToken()} exactly — an entry
+     * that cannot say WHEN it dies is not an entry — and the returned
+     * `refreshToken` is `''` when the server omitted one, which is legal for
+     * authorization-code grants. The caller of a refresh-less entry serves
+     * the access token until it expires and then re-runs the browser login;
+     * {@see getValidAuth()}'s buffer-window arm honours that, rather than
+     * calling refresh with an empty token and failing deep in the wire.
+     *
+     * The secret rides the form body (client_secret_post). Registration
+     * advertises client_secret_basic (:56's `token_endpoint_auth_method`),
+     * and that mismatch is deliberately NOT "fixed" here: every working
+     * request this class makes today — fetchToken, refreshToken — posts the
+     * credentials in the body against the same endpoint, so the exchange
+     * keeps parity with the POSTURE THAT WORKS rather than the capability
+     * string the registration happens to advertise.
+     *
+     * @param string $tokenUrl The server's token endpoint
+     * @param string $clientId The client ID from registration
+     * @param string $clientSecret The client secret from registration (may be empty)
+     * @param string $code The authorization code from the callback
+     * @param string $redirectUri The exact redirect_uri the authorize URL carried
+     * @param string $codeVerifier The PKCE verifier whose S256 challenge was sent
+     * @return array{accessToken: string, refreshToken: string, expiresIn: int, scopes: list<string>}
+     */
+    public function exchangeAuthorizationCode(
+        string $tokenUrl,
+        string $clientId,
+        string $clientSecret,
+        string $code,
+        string $redirectUri,
+        string $codeVerifier,
+    ): array {
+        $body = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'redirect_uri' => $redirectUri,
+            'client_id' => $clientId,
+            'code_verifier' => $codeVerifier,
+        ];
+
+        if ($clientSecret !== '') {
+            $body['client_secret'] = $clientSecret;
+        }
+
+        $data = $this->requestJson($tokenUrl, [
+            'method' => 'POST',
+            'form_params' => $body,
+            'headers' => ['Accept' => 'application/json'],
+        ]);
+
+        $accessToken = $data['access_token'] ?? null;
+        $expiresIn = $data['expires_in'] ?? null;
+
+        if ($accessToken === null || $expiresIn === null) {
+            throw new \RuntimeException('Authorization-code response missing access_token or expires_in');
+        }
+
+        $scope = $data['scope'] ?? '';
+
+        return [
+            'accessToken' => $accessToken,
+            // An omitted refresh_token is stored as '' — the honest shape of
+            // "this entry cannot refresh", which getValidAuth() reads as a
+            // guard rather than as a token to send.
+            'refreshToken' => $data['refresh_token'] ?? '',
+            'expiresIn' => (int) $expiresIn,
+            'scopes' => $scope === '' ? [] : explode(' ', (string) $scope),
+        ];
+    }
+
+    /**
      * Persist auth data for a server to the auth file.
      *
      * @param string $serverUrl The server's URL (used as key)
@@ -289,6 +370,25 @@ final class OAuthClientRegistration
         }
 
         if ($entry->expiresAt !== null && $entry->expiresAt - time() < self::TOKEN_EXPIRY_BUFFER_SECONDS) {
+            // E701 DEFECT FIX: an authorization-code entry with no
+            // refresh_token (legal — RFC 6749 makes the field optional)
+            // used to reach refreshToken() here with '' as the token,
+            // turning every request inside the buffer window into a doomed
+            // wire call whose server error the user saw. An empty refresh
+            // token means "cannot refresh", not "refresh with nothing":
+            // serve the unexpired entry as-is and let the existing
+            // isExpired() arm — earlier in this method — own the eventual
+            // expiry: an auth-code entry that expires without a refresh
+            // token lands on its re-registration path, whose honest throw
+            // when the server will not re-issue credentials is what tells
+            // the user to re-run login.
+            // That path is deliberately NOT widened to re-run the browser
+            // flow: launching a human-in-the-loop prompt from a request
+            // path is not something this class should ever do.
+            if ($entry->refreshToken === '') {
+                return $entry;
+            }
+
             $refreshed = $this->refreshToken(
                 $tokenUrl,
                 $entry->clientId,
