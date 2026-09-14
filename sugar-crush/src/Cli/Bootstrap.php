@@ -5646,6 +5646,10 @@ final class Bootstrap
                 ),
                 'http' => is_string($config['url'] ?? null) ? $config['url'] : '',
                 'git' => is_string($config['path'] ?? null) ? $config['path'] : '(this project)',
+                // E699: the entry names nothing and the operator's path must
+                // never reach a transcript-visible surface — the detail is a
+                // fixed label, not data.
+                'claude-mcp' => '(operator-supplied)',
                 default => '',
             };
 
@@ -5741,6 +5745,80 @@ final class Bootstrap
         }
 
         return ['sha256' => hash('sha256', $contents), 'mtime' => (int) @filemtime($path)];
+    }
+
+    /**
+     * E699: the OPERATOR-TIER grant behind a `claude-mcp` entry, or null when
+     * the operator said nothing at all.
+     *
+     * RAW SHAPES ONLY — the spawn policy (absolute path, existing file,
+     * executable bit, the repository-may-not-name rule) lives entirely in
+     * {@see \SugarCraft\Crush\MCP\ClaudeCodeMcpServer::fromGrant()}, so
+     * every refusal this transport can raise is decided by one class and
+     * unit-testable without any file writes. This method answers only two
+     * questions: is the grant present, and is it the shape the operator
+     * tier can carry?
+     *
+     * THE READ RIDES {@see permissionConfig()} on purpose: the same two user
+     * files, the same ownership gate, the same tier as `trustedProjectMcp` —
+     * a PROJECT settings layer must never be able to name this binary, so
+     * this is NOT {@see readUserConfig()}'s merged view. The once-per-process
+     * FREEZE is structural rather than a second memo: the only production
+     * caller is the `claude-mcp` arm of {@see \SugarCraft\Crush\MCP\McpClient::buildServer()},
+     * which runs inside `startServers()`, which runs inside the per-(pid,
+     * path) client memo of {@see mcpClient()} — a config edit after that
+     * read cannot re-spawn anything in this process, which is the E703-β
+     * rejection argument applied to a grant that never re-reads.
+     *
+     * @return array{binary: string, args: list<string>|null, env: array<string,string>|null}|null
+     *
+     * @throws \RuntimeException when a named key carries a shape the tier
+     *         cannot express — a config error the launch catch reports, not a
+     *         silent ignore
+     */
+    public static function claudeMcpGrant(): ?array
+    {
+        $config = self::permissionConfig();
+
+        if (!array_key_exists('claudeMcpBinary', $config)) {
+            return null;
+        }
+
+        $binary = $config['claudeMcpBinary'];
+        if (!is_string($binary)) {
+            throw new \RuntimeException('claudeMcpBinary must be a string path in the user config');
+        }
+
+        $args = null;
+        if (array_key_exists('claudeMcpArgs', $config)) {
+            $rawArgs = $config['claudeMcpArgs'];
+            if (!is_array($rawArgs) || !array_is_list($rawArgs)) {
+                throw new \RuntimeException('claudeMcpArgs must be a JSON array of scalars in the user config');
+            }
+            foreach ($rawArgs as $arg) {
+                if (!is_string($arg) && !is_int($arg) && !is_float($arg)) {
+                    throw new \RuntimeException('claudeMcpArgs carries a non-scalar entry; argv strings only');
+                }
+            }
+            $args = array_values(array_map(static fn (string|int|float $arg): string => (string) $arg, $rawArgs));
+        }
+
+        $env = null;
+        if (array_key_exists('claudeMcpEnv', $config)) {
+            $rawEnv = $config['claudeMcpEnv'];
+            if (!is_array($rawEnv)) {
+                throw new \RuntimeException('claudeMcpEnv must be a JSON object in the user config');
+            }
+            $env = [];
+            foreach ($rawEnv as $key => $value) {
+                if (!is_string($key) || !is_string($value)) {
+                    throw new \RuntimeException('claudeMcpEnv must map string keys to string values');
+                }
+                $env[$key] = $value;
+            }
+        }
+
+        return ['binary' => $binary, 'args' => $args, 'env' => $env];
     }
 
     /**

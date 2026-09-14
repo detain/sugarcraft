@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\MCP;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SugarCraft\Crush\Agents\AgentPreset;
+use SugarCraft\Crush\Cli\Bootstrap;
 
 final class McpClient
 {
@@ -141,12 +142,15 @@ final class McpClient
      * transport cannot have.
      *
      * Same per-server contract as {@see StdioMcpServer::pumpStderr()} —
-     * bounded, idempotent, never throws on a torn-down server.
+     * bounded, idempotent, never throws on a torn-down server. E699 widens
+     * the narrowing to {@see ClaudeCodeMcpServer}, which is the second
+     * SPAWNED child this client can own — the law is "only a spawned child
+     * has an fd 2", and now exactly two classes qualify.
      */
     public function pumpStderr(): void
     {
         foreach ($this->servers as $server) {
-            if ($server instanceof StdioMcpServer) {
+            if ($server instanceof StdioMcpServer || $server instanceof ClaudeCodeMcpServer) {
                 $server->pumpStderr();
             }
         }
@@ -188,12 +192,14 @@ final class McpClient
                     $server instanceof StdioMcpServer => 'stdio',
                     $server instanceof HttpMcpServer => 'http',
                     $server instanceof GitMcpServer => 'git',
+                    $server instanceof ClaudeCodeMcpServer => ClaudeCodeMcpServer::TYPE,
                     default => 'other',
                 },
                 'up' => match (true) {
                     $server instanceof StdioMcpServer,
                     $server instanceof HttpMcpServer,
-                    $server instanceof GitMcpServer => $server->isUp(),
+                    $server instanceof GitMcpServer,
+                    $server instanceof ClaudeCodeMcpServer => $server->isUp(),
                     default => null,
                 },
                 'tools' => count($server->listTools()),
@@ -326,6 +332,27 @@ final class McpClient
                 handlers: new GitCommandHandlers(
                     cwd: $config['path'] ?? null,
                 ),
+            ),
+            // E699: the gated transport. Deliberately NOT `new ClaudeCodeMcpServer`
+            // with args threaded from $config: the ENTRY carries no spawn keys at
+            // all — the repository does not name this binary — and the grant is
+            // read from the OPERATOR tier (Bootstrap::claudeMcpGrant(), same file
+            // and same once-per-process posture as trustedProjectMcp) inside
+            // ClaudeCodeMcpServer::fromGrant(), which throws a config error for
+            // every gate failure. A refusal lands in mcpClient()'s existing
+            // catch: reported on both channels, degraded-not-refused, exactly
+            // like an unknown type.
+            //
+            // THE BOOTSTRAP CITE IS THE WIREING-LAW REMINDER, not prose:
+            // Bootstrap::mcpClient()'s TWO-CONTROLS comment states that
+            // STARTING a server is itself the execution the trust tiers gate —
+            // PreToolUse sees tool calls and never sees proc_open() — so the
+            // double opt-in above is the boundary for the spawn, and the
+            // PreToolUse chain stays the boundary only for the CALLS.
+            'claude-mcp' => ClaudeCodeMcpServer::fromGrant(
+                $name,
+                $config,
+                Bootstrap::claudeMcpGrant(),
             ),
             default => throw new \RuntimeException("Unknown MCP server type: $type"),
         };

@@ -182,6 +182,10 @@ final class McpPanel
 
         $label = match ([$row['transport'], $up]) {
             ['stdio', true] => 'up',
+            // E699: a spawned child that is running reads exactly like the
+            // stdio one — deliberately NO new label, the suffix vocabulary
+            // is pinned by the docs and the panel adds a transport, not a word.
+            ['claude-mcp', true] => 'up',
             ['http', true] => 'ready',
             ['git', true] => 'ready (in-process)',
             default => 'exited',

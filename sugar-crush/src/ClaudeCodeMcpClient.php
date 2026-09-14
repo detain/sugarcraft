@@ -6,6 +6,7 @@ namespace SugarCraft\Crush;
 
 use RuntimeException;
 use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Support\ProcessContainment;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -16,7 +17,8 @@ use SugarCraft\Crush\Support\ProcessReaper;
  * Mirrors the MCP spec stdio transport:
  * https://modelcontextprotocol.io/specification/basic/transports/
  *
- * A DORMANT SEAM, and named so you can tell which one you are reading. This
+ * A GATED SEAM as of E699 — and named so you can tell which one you are
+ * reading: this used to be the dormant sibling of the live transport client. This
  * class was `SugarCraft\Crush\McpClient` and shared its basename with
  * {@see \SugarCraft\Crush\MCP\McpClient} — a different class in a
  * different namespace over a different transport: Guzzle HTTP (plus stdio and
@@ -42,24 +44,36 @@ use SugarCraft\Crush\Support\ProcessReaper;
  * through {@see \SugarCraft\Crush\Tools\McpToolBridge} — whose CALLS are gated by
  * the PreToolUse chain like every other tool. So "the other one is the live one"
  * IS now a thing that
- * can be said, and it is said about the sibling; THIS class is still constructed
- * by nothing but its own test. Reading the sentence that used to be here as
- * covering both is exactly the basename confusion the rename existed to end.
+ * can be said, and it was said about the sibling for as long as this file was
+ * the dormant one; E699 gave THIS class its own wired door — the gated
+ * `claude-mcp` factory arm described below, not a general reachability.
+ * Reading the sentence that used to be here as covering both is exactly the
+ * basename confusion the rename existed to end.
  *
- * The dormancy test for this class
- * ({@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientTest::testNothingInSrcBinOrExamplesReachesThisDormantSeam()})
- * separates comments from code with `token_get_all()` rather than grepping
- * bytes: a doc-comment mention reaches nothing, and reporting one as a call site
- * would be this file's own basename confusion in a new costume. The only caller
- * of this class today is
- * {@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientTest}. It spawns
- * `$command` (default `claude --mcp`) through `proc_open` with no
- * {@see \SugarCraft\Crush\Support\ContainedPath} anchor and no
- * {@see \SugarCraft\Crush\Permissions\PermissionGate} in front of the tool
- * calls it forwards, which is survivable ONLY while it stays unreachable from
- * a run. Wiring it up (crush_code.md Phase 2 item 2, a separate change) has to
- * bring those two gates with it; reaching for it before then is how a
- * process-spawning seam goes live ungated.
+ * THE GATED-REACHABILITY LAW. This class is reachable from a run ONLY through
+ * the `claude-mcp` arm of
+ * {@see \SugarCraft\Crush\MCP\McpClient::buildServer()}, which constructs it
+ * exclusively via {@see \SugarCraft\Crush\MCP\ClaudeCodeMcpServer::fromGrant()}
+ * behind the double opt-in: a `.mcp.json` entry of that type AND an
+ * operator-tier `claudeMcpBinary` absolute path in the user config — the
+ * repository cannot name this binary, its args, or its environment. The two
+ * gates the old dormancy note demanded arrive as `claudeMcpBinary` (path
+ * policy with NO $PATH trust: {@see resolveExecutable()} stays a test-double
+ * convenience, and the factory arm refuses a bare grant before this class
+ * ever sees one) and the
+ * {@see \SugarCraft\Crush\Tools\McpToolBridge}/PreToolUse chain in front of
+ * the forwarded calls, respectively. {@see \SugarCraft\Crush\Support\ContainedPath}
+ * is deliberately NOT applied to the grant: containment answers
+ * repository-chosen paths, and this path is operator-authored in the user
+ * tier whose ownership the settings reader already enforces — there is no
+ * anchor a `within()` could check it against.
+ *
+ * {@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientTest::testTheOnlyPathToThisSeamIsTheGatedFactoryArm()}
+ * enforces exactly that set, separating comments from code with
+ * `token_get_all()` rather than grepping bytes: a doc-comment mention reaches
+ * nothing, and reporting one as a call site would be this file's own basename
+ * confusion in a new costume. Reaching for this class through any other door
+ * is how a process-spawning seam goes live ungated, and the pin reddens.
  */
 final class ClaudeCodeMcpClient
 {
@@ -236,9 +250,10 @@ final class ClaudeCodeMcpClient
      * client, so no test exercises its cap end to end, and the derivation is
      * what keeps a number in a dormant file from going stale unobserved.
      *
-     * WHAT IS TRUE: the first half is right and the second is inverted. This
-     * class has no call site in `src/` — the class doc-block explains why — but
-     * its framing path IS exercised end to end.
+     * WHAT IS TRUE: the first half was right and the second is inverted. This
+     * class had no call site in `src/` until E699 — the class doc-block now
+     * explains the gated single door — but its framing path IS exercised end
+     * to end either way.
      * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} drives the real
      * {@see readMessages()} against a real child process at `cap` and at
      * `cap + 1`, so those rows cover the CALL SITE as well as the check, unlike
@@ -321,7 +336,13 @@ final class ClaudeCodeMcpClient
      */
     private bool $stdinFragmentPending = false;
 
-    /** @param array<string, mixed>|null $initialOptions */
+    /**
+     * @param array<string, mixed>|null $initialOptions
+     * @param array<string, string> $env E699: overrides merged onto the
+     *        inherited environment at spawn, routed through
+     *        {@see \SugarCraft\Crush\Support\ProcessContainment::env()} so a
+     *        contained spawn sees them too. Empty for every pre-E699 caller.
+     */
     public function __construct(
         public readonly ?string $command = null,
         public readonly array $args = [],
@@ -331,6 +352,7 @@ final class ClaudeCodeMcpClient
         private ?array $pipes = null,
         private bool $connected = false,
         private int $requestId = 0,
+        public readonly array $env = [],
     ) {}
 
     /**
@@ -354,20 +376,36 @@ final class ClaudeCodeMcpClient
         // we throw a RuntimeException right after. Resolving the binary
         // ourselves means proc_open() only runs against a real executable
         // and never has reason to warn.
+        //
+        // E699: this PATH-searching branch is a TEST-DOUBLE convenience and
+        // NOT trust on a wiring path — the `claude-mcp` factory arm refuses
+        // a bare grant before this class ever sees one, so a production
+        // spawn reaches here only with the operator's absolute path.
         if (self::resolveExecutable($command) === null) {
-            throw new RuntimeException("Failed to spawn MCP process: {$command}");
+            throw new RuntimeException("Failed to spawn MCP process: " . basename($command));
         }
 
         // stdio transport — Claude Code MCP speaks JSON-RPC over stdin/stdout.
+        //
+        // E699/E672: the same choke point StdioMcpServer learned —
+        // ProcessContainment::spawnSpec() fronts the argv with `setsid`
+        // where available, so {@see disconnect()} can group-kill the
+        // process TREE, and ProcessContainment::env() is the single place
+        // the spawn environment is composed. `@` for the same reason
+        // StdioMcpServer::start() gives it: an unresolvable program under
+        // the wrapper would put a PHP warning over the TUI on a path that
+        // already reports itself properly below.
         /** @var array{0: resource, 1: resource, 2: resource} */
-        $processHandles = proc_open(
-            array_merge([$command], $args),
+        $processHandles = @proc_open(
+            ProcessContainment::spawnSpec(array_merge([$command], $args)),
             [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
             $pipes,
+            null,
+            ProcessContainment::env($this->env),
         );
 
         if (!is_resource($processHandles)) {
-            throw new RuntimeException("Failed to spawn MCP process: {$command}");
+            throw new RuntimeException("Failed to spawn MCP process: " . basename($command));
         }
 
         $this->process = $processHandles;
@@ -837,7 +875,11 @@ final class ClaudeCodeMcpClient
             }
         }
 
-        ProcessReaper::terminateAndClose($this->process);
+        // E699/E673: the group id is read WHILE the child is alive, exactly
+        // as StdioMcpServer::stop() does — this child is a CLI that spawns
+        // grandchildren of its own, and a bare pid signal would orphan them
+        // with the pipes already closed.
+        ProcessReaper::terminateAndClose($this->process, ProcessContainment::groupId($this->process));
 
         $this->process = null;
         $this->pipes = null;
@@ -852,6 +894,32 @@ final class ClaudeCodeMcpClient
     public function isConnected(): bool
     {
         return $this->connected;
+    }
+
+    /**
+     * E699: connected AND the child still running — the liveness question
+     * {@see childIsRunning()} already answers inside the write loop, exposed
+     * once for the `/mcp` panel's snapshot the way
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::isUp()} does for it.
+     */
+    public function isUp(): bool
+    {
+        return $this->connected && self::childIsRunning($this->process);
+    }
+
+    /**
+     * E699: the bounded stderr drain as an on-demand seam, same contract as
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::pumpStderr()} — bounded
+     * (16 passes inside {@see drainStderr()}), a no-op before connect() and
+     * after disconnect(), never throws on a torn-down server.
+     */
+    public function pumpStderr(): void
+    {
+        if (!$this->connected) {
+            return;
+        }
+
+        $this->drainStderr();
     }
 
     public function __destruct()
@@ -941,6 +1009,12 @@ final class ClaudeCodeMcpClient
      * command can't be found. Used to pre-validate before proc_open() so
      * that a missing binary throws a clean RuntimeException without
      * emitting a PHP warning that would trip PHPUnit's failOnWarning gate.
+     *
+     * E699: this PATH branch is a TEST-DOUBLE convenience and NOTHING on the
+     * gated wiring path relies on it —
+     * {@see \SugarCraft\Crush\MCP\ClaudeCodeMcpServer::fromGrant()} refuses a
+     * non-absolute `claudeMcpBinary` before a spawn, so $PATH never picks the
+     * binary a run talks to.
      */
     private static function resolveExecutable(string $command): ?string
     {

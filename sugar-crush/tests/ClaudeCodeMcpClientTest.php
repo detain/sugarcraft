@@ -46,26 +46,32 @@ final class ClaudeCodeMcpClientTest extends TestCase
     }
 
     /**
-     * The dormancy the class docblock claims, measured here instead of
-     * asserted in prose: no file under `src/`, `bin/` or `examples/` REFERENCES
-     * this class in code. It spawns a process with no path containment and no
-     * permission gate, so "nothing reaches it" is the property that makes that
-     * survivable — and the day someone wires it up (Phase 2 item 2) this test
-     * reds and points at the two gates that have to come with the wiring.
+     * E699 CONVERSION — the dormancy pin became an allowlist pin in the same
+     * commit that gave the seam its gated door. What is measured here is not
+     * "nothing reaches this class" but "exactly one thing reaches it, and it
+     * is the gated adapter": the set of files under `src/` that name
+     * {@see ClaudeCodeMcpClient} in CODE must equal
+     * {src/MCP/ClaudeCodeMcpServer.php}, BIDIRECTIONALLY — a new construction
+     * site reddens the added half, and deleting or renaming the adapter's
+     * reddens the missing half, so the seam can be neither widened nor
+     * orphaned quietly. `bin/` and `examples/` stay off the list entirely:
+     * the factory arm is still the only door, and it opens only for a
+     * `claude-mcp` entry behind the operator-tier `claudeMcpBinary` grant.
      *
-     * CODE, NOT PROSE, and the distinction is load-bearing. This test used to
-     * be a `str_contains()` over the raw bytes of every file, which matched a
+     * The harness is the dormancy version on purpose — CODE, NOT PROSE, and
+     * the distinction stays load-bearing. This test used to be a
+     * `str_contains()` over the raw bytes of every file, which matched a
      * `{@see}` in a doc comment exactly as readily as a `new` — so the day
      * anyone cross-referenced this class from a neighbouring docblock the test
      * would have gone red claiming the class was "reached from" a file that
      * merely mentioned it, which is the mis-attribution this whole rename exists
-     * to stop. Comments are now separated with {@see \token_get_all()}: a
+     * to stop. Comments are separated with {@see \token_get_all()}: a
      * mention inside a `T_COMMENT`/`T_DOC_COMMENT` cannot reach anything, so it
      * is collected and REPORTED rather than failed on. A name inside a string
      * literal still counts as code — `class_exists('…')` and a container binding
      * are both real reachability.
      */
-    public function testNothingInSrcBinOrExamplesReachesThisDormantSeam(): void
+    public function testTheOnlyPathToThisSeamIsTheGatedFactoryArm(): void
     {
         $lib = \dirname(__DIR__);
         $callers = [];
@@ -101,17 +107,122 @@ final class ClaudeCodeMcpClientTest extends TestCase
         }
 
         $this->assertSame(
-            [],
+            ['src/MCP/ClaudeCodeMcpServer.php'],
             $callers,
-            'ClaudeCodeMcpClient is named in CODE by: ' . \implode(', ', $callers)
-                . ' — it spawns a process with no ContainedPath anchor and no PermissionGate, so wiring it'
-                . ' up has to bring both gates along (crush_code.md Phase 2 item 2).'
+            'ClaudeCodeMcpClient must be named in CODE by exactly one src file — the gated '
+                . 'claude-mcp adapter (E699). Anything else on this list is a construction site that '
+                . 'skipped the operator-tier claudeMcpBinary gate; an empty list means the adapter '
+                . 'moved or renamed without converting this pin. The gates the old dormancy note '
+                . 'demanded — binary-path policy and the PreToolUse chain in front of forwarded '
+                . 'calls — arrive via ClaudeCodeMcpServer::fromGrant() and McpToolBridge.'
                 . ($mentionedInProse === []
                     ? ''
                     : ' (Doc-comment mentions, which reach nothing and are not the failure: '
                         . \implode(', ', $mentionedInProse) . '.)'),
         );
     }
+
+    /**
+     * The second half of the allowlist: the ADAPTER has one door too.
+     * `ClaudeCodeMcpServer::fromGrant` may appear outside comments at exactly
+     * one place in `src/`, and it must sit inside
+     * {@see \SugarCraft\Crush\MCP\McpClient::buildServer()} — the `match`
+     * that is the factory's single `type` switch. `new ClaudeCodeMcpServer`
+     * is not merely unpinned here, it is impossible: the constructor is
+     * private, so `fromGrant` IS the construction grammar of this transport
+     * and pinning it pins every spawn the repository side can request.
+     */
+    public function testTheAdapterIsConstructedOnlyByTheFactoryArm(): void
+    {
+        $needle = 'ClaudeCodeMcpServer::fromGrant';
+        $lib = \dirname(__DIR__);
+        $found = [];
+
+        /** @var \SplFileInfo $file */
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($lib . '/src', \FilesystemIterator::SKIP_DOTS)
+        ) as $file) {
+            if (!$file->isFile() || !\str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+            $source = (string) \file_get_contents((string) $file->getPathname());
+            if (!\str_contains($source, $needle)) {
+                continue;
+            }
+            // Pure token walk: a `<?php` sequence inside doc prose would
+            // desynchronise any byte-arithmetic blank-out, so count the
+            // three-token sequence `ClaudeCodeMcpServer :: fromGrant`
+            // directly among non-comment tokens instead.
+            $tokens = \token_get_all($source);
+            $code = [];
+            foreach ($tokens as $index => $token) {
+                if (!\is_array($token)) {
+                    continue;
+                }
+                if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT || $token[0] === \T_INLINE_HTML) {
+                    continue;
+                }
+                if ($token[0] === \T_STRING
+                    && $token[1] === 'ClaudeCodeMcpServer'
+                    && isset($tokens[$index + 1], $tokens[$index + 2])
+                    // PHP 8 lexes the scope operator as an ARRAY token whose
+                    // text is the two-character '::' — compare texts.
+                    && (\is_array($tokens[$index + 1]) ? $tokens[$index + 1][1] : $tokens[$index + 1]) === '::'
+                    && \is_array($tokens[$index + 2])
+                    && $tokens[$index + 2][0] === \T_STRING
+                    && $tokens[$index + 2][1] === 'fromGrant') {
+                    $code[] = $index;
+                }
+            }
+            $count = \count($code);
+            if ($count > 0) {
+                // The hit sits inside buildServer when its token index is
+                // greater than the declaration's and no T_FUNCTION keyword
+                // starts a new body in between.
+                $declIndex = null;
+                $previous = null;
+                foreach ($tokens as $index => $token) {
+                    // The DECLARATION, not the call site: startServer()
+                    // invokes `$this->buildServer(...)` and would otherwise
+                    // win a bare name search; a `{@see ...buildServer()}`
+                    // doc mention must not win either.
+                    if (\is_array($token)
+                        && $token[0] === \T_STRING
+                        && $token[1] === 'buildServer'
+                        && \is_array($previous)
+                        && $previous[0] === \T_FUNCTION) {
+                        $declIndex = $index;
+                        break;
+                    }
+                    if (\is_array($token) && $token[0] === \T_WHITESPACE) {
+                        continue; // the name follows whitespace after the keyword
+                    }
+                    $previous = $token;
+                }
+                $anotherFunctionBetween = false;
+                if ($declIndex !== null) {
+                    for ($i = $declIndex + 1; $i < $code[0]; $i++) {
+                        if (\is_array($tokens[$i]) && $tokens[$i][0] === \T_FUNCTION) {
+                            $anotherFunctionBetween = true;
+                            break;
+                        }
+                    }
+                }
+                $found[\substr((string) $file->getPathname(), \strlen($lib) + 1)] = [
+                    'count' => $count,
+                    'insideBuildServer' => $declIndex !== null && $code[0] > $declIndex && !$anotherFunctionBetween,
+                ];
+            }
+        }
+
+        $this->assertSame(
+            ['src/MCP/McpClient.php' => ['count' => 1, 'insideBuildServer' => true]],
+            $found,
+            'the claude-mcp factory arm is the adapter\'s only construction door (E699); a second '
+                . 'fromGrant call, or the same call relocated outside buildServer, is a new door.',
+        );
+    }
+
 
     /**
      * True when the class name appears anywhere in $source that is not a
