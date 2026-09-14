@@ -191,8 +191,12 @@ servers to itself. A server this process started that the config no longer
 declares gets its own line (`Started but no longer declared: name (N tools)`)
 rather than vanishing from the count.
 
-A live session also digests `.mcp.json` at the instant it memoises its client,
-and when the file's bytes no longer match that digest the panel adds one line:
+A live session also digests `.mcp.json` at the instant it memoises its client.
+The verdict rides inside the liveness block above, so it renders only while
+this process has at least one started server to report — a session that
+started no servers shows no liveness block, hence no verdict line even after
+its config drifts. While that block is rendering and the file's bytes no
+longer match the digest taken at launch, the panel adds one line:
 `Config: changed since launch — restart sugar-crush to apply (reload is not
 implemented)`. That is a DETECTION, not a fix, and the fix was weighed and
 declined (E703 option β): re-reading the file in-session would relaunch

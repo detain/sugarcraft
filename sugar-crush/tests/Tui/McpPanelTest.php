@@ -330,6 +330,8 @@ final class McpPanelTest extends TestCase
         ]);
 
         self::assertStringContainsString('  Started but no longer declared: ' . $orphan . ' (9 tools)', $out);
+        self::assertStringNotContainsString('Started but no longer declared: ' . $inventory['servers'][0]['name'], $out,
+            'a declared-and-started server must not ALSO get the orphan line — suppression of declared rows is the claim');
         self::assertStringContainsString('  Live in this process: 1 of 1 declared', $out,
             'the summary counts DECLARED rows only — the orphan lives in its own section');
     }
