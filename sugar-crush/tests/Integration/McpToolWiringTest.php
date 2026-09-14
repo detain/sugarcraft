@@ -984,6 +984,99 @@ final class McpToolWiringTest extends TestCase
     // =========================================================================
 
     /**
+     * E696-α THE PRODUCTION FEED, live-fed like the E675 TaskTool pin: not a
+     * hand-built manager with fixture bridges, but the REAL
+     * {@see Bootstrap::agentManager()} launch over a real two-server
+     * `.mcp.json` and a real user-tier native preset. Three separate links
+     * have to hold for the last assertion to mean anything, and this test is
+     * the only place all three are pinned as one production path: the preset
+     * parser must READ `mcpServers:` off the front matter, `Agent::fromPreset()`
+     * must CARRY it onto the Agent, and `resolveGrantedTools()` must NARROW
+     * the real bridges by it. Reverting any one link reddens exactly this pin
+     * — and only the third is pinned elsewhere (AgentManagerTest builds its
+     * own manager).
+     */
+    public function testTheProductionAgentManagerNarrowsRealBridgesByTheUserPresetsAllowList(): void
+    {
+        // TWO fixture servers under the RAW keys a preset speaks. Both share
+        // the same script; the servers are distinct configs, which is what
+        // `mcpServers` is for.
+        $server = [
+            'type' => 'stdio',
+            'command' => PHP_BINARY,
+            'args' => [$this->tempDir . '/server.php', $this->callLog, $this->handshakeLog],
+            'startTimeout' => 5,
+        ];
+        file_put_contents(
+            $this->repo . '/.mcp.json',
+            (string) json_encode(['mcpServers' => ['alpha' => $server, 'beta' => $server]]),
+        );
+        $this->trustTheRepo();
+
+        // The user-tier native preset, written the way an operator writes one;
+        // `mcpServers` names only `alpha` while `tools` declares both bridges
+        // — the self-contradictory shape whose resolution (list-time removal,
+        // grant still "resolves" the beta declaration) is the feature.
+        $home = $this->useHomeSandbox($this->tempDir . '/home');
+        mkdir($home . '/.sugar-crush/agents', 0o755, true);
+        file_put_contents($home . '/.sugar-crush/agents/ma-scoped.md', <<<'MD'
+            ---
+            name: ma-scoped
+            description: E696-α production pin; names one of the two fixture servers.
+            tools: [mcp__alpha__ping, mcp__beta__ping]
+            mcpServers: [alpha]
+            ---
+
+            Pin body.
+            MD);
+
+        $manager = Bootstrap::agentManager($this->repo);
+
+        // LINK 1+2: the roster agent exists and CARRIES the allowlist. This is
+        // the field E696 called carried-but-enforced-nowhere; before this lane
+        // the carry was real and the enforcement was not, so pin both halves
+        // against the production construction path, not a fixture Agent.
+        $agents = (new \ReflectionProperty('SugarCraft\Crush\Agents\AgentManager', 'agents'))->getValue($manager);
+        $this->assertIsArray($agents);
+        $this->assertArrayHasKey('ma-scoped', $agents, 'a user-tier preset never reached the production roster — the pin below is vacuous without this');
+        $agent = $agents['ma-scoped'];
+        $this->assertSame(
+            ['alpha'],
+            $agent->mcpServers,
+            'AgentPresetRegistry/Agent::fromPreset no longer carries mcpServers to the Agent — nothing downstream can narrow by a field that did not arrive',
+        );
+
+        // The narrowing must bite on REAL bridges from the production registry
+        // (same client the main chat would use), so a fixture double cannot
+        // satisfy it.
+        $registry = (new \ReflectionProperty('SugarCraft\Crush\Agents\AgentManager', 'toolRegistry'))->getValue($manager);
+        $bridgeNames = array_values(array_map(
+            static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(),
+            array_filter(
+                is_array($registry) ? $registry : [],
+                static fn(\SugarCraft\Crush\Tools\Tool $t): bool => $t instanceof McpToolBridge,
+            ),
+        ));
+        sort($bridgeNames);
+        $this->assertSame(
+            ['mcp__alpha__ping', 'mcp__beta__ping'],
+            $bridgeNames,
+            'production did not build both fixture servers into bridges — the roster assertion below would be vacuous',
+        );
+
+        // LINK 3: the grant-resolution seam narrows by the preset, observed
+        // through the manager's own private resolver — the exact function the
+        // :598 request and the E644/E660 batch resolver call.
+        $granted = (new \ReflectionMethod('SugarCraft\Crush\Agents\AgentManager', 'resolveGrantedTools'))
+            ->invoke($manager, $agent);
+        $this->assertSame(
+            ['mcp__alpha__ping'],
+            array_map(static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(), $granted ?? []),
+            'the production path must advertise the allowed server only; beta is narrowed away exactly where the provider request is built',
+        );
+    }
+
+    /**
      * A minimal MCP server over stdio: `initialize`, `tools/list`, `tools/call`.
      *
      * `$argv[1]` is a log file every `tools/call` is appended to — the witness

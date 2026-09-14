@@ -15,6 +15,8 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Agents\Team;
 use SugarCraft\Crush\Agents\TeamConfig;
 use SugarCraft\Crush\Agents\TeamManager;
+use SugarCraft\Crush\MCP\McpClient;
+use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\Permissions\PermissionDecision;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -23,6 +25,7 @@ use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Skills\SkillRegistry;
 
 /**
@@ -2215,8 +2218,12 @@ final class AgentManagerTest extends TestCase
      *        ceiling $registry was narrowed from — supply it whenever the
      *        fixture models a session with `allowedTools`/`disabledTools`
      *        (E639 option 1); omit it to keep the old all-or-nothing refusal.
+     * @param list<mixed> $mcpServers the preset's `mcpServers` allowlist to
+     *        carry onto the Agent — E696-α narrows MCP bridges by it at
+     *        resolution; omit (empty) for the allow-all default every
+     *        built-in preset ships.
      */
-    private function captureSubAgentRequest(array $grant, ?array $registry, ?array $universe = null): CompleteRequest
+    private function captureSubAgentRequest(array $grant, ?array $registry, ?array $universe = null, array $mcpServers = []): CompleteRequest
     {
         $captured = null;
         $provider = $this->createMock(ProviderInterface::class);
@@ -2244,6 +2251,7 @@ final class AgentManagerTest extends TestCase
             skillNames: [],
             hooks: [],
             isActive: true,
+            mcpServers: $mcpServers,
         ));
 
         $subAgent = $manager->createSubAgent('granted', 'do the thing');
@@ -2260,6 +2268,220 @@ final class AgentManagerTest extends TestCase
         return $tools === null
             ? null
             : array_map(static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(), $tools);
+    }
+
+    /**
+     * A real {@see McpToolBridge} over a declared tool, WITHOUT touching a
+     * transport: the bridge constructor starts nothing (a non-existent config
+     * path is fine — the same hermetic recipe McpToolBridgeTest ships), and
+     * roster resolution reads only `name()` and `descriptor()->serverName`,
+     * never the client. `serverName` is the RAW `.mcp.json` key; the wire name
+     * sanitises it (`my_files` → `mcp__my_5Ffiles__ping`), which is exactly
+     * the pair E696-α's raw-vs-raw comparison turns on.
+     */
+    private function mcpBridge(string $server, string $tool = 'ping'): McpToolBridge
+    {
+        return new McpToolBridge(
+            new McpClient('/nonexistent/.mcp.json', unrestricted: true),
+            new McpTool(
+                name: $tool,
+                description: 'Fixture bridge tool.',
+                inputSchema: ['type' => 'object'],
+                serverName: $server,
+            ),
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // E696-α: per-preset `mcpServers` narrowing at grant-resolution.
+    // -------------------------------------------------------------------------
+
+    /**
+     * THE FEATURE: a preset naming servers restricts its agent's roster to
+     * those servers' bridges. `Bash` rides through untouched — the gate is
+     * `instanceof McpToolBridge`, so non-MCP grants cannot be affected by an
+     * MCP field.
+     */
+    public function testAPresetNamingOneServerKeepsOnlyThatServersBridge(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['Bash', 'mcp__*'],
+            array_merge(
+                $this->fakeRegistry('Bash'),
+                [$this->mcpBridge('alpha'), $this->mcpBridge('beta')],
+            ),
+            mcpServers: ['alpha'],
+        );
+
+        $this->assertSame(
+            ['Bash', 'mcp__alpha__ping'],
+            self::toolNames($request->tools),
+            'the roster must carry the named server\'s bridge and nothing from the unnamed one',
+        );
+    }
+
+    /**
+     * ZERO BLAST RADIUS, both spellings: the empty list (what every built-in
+     * preset ships and what an absent `mcpServers:` key parses to) and the
+     * `*` entry advertise every bridge — byte-identical rosters. A regression
+     * that read `[]` as "allow nothing" would silently MCP-gut every existing
+     * sub-agent, so this is the pin that protects the whole fleet.
+     */
+    public function testAnEmptyAllowListAdvertisesEveryBridgeExactlyLikeTheGlob(): void
+    {
+        $registry = array_merge(
+            $this->fakeRegistry('Bash'),
+            [$this->mcpBridge('alpha'), $this->mcpBridge('beta')],
+        );
+
+        $empty = $this->captureSubAgentRequest(['Bash', 'mcp__*'], $registry, mcpServers: []);
+        $glob = $this->captureSubAgentRequest(['Bash', 'mcp__*'], $registry, mcpServers: ['*']);
+
+        $expected = ['Bash', 'mcp__alpha__ping', 'mcp__beta__ping'];
+        $this->assertSame($expected, self::toolNames($empty->tools));
+        $this->assertSame($expected, self::toolNames($glob->tools));
+    }
+
+    /**
+     * THE E42 CLASS, pinned on both legs: the allowlist speaks RAW config keys
+     * and is compared against `descriptor()->serverName`, never the sanitised
+     * wire spelling. A server named `my_files` rides the wire as
+     * `mcp__my_5Ffiles__ping` — the raw entry keeps it; a preset author who
+     * pasted the sanitised half matches nothing and the bridge is dropped
+     * (roster empties to null, the same shape an all-denied grant produces).
+     */
+    public function testTheAllowListMatchesRawServerKeysAndNotTheSanitisedWireSpelling(): void
+    {
+        $keep = $this->captureSubAgentRequest(
+            ['mcp__*'],
+            [$this->mcpBridge('my_files')],
+            mcpServers: ['my_files'],
+        );
+        $this->assertSame(
+            ['mcp__my_5Ffiles__ping'],
+            self::toolNames($keep->tools),
+            'a raw entry must keep the bridge whose WIRE name sanitises the underscore — comparing wire-against-raw would drop it',
+        );
+
+        $drop = $this->captureSubAgentRequest(
+            ['mcp__*'],
+            [$this->mcpBridge('my_files')],
+            mcpServers: ['my_5Ffiles'],
+        );
+        $this->assertNull(
+            $drop->tools,
+            'the sanitised spelling is not a config key; the router law drops it and an emptied roster reaches the provider as null',
+        );
+    }
+
+    /**
+     * FAIL LOUD, AND ONLY WHERE IT BITES: a non-string allowlist entry that a
+     * bridge actually meets raises instead of quietly matching nothing — the
+     * same argument `namePatterns()` gives for malformed grant declarations.
+     * The lazy half is the parity statement: with no bridges in the registry
+     * the malformed list never reaches the predicate and costs nothing, which
+     * is why this throw cannot fire for agents that never touch MCP.
+     */
+    public function testANonStringAllowListEntryFailsLoudWhereABridgeIsNarrowedAndStaysSilentWhereNoneIs(): void
+    {
+        // Built inline, NOT via captureSubAgentRequest: the throwing leg wraps
+        // its iteration in a catch, and a same-file helper asserting inside a
+        // try would be the indirect-swallow shape SwallowingCatchCensus names
+        // (E612) — the helper's own failure could ride out as $caught.
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(content: 'done'));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: [$this->mcpBridge('alpha')],
+        );
+        $manager->register(new Agent(
+            name: 'malformed',
+            description: 'malformed description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['mcp__*'],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            mcpServers: [42],
+        ));
+
+        $subAgent = $manager->createSubAgent('malformed', 'do the thing');
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'a malformed entry that a bridge meets must not read as a rule that matches nothing');
+        $this->assertStringContainsString('non-empty string', $caught->getMessage());
+
+        $request = $this->captureSubAgentRequest(
+            ['Bash'],
+            $this->fakeRegistry('Bash'),
+            mcpServers: [42],
+        );
+        $this->assertSame(['Bash'], self::toolNames($request->tools));
+    }
+
+    /**
+     * THE CALL-TIME LAYER, unchanged and re-pinned for MCP names: a preset
+     * that declares its allowed servers in BOTH lists (tools and mcpServers)
+     * gets list-time narrowing AND a grant refusal on a hallucinated call to
+     * the dropped server. The refusal here is declaration-driven — that is
+     * the whole of `refuseCallOutsideGrant()` and this lane does not touch
+     * it; for a wildcard declaration the enforcement is that the narrowed
+     * roster never advertises the tool (no sub-agent path executes past its
+     * advertised roster — see the code comment at the gate).
+     */
+    public function testACallToANarrowedAwayBridgeOutsideTheDeclarationIsRefusedByTheGrant(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [new ToolCall(name: 'mcp__beta__ping', arguments: [])],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: array_merge(
+                $this->fakeRegistry('Bash'),
+                [$this->mcpBridge('alpha'), $this->mcpBridge('beta')],
+            ),
+        );
+        $manager->register(new Agent(
+            name: 'scoped',
+            description: 'scoped description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['mcp__alpha__ping'],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            mcpServers: ['alpha'],
+        ));
+
+        $subAgent = $manager->createSubAgent('scoped', 'do the thing');
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'a call to the dropped server outside the declaration must hit the existing grant refusal');
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
     }
 
     /**

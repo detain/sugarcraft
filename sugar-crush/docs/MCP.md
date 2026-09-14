@@ -158,8 +158,13 @@ patterns like `mcp__git__*` match — see [`PERMISSIONS.md`](PERMISSIONS.md).
 The client is built `unrestricted: true`, which is the opposite of what it looks
 like. `McpClient::listTools()` fails *closed* without an `AgentPreset`, and the
 main agent has no preset — that mechanism is *meant* to scope sub-agents, and
-today it reaches none of them: no production path calls `setAgentPreset()`, so
-per-preset `mcpServers` allowlists are carried and enforced nowhere (E696). The two options
+the client-side arm still has no production caller: per-preset `mcpServers`
+allowlists are enforced one layer up instead, at grant-resolution, where the
+preset actually is known — `AgentManager::resolveGrantedTools()` consults
+`McpRouter::serverAllowed` (the router's own membership law) and drops bridges
+whose server the preset does not name, so the narrowed roster is what the
+sub-agent's provider request advertises (E696). An empty or absent list is
+allow-all, which is why declaring nothing changes nothing. The two options
 at construction were "the main agent gets zero MCP tools" or "synthesize a fake preset for it".
 What the flag bypasses is `McpRouter`'s per-preset allowlist, which is sub-agent
 scoping, not your safety boundary: the main agent is not preset-scoped for
@@ -180,8 +185,9 @@ in the conservative direction.
 
 No `denyPatterns` are passed on this path, deliberately: `McpClient` consults
 them only through `router()`, which only the `AgentPreset` arm reaches, so they
-would be inert here. Deny patterns belong to the sub-agent path — which is
-unwired today, same as the allowlist (E696).
+would be inert here. Deny patterns belong to the sub-agent path — whose
+allowlist half is now enforced at grant-resolution (above); the deny half is
+still minted and unwired, because no settings producer feeds it (E696).
 
 ---
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
@@ -13,6 +14,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Tool;
 
 final class AgentManager
@@ -951,9 +953,16 @@ final class AgentManager
      * declarations are still marked resolved, which is a separate fact the
      * loop had to be corrected to get right.
      *
+     * A preset's `mcpServers` allowlist removes bridges in addition to the
+     * declarations: E696-α narrows MCP entries by the preset's own server list
+     * at this point, on the same resolved-then-removed footing as the denylist
+     * — see the `instanceof McpToolBridge` block in the body.
+     *
      * @return ?list<Tool>
      * @throws \RuntimeException When a declaration is malformed, resolves to no
      *         tool in the registry, or the registry holds a non-{@see Tool}.
+     * @throws \RuntimeException When a non-empty `mcpServers` allowlist meets a
+     *         bridge and holds a non-string entry ({@see McpRouter::serverAllowed()}).
      */
     private function resolveGrantedTools(Agent $agent): ?array
     {
@@ -1053,6 +1062,43 @@ final class AgentManager
                 if (PermissionRule::matchesToolName($denyPattern, $tool->name())) {
                     continue 2;
                 }
+            }
+
+            // E696-α: PER-PRESET MCP NARROWING, on the same resolved-then-
+            // removed footing as the deny above. `AgentPreset::$mcpServers`
+            // arrived with the preset ({@see Agent::fromPreset()}) and was
+            // read by NOTHING in the sub-agent path until this line — the
+            // field the E696 record called carried-but-enforced-nowhere. A
+            // preset naming servers restricts its agent's roster to those
+            // servers' bridges; naming NONE is absence, not denial, so the
+            // empty list allows all — the exact law
+            // {@see \SugarCraft\Crush\MCP\McpRouter::serverAllowed()} states,
+            // which is the single implementation consulted here (the router
+            // filters a server map, this narrows one roster entry — same
+            // membership, one spelling). Every built-in preset ships the
+            // empty list, so declaring-nothing changes nothing.
+            //
+            // WHY `instanceof` AND NOT THE WIRE NAME: the membership test
+            // reads `$descriptor->serverName`, the RAW `.mcp.json` key — the
+            // same pair of raw spellings McpRouter compares. Parsing
+            // `mcp__<sanitised>__` and matching a raw entry against a
+            // sanitised segment is the E42 bug class this repo already
+            // filed, and a prefix string test would also accuse the
+            // anonymous data-Tools ProcessExecutor rehydrates child-side,
+            // which carry no server identity at all.
+            //
+            // LIST-TIME IS ENFORCEMENT HERE, honestly stated: a narrowed-
+            // away bridge never reaches the provider request, and no
+            // sub-agent path can execute past its roster — the in-process
+            // loop validates calls and completes without executing any
+            // (this class holds no `execute()` call), and the fork worker
+            // advertises rehydrated doubles whose `execute()` throws
+            // ("tool execution is a parent-side act", E647) and speaks no
+            // tool-call frame. {@see refuseCallOutsideGrant()} stays the
+            // untouched declaration-level second layer.
+            if ($tool instanceof McpToolBridge
+                && !McpRouter::serverAllowed($tool->descriptor()->serverName, $agent->mcpServers)) {
+                continue;
             }
 
             $granted[] = $tool;

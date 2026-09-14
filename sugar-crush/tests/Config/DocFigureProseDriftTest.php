@@ -30,6 +30,7 @@ use SugarCraft\Crush\Hooks\HookDispatcher;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookResult;
 use SugarCraft\Crush\Hooks\ScriptHook;
+use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\HookContextFiles;
 use SugarCraft\Crush\Tests\Support\SourceFileWalkTrait;
@@ -5112,6 +5113,59 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(1, preg_match('/pays its (\w+) git subprocess/', $flat, $gitWord), 'the one-render-per-build sentence no longer spells its subprocess count');
         self::assertMatchesRegularExpression('/those ' . strtoupper($gitWord[1]) . ' subprocesses run per step/', self::sourceOf('Context/EnvironmentBlock.php'), "the page says {$gitWord[1]} git subprocess polls — EnvironmentBlock's own docblock counts them in capitals and no longer agrees");
+    }
+
+    /**
+     * E696-α (BA): the per-preset MCP enforcement sentences — README's MCP
+     * bullet and MCP.md's "What the model sees" section — against the seam
+     * they name. The doc claim is three-legged: `resolveGrantedTools()`
+     * consults `McpRouter::serverAllowed` on the `instanceof McpToolBridge`
+     * gate, and the LAW the page paraphrases (empty allows all, raw keys,
+     * `*` globs, sanitised spellings match nothing) is derived live from the
+     * single predicate both callers share. A reverted seam or a forked second
+     * implementation of the membership rule reddens this arm; the glob entry
+     * is assembled via chr(42) so this file contributes no new glob-shaped
+     * literal to the PathGlob corpus.
+     */
+    public function testPerPresetMcpNarrowingSentenceTracksTheGrantResolutionSeam(): void
+    {
+        $readme = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/README.md'));
+        $mcp = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md'));
+
+        self::assertStringContainsString(
+            'allowlists are enforced at grant-resolution',
+            $readme,
+            'README stopped claiming grant-resolution enforcement — flip this arm with the seam',
+        );
+        self::assertStringContainsString(
+            'drops bridges whose server the preset does not name',
+            $mcp,
+            'MCP.md reworded what the narrowing does — re-pin this arm with the prose',
+        );
+
+        $body = self::bodyExcerpt(self::sourceOf('Agents/AgentManager.php'), 'resolveGrantedTools', 9000);
+        self::assertStringContainsString(
+            '$tool instanceof McpToolBridge',
+            $body,
+            'the docs name resolveGrantedTools() as the enforcement point; the bridge-specific gate is gone from it',
+        );
+        self::assertStringContainsString(
+            'McpRouter::serverAllowed(',
+            $body,
+            'the seam no longer consults the router\'s single law — a forked second membership rule is exactly the divergence this arm exists for',
+        );
+
+        // The law itself, live off the shared predicate — every half the two
+        // pages paraphrase, none hand-typed.
+        self::assertTrue(McpRouter::serverAllowed('anything', []), 'empty = allow-all left the law; every built-in preset ships the empty list');
+        self::assertTrue(McpRouter::serverAllowed('alpha', ['alpha']));
+        self::assertFalse(McpRouter::serverAllowed('beta', ['alpha']));
+        self::assertTrue(
+            McpRouter::serverAllowed('data_lake', ['data_' . \chr(42)]),
+            'the fnmatch leg left — MCP.md\'s glob sentence would now be a lie',
+        );
+        self::assertTrue(McpRouter::serverAllowed('my_files', ['my_files']), 'a raw key must keep the bridge whose wire name sanitises it');
+        self::assertFalse(McpRouter::serverAllowed('my_files', ['my_5Ffiles']), 'the sanitised spelling is not a config key — matching it would be the E42 bug class back in the law');
     }
 
     /**
