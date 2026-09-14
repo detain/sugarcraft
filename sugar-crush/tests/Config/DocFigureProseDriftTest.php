@@ -3417,7 +3417,7 @@ final class DocFigureProseDriftTest extends TestCase
         $mcp = self::markdownProse($raw);
         self::assertSame(
             1,
-            preg_match('/Three types, and they are the three `McpClient::startServer\(\)` constructs/', $mcp),
+            preg_match('/Four types, and they are the four `McpClient::startServer\(\)` constructs/', $mcp),
             'the type-table lead-in no longer states the count with its factory cite',
         );
 
@@ -3448,14 +3448,23 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match_all("/'(stdio|http|git)' => new ([A-Za-z]+)/", $buildText, $arms, PREG_SET_ORDER),
             'buildServer() no longer constructs one named class per match arm — the pin lost its ground',
         );
-        self::assertCount(3, $arms, 'the factory gained or lost a server type — the page table carries three rows');
+        self::assertCount(3, $arms, 'the three new-constructing arms moved — the page counts them plus the gated fourth');
         $built = [];
         foreach ($arms as $arm) {
             $built[$arm[1]] = $arm[2];
         }
+        // E699: the fourth arm constructs THROUGH the adapter's gated factory
+        // method, never via a bare `new` — fromGrant is the gate, so the
+        // grammar the pin accepts is exactly what the safety story claims.
+        self::assertSame(
+            1,
+            preg_match("/'claude-mcp' => (ClaudeCodeMcpServer)::fromGrant\(/", $buildText, $claudeArm),
+            'the claude-mcp arm stopped constructing through the gated fromGrant factory — the fourth table row lost its ground',
+        );
+        $built['claude-mcp'] = $claudeArm[1];
 
-        preg_match_all('/^\| `(stdio|http|git)`(?: \(the default when `type` is absent\))? \| `([A-Za-z]+)` \| ([^|]+) \|$/m', $raw, $rows, PREG_SET_ORDER);
-        self::assertCount(3, $rows, 'the type table no longer carries three parseable rows — re-pin with the prose');
+        preg_match_all('/^\| `(stdio|http|git|claude-mcp)`(?: \(the default when `type` is absent\))? \| `([A-Za-z]+)` \| ([^|]+) \|$/m', $raw, $rows, PREG_SET_ORDER);
+        self::assertCount(4, $rows, 'the type table no longer carries four parseable rows — re-pin with the prose');
         $documented = [];
         $documentedKeys = [];
         foreach ($rows as $row) {
@@ -3469,7 +3478,7 @@ final class DocFigureProseDriftTest extends TestCase
         }
 
         $armPositions = [];
-        foreach (['stdio', 'http', 'git'] as $type) {
+        foreach (['stdio', 'http', 'git', 'claude-mcp'] as $type) {
             $armPositions[$type] = strpos($buildText, "'{$type}' =>");
             self::assertIsInt($armPositions[$type]);
         }
@@ -3479,7 +3488,7 @@ final class DocFigureProseDriftTest extends TestCase
         $order['default'] = $defaultAt;
         asort($order);
         $boundary = array_values($order);
-        foreach (array_slice($boundary, 0, 3) as $index => $begin) {
+        foreach (array_slice($boundary, 0, 4) as $index => $begin) {
             $type = array_keys($order)[$index];
             $armSlice = substr($buildText, $begin, $boundary[$index + 1] - $begin);
             preg_match_all("/\\\$config\['(\w+)'\]/", $armSlice, $reads);
@@ -5462,15 +5471,20 @@ final class DocFigureProseDriftTest extends TestCase
         $buildText = (string) substr($clientSource, $build['begin'], $build['end'] - $build['begin']);
         preg_match_all("/'(stdio|http|git)' => new /", $buildText, $arms);
         $implemented = $arms[1];
+        // E699: the fourth transport is constructed, through its gate —
+        // fromGrant's arm counts exactly like a `new` arm for the census.
+        if (preg_match("/'claude-mcp' => ClaudeCodeMcpServer::fromGrant/", $buildText) === 1) {
+            $implemented[] = 'claude-mcp';
+        }
         sort($implemented);
         self::assertSame(
-            ['git', 'http', 'stdio'],
+            ['claude-mcp', 'git', 'http', 'stdio'],
             $implemented,
             'the factory gained or lost a constructed transport — the census table and this pin move together',
         );
 
-        preg_match_all('/^\| (Stdio|HTTP|Git|SSE) \| (yes|\*\*no\*\*) \|/m', $raw, $rows, \PREG_SET_ORDER);
-        self::assertCount(4, $rows, 'the transport census no longer carries its four named rows (three built, one spec-named-unimplemented)');
+        preg_match_all('/^\| (Stdio|HTTP|Git|Claude-mcp|SSE) \| (yes|\*\*no\*\*) \|/m', $raw, $rows, \PREG_SET_ORDER);
+        self::assertCount(5, $rows, 'the transport census no longer carries its five named rows (four built, one spec-named-unimplemented)');
         $yes = [];
         $no = [];
         foreach ($rows as $row) {
@@ -5492,6 +5506,57 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('wins over the store', $prose, 'the http row stopped stating the static-header precedence');
         self::assertStringContainsString('function hasStaticAuthorization', $http, 'the precedence the row describes lost its method');
         self::assertStringContainsString('validAuthFor', $http, 'the per-request bearer attach the row describes lost its call');
+    }
+
+    /**
+     * E699 — the `claude-mcp` operator-tier paragraph in docs/MCP.md and the
+     * gate in `src/` are one claim told twice. Every figure the paragraph
+     * states derives live: the entry-refusal trio from the adapter's
+     * `REPOSITORY_MUST_NOT_NAME`, the default argv from `DEFAULT_ARGS`, the
+     * fixed inventory label from Bootstrap's detail arm, the three config
+     * keys from the grant reader's own literals, and the absolute-path law
+     * from the `str_starts_with` guard the refusal text rests on. A widening
+     * of the gate that forgets the page — or a page edit that outpresents
+     * the gate — reddens here, not in a production refusal.
+     */
+    public function testTheClaudeMcpOperatorGrantParagraphAndTheGateAgree(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $prose = self::markdownProse($raw);
+        $adapter = self::sourceOf('MCP/ClaudeCodeMcpServer.php');
+        $bootstrap = self::sourceOf('Cli/Bootstrap.php');
+
+        $reflected = new \ReflectionClass(\SugarCraft\Crush\MCP\ClaudeCodeMcpServer::class);
+        $mustNotName = array_keys($reflected->getConstant('REPOSITORY_MUST_NOT_NAME'));
+        sort($mustNotName);
+        self::assertSame(['args', 'command', 'env'], $mustNotName, 'the entry-refusal trio moved — the paragraph names them one by one');
+        self::assertSame(
+            1,
+            preg_match('/carrying `' . implode('`, `', $mustNotName) . '` is refused/', $prose),
+            'the paragraph stopped naming exactly the refused keys',
+        );
+
+        self::assertSame(['--mcp'], $reflected->getConstant('DEFAULT_ARGS'), 'the operator default moved — the paragraph carries it');
+        self::assertStringContainsString('(default `--mcp`)', $prose, 'the default-argv claim left the paragraph while the constant still holds');
+
+        foreach (['claudeMcpBinary', 'claudeMcpArgs', 'claudeMcpEnv'] as $key) {
+            self::assertStringContainsString("'" . $key . "'", $bootstrap, "the grant reader stopped consulting {$key} — the paragraph names it");
+            self::assertStringContainsString($key, $prose, "the paragraph lost the {$key} sentence the reader implements");
+        }
+
+        self::assertStringContainsString("str_starts_with(\$binary, '/')", $adapter, 'the absolute-path law left the adapter — the paragraph states it in words');
+        self::assertStringContainsString('is not a grant', $prose, 'the PATH refusal sentence left the page while the guard still throws it');
+        self::assertStringContainsString('$PATH is not a grant', $adapter, 'the refusal text the page echoes was reworded');
+
+        self::assertStringContainsString("'claude-mcp' => '(operator-supplied)'", $bootstrap, 'the inventory detail changed — the page quotes the fixed label');
+        self::assertStringContainsString('`(operator-supplied)`', $raw, 'the page stopped quoting the inventory label');
+
+        $settings = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md');
+        self::assertStringContainsString(
+            '**`claudeMcpBinary` names a spawn, which is why it is user-tier only.**',
+            $settings,
+            'the settings page lost the operator-tier sentence the reader enforces',
+        );
     }
 
     private static function sourceOf(string $relative): string

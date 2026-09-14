@@ -268,6 +268,20 @@ session builds
 and the backend consults the live set per turn rather than freezing it at launch
 (`RulesStateWiringTest::testTheBackendReadsItsToggleSetPerTurnRatherThanFreezingItAtLaunch()`).
 
+**`claudeMcpBinary` names a spawn, which is why it is user-tier only.** A
+trusted repository's `.mcp.json` may declare a `claude-mcp` entry — but the
+entry carries the type and nothing else, and the spawn it requests comes
+from this file: `claudeMcpBinary`, an absolute path to an existing,
+executable program, plus optional `claudeMcpArgs` (default `--mcp`) and
+`claudeMcpEnv` (literal strings, no `${VAR}` interpolation). A project's
+`.sugar-crush/settings.json` naming them changes nothing: the reader
+consults the user files only. The grant is frozen for the process at the
+first MCP launch — mid-session edits land next relaunch, the same posture
+as `trustedProjectMcp` — and the path itself never appears in the `/mcp`
+panel or any transcript row. See the transport section of `docs/MCP.md`
+for what a claude-mcp server is and why its own spawn is the execution the
+tiers gate.
+
 **`statusLine` runs a command, which is why it is user-tier only.** The shape
 is Claude Code's, so a settings file written for that tool carries over:
 

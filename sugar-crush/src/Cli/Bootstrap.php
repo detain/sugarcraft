@@ -5629,7 +5629,7 @@ final class Bootstrap
                 continue;
             }
 
-            // The same three types {@see \SugarCraft\Crush\MCP\McpClient::startServer()}
+            // The same types {@see \SugarCraft\Crush\MCP\McpClient::startServer()}
             // constructs, and the same `?? 'stdio'` default it applies, so an
             // entry listed as `stdio` here is the entry that would be started
             // as `stdio`. An unknown type is shown as written rather than

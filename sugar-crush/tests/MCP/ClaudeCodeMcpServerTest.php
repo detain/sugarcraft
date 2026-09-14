@@ -36,8 +36,10 @@ final class ClaudeCodeMcpServerTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->ocWorkDir . '/*') ?: [] as $leftover) {
-            @unlink($leftover);
+        foreach (scandir($this->ocWorkDir) ?: [] as $leftover) {
+            if ($leftover !== '.' && $leftover !== '..') {
+                @unlink($this->ocWorkDir . '/' . $leftover);
+            }
         }
         @rmdir($this->ocWorkDir);
 

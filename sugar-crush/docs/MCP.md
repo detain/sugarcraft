@@ -85,13 +85,14 @@ whose entries `proc_open()` arbitrary commands. Its absence is a decision.
 }
 ```
 
-Three types, and they are the three `McpClient::startServer()` constructs:
+Four types, and they are the four `McpClient::startServer()` constructs:
 
 | `type` | Class | Keys |
 |---|---|---|
 | `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout` |
 | `http` | `HttpMcpServer` | `url`, `headers` |
 | `git` | `GitMcpServer` | `path` (omitted → this project) |
+| `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
 Any other `type` **throws**, and that throw is ordering-dependent: servers
 listed *earlier* in the file are already up, servers listed *after* the bad
@@ -109,6 +110,7 @@ census, table first:
 | Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`) | spawned child, JSON-RPC over pipes |
 | HTTP | yes | `url` (+ optional `headers`) | stateless POSTs; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
 | Git | yes | `path` (omit → this project) | in-process — no transport, no child, no socket |
+| Claude-mcp | yes | operator-tier `claudeMcpBinary` (+ optional `claudeMcpArgs`, `claudeMcpEnv`; never the entry) | spawned child under process containment, JSON-RPC over pipes |
 | SSE | **no** | — | spec-named and not implemented: `"type": "sse"` falls to the factory's default arm and throws `Unknown MCP server type: sse` — a config-error report, deferred until every OTHER entry has been attempted, so one `sse` entry costs only its own server |
 
 The `sse` row is written because the failure used to be silent-fast: before
@@ -116,6 +118,31 @@ The `sse` row is written because the failure used to be silent-fast: before
 every server listed after it in the same file, with no report at all. An
 `http` entry whose URL happens to end in `/sse` is unaffected — the transport
 is the `type`, never the URL.
+
+A fourth row deserves its own paragraph, because it is the only transport the
+repository cannot fully choose: **`claude-mcp` spawns the OPERATOR's binary,
+not the repository's.** The entry is `{"type": "claude-mcp"}` and nothing else —
+an entry carrying `args`, `command`, `env` is refused as a config-error
+report, because the repository does not name this binary. The spawn comes from
+three keys in the USER config, the same tier that owns the list above:
+`claudeMcpBinary` (an absolute, existing, executable path — a bare name is
+refused even though it would resolve on `$PATH`, and `$PATH` is not a grant),
+an optional `claudeMcpArgs` (default `--mcp`), and an optional `claudeMcpEnv`
+of literal strings — the `${VAR}` interpolation below applies to two keys
+only, and neither is among these three. No entry becomes a claude-mcp spawn
+without all of it, and the operator's path is never echoed anywhere a
+transcript can see it: the `/mcp` inventory's detail for this transport reads
+the fixed label `(operator-supplied)`.
+
+The grant is read once per process inside the launch-frozen client memo — a
+mid-session edit cannot re-spawn anything until relaunch — and trust still
+gates the launch: an untrusted project never builds a client at all, so it
+never reaches the operator tier. What the entry DOES buy is a bridge set
+routed exactly like a stdio one: every forwarded call rides the PreToolUse
+chain, and plan mode denies all `mcp__*` names. Starting, though, IS the
+execution the tiers gate — the PreToolUse chain sees calls, never the
+`proc_open` behind them — which is why the grant sits a tier above the file
+the trust list controls rather than inside it.
 
 `startTimeout` is **seconds, per server, and bounds the handshake only** — a
 `tools/call` is unbounded. Only a positive number is honoured; a string, `0` or

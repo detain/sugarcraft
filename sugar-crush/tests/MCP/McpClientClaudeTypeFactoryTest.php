@@ -122,7 +122,7 @@ final class McpClientClaudeTypeFactoryTest extends TestCase
 
         $unknown = null;
         try {
-            $this->ocBuild('c?', 'claude', []);
+            $this->ocBuild('c-approx', 'claude', []);
         } catch (\RuntimeException $e) {
             $unknown = $e;
         }
