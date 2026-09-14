@@ -9,7 +9,10 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Commands\McpAuthCommand;
 use SugarCraft\Crush\MCP\AuthEntry;
+use SugarCraft\Crush\MCP\McpAuthStore;
 use SugarCraft\Crush\MCP\OAuthClientRegistration;
 
 // AuthEntry is defined in the same file as OAuthClientRegistration
@@ -83,6 +86,11 @@ final class OAuthClientRegistrationTest extends TestCase
         $this->assertSame('', $entry->refreshToken);
         $this->assertNull($entry->expiresAt);
         $this->assertSame([], $entry->scopes);
+        // E695 keys may be ABSENT ENTIRELY on a pre-E695 auth.json — fromArray
+        // defaults both to '' (r77-rv-la MINOR-2: the on-disk legacy shape was
+        // only proven by a reviewer's temp probe; this pins it in the suite).
+        $this->assertSame('', $entry->tokenUrl);
+        $this->assertSame('', $entry->registrationUrl);
     }
 
     public function testAuthEntryIsExpired(): void
@@ -504,5 +512,53 @@ final class OAuthClientRegistrationTest extends TestCase
 
         $this->assertSame('https://roundtrip.example.com/token', $reloaded['https://roundtrip.example.com/mcp']->tokenUrl);
         $this->assertSame('https://roundtrip.example.com/reg', $reloaded['https://roundtrip.example.com/mcp']->registrationUrl);
+    }
+
+    /**
+     * r77-rv-la MINOR-1: `mcp auth add` must persist the endpoint URLs on the
+     * stored entry. Before this pin the add-arm's `tokenUrl:`/`registrationUrl:`
+     * lines could be deleted and every MCP test stayed green (mutation M3b),
+     * shipping freshly-added entries that E695 can attach but can never
+     * refresh — dead the moment the access token expires.
+     *
+     * Drives the REAL command: both endpoints arrive as explicit argv so the
+     * well-known discovery leg is skipped and the MockHandler answers exactly
+     * the register + token posts; the read-back uses a SEPARATE
+     * OAuthClientRegistration so the assertion proves the on-disk entry, not
+     * the store's in-memory cache.
+     */
+    public function testAddCommandPersistsRefreshEndpoints(): void
+    {
+        $serverUrl = 'https://add-arm.example.com/mcp';
+        $registrationUrl = 'https://add-arm.example.com/register';
+        $tokenUrl = 'https://add-arm.example.com/token';
+
+        $httpClient = new Client(['handler' => HandlerStack::create(new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], json_encode([
+                'client_id' => 'cid-add',
+                'client_secret' => 'secret-add',
+                'registration_access_token' => 'reg-add',
+            ])),
+            new Response(200, ['Content-Type' => 'application/json'], json_encode([
+                'access_token' => 'at-add',
+                'refresh_token' => 'rt-add',
+                'expires_in' => 3600,
+            ])),
+        ]))]);
+
+        $store = new McpAuthStore(new OAuthClientRegistration($httpClient, $this->authFilePath));
+
+        ob_start();
+        $rc = (new McpAuthCommand($store))->execute(new Chat([]), ['add', $serverUrl, $registrationUrl, $tokenUrl]);
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(0, $rc, $output);
+
+        $persisted = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+
+        $this->assertArrayHasKey($serverUrl, $persisted);
+        $this->assertSame($tokenUrl, $persisted[$serverUrl]->tokenUrl);
+        $this->assertSame($registrationUrl, $persisted[$serverUrl]->registrationUrl);
+        $this->assertSame('at-add', $persisted[$serverUrl]->accessToken);
     }
 }
