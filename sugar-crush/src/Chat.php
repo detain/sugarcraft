@@ -20,6 +20,7 @@ use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -1554,6 +1555,24 @@ final class Chat implements Model
         if ($msg instanceof MouseMsg) {
             return $this->handleMouse($msg);
         }
+        if ($msg instanceof PasteMsg) {
+            // E704. The whole bracketed payload — `InputReader` collects the
+            // bytes between `CSI 200~` and `CSI 201~` (only ever emitted once
+            // {@see programOptions()} asks for mode 2004) into ONE message, so
+            // a multi-line paste is one atomic edit rather than the byte-burst
+            // that used to dispatch one submit per line. Inserted AT the caret
+            // through TextArea's string seam; the cursor lands at the END of
+            // the pasted text, which is the law every other single edit of
+            // this box follows. It does not submit and it does not answer a
+            // permission prompt: the Enter that follows a paste is the user's
+            // own keystroke and submits the WHOLE draft once, through
+            // {@see submit()}'s existing trim — content is inserted verbatim,
+            // with no pre-trim, because the boundary sanitize upstream
+            // (ProgramOptions::$sanitizePaste, default ON) is the one place
+            // untrusted bytes get stripped. The companion PasteEndMsg carries
+            // no payload and stays dropped below, with every other non-KeyMsg.
+            return [$this->withInput($this->input->insertString($msg->content)), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -1922,13 +1941,15 @@ final class Chat implements Model
             // not drafts a user can type. Same for "\u{000C}", which is in the
             // NON-blank set: parse("\x0C") is Ctrl+L and types the letter, so a
             // form feed is recalled-only too.
-            // Nor is there a paste route in: candy-core's decoder DOES emit a paste
-            // message for bracketed paste, and update() returns the IDENTICAL object
-            // when handed one -- both now asserted in that test. That pair replaces
-            // the instrument this comment used to cite, "`grep -rn PasteMsg src/` is
-            // empty", which stopped being true the moment it was written: every hit
-            // that grep returns today is prose in this file claiming there are none.
-            // A driven assertion cannot refute itself that way.
+            // And since E704 there is a paste route in too: bracketed paste
+            // decodes to one PasteMsg and update() inserts its payload at the
+            // caret VERBATIM, so "\t" (sanitize keeps tabs) reaches the box by
+            // a route that is neither a keystroke nor the Up arm. Pre-E704 this
+            // paragraph claimed the opposite -- that update() returned the
+            // IDENTICAL object handed a PasteMsg -- and cited `grep -rn
+            // PasteMsg src/`, an instrument that had been self-refuting since
+            // the day it was written; the driven ingest pins now live in
+            // PasteIngestTest, with the old drop-pin flipped in KeyHelpTest.
             //
             // Space is driven twice in that corpus, as KeyType::Space and as
             // KeyType::Char " ". Measured, InputReader::parse(" ") yields only the
@@ -2718,10 +2739,14 @@ final class Chat implements Model
      * Every session grant in that table now costs two deliberate keystrokes,
      * and not one of the six slash commands reaches an answer at all.
      *
-     * A pasted command does not walk this table: bracketed paste decodes to a
-     * `PasteMsg` and {@see update()} drops it (the identical object comes back
-     * -- asserted in KeyHelpTest). Only an UNBRACKETED paste, delivered as raw
-     * `Char` keys, does.
+     * A pasted command does not walk this table. Bracketed paste arrives as one
+     * {@see PasteMsg}, which {@see update()} catches at its own arm ABOVE the
+     * `!$msg instanceof KeyMsg` return and inserts into the draft box -- so it
+     * reaches neither this prompt handler nor the Char arms, and cannot arm,
+     * disarm, or answer on the user's behalf (pre-E704 the PasteMsg was dropped
+     * outright; it was still never a keystroke, so the table read the same way
+     * either way). Only an UNBRACKETED paste on a terminal that ignores mode
+     * 2004 -- delivered as a burst of raw `Char` keys -- walks this table.
      *
      * ── THE RESIDUAL, stated rather than apologised for ──
      *
@@ -2856,9 +2881,12 @@ final class Chat implements Model
      * moved the draft into `candy-forms`' TextArea, so there is now a second
      * route — type "why", press Home, type "?" — which
      * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`
-     * drives. This arm is still the only route on a genuinely EMPTY line,
-     * where there is no character for the cursor to sit in front of, and it
-     * stays for that case (and because the footer already advertises it).
+     * drives. This arm is still the only KEYSTROKE route on a genuinely EMPTY
+     * line, where there is no character for the cursor to sit in front of, and
+     * it stays for that case (and because the footer already advertises it).
+     * The paste half of the original sentence expired with E704 — a pasted
+     * `?why` now lands in the box verbatim, a second route to the same draft
+     * that is likewise not a keystroke.
      *
      * Three options were weighed. Dropping the "?" shortcut is not one of them:
      * the shortcut is the feature. Letting the next unbound printable rune fall
@@ -5413,7 +5441,18 @@ final class Chat implements Model
      */
     public static function programOptions(): ProgramOptions
     {
-        return new ProgramOptions(useAltScreen: true, mouseMode: self::mouseMode());
+        // `bracketedPaste: true` (E704) asks the terminal to wrap pasted text
+        // in `CSI 200~ … CSI 201~`, which is what lets a multi-line paste reach
+        // {@see update()} as ONE {@see PasteMsg} instead of a burst of Char/
+        // Enter keys that submit a line each. `Program::setupTerminal()` writes
+        // the `CSI ?2004h` enable only when this is set; the default sanitize
+        // (`ProgramOptions::$sanitizePaste`) stays ON so the payload is
+        // escape/control-stripped by InputReader before it reaches the model.
+        return new ProgramOptions(
+            useAltScreen: true,
+            mouseMode: self::mouseMode(),
+            bracketedPaste: true,
+        );
     }
 
     /**
@@ -11974,12 +12013,19 @@ final class Chat implements Model
      * {@see TextArea::view()}, so a blink subscription would drive redraws
      * for a cursor nothing reads.
      *
-     * `withCharLimit(0)` restores TextArea's pre-limit unbounded behaviour.
-     * Its 65536 default is a paste-DoS guard, and this box has no paste path
-     * (a `PasteMsg` is dropped by {@see update()}), but it DOES receive
-     * arbitrarily long revived checkpoint rows through the Up arm — a cap
-     * would silently truncate one, which is a feature loss the previous
-     * hand-rolled string did not have.
+     * `withCharLimit(0)` keeps TextArea's pre-limit unbounded behaviour. Its
+     * 65536 default is a paste-DoS guard, and this box DOES now take a paste
+     * (E704: {@see update()} inserts a `PasteMsg` through
+     * {@see TextArea::insertString()}); the length is deliberately left
+     * uncapped because the SAME box also receives arbitrarily long revived
+     * checkpoint rows through the Up arm, where a cap would silently truncate
+     * one — the feature loss this limit was always set to zero to avoid. What
+     * bounds a paste is upstream, not here: `InputReader` runs the payload
+     * through `Sanitize::untrusted()` (escapes and C0/C1 control bytes
+     * stripped) before it becomes a PasteMsg, so the reachable damage from a
+     * huge clipboard is a long draft the user can see and clear, not a
+     * terminal hijack or a model injection. Length is a UX ceiling, not a
+     * security one, and clamping it here would break the checkpoint case.
      *
      * Two collisions the plan for this change flagged are DISSOLVED by this
      * choice rather than resolved by policy, and both are properties of

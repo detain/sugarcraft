@@ -456,8 +456,9 @@ final class KeyHelpTest extends TestCase
             . 'Up arm, which is what the README row now says',
         );
 
-        // No paste route in, asserted at both ends rather than left to a grep. The
-        // decoder DOES produce a paste message; Chat drops it, identity and all.
+        // The paste route in, asserted at both ends rather than left to a
+        // grep. The decoder DOES produce a paste message, and — since E704 —
+        // Chat ingests it: the payload lands in the box verbatim.
         $pastes = array_values(array_filter(
             (new InputReader())->parse("\x1b[200~a\tb\x1b[201~"),
             static fn(object $msg): bool => $msg instanceof PasteMsg,
@@ -466,12 +467,19 @@ final class KeyHelpTest extends TestCase
         $this->assertSame("a\tb", $pastes[0]->content, 'fixture: carrying the tab verbatim');
         $pasted = $this->chat('why');
         [$afterPaste] = $pasted->update($pastes[0]);
-        $this->assertSame(
+        $this->assertNotSame(
             $pasted,
             $afterPaste,
-            'Chat::update() drops a PasteMsg — the SAME object back, so there is no paste route into the '
-            . 'box. This replaces "grep -rn PasteMsg src/ is empty", whose every hit today is prose in '
-            . 'Chat.php claiming there are none',
+            'Chat::update() no longer hands back the SAME object for a PasteMsg — the pre-E704 drop-pin, '
+            . 'flipped. The paste now has a route into the box',
+        );
+        $this->assertSame(
+            "whya\tb",
+            $afterPaste->inputBuf,
+            'and the route is insert-at-caret, verbatim: the payload lands after "why" with its tab '
+            . 'intact, sanitising (or not) having been decided by InputReader upstream. Full ingest '
+            . 'semantics — one message per paste, multi-row drafts, submit-once, caret laws — are '
+            . 'pinned in PasteIngestTest',
         );
 
         // The three routes a draft reaches the box by. Kept apart, and named, so
@@ -964,7 +972,8 @@ final class KeyHelpTest extends TestCase
      * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`.
      * On a genuinely empty line there is still no character for the cursor to
      * sit in front of, so what this test pins is unchanged and remains the only
-     * route in that case.
+     * KEYSTROKE route in that case — a bracketed paste (E704) can of course
+     * drop a leading `?` straight into the box, but it never was a keystroke.
      *
      * So the second `?` closes the reference AND lands the character. Driven
      * here as real keystrokes, one per character, exactly as a user types them.
@@ -1998,11 +2007,13 @@ final class KeyHelpTest extends TestCase
      * disarm is a state a user can get out of. {@see testEnterIsTheWayBackFromADisarmedPrompt()}
      * takes that row apart keystroke by keystroke.
      *
-     * A bracketed PASTE does not qualify, then or now: `Chat::update()` drops
-     * `PasteMsg` (asserted in
-     * {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()}). Only an
-     * unbracketed paste, delivered by the terminal as raw `Char` keys, walks
-     * this table.
+     * A bracketed PASTE does not qualify, then or now: `Chat::update()` hands
+     * the `PasteMsg` to the draft box at its own arm above the permission gate
+     * (dropped outright pre-E704, inserted since — asserted in
+     * {@see testTheTwoRoutesAgreeOnEveryBlankAndNonBlankDraft()} and pinned in
+     * full by PasteIngestTest) — and on neither side of that flip was a paste
+     * ever a `Char` keystroke this handler could see. Only an unbracketed
+     * paste, delivered by the terminal as raw `Char` keys, walks this table.
      */
     public function testTypingAtALivePromptIsSwallowedUntilEnterReArmsIt(): void
     {
