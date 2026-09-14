@@ -859,7 +859,7 @@ records them as **survivors**.
 
 ## E. Deferred UX / correctness follow-ups (not security)
 
-### E1 [OPEN] — issue #88: the README's whole-suite figure
+### E1 [CLOSED] — issue #88: the README's whole-suite figure
 
 - **What** `README.md` advertises a test/assertion count that is many commits
   stale.
@@ -1140,7 +1140,7 @@ records them as **survivors**.
   already uses.
 - **Blocked on** Nothing.
 
-### E14 [OPEN] — `src/ToolRegistry.php` declares its own `SugarCraft\Crush\Tool`
+### E14 [CLOSED] — `src/ToolRegistry.php` declares its own `SugarCraft\Crush\Tool`
 
 - **What** A second class literally named `Tool` in the root namespace, one `use`
   statement away from colliding with the tool **interface** every built-in tool
@@ -1160,7 +1160,7 @@ records them as **survivors**.
   decision to the human review it is already queued for.
 - **Blocked on** Nothing for the rename; the consolidation decision is separate.
 
-### E15 [OPEN] — tracker #81: port the vhs lexical grammar into `candy-vcr`
+### E15 [CLOSED] — tracker #81: port the vhs lexical grammar into `candy-vcr`
 
 - **What** `candy-vcr/src/Tape/Lexer.php` has no JSON token and no regex token,
   so it does not implement upstream vhs's real grammar.
@@ -1687,7 +1687,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E27 [OPEN] — two provider failure shapes are deliberately left unclassified by the transient-failure retry
+### E27 [CLOSED] — two provider failure shapes are deliberately left unclassified by the transient-failure retry
 
 - **What** crush_code.md Phase 5 item 8's retry classifies on an ALLOW-LIST
   (`Providers/TransientFailure`), so anything unrecognised is treated as
@@ -1770,7 +1770,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E29 [OPEN] — `vendor/bin/phpunit tests/Cli` hangs, while the full configured run passes
+### E29 [CLOSED] — `vendor/bin/phpunit tests/Cli` hangs, while the full configured run passes
 
 - **What** A directory-scoped run of `tests/Cli` does not finish. Measured over 4
   minutes and killed at 250s, while the full configured suite passes in ~2m26s and
@@ -1803,7 +1803,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E30 [OPEN] — three backoff figures are literals with no test reading them back
+### E30 [CLOSED] — three backoff figures are literals with no test reading them back
 
 - **What** `TransientFailure::BASE_BACKOFF_MICROSECONDS`, `MAX_ATTEMPTS` and the
   derived total are described in prose in three places, and no test asserts any of
@@ -2029,7 +2029,7 @@ fixture. What is left after the correction is a narrower but real dead end.
 
 ---
 
-### E37 [OPEN] — `--help` documents 6 of the 20 `SUGARCRUSH_*` variables the code reads
+### E37 [CLOSED] — `--help` documents 6 of the 20 `SUGARCRUSH_*` variables the code reads
 
 - **What** `src/Cli/Help.php` names six environment variables; `src/` and `bin/` read
   twenty. (Five before bundle C1, which added the streaming variable — the heading said
@@ -2217,7 +2217,7 @@ anyone who *does* wire one knows what gate to add at the same time.
 
 ---
 
-### E40 [OPEN] — `.mcp.json` TOCTOU, and a hard link escapes containment
+### E40 [CLOSED] — `.mcp.json` TOCTOU, and a hard link escapes containment
 
 - **What** Two limits on the `.mcp.json` containment check, both low-severity but
   both attached to the one `ContainedPath` caller whose granted file causes
@@ -2553,7 +2553,7 @@ re-measure and retry, which is what `Renderer::wrapToPane()` now does locally.
 each wrapped piece and truncate any that still overflows). Fixing upstream lets that local fallback be
 simplified, not removed — the fallback is also what protects against the NEXT such disagreement.
 
-### E47 [OPEN] — the overlay composite path has no width discipline
+### E47 [CLOSED] — the overlay composite path has no width discipline
 
 **What.** W1's `fitToPane()` choke point covers `$body` only. The Veil composite that draws the palette,
 the session picker and the permission prompt emits rows wider than the terminal: measured
@@ -2572,7 +2572,7 @@ than a corrupted frame; on the standalone `Chat::view()` path there is no such n
 `PaneWidthInvariantTest`'s sweep to overlay states — W1 added an honest out-of-scope note there rather
 than a silent gap.
 
-### E48 [OPEN] — the frame is 2 rows tall at `rows=1`
+### E48 [CLOSED] — the frame is 2 rows tall at `rows=1`
 
 **What.** `$available = max(1, $rows - 1)` plus the always-present status bar means a 1-row terminal gets
 a 2-line frame. Pre-existing.
@@ -2588,7 +2588,7 @@ that prose rather than leaving a claim its own sweep (8/20/40) would have refute
 **Step.** Either reserve the bar out of `$available` so the frame can be 1 row, or decide 2 is the floor
 and say so in `renderStatusBar()`'s docblock.
 
-### E49 [OPEN] — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can
+### E49 [CLOSED] — candy-shine's `withTableWrap(true)` cannot bound a table's width, and reads as if it can
 
 **What.** `withTableWrap(true)` wraps each **cell** at the full `wrapWidth`, so a three-column table
 still renders roughly three times the pane wide. Measured at `wrapWidth: 60`: cells wrap to 67/49/56/23
@@ -2613,7 +2613,7 @@ reflow.
 
 **Blocked on.** It is a **candy-shine** change; W1 was scoped to sugar-crush.
 
-### E50 [OPEN] — `SgrState` does not track SGR 58 (underline colour) or OSC 8 hyperlinks
+### E50 [CLOSED] — `SgrState` does not track SGR 58 (underline colour) or OSC 8 hyperlinks
 
 **What.** `SgrState` handles only `Token::CSI` with `final === 'm'`, and `Ansi::reset()` (CSI 0 m) does
 not close an OSC 8 hyperlink. Any row-wise re-emission of style state therefore loses underline colour
@@ -5868,7 +5868,7 @@ oracle for "every entry point into this method". Stated in the test's own doc-bl
 **Step.** One-line fix, and it now has a pinning pattern to copy:
 `testTheReadmeCounterfactualCreditsTheSlashCommandAndNotThePaletteAlone`.
 
-### E107 [OPEN] — eight of round 43's lane-c review mutations were never verified by anyone
+### E107 [CLOSED] — eight of round 43's lane-c review mutations were never verified by anyone
 
 **Recorded 2026-08-22 by the round-43 lane-c fix agent.** Severity: low, process.
 
@@ -6002,7 +6002,7 @@ exactly this; this is the first observation of it firing.
 it noticed), and fix E96 so a concurrent sibling suite cannot red a lane's run. The E96 fix is the
 load-bearing one: a lane that cannot trust `rc 0` cannot trust anything downstream of it.
 
-### E115 [OPEN] — `pathMatches()`'s own perf note has the generator gap that was just fixed one doc-block above it
+### E115 [CLOSED] — `pathMatches()`'s own perf note has the generator gap that was just fixed one doc-block above it
 
 **Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, measurement-hygiene.
 **Not fixed here — deliberately scoped out**, recorded so it is not mistaken for having been checked.
@@ -6024,7 +6024,7 @@ class, so re-taking it is possible rather than archaeological.
 **Step.** Re-take with the segment content written down (measure at 1, 12 and 24 characters, three runs
 each, PHP version stated), and quote the band across those rather than a point. Related: E85, E99.
 
-### E116 [OPEN] — `not-found` and `mcp-config` are the only hyphenated `error.type` names in the contract
+### E116 [CLOSED] — `not-found` and `mcp-config` are the only hyphenated `error.type` names in the contract
 
 **Recorded 2026-08-22 by the round-44 lane-b fix agent.** Severity: low, API-consistency. **A contract
 decision, not a defect — recorded because the guard now makes either answer cheap and someone should
@@ -6245,7 +6245,7 @@ PROMISE from a prose MENTION, because `docs/ENVIRONMENT.md` deliberately discuss
 `SUGARCRUSH_TOOL_CALL_PARSER` and `SUGARCRUSH_REASONING_EFFORT` in prose **precisely because nothing
 reads them** — a naive widening would red on the two sentences that exist to record that fact.
 
-### E124 [OPEN] — `docs/_data/sugar-crush.json` is a fourth documentation surface outside every oracle
+### E124 [CLOSED] — `docs/_data/sugar-crush.json` is a fourth documentation surface outside every oracle
 
 **Recorded 2026-08-22 by the supervisor from the round-44 lane-a report.** Severity: low.
 **Monorepo-root scope — needs a supervisor decision before any lane can own it.**
@@ -7005,7 +7005,7 @@ promoted (E118).
 **Step.** Walk the other ten and ask, per format, whether an external reader exists. 🔴 **The promotion
 rule is external readership, not tidiness.**
 
-### E165 [OPEN] — the "84 assertions" historical figure's original tree is unidentified
+### E165 [CLOSED] — the "84 assertions" historical figure's original tree is unidentified
 
 **Recorded 2026-08-22 by round-45 lane a, filed by the supervisor.** Severity: low, provenance.
 
@@ -11035,7 +11035,7 @@ closed resource directly rather than through a thrown probe. Worth a candy-mosai
 
 ---
 
-### E319 [PARTIAL] — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
+### E319 [CLOSED] — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
 
 **ROUND-67 wave-2 (lane dj — lane `b43fb131c` → master `00c8bc14b`): the inversion is DEAD, the entry stays
 PARTIAL for residue.** All eight inverted failure messages rewritten (the "×2 per file" figure below was
@@ -15765,7 +15765,7 @@ session that can never send again.
 **STEP:** decide whether `isConnected()` should mean "the process is up" or "this session can still be
 used", and say which in its doc-block either way. If the latter, the latch belongs in it.
 
-### E475 [OPEN] — E440's sibling: `LspConnection` also only drains stderr inside an exchange
+### E475 [CLOSED] — E440's sibling: `LspConnection` also only drains stderr inside an exchange
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor, no longer a deadlock.
 
@@ -17631,7 +17631,7 @@ copy the counts above into a later round: re-derive them from that method.
 
 ---
 
-### E547 [PARTIAL] — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
+### E547 [CLOSED] — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
 
 **DEFERRED (round 57, lane c).** `SymbolCitationDriftTest` now resolves a bare `{@see …()}` in a `tests/`
 file against the classes that file declares, but ONLY for a member spelled as a test method — the
@@ -18198,7 +18198,7 @@ being `Providers\ToolSchemaEncodingTest`'s `catch (\PHPUnit\Framework\AssertionF
 correct code and one of the four deliberate survivors. Every other bucket matched exactly. Harmless here
 because the missed row needed no fix, but a distribution used to decide "am I done" was wrong by one.
 
-### E575 [OPEN] — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
+### E575 [CLOSED] — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
 
 `parsePresetFile()` throws `"Invalid YAML frontmatter in: {$filePath}"` when `Frontmatter::parse()` returns
 a non-array. MEASURED on PHP 8.3.6: malformed YAML never reaches it — `Frontmatter::parse()` raises
@@ -19597,7 +19597,7 @@ not committed and not a policy breach. Recorded only because a per-lib lock make
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
 
-### E631 [OPEN] — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
+### E631 [CLOSED] — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
 
 `tests/Tools/BuiltInToolCorpus.php`'s class doc-block and `classNames()`'s own comment both say a
 PSR-4 exemption elsewhere in the tree is *reported* by `nonClassSources()` rather than aborting suite
@@ -19641,7 +19641,7 @@ doc-block's "reported rather than thrown on" must be rewritten under rule 7 rath
 and `testAnExemptFileElsewhereIsReportedRatherThanThrownOn()` needs a sibling that drives the REAL
 autoloader, because the probe autoloader cannot express this case.
 
-### E632 [OPEN] — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
+### E632 [CLOSED] — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
 
 Round 60 lane a retired every cardinality over `src/` from `BuiltInToolCorpusTest` and both restated
 figures from `src/Context/RepoMapBlock.php`. It did not touch the scanner's own doc-block, which is
@@ -19833,7 +19833,7 @@ of the corpus scanner's symbols), which is a token-stream fact rather than a phr
 narrow alphabet is documented in the guard's own doc-block, with this measurement, rather than
 implied.
 
-### E636 [OPEN] — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
+### E636 [CLOSED] — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
 
 E631 establishes that a mis-namespaced file under `src/` takes the runner down rc 255 through
 `classNames()`/`nonClassSources()`'s triple `*_exists()` probe. This entry is the consequence for
@@ -19857,7 +19857,7 @@ reflection census in the file, and pin the ordering with a comment stating why (
 wrong: they are not dependent, they are differently survivable). Cheap, and it is the difference
 between a named failure and a redeclaration fatal.
 
-### E637 [OPEN] — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
+### E637 [CLOSED] — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
 
 MEASURED on PHP 8.3.6 at `204c9cf58`: `BuiltInToolCorpus::declaredTypes()` walks the token stream at
 brace depth zero, so a `class Hidden {}` nested inside an `if` block is invisible to it — the file
@@ -19916,7 +19916,7 @@ coupling nobody counted**; if a bound needs slack, the slack has to be argued fo
 **Step.** No fix. Re-measure the table if `MAX_SECTION_BYTES` or `MAX_SOURCE_FILES` moves, and treat
 any red in it as an instruction to rewrite `RepoMapBlock`'s design note, never to loosen the bound
 back toward a ratio.
-### E639 [OPEN] — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
+### E639 [CLOSED] — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
 
 **DEFERRED, out of lane (`src/Cli/Bootstrap.php`).** Round 60 lane b made
 `AgentManager::executeSubAgent()` resolve `Agent::$tools` into the `CompleteRequest`'s `tools` field
@@ -19983,7 +19983,7 @@ a judgement about what the preset meant. Worth doing when a preset ships a grant
 actually matters — today the only argument-scoped declaration in the built-in set is `Bash(git *)`,
 whose trailing space makes the over-fire case not arise.
 
-### E641 [OPEN] — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
+### E641 [CLOSED] — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
 
 **DEFERRED, out of lane (`src/Workflows/WorkflowEngine.php`, `src/Workflows/WorkflowTask.php`).**
 Found while checking round 60's review MAJOR 4. `WorkflowEngine` builds its stage request as
@@ -20014,7 +20014,7 @@ Note this also makes the `[]`-vs-`null` distinction load-bearing on that path: `
 defaults to `[]`, NOT to `null`, so four of the six providers put a present-but-empty `tools` key on
 the wire for every workflow stage.
 
-### E642 [PARTIAL] — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
+### E642 [CLOSED] — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
 
 **PARTIALLY CLOSED in round 60's fix stage.** `AgentDefinitionTest::declarationDefect()` returns
 `null` for any declaration with no argument half, on the grounds that the name half is matched
@@ -20024,16 +20024,18 @@ typo'd bare `defaultTools: ['Reed']` was therefore caught by nothing.
 presets, resolving each bare name against `Bootstrap::tools()` under a sandboxed HOME (the sandbox's
 emptiness is asserted, so the guard cannot silently measure a narrowed set — see E639).
 
-**STILL OPEN:** the same typo in a USER or FOREIGN preset (`.sugar-crush/agents`, `.claude/agents`,
-`.opencode/agents`) is caught by nothing, since those are not in the fixture table and are not
-validated at load time. Closing it properly means validating at `AgentPresetRegistry` /
-`ForeignAgentPresetRegistry` load time against the session's tool set — which needs E639's decision
-first, since a user preset naming a tool the operator disabled must warn rather than refuse. Related
-to E645, which is the argument-scoped half of the same gap.
+**CLOSED in round 61 - the half this paragraph called uncaught.** The shape
+it measured (a typo'd bare name in a USER or FOREIGN preset caught by nothing) is now caught: a
+preset naming a tool the session DISABLED warns at load and a never-existing name is refused at
+grant (master `80cd6054a`), collected registry-vs-ceiling by `narrowedGrantWarnings()` with a
+lenient parse (master `b5fff4660`). E639's decision - warn for a disabled tool rather than refuse -
+is exactly what made that lenient load-time check safe. The operator-facing DRAIN residual was
+withdrawn as a measured seam in round 62 (master `9a0128ecf`) and rode E653, since closed. The
+measurement above stands as the record of the gap and the load-time validation it prescribed.
 
-### E643 [OPEN] — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
+### E643 [CLOSED] — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
 
-**DEFERRED. The FINDING, not the fix (rule 10).** `executeSubAgent()` applies skills with
+**CLOSED in round 61. The FINDING, kept as filed (rule 10).** `executeSubAgent()` applies skills with
 
     $skill = $this->skillRegistry->get($skillName);
     if ($skill !== null) { $systemPrompt .= $skill->systemPromptContribution(); }
@@ -20046,14 +20048,16 @@ this commit: a bare `new SkillRegistry()` resolves NONE of `php-best-practices`,
 prompt tells the model to consult skills whose bodies were never appended — the same "the prompt
 lies and nothing reds" defect §C7 was filed for, one field over.
 
-Not fixed here because refusing loudly would fail every `reviewer`/`tester` sub-agent launched
-without those skill files present, and that trade needs the launch path to be live first. The
-candidate fixes, in preference order: (a) refuse a preset whose granted skill does not resolve, at
+Closed once the launch path went live: `executeSubAgent()`'s skill loop no longer skips in
+silence - a granted-but-unresolvable skill now throws a `RuntimeException`, the loud shape this row
+said the trade needed (master `b47391f1f`, 2 tests: refusal + positive polarity). The batch-path
+sibling - `executeAll()`'s direct path building no per-agent skills at all - rode E654, since
+closed. The candidate fixes as filed at the time, kept as history: (a) refuse a preset whose granted skill does not resolve, at
 REGISTRATION rather than at execution; (b) strip the skill's name from the prompt when it does not
 resolve; (c) warn on stderr at construction. (b) is wrong on its own — it edits the model-facing
 prompt at runtime, which nothing else here does.
 
-### E644 [OPEN] — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
+### E644 [CLOSED] — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
 
 **DEFERRED, and the more consequential half of §C7.** `executeSubAgent()` has no production caller;
 `executeAll()` has TWO — `Chat::executeAgents()` and `WorkflowEngine`'s parallel stages. MEASURED at
@@ -20065,12 +20069,15 @@ gets whatever tools the caller put in the shared request, with no per-agent reso
 per-call grant or denylist enforcement — and `WorkflowEngine` builds that shared request from the
 FIRST task of the stage, so agents 2..n of a mixed stage are governed by agent 1's declaration.
 
-Not fixed in round 60 because the correct shape is a PER-AGENT request built inside the pool, and
-`src/Agents/AgentWorkerPool.php` was lane c's file that round. The seam to use is the one the pool
-already has: it builds a per-agent `CompleteRequest` from each agent's own `task`, so `tools` can be
-resolved there from `$agent->agent->tools` by the same method.
+Closed in round 61 at exactly the seam this tail pointed at: the pool already built a
+per-agent `CompleteRequest`, so `AgentWorkerPool::executeAll()` now takes
+`?\Closure $toolGrantResolver = null` and resolves each agent's own grant there, while
+`AgentManager::executeAll()` resolves the batch and fails BEFORE dispatch, with an honest
+`settleAbandoned` reason - 4 manager + 2 pool tests (master `d7ed85bcc`). The file-ownership note
+above is why the fix landed a round later, not why it was skipped. The cross-fork enforcement half
+remained dormant parent-side (names-only wire) and rode E660, since closed.
 
-### E645 [OPEN] — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
+### E645 [CLOSED] — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
 
 **DEFERRED.** Round 60 lane b found `AgentDefinition::reviewer()` shipping `Bash(git:*)` — Claude
 Code's prefix dialect — where this project globs an argument half with `fnmatch()`. MEASURED on PHP
@@ -20079,14 +20086,15 @@ status']))` is FALSE, and so is every other real git command. The built-in prese
 `AgentDefinitionTest` now refuses any argument-scoped preset declaration that its own probe cannot
 satisfy.
 
-**That guard covers the six built-in presets and nothing else.** `ForeignAgentPresetRegistry` imports
-`.claude/agents` frontmatter through `toolList()`, which MEASURED is a pure trim-and-split with no
-dialect translation anywhere in `src/Agents/` or `src/Permissions/`. So a user's own Claude Code
-preset carrying `tools: Bash(git:*)` produces a declaration that is well-formed, passes every check,
-and matches nothing — which after §C7 means the sub-agent is granted the `Bash` tool by the NAME half
-and then has every `Bash` call refused by the argument half. The durable fixes are a translation at
-import (`(x:*)` → `(x *)`) or a stderr warning naming the dialect; neither was taken.
-### E646 [OPEN] — the live worker cannot heartbeat through a non-streaming provider call
+**CLOSED in round 61 by the first durable fix this paragraph named:**
+`fromClaudePrefixDialect()` translates `(x:*)` into `(x *)` inside `toolList()` at foreign-import
+time, so a user's own Claude Code preset carrying `tools: Bash(git:*)` arrives matchable instead of
+well-formed-but-silently-unmatchable - pinned by unit + matcher + end-to-end chain tests (master
+`e5bb9de76`). The import account above is measured history: `toolList()` was a pure trim-and-split
+with no dialect translation, and after section C7 the imported NAME half granted `Bash` while the
+argument half refused every call. That shape can no longer be produced by `.claude/agents` import;
+the stderr-warning alternative became unnecessary once the translation shipped.
+### E646 [CLOSED] — the live worker cannot heartbeat through a non-streaming provider call
 
 **DEFERRED FINDING, not a hole today.** `ProcessExecutor::createLiveWorkerScript()` emits one
 heartbeat before the provider call and then one every 5s *between relayed chunks*. On the
@@ -20105,7 +20113,7 @@ emit while blocked, e.g. an alarm signal, a `pcntl_fork()`ed heartbeat emitter, 
 Standing user rule: LLM calls may legitimately run for tens of minutes, so this must not be
 "solved" by capping the request.
 
-### E647 [OPEN] — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
+### E647 [CLOSED] — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
 
 **DEFERRED FINDING.** `ProcessExecutor::encodeTools()` sends the request's tool NAMES across the
 startup line and `createLiveWorkerScript()` builds its `CompleteRequest` with `tools: null`. The
@@ -20153,7 +20161,7 @@ reading a spooled startup line off disk — the `require` becomes attacker-influ
 `is_file()` test does not bound it. `Sessions/BackgroundSupervisor.php|require` carries the same
 shape and the same exposure.
 
-### E649 [OPEN] — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
+### E649 [CLOSED] — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
 
 **DEFERRED FINDING, and it is the reason the production sub-agent path is unexercised.**
 `Chat::executeAgents()` builds its executor from `AgentPoolConfig`, which carries `maxConcurrent`,
@@ -20185,7 +20193,7 @@ answer — but it is a behaviour change on a live command and it was not written
 Note also that `WorkflowEngine::$provider` is a provider NAME, not a config, so it is not a ready
 supplier for the seam either; the gap has the same shape at that site as at `AgentPoolConfig`.
 
-### E650 [OPEN] — the parent writes `execute` into a pipe whose child may already be gone
+### E650 [CLOSED] — the parent writes `execute` into a pipe whose child may already be gone
 
 **DEFERRED FINDING, cosmetic today.** `spawnWorker()` writes its `execute` line with a bare
 `fwrite($pipes[0], ...)` after a bounded wait for `ready`. A child that exited during startup —
@@ -20201,7 +20209,7 @@ warning attributed to the executor rather than as a named failure, and `phpunit.
 detect the dead child (or guard the write) and turn it into the AgentResult the caller already
 expects.
 
-### E651 [OPEN] — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
+### E651 [CLOSED] — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
 
 **DEFERRED, trivial.** A doc-block in `Renderer.php` reasons about the executor by LINE NUMBER. Both
 numbers were already approximate and this round moved everything below the constructor, so they now
