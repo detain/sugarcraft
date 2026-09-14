@@ -11598,6 +11598,50 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 80 (2026-09-14) — PHASE 2 (MCP) closes at the operator ruling: E699 WIRED behind a double opt-in by oc; ob closed the /tmp/crush-mcp-auth-* tempnam leak family; ACTIONABLE drops to ZERO — PHASE-2 COMPLETE
+
+**Closed 2026-09-14.** Two lanes, both reviewed BEFORE merge (r80-rv-ob APPROVE 0C/0M; r80-rv-oc
+APPROVE-WITH-FIX 0C/1MAJOR+4MINOR, all healed in fix-round `8b7989af1`). Chain `492314c17` (r79 filemap)
+→ pick `896c18205` (ob `ce41d8c9f`) → picks `ad8dfda12`+`e438c9dca`+`f0ef430fc`+`b57ed8fec`+`4b9ab1258`
+(oc `db93dbe16`+`a489db1da`+`54cc5afac`+`2f87b4f8b`+`8b7989af1`, ALL CLEAN, zero conflicts) → drift-fix
+`b11a34ca3` → weld `710544154` floor **11,870 / 170,786 / 0F / 0E / 1 skipped (McpClientTest canary) /
+EXIT 0** linked @cwd=sugar-crush (serial green in one pass after the drift-fix, 10m12s); NEVER pushed.
+
+- **ob (test hygiene):** the tempnam+suffix-append family — grep-proven exactly 3 sites under tests/ —
+  leaked one 0-byte stub per call: 1,923 stale `/tmp/crush-mcp-auth-*` (CommandTableRenderingTest, the
+  named defect), 682 `suite-figure-*` (ReadmeSuiteFigureDriftTest), + a latent `screach*` in
+  StdioMcpServerWriteBoundsTest's probe heredoc. Fix idiom: capture the base, clean BOTH names
+  (VhsTapeContractTest::scratchTape precedent); pin folded into an existing finally (+0T deliberate,
+  ~+30A); mutation drop-`@unlink($base)` → 11 reds all naming the pin.
+- **oc (E699, operator ruling "wire it" honored):** DOUBLE opt-in — a repo `.mcp.json` entry of
+  `type: claude-mcp` (the repo cannot name the binary, args, or env) PLUS an operator-tier
+  `claudeMcpBinary` absolute path (+ `claudeMcpArgs`/`claudeMcpEnv`, env values ride literally — no
+  interpolation, per the AX/E702 two-keys law). New `src/MCP/ClaudeCodeMcpServer.php` adapter routes the
+  previously dormant ClaudeCodeMcpClient through the same bridge/dispatch/naming/narrowing law as its
+  siblings, group-reap lifecycle; the dormancy guard converted to a bidirectional allowlist pin with a
+  documented glued-split fidelity ceiling; the freeze pin bit in-lane (digest-memo restore `b57ed8fec`
+  forced by co-shard pollution — caught and fixed before review). MCP.md/SETTINGS.md carried in-step
+  (FOUR types now documented). +33T exact, 3 new test files.
+- **Process facts:** the design researcher lane died empty TWICE; the design survived only via the
+  write-agent-with-design-to-disk fallback (design-oa) — durable-filesystem-first re-proved. Review
+  MAJOR-1 was an UNDISCLOSED OMISSION: §7.5 e2e-bridge/narrowing + §7.6 configured-panel rows were
+  claimed covered by the §9 acceptance sentence but never shipped AND absent from the lane's deviations
+  list — review caught what self-reporting missed; fix-round shipped all three rows (+3T, 11,867→11,870).
+- **Merge drift-fix:** serial1 11,870T exact + the expected staleness pair + ONE tree-scan red: the
+  fix-round stacked the §7.5 method doc UNDER the pre-existing FIXTURE_SERVER forward-doc block —
+  `RuntimeNoticeSinkDeliveryTest::testNoSourceFileCarriesStackedDocComments` caught it (third
+  co-shard-class catch after r77-w1 SwallowingCatch and r79's roster/glob pair). `b11a34ca3` moved the
+  stranded block to the declaration it describes (the guard's own prescription); serial2 green.
+- **Gates at weld:** K=8 CONSERVATION +0/+0 (shard sums 11,870/170,786 exact); five-guard 123T/7176A;
+  DocFigure alone **81T/2604A** (79+2 = AX-widen + new arm); Config window 860T/19271A/1S;
+  citation+roster+SwallowingCatch+census4 combo 179T/14152A green ZERO census flips;
+  `tools/check-child-lifetimes.php` rc0 (57 libs, 24 sites, 6 findings, 6 accounted, 0 problems);
+  Glob pair green (corpus 131,765); durations **515→518** (+exactly oc's 3 new *Test.php, set-diff
+  verified); runtime config.json md5 05480c743aff302fd6c06c5a4a4c2210 stable start==end.
+- **Phase state:** backlog E699 heading flipped [OPEN]→[CLOSED] with the ruling honored; triage
+  ROUND-80 CLOSE re-derives the census EMPTY — **ACTIONABLE = 0, PHASE-2 COMPLETE**. Next: mint pending
+  for three operator-reported UX findings under investigation (§0-NOW-82 §2c).
+
 ## ROUND 79 (2026-09-14) — PHASE 2 (MCP) wave-3: E701 interactive OAuth auth-code + PKCE shipped by a single lane; queue drops to the E699 decision gate; floor 11,837/170,424 @ ca9aac147
 
 - **na — E701** (lane `a14f613ec`+`9d19bd2b5`+`44adf5fe0` → picks `8ed8ada1d`+`7b83a6454`+`1b8cc7ce8`, linear, ALL CLEAN;
