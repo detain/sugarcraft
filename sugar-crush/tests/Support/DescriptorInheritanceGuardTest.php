@@ -125,14 +125,21 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * @var array<string, array{count:int, reason:string}>
      */
     private const ACCOUNTED_FOR = [
-        // E366 HIGH. Third-party stdio MCP server, held in `$this->process`
-        // for the life of the client; `disconnect()` is fclose + a bare
-        // `proc_close()`. The child is not ours and inherits whatever the host
-        // had open at spawn.
+        // E366 HIGH, E699 GATED. Third-party stdio MCP server held in
+        // `$this->process` for the life of the client. The old reason text
+        // ("fclose + a bare `proc_close()`") predates the code: `disconnect()`
+        // has since delegated to ProcessReaper and, since E699, passes the
+        // ProcessContainment group id, so the CLI's grandchildren die with it.
+        // What still stands is the half this row licenses: the child inherits
+        // whatever fds ≥3 the host had open at spawn (the spawn rides the
+        // containment env/spawnSpec choke point, not an fd-cloexec census).
+        // Reachability is now gated per E699: the `claude-mcp` factory arm
+        // behind the operator-tier claudeMcpBinary grant is the only door
+        // (pinned by ClaudeCodeMcpClientTest's construction-allowlist rows).
         'ClaudeCodeMcpClient.php::connect' => [
             'count' => 1,
-            'reason' => 'long-lived third-party MCP server; E366 HIGH, fix deferred with the '
-                . 'finding recorded',
+            'reason' => 'long-lived third-party MCP server; E366 HIGH inherited-fd half stands, '
+                . 'E699 gated the reach',
         ],
 
         // E366 HIGH. Language server, `$this->process`; `stopProcess()`
