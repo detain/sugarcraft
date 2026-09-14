@@ -5310,6 +5310,55 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(method_exists(Bootstrap::class, 'mcpLivenessSnapshot'), 'the page cites Bootstrap::mcpLivenessSnapshot() by name');
     }
 
+    /**
+     * E703-α: the changed-since-launch sentence is ONE literal shared by the
+     * panel source and MCP.md (byte-compared after whitespace collapse), the
+     * freeze law survives verbatim beside its trustedRootsForThisProcess()
+     * cite, the β rejection stays stated, and the digest machinery is pinned
+     * where it lives: the store line inside the mcpClient span, the keying
+     * method outside the AW inventory span, and the private static itself.
+     */
+    public function testMcpConfigChangedSinceLaunchRowDigestsItsLiteralAndStaysWithinTheFreezeLaw(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $prose = self::markdownProse($raw);
+        $panel = self::sourceOf('Tui/McpPanel.php');
+
+        $needle = 'Config: changed since launch — restart sugar-crush to apply (reload is not implemented)';
+        self::assertStringContainsString("'  " . $needle . "'", $panel, 'the panel literal moved — the page quotes it');
+        self::assertStringContainsString($needle, $prose, 'MCP.md no longer quotes the panel sentence byte-for-byte');
+
+        self::assertSame(
+            1,
+            substr_count($raw, 'read **once per process and frozen**' . "\n(`Bootstrap::trustedRootsForThisProcess()`)"),
+            'the freeze law is no longer the verbatim sentence + cite it was — E703-α quotes it as the reason reload is declined',
+        );
+        self::assertStringContainsString('re-arms exactly', $prose, 'the β-rejection stance left the page — the design ruling must stay disclosed, not implied');
+
+        $bootstrap = self::sourceOf('Cli/Bootstrap.php');
+        $inventory = null;
+        $changed = null;
+        $builder = null;
+        foreach (self::functionSpans($bootstrap) as $span) {
+            $inventory ??= 'mcpServerInventory' === $span['name'] ? $span : null;
+            $changed ??= 'mcpConfigChangedSinceLaunch' === $span['name'] ? $span : null;
+            $builder ??= 'mcpClient' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($inventory);
+        self::assertIsArray($changed, 'Bootstrap::mcpConfigChangedSinceLaunch() vanished — the page sentence lost its producer');
+        self::assertIsArray($builder, 'Bootstrap::mcpClient() vanished — the digest-store pin lost its host');
+        self::assertGreaterThanOrEqual($inventory['end'], $changed['begin'], 'the digest reader slid back inside the AW inventory span');
+        $changedText = (string) substr($bootstrap, $changed['begin'], $changed['end'] - $changed['begin']);
+        self::assertStringContainsString('mcpConfigDecision(', $changedText, 'the digest check no longer resolves through the shared decision path');
+        self::assertStringNotContainsString('self::mcpClient(', $changedText, 'the changed-check now BUILDS a client — building starts servers, which no readout may do');
+        $builderText = (string) substr($bootstrap, $builder['begin'], $builder['end'] - $builder['begin']);
+        self::assertStringContainsString('self::$mcpConfigDigests[$pid][$path] = $digest;', $builderText, 'the launch stopped storing its digest at the memo point — the panel line would compare against nothing');
+
+        $prop = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        self::assertTrue($prop->isPrivate() && $prop->isStatic(), 'the digest memo is process-global and private by design — the panel reads verdicts, not bytes');
+        self::assertTrue(method_exists(Bootstrap::class, 'mcpConfigChangedSinceLaunch'));
+    }
+
     private static function sourceOf(string $relative): string
     {
         $text = file_get_contents(\dirname(__DIR__, 2) . '/src/' . $relative);

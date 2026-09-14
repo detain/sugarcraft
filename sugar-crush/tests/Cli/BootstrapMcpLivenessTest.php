@@ -30,6 +30,9 @@ final class BootstrapMcpLivenessTest extends TestCase
     /** @var array<int, array<string, McpClient>> */
     private array $memoBefore = [];
 
+    /** @var array<int, array<string, array{sha256: string, mtime: int}>> */
+    private array $digestsBefore = [];
+
     private string $tmpDir;
 
     protected function setUp(): void
@@ -40,11 +43,13 @@ final class BootstrapMcpLivenessTest extends TestCase
         mkdir($this->tmpDir, 0o755, true);
 
         $this->memoBefore = $this->readMemo();
+        $this->digestsBefore = $this->readDigests();
     }
 
     protected function tearDown(): void
     {
         $this->writeMemo($this->memoBefore);
+        $this->writeDigests($this->digestsBefore);
         $this->removeLeftoverTree();
         $this->restoreHomeSandbox();
 
@@ -176,6 +181,105 @@ final class BootstrapMcpLivenessTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // E703-α: the launch digest
+    // -------------------------------------------------------------------------
+
+    /**
+     * THE REAL WIRING, not a reflection plant: {@see Bootstrap::mcpClient()}
+     * must store the digest AT the memo-store point, keyed by the same path,
+     * over the same bytes — pinned here against a `git` server (in-process,
+     * no child) so the launch itself is hermetic. The verdict right after the
+     * launch is FALSE (nothing moved); after one appended byte it is TRUE.
+     */
+    public function testTheClientBuildStoresItsDigestBesideItsMemo(): void
+    {
+        $root = $this->makeLivenessRoot();
+        $this->writeConfigNaming($root, ['inproc' => ['type' => 'git']]);
+        $this->grantProjectTrust($root);
+
+        $client = Bootstrap::mcpClient($root);
+        self::assertInstanceOf(McpClient::class, $client);
+
+        $path = $this->canonicalDecisionPath($root);
+        $pid = getmypid() ?: 0;
+        $digests = $this->readDigests();
+        $stored = $digests[$pid][$path] ?? null;
+        self::assertIsArray($stored, 'mcpClient() memoised without digesting — the changed-since-launch line would have no referent');
+        self::assertSame(
+            hash('sha256', (string) file_get_contents($path)),
+            $stored['sha256'],
+            'the stored digest is not the launch bytes',
+        );
+        self::assertIsInt($stored['mtime']);
+
+        self::assertFalse(Bootstrap::mcpConfigChangedSinceLaunch($root));
+
+        file_put_contents($path, "\n", FILE_APPEND);
+        self::assertTrue(Bootstrap::mcpConfigChangedSinceLaunch($root), 'm4 mutation target — drop the comparison and this goes green');
+
+        $client->stopServers();
+    }
+
+    /**
+     * NO DIGEST, NO CLAIM: a trusted project this process never launched
+     * answers null — silence, not "unchanged" (which would be a guess) and
+     * not "changed" (which would be a lie).
+     */
+    public function testChangedSinceLaunchIsSilentWithoutADigest(): void
+    {
+        $root = $this->makeLivenessRoot();
+        $this->writeConfigNaming($root, ['never-launched' => ['type' => 'git']]);
+        $this->grantProjectTrust($root);
+
+        self::assertNull(Bootstrap::mcpConfigChangedSinceLaunch($root));
+        self::assertSame([], $this->readDigests()[getmypid()] ?? []);
+    }
+
+    /**
+     * VANISHED IS CHANGED. A digest exists, the file is gone (or unreadable):
+     * the loud answer is the truthful one — the launch's bytes are not what
+     * the path holds now, whatever the path holds now is not the config the
+     * servers were started from.
+     */
+    public function testAVanishedConfigReportsChangedNotSilent(): void
+    {
+        $root = $this->makeLivenessRoot();
+        $this->writeConfigNaming($root, ['ghost' => ['type' => 'git']]);
+        $this->grantProjectTrust($root);
+        $path = $this->canonicalDecisionPath($root);
+
+        $digests = $this->readDigests();
+        $digests[getmypid() ?: 0][$path] = ['sha256' => hash('sha256', 'whatever'), 'mtime' => time()];
+        $this->writeDigests($digests);
+        unlink($path);
+
+        self::assertTrue(Bootstrap::mcpConfigChangedSinceLaunch($root));
+    }
+
+    /**
+     * LIFETIME SYMMETRY: {@see Bootstrap::stopMcpServers()} drops this pid's
+     * digest bucket with its client bucket — a digest describing no live memo
+     * must not outlive the memo it belongs to.
+     */
+    public function testStopMcpServersClearsTheDigestBucketWithTheMemo(): void
+    {
+        $root = $this->makeLivenessRoot();
+        $this->writeConfigNaming($root, ['gone' => ['type' => 'git']]);
+        $this->grantProjectTrust($root);
+        $path = $this->canonicalDecisionPath($root);
+
+        $client = new McpClient($path);
+        $this->plantInMemo($root, $client);
+        $digests = $this->readDigests();
+        $digests[getmypid() ?: 0][$path] = ['sha256' => hash('sha256', (string) file_get_contents($path)), 'mtime' => time()];
+        $this->writeDigests($digests);
+
+        Bootstrap::stopMcpServers();
+
+        self::assertArrayNotHasKey($path, $this->readDigests()[getmypid() ?: 0] ?? []);
+    }
+
+    // -------------------------------------------------------------------------
     // Fixture plumbing
     // -------------------------------------------------------------------------
 
@@ -260,6 +364,26 @@ final class BootstrapMcpLivenessTest extends TestCase
         $ref = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
         $ref->setAccessible(true);
         $ref->setValue(null, $memo);
+    }
+
+    /** @return array<int, array<string, array{sha256: string, mtime: int}>> */
+    private function readDigests(): array
+    {
+        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $ref->setAccessible(true);
+
+        /** @var array<int, array<string, array{sha256: string, mtime: int}>> $value */
+        $value = $ref->getValue();
+
+        return $value;
+    }
+
+    /** @param array<int, array<string, array{sha256: string, mtime: int}>> $digests */
+    private function writeDigests(array $digests): void
+    {
+        $ref = new \ReflectionProperty(Bootstrap::class, 'mcpConfigDigests');
+        $ref->setAccessible(true);
+        $ref->setValue(null, $digests);
     }
 
     private function removeLeftoverTree(): void

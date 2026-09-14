@@ -408,6 +408,61 @@ final class McpPanelTest extends TestCase
         self::assertStringContainsString('…', $out, 'the clip demonstrably fired on this payload');
     }
 
+    /**
+     * E703-α polarity: the changed-since-launch row appears ONLY on true.
+     * False (digest matches) and null (no digest — cold process, unreadable
+     * at store time) both answer nothing: the panel states facts it holds,
+     * never defaults.
+     */
+    public function testTheConfigChangedLineAppearsOnlyOnTrue(): void
+    {
+        $root = $this->makeRoot();
+        $name = 'drift-' . bin2hex(random_bytes(3));
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [$name => ['command' => '/bin/thing']],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $liveness = [$name => ['transport' => 'stdio', 'up' => true, 'tools' => 2]];
+        $needle = 'Config: changed since launch';
+
+        self::assertStringContainsString(
+            $needle . ' — restart sugar-crush to apply (reload is not implemented)',
+            McpPanel::render($inventory, 160, $liveness, true),
+        );
+        self::assertStringNotContainsString($needle, McpPanel::render($inventory, 160, $liveness, false));
+        self::assertStringNotContainsString($needle, McpPanel::render($inventory, 160, $liveness));
+        self::assertSame(
+            McpPanel::render($inventory, 160, $liveness),
+            McpPanel::render($inventory, 160, $liveness, null),
+            'the fourth argument must default to exactly the three-argument render',
+        );
+    }
+
+    /**
+     * The changed line is part of the liveness block, so the trust gate holds
+     * over it too: a planted true on an untrusted root renders nothing — the
+     * sentence names the file's state, and on this tier the panel has
+     * withheld even the roster.
+     */
+    public function testUntrustedRootSuppressesTheConfigChangedLineToo(): void
+    {
+        $root = $this->makeRoot();
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => ['hidden-' . bin2hex(random_bytes(3)) => ['command' => '/bin/thing']],
+        ], JSON_THROW_ON_ERROR));
+        // Deliberate: NO trustRoot().
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $out = McpPanel::render($inventory, 160, [
+            'x' => ['transport' => 'stdio', 'up' => true, 'tools' => 1],
+        ], true);
+
+        self::assertStringNotContainsString('Config: changed since launch', $out);
+        self::assertStringNotContainsString('reload is not implemented', $out);
+    }
+
     // -------------------------------------------------------------------------
     // Fixture plumbing
     // -------------------------------------------------------------------------

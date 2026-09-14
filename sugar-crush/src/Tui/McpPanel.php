@@ -44,11 +44,13 @@ final class McpPanel
      *
      * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null} $inventory exactly what {@see Bootstrap::mcpServerInventory()} returned
      * @param array<string, array{transport: string, up: bool|null, tools: int}> $liveness what {@see Bootstrap::mcpLivenessSnapshot()} returned for the same root (`?? []` when it answered null). EMPTY MAP ⇒ the render is BYTE-IDENTICAL to the pre-E698 panel — every existing pin in `tests/Tui/McpPanelTest` reads the cold process, and a cold process must say exactly what it said before this feature existed.
+     * @param bool|null $configChangedSinceLaunch {@see Bootstrap::mcpConfigChangedSinceLaunch()}; null suppresses the E703-α line (no digest to compare — silence, never a claim).
      */
     public static function render(
         array $inventory,
         int $paneWidth = self::DEFAULT_WIDTH,
         array $liveness = [],
+        ?bool $configChangedSinceLaunch = null,
     ): string {
         $width = max(40, $paneWidth);
         $status = (string) $inventory['status'];
@@ -134,6 +136,13 @@ final class McpPanel
                         $width,
                     );
                 }
+            }
+
+            if ($configChangedSinceLaunch === true) {
+                $out .= self::line(
+                    '  Config: changed since launch — restart sugar-crush to apply (reload is not implemented)',
+                    $width,
+                );
             }
         }
 

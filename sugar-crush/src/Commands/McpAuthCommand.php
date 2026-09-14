@@ -125,11 +125,13 @@ final class McpAuthCommand
         // E698: the same render also gets THIS PROCESS's started-servers map —
         // read from the memo only, so opening the panel can never be the act
         // that launches a server (Bootstrap::mcpLivenessSnapshot()'s whole
-        // design constraint).
+        // design constraint) — and E703-α's changed-since-launch verdict,
+        // whose null means "no digest here, say nothing".
         echo \SugarCraft\Crush\Tui\McpPanel::render(
             \SugarCraft\Crush\Cli\Bootstrap::mcpServerInventory(),
             $paneWidth,
             \SugarCraft\Crush\Cli\Bootstrap::mcpLivenessSnapshot() ?? [],
+            \SugarCraft\Crush\Cli\Bootstrap::mcpConfigChangedSinceLaunch(),
         );
 
         return $this->listServers($paneWidth);

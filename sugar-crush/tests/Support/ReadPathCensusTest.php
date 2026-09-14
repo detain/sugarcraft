@@ -204,6 +204,12 @@ final class ReadPathCensusTest extends TestCase
             'CONTAINED — mcpServerInventory() reading the project `.mcp.json` for `sugarcrush mcp list`. '
                 . 'Same ContainedPath::within() compare and same trust gate mcpClient() applies, because both '
                 . 'come through mcpConfigDecision(); this arm is reached only on the TRUSTED verdict',
+            'CONTAINED — mcpConfigDigest() hashing the SAME decision-path `.mcp.json`: at the memo-store '
+                . 'point inside mcpClient() (behind the identical mcpConfigDecision() gate) and from '
+                . 'mcpConfigChangedSinceLaunch(), which re-runs that decision for the same root before '
+                . 'reading. file_get_contents rather than hash_file on purpose — the latter spelling is '
+                . 'outside this census\'s sink vocabulary and would be an ungazed read on a '
+                . 'repository-chosen path',
         ],
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',

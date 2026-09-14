@@ -173,6 +173,20 @@ servers to itself. A server this process started that the config no longer
 declares gets its own line (`Started but no longer declared: name (N tools)`)
 rather than vanishing from the count.
 
+A live session also digests `.mcp.json` at the instant it memoises its client,
+and when the file's bytes no longer match that digest the panel adds one line:
+`Config: changed since launch — restart sugar-crush to apply (reload is not
+implemented)`. That is a DETECTION, not a fix, and the fix was weighed and
+declined (E703 option β): re-reading the file in-session would relaunch
+servers under a root grant the process already holds, which re-arms exactly
+the prompt-injection → `proc_open()` path the once-per-process freeze closes —
+the trusted-roots list is read **once per process and frozen** above, and the
+digest keeps that law whole by telling you when it has gone stale rather than
+silently honouring new bytes under an old decision. And the panel stays
+display-only, the E689 prohibition on inventing a second persistence seam
+standing: writing the grant has exactly one home, and neither a digest row
+nor a button belongs to it. Restart is your decision, not the panel's.
+
 On an untrusted or absent root the whole block is suppressed even if a map
 arrives — the panel will not hand back, through "what this process started",
 the same roster the discovery gate withholds. And in a cold process (the

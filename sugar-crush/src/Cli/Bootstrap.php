@@ -927,6 +927,28 @@ final class Bootstrap
     private static array $mcpClients = [];
 
     /**
+     * E703-α: the bytes each memoised client's `.mcp.json` had AT LAUNCH, keyed
+     * exactly like {@see $mcpClients} — pid, then the canonical decision path.
+     *
+     * WHY A DIGEST AND NOT A RELOAD: the trusted-roots list is read once per
+     * process and frozen (see {@see trustedRootsForThisProcess()} and
+     * `docs/MCP.md`), and that freeze is the security property, not an
+     * inconvenience — reloading config in-session under a still-valid root
+     * grant would let prompt-injected edits to `.mcp.json` reach
+     * `proc_open()` with no fresh operator decision. So nothing re-applies the
+     * change; this only lets the `/mcp` panel SAY the file has moved since the
+     * launch that froze it, instead of the operator discovering it by diffing.
+     *
+     * Stored at the same instant the client is memoised, so "at launch" means
+     * the same bytes the memo key was decided on. A read failure at that
+     * instant stores NOTHING — the panel's line is then suppressed, which is
+     * silence about the drift, never a claim about it.
+     *
+     * @var array<int, array<string, array{sha256: string, mtime: int}>>
+     */
+    private static array $mcpConfigDigests = [];
+
+    /**
      * Whether this process IMAGE has registered the shutdown hook that stops the
      * servers in {@see $mcpClients}.
      *
@@ -5667,6 +5689,61 @@ final class Bootstrap
     }
 
     /**
+     * E703-α: has `.mcp.json` changed since the launch that memoised it?
+     *
+     * A DETECTION, NOT A FIX. The change cannot be applied in-session and this
+     * method does not pretend otherwise: the trust decision is frozen per
+     * process, and re-reading a repository-chosen file whose entries
+     * `proc_open()` would resurrect the very threat the freeze closes (an
+     * auto-reload under a still-valid grant re-arms prompt-injection →
+     * execution with no new operator decision). So the honest seam stops at
+     * naming the drift and pointing at the restart.
+     *
+     * @return bool|null null when THIS process has no launch digest for the
+     *         rooted path (no client built here, or the file was unreadable at
+     *         the store instant) — the caller suppresses the line rather than
+     *         claiming anything; true when the current bytes differ from the
+     *         launch bytes OR the file cannot be read any more (vanishing IS
+     *         a change — the loud answer is the truthful one); false when the
+     *         digest still matches.
+     */
+    public static function mcpConfigChangedSinceLaunch(?string $root = null): ?bool
+    {
+        $decision = self::mcpConfigDecision($root);
+        $path = $decision['path'];
+        $pid = getmypid() ?: 0;
+
+        $digest = self::$mcpConfigDigests[$pid][$path] ?? null;
+        if ($digest === null) {
+            return null;
+        }
+
+        $now = self::mcpConfigDigest($path);
+
+        return $now === null || $now['sha256'] !== $digest['sha256'];
+    }
+
+    /**
+     * The digest of $path's CURRENT bytes, or null when they cannot be read.
+     *
+     * `file_get_contents` and not `hash_file`, deliberately: the read-path
+     * census (`tests/Support/ReadPathCensusTest`) enumerates `file_get_contents`
+     * as a sink spelling and sees nothing else of this shape — a `hash_file`
+     * read would be the one read on this path with no row beside it. The
+     * `.mcp.json` is a small project file; reading it to hash it costs nothing
+     * and stays inside the instrumented vocabulary.
+     */
+    private static function mcpConfigDigest(string $path): ?array
+    {
+        $contents = @file_get_contents($path);
+        if (!is_string($contents)) {
+            return null;
+        }
+
+        return ['sha256' => hash('sha256', $contents), 'mtime' => (int) @filemtime($path)];
+    }
+
+    /**
      * The launch's MCP client, with its configured servers STARTED, or null when
      * this project has no usable `.mcp.json`.
      *
@@ -5835,6 +5912,14 @@ final class Bootstrap
         // part-way through still owns live processes that stopMcpServers() has to
         // reach.
         self::$mcpClients[$pid][$path] = $client;
+        // E703-α: digest the SAME bytes this memo was keyed on, at the instant
+        // the memo is stored. Unreadable stores nothing — a missing digest is
+        // silence in the panel, never a claim that the file did or did not
+        // move. Not a reload hook: see mcpConfigChangedSinceLaunch().
+        $digest = self::mcpConfigDigest($path);
+        if ($digest !== null) {
+            self::$mcpConfigDigests[$pid][$path] = $digest;
+        }
         self::registerMcpShutdown();
 
         try {
@@ -6014,6 +6099,11 @@ final class Bootstrap
         $pid = getmypid() ?: 0;
         $clients = self::$mcpClients[$pid] ?? [];
         unset(self::$mcpClients[$pid]);
+        // Same bucket, same lifetime (E703-α): once this pid owns no client, a
+        // launch digest for it describes no live memo, and the panel must not
+        // compare against a fact whose subject is gone. A later mcpClient()
+        // stores a fresh digest beside a fresh memo.
+        unset(self::$mcpConfigDigests[$pid]);
 
         foreach ($clients as $client) {
             // Bounded by StdioMcpServer::stop()'s SIGTERM-then-9 escalation.
