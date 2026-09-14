@@ -126,14 +126,20 @@ final class AppModelTest extends TestCase
         $this->assertInstanceOf(BatchMsg::class, $batch);
 
         // Chat::init() is null today, and Cmd::batch() drops nulls, so the
-        // query is the only member — asserting the count is what would catch a
-        // null leaking through as a member and TypeError-ing scheduleCmd().
-        $this->assertCount(1, $batch->cmds);
+        // query and the E705 Kitty push are the only members — asserting the
+        // count is what would catch a null leaking through as a member and
+        // TypeError-ing scheduleCmd().
+        $this->assertCount(2, $batch->cmds);
 
         $raw = ($batch->cmds[0])();
         $this->assertInstanceOf(RawMsg::class, $raw);
         $this->assertSame(Ansi::requestBackgroundColor(), $raw->bytes);
         $this->assertSame("\x1b]11;?\x07", $raw->bytes, 'OSC 11 query, BEL-terminated');
+
+        $kitty = ($batch->cmds[1])();
+        $this->assertInstanceOf(RawMsg::class, $kitty);
+        $this->assertSame(Ansi::pushKittyKeyboard(1), $kitty->bytes, 'E705: DISAMBIGUATE, pushed exactly once per start');
+        $this->assertSame("\x1b[>1u", $kitty->bytes);
     }
 
     /**
@@ -149,7 +155,8 @@ final class AppModelTest extends TestCase
 
         $batch = ($this->app()->withChat($chat)->init())();
         $this->assertInstanceOf(BatchMsg::class, $batch);
-        $this->assertCount(1, $batch->cmds);
+        // Query + E705 Kitty push; the null Chat::init() is dropped by batch().
+        $this->assertCount(2, $batch->cmds);
     }
 
     /**

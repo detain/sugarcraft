@@ -201,6 +201,7 @@ declare(strict_types=1);
 })();
 
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\ArgvParser;
 use SugarCraft\Crush\Cli\Bootstrap;
@@ -421,6 +422,15 @@ if ($args->promptRequested) {
 // uses it — see crush_feat.md section 8 E1. They belong to the hosted
 // content model, which is what reads the mouse events.
 (new Program(Bootstrap::app($args->root), Chat::programOptions()))->run();
+
+// E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.
+// Every way out of run() — QuitMsg, SIGINT's InterruptMsg, kill() — stops the
+// loop without giving the model a turn to emit anything, so the balanced
+// `CSI < 1 u` is written here, after teardown, where all exits funnel.
+// Non-Kitty terminals ignore the bytes; a terminal we never pushed to cannot
+// have its base flags popped below default. The one uncovered exit is an
+// exception thrown out of run() — which also skips Program's own teardown.
+fwrite(STDOUT, Ansi::popKittyKeyboard());
 
 } catch (PermissionConfigException $e) {
     exit(NonInteractive::failUsage(

@@ -10,6 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
+use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
@@ -622,8 +623,9 @@ final class App implements Model
     }
 
     /**
-     * The startup Cmd: ask the terminal what colour it paints on, batched with
-     * whatever the hosted {@see Chat} wants to run.
+     * The startup Cmd: ask the terminal what colour it paints on and what
+     * keyboard protocol it speaks, batched with whatever the hosted
+     * {@see Chat} wants to run.
      *
      * The OSC 11 query is the shell's one genuine startup side effect. It is
      * asked once, here, because the answer is a property of the terminal this
@@ -635,13 +637,31 @@ final class App implements Model
      * environment guess, which is why this is fire-and-forget rather than
      * something the first frame waits on.
      *
+     * The Kitty push (E705) joins it as the second unconditional member: like
+     * the background query, it is a property of the terminal, not of the
+     * conversation, and unlike a per-frame write it must happen exactly once
+     * per program start so the pop in bin/sugarcrush stays balanced.
+     *
      * {@see CoreCmd::batch()} drops nulls, so a shell with no hosted chat (or a
-     * chat with no startup Cmd of its own) still emits just the query.
+     * chat with no startup Cmd of its own) still emits the query and the push.
      */
     public function init(): ?\Closure
     {
         return CoreCmd::batch(
             CoreCmd::requestBackgroundColor(),
+            // E705: negotiate the Kitty progressive-keyboard protocol so
+            // Shift/Ctrl+Enter arrive as distinguishable KeyMsgs instead of
+            // colliding with plain Enter. DISAMBIGUATE only — deliberately NOT
+            // REPORT_EVENT_TYPES, which would flood update() with release and
+            // repeat frames no arm here consumes, and NOT modifyOtherKeys,
+            // which must never ride alongside Kitty (its `CSI 27;2;13u`
+            // spelling misparses as text). Non-Kitty terminals ignore the
+            // `CSI > 1 u` push bytes and keep sending plain CR, so the
+            // degradation path is byte-identical to before this line existed.
+            // The matching pop is not here: it lives after `Program::run()`
+            // returns in bin/sugarcrush, where it also covers the SIGINT and
+            // kill() exits that never let a model emit a Cmd.
+            CoreCmd::pushKittyKeyboard(KeyboardEnhancementsMsg::DISAMBIGUATE),
             $this->chat?->init(),
         );
     }

@@ -1800,11 +1800,14 @@ final class Chat implements Model
 
         return match (true) {
             // Alt/Shift/Ctrl+Enter insert a newline instead of submitting.
-            // Alt+Enter is the reliable one across plain terminals (ESC+CR,
-            // now decoded correctly by InputReader - see candy-core's
-            // Alt-prefixed-key fix); Shift/Ctrl+Enter only arrive
-            // distinguishably on terminals that report the Kitty keyboard
-            // protocol unprompted, but cost nothing to also honor.
+            // E705: App::init() now pushes the Kitty DISAMBIGUATE flag, so on
+            // Kitty-capable terminals Shift+Enter (`CSI 13;2u`) and
+            // Ctrl+Enter (`CSI 13;5u`) arrive as Enter KeyMsgs carrying their
+            // modifier flags and land here. Alt+Enter stays the reliable one
+            // everywhere (ESC+CR, decoded by candy-core's Alt-prefixed-key
+            // fix); on legacy terminals the modified chords are physically
+            // indistinguishable from plain Enter — the terminal sends the same
+            // CR byte — so they submit, which is the honest degradation.
             //
             // Inserted AT the cursor rather than appended, which is the whole
             // point of the widget: before this arm went through
