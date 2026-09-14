@@ -11598,6 +11598,39 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 77 (2026-09-14) — PHASE 2 (MCP product) wave-1: E695 token-attachment flagship shipped, label honesty + stamp hygiene landed, E696 architecture verdict defers wiring to a seam ruling; floor 11,749/169,388 @ f895f03c5
+
+**Phase-2 kickoff.** The r76 closeout declared the hardening plan complete (0 actionables); the operator chose
+option 3 — MCP/E642-class product work. Minted `e2e427eca` opened the round with E695-E703 (phase-2 probes:
+MCP product-surface inventory, RuntimeNoticeSink wiring state, backlog heading hygiene).
+
+- **la — E695 flagship** (lane picks `eb8318b91` + `4a76fdd40`; r77-rv-la **APPROVE 0C/0M/2MINOR**): stored OAuth
+  tokens now attach per-request — the single `HttpMcpServer::rpc()` egress consults `validAuthFor(url)`; static
+  `Authorization` wins case-insensitively (store untouched); `AuthEntry` carries `tokenUrl`/`registrationUrl`
+  through refresh + re-register (MINOR-1/2 pinned `e7e25ca17`); `hasCredentials` made real; MCP.md auth prose
+  flipped IN-STEP; hermetic (temp stores only, HOME `mcp-auth*` absence proven across double targeted run).
+  **DRIFT-FIX `9ea12b968`**: the merge weld's serial caught a fail-inside-`catch(\RuntimeException)` in
+  `HttpMcpServerTest:764` via `SwallowingCatchCensusTest` — that guard is NOT in the five-guard family, so no
+  lane gate caught it pre-merge. **NEW GATE LAW:** src-touching lanes add `SwallowingCatchCensusTest` to their
+  brief gate lists.
+- **lc — E697 + E700** (picks `dc5528bba` + `b7e6c2888`): palette label renamed to the truthful listing label
+  (label-only; E689 trust-write DECLINE byte-intact, DocFigure arms are the only lexical pins); 36 stale backlog
+  heading stamps flipped + E642-E645 contradictory bodies rewritten as closed-notation. Disclosed mid-lane ledger
+  wipe (unanchored `re.subn` ate 3,837 lines) RESTORED from git with zero collateral — reviewer enumerated every
+  deletion; the durable law (scope per-section, assert exactly-1, verify numstat + canary grep) is recorded at
+  E700's closed-notation.
+- **lb — E696 verdict** (lane `d46dd5bc3` → pick `630ef47ff`, post-weld): docs-first. Construction-time wiring is
+  IMPOSSIBLE — the single src `McpClient` is a per-(pid,configPath) memoized process singleton shared by main
+  chat and every sub-agent's PARENT-SIDE execution (`ProcessExecutor::rehydrateTools` is data-only), so no preset
+  is knowable at construction. README:1072 + MCP.md corrected honestly; α (grant-resolution roster-narrowing,
+  recommended) vs β (shared-client set/restore, REJECTED — race) deferred to an orchestrator ruling; carried as
+  E696 [PARTIAL], round-78 lane ma. Design record `/home/sites/crush-r61-artifacts/lb/design.md`.
+
+**Floor 11,749T/169,388A/0F/0E/1S (McpClientTest canary)/exit0** LINKED cwd=sugar-crush @ weld `f895f03c5`; the
++15T wave-1 prediction (la13+fix1+lc1) HIT exact; K=8 CONSERVATION +0/+0; guards 190T/13732A; Config
+849T/18909A/1S; durations 506 rows HELD exact. Actionables after this close: **6** by row census (E696 PARTIAL,
+E698, E699, E701, E702, E703). NEVER pushed.
+
 ## ROUND 76 (2026-09-13) — E694a store-aware discovery ops + E611 CLOSED-BY-PRACTICE + the README built-ins family healed with its quoted-pin test; the actionable queue empties; floor 11,734/169,328 @ ea61174b5
 
 **Two lanes, both reviewed BEFORE merge; zero pre-landed work at salvage audit (clean chain).**
