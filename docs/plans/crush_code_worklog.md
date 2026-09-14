@@ -11598,6 +11598,30 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 79 (2026-09-14) — PHASE 2 (MCP) wave-3: E701 interactive OAuth auth-code + PKCE shipped by a single lane; queue drops to the E699 decision gate; floor 11,837/170,424 @ ca9aac147
+
+- **na — E701** (lane `a14f613ec`+`9d19bd2b5`+`44adf5fe0` → picks `8ed8ada1d`+`7b83a6454`+`1b8cc7ce8`, linear, ALL CLEAN;
+  r79-rv-na **APPROVE-WITH-FIX 0C/0M/3MINOR**, all healed at `44adf5fe0`): `sugarcrush mcp auth login <server>` — RFC 8414
+  discovery, RFC 7591 registration when needed, RFC 8252 loopback + RFC 7636 S256 authorization-code exchange on a
+  127.0.0.1-bound listener, state-checked, deadline-bounded (default 300 s, override flag), Ctrl-C-cancellable, stores
+  NOTHING on every failure arm; persists a complete `AuthEntry` that E695 request-time attachment consumes/refreshes;
+  in-chat `/mcp auth login` prints shell guidance with ZERO Chat.php edits; MCP.md prose armed IN-STEP (DocFigure BI/BJ/BK).
+  +53T exact, 7 new test files (design predicted ~25T/4 — honest deviation). rv fixes: live `$clock` seam (no 0.3 s real
+  sleep), canonical RFC 7636 App-B vector pinned, `hash_equals(` source pin.
+- **Design provenance (nd):** the §4 buffer-window DEFECT — near-expiry arm must branch on `refreshToken !== ''` or the
+  exchange POSTs `refresh_token=''` — was FOUND BY THE DESIGN PASS and fixed in tranche-1: design-first earning its keep.
+  §2.2 `updateRegistration()` redirect-churn seam carried as trigger-watch (NOT implemented — out of slice).
+- **Builder death + salvage (-72 re-proven):** the na builder died mid-tranche-2; the finisher discovered tranche-2 had
+  been committed FROM the uncommitted working tree; SALVAGE-FIRST audit (ref vs porcelain vs disk) redid nothing.
+- **Floor:** 11,837 / 170,424 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0 linked @cwd=sugar-crush at weld `ca9aac147`;
+  serial green in ONE pass (r78 cadence: hand-bump json tests-only first); K=8 CONSERVATION +0/+0; durations 508→515
+  (+7 na files, set-diff exact); config.json md5 `05480c74…2210` stable. SwallowingCatch gate-law HELD CLEAN.
+- **Ledger:** E701 → CLOSED (backlog heading + §10-citing paragraph; triage row CLOSED-in-place). ACTIONABLE by row census:
+  2 → **1 = E699 OPERATOR DECISION GATE** (keep-as-is recommended ON RECORD; delete STOP-class — NOT a lane). Phase-2 queue
+  empty otherwise; round-80 options: E699 ruling · fresh audit sweep · bank.
+- **INFO carry (closeout-side):** `/tmp/crush-mcp-auth-*` tempnam leak — 1,878 files produced by CommandTableRenderingTest;
+  hygiene candidate for a future lane (watch, not a row).
+
 ## ROUND 78 (2026-09-14) — PHASE 2 (MCP product) wave-2: E696-α narrowing shipped, MCP liveness surface built, transports documented, freeze made loud; the actionable queue drops to 2; floor 11,784/169,799 @ a594f073b
 
 **Design-first round.** mc re-verified every r77 stamp at `fcbf19d43` (all 7 clusters HOLD — the census-six
