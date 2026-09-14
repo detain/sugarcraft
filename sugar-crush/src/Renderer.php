@@ -473,13 +473,30 @@ final class Renderer
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
     /**
-     * Characters of a model's thinking trace {@see renderReasoning()} keeps
-     * before it elides. One constant rather than a literal at each call site
-     * because the live paint and the settled transcript must agree on the cap
-     * while deliberately disagreeing on WHICH end they keep - see that
-     * method's `$keepTail`.
+     * Characters of a model's thinking trace the LIVE paint in
+     * {@see renderReasoning()} keeps before it elides.
+     *
+     * WHAT THIS SAID BEFORE: the cap bounded both the live paint and the
+     * settled transcript. WHAT IS TRUE NOW (E706, round 81): it bounds the
+     * live ticker ONLY. An in-flight thought is a progress indicator that
+     * only ever grows, so a bounded rolling tail is honest about what it is;
+     * a settled thought is a finished artefact the operator ruled must be
+     * readable in full - the transcript wraps it across rows through
+     * {@see fitToPane()} instead of clipping it.
      */
     private const REASONING_MAX_CHARS = 120;
+
+    /**
+     * The honest count-suffixed trailer the bounded live reasoning ticker
+     * appends after its rolling tail, mirroring the house truncation wording
+     * (`ScriptHook::clip()`, `TruncatesOutput::truncationMarker()`): a reader
+     * who sees the ticker must be able to tell HOW MUCH of the trace it is
+     * showing, not just that something was eaten. sprintf args: shown, total.
+     *
+     * Public so a test pins the SAME string the renderer paints rather than a
+     * hand-copied literal that can drift out from under it.
+     */
+    public const REASONING_LIVE_TRAILER = ' … [thinking truncated: %d of %d chars shown]';
 
     /**
      * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
@@ -1117,19 +1134,19 @@ final class Renderer
             // this app watched a static "assistant is thinking..." while the
             // thinking was arriving and being discarded.
             //
-            // Through {@see renderReasoning()}, the same collapsed and dimmed
-            // treatment a settled Message's own `reasoning` gets in
-            // {@see renderAssistantTurn()}, rather than a second style: a
-            // MiniMax-M2.7 trace runs to thousands of tokens and painting it in
-            // full would push the answer off-screen turn after turn, and having
-            // the live thought and the settled one look different would read as
-            // two different things rather than one thing before and after.
+            // Through {@see renderReasoning()}, the same flatten-to-one-row and
+            // dim style a settled Message's own `reasoning` gets in
+            // {@see renderAssistantTurn()}, rather than a second style. What
+            // the two now differ on is the BOUND, not the look (E706, round
+            // 81): the settled transcript wraps the whole trace, while this
+            // ticker stays a rolling tail of {@see REASONING_MAX_CHARS} behind
+            // an honest {@see REASONING_LIVE_TRAILER} - painting a
+            // still-growing MiniMax-scale trace in full every frame would push
+            // the answer off-screen for the duration of the turn.
             //
-            // `keepTail` is the ONE way the two differ, and it is the
-            // difference between a progress indicator and a frozen line: this
-            // thought is still growing, so the elision has to eat the oldest
-            // characters rather than the newest. See that method for the
-            // measurement.
+            // The TAIL anchor is what keeps the ticker alive: a head-anchored
+            // bound re-freezes the frame once the accumulation passes the cap.
+            // See that method for the measurement.
             //
             // ABOVE the partial, not below it, and the order is load-bearing
             // rather than aesthetic: the model thinks and then speaks, so a
@@ -2708,7 +2725,9 @@ final class Renderer
 
     /**
      * An assistant turn's label + (when present) its {@see Message::$reasoning}
-     * line + rendered Markdown body. §12 D3's final wiring step - the
+     * painted in full across however many pane-width rows it needs (E706,
+     * round 81 - wrapped, never clipped) + rendered Markdown body. §12 D3's
+     * final wiring step - the
      * extractor already splits reasoning out at the provider layer and
      * {@see \SugarCraft\Crush\Backend\EngineBackend} threads it onto the root
      * {@see Message} DTO; this is where it actually reaches the user instead
@@ -2770,48 +2789,61 @@ final class Renderer
     }
 
     /**
-     * Dimmed, single-line, collapsed rendering of a model's extracted
-     * "thinking" text - per crush_feat.md §12 D3 ("surface the result
-     * rendered dimmed/collapsed in the TUI"). Collapsed to one flattened,
-     * truncated line rather than rendered in full: a MiniMax-M2.7 thinking
-     * trace can run to thousands of tokens, and showing it verbatim would
-     * push the actual answer off-screen turn after turn. Reasoning is raw
+     * Dimmed, collapsed rendering of a model's extracted "thinking" text -
+     * per crush_feat.md §12 D3 ("surface the result rendered dimmed/collapsed
+     * in the TUI"). Collapse governs WHITESPACE: the trace is flattened to
+     * one logical line, and the pane's {@see fitToPane()} is what walks that
+     * line back onto rows at the pane width - it is never cut short
+     * (E706, round 81: the operator ruling was WRAP, not truncate). The live
+     * ticker is the one bounded path, and it says so with an honest trailer.
+     * Reasoning is raw
      * model output that never passes through CandyShine's Markdown renderer,
      * so - like every other untrusted turn in this method - it goes through
      * {@see Sanitize::untrusted()} before display.
      *
-     * ## Which end survives the elision is not cosmetic
+     * ## Settled wraps; only the live ticker is bounded
      *
-     * WHAT THIS SAID BEFORE: nothing - the method truncated from the head
-     * unconditionally, and the live paint added by E494 reused it as-is.
-     * WHAT IS TRUE NOW: a head-anchored elision makes the LIVE display freeze.
-     * The in-flight thought is an accumulation that only ever grows, so once it
-     * passes the cap every later frame renders the same first
-     * {@see REASONING_MAX_CHARS} characters - measured, the frame for a 340
-     * character accumulation and for a 3790 character one were byte-identical.
-     * For the very trace this doc-block names that is the first second of a
-     * two-minute turn followed by a static line, which is the exact symptom
-     * E494 exists to remove.
-     * WHY BOTH ANCHORS STILL EARN THEIR PLACE: a SETTLED turn's thought is a
-     * finished artefact being skimmed, and its opening is its summary, so the
-     * transcript keeps the head. A RUNNING turn's thought is a progress
-     * indicator, and the only part of it that carries new information is the
-     * part that just arrived, so the live paint keeps the tail. The cap is
-     * shared; the anchor is not.
+     * WHAT THIS SAID BEFORE: both anchors elided at
+     * {@see REASONING_MAX_CHARS} - the settled transcript kept a head-120,
+     * the live paint a tail-120 - so the operator saw the same clipped window
+     * either way while the full trace survived only in state and on disk.
+     * WHAT IS TRUE NOW (E706, round 81): the settled path does not bound. The
+     * flattened row rides {@see renderView()}'s single {@see fitToPane()}
+     * choke point exactly like prose does and wraps over as many rows as it
+     * needs; rows past the frame's bottom fall to the row-budget tail clip,
+     * which is scrollback, not deletion - the same trade every transcript
+     * row already makes.
+     * WHY LIVE STAYS BOUNDED: an in-flight trace grows a fragment at a time
+     * against an answer that must stay readable under it, and it is not yet a
+     * finished artefact - a MiniMax-scale trace painted in full every frame
+     * would push that answer off-screen for the duration of the turn. The
+     * ticker therefore keeps the newest {@see REASONING_MAX_CHARS} characters
+     * behind a leading ellipsis and names the bound honestly in
+     * {@see REASONING_LIVE_TRAILER}; when the turn settles the complete text
+     * appears under the same marker.
+     * WHY THE LIVE ANCHOR IS STILL THE TAIL: a head-anchored elision freezes
+     * the ticker - once past the cap every later frame renders the same
+     * leading characters (E494's measurement: a 340-character accumulation
+     * and a 3790-character one painted byte-identical frames).
      *
-     * @param bool $keepTail elide from the FRONT (keeping the newest
-     *                       characters) instead of from the back. True for the
-     *                       in-flight paint in {@see renderView()}, false for
-     *                       the settled transcript in
-     *                       {@see renderAssistantTurn()}.
+     * @param bool $keepTail bound the in-flight ticker to a rolling tail of
+     *                       {@see REASONING_MAX_CHARS} newest characters and
+     *                       append the honest {@see REASONING_LIVE_TRAILER}.
+     *                       True at the live paint in {@see renderView()};
+     *                       false at the settled transcript in
+     *                       {@see renderAssistantTurn()}, where nothing is
+     *                       bounded at all (E706, round 81).
      */
     private static function renderReasoning(string $reasoning, Theme $theme, bool $keepTail = false): string
     {
         $flat = trim(preg_replace('/\s+/', ' ', self::untrusted($reasoning)) ?? '');
-        if (mb_strlen($flat) > self::REASONING_MAX_CHARS) {
-            $flat = $keepTail
-                ? '…' . mb_substr($flat, -self::REASONING_MAX_CHARS)
-                : mb_substr($flat, 0, self::REASONING_MAX_CHARS) . '…';
+        // E706 (round 81): the settled trace is NOT clipped here. It paints as
+        // one flattened logical row and the existing fitToPane() wrap path -
+        // the one prose already rides - is what turns it into pane-width rows.
+        // This branch is the live ticker alone.
+        if ($keepTail && mb_strlen($flat) > self::REASONING_MAX_CHARS) {
+            $flat = '…' . mb_substr($flat, -self::REASONING_MAX_CHARS)
+                . sprintf(self::REASONING_LIVE_TRAILER, self::REASONING_MAX_CHARS, mb_strlen($flat));
         }
 
         return Style::new()->foreground($theme->systemLabel)->faint()->render('💭 ' . $flat);

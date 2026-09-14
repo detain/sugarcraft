@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend;
@@ -539,15 +540,19 @@ final class ReasoningPaintTest extends TestCase
     }
 
     /**
-     * A long trace must not evict the answer. The live thought goes through the
-     * same collapse a settled Message's reasoning does, so a MiniMax-scale trace
-     * costs one line rather than a screen.
+     * The LIVE thought must not evict the answer (E706, round 81, kept the
+     * bound here on purpose). The in-flight trace goes through the same
+     * collapse a settled Message's reasoning does, but where the settled
+     * transcript now wraps in full, this ticker stays a bounded rolling tail
+     * behind an honest count-suffixed trailer - a trace still growing would
+     * otherwise push the answer off-screen every frame.
      */
     public function testALongThoughtIsCollapsedRatherThanPaintedInFull(): void
     {
+        $thought = str_repeat('every thought in full ', 60);
         $chat = $this->pumpToQuiescence($this->withThought(
             new Chat(inFlight: true),
-            str_repeat('every thought in full ', 60),
+            $thought,
         ));
 
         $frame = $this->render($chat);
@@ -561,28 +566,34 @@ final class ReasoningPaintTest extends TestCase
         }
         $this->assertNotNull($first, 'the thought was not painted at all');
 
-        // How many rows the thought actually occupies: from its marker to the
-        // first line that no longer carries any of it. Counted rather than
-        // assumed, because the collapsed single line is then WRAPPED to the
-        // pane, so "collapsed" is a claim about a couple of rows and not about
-        // exactly one.
+        // The ticker runs from its marker row to the row carrying the honest
+        // trailer's closer - with the trailer the logical row wraps, so
+        // "collapsed" is a claim about a few rows and not about exactly one.
         $rows = 0;
         for ($i = $first; $i < count($lines); $i++) {
-            if (!str_contains($lines[$i], 'every thought in full') && !str_contains($lines[$i], '💭')) {
+            $rows++;
+            if (str_contains($lines[$i], 'chars shown]')) {
                 break;
             }
-            $rows++;
         }
 
         $this->assertLessThanOrEqual(
             3,
             $rows,
-            'a trace that would fill a screen must be collapsed before it is painted',
+            'a live trace that would fill a screen must stay a bounded ticker',
         );
         $painted = implode("\n", array_slice($lines, $first, $rows));
         $this->assertStringContainsString('…', $painted, 'a trace longer than the cap must be elided');
+        // The elision must SAY how much it shows - the house count-suffixed
+        // trailer (E706) - not just leave a bare ellipsis as its only tell.
+        $total = mb_strlen(trim(preg_replace('/\s+/', ' ', $thought) ?? ''));
+        $this->assertStringContainsString(
+            sprintf(Renderer::REASONING_LIVE_TRAILER, 120, $total),
+            $painted,
+            'the bounded live ticker is missing its honest N-of-M trailer',
+        );
         $this->assertLessThan(
-            substr_count(str_repeat('every thought in full ', 60), 'every'),
+            substr_count($thought, 'every'),
             substr_count($painted, 'every'),
             'the whole trace reached the frame - nothing was collapsed',
         );
@@ -647,18 +658,18 @@ final class ReasoningPaintTest extends TestCase
     }
 
     /**
-     * The other polarity, in the same test file, because the two anchors are
-     * one decision: the cap is shared and the END that survives is not.
-     *
-     * A SETTLED turn's thought is a finished artefact being skimmed and its
-     * opening is its summary, so the transcript keeps the head. A RUNNING
-     * turn's thought is a progress indicator and only its newest bytes carry
-     * information, so the live paint keeps the tail. Asserted together so that
-     * "fixing" the freeze by flipping {@see \SugarCraft\Crush\Renderer}'s
-     * elision wholesale - rather than at the live call site - goes red here
-     * instead of silently rewriting how every past turn reads.
+     * The two paths' difference after E706 (round 81): the SETTLED transcript
+     * paints the WHOLE thought - wrapped over as many rows as it needs, no
+     * bound, no trailer - while the RUNNING ticker keeps only the newest tail
+     * behind {@see Renderer::REASONING_LIVE_TRAILER}. Asserted together
+     * because they are one decision: "fixing" the settled clip by dropping
+     * the bound wholesale - taking the live cap with it - would trade a
+     * bounded ticker for an evicted answer, and keeping any settled clip
+     * re-commits the truncation the operator ruled out. The trailer's
+     * PRESENCE on the ticker and ABSENCE from the settled frame pin which
+     * side of the decision moved.
      */
-    public function testTheSettledTranscriptKeepsTheOpeningTheLivePaintDrops(): void
+    public function testTheSettledTranscriptPaintsTheWholeThoughtTheLiveTickerStaysBounded(): void
     {
         $thought = 'OPENINGMARKER ' . str_repeat('and then a further consideration ', 8) . ' TAILMARKER';
 
@@ -670,17 +681,78 @@ final class ReasoningPaintTest extends TestCase
         $this->assertStringContainsString(
             'OPENINGMARKER',
             $settled,
-            'a settled turn must keep the opening of its thought - that is the half a reader skims',
+            'a settled turn must still open with the beginning of its thought',
         );
-        $this->assertStringNotContainsString(
+        $this->assertStringContainsString(
             'TAILMARKER',
             $settled,
-            'the settled transcript stopped collapsing, or adopted the live paint\'s anchor',
+            'the settled transcript clipped the thought again - E706 ruled it paints the full trace',
+        );
+        $this->assertStringNotContainsString(
+            'thinking truncated',
+            $settled,
+            "a settled turn shows everything, so it must not carry the ticker's truncation trailer",
         );
 
         $live = $this->paintedThought($thought);
         $this->assertStringContainsString('TAILMARKER', $live);
-        $this->assertStringNotContainsString('OPENINGMARKER', $live);
+        $this->assertStringNotContainsString(
+            'OPENINGMARKER',
+            $live,
+            'the live cap vanished with the settled one - the ticker must stay bounded (E706 kept it on purpose)',
+        );
+        $this->assertStringContainsString(
+            'thinking truncated',
+            $live,
+            'the bounded ticker must say it is bounded',
+        );
+    }
+
+    /**
+     * E706 (round 81) in its load-bearing shape: a long SETTLED trace must be
+     * readable on screen, not merely retained in state. Three independent
+     * claims, each killed by a different regression:
+     *
+     * - every WORD of the trace appears in the frame as often as the fixture
+     *   repeats it - wrapping never splits a word, so ANY re-clip anywhere in
+     *   the settled path drops this count.
+     * - the trace occupies multiple rows (measured at this exact 100-column
+     *   pane) - proof it rode the wrap rather than painting one unreachable
+     *   over-wide row.
+     * - every row of the frame stays within the pane width once SGR and the
+     *   zero-cell zone sentinels are stripped - the invariant
+     *   {@see Renderer}'s fitter exists to hold, and the one a reasoning
+     *   row dodging it would break for every cursorTo() below it.
+     */
+    public function testTheSettledThoughtWrapsAcrossRowsWithoutLosingATrace(): void
+    {
+        $thought = str_repeat('every thought in full ', 60);
+        $frame = Renderer::render(new Chat(history: [
+            Message::user('why?'),
+            Message::assistant('Because.', null, $thought),
+        ], rows: 40, cols: 100));
+
+        $this->assertSame(
+            60,
+            substr_count($frame, 'every'),
+            'the settled frame does not carry every word of the trace - something clipped it '
+                . '(word-level on purpose: the wrap breaks rows between words, so an intact '
+                . 'phrase can straddle a row boundary, but a WORD never splits)',
+        );
+
+        $lines = explode("\n", $frame);
+        $carried = 0;
+        foreach ($lines as $row) {
+            if (str_contains($row, 'every')) {
+                $carried++;
+            }
+            $this->assertLessThanOrEqual(
+                100,
+                Width::of((string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]|\x{e000}|\x{e001}/u', '', $row)),
+                'a frame row exceeded the pane width - the fitToPane wrap was bypassed',
+            );
+        }
+        $this->assertGreaterThanOrEqual(10, $carried, 'the trace did not wrap over rows');
     }
 
     /**
