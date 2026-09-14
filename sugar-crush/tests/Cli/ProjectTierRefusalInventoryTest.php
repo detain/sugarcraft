@@ -321,6 +321,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.sugar-crush/worktrees' => self::NOT_A_TIER,
         'Commands/McpAuthCommand.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
+        // The SAME wire path in its SECOND file: E701's loopback flow does the
+        // RFC 8414 discovery fetch itself, so the literal moved into
+        // `MCP/OAuthLoopbackFlow.php` beside the command that already carried it.
+        // Still not a tier — it is a URL path segment on the issuer's origin,
+        // never joined to a filesystem root, which is the rule the row above it
+        // already states.
+        'MCP/OAuthLoopbackFlow.php|.well-known/oauth-authorization-server' => self::NOT_A_TIER,
         'Tools/IgnoreRules.php|.git/info' => self::NOT_A_TIER,
     ];
 
@@ -347,7 +354,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is THIRTY-NINE occurrences — one per entry
+     * APPEARS IN. On this tree that is FORTY occurrences — one per entry
      * in {@see DOT_PATHS} — of TWENTY-SIX distinct paths. NINETEEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
@@ -537,7 +544,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         $ownWords = [30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE',
             36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN', 38 => 'THIRTY-EIGHT',
-            39 => 'THIRTY-NINE'];
+            39 => 'THIRTY-NINE', 40 => 'FORTY'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
