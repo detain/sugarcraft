@@ -172,7 +172,10 @@ final class ReadmeSuiteFigureDriftTest extends TestCase
             'a filtered run' => [$filteredLog, 'below the suite floor'],
             'a log that contradicts itself' => [$contradictingLog, 'contradicts itself'],
         ] as $shape => [$fixture, $needle]) {
-            $path = tempnam(sys_get_temp_dir(), 'suite-figure-') . '.xml';
+            // tempnam() creates the base; the '.xml' path is a second file.
+            // Both are unlinked below or every loop iteration leaks a stub.
+            $base = tempnam(sys_get_temp_dir(), 'suite-figure-');
+            $path = $base . '.xml';
             file_put_contents($path, $fixture);
 
             $output = [];
@@ -184,6 +187,7 @@ final class ReadmeSuiteFigureDriftTest extends TestCase
                 \escapeshellarg($path),
             ), $output, $status);
             unlink($path);
+            unlink($base);
 
             self::assertSame(2, $status, "the refuser accepted {$shape} with exit {$status}");
             self::assertStringContainsString(

@@ -478,7 +478,13 @@ final class CommandTableRenderingTest extends TestCase
     /** @param array<string, array{0: ?int, 1: list<string>}> $servers */
     private function runMcpAuthList(array $servers, int $cols = self::WIDE_TERMINAL): string
     {
-        $path = tempnam(sys_get_temp_dir(), 'crush-mcp-auth-') . '.json';
+        // `tempnam()` CREATES the base file; the `.json` path is a SECOND file.
+        // Both must be cleaned up or every call drops one 0-byte stub in the
+        // temp dir — the shape behind the reviewer's `/tmp/crush-mcp-auth-*`
+        // census. The scratchTape() helper in VhsTapeContractTest is the
+        // same-pair idiom this helper now follows.
+        $base = tempnam(sys_get_temp_dir(), 'crush-mcp-auth-');
+        $path = $base . '.json';
         $data = [];
         foreach ($servers as $url => [$expiresAt, $scopes]) {
             $data[$url] = [
@@ -502,6 +508,11 @@ final class CommandTableRenderingTest extends TestCase
             return (string) ob_get_clean();
         } finally {
             @unlink($path);
+            @unlink($base);
+            // Hygiene pin: neuter either unlink above and this reddens every
+            // caller — the leak this guard was written for.
+            $this->assertFalse(is_file($base), 'the tempnam base file survived runMcpAuthList');
+            $this->assertFalse(is_file($path), 'the auth JSON file survived runMcpAuthList');
         }
     }
 }

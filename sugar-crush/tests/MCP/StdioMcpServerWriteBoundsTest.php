@@ -741,7 +741,8 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
     private const REACHABILITY_PROBE = <<<'PHP'
         <?php
         $state = $argv[1];
-        $script = tempnam(sys_get_temp_dir(), 'screach') . '.php';
+        $screachBase = tempnam(sys_get_temp_dir(), 'screach');
+        $script = $screachBase . '.php';
         file_put_contents($script, '<?php sleep(60);');   // never reads its stdin
         $p = proc_open([PHP_BINARY, $script],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
@@ -777,7 +778,7 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         posix_kill($kid, 9); pcntl_waitpid($kid, $st);
         if (proc_get_status($p)['running']) { proc_terminate($p, 9); }
         foreach ($pipes as $q) { if (is_resource($q)) fclose($q); }
-        proc_close($p); unlink($script);
+        proc_close($p); unlink($script); @unlink($screachBase);
         PHP;
 
     // =========================================================================
