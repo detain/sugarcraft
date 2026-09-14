@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Integration;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\AgentPreset;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\MCP\ClaudeCodeMcpServer;
+use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -1084,6 +1087,144 @@ final class McpToolWiringTest extends TestCase
      * completed `initialize`, which is the witness for how many server PROCESSES a
      * sequence of {@see Bootstrap::tools()} calls actually caused.
      */
+    /**
+     * E699 §7.5 — THE GATED TRANSPORT IS ROUTED LIKE ITS SIBLINGS, and this
+     * pins the clause the §9 acceptance sentence claims: bridges built from a
+     * `claude-mcp` entry ride the same Runtime dispatch, the same
+     * `mcp__<key>__<tool>` naming, and the same serverAllowed narrowing law
+     * as a stdio bridge. The child is the same kind of fixture as
+     * {@see self::FIXTURE_SERVER} — a ~25-line PHP script speaking NDJSON —
+     * but reached through the operator grant, not the repository's command
+     * keys: the entry carries only the type, and the spawn comes from
+     * `claudeMcpBinary`/`claudeMcpArgs` in the user config.
+     */
+    public function testAModelToolCallReachesTheGatedClaudeChildAndItsAnswerReachesTheModel(): void
+    {
+        $responder = $this->tempDir . '/claude-fixture.php';
+        file_put_contents($responder, self::CLAUDE_FIXTURE_SERVER);
+        Bootstrap::writeUserConfig([
+            'permissionMode' => 'bypass-permissions',
+            'trustedProjectMcp' => [$this->repo],
+            'claudeMcpBinary' => PHP_BINARY,
+            'claudeMcpArgs' => [$responder, $this->callLog],
+        ]);
+        file_put_contents($this->repo . '/.mcp.json', (string) json_encode([
+            'mcpServers' => ['cc' => ['type' => 'claude-mcp']],
+        ]));
+
+        $tools = Bootstrap::tools($this->repo);
+        $bridges = array_values(array_filter($tools, static fn (object $t): bool => $t instanceof McpToolBridge));
+
+        $this->assertCount(1, $bridges, 'the gated child advertises exactly one tool');
+        $this->assertSame('mcp__cc__ping', $bridges[0]->name());
+        // The DESCRIPTOR came off the gated wire: handshake and tools/list
+        // really happened inside the adapter's start-time cache.
+        $this->assertSame('[MCP cc] Answer with pong.', $bridges[0]->description());
+
+        $results = $this->drive(new ToolCall('call_cc1', 'mcp__cc__ping', ['note' => 'hi']));
+
+        $this->assertCount(1, $results);
+        $this->assertFalse($results[0]->isError(), $results[0]->content());
+        $this->assertSame('pong:hi', $results[0]->content());
+        $this->assertSame(
+            [['name' => 'ping', 'arguments' => ['note' => 'hi']]],
+            $this->serverCalls(),
+            'the gated child received the call with the arguments the model sent',
+        );
+    }
+
+    /**
+     * E699 §7.5, the narrowing half: a `claude-mcp` key is ONE allowlist
+     * target, spelled the raw `.mcp.json` key on both sides, exactly like a
+     * stdio key — `mcpServers: []` admits it, `mcpServers: ['ledger']`
+     * removes its bridges at list-time, and no per-type machinery exists to
+     * argue with. Driven over two REAL started adapters so the law is
+     * measured against this transport's actual tool caches.
+     */
+    public function testTheClaudeMcpBridgesNarrowUnderTheSameServerAllowedLawAsTheirSiblings(): void
+    {
+        $responder = $this->tempDir . '/claude-fixture.php';
+        file_put_contents($responder, self::CLAUDE_FIXTURE_SERVER);
+
+        $grant = fn (string $n): ClaudeCodeMcpServer => ClaudeCodeMcpServer::fromGrant(
+            $n,
+            ['type' => 'claude-mcp'],
+            ['binary' => PHP_BINARY, 'args' => [$responder, $this->callLog], 'env' => null],
+        );
+        $cc = $grant('cc');
+        $ledger = $grant('ledger');
+        $cc->start();
+        $ledger->start();
+
+        try {
+            $router = new McpRouter(['cc' => $cc, 'ledger' => $ledger]);
+
+            $open = $router->resolveAllowedTools(new AgentPreset(name: 'open', description: 'sees all', mcpServers: []));
+            $this->assertCount(2, $open, 'the empty allowlist is allow-all for this transport too');
+            $this->assertSame(['cc', 'ledger'], array_values(array_unique(array_map(
+                static fn (object $t): string => $t->serverName,
+                $open,
+            ))));
+
+            $narrowed = $router->resolveAllowedTools(new AgentPreset(name: 'hedge', description: 'one server', mcpServers: ['ledger']));
+            $this->assertCount(1, $narrowed);
+            $this->assertSame('ledger', $narrowed[0]->serverName, 'a preset that names another server must not see the claude-mcp bridge');
+        } finally {
+            $cc->stop();
+            $ledger->stop();
+        }
+    }
+
+    /**
+     * The gated transport's fake child. Same NDJSON framing the real
+     * `ClaudeCodeMcpClient` handshake speaks (initialize arrives as a
+     * NOTIFICATION; answering it is harmless and matches what the adapter's
+     * start poll ignores), and the same call-logging discipline as
+     * {@see self::FIXTURE_SERVER} — the log is what proves a DENIED call
+     * never reached the child, not merely that the model saw a refusal.
+     */
+    private const CLAUDE_FIXTURE_SERVER = <<<'PHP'
+        <?php
+        $log = $argv[1] ?? '';
+        while (($line = fgets(STDIN)) !== false) {
+            $msg = json_decode($line, true);
+            if (!is_array($msg)) {
+                continue;
+            }
+            $method = (string) ($msg['method'] ?? '');
+            if ($method === 'tools/call') {
+                file_put_contents($log, json_encode([
+                    'name' => $msg['params']['name'] ?? null,
+                    'arguments' => $msg['params']['arguments'] ?? null,
+                ]) . "\n", FILE_APPEND);
+            }
+            if (!isset($msg['id'])) {
+                continue; // notifications expect no answer
+            }
+            $result = match ($method) {
+                'initialize' => ['protocolVersion' => '2024-11-05', 'capabilities' => new stdClass()],
+                'tools/list' => ['tools' => [[
+                    'name' => 'ping',
+                    'description' => 'Answer with pong.',
+                    'inputSchema' => [
+                        'type' => 'object',
+                        'properties' => ['note' => ['type' => 'string']],
+                        'required' => [],
+                    ],
+                ]]],
+                'tools/call' => ['content' => [[
+                    'type' => 'text',
+                    'text' => 'pong:' . (string) ($msg['params']['arguments']['note'] ?? ''),
+                ]]],
+                default => null,
+            };
+            echo json_encode($result === null
+                ? ['jsonrpc' => '2.0', 'id' => (string) $msg['id'], 'error' => ['code' => -32601, 'message' => 'unknown']]
+                : ['jsonrpc' => '2.0', 'id' => (string) $msg['id'], 'result' => $result]) . "\n";
+            flush();
+        }
+        PHP;
+
     private const FIXTURE_SERVER = <<<'PHP'
         <?php
         $log = $argv[1] ?? '';

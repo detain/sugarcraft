@@ -310,6 +310,36 @@ final class McpPanelTest extends TestCase
     }
 
     /**
+     * E699 §7.6 — the fourth transport renders through the EXISTING suffix
+     * vocabulary (`up`, the stdio word: a spawned child that is running is
+     * running), and the row's detail half is the fixed label, never the
+     * operator's binary path. A panel row that echoed the path would put a
+     * machine-local secret-adjacent string into every transcript frame the
+     * pane reaches.
+     */
+    public function testClaudeMcpTransportReadsUpAndItsRowCarriesNoOperatorPath(): void
+    {
+        $root = $this->makeRoot();
+        $name = 'operatorside-' . bin2hex(random_bytes(3));
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [$name => ['type' => 'claude-mcp']],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $out = McpPanel::render($inventory, 160, [
+            $name => ['transport' => 'claude-mcp', 'up' => true, 'tools' => 7],
+        ]);
+
+        self::assertStringContainsString(
+            $name . ' [claude-mcp] (operator-supplied) · up 7 tools',
+            $out,
+            'the configured claude-mcp row must ride the existing suffix vocabulary',
+        );
+        self::assertStringNotContainsString('/usr/bin/', $out, 'the panel must not echo binary paths for this transport');
+    }
+
+    /**
      * The mirror gap: this process started a server the CURRENT inventory no
      * longer declares — config edited or deleted after the launch that froze
      * it. Its tools stay attributable.

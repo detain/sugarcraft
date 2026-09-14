@@ -248,7 +248,7 @@ final class ClaudeCodeMcpClient
      * ⚠️ AND A WORD ABOUT DORMANCY, BECAUSE THE OBVIOUS INFERENCE IS BACKWARDS.
      * WHAT AN EARLIER DRAFT OF THIS PARAGRAPH SAID: that nothing calls this
      * client, so no test exercises its cap end to end, and the derivation is
-     * what keeps a number in a dormant file from going stale unobserved.
+     * what kept a number in the then-dormant file from going stale unobserved.
      *
      * WHAT IS TRUE: the first half was right and the second is inverted. This
      * class had no call site in `src/` until E699 — the class doc-block now

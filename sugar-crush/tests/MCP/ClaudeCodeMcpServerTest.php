@@ -130,7 +130,15 @@ final class ClaudeCodeMcpServerTest extends TestCase
             $caught = $e;
         }
         self::assertNotNull($caught, 'the no-grant path must throw');
-        self::assertStringContainsString('claudeMcpBinary', $caught->getMessage());
+        // THE EXACT SENTENCE, not the key's name: deleting the null-grant
+        // guard falls through to the shape guard, whose message ALSO names
+        // claudeMcpBinary — a substring pin here is ordering-vacuous (r80
+        // review M-b). This sentence belongs to the no-grant branch alone.
+        self::assertSame(
+            'the claude-mcp entry "cc" needs the operator-tier claudeMcpBinary key in the user config '
+                . '(same tier as trustedProjectMcp); no operator grant, no spawn',
+            $caught->getMessage(),
+        );
         // The refusal must survive the trip to the transcript: this class is
         // constructed from strings the operator never wrote here, and none of
         // them may carry a path.

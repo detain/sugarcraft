@@ -70,6 +70,12 @@ final class ClaudeCodeMcpClientTest extends TestCase
      * is collected and REPORTED rather than failed on. A name inside a string
      * literal still counts as code — `class_exists('…')` and a container binding
      * are both real reachability.
+     *
+     * MEASURED CEILING, stated so nobody over-trusts the pin: it is
+     * literal-name grammar — the §5 promise is "names the class in CODE",
+     * and a glued split construction (string-concatenating the class name
+     * past a `new`) evades it. Widening beyond that literal promise is
+     * deliberately not done here.
      */
     public function testTheOnlyPathToThisSeamIsTheGatedFactoryArm(): void
     {
