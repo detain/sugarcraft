@@ -1080,14 +1080,6 @@ final class McpToolWiringTest extends TestCase
     }
 
     /**
-     * A minimal MCP server over stdio: `initialize`, `tools/list`, `tools/call`.
-     *
-     * `$argv[1]` is a log file every `tools/call` is appended to — the witness
-     * that a call did or did not arrive. `$argv[2]` is a second log, one line per
-     * completed `initialize`, which is the witness for how many server PROCESSES a
-     * sequence of {@see Bootstrap::tools()} calls actually caused.
-     */
-    /**
      * E699 §7.5 — THE GATED TRANSPORT IS ROUTED LIKE ITS SIBLINGS, and this
      * pins the clause the §9 acceptance sentence claims: bridges built from a
      * `claude-mcp` entry ride the same Runtime dispatch, the same
@@ -1225,6 +1217,14 @@ final class McpToolWiringTest extends TestCase
         }
         PHP;
 
+    /**
+     * A minimal MCP server over stdio: `initialize`, `tools/list`, `tools/call`.
+     *
+     * `$argv[1]` is a log file every `tools/call` is appended to — the witness
+     * that a call did or did not arrive. `$argv[2]` is a second log, one line per
+     * completed `initialize`, which is the witness for how many server PROCESSES a
+     * sequence of {@see Bootstrap::tools()} calls actually caused.
+     */
     private const FIXTURE_SERVER = <<<'PHP'
         <?php
         $log = $argv[1] ?? '';
