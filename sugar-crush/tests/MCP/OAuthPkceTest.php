@@ -15,10 +15,10 @@ use SugarCraft\Crush\MCP\OAuthPkce;
  * the RFC 7636 §4.2 construction base64url(SHA-256(verifier)). Pinning
  * independently derived pairs is what catches a mutated digest step, a
  * swapped encoding, or a lost `-`/`_` translation: every one of those
- * changes the vector. (The suite deliberately does NOT pin the Appendix B
- * pair from memory — memorized halves of it disagreed with both PHP and
- * Python here, which is exactly the failure mode an unverified literal
- * carries.)
+ * changes the vector. The first leg IS the canonical RFC 7636 Appendix B
+ * pair — verifier `…EjXk` (lowercase k) and its published challenge
+ * `E9Melhoa…` — re-verified against the same independent computation,
+ * which is exactly what a merely memorized literal is not.
  *
  * @see OAuthPkce
  */
@@ -49,6 +49,14 @@ final class OAuthPkceTest extends TestCase
 
     public function testTheChallengeMatchesTheIndependentlyComputedVectors(): void
     {
+        // Canonical RFC 7636 Appendix B pair (independently re-verified).
+        self::assertSame(
+            'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+            OAuthPkce::challengeFor('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'),
+        );
+        // Extra legs: pairs computed with Python for the near-miss uppercase
+        // variant and for plain inputs — a self-consistent digest mutation
+        // survives the canonical leg only if it also survives these.
         self::assertSame(
             'gMhFviSMvh4p6Dk0JJBqmff50a_bngH3n_i14zTH5Z4',
             OAuthPkce::challengeFor('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXK'),

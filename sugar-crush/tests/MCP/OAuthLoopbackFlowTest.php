@@ -61,6 +61,7 @@ final class OAuthLoopbackFlowTest extends TestCase
         );
         self::assertStringNotContainsString("tcp://0.0.0.0", $source, 'RFC 8252 loopback redirect URIs forbid a wildcard bind');
         self::assertStringNotContainsString("tcp://[::]", $source, 'and likewise the IPv6 wildcard');
+        self::assertStringContainsString('hash_equals(', $source, 'the state comparison must be timing-safe — loose equality is the exact footgun magic-hash-shaped values exist for');
     }
 
     public function testRedirectUriForBuildsTheBoundLoopbackAddress(): void
@@ -202,19 +203,44 @@ final class OAuthLoopbackFlowTest extends TestCase
     {
         $server = $this->bindListener();
 
-        $start = microtime(true);
+        // Design promise: the deadline arithmetic runs against the INJECTED
+        // clock. Each tick jumps 0.95 s, so a 1.0 s budget lives exactly one
+        // surviving slice (stream_select waits the computed 0.05 s remnant,
+        // not a real second) and dies on the next check — deterministic,
+        // sub-tenth-of-a-second, no ~0.3 s real sleep.
+        $ticks = 0;
+        $clock = static function () use (&$ticks): float {
+            $now = 1000.0 + 0.95 * $ticks;
+            $ticks++;
+
+            return $now;
+        };
+
         $caught = null;
         try {
-            $this->flow()->awaitCallback($server, 'state-abc', 0.3);
+            $this->flow($clock)->awaitCallback($server, 'state-abc', 1.0);
         } catch (\RuntimeException $e) {
             $caught = $e;
         }
         self::assertNotNull($caught, 'the flow must throw');
         self::assertStringContainsString('wait expired', $caught->getMessage());
-        $elapsed = microtime(true) - $start;
+        // 3 consults: arm the deadline, survive the first check (the budget
+        // is honoured, not skipped), cross it on the second (it stops at the
+        // deadline, not after the slice table).
+        self::assertSame(3, $ticks, 'the injected budget was consulted exactly once per deadline check');
 
-        self::assertGreaterThan(0.2, $elapsed, 'the budget is honoured, not skipped');
-        self::assertLessThan(5.0, $elapsed, 'and it stops shortly after the deadline, not after the slice table');
+        // Tiny real-clock smoke (50 ms): the DEFAULT clock must actually
+        // advance, or the seam above proves nothing about production.
+        $start = microtime(true);
+        $caught = null;
+        try {
+            $this->flow()->awaitCallback($server, 'state-abc', 0.05);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+        self::assertNotNull($caught, 'the real-clock wait must expire too');
+        self::assertStringContainsString('wait expired', $caught->getMessage());
+        self::assertGreaterThan(0.04, microtime(true) - $start, 'the default clock advances — the real wait spent its slice');
     }
 
     // =========================================================================
@@ -271,12 +297,14 @@ final class OAuthLoopbackFlowTest extends TestCase
         return (string) stream_get_contents($client);
     }
 
-    private function flow(): OAuthLoopbackFlow
+    private function flow(?callable $clock = null): OAuthLoopbackFlow
     {
         $authFile = sys_get_temp_dir() . '/loopback_flow_test_' . uniqid((string) getmypid(), true) . '.json';
 
         return new OAuthLoopbackFlow(
             new OAuthClientRegistration(new Client(['handler' => HandlerStack::create(new MockHandler([]))]), $authFile),
+            null,
+            $clock,
         );
     }
 }
