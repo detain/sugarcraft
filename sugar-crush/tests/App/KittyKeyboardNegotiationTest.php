@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\App;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\BatchMsg;
+use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Crush\App\App;
@@ -63,15 +64,33 @@ final class KittyKeyboardNegotiationTest extends TestCase
     {
         // REPORT_EVENT_TYPES (bit 2) would flood update() with release/repeat
         // frames no arm consumes; bits 4/8/16 change encodings Chat does not
-        // read. The exact-byte pin above is the load-bearing one; this names
-        // the near-neighbours explicitly so a widening is a deliberate edit.
-        $bytes = "\x1b[>1u";
-        foreach ([2, 3, 4, 8, 16, 31] as $flags) {
-            $this->assertNotSame(
-                Ansi::pushKittyKeyboard($flags),
-                $bytes,
-                "flags bit set {$flags} must not ride the push — DISAMBIGUATE is the whole ask",
-            );
+        // read. Read the flags off the bytes App ACTUALLY pushes on the
+        // startup batch — asking the Ansi formatter whether it can spell
+        // other values is a tautology that no App edit could ever redden —
+        // so widening the negotiated mask reddens HERE naming the offending
+        // bit, beside the exact-byte pin in the test above.
+        $layers = [];
+        foreach ($this->startupCmds() as $cmd) {
+            $msg = $cmd();
+            if ($msg instanceof RawMsg && \preg_match('/^\x1b\[>(\d+)u$/', $msg->bytes, $match) === 1) {
+                $layers[] = (int) $match[1];
+            }
+        }
+
+        $this->assertCount(1, $layers, 'fixture: App pushes exactly one Kitty layer on init');
+        $flags = $layers[0];
+        $this->assertSame(
+            KeyboardEnhancementsMsg::DISAMBIGUATE,
+            $flags,
+            'DISAMBIGUATE is the whole ask — widen it only by re-judging every bit below',
+        );
+        foreach ([
+            KeyboardEnhancementsMsg::REPORT_EVENT_TYPES => 'release/repeat frames no arm here consumes',
+            KeyboardEnhancementsMsg::REPORT_ALTERNATES => 'alternate-key spelling Chat does not read',
+            KeyboardEnhancementsMsg::REPORT_ALL_AS_ESC => 'all-as-escapes spelling Chat does not read',
+            KeyboardEnhancementsMsg::REPORT_ASSOCIATED => 'associated-text payload Chat does not read',
+        ] as $bit => $why) {
+            $this->assertSame(0, $flags & $bit, "the Kitty push must leave bit {$bit} clear — {$why}");
         }
     }
 
