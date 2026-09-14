@@ -3443,6 +3443,60 @@ final class DocFigureProseDriftTest extends TestCase
             'the absent-type default is no longer stdio — the table row says it is',
         );
         self::assertStringContainsString('(the default when `type` is absent)', $mcp, 'the stdio row lost its default note');
+
+        // E708: opencode spellings are renamed BEFORE the match, never as new
+        // arms — the four-construct census above stays four precisely because
+        // the alias map runs first. Both sides are pinned: re-planting the
+        // pre-E708 `startServer()` (literal `?? 'stdio'` line, no substitution,
+        // no canonicalisation) reddens the presence legs, and a page/table
+        // that drifts from the constant reddens the roster — bidirectionally.
+        self::assertStringContainsString(
+            '$type = self::TYPE_ALIASES[$type] ?? $type;',
+            $startText,
+            'startServer() no longer renames foreign types before dispatch — the page promises the aliases are read there, before the factory',
+        );
+        self::assertStringContainsString(
+            '$this->normalizeEntry(',
+            $startText,
+            'startServer() no longer canonicalises the entry before buildServer() — the shape table lost its ground',
+        );
+        $aliasMap = (new \ReflectionClass(\SugarCraft\Crush\MCP\McpClient::class))->getConstant('TYPE_ALIASES');
+        self::assertIsArray($aliasMap, 'McpClient::TYPE_ALIASES vanished — the alias rows lost their ground');
+        preg_match_all('/^\| `"type": "([a-z-]+)"` \| `([a-z-]+)` \|/m', $raw, $aliasRows, \PREG_SET_ORDER);
+        $documentedAliases = [];
+        foreach ($aliasRows as $aliasRow) {
+            $documentedAliases[$aliasRow[1]] = $aliasRow[2];
+        }
+        self::assertSame(
+            $documentedAliases,
+            $aliasMap,
+            "the page's alias rows and McpClient::TYPE_ALIASES no longer agree — a row added or a map entry dropped both redden here",
+        );
+
+        $normalize = null;
+        foreach (self::functionSpans($clientSource) as $span) {
+            $normalize ??= 'normalizeEntry' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($normalize, 'normalizeEntry() vanished — the shape rows of the foreign-spellings table lost their ground');
+        $normalizeText = (string) substr($clientSource, $normalize['begin'], $normalize['end'] - $normalize['begin']);
+        foreach (['enabled', 'environment', 'env', 'command', 'args'] as $shapeKey) {
+            self::assertStringContainsString(
+                "'{$shapeKey}'",
+                $normalizeText,
+                "normalizeEntry() stopped reading `{$shapeKey}` — the foreign-spellings table says it canonicalises it",
+            );
+        }
+        self::assertStringContainsString(
+            'used only when `env` is absent',
+            $mcp,
+            'the env-over-environment precedence row left the page while normalizeEntry() still implements it',
+        );
+        self::assertStringContainsString(
+            'skipped and named in the launch report',
+            $mcp,
+            'the enabled row left the page while startServer() still collects and reports skips',
+        );
+
         self::assertSame(
             3,
             preg_match_all("/'(stdio|http|git)' => new ([A-Za-z]+)/", $buildText, $arms, PREG_SET_ORDER),
@@ -3961,10 +4015,22 @@ final class DocFigureProseDriftTest extends TestCase
                 }
             }
         }
+        // E708 moved this from a one-name list to a two-name roster WITH
+        // reasons, not a widening of tolerance: the page's claim still holds
+        // over the memory vocabulary, and the one other live `'local'` in
+        // src/ is the MCP transport alias — the same word in an unrelated
+        // vocabulary (opencode spells stdio `local`). A THIRD carrier of any
+        // kind redds here until it is judged into this roster or the claim
+        // is re-argued.
         self::assertSame(
-            ['src/Agents/MemoryScope.php'],
+            ['src/Agents/MemoryScope.php', 'src/MCP/McpClient.php'],
             array_keys($sites),
-            sprintf('the page claims `%s` appears nowhere else, yet a live string literal carries it elsewhere in src/', $needle),
+            sprintf('the page enumerates every live `%s` carrier by name — a new one appeared, or a judged one moved', $needle),
+        );
+        self::assertStringContainsString(
+            "'local' => 'stdio'",
+            self::sourceOf('MCP/McpClient.php'),
+            'the roster exempts McpClient.php ONLY as the E708 transport alias — the exemption must name its own ground',
         );
         self::assertSame($needle, MemoryScope::Local->value, 'MemoryScope::Local no longer backs onto the string the absence claim quotes');
     }

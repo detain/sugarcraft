@@ -11,8 +11,33 @@ use SugarCraft\Crush\Cli\Bootstrap;
 
 final class McpClient
 {
+    /**
+     * E708 — foreign `type` spellings, renamed to this port's names BEFORE
+     * {@see buildServer()} dispatch so the factory's match stays exactly the
+     * four-transport census the docs page records (an alias arm inside the
+     * `match` would make the page's "the types ARE the constructs" claim
+     * count wrong). `local`/`remote` are the names opencode's config gives to
+     * stdio and HTTP; nothing else in this file invents a synonym.
+     *
+     * @var array<string, string>
+     */
+    private const TYPE_ALIASES = [
+        'local' => 'stdio',
+        'remote' => 'http',
+    ];
+
     /** @var array<string, McpServer> */
     private array $servers = [];
+
+    /**
+     * Names of entries skipped because the config says `enabled: false`
+     * (E708). Collected per {@see startServers()} run and reported WITH the
+     * build failures rather than dropped in silence — the silent half is what
+     * made a disabled opencode server indistinguishable from a running one.
+     *
+     * @var list<string>
+     */
+    private array $disabledServers = [];
 
     private Client $httpClient;
 
@@ -85,7 +110,10 @@ final class McpClient
      * @throws \RuntimeException naming every entry whose CONFIG could not be
      *         built — an unrecognised `type` — AFTER all of them have been
      *         attempted, so the throw no longer decides which servers get to
-     *         exist. A server whose `start()` merely fails is skipped silently,
+     *         exist, and (E708) naming SEPARATELY every entry the config
+     *         itself disabled (`enabled: false`) and that was therefore not
+     *         started — a deliberate skip is reported, not dropped. A server
+     *         whose `start()` merely fails is skipped silently,
      *         as it always was; see {@see startServer()} for why those two are
      *         not the same event. A caller that wants the working servers
      *         regardless catches this and carries on — which is what
@@ -97,6 +125,7 @@ final class McpClient
     {
         $config = $this->loadConfig();
         $failures = [];
+        $this->disabledServers = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
             $failure = $this->startServer($name, $serverConfig);
@@ -110,13 +139,49 @@ final class McpClient
         // constructed and the same broken file lost a different set of servers
         // depending purely on key order.
         if ($failures !== []) {
-            throw new \RuntimeException(sprintf(
-                '%d MCP server %s in this config could not be built: %s',
-                count($failures),
-                count($failures) === 1 ? 'entry' : 'entries',
-                implode('; ', $failures),
-            ));
+            $disabled = $this->disabledReport();
+
+            throw new \RuntimeException(
+                sprintf(
+                    '%d MCP server %s in this config could not be built: %s',
+                    count($failures),
+                    count($failures) === 1 ? 'entry' : 'entries',
+                    implode('; ', $failures),
+                )
+                . ($disabled === '' ? '' : '. ' . $disabled),
+            );
         }
+
+        // E708: a purely disabled file still reports. A `false` the reader
+        // ignores is the same silent-drop class as an `environment` map read
+        // nowhere — the operator configured a decision and deserves to see it
+        // honoured, not inferred from a server that quietly never appears.
+        $disabled = $this->disabledReport();
+        if ($disabled !== '') {
+            throw new \RuntimeException($disabled);
+        }
+    }
+
+    /**
+     * The one-sentence account of entries skipped for `enabled: false`, or the
+     * empty string when nothing was skipped. Deliberately NOT phrased as a
+     * build failure — the entry built fine and its own config declined to
+     * run; the distinction is why this reads "disabled and skipped" where a
+     * malformed entry reads "could not be built".
+     */
+    private function disabledReport(): string
+    {
+        if ($this->disabledServers === []) {
+            return '';
+        }
+
+        return sprintf(
+            '%d MCP server %s in this config %s disabled and skipped: %s',
+            count($this->disabledServers),
+            count($this->disabledServers) === 1 ? 'entry' : 'entries',
+            count($this->disabledServers) === 1 ? 'is' : 'are',
+            implode(', ', $this->disabledServers),
+        );
     }
 
     /**
@@ -262,6 +327,14 @@ final class McpClient
      * every entry has been attempted. The runtime catch also widens from
      * `\RuntimeException` to `\Throwable`, which is route 3.
      *
+     * E708 — before anything is constructed, the entry is READ: an
+     * `enabled: false` declines to start and is collected for the report, and
+     * a foreign `type` name is translated through {@see TYPE_ALIASES}. The
+     * non-string `type` deliberately rides into {@see buildServer()}'s typed
+     * parameter UNtranslated rather than being special-cased here: the `match`
+     * raises its TypeError inside the existing guard, where it joins the
+     * per-entry report like every other unbuildable shape.
+     *
      * @return string|null a description of a CONFIG error, to be reported after
      *         every entry has been attempted; null for a clean start and for a
      *         runtime failure alike
@@ -269,9 +342,18 @@ final class McpClient
     private function startServer(string $name, array $config): ?string
     {
         $type = $config['type'] ?? 'stdio';
+        if (is_string($type)) {
+            $type = self::TYPE_ALIASES[$type] ?? $type;
+        }
 
         try {
-            $server = $this->buildServer($name, $type, $config);
+            $entry = $this->normalizeEntry($config);
+            if ($entry === null) {
+                $this->disabledServers[] = $name;
+
+                return null;
+            }
+            $server = $this->buildServer($name, $type, $entry);
         } catch (\Throwable $e) {
             return sprintf('%s (%s)', $name, $e->getMessage());
         }
@@ -285,6 +367,82 @@ final class McpClient
         $this->servers[$name] = $server;
 
         return null;
+    }
+
+    /**
+     * E708 — read one entry's FOREIGN spellings into the shape
+     * {@see buildServer()} constructs, before any class is named.
+     *
+     * WHY BEFORE THE MATCH AND NOT INSIDE AN ARM: a real opencode `.mcp.json`
+     * block pasted unchanged used to lose its env maps in silence —
+     * `environment` was read nowhere, so `searxng` spawned with no
+     * `SEARXNG_URL` and no report anywhere said so — and its `enabled: false`
+     * started anyway. Renaming here (rather than growing `local`/`remote`
+     * arms there) keeps the factory's match the four-transport census
+     * docs/MCP.md records, and it means every downstream reader —
+     * `resolveEnv`, the per-arm key reads the AX doc-arm pins — sees exactly
+     * one spelling of each key.
+     *
+     * PRECEDENCE, stated once because both files exist in the wild: the
+     * explicit sugar-crush spelling wins where two spellings of the SAME slot
+     * disagree — `env` over `environment`. A `command` ARRAY is not the rival
+     * of the string form, it is the same slot typed differently: the head
+     * becomes the program and the tail joins an already-present `args` list
+     * AFTER the array's own pieces, because the array is a whole argv and the
+     * `args` key extends it.
+     *
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, mixed>|null the entry in canonical shape; null
+     *         when the entry itself declines to run (`enabled: false`), which
+     *         {@see startServer()} reports rather than forgets
+     *
+     * @throws \RuntimeException a malformed shape, carried by the caller's
+     *         guard into the per-entry report — same family as the
+     *         factory's unknown-type throw
+     */
+    private function normalizeEntry(array $config): ?array
+    {
+        if (array_key_exists('enabled', $config) && !is_bool($config['enabled'])) {
+            throw new \RuntimeException('"enabled" must be a boolean when present');
+        }
+        if (($config['enabled'] ?? true) === false) {
+            return null;
+        }
+
+        if (array_key_exists('environment', $config)) {
+            if (!array_key_exists('env', $config)) {
+                $config['env'] = $config['environment'];
+            }
+            // Gone either way, won or lost: a slot that keeps two spellings
+            // after canonicalisation invites a second reader to disagree
+            // with the precedence.
+            unset($config['environment']);
+        }
+
+        $command = $config['command'] ?? null;
+        if (is_array($command)) {
+            if ($command === [] || !array_is_list($command)) {
+                throw new \RuntimeException('"command" array must be a non-empty list');
+            }
+            $head = array_shift($command);
+            if (!is_string($head) || $head === '') {
+                throw new \RuntimeException('"command" array must start with a non-empty string');
+            }
+            foreach ($command as $piece) {
+                if (!is_string($piece)) {
+                    throw new \RuntimeException('"command" array must hold strings');
+                }
+            }
+            $args = $config['args'] ?? [];
+            if (!is_array($args) || !array_is_list($args)) {
+                throw new \RuntimeException('"args" must be a list');
+            }
+            $config['command'] = $head;
+            $config['args'] = [...$command, ...$args];
+        }
+
+        return $config;
     }
 
     /**

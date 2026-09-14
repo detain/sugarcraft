@@ -38,7 +38,10 @@ The index is regenerated on every mutation and is bounded at
 
 The `MemoryScope` enum's cases are `User`, `Project`, `Local` — but every
 string-based caller says `user`, `project`, `agent`, and `local` appears nowhere
-else in the codebase. `MemoryStore::normalizeScope()` therefore maps
+else in the codebase as a memory spelling. (The only other live `'local'` in
+`src/` is the MCP transport alias — `McpClient::TYPE_ALIASES`, E708 — the same
+word naming an opencode stdio server, a different vocabulary entirely.)
+`MemoryStore::normalizeScope()` therefore maps
 `MemoryScope::Local` **onto the string `agent`** so the two vocabularies name one
 physical scope. Without that mapping, a caller passing `MemoryScope::Local` would
 write into a `local/` directory no string-based caller ever looks at.

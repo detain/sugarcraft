@@ -94,11 +94,33 @@ Four types, and they are the four `McpClient::startServer()` constructs:
 | `git` | `GitMcpServer` | `path` (omitted → this project) |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
-Any other `type` **throws**, and that throw is ordering-dependent: servers
+Any other `type` — beyond the four above and the aliases below — **throws**,
+and that throw is ordering-dependent: servers
 listed *earlier* in the file are already up, servers listed *after* the bad
 entry are never reached. The throw is caught in `Bootstrap::mcpClient()`,
 reported through `error_log()`, and the launch continues with fewer tools rather
 than dying over a live TUI.
+
+### Foreign spellings that are read
+
+Configs copied from opencode name some of these shapes differently, and a
+`command` given as one whole argv array is common enough that the reader
+handles it too. `McpClient::startServer()` normalises every spelling below
+**before** the factory match, so everything on this page describes what an
+entry runs as once it is read:
+
+| Spelling seen | Read as | Rule |
+|---|---|---|
+| `"type": "local"` | `stdio` | alias map `McpClient::TYPE_ALIASES` |
+| `"type": "remote"` | `http` | alias map `McpClient::TYPE_ALIASES` |
+| `"command": ["npx", "-y", "pkg"]` | `command: "npx"` plus `args` | the head is the program and the tail joins ahead of any `args` already present; a non-empty list of strings is required |
+| `"environment": { … }` | `env` | used only when `env` is absent — when both are present, `env` wins |
+| `"enabled": false` | not started | the entry is skipped and named in the launch report; `true` or absent starts it |
+
+A renamed `env` rides the `${VAR}` interpolation below exactly like a
+literally spelled one — an opencode `environment` map is not a second env
+map — and `enabled: false` is a decision being honoured, not a defect being
+worked around: it costs one line in the launch report and nothing else.
 
 ### Supported transports
 
