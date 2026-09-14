@@ -11627,6 +11627,9 @@ EXIT 0** linked @cwd=sugar-crush (serial green in one pass after the drift-fix, 
   MAJOR-1 was an UNDISCLOSED OMISSION: §7.5 e2e-bridge/narrowing + §7.6 configured-panel rows were
   claimed covered by the §9 acceptance sentence but never shipped AND absent from the lane's deviations
   list — review caught what self-reporting missed; fix-round shipped all three rows (+3T, 11,867→11,870).
+  The round-80 merge agent itself was re-cut after a client crash mid-flight — law -72 salvage audit found
+  picks/weld/closeout fully landed and clean; the re-cut verified every figure against the tree and closed
+  only the outstanding record (this sentence) plus the final REPORT.
 - **Merge drift-fix:** serial1 11,870T exact + the expected staleness pair + ONE tree-scan red: the
   fix-round stacked the §7.5 method doc UNDER the pre-existing FIXTURE_SERVER forward-doc block —
   `RuntimeNoticeSinkDeliveryTest::testNoSourceFileCarriesStackedDocComments` caught it (third
