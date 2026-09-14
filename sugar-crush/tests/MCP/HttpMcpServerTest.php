@@ -751,6 +751,7 @@ final class HttpMcpServerTest extends TestCase
             tokenUrl: 'http://localhost:9777/token',
         ));
 
+        $caught = null;
         try {
             $server = new HttpMcpServer(
                 name: 'e695-leak-check',
@@ -760,10 +761,11 @@ final class HttpMcpServerTest extends TestCase
                 authStore: $store,
             );
             $server->start();
-            $this->fail('expected the un-refreshable entry to fail the start');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('e695-leak-check', $e->getMessage());
-            $this->assertStringNotContainsString('secret-access-must-stay-hidden', $e->getMessage());
+            $caught = $e;
         }
+        $this->assertNotNull($caught, 'expected the un-refreshable entry to fail the start');
+        $this->assertStringContainsString('e695-leak-check', $caught->getMessage());
+        $this->assertStringNotContainsString('secret-access-must-stay-hidden', $caught->getMessage());
     }
 }
