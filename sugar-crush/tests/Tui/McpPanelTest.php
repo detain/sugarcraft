@@ -231,6 +231,15 @@ final class McpPanelTest extends TestCase
             McpPanel::render($inventory, 100, []),
             'a cold process (empty started-map) must not gain a single byte',
         );
+
+        // The equality above alone cannot catch a gate that fires on the
+        // EMPTY map too (it would mutate both renders alike) — so pin the
+        // cold shape against what the pre-E698 panel never said: no
+        // summary, no suffix, no changed-line anywhere.
+        $cold = McpPanel::render($inventory, 100, []);
+        self::assertStringNotContainsString('  Live in this process:', $cold);
+        self::assertStringNotContainsString(' · ', $cold);
+        self::assertStringNotContainsString('changed since launch', $cold);
     }
 
     /**
