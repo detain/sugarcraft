@@ -244,7 +244,16 @@ final class CommandTableRenderingTest extends TestCase
     {
         $output = $this->runMcpAuthList([]);
 
-        $this->assertStringContainsString('No MCP servers registered', $output);
+        // E709: the old wording ("No MCP servers registered. Run `mcp auth
+        // add`...") read as "MCP = register credentials first". The table is
+        // empty of CREDENTIALS, servers come from .mcp.json, and the empty
+        // state now says all three.
+        $this->assertStringContainsString('No stored MCP credentials', $output);
+        $this->assertStringNotContainsString('No MCP servers registered', $output);
+        $this->assertStringContainsString('demand OAuth login', $output, 'the empty state must scope credentials to the OAuth minority');
+        $this->assertStringContainsString('runs from its "url" alone', $output, 'the zero-auth http truth is the point of this rewrite');
+        $this->assertStringContainsString('mcpServers', $output, 'the hint must name the real declaration key');
+        $this->assertStringContainsString(\SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION, $output, 'the hint must point at the docs recipe section by name');
     }
 
     // -------------------------------------------------------------------------

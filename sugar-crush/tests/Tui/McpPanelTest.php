@@ -64,6 +64,54 @@ final class McpPanelTest extends TestCase
     }
 
     /**
+     * E709: the cold panel TEACHES. Both guidance lines print on the absent
+     * state — naming where servers come from, the zero-auth http truth, and
+     * the docs section — and neither line may impersonate a server row.
+     */
+    public function testAbsentProjectGetsTheDiscoveryGuidance(): void
+    {
+        $root = $this->makeRoot();
+        $out = McpPanel::render(Bootstrap::mcpServerInventory($root));
+
+        self::assertStringContainsString(McpPanel::GUIDANCE_ADD, $out);
+        self::assertStringContainsString('mcpServers', $out, 'the hint must name the actual key');
+        self::assertStringContainsString(McpPanel::GUIDANCE_RECIPE, $out);
+        self::assertStringContainsString(McpPanel::GUIDANCE_SECTION, $out, 'the panel must point at the docs section by name');
+        self::assertStringNotContainsString('   - ', $out, 'guidance lines are two-space rows, never server rows');
+    }
+
+    /**
+     * E709 guidance polarity: a trusted root that declares NOTHING still gets
+     * the hint (that frame also reads as "setup required"); a root that
+     * DECLARES servers does not (there is nothing to teach yet); and a
+     * refused root does not either (its next action is the trust opt-in the
+     * status line already names, not a recipe).
+     */
+    public function testGuidancePrintsOnEmptyStatesAndStandsDownOtherwise(): void
+    {
+        $empty = $this->makeRoot();
+        file_put_contents($empty . '/' . Bootstrap::MCP_CONFIG_FILENAME, '{"mcpServers":{}}');
+        $this->trustRoot($empty);
+
+        $cold = McpPanel::render(Bootstrap::mcpServerInventory($empty));
+        self::assertStringContainsString('Servers: none declared.', $cold);
+        self::assertStringContainsString(McpPanel::GUIDANCE_ADD, $cold, 'a trusted-but-empty file is still a cold surface');
+
+        $named = 'kestrel-' . bin2hex(random_bytes(4));
+        file_put_contents($empty . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [$named => ['type' => 'http', 'url' => 'https://example.invalid/' . $named]],
+        ], JSON_THROW_ON_ERROR));
+        $warm = McpPanel::render(Bootstrap::mcpServerInventory($empty), 140);
+        self::assertStringContainsString($named, $warm);
+        self::assertStringNotContainsString(McpPanel::GUIDANCE_ADD, $warm, 'a server list stands the hint down');
+
+        $refused = $this->makeRoot();
+        file_put_contents($refused . '/' . Bootstrap::MCP_CONFIG_FILENAME, '{"mcpServers":{}}');
+        $out = McpPanel::render(Bootstrap::mcpServerInventory($refused));
+        self::assertStringNotContainsString(McpPanel::GUIDANCE_ADD, $out, 'a refusal state teaches the opt-in, not the recipe');
+    }
+
+    /**
      * THE HEADLINE (E191): for a TRUSTED root, the panel's rows are exactly
      * the live inventory's rows — every randomised name, every type as
      * written, every detail — no more, no less.

@@ -5635,6 +5635,127 @@ final class DocFigureProseDriftTest extends TestCase
         );
     }
 
+    /**
+     * E709 (BL): the discovery guidance shipped this round — the panel's two
+     * cold-state hint lines, the credentials table's rewrite, the README
+     * pointer, and the docs/MCP.md "Adding servers" recipe — against the facts
+     * that make those claims true. Three surfaces share ONE constant for the
+     * section name, and the recipe's two fenced blocks must stay the same
+     * servers written two ways, or the worked example teaches drift instead
+     * of syntax. The join rule the docs lean on (array-command head/args,
+     * environment→env, alias type) is checked against the parsed fences, and
+     * the zero-auth claim against buildServer()'s optional-headers leg.
+     */
+    public function testMcpDiscoveryGuidanceAndTheWorkedRecipeReadTheSameFacts(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $panel = self::sourceOf('Tui/McpPanel.php');
+        $auth = self::sourceOf('Commands/McpAuthCommand.php');
+        $client = self::sourceOf('MCP/McpClient.php');
+
+        $section = (string) (new \ReflectionClassConstant(\SugarCraft\Crush\Tui\McpPanel::class, 'GUIDANCE_SECTION'))->getValue();
+
+        // The triangle: one shared name, printed by both surfaces and
+        // resolvable as a heading in the page they point at.
+        self::assertSame(
+            1,
+            preg_match('/^### ' . preg_quote($section, '/') . '$/m', $raw),
+            'the recipe section the panel points at by name no longer carries that heading',
+        );
+        self::assertStringContainsString('self::GUIDANCE_SECTION', $panel, 'the panel stopped composing its hint from the shared name');
+        self::assertStringContainsString('McpPanel::GUIDANCE_SECTION', $auth, 'the credentials table stopped reusing the shared name');
+
+        // Behaviour: the cold panel really prints the hint through the
+        // constants — a dead const fails here, not only in source shape.
+        $out = \SugarCraft\Crush\Tui\McpPanel::render([
+            'status' => Bootstrap::MCP_ABSENT,
+            'path' => '/tmp/example-project/.mcp.json',
+            'servers' => [],
+            'error' => null,
+        ]);
+        self::assertStringContainsString('"mcpServers"', $out);
+        self::assertStringContainsString('docs/MCP.md', $out);
+        self::assertStringContainsString($section, $out);
+
+        // The credentials table's own empty state scopes credentials to OAuth
+        // and states the zero-auth truth in words the page repeats.
+        self::assertStringContainsString('demand OAuth login', $auth);
+        self::assertStringContainsString('runs from its \"url\" alone', $auth, 'the empty store stopped promising the zero-auth path');
+
+        // README pointer (this round's sentence, one leg).
+        $readme = (string) file_get_contents(\dirname(__DIR__, 2) . '/README.md');
+        self::assertSame(
+            1,
+            substr_count($readme, 'works both spellings through under'),
+            'the README MCP bullet lost (or duplicated) its pointer into the recipe',
+        );
+
+        // Recipe fences: exactly two json blocks ending at the rule.
+        $begin = (int) strpos($raw, '### ' . $section);
+        $rule = (int) strpos($raw, "\n---", $begin);
+        self::assertGreaterThan($begin, $rule, 'the recipe section must end at a rule before the next chapter');
+        $slice = substr($raw, $begin, $rule - $begin);
+        preg_match_all('/```json\n(.*?)\n```/s', $slice, $fences);
+        self::assertCount(2, $fences[1], 'the recipe is exactly two spellings of one server set');
+        $native = json_decode($fences[1][0], true);
+        $foreign = json_decode($fences[1][1], true);
+        self::assertIsArray($native, 'the recipe lost its translated block');
+        self::assertIsArray($foreign, 'the recipe lost its verbatim block');
+
+        $nativeServers = $native['mcpServers'] ?? [];
+        $foreignServers = $foreign['mcpServers'] ?? [];
+        self::assertSame(
+            array_keys($nativeServers),
+            array_keys($foreignServers),
+            'the two recipe blocks no longer declare the same servers in the same order',
+        );
+        self::assertGreaterThanOrEqual(3, count($nativeServers), 'the worked example must carry stdio AND several no-auth remotes');
+
+        $aliases = (new \ReflectionClassConstant(\SugarCraft\Crush\MCP\McpClient::class, 'TYPE_ALIASES'))->getValue();
+        $nativeOnlyKeys = ['type', 'command', 'args', 'url', 'env', 'headers', 'startTimeout', 'enabled'];
+        $buildServer = self::bodyExcerpt($client, 'buildServer');
+
+        foreach ($nativeServers as $name => $entry) {
+            foreach (array_keys($entry) as $key) {
+                self::assertContains($key, $nativeOnlyKeys, "the native block grew a foreign spelling \"{$key}\" on {$name}");
+            }
+            $foreignType = (string) ($foreignServers[$name]['type'] ?? '');
+            self::assertArrayHasKey($foreignType, $aliases, "the verbatim block names a type the alias map does not read on {$name}");
+            self::assertSame(
+                $aliases[$foreignType],
+                (string) ($entry['type'] ?? 'stdio'),
+                "the translated block no longer types {$name} the way TYPE_ALIASES maps its verbatim twin",
+            );
+
+            if (isset($entry['command'])) {
+                // The join law, demonstrated: head is the program, the tail
+                // is the args, env rode over from `environment`.
+                self::assertIsString($entry['command'], "{$name}: a native command is the program string, not an array");
+                $argv = $foreignServers[$name]['command'] ?? null;
+                self::assertIsArray($argv, "{$name}: the verbatim block no longer demonstrates the whole-argv array");
+                self::assertSame($argv[0], $entry['command'], "{$name}: head of the argv array is not the native command");
+                self::assertSame(\array_slice($argv, 1), $entry['args'] ?? [], "{$name}: tail of the argv array is not the native args");
+                self::assertSame($foreignServers[$name]['environment'] ?? null, $entry['env'] ?? null, "{$name}: environment did not ride over byte-identically to env");
+            } else {
+                // Zero-auth remote: both spellings carry the same bare url
+                // and NEITHER carries headers — that is the claim E709 was
+                // cut for, so the optional-headers leg must stay optional.
+                self::assertSame(
+                    (string) ($foreignServers[$name]['url'] ?? ''),
+                    (string) ($entry['url'] ?? ''),
+                    "the remotes of the two blocks no longer name one url ({$name})",
+                );
+                self::assertNotEmpty($entry['url'], "{$name}: a remote lost its url");
+            }
+        }
+
+        self::assertStringContainsString("headers'] ?? []", $buildServer, 'buildServer() no longer treats an http entry as header-optional — the zero-auth recipe would be a lie');
+        $skipped = array_filter($foreignServers, static fn (array $e): bool => ($e['enabled'] ?? null) === false);
+        self::assertNotEmpty($skipped, 'the verbatim block no longer demonstrates enabled: false — the skip the docs name is undrawn');
+        self::assertStringContainsString('enabled: false', $slice, 'the recipe stopped explaining the skip its own block demonstrates');
+        self::assertStringContainsString('trustedProjectMcp', $slice, 'the recipe lost the one trust line an operator needs before relaunch');
+    }
+
     private static function sourceOf(string $relative): string
     {
         $text = file_get_contents(\dirname(__DIR__, 2) . '/src/' . $relative);

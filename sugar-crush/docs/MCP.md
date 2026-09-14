@@ -191,6 +191,72 @@ empty string also takes the default.
 This is a *different* mechanism from the `${VAR}` expansion `ProviderFactory`
 performs on provider config — see [`ENVIRONMENT.md`](ENVIRONMENT.md#variables-read-from-any-config-file).
 
+### Adding servers
+
+The `/mcp` panel opens empty in a fresh project and both hint lines there point
+here, so this is the worked answer to "how would I do that?". Shortest honest
+form: **write the file, trust the root, relaunch** — there is no registration
+step for anything that does not demand OAuth login.
+
+A stdio server and three zero-auth remotes, in this port's native spelling:
+
+```json
+{
+  "mcpServers": {
+    "searxng": {
+      "command": "npx",
+      "args": ["-y", "@spences10/mcp-searxng-ultimate"],
+      "env": { "SEARXNG_URL": "https://searx.example.org" }
+    },
+    "context7": { "type": "http", "url": "https://mcp.context7.com/mcp" },
+    "exa": { "type": "http", "url": "https://mcp.exa.ai/mcp" },
+    "gh-grep": { "type": "http", "url": "https://mcp.github.com/grep" }
+  }
+}
+```
+
+Nothing about the three `http` entries above needs a credential, a registration
+URL, or a token URL: an `http` entry starts from its `url` alone — headers are
+optional, and a stored bearer attaches only if one was ever saved. `mcp auth`
+serves the OAuth minority, which is now what the panel's empty states and the
+credentials table each say out loud.
+
+The same four servers, written the way an opencode config writes them, are
+accepted verbatim — see "Foreign spellings that are read" above for the full
+normalisation roster:
+
+```json
+{
+  "mcpServers": {
+    "searxng": {
+      "type": "local",
+      "command": ["npx", "-y", "@spences10/mcp-searxng-ultimate"],
+      "environment": { "SEARXNG_URL": "https://searx.example.org" }
+    },
+    "context7": { "type": "remote", "url": "https://mcp.context7.com/mcp" },
+    "exa": { "type": "remote", "url": "https://mcp.exa.ai/mcp" },
+    "gh-grep": { "type": "remote", "url": "https://mcp.github.com/grep", "enabled": false }
+  }
+}
+```
+
+The two blocks declare the same four servers and run them the same way:
+`type: local` reads as `stdio`, `type: remote` as `http`, a whole-argv
+`command` array splits into program plus args, `environment` rides as the env
+map, and `enabled: false` keeps a server documented but not launched. Either
+spelling is fine, per entry; the reader decides shape by key, not by file.
+
+Both files are PROJECT config, so they run only once the repository is trusted:
+name its path under `trustedProjectMcp` in `~/.sugar-crush/config.json` — the
+trust gate at the top of this page carries the exact rules — and relaunch,
+because the decision is frozen for the life of the process. `/mcp` then lists
+every declared server whether or not it started, and the liveness rows below
+explain each suffix.
+
+If a server really does demand OAuth, that is the single case with a second
+step: `mcp auth add <url>` registers a client and stores tokens, and the flow
+under "Authorization-code login" completes the browser dance.
+
 ---
 
 ## Listing without starting

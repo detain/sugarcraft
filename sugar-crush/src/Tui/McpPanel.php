@@ -40,6 +40,24 @@ final class McpPanel
     public const DEFAULT_WIDTH = 80;
 
     /**
+     * E709: the docs/MCP.md subsection carrying the worked recipe. One const
+     * so the panel hint, the auth-table hint, and the DocFigure arm that
+     * proves the heading exists cannot drift apart from each other.
+     */
+    public const GUIDANCE_SECTION = 'Adding servers';
+
+    /**
+     * E709: first half of the empty-state hint — WHERE servers come from.
+     * The operator pain this answers is real: a cold panel used to name only
+     * the OAuth verb, which reads as "MCP means registering credentials",
+     * while in fact a declared http remote with no auth starts on its own.
+     */
+    public const GUIDANCE_ADD = '  Add servers: declare them under "mcpServers" in the .mcp.json above.';
+
+    /** E709: second half — the zero-auth truth and where the recipe lives. */
+    public const GUIDANCE_RECIPE = '  No-auth http remotes just work — recipe: docs/MCP.md, "' . self::GUIDANCE_SECTION . '".';
+
+    /**
      * Render the inventory as transcript lines.
      *
      * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null} $inventory exactly what {@see Bootstrap::mcpServerInventory()} returned
@@ -107,6 +125,21 @@ final class McpPanel
             }
         } elseif ($status !== Bootstrap::MCP_ABSENT) {
             $out .= self::line('  Servers: not listed (discovery refused before parsing).', $width);
+        }
+
+        // E709: teach the surface when there is nothing to teach ABOUT. The
+        // pair prints on exactly two cold states — no config at all, and a
+        // trusted config that declares nothing — because those are the frames
+        // an operator reads as "this feature needs setup". It deliberately
+        // does NOT print on the refusal states: an untrusted root's next
+        // correct action is the trust opt-in the status line already names,
+        // not a recipe. The rows use two-space indent, never the three-space
+        // dash of a server row, so the panel's own "no server rows invented"
+        // law keeps holding over them.
+        if ($status === Bootstrap::MCP_ABSENT
+            || ($status === Bootstrap::MCP_TRUSTED && $servers === [])) {
+            $out .= self::line(self::GUIDANCE_ADD, $width);
+            $out .= self::line(self::GUIDANCE_RECIPE, $width);
         }
 
         if ($live) {

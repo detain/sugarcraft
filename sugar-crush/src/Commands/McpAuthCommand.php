@@ -177,10 +177,19 @@ final class McpAuthCommand
         $servers = $this->authStore->listServers();
 
         if ($servers === []) {
+            // E709: this block used to read "No MCP servers registered. Run
+            // `mcp auth add`..." — and the operator reasonably concluded MCP
+            // means registering credentials first. It does not: this store
+            // holds OAuth credentials ONLY, and the servers themselves come
+            // from .mcp.json (the panel above already teaches that; these
+            // lines fix what THIS table is actually empty of).
             echo "\n";
-            echo "  No MCP servers registered.\n";
+            echo "  No stored MCP credentials.\n";
             echo "\n";
-            echo "  Run `mcp auth add` *<server>* to register a server.\n";
+            echo "  Credentials are only for servers that demand OAuth login; a\n";
+            echo "  declared http server that needs none runs from its \"url\" alone.\n";
+            echo "  Servers themselves are declared under \"mcpServers\" in\n";
+            echo "  <project>/.mcp.json — recipe: docs/MCP.md, \"" . \SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION . "\".\n";
             echo "\n";
 
             return 0;
@@ -255,6 +264,13 @@ final class McpAuthCommand
             echo "\n";
             echo "  Please provide them explicitly:\n";
             echo "    `mcp auth add {$serverUrl}` *<registration-url>* *<token-url>*\n";
+            // E709: failed discovery very often means there was nothing to
+            // discover — a plain no-auth remote exposes no OAuth metadata and
+            // answers 404 here. Say so before the operator hunts endpoints.
+            echo "\n";
+            echo "  Nothing to discover usually means nothing to register: a\n";
+            echo "  server that needs no login runs from its \"url\" alone once\n";
+            echo "  declared in .mcp.json (docs/MCP.md, \"" . \SugarCraft\Crush\Tui\McpPanel::GUIDANCE_SECTION . "\").\n";
             echo "\n";
 
             return 1;
@@ -430,7 +446,7 @@ final class McpAuthCommand
         echo "\n";
         echo "  Usage:\n";
         echo "    mcp auth list                    — list registered servers\n";
-        echo "    mcp auth add <server> [reg-url] [token-url]  — register a server\n";
+        echo "    mcp auth add <server> [reg-url] [token-url]  — store OAuth credentials for a server\n";
         echo "    mcp auth remove <server>         — remove a server's credentials\n";
         echo "    mcp auth login <server>          — print the shell command for interactive login\n";
         echo "\n";
