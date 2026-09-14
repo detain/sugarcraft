@@ -386,6 +386,16 @@ final class GitMcpServer implements McpServer
     }
 
     /**
+     * E698: the git transport runs IN-PROCESS — there is no child and no
+     * socket, so "up" here is exactly "this server was started and has not
+     * been stopped". The panel labels it distinctly for that reason.
+     */
+    public function isUp(): bool
+    {
+        return $this->running;
+    }
+
+    /**
      * @return array<McpTool>
      */
     public function listTools(): array

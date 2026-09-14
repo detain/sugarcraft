@@ -62,6 +62,19 @@ final class HttpMcpServer implements McpServer
     }
 
     /**
+     * E698: for an HTTP server, "up" IS {@see $initialized} — the handshake
+     * completed and the tool list was cached. There is no process to lose and
+     * no persistent connection to drop; each call is its own request, so this
+     * answers "did this launch ever talk to it", not "is it answering right
+     * now" (that question would cost a wire exchange, which a readout must
+     * not).
+     */
+    public function isUp(): bool
+    {
+        return $this->initialized;
+    }
+
+    /**
      * @return array<McpTool>
      */
     public function listTools(): array

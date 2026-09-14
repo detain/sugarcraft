@@ -148,6 +148,40 @@ absent or trusted, `WARN` for untrusted, `FAIL` for out-of-tree or undecodable.
 
 ---
 
+## Liveness in a running session
+
+The listing above reflects the config. A running session can additionally
+report what it actually started: `/mcp` consults
+`Bootstrap::mcpLivenessSnapshot()` — the memo of already-started clients in
+THIS process only, read without ever building a client, because the only other
+way to answer "what is up" would launch every server the repository names —
+and annotates each declared row:
+
+| Suffix | Meaning |
+|---|---|
+| ` · up N tools` | a `stdio` child that is still running |
+| ` · exited N tools` | it came up at launch; the child is gone, its cached tool list is not |
+| ` · ready N tools` | an `http` server whose handshake completed |
+| ` · ready (in-process) N tools` | the in-process `git` transport, up |
+| ` · not up` | declared, but this process never started it — a failed `start()` is skipped silently at launch, and this is where that skip surfaces |
+| ` · state unknown` | a transport the snapshot could not classify — unknown stays unknown |
+
+The block closes with `Live in this process: K of M declared (other sessions'
+servers are not visible here)`. The scope is honest: the readout is per
+process, so a second sugar-crush session or a sub-agent worker keeps its own
+servers to itself. A server this process started that the config no longer
+declares gets its own line (`Started but no longer declared: name (N tools)`)
+rather than vanishing from the count.
+
+On an untrusted or absent root the whole block is suppressed even if a map
+arrives — the panel will not hand back, through "what this process started",
+the same roster the discovery gate withholds. And in a cold process (the
+one-shot `sugarcrush mcp list`, or any session that started nothing) there is
+no memo to read and the panel renders exactly as it did before this readout
+existed — byte for byte.
+
+---
+
 ## What the model sees
 
 `Bootstrap::mcpTools()` wraps each advertised tool in an `McpToolBridge`

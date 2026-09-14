@@ -552,6 +552,19 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * E698: is the spawned child STILL THERE? The same question
+     * {@see childIsRunning()} answers for {@see writeLine()}'s EINTR branch,
+     * exposed once for the `/mcp` panel's liveness readout — a server whose
+     * process exited after a successful handshake is exactly the state an
+     * operator can otherwise not see: it is registered, it advertises its
+     * cached tools, and it answers nothing.
+     */
+    public function isUp(): bool
+    {
+        return self::childIsRunning($this->process);
+    }
+
+    /**
      * @return array<McpTool>
      */
     public function listTools(): array

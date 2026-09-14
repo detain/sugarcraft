@@ -153,6 +153,57 @@ final class McpClient
     }
 
     /**
+     * E698: a LIVENESS READOUT of the servers this client has STARTED, with
+     * zero side effects — no exchange, no `proc_open()`, no wire traffic.
+     *
+     * WHY IT CAN BE HONEST AT ALL: {@see startServer()} registers a server in
+     * {@see $servers} ONLY after its `start()` succeeded, and a `start()` that
+     * fails is skipped silently. So the map's KEYS are exactly "came up at
+     * launch", and its ABSENCES are the silent skip — the pair the `/mcp`
+     * panel renders as up-vs-not-up. This method adds the second half the map
+     * could not carry before: whether a registered stdio child is STILL alive,
+     * which until now nothing outside {@see writeLine()}'s EINTR branch ever
+     * asked after launch.
+     *
+     * The instanceof narrowing is deliberate, same law as {@see pumpStderr()}:
+     * {@see McpServer} does NOT grow an isUp(). A transport that has no
+     * liveness to report should not be forced to fake one; an unrecognised
+     * fourth class answers `transport: 'other'` with `up: null` — unknown,
+     * which is the truth, rather than a default that reads as healthy.
+     *
+     * `tools` counts the START-TIME cache every transport already holds
+     * ({@see StdioMcpServer::listTools()}, {@see HttpMcpServer::listTools()},
+     * {@see GitMcpServer::listTools()} all return arrays built during the
+     * handshake or constructor), so enumerating it costs no traffic.
+     *
+     * @return array<string, array{transport: string, up: bool|null, tools: int}>
+     */
+    public function startedSnapshot(): array
+    {
+        $rows = [];
+
+        foreach ($this->servers as $name => $server) {
+            $rows[$name] = [
+                'transport' => match (true) {
+                    $server instanceof StdioMcpServer => 'stdio',
+                    $server instanceof HttpMcpServer => 'http',
+                    $server instanceof GitMcpServer => 'git',
+                    default => 'other',
+                },
+                'up' => match (true) {
+                    $server instanceof StdioMcpServer,
+                    $server instanceof HttpMcpServer,
+                    $server instanceof GitMcpServer => $server->isUp(),
+                    default => null,
+                },
+                'tools' => count($server->listTools()),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
      * Start a single server, and NEVER let one entry's failure reach the loop
      * that is starting the others.
      *

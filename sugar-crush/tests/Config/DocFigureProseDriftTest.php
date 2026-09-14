@@ -5231,6 +5231,85 @@ final class DocFigureProseDriftTest extends TestCase
         self::fail("{$class}::__construct() no longer promotes \${$parameter} with a default — the prose default lost its referent");
     }
 
+    /**
+     * E698: MCP.md's liveness table quotes the panel's SUFFIX VOCABULARY,
+     * derived from `livenessSuffix()` itself (match arms, the null-row return,
+     * and the unknown fallback — the labels the panel can emit, not a typed
+     * copy), the two shared sentences quoted byte-for-byte from the panel and
+     * the page, and the never-launches law sliced as tokens: the snapshot
+     * method lives OUTSIDE the mcpServerInventory AW span, still routes
+     * through mcpConfigDecision(), and contains no call of self::mcpClient(.
+     */
+    public function testMcpLivenessSuffixesAndTheNeverLaunchingSnapshotReadThePanel(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $panel = self::sourceOf('Tui/McpPanel.php');
+
+        $suffix = null;
+        foreach (self::functionSpans($panel) as $span) {
+            if ('livenessSuffix' === $span['name']) {
+                $suffix = (string) substr($panel, $span['begin'], $span['end'] - $span['begin']);
+            }
+        }
+        self::assertIsString($suffix, 'McpPanel::livenessSuffix() vanished — the page\'s suffix table lost its generator');
+
+        $labels = [];
+        preg_match_all("/\['\w+', true\] => '([^']+)'/", $suffix, $arms);
+        foreach ($arms[1] as $label) {
+            $labels[] = $label;
+        }
+        preg_match_all("/return ' \x{00B7} ([^'\$]+?)';/u", $suffix, $fixed);
+        foreach ($fixed[1] as $label) {
+            $labels[] = $label;
+        }
+        preg_match("/default => '([^']+)'/", $suffix, $down);
+        self::assertSame(1, isset($down[1]) ? 1 : 0, 'the exited fallback arm left — one label is unminted');
+        $labels[] = $down[1];
+        $labels = array_values(array_unique($labels));
+        self::assertSame(
+            ['up', 'ready', 'ready (in-process)', 'not up', 'state unknown', 'exited'],
+            $labels,
+            'the panel\'s liveness vocabulary changed shape — the page table and this pin move with it',
+        );
+
+        $dot = "\u{00B7}";
+        foreach ($labels as $label) {
+            self::assertStringContainsString(
+                '` ' . $dot . ' ' . $label,
+                $raw,
+                'MCP.md no longer quotes the suffix the panel emits for ' . $label,
+            );
+        }
+
+        foreach (['  Live in this process: ', '  Started but no longer declared: '] as $sentence) {
+            self::assertStringContainsString("'" . $sentence . "'", $panel, "the panel literal for \"{$sentence}\" moved");
+            self::assertStringContainsString(
+                $sentence === '  Live in this process: ' ? 'Live in this process: K of M declared' : trim($sentence),
+                $raw,
+                "MCP.md stopped quoting \"{$sentence}\"",
+            );
+        }
+
+        $bootstrap = self::sourceOf('Cli/Bootstrap.php');
+        $inventory = null;
+        $snapshot = null;
+        foreach (self::functionSpans($bootstrap) as $span) {
+            $inventory ??= 'mcpServerInventory' === $span['name'] ? $span : null;
+            $snapshot ??= 'mcpLivenessSnapshot' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($inventory, 'mcpServerInventory() vanished — the AW span lost its referent');
+        self::assertIsArray($snapshot, 'Bootstrap::mcpLivenessSnapshot() vanished — the never-launches pin lost its subject');
+        self::assertGreaterThanOrEqual(
+            $inventory['end'],
+            $snapshot['begin'],
+            'the snapshot moved INSIDE or before the mcpServerInventory span — AW slices that span to pin its zero-exec claim, and a shared slice would blur which method owes what',
+        );
+        $snapText = (string) substr($bootstrap, $snapshot['begin'], $snapshot['end'] - $snapshot['begin']);
+        self::assertStringContainsString('mcpConfigDecision(', $snapText, 'the snapshot no longer resolves through the shared decision path — its memo key could drift from the writer\'s');
+        self::assertStringNotContainsString('self::mcpClient(', $snapText, 'the liveness readout now BUILDS a client — building one starts every server, which is the exact act this method exists to refuse');
+        self::assertTrue(method_exists(Bootstrap::class, 'mcpLivenessSnapshot'), 'the page cites Bootstrap::mcpLivenessSnapshot() by name');
+    }
+
     private static function sourceOf(string $relative): string
     {
         $text = file_get_contents(\dirname(__DIR__, 2) . '/src/' . $relative);

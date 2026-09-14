@@ -122,9 +122,14 @@ final class McpAuthCommand
      */
     private function listWithProjectPanel(Chat $chat, int $paneWidth): int
     {
+        // E698: the same render also gets THIS PROCESS's started-servers map —
+        // read from the memo only, so opening the panel can never be the act
+        // that launches a server (Bootstrap::mcpLivenessSnapshot()'s whole
+        // design constraint).
         echo \SugarCraft\Crush\Tui\McpPanel::render(
             \SugarCraft\Crush\Cli\Bootstrap::mcpServerInventory(),
             $paneWidth,
+            \SugarCraft\Crush\Cli\Bootstrap::mcpLivenessSnapshot() ?? [],
         );
 
         return $this->listServers($paneWidth);

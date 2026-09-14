@@ -5634,6 +5634,39 @@ final class Bootstrap
     }
 
     /**
+     * What THIS PROCESS has actually started, for the `/mcp` panel — reading
+     * the {@see $mcpClients} memo, NEVER consulting {@see mcpClient()}.
+     *
+     * THE ONE THING THIS MUST NOT DO IS LAUNCH. A liveness readout asked on a
+     * cold process would love nothing more than to "just check", and the only
+     * way to check from outside the memo is to build the client — whose
+     * constructor path STARTS every server. That turns a status question into
+     * the exact un-deliberated `proc_open()` the trust gate above exists to
+     * make one. So this reads the memo and nothing else: a miss is a null,
+     * never a launch.
+     *
+     * @return array<string, array{transport: string, up: bool|null, tools: int}>|null
+     *   null when this process holds no session client for the rooted path at
+     *   all (the one-shot CLI always lands here — its process never builds
+     *   one); the empty map when a client exists but zero servers came up;
+     *   else {@see \SugarCraft\Crush\MCP\McpClient::startedSnapshot()}.
+     */
+    public static function mcpLivenessSnapshot(?string $root = null): ?array
+    {
+        // THE SAME DECISION PATH, for the property that matters: the memo is
+        // keyed by the canonical decision path, so resolving any other way
+        // (raw $root, or the config path without realpath) would read a key
+        // mcpClient() never writes. mcpConfigDecision() records nothing new on
+        // this call — the render site has already asked it once for the very
+        // same root, and its refusals are keyed idempotently by path.
+        $decision = self::mcpConfigDecision($root);
+        $path = $decision['path'];
+        $pid = getmypid() ?: 0;
+
+        return (self::$mcpClients[$pid][$path] ?? null)?->startedSnapshot();
+    }
+
+    /**
      * The launch's MCP client, with its configured servers STARTED, or null when
      * this project has no usable `.mcp.json`.
      *
