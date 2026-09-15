@@ -65,7 +65,7 @@ final class KittyImage
 
         foreach (self::SIGNED_KEYS as $key) {
             $value = $params[$key] ?? null;
-            if ($value !== null && preg_match('/^-?\d+$/', $value) !== 1) {
+            if ($value !== null && preg_match('/^-?\d+\z/', $value) !== 1) {
                 self::rejectNonNumeric($key, $value);
             }
         }
