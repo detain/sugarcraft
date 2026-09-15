@@ -90,9 +90,9 @@ final class AllocationTest extends TestCase
         $buffer = new Buffer(320, 120);
 
         $copy = $buffer->copy();
-        self::assertCount(120, $copy, 'a fresh Buffer must expose exactly `rows` row arrays');
+        $this->assertCount(120, $copy, 'a fresh Buffer must expose exactly `rows` row arrays');
         foreach ($copy as $row => $cells) {
-            self::assertCount(320, $cells, "row {$row} must expose exactly `cols` cells");
+            $this->assertCount(320, $cells, "row {$row} must expose exactly `cols` cells");
         }
 
         // Churn: 120 alternating resize round-trips. The live structure is
@@ -101,8 +101,8 @@ final class AllocationTest extends TestCase
         for ($i = 0; $i < 120; $i++) {
             $buffer = $buffer->resize($i % 2 === 0 ? 321 : 320, 120);
             $copy = $buffer->copy();
-            self::assertCount(120, $copy);
-            self::assertCount($i % 2 === 0 ? 321 : 320, $copy[0]);
+            $this->assertCount(120, $copy);
+            $this->assertCount($i % 2 === 0 ? 321 : 320, $copy[0]);
         }
     }
 
@@ -120,7 +120,7 @@ final class AllocationTest extends TestCase
             $distinct->attach($slot['cell']);
         }
 
-        self::assertSame(1, $distinct->count(), 'all empty slots must be one shared immutable Cell');
+        $this->assertSame(1, $distinct->count(), 'all empty slots must be one shared immutable Cell');
     }
 
     public function testWrittenCellsDoNotAccumulateAcrossRepeatedFeedOfTheSameStream(): void
@@ -140,7 +140,7 @@ final class AllocationTest extends TestCase
             if ($baseline === null) {
                 $baseline = $distinct;
             }
-            self::assertSame($baseline, $distinct, "cycle {$cycle}: written-cell census must not drift");
+            $this->assertSame($baseline, $distinct, "cycle {$cycle}: written-cell census must not drift");
             $terminal->resize(320, 120);
         }
     }
@@ -152,7 +152,7 @@ final class AllocationTest extends TestCase
         // cols*rows — not cols*rows + slack retained by a stale resize —
         // and that 80 clear/resize round-trips leave the count unchanged.
         $grid = new CellGrid(160, 50);
-        self::assertSame(160 * 50, $this->distinctCellCensus($grid));
+        $this->assertSame(160 * 50, $this->distinctCellCensus($grid));
 
         for ($i = 0; $i < 80; $i++) {
             // clear() re-allocates the whole grid; resize() round-trips a
@@ -160,7 +160,7 @@ final class AllocationTest extends TestCase
             // on exactly cols*rows — no slack from the discarded shape.
             $grid = $grid->resize(161, 51)->resize(160, 50);
             $grid = $grid->clear();
-            self::assertSame(160 * 50, $this->distinctCellCensus($grid), "cycle {$i}: grid stayed cols*rows");
+            $this->assertSame(160 * 50, $this->distinctCellCensus($grid), "cycle {$i}: grid stayed cols*rows");
         }
     }
 
@@ -181,14 +181,14 @@ final class AllocationTest extends TestCase
             // The sentinel values (min=PHP_INT_MAX, max=-1) would satisfy a
             // bare `0 <= x < rows` check forever; pin them to real, written
             // bounds so the test can't pass on an empty grid.
-            self::assertNotSame(PHP_INT_MAX, $dirty['minRow'], 'dirty region must open after a write');
-            self::assertNotSame(PHP_INT_MAX, $dirty['minCol'], 'dirty region must open after a write');
-            self::assertLessThanOrEqual($row, $dirty['minRow']);
-            self::assertGreaterThanOrEqual($row, $dirty['maxRow']);
-            self::assertLessThan(50, $dirty['maxRow'], 'dirty region must never exceed the grid');
-            self::assertGreaterThanOrEqual(0, $dirty['minCol']);
-            self::assertLessThan(160, $dirty['maxCol'], 'dirty region must never exceed the grid');
-            self::assertSame('z', $grid->get($row, $col)->char, 'the dispatched write must land in the grid');
+            $this->assertNotSame(PHP_INT_MAX, $dirty['minRow'], 'dirty region must open after a write');
+            $this->assertNotSame(PHP_INT_MAX, $dirty['minCol'], 'dirty region must open after a write');
+            $this->assertLessThanOrEqual($row, $dirty['minRow']);
+            $this->assertGreaterThanOrEqual($row, $dirty['maxRow']);
+            $this->assertLessThan(50, $dirty['maxRow'], 'dirty region must never exceed the grid');
+            $this->assertGreaterThanOrEqual(0, $dirty['minCol']);
+            $this->assertLessThan(160, $dirty['maxCol'], 'dirty region must never exceed the grid');
+            $this->assertSame('z', $grid->get($row, $col)->char, 'the dispatched write must land in the grid');
         }
     }
 
@@ -200,12 +200,12 @@ final class AllocationTest extends TestCase
         $scrollback = new Scrollback($maxSize);
         $row = array_fill(0, 80, Cell::empty());
 
-        self::assertSame(0, $scrollback->count());
-        self::assertSame($maxSize, $scrollback->maxSize());
+        $this->assertSame(0, $scrollback->count());
+        $this->assertSame($maxSize, $scrollback->maxSize());
 
         for ($i = 0; $i < $maxSize; $i++) {
             $scrollback->push($row);
-            self::assertSame($i + 1, $scrollback->count(), 'ring fills one-for-one before saturation');
+            $this->assertSame($i + 1, $scrollback->count(), 'ring fills one-for-one before saturation');
         }
 
         $settledFull = $this->settledUsage();
@@ -215,10 +215,10 @@ final class AllocationTest extends TestCase
         // overwrites in place, it never appends).
         for ($i = 0; $i < $maxSize * 4; $i++) {
             $scrollback->push($row);
-            self::assertSame($maxSize, $scrollback->count());
+            $this->assertSame($maxSize, $scrollback->count());
         }
 
-        self::assertLessThan(
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $this->settledUsage() - $settledFull,
             'saturated ring must reuse slots; live heap must not climb with push volume',
@@ -232,7 +232,7 @@ final class AllocationTest extends TestCase
                 $distinct->attach($cell);
             }
         }
-        self::assertSame(1, $distinct->count(), 'ring slots must not clone the shared empty cell');
+        $this->assertSame(1, $distinct->count(), 'ring slots must not clone the shared empty cell');
     }
 
     public function testTerminalScrollCycleKeepsScrollbackRingBounded(): void
@@ -248,12 +248,12 @@ final class AllocationTest extends TestCase
             $terminal->feed("cycle line {$cycle}\r\n");
             if ($cycle === 400) {
                 $settledWarm = $this->settledUsage();
-                self::assertSame($scrollbackSize, $terminal->screen()->scrollback()?->count());
+                $this->assertSame($scrollbackSize, $terminal->screen()->scrollback()?->count());
             }
         }
 
-        self::assertSame($scrollbackSize, $terminal->screen()->scrollback()?->count(), 'ring stayed pinned at maxSize');
-        self::assertLessThan(
+        $this->assertSame($scrollbackSize, $terminal->screen()->scrollback()?->count(), 'ring stayed pinned at maxSize');
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $this->settledUsage() - (int) $settledWarm,
             'scroll churn must not grow the heap beyond a ring of maxSize rows',
@@ -280,9 +280,9 @@ final class AllocationTest extends TestCase
             $buffer = $buffer->resize(321, 121)->resize(320, 120);
         }
 
-        self::assertSame(320, $buffer->cols);
-        self::assertSame(120, $buffer->rows);
-        self::assertSame('A', $buffer->cell(10, 10)->grapheme, 'resize round-trip must preserve content');
+        $this->assertSame(320, $buffer->cols);
+        $this->assertSame(120, $buffer->rows);
+        $this->assertSame('A', $buffer->cell(10, 10)->grapheme, 'resize round-trip must preserve content');
         $this->assertNoGrowth($settledWarm, $peakWarm);
     }
 
@@ -317,7 +317,7 @@ final class AllocationTest extends TestCase
             unset($screen);
         }
 
-        self::assertSame(80, $terminal->screen()->cols);
+        $this->assertSame(80, $terminal->screen()->cols);
         $this->assertNoGrowth($settledWarm, $peakWarm);
     }
 
@@ -341,12 +341,12 @@ final class AllocationTest extends TestCase
             $terminal->feed($stream);
 
             $cells = $this->flattenCells($terminal->screen());
-            self::assertCount(320 * 120, $cells, 'grid stayed exactly cols*rows');
+            $this->assertCount(320 * 120, $cells, 'grid stayed exactly cols*rows');
             $census = $this->distinctLiveCells($cells);
             if ($censusAt320 === null) {
                 $censusAt320 = $census;
             } else {
-                self::assertSame($censusAt320, $census, "cycle {$cycle}: wide-cell churn must not grow the live census");
+                $this->assertSame($censusAt320, $census, "cycle {$cycle}: wide-cell churn must not grow the live census");
             }
 
             if ($cycle === 50) {
@@ -354,7 +354,7 @@ final class AllocationTest extends TestCase
             }
         }
 
-        self::assertLessThan(
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $this->settledUsage() - (int) $settledSteady,
             'wide-character reflow churn must not grow the settled heap',
@@ -378,8 +378,8 @@ final class AllocationTest extends TestCase
         for ($i = 0; $i < 500; $i++) {
             $screen = Screen::fromBuffer($buffer);
         }
-        self::assertSame('x', $screen->cell(0, 0)->grapheme);
-        self::assertSame(120, iterator_count($screen->lines()));
+        $this->assertSame('x', $screen->cell(0, 0)->grapheme);
+        $this->assertSame(120, iterator_count($screen->lines()));
         $this->assertNoGrowth($settledWarm, $peakWarm);
     }
 
@@ -394,7 +394,7 @@ final class AllocationTest extends TestCase
             $buffer->put($cycle % 60, $cycle % 120, new Cell(grapheme: 'q'));
             $after = Screen::fromBuffer($buffer);
             $changes = $before->diff($after);
-            self::assertLessThanOrEqual(1, count($changes), 'one write diffs to at most one cell change');
+            $this->assertLessThanOrEqual(1, count($changes), 'one write diffs to at most one cell change');
             unset($before, $after, $changes);
             if ($cycle === 30) {
                 $settledWarm = $this->settledUsage();
@@ -402,7 +402,7 @@ final class AllocationTest extends TestCase
             }
         }
 
-        self::assertLessThan(
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $this->settledUsage() - (int) $settledWarm,
             'diff churn must not grow the settled heap',
@@ -436,9 +436,9 @@ final class AllocationTest extends TestCase
 
         // Liveness guard: the churn must have actually dispatched — an idle
         // parser (state-machine regression) would keep the heap flat too.
-        self::assertGreaterThan(2000, $handler->dispatches, 'parser must keep dispatching across reset()');
-        self::assertSame(State::Ground, $parser->currentState(), 'reset() must return the parser to ground');
-        self::assertLessThan(
+        $this->assertGreaterThan(2000, $handler->dispatches, 'parser must keep dispatching across reset()');
+        $this->assertSame(State::Ground, $parser->currentState(), 'reset() must return the parser to ground');
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $this->settledUsage() - $settledWarm,
             'feed/reset churn must not grow the parser footprint',
@@ -472,9 +472,9 @@ final class AllocationTest extends TestCase
             }
         }
 
-        self::assertGreaterThan(5000, $handler->dispatches, 'hostile input must still drive dispatches');
-        self::assertSame(State::Ground, $parser->currentState());
-        self::assertLessThan(
+        $this->assertGreaterThan(5000, $handler->dispatches, 'hostile input must still drive dispatches');
+        $this->assertSame(State::Ground, $parser->currentState());
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $this->settledUsage() - (int) $settledWarm,
             '5000 cycles of hostile truncated sequences must not grow the settled heap',
@@ -492,7 +492,7 @@ final class AllocationTest extends TestCase
 
         for ($i = 0; $i < 20; $i++) {
             $terminal->feed($stream);
-            self::assertSame(160, $terminal->snapshot()->grid->cols);
+            $this->assertSame(160, $terminal->snapshot()->grid->cols);
         }
         $settledWarm = $this->settledUsage();
         $peakWarm = $this->capturePeakBaseline();
@@ -503,8 +503,8 @@ final class AllocationTest extends TestCase
             unset($snap);
         }
 
-        self::assertSame(160, $terminal->grid()->cols);
-        self::assertSame(50, $terminal->grid()->rows);
+        $this->assertSame(160, $terminal->grid()->cols);
+        $this->assertSame(50, $terminal->grid()->rows);
         $this->assertNoGrowth($settledWarm, $peakWarm);
     }
 
@@ -590,12 +590,12 @@ final class AllocationTest extends TestCase
     private function assertNoGrowth(int $settledWarm, int $peakWarm): void
     {
         $settledNow = $this->settledUsage();
-        self::assertLessThan(
+        $this->assertLessThan(
             self::GROWTH_CEILING_BYTES,
             $settledNow - $settledWarm,
             "settled heap grew " . ($settledNow - $settledWarm) . ' bytes across churn',
         );
-        self::assertLessThan(
+        $this->assertLessThan(
             self::PEAK_CEILING_BYTES,
             memory_get_peak_usage() - $peakWarm,
             'peak working set climbed during churn — allocation outran release beyond one transient grid',
