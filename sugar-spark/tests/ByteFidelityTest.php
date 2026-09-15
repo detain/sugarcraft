@@ -588,6 +588,9 @@ final class ByteFidelityTest extends TestCase
         // The expected bytes still show the one documented pre-existing
         // normalisation: a re-emitted DCS drops the prelude's final byte (`q`
         // here), which is outside this PR and recorded in CALIBER_LEARNINGS.
+        // The `plain semicolons` case is a regression guard rather than a fix —
+        // a single non-empty parameter needs no separator, so master reproduced
+        // that one too.
         $cases = [
             'colon sub-parameters' => ["\x1bP1:2q data\x1b\\", "\x1bP1:2 data\x1b\\"],
             'omitted parameter' => ["\x1bP;5q data\x1b\\", "\x1bP;5 data\x1b\\"],
@@ -600,6 +603,24 @@ final class ByteFidelityTest extends TestCase
             $this->assertSame($expected, $raw, $label);
             $this->assertStringNotContainsString('-1', $raw, $label);
         }
+    }
+
+    public function testDcsPreludeRebuildHoistsTheIntermediateAheadOfTheParameters(): void
+    {
+        // The other half of the documented DCS lossiness, pinned rather than
+        // merely mentioned: candy-ansi collects `1` as a parameter and `$` as an
+        // intermediate, but `dcsDispatch()` rebuilds the prelude as
+        // `intermediate . params`, so the hoist and the dropped prelude final
+        // byte (`r`) always travel together. `ESC P 1 $ r ST` arrives as
+        // `ESC P $ 1 ST` — reordered and one byte shorter, but nothing lost
+        // without a segment to show for it.
+        $input = "\x1bP1\$r\x1b\\";
+
+        $segments = Inspector::parse($input);
+
+        $this->assertCount(1, $segments);
+        $this->assertSame("\x1bP\$1\x1b\\", $segments[0]->raw());
+        $this->assertNotSame($input, $segments[0]->raw());
     }
 
     // --- documented limit: candy-ansi's 32-parameter cap --------------------

@@ -89,13 +89,21 @@ inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
 
-Three normalisations remain, each pinned by a test rather than hidden: an OSC is
-re-emitted with a BEL terminator; a re-emitted DCS prelude is lossy (its final
-byte is dropped and an intermediate byte comes back ahead of the parameters) —
-the parameters themselves now keep their own separators; and candy-ansi caps a
+Three normalisations remain in the re-emitted bytes, each pinned by a test
+rather than hidden: an OSC is re-emitted with a BEL terminator; a re-emitted DCS
+prelude is lossy (its final byte is dropped and an intermediate byte comes back
+ahead of the parameters, so `ESC P 1 $ r ST` arrives as `ESC P $ 1 ST`) — the
+parameters themselves now keep their own separators; and candy-ansi caps a
 sequence at 32 parameters, past which the separator is dropped and digits keep
 accumulating into the last slot, so `ESC[1;…;32;33m` arrives as the single
 parameter `3233`.
+
+Two further byte losses live in the shared candy-ansi state machine rather than
+in this inspector, and are recorded in `CALIBER_LEARNINGS.md`: an illegal
+parameter byte (`-`, CAN, SUB) cancels the sequence and discards the bytes
+collected so far, and a truncated UTF-8 rune at end of stream is dropped because
+it is not an escape-sequence state. Both are byte-identical to the behaviour
+before this contract was written, and both are fidelity items for candy-ansi.
 
 ## Test
 

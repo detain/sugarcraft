@@ -127,8 +127,12 @@ final class AnsiHandlerTest extends TestCase
         // DCS with xterm XTVERSION payload
         $segments = $handler->parse("\x1bP>|xterm(367)\x1b\\");
 
-        $this->assertGreaterThanOrEqual(1, count($segments));
+        $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);
+        // The `|` is the DCS prelude's final byte and the re-emission drops it
+        // (documented normalisation); the terminator belongs to this segment,
+        // so nothing may follow it.
+        $this->assertSame("\x1bP>xterm(367)\x1b\\", $segments[0]->raw());
         $this->assertStringContainsString('terminal version', $segments[0]->describe());
     }
 
