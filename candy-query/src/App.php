@@ -762,12 +762,28 @@ final class App implements Model
     /**
      * Create the appropriate server context based on database flavor.
      * Returns null for unsupported flavors (e.g., SQLite).
+     *
+     * The built context is memoized per database handle in AdminQueryCache,
+     * NOT minted fresh per call (E718): adminPage() re-runs this on every pane
+     * reset, and a cold ServerContext means a cold status-variables TTL cache,
+     * which means a synchronous SHOW GLOBAL STATUS on the render path on every
+     * navigation. One shared instance lets the TTL window actually cover
+     * repeated renders.
      */
     private function createContext(): ?ServerContextInterface
     {
-        return match ($this->connection->flavor) {
-            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => new ServerContext($this->connection->db, $this->connection->flavor),
-            Flavor::Postgres => $this->createPostgresContext(),
+        $db = $this->connection->db;
+        $flavor = $this->connection->flavor;
+
+        return match ($flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => AdminQueryCache::instance()->serverContext(
+                $db,
+                static fn(DatabaseInterface $connection): ServerContextInterface => new ServerContext($connection, $flavor),
+            ),
+            Flavor::Postgres => AdminQueryCache::instance()->serverContext(
+                $db,
+                fn(DatabaseInterface $connection): ServerContextInterface => $this->createPostgresContext(),
+            ),
             default => null,
         };
     }

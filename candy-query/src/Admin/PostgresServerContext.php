@@ -17,6 +17,11 @@ use SugarCraft\Query\Db\Version;
  * This allows all admin pages (DashboardPage, VariablesPage, ServerStatusPage,
  * ReportsPage) to work with PostgreSQL without modification.
  *
+ * The status/server variable reads carry the same in-window TTL cache with
+ * fail-open-on-refresh as their MySQL counterparts, and instances are shared
+ * across admin-pane resets via AdminQueryCache::serverContext() — see the
+ * E718 seam note in {@see ServerContext}.
+ *
  * @see PostgresAdminProvider
  * @see ServerContextInterface
  */
@@ -60,7 +65,15 @@ final class PostgresServerContext implements ServerContextInterface
         return $this->connection;
     }
 
-    /** @return array<string, string> */
+    /**
+     * pg_settings with an in-window TTL cache (fail-open).
+     *
+     * Same contract as ServerContext::serverVariables(): one fetch attempt per
+     * CacheTtl::SERVER window; a failed refresh serves the last-known snapshot
+     * instead of propagating into the render path, cold-with-error rethrows.
+     *
+     * @return array<string, string>
+     */
     public function serverVariables(): array
     {
         $now = microtime(true);
@@ -71,12 +84,33 @@ final class PostgresServerContext implements ServerContextInterface
             }
         }
 
+        $stale = $this->serverVariablesCache;
         $this->serverVariablesTsCache = $now;
-        $this->serverVariablesCache = $this->provider->fetchServerVariables();
+
+        try {
+            $this->serverVariablesCache = $this->provider->fetchServerVariables();
+        } catch (\PDOException $e) {
+            if ($stale === null) {
+                throw $e;
+            }
+            return $stale;
+        }
+
         return $this->serverVariablesCache;
     }
 
-    /** @return array<string, string> */
+    /**
+     * pg_stat_database snapshot with an in-window TTL cache (fail-open).
+     *
+     * Same contract as ServerContext::statusVariables(): two reads inside one
+     * CacheTtl::STATUS window execute the query exactly once; a failed refresh
+     * serves the last-known snapshot, cold-with-error rethrows. Today's
+     * PostgresAdminProvider additionally degrades PDO errors internally, so
+     * the stale-serving catch is defense-in-depth for a provider that starts
+     * surfacing them — the window itself is the observable contract.
+     *
+     * @return array<string, string>
+     */
     public function statusVariables(): array
     {
         $now = microtime(true);
@@ -87,8 +121,18 @@ final class PostgresServerContext implements ServerContextInterface
             }
         }
 
+        $stale = $this->statusVariablesCache;
         $this->statusVariablesTsCache = $now;
-        $this->statusVariablesCache = $this->provider->fetchStatusVariables();
+
+        try {
+            $this->statusVariablesCache = $this->provider->fetchStatusVariables();
+        } catch (\PDOException $e) {
+            if ($stale === null) {
+                throw $e;
+            }
+            return $stale;
+        }
+
         return $this->statusVariablesCache;
     }
 

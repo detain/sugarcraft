@@ -21,6 +21,9 @@ final class FakePostgresDatabase implements DatabaseInterface
     /** @var array<string, \PDOException> */
     private array $queryExceptions = [];
 
+    /** @var array<string,int> Per-routed-table query()/prepare() call counts */
+    private array $queryCounts = [];
+
     private string $serverVersion = 'PostgreSQL 16.1';
 
     public function setQueryResult(string $table, array $result): void
@@ -68,6 +71,7 @@ final class FakePostgresDatabase implements DatabaseInterface
     public function query(string $sql): array|null
     {
         $table = $this->extractTableFromQuery($sql);
+        $this->queryCounts[$table] = ($this->queryCounts[$table] ?? 0) + 1;
 
         if (isset($this->queryExceptions[$table])) {
             throw $this->queryExceptions[$table];
@@ -131,10 +135,20 @@ final class FakePostgresDatabase implements DatabaseInterface
     public function prepare(string $sql): ?PreparedStatementInterface
     {
         $table = $this->extractTableFromQuery($sql);
+        $this->queryCounts[$table] = ($this->queryCounts[$table] ?? 0) + 1;
         $results = $this->queryResults[$table] ?? [];
 
         // Always return a statement; exception will be thrown at execute() time if set
         return new FakePostgresStatement($sql, $table, $results, $this);
+    }
+
+    /**
+     * How many times query()/prepare() touched the given routed table.
+     * Counts every round-trip regardless of the provider's own memoization.
+     */
+    public function queryCount(string $table): int
+    {
+        return $this->queryCounts[$table] ?? 0;
     }
 
     /**

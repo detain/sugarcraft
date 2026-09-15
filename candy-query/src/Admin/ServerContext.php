@@ -15,6 +15,31 @@ use SugarCraft\Query\Db\Version;
  * SHOW PLUGINS, and parsed version/flavor. Gracefully degrades on
  * MySQL errors 1142/1227/1146/2002/2003/2013.
  *
+ * ## How this fits the non-blocking admin data path (E718)
+ *
+ * The live feed for the admin pane is asynchronous: App::subscriptions()
+ * ticks once per second (throttled to CacheTtl::STATUS) and
+ * App::createAdminFetchPromise() runs SHOW GLOBAL STATUS / VARIABLES on the
+ * React event loop, storing results in AdminQueryCache. Pages render through
+ * AsyncCachingServerContext, which answers variable queries from that cache
+ * and NEVER calls into this class's fetches for them.
+ *
+ * This class's own TTL caches ({@see statusVariables()}, {@see
+ * serverVariables()}) are the synchronous backstop behind the few delegations
+ * AsyncCachingServerContext still forwards — statusVariablesTs(), wasReset(),
+ * lastUptime() and the sync-side admin providers. To keep that backstop
+ * actually cheap across admin-pane resets, the model hands out ONE shared
+ * instance per live database handle via AdminQueryCache::serverContext():
+ * dropping and rebuilding the page (AdminState::withPane()) reuses the same
+ * warm cache instead of minting a cold context whose first read would block.
+ *
+ * ACCEPTED RESIDUAL: the first synchronous read in each TTL window still
+ * issues one blocking fetch on the calling (render) path. Removing that
+ * entirely means every consumer moves onto the async cache; the status page's
+ * sampling helpers are not there yet. The window bounds the blast radius —
+ * repeated renders inside it execute the query exactly once — but do not
+ * eliminate the call.
+ *
  * @see Mirrors charmbracelet/lazysql ServerContext
  */
 final class ServerContext implements ServerContextInterface
@@ -49,7 +74,23 @@ final class ServerContext implements ServerContextInterface
         return $this->connection;
     }
 
-    /** @return array<string, string> */
+    /**
+     * SHOW GLOBAL VARIABLES with an in-window TTL cache (fail-open).
+     *
+     * Fresh cache → return it, no query. Expired/absent → issue exactly one
+     * fetch per window. If that fetch fails with a non-ignorable error and a
+     * previous snapshot exists, the stale snapshot is served rather than
+     * crashing the render — a monitoring pane showing 3-second-old data beats
+     * a dead UI, and the next window retries. With no previous snapshot the
+     * error is rethrown (there is nothing honest to serve).
+     *
+     * The timestamp records the last refresh ATTEMPT, not the last success:
+     * a failed window still swallows its retry until it expires, so a
+     * struggling server costs at most one blocking call per TTL, never one
+     * per render.
+     *
+     * @return array<string, string>
+     */
     public function serverVariables(): array
     {
         $now = microtime(true);
@@ -60,12 +101,33 @@ final class ServerContext implements ServerContextInterface
             }
         }
 
+        $stale = $this->serverVariablesCache;
         $this->serverVariablesTsCache = $now;
-        $this->serverVariablesCache = $this->fetchServerVariables();
+
+        try {
+            $this->serverVariablesCache = $this->fetchServerVariables();
+        } catch (\PDOException $e) {
+            if ($stale === null) {
+                throw $e;
+            }
+            return $stale;
+        }
+
         return $this->serverVariablesCache;
     }
 
-    /** @return array<string, string> */
+    /**
+     * SHOW GLOBAL STATUS with an in-window TTL cache (fail-open).
+     *
+     * Same contract as {@see serverVariables()}: within CacheTtl::STATUS of
+     * the last refresh attempt the cached snapshot answers every read — two
+     * renders inside one window execute the query exactly once — and a failed
+     * refresh serves the last-known snapshot instead of propagating into the
+     * render path. Cold-with-error rethrows; detection of a server restart
+     * (detectReset) runs only on a successful fetch.
+     *
+     * @return array<string, string>
+     */
     public function statusVariables(): array
     {
         $now = microtime(true);
@@ -76,9 +138,20 @@ final class ServerContext implements ServerContextInterface
             }
         }
 
+        $stale = $this->statusVariablesCache;
         $this->statusVariablesTsCache = $now;
-        $this->statusVariablesCache = $this->fetchStatusVariables();
+
+        try {
+            $this->statusVariablesCache = $this->fetchStatusVariables();
+        } catch (\PDOException $e) {
+            if ($stale === null) {
+                throw $e;
+            }
+            return $stale;
+        }
+
         $this->detectReset();
+
         return $this->statusVariablesCache;
     }
 

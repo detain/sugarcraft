@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin;
 
+use SugarCraft\Query\Db\DatabaseInterface;
+
 /**
  * Process-level coordinator bridging the synchronous render path to the
  * asynchronous ReactPHP query layer for the admin panel.
@@ -44,6 +46,9 @@ final class AdminQueryCache
 
     private ?AsyncConnection $connection = null;
     private string $connectionKey = '';
+
+    private ?ServerContextInterface $serverContext = null;
+    private ?DatabaseInterface $serverContextDb = null;
 
     public static function instance(): self
     {
@@ -130,6 +135,40 @@ final class AdminQueryCache
         }
 
         return $this->connection;
+    }
+
+    /**
+     * Single-slot memo for the synchronous-side ServerContext, keyed by the
+     * identity of the database handle it wraps.
+     *
+     * WHY (E718): App is immutable and rebuilt on every update(), and
+     * ConnectionState::$serverContext is null on every production entry point,
+     * so App::createContext() used to mint a FRESH ServerContext on each call.
+     * A pane switch drops the admin page (AdminState::withPane()); the next
+     * render rebuilds it, and any synchronous delegation into the inner context
+     * (statusVariablesTs()/wasReset()) hit a brand-new, cold TTL cache — one
+     * blocking SHOW GLOBAL STATUS per navigation, inside the very window the
+     * TTL was supposed to cover. Holding one context per live database handle
+     * here — the same process-global pattern as {@see connection()} above —
+     * lets the per-context TTL cache survive page resets, so a render inside
+     * the window answers from cache instead of re-issuing the query.
+     *
+     * Identity (not DSN) is the key: a reconnect that swaps in a new handle
+     * must not resurrect a context bound to the dead one, while a handle that
+     * reconnects in place keeps its warm cache.
+     */
+    public function serverContext(DatabaseInterface $db, \Closure $factory): ServerContextInterface
+    {
+        if ($this->serverContext !== null && $this->serverContextDb === $db) {
+            return $this->serverContext;
+        }
+
+        /** @var ServerContextInterface $context */
+        $context = $factory($db);
+        $this->serverContext = $context;
+        $this->serverContextDb = $db;
+
+        return $context;
     }
 
     /**

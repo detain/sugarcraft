@@ -24,6 +24,9 @@ final class FakeDatabase implements DatabaseInterface
     /** @var list<string> Raw SQL passed to exec() (e.g. KILL statements) */
     private array $execLog = [];
 
+    /** @var array<string,int> Per-SQL query() call counts (TTL / query-once pins) */
+    private array $queryCounts = [];
+
     public function setQueryResult(array $result): void
     {
         $this->queryResult = $result;
@@ -67,10 +70,17 @@ final class FakeDatabase implements DatabaseInterface
     /** @return list<array<string, mixed>>|null */
     public function query(string $sql): array|null
     {
+        $this->queryCounts[$sql] = ($this->queryCounts[$sql] ?? 0) + 1;
         if ($this->queryException !== null) {
             throw $this->queryException;
         }
         return $this->queryResult;
+    }
+
+    /** How many times query() was called with exactly this SQL. */
+    public function queryCount(string $sql): int
+    {
+        return $this->queryCounts[$sql] ?? 0;
     }
 
     public function lastInsertId(): string|int

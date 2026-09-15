@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Query\Admin\CacheTtl;
 use SugarCraft\Query\Admin\ServerContext;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\Flavor;
@@ -230,5 +231,121 @@ final class ServerContextTest extends TestCase
     {
         $this->db->setQueryThrows(new \PDOException('Command denied', 1227));
         $this->assertSame([], $this->ctx->serverVariables());
+    }
+
+    // ------------------------------------------------------------------
+    // E718: the TTL window must actually bound sync queries on the render
+    // path, and a failing refresh must serve the last-known snapshot rather
+    // than crash or retry-storm.
+    // ------------------------------------------------------------------
+
+    public function testStatusVariablesInsideTtlWindowExecutesQueryOnce(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'Uptime', 'Value' => '100'],
+        ]);
+
+        $first = $this->ctx->statusVariables();
+        $second = $this->ctx->statusVariables();
+        $this->ctx->statusVariablesTs();
+        $this->ctx->wasReset();
+
+        $this->assertSame($first, $second);
+        $this->assertSame(1, $this->db->queryCount('SHOW GLOBAL STATUS'));
+    }
+
+    public function testStatusVariablesRefetchesAfterTtlWindowExpires(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'Uptime', 'Value' => '100'],
+        ]);
+        $this->ctx->statusVariables();
+
+        $this->expireStatusCacheWindow();
+        $this->db->setQueryResult([
+            ['Variable_name' => 'Uptime', 'Value' => '260'],
+        ]);
+
+        $next = $this->ctx->statusVariables();
+
+        $this->assertSame('260', $next['Uptime']);
+        $this->assertSame(2, $this->db->queryCount('SHOW GLOBAL STATUS'));
+    }
+
+    public function testStatusVariablesServesStaleSnapshotWhenRefreshFails(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'Uptime', 'Value' => '100'],
+        ]);
+        $stale = $this->ctx->statusVariables();
+
+        // "Gone away" (2006) is NOT an ignorable code: the fetch rethrows.
+        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+        $this->expireStatusCacheWindow();
+
+        $served = $this->ctx->statusVariables();
+        $this->assertSame($stale, $served, 'failed refresh must fail-open to the last-known snapshot');
+
+        // The failed attempt still stamps the window: no retry storm — the
+        // next read answers from the swallowed window without a third query.
+        $again = $this->ctx->statusVariables();
+        $this->assertSame($stale, $again);
+        $this->assertSame(2, $this->db->queryCount('SHOW GLOBAL STATUS'));
+    }
+
+    public function testStatusVariablesRethrowsWhenColdFetchFails(): void
+    {
+        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+
+        $this->expectException(\PDOException::class);
+        $this->ctx->statusVariables();
+    }
+
+    public function testServerVariablesInsideTtlWindowExecutesQueryOnce(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'version', 'Value' => '8.0.33'],
+        ]);
+
+        $this->ctx->serverVariables();
+        $this->ctx->serverVariables();
+
+        $this->assertSame(1, $this->db->queryCount('SHOW GLOBAL VARIABLES'));
+    }
+
+    public function testServerVariablesServesStaleSnapshotWhenRefreshFails(): void
+    {
+        $this->db->setQueryResult([
+            ['Variable_name' => 'version', 'Value' => '8.0.33'],
+        ]);
+        $stale = $this->ctx->serverVariables();
+
+        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+        $this->expireServerCacheWindow();
+
+        $this->assertSame($stale, $this->ctx->serverVariables());
+        $this->assertSame(2, $this->db->queryCount('SHOW GLOBAL VARIABLES'));
+    }
+
+    public function testServerVariablesRethrowsWhenColdFetchFails(): void
+    {
+        $this->db->setQueryThrows(new \PDOException('MySQL server has gone away', 2006));
+
+        $this->expectException(\PDOException::class);
+        $this->ctx->serverVariables();
+    }
+
+    /** Force the status TTL window to expire without sleeping 3 seconds. */
+    private function expireStatusCacheWindow(): void
+    {
+        (new \ReflectionProperty(ServerContext::class, 'statusVariablesTsCache'))
+            ->setValue($this->ctx, microtime(true) - CacheTtl::STATUS - 0.1);
+    }
+
+    /** Force the server-variables TTL window to expire without sleeping 30s. */
+    private function expireServerCacheWindow(): void
+    {
+        (new \ReflectionProperty(ServerContext::class, 'serverVariablesTsCache'))
+            ->setValue($this->ctx, microtime(true) - CacheTtl::SERVER - 0.1);
     }
 }

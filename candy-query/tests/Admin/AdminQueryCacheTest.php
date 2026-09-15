@@ -7,6 +7,8 @@ namespace SugarCraft\Query\Tests\Admin;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Query\Admin\AdminQueryCache;
 use SugarCraft\Query\Admin\AsyncConnection;
+use SugarCraft\Query\Admin\EmptyServerContext;
+use SugarCraft\Query\Admin\ServerContext;
 
 /**
  * Guards the cache's two audit-driven contracts: it must be constructible for
@@ -75,5 +77,63 @@ final class AdminQueryCacheTest extends TestCase
 
         $this->assertNotSame($stale, $fresh, 'the post-invalidation connection must be a new instance');
         $this->assertSame(2, $calls);
+    }
+
+    // ---------------------------------------------------------------
+    // E718: the synchronous-side ServerContext must survive admin-pane
+    // resets — one memoized instance per live database handle, so its
+    // status-variables TTL cache keeps covering repeated renders.
+    // ---------------------------------------------------------------
+
+    public function testServerContextMemoizesPerDatabaseHandle(): void
+    {
+        $cache = AdminQueryCache::instance();
+        $db = new FakeDatabase();
+        $calls = 0;
+
+        $first = $cache->serverContext($db, static function () use ($db, &$calls): ServerContext {
+            $calls++;
+            return new ServerContext($db);
+        });
+        $second = $cache->serverContext($db, static function () use ($db, &$calls): ServerContext {
+            $calls++;
+            return new ServerContext($db);
+        });
+
+        $this->assertSame($first, $second, 'same handle must reuse the memoized context');
+        $this->assertSame(1, $calls);
+    }
+
+    public function testServerContextRebuildsWhenTheDatabaseHandleChanges(): void
+    {
+        $cache = AdminQueryCache::instance();
+        $dbA = new FakeDatabase();
+        $dbB = new FakeDatabase();
+
+        $fromA = $cache->serverContext($dbA, static fn(): ServerContext => new ServerContext($dbA));
+        $fromB = $cache->serverContext($dbB, static fn(): ServerContext => new ServerContext($dbB));
+        $backToA = $cache->serverContext($dbA, static fn(): ServerContext => new ServerContext($dbA));
+
+        $this->assertNotSame($fromA, $fromB, 'a different handle must not inherit A\'s cache');
+        $this->assertNotSame($fromB, $backToA, 'returning to A must rebuild after B displaced the slot');
+    }
+
+    public function testServerContextMemoIsClearedByReset(): void
+    {
+        $db = new FakeDatabase();
+        $first = AdminQueryCache::instance()->serverContext($db, static fn(): ServerContext => new ServerContext($db));
+
+        AdminQueryCache::reset();
+
+        $second = AdminQueryCache::instance()->serverContext($db, static fn(): ServerContext => new ServerContext($db));
+        $this->assertNotSame($first, $second, 'reset() must drop the memoized context');
+    }
+
+    public function testServerContextAcceptsAnyInterfaceImplementation(): void
+    {
+        $db = new FakeDatabase();
+        $empty = AdminQueryCache::instance()->serverContext($db, static fn(): EmptyServerContext => new EmptyServerContext());
+
+        $this->assertInstanceOf(EmptyServerContext::class, $empty);
     }
 }
