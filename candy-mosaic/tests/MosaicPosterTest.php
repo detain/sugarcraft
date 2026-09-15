@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Mosaic\DiskCache;
 use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Mosaic\Scale;
 use SugarCraft\Mosaic\Tests\Support\LoopbackHttpServer;
 
 /**
@@ -54,7 +55,7 @@ final class MosaicPosterTest extends TestCase
     {
         $mosaic = Mosaic::halfBlock();
         $cache  = new DiskCache($this->cacheDir);
-        $key    = DiskCache::key('http://127.0.0.1:1/poster.png', 8, 4, 'halfblock');
+        $key    = DiskCache::key('http://127.0.0.1:1/poster.png', 8, 4, 'halfblock|Fill');
         $cache->put($key, "CACHED\x1b[0m");
 
         // The URL points at a closed port: only a cache hit can return.
@@ -69,7 +70,7 @@ final class MosaicPosterTest extends TestCase
         $cache  = new DiskCache($this->cacheDir);
         // $cellH null must key on the sentinel, not on a derived height —
         // pre-populate under the sentinel and prove the hit.
-        $key = DiskCache::key('http://127.0.0.1:1/poster.png', 8, -1, 'halfblock');
+        $key = DiskCache::key('http://127.0.0.1:1/poster.png', 8, -1, 'halfblock|Fill');
         $cache->put($key, 'SENTINEL');
 
         $this->assertSame('SENTINEL', $mosaic->poster('http://127.0.0.1:1/poster.png', 8, null, $cache));
@@ -83,7 +84,7 @@ final class MosaicPosterTest extends TestCase
         $mosaic = Mosaic::halfBlock();
         $cache  = new DiskCache($this->cacheDir);
         $url    = "http://127.0.0.1:{$this->port}/poster.png";
-        $key    = DiskCache::key($url, 8, 4, 'halfblock');
+        $key    = DiskCache::key($url, 8, 4, 'halfblock|Fill');
 
         $this->assertFalse($cache->has($key));
         $out = $mosaic->poster($url, 8, 4, $cache, ['127.0.0.1']);
@@ -125,7 +126,7 @@ final class MosaicPosterTest extends TestCase
     {
         $mosaic = Mosaic::halfBlock();
         $cache  = new DiskCache($this->cacheDir);
-        $key    = DiskCache::key('http://127.0.0.1:1/poster.png', 8, 4, 'halfblock');
+        $key    = DiskCache::key('http://127.0.0.1:1/poster.png', 8, 4, 'halfblock|Fill');
         $cache->put($key, 'ASYNC-CACHED');
 
         $resolved = null;
@@ -144,7 +145,7 @@ final class MosaicPosterTest extends TestCase
         $mosaic = Mosaic::kitty();
         $cache  = new DiskCache($this->cacheDir);
         $url    = "http://127.0.0.1:{$this->port}/poster.png";
-        $key    = DiskCache::key($url, 8, 4, 'kitty');
+        $key    = DiskCache::key($url, 8, 4, 'kitty|Fill');
 
         $out = $this->await($mosaic->posterAsync($url, 8, 4, $cache, ['127.0.0.1']));
 
@@ -185,7 +186,7 @@ final class MosaicPosterTest extends TestCase
         $cache  = new DiskCache($this->cacheDir);
 
         $out = $mosaic->posterFile($path, 8, 4, $cache);
-        $key = DiskCache::key($path, 8, 4, 'kitty');
+        $key = DiskCache::key($path, 8, 4, 'kitty|Fill');
 
         $this->assertNotSame('', $out);
         $this->assertSame($out, $cache->get($key));
@@ -206,6 +207,24 @@ final class MosaicPosterTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         Mosaic::halfBlock()->posterFile('/nonexistent/poster.png', 8, 4);
+    }
+
+    // ---- poster(): scale rides in the cache key ---------------------------
+
+    public function testPosterCacheKeyFoldsScaleWithoutDisturbingTheDefault(): void
+    {
+        $path  = __DIR__ . '/fixtures/4x2.png';
+        $cache = new DiskCache($this->cacheDir);
+
+        // The scale-less default must key as Fill (the default poster scale).
+        $cache->put(DiskCache::key($path, 8, 4, 'kitty|Fill'), 'FILL-CACHED');
+        $this->assertSame('FILL-CACHED', Mosaic::kitty()->posterFile($path, 8, 4, $cache));
+
+        // A Fit mosaic must NOT collide with that Fill entry…
+        $fit = Mosaic::kitty()->withScale(Scale::Fit);
+        // …and its own key serves its own entry.
+        $cache->put(DiskCache::key($path, 8, 4, 'kitty|Fit'), 'FIT-CACHED');
+        $this->assertSame('FIT-CACHED', $fit->posterFile($path, 8, 4, $cache));
     }
 
     // ---- helpers ----------------------------------------------------------

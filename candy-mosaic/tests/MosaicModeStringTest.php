@@ -19,7 +19,7 @@ use SugarCraft\Mosaic\Renderer\SixelRenderer;
  */
 final class MosaicModeStringTest extends TestCase
 {
-    /** @var array<string,string|null> */
+    /** @var array<string,string|false> */
     private array $savedEnv = [];
 
     protected function setUp(): void
@@ -33,7 +33,10 @@ final class MosaicModeStringTest extends TestCase
             'KITTY_WINDOW_ID', 'XTERM_VERSION', 'LC_TERMINAL',
         ];
         foreach ($keys as $key) {
-            $this->savedEnv[$key] = $_ENV[$key] ?? null;
+            // Detect reads getenv(), not $_ENV — save/restore through the
+            // same channel (false = genuinely unset) so the real process env
+            // survives even under variables_order settings without 'E'.
+            $this->savedEnv[$key] = getenv($key);
             unset($_ENV[$key]);
             putenv($key);
         }
@@ -43,7 +46,7 @@ final class MosaicModeStringTest extends TestCase
     {
         parent::tearDown();
         foreach ($this->savedEnv as $key => $value) {
-            if ($value === null) {
+            if ($value === false) {
                 unset($_ENV[$key]);
                 putenv($key);
             } else {
@@ -96,6 +99,16 @@ final class MosaicModeStringTest extends TestCase
         $this->assertSame('kitty', Mosaic::fromModeString('  KiTtY ')?->protocol());
         $this->assertSame('iterm2', Mosaic::fromModeString('ITERM2')?->protocol());
         $this->assertSame('halfblock', Mosaic::fromModeString('HALF')?->protocol());
+    }
+
+    public function testAnsi256AndTruecolorModesReachTheAsciiRendererColorMode(): void
+    {
+        // AsciiRenderer::name() is the AsciiColorMode value, so protocol()
+        // distinguishes the three ramp modes — 'ansi256'/'truecolor' must
+        // not collapse onto plain 'ascii'.
+        $this->assertSame('ascii', Mosaic::fromModeString('ascii')?->protocol());
+        $this->assertSame('ansi256', Mosaic::fromModeString('ansi256')?->protocol());
+        $this->assertSame('truecolor', Mosaic::fromModeString('truecolor')?->protocol());
     }
 
     public function testUnknownModeReturnsNullForCallerPhrasedErrors(): void

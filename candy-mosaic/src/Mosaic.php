@@ -284,14 +284,24 @@ final class Mosaic
 
     /**
      * Return a new Mosaic with a different dither algorithm.
-     * Only meaningful when the current renderer is a SixelRenderer;
-     * returns the same instance otherwise.
+     * Only meaningful when the current renderer is a SixelRenderer (also
+     * through a tmux passthrough envelope); returns the same instance
+     * otherwise.
      */
     public function withDither(Dither $dither): self
     {
-        if ($this->renderer instanceof SixelRenderer) {
-            return new self(new SixelRenderer($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale);
+        if ($this->renderer instanceof TmuxPassthroughDecorator) {
+            $inner = $this->renderer->inner();
+
+            return $inner instanceof SixelRenderer
+                ? new self(new TmuxPassthroughDecorator($inner->withDither($dither)), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale)
+                : $this;
         }
+
+        if ($this->renderer instanceof SixelRenderer) {
+            return new self($this->renderer->withDither($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale);
+        }
+
         return $this;
     }
 
@@ -595,8 +605,8 @@ final class Mosaic
      * display aspect so portrait posters are never squashed (see CELL_ASPECT).
      *
      * $cache, when given, is keyed with
-     * {@see DiskCache::key()} over ($url, $cellW, $cellH, protocol) — a hit
-     * returns the stored bytes without touching the network. Pass
+     * {@see DiskCache::key()} over ($url, $cellW, $cellH, protocol|scale) —
+     * a hit returns the stored bytes without touching the network. Pass
      * {@see DiskCache::key()}-compatible explicit dimensions on both sides of
      * a process restart for stable hits; a null $cellH hashes as the sentinel
      * auto-height.
@@ -607,6 +617,7 @@ final class Mosaic
      * @param DiskCache|null   $cache        Optional render cache; consulted first, populated on miss.
      * @param array<string>|null $allowedHosts Hosts allowed to bypass the SSRF deny-list.
      * @throws \InvalidArgumentException  if the fetch or decode fails (SSRF, bad URL, unsupported image).
+     * @throws \RuntimeException          if GD cannot decode the fetched bytes (or is absent).
      */
     public function poster(
         string $url,
@@ -638,6 +649,9 @@ final class Mosaic
      * fulfillment chain, so a rejected fetch stores nothing. Error semantics
      * are inherited from the source call: an unsupported URL scheme throws
      * synchronously, SSRF/host rejections come back as a rejected promise.
+     * The render itself is synchronous on the event loop (decode + resample
+     * + encode) — for large posters wrap the mosaic in {@see withAsync()} or
+     * offload the whole call so the loop keeps serving other sockets.
      *
      * @return PromiseInterface<string>
      */
@@ -708,9 +722,18 @@ final class Mosaic
         return $this->scaledForPoster()->render($source, $cellW, $cellH);
     }
 
+    /**
+     * Poster cache key: DiskCache::key() over (url, cellW, cellH-sentinel,
+     * protocol|scale). The scale rides in the protocol segment because it
+     * changes the encoded bytes (Fill crops, Fit letterboxes) for an
+     * otherwise identical (url, size, protocol) tuple — two mosaics at
+     * different scales must never cross-serve each other's cache entries.
+     */
     private function posterCacheKey(string $urlOrPath, int $cellW, ?int $cellH): string
     {
-        return DiskCache::key($urlOrPath, $cellW, $cellH ?? self::AUTO_HEIGHT, $this->protocol());
+        $protocol = $this->protocol() . '|' . ($this->scale ?? Scale::Fill)->name;
+
+        return DiskCache::key($urlOrPath, $cellW, $cellH ?? self::AUTO_HEIGHT, $protocol);
     }
 }
 
@@ -812,8 +835,9 @@ final class MosaicBuilder
 
     /**
      * Swap the dither of a Sixel backend without disturbing a wrapping
-     * tmux passthrough envelope; non-Sixel renderers are returned as-is
-     * (dither only parameterises Sixel encoding).
+     * tmux passthrough envelope or the renderer's own colour/cell tuning;
+     * non-Sixel renderers are returned as-is (dither only parameterises
+     * Sixel encoding).
      */
     private static function applyDither(Renderer $renderer, Dither $dither): Renderer
     {
@@ -821,12 +845,12 @@ final class MosaicBuilder
             $inner = $renderer->inner();
 
             return $inner instanceof SixelRenderer
-                ? new TmuxPassthroughDecorator(new SixelRenderer($dither))
+                ? new TmuxPassthroughDecorator($inner->withDither($dither))
                 : $renderer;
         }
 
         return $renderer instanceof SixelRenderer
-            ? new SixelRenderer($dither)
+            ? $renderer->withDither($dither)
             : $renderer;
     }
 }

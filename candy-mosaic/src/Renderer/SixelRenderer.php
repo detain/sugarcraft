@@ -169,6 +169,16 @@ final class SixelRenderer implements Renderer
     }
 
     /**
+     * A copy of this renderer using $dither, keeping its colour budget and
+     * cell-pixel geometry — so re-tinting a configured Sixel (custom
+     * maxColors or real terminal cell sizes) never silently resets them.
+     */
+    public function withDither(Dither $dither): self
+    {
+        return new self($dither, $this->maxColors, $this->cellWidth, $this->cellHeight);
+    }
+
+    /**
      * The maximum number of colors in the quantized Sixel palette.
      *
      * The Sixel protocol supports at most 256 colors. Values below 256

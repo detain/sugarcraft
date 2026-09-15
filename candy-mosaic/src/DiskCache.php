@@ -61,8 +61,11 @@ final class DiskCache
      * v6: cover scaling (Fill/Crop) no longer pre-downscales the image to the cell
      *     count and crops to the cell box's true display aspect — every renderer
      *     now downsamples from full resolution, so all cached bytes changed.
+     * v7: Sixel alpha — transparent pixels now emit the `#0;2;P` background
+     *     register with the colour palette shifted to 1..N instead of blending
+     *     to black, so cached sixel blobs for alpha-bearing sources changed.
      */
-    private const FORMAT_VERSION = 6;
+    private const FORMAT_VERSION = 7;
 
     /**
      * @param string $dir         Directory that holds the cache entries

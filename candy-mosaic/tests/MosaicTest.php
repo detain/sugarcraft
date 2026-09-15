@@ -6,6 +6,7 @@ namespace SugarCraft\Mosaic\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mosaic\AdaptiveImage;
+use SugarCraft\Mosaic\Capability;
 use SugarCraft\Mosaic\Dither;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Mosaic;
@@ -17,6 +18,7 @@ use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
 use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
 use SugarCraft\Mosaic\Scale;
+use SugarCraft\Mosaic\TmuxPassthroughDecorator;
 
 /**
  * @covers \SugarCraft\Mosaic\Mosaic
@@ -51,7 +53,8 @@ final class MosaicTest extends TestCase
 
     public function testKittyProtocolThroughAuto(): void
     {
-        // Kitty is only available via auto() or probe(), not a direct factory
+        // Pins the auto() detection path for kitty (a direct factory exists
+        // too — see testKittyFactoryMirrorsForceFactories).
         // Test that kitty capability is detected when available
         // Clear TMUX to avoid tmux() wrapper prefix
         putenv('TMUX');
@@ -127,8 +130,42 @@ final class MosaicTest extends TestCase
         $m = Mosaic::sixel(Dither::FloydSteinberg);
         $m2 = $m->withDither(Dither::Atkinson);
 
-        // Returns new instance with different dither
+        // Returns new instance carrying the requested dither
         $this->assertNotSame($m, $m2);
+        $this->assertSame(Dither::Atkinson, $m2->renderer()->dither());
+        $this->assertSame(Dither::FloydSteinberg, $m->renderer()->dither());
+    }
+
+    public function testWithDitherPreservesSixelColorAndCellTuning(): void
+    {
+        $m = new Mosaic(new SixelRenderer(Dither::FloydSteinberg, 16, 12, 24), Capability::universal(), null, null, null);
+        $m2 = $m->withDither(Dither::Atkinson);
+
+        // Re-tinting swaps only the dither — the colour budget and the real
+        // terminal cell geometry survive (a reset to defaults would mis-scale
+        // the pixel canvas).
+        $this->assertSame(Dither::Atkinson, $m2->renderer()->dither());
+        $this->assertSame(16, $m2->renderer()->maxColors());
+    }
+
+    public function testWithDitherThroughTmuxEnvelopePeelsAndReapplies(): void
+    {
+        $inner = new SixelRenderer(Dither::FloydSteinberg, 32, 10, 20);
+        $m = new Mosaic(new TmuxPassthroughDecorator($inner), Capability::universal(), null, null, null);
+        $m2 = $m->withDither(Dither::Atkinson);
+
+        $renderer = $m2->renderer();
+        $this->assertInstanceOf(TmuxPassthroughDecorator::class, $renderer);
+        $this->assertInstanceOf(SixelRenderer::class, $renderer->inner());
+        $this->assertSame(Dither::Atkinson, $renderer->inner()->dither());
+        $this->assertSame(32, $renderer->inner()->maxColors());
+    }
+
+    public function testWithDitherOnTmuxWrappedNonSixelIsNoOp(): void
+    {
+        $m = new Mosaic(new TmuxPassthroughDecorator(new HalfBlockRenderer()), Capability::universal(), null, null, null);
+
+        $this->assertSame($m, $m->withDither(Dither::Atkinson));
     }
 
     public function testWithDitherOnNonSixelRendererIsNoOp(): void

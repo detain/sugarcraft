@@ -99,6 +99,23 @@ final class ImageSourceFromRgbTest extends TestCase
         ImageSource::fromRgb(str_repeat("\x00", 12), 2, -2);
     }
 
+    public function testLoweredMaxPixelsCeilingIsHonoured(): void
+    {
+        // A trusted decoder may lower the bomb ceiling below MAX_PIXELS —
+        // the guard must fire on the ceiling, before GD allocates.
+        $this->expectException(\InvalidArgumentException::class);
+
+        ImageSource::fromRgb(str_repeat("\x00", 4 * 4 * 3), 4, 4, false, 10);
+    }
+
+    public function testWithinLoweredCeilingStillDecodes(): void
+    {
+        $source = ImageSource::fromRgb(str_repeat("\x10\x20\x30", 4), 2, 2, false, 4);
+
+        $this->assertSame(2, $source->width);
+        $this->assertSame(2, $source->height);
+    }
+
     public function testResultIsAcceptedByTheContainerPipeline(): void
     {
         // The whole point: downstream callers treat the output exactly like

@@ -61,6 +61,9 @@ final class ImageLayer
     /** @var array<string, int> window digest ({@see digestFor()}) → image id. */
     private array $idByWindowDigest = [];
 
+    /** @var array<int, string> image id → its currently tracked window digest. */
+    private array $windowDigestById = [];
+
     public function __construct(
         private readonly ?Renderer $renderer = null,
     ) {}
@@ -80,7 +83,10 @@ final class ImageLayer
      *
      * Same bytes at different sizes are different allocations to the
      * terminal, so the size belongs in the digest — this is the identity a
-     * scrolling viewport keys on ({@see imageIdForDigest()}).
+     * scrolling viewport keys on ({@see imageIdForDigest()}). The layer
+     * tracks at most one footprint per id (the most recently placed one —
+     * see {@see placeTracked()}), so a check-then-place viewport never sees
+     * a digest claiming a placement size the layer no longer holds.
      */
     public static function digestFor(string $bytes, int $width, int $height): string
     {
@@ -112,6 +118,12 @@ final class ImageLayer
      * hit re-assigns an existing key without moving it, so that reports the
      * highest id rather than the one just placed, and the exhaustion branch
      * writes no placement at all, so it reports a stale unrelated id.
+     *
+     * Window tracking is last-footprint-wins: placing the same bytes at a new
+     * size replaces the id's tracked {@see digestFor()} entry (the placement
+     * slot itself has always held only the most recent footprint), so
+     * {@see imageIdForDigest()} mirrors what the layer and terminal actually
+     * hold right now.
      */
     public function placeTracked(string $bytes, int $width, int $height): PlacedImage
     {
@@ -123,7 +135,7 @@ final class ImageLayer
         }
 
         $this->placementById[$id] = new ImagePlacement($bytes, $width, $height);
-        $this->idByWindowDigest[self::digestFor($bytes, $width, $height)] = $id;
+        $this->trackWindowDigest($id, self::digestFor($bytes, $width, $height));
 
         return new PlacedImage(ImageOverlay::markerBlock($id, $width, $height), $id);
     }
@@ -171,15 +183,11 @@ final class ImageLayer
 
     /**
      * The image id a window digest is currently placed under, or null when it
-     * has never been placed or was since removed/released. Lets a viewport
-     * check its scratch digest against the layer before deciding to
-     * re-fetch/re-render.
-     *
-     * Note (inherited from the id model, not the digest index): identical
-     * bytes placed at two sizes share ONE content id, and the id's single
-     * placement slot holds the most recent size — both digests therefore map
-     * to that id. Callers needing size-accurate placements should vary the
-     * bytes per variant, as they already must for markers.
+     * has never been placed, was since removed/released, or the id was
+     * re-placed at a different footprint (last-footprint-wins, see
+     * {@see placeTracked()}). Lets a viewport check its scratch digest
+     * against the layer before deciding to re-fetch/re-render — a null here
+     * after a size change is the layer telling you to re-place.
      */
     public function imageIdForDigest(string $digest): ?int
     {
@@ -233,18 +241,37 @@ final class ImageLayer
     }
 
     /**
-     * Drop every window digest that pointed at a now-gone placement, so
+     * Register $id's current window footprint, superseding (and un-tracking)
+     * whatever footprint the id held before — the placement slot is
+     * single-valued, so the digest index must be too.
+     */
+    private function trackWindowDigest(int $imageId, string $digest): void
+    {
+        $previous = $this->windowDigestById[$imageId] ?? null;
+        if ($previous !== null && $previous !== $digest) {
+            unset($this->idByWindowDigest[$previous]);
+        }
+
+        $this->idByWindowDigest[$digest] = $imageId;
+        $this->windowDigestById[$imageId] = $digest;
+    }
+
+    /**
+     * Drop the window digest pointing at a now-gone placement, so
      * {@see imageIdForDigest()} never hands back an id the terminal no longer
-     * holds. Content-addressed dedup ($idByDigest) is deliberately untouched:
-     * the bytes keep their id for re-placement.
+     * holds. O(1) via the reverse index — cheap even for a full-window
+     * {@see releaseAllExcept()} on a saturated id space. Content-addressed
+     * dedup ($idByDigest) is deliberately untouched: the bytes keep their id
+     * for re-placement.
      */
     private function forgetWindowDigests(int $imageId): void
     {
-        foreach ($this->idByWindowDigest as $digest => $id) {
-            if ($id === $imageId) {
-                unset($this->idByWindowDigest[$digest]);
-            }
+        $digest = $this->windowDigestById[$imageId] ?? null;
+        if ($digest === null) {
+            return;
         }
+
+        unset($this->idByWindowDigest[$digest], $this->windowDigestById[$imageId]);
     }
 
     /**

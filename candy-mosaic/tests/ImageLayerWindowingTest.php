@@ -89,20 +89,29 @@ final class ImageLayerWindowingTest extends TestCase
         $this->assertCount(1, $layer->trackedDigests());
     }
 
-    public function testSameBytesAtDifferentSizesAreDistinctDigestsSharedByteId(): void
+    public function testSameBytesAtDifferentSizesShareIdWithLastFootprintTracked(): void
     {
         $layer = new ImageLayer();
         $small = $layer->placeTracked('ONE', 4, 2);
         $large = $layer->placeTracked('ONE', 8, 4);
 
-        // Byte-content dedup gives both footprints the same id; the window
-        // index keeps the two digests apart.
+        // Byte-content dedup gives both footprints the same id, and the
+        // placement slot is single-valued — so the window index tracks only
+        // the most recent footprint. The superseded digest must report null
+        // rather than claim a placement size the layer no longer holds.
         $this->assertSame($small->imageId, $large->imageId);
-        $this->assertCount(2, $layer->trackedDigests());
+        $this->assertCount(1, $layer->trackedDigests());
         $this->assertSame(
             $large->imageId,
             $layer->imageIdForDigest(ImageLayer::digestFor('ONE', 8, 4)),
         );
+        $this->assertNull($layer->imageIdForDigest(ImageLayer::digestFor('ONE', 4, 2)));
+
+        // Re-placing the small footprint takes the tracking slot back.
+        $layer->placeTracked('ONE', 4, 2);
+        $this->assertSame($small->imageId, $layer->imageIdForDigest(ImageLayer::digestFor('ONE', 4, 2)));
+        $this->assertNull($layer->imageIdForDigest(ImageLayer::digestFor('ONE', 8, 4)));
+        $this->assertCount(1, $layer->trackedDigests());
     }
 
     public function testExhaustedPlacementRegistersNoWindowDigest(): void

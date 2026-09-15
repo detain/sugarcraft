@@ -18,7 +18,7 @@ use SugarCraft\Mosaic\TmuxPassthroughDecorator;
  */
 final class MosaicBuilderTest extends TestCase
 {
-    /** @var array<string,string|null> */
+    /** @var array<string,string|false> */
     private array $savedEnv = [];
 
     /**
@@ -35,7 +35,10 @@ final class MosaicBuilderTest extends TestCase
             'KITTY_WINDOW_ID', 'XTERM_VERSION', 'LC_TERMINAL',
         ];
         foreach ($keys as $key) {
-            $this->savedEnv[$key] = $_ENV[$key] ?? null;
+            // Detect reads getenv(), not $_ENV — save/restore through the
+            // same channel (false = genuinely unset) so the real process env
+            // survives even under variables_order settings without 'E'.
+            $this->savedEnv[$key] = getenv($key);
             unset($_ENV[$key]);
             putenv($key);
         }
@@ -45,7 +48,7 @@ final class MosaicBuilderTest extends TestCase
     {
         parent::tearDown();
         foreach ($this->savedEnv as $key => $value) {
-            if ($value === null) {
+            if ($value === false) {
                 unset($_ENV[$key]);
                 putenv($key);
             } else {
@@ -143,6 +146,37 @@ final class MosaicBuilderTest extends TestCase
         $inner = $renderer->inner();
         $this->assertInstanceOf(SixelRenderer::class, $inner);
         $this->assertSame(Dither::Stucki, $inner->dither());
+    }
+
+    public function testBuildDitherIsNoOpForNonSixelRenderer(): void
+    {
+        // Dither parameterises only Sixel encoding — an explicit half-block
+        // builder with a dither configured must build the renderer untouched.
+        $renderer = new HalfBlockRenderer();
+        $mosaic = Mosaic::builder()
+            ->withRenderer($renderer)
+            ->withDither(Dither::Atkinson)
+            ->build();
+
+        $this->assertSame($renderer, $mosaic->renderer());
+        $this->assertSame('halfblock', $mosaic->protocol());
+    }
+
+    public function testBuildDitherPreservesSixelTuning(): void
+    {
+        // Swapping the builder dither over a tuned Sixel (custom colour
+        // budget, real terminal cell size) must not reset the tuning —
+        // sugar-reel builds SixelRenderer with the true cell pixel size,
+        // and a reset would mis-scale its canvas.
+        $mosaic = Mosaic::builder()
+            ->withRenderer(new SixelRenderer(Dither::None, 16, 12, 24))
+            ->withDither(Dither::Atkinson)
+            ->build();
+
+        $renderer = $mosaic->renderer();
+        $this->assertInstanceOf(SixelRenderer::class, $renderer);
+        $this->assertSame(Dither::Atkinson, $renderer->dither());
+        $this->assertSame(16, $renderer->maxColors());
     }
 
     public function testRendererAccessorReturnsConfiguredRenderer(): void

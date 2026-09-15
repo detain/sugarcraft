@@ -295,12 +295,15 @@ final class ImageSource
      * @param int    $width     Pixel width  (> 0).
      * @param int    $height    Pixel height (> 0).
      * @param bool   $hasAlpha  True for RGBA32, false for RGB24.
+     * @param int    $maxPixels Pixel ceiling (same semantics as the other
+     *                          ingress factories); a trusted decoder with a
+     *                          known-small frame grid may lower it.
      * @throws \RuntimeException          if ext-gd is not available
      * @throws \InvalidArgumentException  if dimensions are non-positive, the
      *                                    buffer length doesn't match w×h×(3|4),
-     *                                    or the pixel count exceeds MAX_PIXELS
+     *                                    or the pixel count exceeds $maxPixels
      */
-    public static function fromRgb(string $bytes, int $width, int $height, bool $hasAlpha = false): self
+    public static function fromRgb(string $bytes, int $width, int $height, bool $hasAlpha = false, int $maxPixels = self::MAX_PIXELS): self
     {
         if (!extension_loaded('gd')) {
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
@@ -324,11 +327,11 @@ final class ImageSource
 
         // Decompression-bomb parity with the container paths: a huge declared
         // canvas is refused before GD allocates the pixel buffer.
-        self::guardPixelCount($width, $height, self::MAX_PIXELS);
+        self::guardPixelCount($width, $height, $maxPixels);
 
         $img = imagecreatetruecolor($width, $height);
         if ($img === false) {
-            throw new \RuntimeException(Lang::t('pixel_grid.alloc_failed'));
+            throw new \RuntimeException(Lang::t('image_source.gd_alloc_failed'));
         }
 
         if ($hasAlpha) {
@@ -359,7 +362,7 @@ final class ImageSource
         }
 
         try {
-            return self::fromGd($img, 'image/png');
+            return self::fromGd($img, 'image/png', $maxPixels);
         } finally {
             imagedestroy($img);
         }

@@ -104,6 +104,8 @@ if (!is_resource($proc)) {
 
 **What:** Remove the nested inner try/catch block (L100-114) that wraps `Detect::probe()`. The comment explicitly states it is unreachable. Use `// @phpstan-ignore-next-line` if a future-proof comment is truly needed.
 
+**Resolution note:** The nested unreachable inner block is gone. The one remaining `catch (\Throwable)` around `Detect::probe()` is retained deliberately as a never-throws belt for `auto()`'s documented totality — it now sets `$cap = null` and flows into the palette fallback (functionally reachable, e.g. an undefined-`STDIN` SAPI escaping `probe()`'s own guards). See `Mosaic::auto()`.
+
 **Why:** Dead code misleads readers, adds noise, and PHPStan should flag it. The outer catch already handles any throwing path.
 
 **Severity:** medium
