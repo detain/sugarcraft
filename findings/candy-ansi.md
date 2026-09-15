@@ -455,7 +455,7 @@ Six findings were recorded in `findings/candy-vt.md` against vt's forked copy of
 
 ### vt#12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) ✅ r82: fixed for the recorded scope — oscDispatch now routes OSC 8 hyperlinks with `id=` param parsing (src/Parser/HandlerAdapter.php:93-102, landed c69d0aff4) and OSC 0/1/2 titles with empty-payload tolerance (:105-108); the vcr sink is live too — `OscHandlerImpl::hyperlink()` now stores uri+id (src/Parser/OscHandlerImpl.php:27-31), retiring §2.1 of this audit
 
-**Evidence:** remaining OSC 4/52 silence is the deliberate vcr-path scope already tracked as §2.3 (house §8 "Could Fix #8"), not a regression of vt#12.
+**Evidence:** remaining OSC 4 (and by umbrella 52) silence is the deliberate vcr-path scope already tracked here as §2.3 for OSC 4 and under the §8 "Could Fix #8" "beyond just OSC 2" umbrella for OSC 52, not a regression of vt#12.
 
 ### vt#16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 ✅ r82: fixed — the finding was explicitly "no functional issue, just a comment/documentation gap"; the gap is filled: src/Parser/HandlerAdapter.php:26-27 now documents the pass-through rule (printable ASCII OR valid UTF-8 lead byte ≥ 0xC2 forwarded; C0 < 0x20 and continuation-range drops), which is the Latin-1/UTF-8 rationale the vt entry asked for
 
