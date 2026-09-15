@@ -63,8 +63,8 @@ final class CloneIsolationTest extends TestCase
 
         $this->assertSame(3, $t->screen()->scrollback()?->count(), 'original ring grew independently');
         $this->assertSame(2, $u->screen()->scrollback()?->count(), 'clone ring grew independently');
-        $this->assertSame('33', trim($this->graphemes($t->screen()->scrollback()?->at(2) ?? [])));
-        $this->assertSame('22', trim($this->graphemes($u->screen()->scrollback()?->at(1) ?? [])));
+        $this->assertSame('33', trim($this->graphemes($t->screen()->scrollback()->at(2) ?? [])));
+        $this->assertSame('22', trim($this->graphemes($u->screen()->scrollback()->at(1) ?? [])));
     }
 
     public function testCloneInsideAltScreenCopiesParkedMainBuffer(): void

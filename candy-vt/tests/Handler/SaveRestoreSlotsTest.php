@@ -186,7 +186,8 @@ final class SaveRestoreSlotsTest extends TestCase
         $p->feed("\x1b[?1049l\x1b8");                  // back to main, THEN DECRC
         $this->assertSame(2, $h->cursor->row, 'main general slot intact after the round-trip');
         $this->assertSame(3, $h->cursor->col);
-        $this->assertTrue($h->sgr->background->equals(Color::indexed16(6)), 'main pen restored by DECRC');
+        $this->assertNotNull($h->sgr->background, 'main pen restored by DECRC');
+        $this->assertTrue($h->sgr->background->equals(Color::indexed16(6)));
         $this->assertSame('0', $h->charsets[0], 'main designation restored by DECRC');
     }
 
