@@ -3450,18 +3450,22 @@ final class DocFigureProseDriftTest extends TestCase
         // pre-E708 `startServer()` (literal `?? 'stdio'` line, no substitution,
         // no canonicalisation) reddens the presence legs, and a page/table
         // that drifts from the constant reddens the roster — bidirectionally.
+        // E710 moved the vocabulary itself into McpForeignTranslate — the ONE
+        // table the importer and this loader share — so the pins name the call
+        // into the shared table; the renames the page records still happen
+        // HERE, before the match, exactly as the prose promises.
         self::assertStringContainsString(
-            '$type = self::TYPE_ALIASES[$type] ?? $type;',
+            '$type = McpForeignTranslate::TYPE_ALIASES[$type] ?? $type;',
             $startText,
             'startServer() no longer renames foreign types before dispatch — the page promises the aliases are read there, before the factory',
         );
         self::assertStringContainsString(
-            '$this->normalizeEntry(',
+            'McpForeignTranslate::normalizeEntry(',
             $startText,
             'startServer() no longer canonicalises the entry before buildServer() — the shape table lost its ground',
         );
-        $aliasMap = (new \ReflectionClass(\SugarCraft\Crush\MCP\McpClient::class))->getConstant('TYPE_ALIASES');
-        self::assertIsArray($aliasMap, 'McpClient::TYPE_ALIASES vanished — the alias rows lost their ground');
+        $aliasMap = (new \ReflectionClass(\SugarCraft\Crush\MCP\McpForeignTranslate::class))->getConstant('TYPE_ALIASES');
+        self::assertIsArray($aliasMap, 'McpForeignTranslate::TYPE_ALIASES vanished — the alias rows lost their ground');
         preg_match_all('/^\| `"type": "([a-z-]+)"` \| `([a-z-]+)` \|/m', $raw, $aliasRows, \PREG_SET_ORDER);
         $documentedAliases = [];
         foreach ($aliasRows as $aliasRow) {
@@ -3470,15 +3474,19 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(
             $documentedAliases,
             $aliasMap,
-            "the page's alias rows and McpClient::TYPE_ALIASES no longer agree — a row added or a map entry dropped both redden here",
+            "the page's alias rows and McpForeignTranslate::TYPE_ALIASES no longer agree — a row added or a map entry dropped both redden here",
         );
 
         $normalize = null;
-        foreach (self::functionSpans($clientSource) as $span) {
+        // E710: the canonicaliser's BODY moved to the shared table; the span
+        // scan follows it there — the shape-key legs below still read the
+        // same literals, just from the file that now owns them.
+        $translateSource = self::sourceOf('MCP/McpForeignTranslate.php');
+        foreach (self::functionSpans($translateSource) as $span) {
             $normalize ??= 'normalizeEntry' === $span['name'] ? $span : null;
         }
-        self::assertIsArray($normalize, 'normalizeEntry() vanished — the shape rows of the foreign-spellings table lost their ground');
-        $normalizeText = (string) substr($clientSource, $normalize['begin'], $normalize['end'] - $normalize['begin']);
+        self::assertIsArray($normalize, 'normalizeEntry() vanished from McpForeignTranslate — the shape rows of the foreign-spellings table lost their ground');
+        $normalizeText = (string) substr($translateSource, $normalize['begin'], $normalize['end'] - $normalize['begin']);
         foreach (['enabled', 'environment', 'env', 'command', 'args'] as $shapeKey) {
             self::assertStringContainsString(
                 "'{$shapeKey}'",
@@ -3699,7 +3707,9 @@ final class DocFigureProseDriftTest extends TestCase
         $helpWords = array_values(array_unique($helpRows[1]));
         sort($helpWords);
         self::assertSame($commands, $helpWords, 'the help Subcommands block and ParsedArgs::SUBCOMMANDS diverged — the page quotes both agreeing');
-        self::assertSame(6, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the six leaf rows the page enumerates (session and completion hold their own second words)');
+        // E710 grew the mcp row a second verb: session and mcp each hold two
+        // second words, completion one line of three shells — seven leaf rows.
+        self::assertSame(7, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the seven leaf rows the code dispatches (session and mcp hold their own second words)');
         foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'completion bash|zsh|fish'] as $row) {
             self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
         }
@@ -3829,7 +3839,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("if (\$action !== 'login') {", $subcommands, 'the verb gate stopped demanding login — an unknown action could reach the flow');
 
         $roster = (new \ReflectionClass(\SugarCraft\Crush\Cli\Subcommands::class))->getConstant('SUBCOMMAND_ACTIONS');
-        self::assertSame(['list', 'auth'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
+        self::assertSame(['list', 'auth', 'import'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
 
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         self::assertStringContainsString("'login' => \$this->printLoginGuidance(),", $authSource, 'the chat arm no longer routes login to guidance');
@@ -4032,15 +4042,19 @@ final class DocFigureProseDriftTest extends TestCase
         // vocabulary (opencode spells stdio `local`). A THIRD carrier of any
         // kind redds here until it is judged into this roster or the claim
         // is re-argued.
+        // E710 is the first exercise of the message's second half — the
+        // judged carrier MOVED: the alias table left McpClient for
+        // McpForeignTranslate, the shared vocabulary the importer reads
+        // through. Same carrier count, same unrelated vocabulary, new file.
         self::assertSame(
-            ['src/Agents/MemoryScope.php', 'src/MCP/McpClient.php'],
+            ['src/Agents/MemoryScope.php', 'src/MCP/McpForeignTranslate.php'],
             array_keys($sites),
             sprintf('the page enumerates every live `%s` carrier by name — a new one appeared, or a judged one moved', $needle),
         );
         self::assertStringContainsString(
             "'local' => 'stdio'",
-            self::sourceOf('MCP/McpClient.php'),
-            'the roster exempts McpClient.php ONLY as the E708 transport alias — the exemption must name its own ground',
+            self::sourceOf('MCP/McpForeignTranslate.php'),
+            'the roster exempts the transport-alias carrier ONLY as the E708 vocabulary — the exemption must name its own ground (E710 moved that ground to McpForeignTranslate)',
         );
         self::assertSame($needle, MemoryScope::Local->value, 'MemoryScope::Local no longer backs onto the string the absence claim quotes');
     }
@@ -5711,7 +5725,7 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertGreaterThanOrEqual(3, count($nativeServers), 'the worked example must carry stdio AND several no-auth remotes');
 
-        $aliases = (new \ReflectionClassConstant(\SugarCraft\Crush\MCP\McpClient::class, 'TYPE_ALIASES'))->getValue();
+        $aliases = (new \ReflectionClassConstant(\SugarCraft\Crush\MCP\McpForeignTranslate::class, 'TYPE_ALIASES'))->getValue();
         $nativeOnlyKeys = ['type', 'command', 'args', 'url', 'env', 'headers', 'startTimeout', 'enabled'];
         $buildServer = self::bodyExcerpt($client, 'buildServer');
 

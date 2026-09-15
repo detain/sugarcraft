@@ -52,12 +52,14 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * project already had —
  * {@see \SugarCraft\Crush\Tests\Integration\BinSugarcrushAutoloadGuardTest}'s
  * doc-block, "the real census of raw `fwrite(STDERR, …)` call sites across
- * `src/` and `bin/` is TWELVE" — is CORRECT, and this file asserts that it
+ * `src/` and `bin/` is THIRTEEN" — is CORRECT, and this file asserts that it
  * stays correct ({@see testTheInheritedCensusStillAgreesWithTheScan()}).
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — twelve sites. The channel that census describes.
+ *  1. `fwrite(STDERR, …)` — thirteen sites. The channel that census describes.
+ *     (E710: `Subcommands::mcpImportLine()` joined it — the import verb's
+ *     notes and post-read failures, one funnel site, stderr-only by design.)
  *  2. `STDERR` captured into a variable or property and written through later —
  *     ONE site, {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
@@ -275,7 +277,7 @@ final class StderrEmitterCensusTest extends TestCase
         'bin/sugarcrush' => 1,
         'src/Cli/Bootstrap.php' => 2,
         'src/Cli/NonInteractive.php' => 7,
-        'src/Cli/Subcommands.php' => 2,
+        'src/Cli/Subcommands.php' => 3,
     ];
 
     /**
@@ -395,8 +397,12 @@ final class StderrEmitterCensusTest extends TestCase
         'src/Cli/NonInteractive.php' => 7,
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
-        // stderr-only decision: malformed CLI usage, session intact.
-        'src/Cli/Subcommands.php' => 16,
+        // E710: mcpImport adds the funnel prefix literal plus its five door
+        // messages (no source, unknown source, no file, extra operand, cannot
+        // read) — sixteen to twenty-two. Same stderr-only decision: malformed
+        // CLI usage or an unreadable operand, session never existed, nothing
+        // was written anywhere.
+        'src/Cli/Subcommands.php' => 22,
         'src/Commands/CommandLoader.php' => 1,
         'src/Context/RuleLoader.php' => 1,
         'src/Memory/ForeignMemoryImporter.php' => 1,

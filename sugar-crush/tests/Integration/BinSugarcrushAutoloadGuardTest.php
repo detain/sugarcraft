@@ -26,7 +26,7 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is TWELVE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTEEN:
  *
  *  - {@see \SugarCraft\Crush\Cli\NonInteractive}, seven —
  *    `run()` twice (a thrown backend error, and an answer that would not encode
@@ -36,8 +36,9 @@ use SugarCraft\Crush\Tests\Support\SlicesDeclaredMethodsTrait;
  *    is the only site on this list whose routing decision is written up
  *    elsewhere: see its own doc-block for why it is on stderr rather than on
  *    the transcript seam, and why it could not be put in `Runtime`.
- *  - {@see \SugarCraft\Crush\Cli\Subcommands}, two — `sessionDelete()`'s "no
- *    such session" and `mcp()`'s inventory error.
+ *  - {@see \SugarCraft\Crush\Cli\Subcommands}, three — `sessionDelete()`'s "no
+ *    such session", `mcp()`'s inventory error, and — added by E710 —
+ *    `mcpImportLine()`, the single funnel for the import verb's notes.
  *  - {@see \SugarCraft\Crush\Cli\Bootstrap}, two —
  *    `warnPermissionConfig()`, which IS the stderr channel the seam delegates
  *    to and so cannot be a migration target, and `reportPrunedSessions()`'s

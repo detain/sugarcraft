@@ -568,9 +568,10 @@ final class Subcommands
 
     /**
      * `sugarcrush mcp list` — what `.mcp.json` declares, and whether this
-     * launch would start it — and, since E701, `sugarcrush mcp auth login`,
+     * launch would start it —, since E701, `sugarcrush mcp auth login`,
      * the interactive OAuth flow handed off whole to {@see self::mcpAuth()}
-     * at the verb gate below.
+     * at the verb gate below, and, since E710, `sugarcrush mcp import`,
+     * the print-only foreign-config translator handed to {@see self::mcpImport()}.
      *
      * READ-ONLY BY CONSTRUCTION. It goes through
      * {@see Bootstrap::mcpServerInventory()}, which shares its path,
@@ -584,13 +585,16 @@ final class Subcommands
         if ($verb === 'auth') {
             return self::mcpAuth($args);
         }
+        if ($verb === 'import') {
+            return self::mcpImport($args);
+        }
         if ($verb !== 'list') {
             return NonInteractive::failUsage(
                 $verb === null
                     ? 'sugarcrush: mcp: no action given'
                     : \sprintf('sugarcrush: mcp %s: unknown action', $verb),
                 $args->outputFormat,
-                'Usage: sugarcrush mcp list | sugarcrush mcp auth login <server>',
+                'Usage: sugarcrush mcp list | sugarcrush mcp auth login <server> | sugarcrush mcp import claude|opencode <path>',
             );
         }
 
@@ -795,6 +799,186 @@ final class Subcommands
     }
 
     /**
+     * The dialects `sugarcrush mcp import` can read — the keys of
+     * {@see \SugarCraft\Crush\MCP\McpForeignTranslate::CONTAINERS}. Derived
+     * from that map rather than re-typed here, so a third dialect added to
+     * the translator is completable and dispatchable the moment it is
+     * importable, and this door can never advertise a word nothing can answer.
+     *
+     * @return list<string>
+     */
+    private static function importSources(): array
+    {
+        return \array_keys(\SugarCraft\Crush\MCP\McpForeignTranslate::CONTAINERS);
+    }
+
+    /**
+     * The one usage line this verb's four doors all print.
+     */
+    private const IMPORT_USAGE = 'Usage: sugarcrush mcp import claude|opencode <path>';
+
+    /**
+     * `sugarcrush mcp import claude|opencode <path>` — E710's print-only
+     * foreign-config translator.
+     *
+     * THE NEVER-WRITE LAW. This verb reads one file and PRINTS the translated
+     * `.mcp.json` block on stdout; it never touches the filesystem again. An
+     * importer that wrote the destination would decide where the operator's
+     * config lives — project root vs `--root` vs a scratch clone are three
+     * different answers a human picks — and a wrong decision silently
+     * swallowed is worse than a paste. stdout carries ONLY the document (and
+     * the JSON envelope under `--output-format json`), so
+     * `sugarcrush mcp import opencode ~/.config/opencode.json > .mcp.json`
+     * is exact; every note about WHAT the translation did rides stderr, where
+     * a redirect cannot corrupt it.
+     *
+     * The renames themselves are not spelled here: they are
+     * {@see \SugarCraft\Crush\MCP\McpForeignTranslate}, the same table
+     * `McpClient::startServer()` reads foreign spellings through since E708.
+     * Importer and loader share one vocabulary by construction — a second
+     * hand-typed mapping would be a second answer waiting to drift.
+     *
+     * Exit codes are the five-way convention this class documents: `2` for
+     * the operand doors (no source, unknown source, no path, extra operand,
+     * unreadable file — nothing was attempted), `1` for a file that was read
+     * and then refused (not JSON, not a config of the named dialect, a
+     * malformed entry — it ran and failed, the same reading as `mcp list` on
+     * a trusted-but-unparseable `.mcp.json`), `0` for the printed document
+     * even when it came with notes.
+     */
+    private static function mcpImport(ParsedArgs $args): int
+    {
+        $source = $args->subcommandArgs[1] ?? null;
+        if ($source === null) {
+            return NonInteractive::failUsage(
+                'sugarcrush: mcp import: no source given',
+                $args->outputFormat,
+                self::IMPORT_USAGE,
+            );
+        }
+        if (!\in_array($source, self::importSources(), true)) {
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush: mcp import %s: unknown source', $source),
+                $args->outputFormat,
+                \sprintf('Valid sources are: %s.', \implode(', ', self::importSources())),
+            );
+        }
+        $path = $args->subcommandArgs[2] ?? null;
+        if ($path === null) {
+            return NonInteractive::failUsage(
+                'sugarcrush: mcp import: no file given',
+                $args->outputFormat,
+                self::IMPORT_USAGE,
+            );
+        }
+        $extra = $args->subcommandArgs[3] ?? null;
+        if ($extra !== null) {
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush: mcp import: unexpected operand %s', $extra),
+                $args->outputFormat,
+                self::IMPORT_USAGE,
+            );
+        }
+
+        // One read, and the operator's own argv named the path — the same
+        // CALLER_SUPPLIED posture as every other CLI file operand (`--config`
+        // above, `session delete`'s store). The bytes are a document to
+        // translate, never code to execute: nothing here reaches `buildServer`
+        // or spawns anything; the servers only START after the operator pastes
+        // the block into `.mcp.json` and trusts the root.
+        $raw = @file_get_contents($path);  // BARE spelling — the \-prefixed form is invisible to the read-path census scanner
+        if ($raw === false) {
+            return NonInteractive::failUsage(
+                \sprintf('sugarcrush: mcp import: cannot read %s', $path),
+                $args->outputFormat,
+                'Check the path; nothing has been translated or written.',
+            );
+        }
+
+        try {
+            $decoded = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+            if (!\is_array($decoded)) {
+                throw new \RuntimeException('the file is not a JSON object');
+            }
+            $translated = \SugarCraft\Crush\MCP\McpForeignTranslate::translateDocument($source, $decoded);
+        } catch (\JsonException $e) {
+            return self::mcpImportFailure($path, 'is not valid JSON: ' . $e->getMessage(), $args);
+        } catch (\RuntimeException $e) {
+            return self::mcpImportFailure($path, $e->getMessage(), $args);
+        }
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument([
+                'result' => [
+                    'source' => $source,
+                    'path' => $path,
+                    'mcpServers' => $translated['servers'],
+                    'notes' => $translated['notes'],
+                ],
+            ]);
+        } else {
+            echo \json_encode(
+                ['mcpServers' => $translated['servers']],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ) . "\n";
+        }
+
+        // Notes after the document, all of them on stderr: the translation
+        // earned its exit 0 by printing, and the account of what it renamed
+        // must not contaminate the bytes a pipe or redirect carries.
+        foreach ($translated['notes'] as $note) {
+            self::mcpImportLine($note);
+        }
+        self::mcpImportLine(\sprintf(
+            'nothing was written — paste the block into %s and add the root to "trustedProjectMcp" in %s to start these servers',
+            // Same ambient default mcpServerInventory() takes for a null
+            // `--root`: the launch directory names where the block belongs.
+            \rtrim($args->root ?? getcwd(), '/') . '/' . Bootstrap::MCP_CONFIG_FILENAME,
+            Bootstrap::userConfigPath(),
+        ));
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * One prefixed sentence on stderr — the shared channel for both this
+     * verb's notes and its post-read failures. Single site by design: the
+     * DIRECT_SITES census credits this file one writer for `mcp import`, and
+     * a second spelling of the same funnel is how a roster loses track.
+     */
+    private static function mcpImportLine(string $line): void
+    {
+        \fwrite(\STDERR, 'sugarcrush: mcp import: ' . $line . "\n");
+    }
+
+    /**
+     * The file WAS read and then refused: exit 1, the failure named on stderr
+     * (text) or in the package's one error envelope (JSON), and — the
+     * acceptance half — NO partial document on stdout in either format. The
+     * `mcp-config` error type is the family `mcp list` already uses for an
+     * unparseable trusted config; a second type word here would fork the
+     * README's exit-table roster for no new fact.
+     */
+    private static function mcpImportFailure(string $path, string $message, ParsedArgs $args): int
+    {
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            // Error-only envelope, the same shape failUsage() prints: a
+            // `"result": null` twin would let a reader mistake a refusal for
+            // a successful import of nothing.
+            self::emitDocument([
+                'error' => [
+                    'type' => 'mcp-config',
+                    'message' => $path . ': ' . $message,
+                ],
+            ]);
+        } else {
+            self::mcpImportLine($path . ': ' . $message);
+        }
+
+        return NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
      * `sugarcrush completion bash|zsh|fish` — a completion script on stdout,
      * for `eval "$(sugarcrush completion bash)"` or redirection into the
      * shell's own completions directory.
@@ -886,7 +1070,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_ACTIONS = [
         'session' => ['list', 'delete'],
-        'mcp' => ['list', 'auth'],
+        'mcp' => ['list', 'auth', 'import'],
         'completion' => self::SHELLS,
     ];
 

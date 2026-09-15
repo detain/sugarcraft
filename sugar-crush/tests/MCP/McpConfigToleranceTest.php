@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\MCP;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\MCP\HttpMcpServer;
 use SugarCraft\Crush\MCP\McpClient;
+use SugarCraft\Crush\MCP\McpForeignTranslate;
 use SugarCraft\Crush\MCP\McpServer;
 use SugarCraft\Crush\MCP\StdioMcpServer;
 
@@ -16,9 +17,10 @@ use SugarCraft\Crush\MCP\StdioMcpServer;
  * with no `SEARXNG_URL` and nothing said so), `enabled: false` started the
  * server anyway, `type: local/remote` threw, and a `command` given as one
  * argv array reached a strict_types `TypeError`. Every row here drives the
- * canonicalisation in `McpClient::startServer()`/`normalizeEntry()` BEFORE
- * the factory match, so the factory arms (pinned by DocFigure AX and E702)
- * stay the four transports the census records.
+ * canonicalisation `McpClient::startServer()` performs BEFORE the factory
+ * match — since E710 the shared table it calls lives in `McpForeignTranslate`
+ * — so the factory arms (pinned by DocFigure AX and E702) stay the four
+ * transports the census records.
  *
  * ZERO CHILD PROCESSES: builds go through reflection on `buildServer` — the
  * pattern {@see McpClientClaudeTypeFactoryTest} established — and the rows
@@ -367,8 +369,8 @@ final class McpConfigToleranceTest extends TestCase
      */
     private function tolAliases(): array
     {
-        $aliases = (new \ReflectionClass(McpClient::class))->getConstant('TYPE_ALIASES');
-        self::assertIsArray($aliases, 'McpClient::TYPE_ALIASES vanished — these rows lost their subject');
+        $aliases = (new \ReflectionClass(McpForeignTranslate::class))->getConstant('TYPE_ALIASES');
+        self::assertIsArray($aliases, 'McpForeignTranslate::TYPE_ALIASES vanished — these rows lost their subject');
 
         /** @var array<string, string> $aliases */
         return $aliases;
@@ -381,9 +383,11 @@ final class McpConfigToleranceTest extends TestCase
      */
     private function tolNormalize(array $config): ?array
     {
-        $normalize = new \ReflectionMethod(McpClient::class, 'normalizeEntry');
-
-        return $normalize->invoke($this->tolFreshClient(), $config);
+        // E710: the canonicaliser moved from a private McpClient method to
+        // the public shared table the loader calls — no reflection needed any
+        // more, and the parity these rows prove now runs through the SAME
+        // code path `mcp import` translates with.
+        return McpForeignTranslate::normalizeEntry($config);
     }
 
     /**

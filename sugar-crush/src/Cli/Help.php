@@ -64,6 +64,11 @@ provider, an API key or a terminal):
                          starting any of them. Reports instead when the file
                          is absent, resolves outside the project tree, or is
                          present but the project root is not trusted.
+  mcp import claude|opencode <path>
+                         Translate a foreign MCP config and print the
+                         equivalent .mcp.json block to stdout. Prints only
+                         the document and writes no file; the renames the
+                         translation made are listed on stderr.
   completion bash|zsh|fish
                          Write a shell completion script to stdout, e.g.
                          eval "$(sugarcrush completion bash)".

@@ -1421,6 +1421,68 @@ final class BinSugarcrushDispatchTest extends TestCase
      * covered without a new line here — the guard grows with the roster
      * (E191 discipline), and a hard-coded current roster could not.
      */
+    /**
+     * E710 — the real binary, real argv, real streams: `mcp import` prints the
+     * translated block on STDOUT and nothing else, narrates its renames on
+     * stderr, names where the block belongs, and writes no file anywhere.
+     * The in-process doors live in SubcommandsMcpImportTest; this arm is the
+     * stream-separation proof only a child process can give — an ob capture
+     * cannot see stderr, and this harness can.
+     */
+    public function testMcpImportPrintsTheTranslatedBlockAndWritesNothing(): void
+    {
+        $project = $this->privateProject();
+        $configPath = $project . '/opencode.json';
+        \file_put_contents(
+            $configPath,
+            \json_encode(['mcp' => [
+                'searxng' => [
+                    'type' => 'local',
+                    'command' => ['npx', '-y', 'mcp-searxng'],
+                    'environment' => ['SEARXNG_URL' => 'http://127.0.0.1:8888'],
+                    'enabled' => true,
+                ],
+                'off' => ['type' => 'local', 'command' => ['sleep'], 'enabled' => false],
+            ]]),
+        );
+
+        $result = $this->runBin(['--root', $project, 'mcp', 'import', 'opencode', $configPath], []);
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $decoded = \json_decode(\trim($result['stdout']), true);
+        $this->assertIsArray($decoded, 'stdout must be exactly the document: ' . $result['stdout']);
+        $this->assertSame(
+            ['searxng' => [
+                'type' => 'stdio',
+                'command' => 'npx',
+                'args' => ['-y', 'mcp-searxng'],
+                'env' => ['SEARXNG_URL' => 'http://127.0.0.1:8888'],
+            ]],
+            $decoded['mcpServers'] ?? null,
+        );
+        $this->assertStringNotContainsString('sugarcrush:', $result['stdout'], 'a note leaked into the redirected channel');
+        $this->assertStringContainsString('moved the "mcp" block', $result['stderr']);
+        $this->assertStringContainsString('dropped "off" — its own "enabled": false declines to start', $result['stderr']);
+        $this->assertStringContainsString('trustedProjectMcp', $result['stderr'], 'the guidance line names the trust grant or the import lands inert');
+        $this->assertFileDoesNotExist($project . '/.mcp.json', 'the import verb wrote its document into the project');
+    }
+
+    /**
+     * E710 — the unknown-source door through the real argv: exit 2 (usage),
+     * the named source refused on stderr, and stdout stays silent so a
+     * redirect captures nothing half-translated.
+     */
+    public function testMcpImportUnknownSourceIsAUsageDoorOnRealStreams(): void
+    {
+        $project = $this->privateProject();
+
+        $result = $this->runBin(['--root', $project, 'mcp', 'import', 'gemini', $project . '/nope.json'], []);
+
+        $this->assertSame(self::EXIT_USAGE, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('gemini: unknown source', $result['stderr']);
+        $this->assertSame('', $result['stdout'], 'a refused door must print nothing on the document channel');
+    }
+
     public function testMcpListJsonRowsCarryTheirLiveWireNames(): void
     {
         $home = $this->privateHome();

@@ -319,6 +319,11 @@ final class ReadPathCensusTest extends TestCase
         // through ContainedPath::within() before constructing the client. A row
         // whose rationale is "nobody calls this" expires the moment somebody does,
         // which is the transition this ledger exists to make visible.
+        'Cli/Subcommands.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `mcp import`\'s operand: the operator\'s own argv names the file, '
+                . 'the verb reads one document, translates it through the shared McpForeignTranslate '
+                . 'table, and PRINTS (the never-write law); nothing read here is ever executed',
+        ],
         'MCP/McpClient.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Cli/Bootstrap.php — `$root/.mcp.json`, bounded against the root '
                 . 'that named it before this class is constructed. Still a constructor argument, so an '

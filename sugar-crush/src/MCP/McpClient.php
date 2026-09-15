@@ -11,20 +11,12 @@ use SugarCraft\Crush\Cli\Bootstrap;
 
 final class McpClient
 {
-    /**
-     * E708 — foreign `type` spellings, renamed to this port's names BEFORE
-     * {@see buildServer()} dispatch so the factory's match stays exactly the
-     * four-transport census the docs page records (an alias arm inside the
-     * `match` would make the page's "the types ARE the constructs" claim
-     * count wrong). `local`/`remote` are the names opencode's config gives to
-     * stdio and HTTP; nothing else in this file invents a synonym.
-     *
-     * @var array<string, string>
-     */
-    private const TYPE_ALIASES = [
-        'local' => 'stdio',
-        'remote' => 'http',
-    ];
+    // E710 moved the foreign-spelling vocabulary — the TYPE_ALIASES map and
+    // normalizeEntry() — into {@see McpForeignTranslate}, the ONE table the
+    // `sugarcrush mcp import` translator and this loader share. The read here
+    // is byte-identical to what it was; only the home of the constants moved,
+    // so a new foreign spelling can never be taught to one caller and not the
+    // other.
 
     /** @var array<string, McpServer> */
     private array $servers = [];
@@ -329,7 +321,10 @@ final class McpClient
      *
      * E708 — before anything is constructed, the entry is READ: an
      * `enabled: false` declines to start and is collected for the report, and
-     * a foreign `type` name is translated through {@see TYPE_ALIASES}. The
+     * a foreign `type` name is translated through
+     * {@see McpForeignTranslate::TYPE_ALIASES}; the entry itself is
+     * canonicalised by {@see McpForeignTranslate::normalizeEntry()} (E710
+     * moved both into the shared table the importer calls too). The
      * non-string `type` deliberately rides into {@see buildServer()}'s typed
      * parameter UNtranslated rather than being special-cased here: the `match`
      * raises its TypeError inside the existing guard, where it joins the
@@ -343,11 +338,11 @@ final class McpClient
     {
         $type = $config['type'] ?? 'stdio';
         if (is_string($type)) {
-            $type = self::TYPE_ALIASES[$type] ?? $type;
+            $type = McpForeignTranslate::TYPE_ALIASES[$type] ?? $type;
         }
 
         try {
-            $entry = $this->normalizeEntry($config);
+            $entry = McpForeignTranslate::normalizeEntry($config);
             if ($entry === null) {
                 $this->disabledServers[] = $name;
 
@@ -367,86 +362,6 @@ final class McpClient
         $this->servers[$name] = $server;
 
         return null;
-    }
-
-    /**
-     * E708 — read one entry's FOREIGN spellings into the shape
-     * {@see buildServer()} constructs, before any class is named.
-     *
-     * WHY BEFORE THE MATCH AND NOT INSIDE AN ARM: a real opencode `.mcp.json`
-     * block pasted unchanged used to lose its env maps in silence —
-     * `environment` was read nowhere, so `searxng` spawned with no
-     * `SEARXNG_URL` and no report anywhere said so — and its `enabled: false`
-     * started anyway. Renaming here (rather than growing `local`/`remote`
-     * arms there) keeps the factory's match the four-transport census
-     * docs/MCP.md records, and it means every downstream reader —
-     * `resolveEnv`, the per-arm key reads the AX doc-arm pins — sees exactly
-     * one spelling of each key.
-     *
-     * PRECEDENCE, stated once because both files exist in the wild: the
-     * explicit sugar-crush spelling wins where two spellings of the SAME slot
-     * disagree — `env` over `environment`. A `command` ARRAY is not the rival
-     * of the string form, it is the same slot typed differently: the head
-     * becomes the program and the tail joins an already-present `args` list
-     * AFTER the array's own pieces, because the array is a whole argv and the
-     * `args` key extends it.
-     *
-     * @param array<string, mixed> $config
-     *
-     * @return array<string, mixed>|null the entry in canonical shape; null
-     *         when the entry itself declines to run (`enabled: false`), which
-     *         {@see startServer()} reports rather than forgets
-     *
-     * @throws \RuntimeException a malformed shape, carried by the caller's
-     *         guard into the per-entry report — same family as the
-     *         factory's unknown-type throw
-     */
-    private function normalizeEntry(array $config): ?array
-    {
-        if (array_key_exists('enabled', $config) && !is_bool($config['enabled'])) {
-            throw new \RuntimeException('"enabled" must be a boolean when present');
-        }
-        if (($config['enabled'] ?? true) === false) {
-            return null;
-        }
-
-        if (array_key_exists('environment', $config)) {
-            // A null `env` is a declared-but-empty slot, not an explicit
-            // spelling that won the precedence — honouring its mere presence
-            // would drop BOTH maps, the silent-drop class this normalisation
-            // exists to end (r81-rv MINOR-1).
-            if (!array_key_exists('env', $config) || $config['env'] === null) {
-                $config['env'] = $config['environment'];
-            }
-            // Gone either way, won or lost: a slot that keeps two spellings
-            // after canonicalisation invites a second reader to disagree
-            // with the precedence.
-            unset($config['environment']);
-        }
-
-        $command = $config['command'] ?? null;
-        if (is_array($command)) {
-            if ($command === [] || !array_is_list($command)) {
-                throw new \RuntimeException('"command" array must be a non-empty list');
-            }
-            $head = array_shift($command);
-            if (!is_string($head) || $head === '') {
-                throw new \RuntimeException('"command" array must start with a non-empty string');
-            }
-            foreach ($command as $piece) {
-                if (!is_string($piece)) {
-                    throw new \RuntimeException('"command" array must hold strings');
-                }
-            }
-            $args = $config['args'] ?? [];
-            if (!is_array($args) || !array_is_list($args)) {
-                throw new \RuntimeException('"args" must be a list');
-            }
-            $config['command'] = $head;
-            $config['args'] = [...$command, ...$args];
-        }
-
-        return $config;
     }
 
     /**

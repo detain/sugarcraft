@@ -343,6 +343,8 @@ sugarcrush models                    # providers this install can select; * mark
 sugarcrush session list              # stored sessions, newest first
 sugarcrush session delete <id>       # delete one stored session
 sugarcrush mcp list                  # what .mcp.json declares — without starting anything
+sugarcrush mcp import claude|opencode <path>
+                                     # translate a foreign MCP config, print the block — writes nothing
 sugarcrush completion bash|zsh|fish  # a shell completion script on stdout
 ```
 
@@ -379,8 +381,9 @@ containment and trust decision with `mcpClient()` (both go through
 disagrees with; an untrusted or out-of-tree config is reported rather than
 enumerated.
 
-`--output-format json` applies to `doctor`, `models`, `session list` and `mcp
-list`, producing the same `{"result": …}` envelope the one-shot path does, and
+`--output-format json` applies to `doctor`, `models`, `session list`, `mcp
+list` and `mcp import`, producing the same `{"result": …}` envelope the
+one-shot path does, and
 the same `{"result":null,"error":{"type":…,"message":…}}` document on any
 failure — an operand error, an unknown session id, or an unreadable trusted
 `.mcp.json`. **The exit code never depends on the format**: `sugarcrush mcp
