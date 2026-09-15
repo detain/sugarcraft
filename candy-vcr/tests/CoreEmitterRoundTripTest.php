@@ -111,6 +111,9 @@ final class CoreEmitterRoundTripTest extends TestCase
         $this->assertNull($handler->singleShift);
         $this->assertTrue($handler->mode->cursorVisible, 'DECTCEM returns to its power-on value');
         $this->assertFalse($handler->sgr->reverse, 'the pen returns to default rendition');
+        // Nothing was printed above, so this only trips if hardReset() scribbles
+        // on the buffer; the clear itself is pinned non-vacuously by
+        // testRisEmitterClearsTheScreenAndHomesTheCursor.
         $this->assertSame('', $this->row($handler));
     }
 
@@ -139,8 +142,13 @@ final class CoreEmitterRoundTripTest extends TestCase
         // follows DECALN must still be rendered, never swallowed as the final
         // byte of a half-built sequence. Today candy-vt ignores `ESC # 8` and
         // prints the 'E' at the cursor; if the emulator later executes DECALN,
-        // the alignment fill puts 'E' in that cell instead. Both outcomes pass,
-        // and no spelling of the broken `CSI # 8` form can produce them.
+        // the alignment fill puts 'E' in that cell instead. Both outcomes pass.
+        // Scope note: this is the tripwire for a receiver that EATS the next
+        // graphic (a physical terminal given `ESC [ # 8` does exactly that). It
+        // does NOT catch a regression to the CSI spelling, because this repo's
+        // parser drops the `8` without dispatching and still prints the 'E'. The
+        // spelling is pinned by the dispatch-shape test above and the exact-byte
+        // test in candy-core — neither is redundant with this one.
         $h = $this->feed('abc' . Ansi::decaln() . 'E');
 
         $this->assertSame('E', $h->buffer->cell(0, 3)->grapheme);
@@ -179,6 +187,13 @@ final class CoreEmitterRoundTripTest extends TestCase
         ];
 
         foreach ($pairs as $coreConstant => $emulatorConstant) {
+            // getConstant() yields false for a name that does not exist, so a
+            // symmetric rename on both sides would compare false === false and
+            // pass with the mapping silently retired. Demand the names first.
+            $this->assertTrue(
+                $core->hasConstant($coreConstant) && $emulator->hasConstant($emulatorConstant),
+                "candy-core Ansi::{$coreConstant} and candy-vt Charsets::{$emulatorConstant} must both exist",
+            );
             $this->assertSame(
                 $emulator->getConstant($emulatorConstant),
                 $core->getConstant($coreConstant),
@@ -188,15 +203,25 @@ final class CoreEmitterRoundTripTest extends TestCase
 
         // …and the other direction: neither roster may grow alone. The pair map
         // above is hand-written, so without this a charset added on the vt side
-        // would silently have no emitter (and vice versa).
+        // would silently have no emitter (and vice versa). This compares every
+        // public constant on both classes, so an unrelated public constant added
+        // to either side also trips it — deliberately loud rather than permissive.
         $collect = static function (\ReflectionClass $class, string $prefix = ''): array {
             $values = [];
             foreach ($class->getReflectionConstants() as $constant) {
                 if ($constant->isPublic() && ($prefix === '' || str_starts_with($constant->getName(), $prefix))) {
-                    $values[] = $constant->getValue();
+                    $value = $constant->getValue();
+                    // Every designator is a single byte, so a non-string here is a
+                    // roster bug worth failing on — and it keeps the sorted lists
+                    // comparable instead of letting a mixed value pick its own order.
+                    if (!\is_string($value)) {
+                        throw new \UnexpectedValueException("{$class->getName()}::{$constant->getName()} must hold a string designator");
+                    }
+                    $values[] = $value;
                 }
             }
-            sort($values);
+            // Deterministic ordering for the comparison below.
+            sort($values, SORT_STRING);
             return $values;
         };
         $this->assertSame(

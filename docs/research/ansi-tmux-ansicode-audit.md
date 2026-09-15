@@ -43,7 +43,9 @@ DECCKM/DECCOLM/DECSCNM/DECARM/LNM/SRM modes · IRM insert mode · DECOM re-ancho
 `shiftOut()`/`shiftIn()`), round-trip-guarded by `candy-vcr/tests/CoreEmitterRoundTripTest.php`. Note the emitter
 spells DECALN as `ESC # 8` (VT510/xterm) rather than the `CSI # 8` of this audit's notes — the CSI form never
 completes as a sequence (a CSI final must be 0x40-0x7E, so candy-ansi drops it to Ground undispatched while a real
-receiver swallows the next graphic). Still missing there: DECCOLM (`?3`) and DECKPAM/DECKPNM emitters (no consumer models them: candy-vt
+receiver swallows the next graphic). candy-vt's `ScreenHandler::displayAlignmentTest()` heading still reads
+"DECALN — CSI # 8" while its own wire-level note documents the gap correctly; the stale label is left to the vt track.
+Still missing there: DECCOLM (`?3`) and DECKPAM/DECKPNM emitters (no consumer models them: candy-vt
 has no DECCOLM mode field and candy-input still decodes `ESC =`/`ESC >` as Alt+=/Alt+>), and an OSC 4 query emitter.
 
 ### Deferred / out of scope

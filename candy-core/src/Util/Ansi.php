@@ -343,6 +343,12 @@ final class Ansi
         return self::CSI . 'u';
     }
 
+    // RIS / DECALN / SCS emitters. Deliberately without this file's
+    // `Mirrors charmbracelet/x/ansi.*` cite: x/ansi ships no emitter for RIS,
+    // DECALN or character-set designation — candy-ansi carries only the parse
+    // side — so every byte string below is cited straight to ECMA-48, VT510 and
+    // ansicode.txt instead of to a non-existent upstream symbol.
+
     /**
      * RIS — Reset to Initial State (`ESC c`).
      *
@@ -373,8 +379,11 @@ final class Ansi
      * notes is not a complete sequence: a CSI final byte must be 0x40-0x7E, so
      * on a standards-conformant receiver `ESC [ # 8` stays inside the CSI, where
      * it consumes whatever the caller prints next as the final — eating output
-     * instead of testing alignment. candy-vt documents that same gap accurately
-     * and exposes the pattern programmatically only.
+     * instead of testing alignment. Here the shared parser drops the `8`
+     * altogether without dispatching anything. candy-vt's
+     * `ScreenHandler::displayAlignmentTest()` still heads itself with that stale
+     * spelling, while its own wire-level note documents the gap accurately and
+     * exposes the pattern programmatically only.
      *
      * Neither spelling executes the pattern in candy-vt yet: this repo's parser
      * closes CsiIntermediate on a 0x30-0x3F byte by dropping to Ground without
@@ -1023,15 +1032,24 @@ final class Ansi
     }
 
     /**
-     * Is `$byte` a legal SCS designator? Designation finals span 0x30-0x7E —
+     * Is `$byte` a legal SCS designator? Designation finals span 0x30-0x7E:
      * ECMA-48's Fp (0x30-0x3F), Fe (0x40-0x5F) and Fs (0x60-0x7E) bands taken
-     * together (ansicode.txt:222-249) — which is wider than the 0x40-0x7E range
-     * of ordinary escape finals, because DEC's own sets live in the digits:
-     * `(0` line drawing, `(1`/`(2` alternate ROM, `(<` supplemental graphics
-     * (ansicode.txt:223-230). A byte below 0x30 is C0: candy-ansi's transition
-     * table EXECUTES it and stays in the Escape state, so it never terminates
-     * the designation — the receiver would be left mid-sequence with a charset
-     * silently unapplied. 0x7F (DEL) is ignored the same way.
+     * together — the band names are ECMA-48's, while ansicode.txt:222-249 is the
+     * designator inventory. That is wider than the 0x40-0x7E range of ordinary
+     * escape finals, because DEC's own sets live in the digits: `(0` line
+     * drawing, `(1`/`(2` alternate ROM, `(<` supplemental graphics
+     * (ansicode.txt:223-230).
+     *
+     * Each rejected byte fails for its own reason and none of them ends with a
+     * charset applied, which is what this emitter promises its caller. 0x20-0x2F
+     * are collected as an additional intermediate instead of dispatching (ECMA-48
+     * places part of Fp there, and ansicode.txt:246-249 uses `ESC , - . /` as SCS
+     * *intermediates* for the 63+16 private sets). Below 0x20 the byte is C0:
+     * candy-ansi's transition table EXECUTES it and keeps the escape open, leaving
+     * the receiver mid-sequence with the designation silently unapplied — except
+     * CAN 0x18 and SUB 0x1A, which abandon the sequence to Ground outright, and
+     * ESC 0x1B, which discards it by starting a different escape. 0x7F (DEL) is
+     * ignored with the state retained.
      */
     private static function isScsDesignator(int $byte): bool
     {

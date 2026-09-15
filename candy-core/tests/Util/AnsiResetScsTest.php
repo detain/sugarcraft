@@ -152,7 +152,7 @@ final class AnsiResetScsTest extends TestCase
     }
 
     #[DataProvider('illegalDesignatorProvider')]
-    public function testRejectsDesignatorsOutsideFp(int $slot, string $designator): void
+    public function testRejectsDesignatorsOutsideTheScsFinalRange(int $slot, string $designator): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/SCS designator/');
