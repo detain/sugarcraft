@@ -9,7 +9,7 @@
 
 ## 1. SECURITY ISSUES
 
-### HIGH: Shell Injection in Env-Var Fallback
+### HIGH: Shell Injection in Env-Var Fallback ✅ r82: fixed by rewrite — stripslashes-after-escapeshellarg chain removed from src/Application.php
 
 **Location:** src/Application.php:137-141
 
@@ -25,7 +25,7 @@ Recommendation: Build argv array instead of string manipulation.
 
 ---
 
-### HIGH: Unrestricted Env Var Access in Template Mode
+### HIGH: Unrestricted Env Var Access in Template Mode ✅ r82: fixed by rewrite — template env access now constrained in src/Command/FormatCommand.php: 35: ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma
 
 **Location:** src/FormatCommand.php:99-102
 
@@ -45,7 +45,7 @@ Recommendation: Add --sandbox-env flag restricting substitution to safe allowlis
 
 ## 2. BUGS
 
-### MEDIUM: Space Key Routing in Filter Mode
+### MEDIUM: Space Key Routing in Filter Mode ✅ r82: fixed by rewrite — src/Model/FilterModel.php:151 comment+behavior: Space consumed by filter buffer (Tab toggles multi-select)
 
 **Location:** src/FilterModel.php:59-67
 
@@ -55,7 +55,7 @@ Recommendation: Verify ItemList::update() routes KeyType::Space to filter buffer
 
 ---
 
-### MEDIUM: Incomplete Hex Color Validation
+### MEDIUM: Incomplete Hex Color Validation ✅ r82: fixed by rewrite — parseHexColor() exists at src/Style/StyleBuilder.php:180 (3-digit expansion + digit-count errors; StyleBuilderTest covers)
 
 **Location:** src/StyleBuilder.php:166-168
 
@@ -65,7 +65,7 @@ Recommendation: Dedicated parseHexColor() method that expands 3-digit shorthand 
 
 ---
 
-### MEDIUM: $this->closed Not Set in terminate()
+### MEDIUM: $this->closed Not Set in terminate() ✅ r82: fixed by rewrite — src/Process/RealProcess.php:73-78 guards on closed||terminated and sets $terminated (double-wait prevented)
 
 **Location:** src/RealProcess.php:63-71
 
@@ -77,7 +77,7 @@ Recommendation: Add $this->closed = true inside terminate().
 
 ## 3. PERFORMANCE
 
-### MEDIUM: O(n·m) Fuzzy Recomputation on Every Keystroke
+### MEDIUM: O(n·m) Fuzzy Recomputation on Every Keystroke ✅ r82: fixed by rewrite — src/Model/FilterModel.php:118-120,:162 filter-text cache + reuse
 
 **Location:** src/Model/FilterModel.php:161-178
 
@@ -87,7 +87,7 @@ Recommendation: Cache results keyed by filter text. Early return if filterText u
 
 ---
 
-### MEDIUM: php://Memory Without Size Limit
+### MEDIUM: php://Memory Without Size Limit ✅ r82: fixed by rewrite — src/Command/TableCommand.php:170 php://temp/maxmemory:8388608
 
 **Location:** src/TableCommand.php:168
 
@@ -97,7 +97,7 @@ For large CSV data, php://memory could exhaust RAM. Use php://temp with maxmemor
 
 ## 4. MEMORY
 
-### MEDIUM: ImagickRasterizer Shared Tile Cache Between Clones
+### MEDIUM: ImagickRasterizer Shared Tile Cache Between Clones ⏭️ r82: obsolete — src/ImagickRasterizer.php does not exist in candy-shell (copy-paste artifact from the candy-vcr audit; rasterizer lives in candy-vcr where the bug IS fixed — ImagickRasterizer.php:62-68 deep-clone)
 
 **Location:** src/ImagickRasterizer.php:58-66
 
@@ -109,7 +109,7 @@ Recommendation: Clone the cache array or implement copy-on-write.
 
 ## 5. MISSING FEATURES
 
-### MEDIUM: Missing --no-selected Option
+### MEDIUM: Missing --no-selected Option ✅ r82: fixed by rewrite — src/Command/ChooseCommand.php:41,:98 option implemented + tests/Command/ChooseCommandTest.php
 
 **Location:** src/ChooseCommand.php
 
@@ -117,7 +117,7 @@ Gum's choose has --no-selected which prints message when no items selected. Not 
 
 ---
 
-### MEDIUM: Missing --print-query Option
+### MEDIUM: Missing --print-query Option ✅ r82: fixed by rewrite — src/Command/FilterCommand.php:48,:102 option implemented + tests/Command/FilterCommandTest.php
 
 **Location:** src/FilterCommand.php
 
@@ -125,7 +125,7 @@ Gum's filter has --print-query which outputs current filter text. Not implemente
 
 ---
 
-### MEDIUM: Fuzzy Match Highlighting Not Rendered
+### MEDIUM: Fuzzy Match Highlighting Not Rendered ✅ r82: fixed by rewrite — src/Model/FilterModel.php:249-254 emphasize() renders highlight indices in view()
 
 **Location:** src/Model/FilterModel.php
 

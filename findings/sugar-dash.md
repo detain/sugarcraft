@@ -1,5 +1,8 @@
 # Code Review: sugar-dash
 
+> ❗ r82: FILE INTEGRITY — this report contains a duplicated first-draft (lines ~1-178) ending in a raw `minimax:tool_call` artifact; canonical report is the second copy. Section IDs H-2/H-3/H-4 in the prose are SWAPPED relative to the summary table (prose: H-2=RingBuffer, H-3=SystemModule, H-4=Clock; table: H-2=Clock, H-3=System, H-4=RingBuffer). r82 marks follow the prose headings.
+# Code Review: sugar-dash
+
 ## Summary
 
 sugar-dash is a comprehensive TUI dashboard library porting patterns from bubble-grid, bubbletea-tilelayout, go-tealeaves, bubbleboxer, lattice, Homedash, and termui. The library provides a module system (Elm-architecture style), layout components, plot/chart rendering, event handling, plugin SDK, and state persistence. The codebase is PHP 8.3+ with PSR-4 autoloading and PHPUnit 10 tests.
@@ -12,7 +15,7 @@ sugar-dash is a comprehensive TUI dashboard library porting patterns from bubble
 
 ## Critical Issues
 
-### C-1: Parse Error in Stack.php (src/Layout/Stack.php:78)
+### C-1: Parse Error in Stack.php (src/Layout/Stack.php:78) ⏭️ r82: obsolete — premise false: `Sizer&&` parses fine (php -l clean); same spelling remains in src/Components/Tabs/Tabs.php:179 (cosmetic only)
 
 **File:** `src/Layout/Stack.php`  
 **Line:** 78  
@@ -34,7 +37,7 @@ if ($item instanceof \SugarCraft\Dash\Foundation\Sizer && $useWidth > 0) {
 
 ---
 
-### C-2: Non-Existent Package Imports in Chart.php (src/Plot/Chart/Chart.php:7-9)
+### C-2: Non-Existent Package Imports in Chart.php (src/Plot/Chart/Chart.php:7-9) ⏭️ r82: obsolete — false alarm: SugarCraft\Buffer\* IS the candy-buffer lib (candy-buffer/src/Buffer.php:5 namespace SugarCraft\Buffer, Cell.php, Diff/ present) which the finding itself lists in the composer closure
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Lines:** 7-9  
@@ -61,7 +64,7 @@ OR if `Buffer`/`Cell` are meant to come from `candy-vcr`, the import path needs 
 
 ---
 
-### C-3: Undefined Array Access in EventDispatcher::dispatch() (src/Events/EventDispatcher.php:112-117)
+### C-3: Undefined Array Access in EventDispatcher::dispatch() (src/Events/EventDispatcher.php:112-117) ⏭️ r82: obsolete by rewrite — src/Events/ was removed from sugar-dash (no EventDispatcher/Handler in src at c489210e6)
 
 **File:** `src/Events/EventDispatcher.php`  
 **Lines:** 112-117  
@@ -93,7 +96,7 @@ $onceKey = $key - 1;
 
 ## High Severity Issues
 
-### H-1: Chart Render Diff State Not Reset on Size Change (src/Plot/Chart/Chart.php:129-134)
+### H-1: Chart Render Diff State Not Reset on Size Change (src/Plot/Chart/Chart.php:129-134) ✅ r82: fixed by rewrite — F1 column-parity diff buffers (3dfec783e): single new-self frame-state point src/Plot/Chart/Chart.php:68,:151-152
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Lines:** 129-134  
@@ -115,7 +118,7 @@ The `render()` method mutates `$this->previousFrame` and the `prev*` fields in p
 
 ---
 
-### H-2: RingBuffer::oldest() Returns Wrong Element After Full Cycle (src/Plot/RingBuffer.php:122-133)
+### H-2: RingBuffer::oldest() Returns Wrong Element After Full Cycle (src/Plot/RingBuffer.php:122-133) ⏭️ r82: obsolete — the section's own final trace concludes oldest() correct & consistent with toArray(); retracted to Low, then a non-issue
 
 **File:** `src/Plot/RingBuffer.php`  
 **Lines:** 122-133  
@@ -189,7 +192,7 @@ sugar-dash is a comprehensive TUI dashboard library porting patterns from bubble
 
 ## Critical Issues
 
-### C-1: Parse Error in Stack.php — Missing Space Before `&&`
+### C-1: Parse Error in Stack.php — Missing Space Before `&&` ⏭️ r82: obsolete — premise false: `Sizer&&` parses fine (php -l clean); same spelling remains in src/Components/Tabs/Tabs.php:179 (cosmetic only)
 
 **File:** `src/Layout/Stack.php`  
 **Line:** 78  
@@ -213,7 +216,7 @@ if ($item instanceof \SugarCraft\Dash\Foundation\Sizer && $useWidth > 0) {
 
 ---
 
-### C-2: Non-Existent Package Imports in Chart.php
+### C-2: Non-Existent Package Imports in Chart.php ⏭️ r82: obsolete — false alarm: SugarCraft\Buffer\* IS the candy-buffer lib (candy-buffer/src/Buffer.php:5 namespace SugarCraft\Buffer, Cell.php, Diff/ present) which the finding itself lists in the composer closure
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Lines:** 7-9  
@@ -243,7 +246,7 @@ OR if `Buffer`/`Cell` are meant to come from `candy-vcr`, the import path needs 
 
 ---
 
-### C-3: Inconsistent Mutation in EventDispatcher::dispatch()
+### C-3: Inconsistent Mutation in EventDispatcher::dispatch() ⏭️ r82: obsolete by rewrite — src/Events/ was removed from sugar-dash (no EventDispatcher/Handler in src at c489210e6)
 
 **File:** `src/Events/EventDispatcher.php`  
 **Lines:** 98-120  
@@ -289,7 +292,7 @@ $onceKey = $key - 1; // array_push returns NEW COUNT, not index
 
 ## High Severity Issues
 
-### H-1: Chart Render Mutates State In-Place (src/Plot/Chart/Chart.php:129-134)
+### H-1: Chart Render Mutates State In-Place (src/Plot/Chart/Chart.php:129-134) ✅ r82: fixed by rewrite — F1 column-parity diff buffers (3dfec783e): single new-self frame-state point src/Plot/Chart/Chart.php:68,:151-152
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Lines:** 129-134  
@@ -315,7 +318,7 @@ Note: The CALIBER_LEARNINGS.md line 47 documents the buffer-diff pattern and men
 
 ---
 
-### H-2: RingBuffer::oldest() Inconsistent With toArray()
+### H-2: RingBuffer::oldest() Inconsistent With toArray() ⏭️ r82: obsolete — the section's own final trace concludes oldest() correct & consistent with toArray(); retracted to Low, then a non-issue
 
 **File:** `src/Plot/RingBuffer.php`  
 **Lines:** 81-100, 122-133  
@@ -360,7 +363,7 @@ So `oldest()` is actually correct. The issue is the **docstring claim** at line 
 
 ---
 
-### H-3: SystemModule State Mutation vs. Immutable Pattern (src/Modules/System/SystemModule.php:85-95)
+### H-3: SystemModule State Mutation vs. Immutable Pattern (src/Modules/System/SystemModule.php:85-95) ✅ r82: fixed by rewrite — src/Modules/System/SystemModule.php:45-47 computes state without mutating $this (direct props synced on the clone)
 
 **File:** `src/Modules/System/SystemModule.php`  
 **Lines:** 85-95  
@@ -397,7 +400,7 @@ The `update()` method calls `$this->fetchSystemData()` before `withSystemState()
 
 ---
 
-### H-4: ClockModule::withTime() Mutates Directly (src/Modules/Clock/ClockModule.php:67-72)
+### H-4: ClockModule::withTime() Mutates Directly (src/Modules/Clock/ClockModule.php:67-72) ✅ r82: fixed by rewrite — $time is NOT readonly (src/Modules/System/../Clock/ClockModule.php:19); withTime() clone-assign legal
 
 **File:** `src/Modules/Clock/ClockModule.php`  
 **Lines:** 67-72  
@@ -423,7 +426,7 @@ private function withTime(\DateTimeImmutable $time): static
 
 ## Medium Severity Issues
 
-### M-1: WeatherModule Uses $_SERVER['HOME'] Without Fallback Check (src/Modules/Weather/WeatherModule.php:196-200)
+### M-1: WeatherModule Uses $_SERVER['HOME'] Without Fallback Check (src/Modules/Weather/WeatherModule.php:196-200) ✅ r82: fixed by rewrite — getenv('HOME') first + sys_get_temp_dir() fallback src/Modules/Weather/WeatherModule.php:175-176
 
 **File:** `src/Modules/Weather/WeatherModule.php`  
 **Lines:** 196-200  
@@ -446,7 +449,7 @@ The `@` suppression on `file_get_contents($path)` at line 154 also silently swal
 
 ---
 
-### M-2: Plugin/Discovery Uses Old-Style Directory Iteration (src/Plugin/Discovery.php:32-54)
+### M-2: Plugin/Discovery Uses Old-Style Directory Iteration (src/Plugin/Discovery.php:32-54) ✅ r82: fixed by rewrite — FilesystemIterator(SKIP_DOTS|CURRENT_AS_FILEINFO) src/Plugin/Discovery.php:36
 
 **File:** `src/Plugin/Discovery.php`  
 **Lines:** 32-54  
@@ -470,7 +473,7 @@ Additionally, `is_file()` and `is_executable()` are called individually for each
 
 ---
 
-### M-3: LegacyModuleAdapter Ignores Msg Parameter (src/Module/LegacyModuleAdapter.php:54-60)
+### M-3: LegacyModuleAdapter Ignores Msg Parameter (src/Module/LegacyModuleAdapter.php:54-60) ❗ r82: STILL LIVE — src/Module/LegacyModuleAdapter.php:62-65 still discards $msg; no limitation note
 
 **File:** `src/Module/LegacyModuleAdapter.php`  
 **Lines:** 54-60  
@@ -495,7 +498,7 @@ This is a design limitation rather than a bug — the adapter is a bridging laye
 
 ---
 
-### M-4: Chart Class Has 20+ Near-Identical Withers (src/Plot/Chart/Chart.php:436-690)
+### M-4: Chart Class Has 20+ Near-Identical Withers (src/Plot/Chart/Chart.php:436-690) ❗ r82: STILL LIVE — src/Plot/Chart/Chart.php ~16 new-self wither/field copies; no mutate() helper adopted
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Lines:** 436-690  
@@ -521,7 +524,7 @@ This is 254 lines of near-identical boilerplate for a class with only 11 configu
 
 ---
 
-### M-5: FocusManager::focusNext/Previous Don't Handle Empty Map Edge Case
+### M-5: FocusManager::focusNext/Previous Don't Handle Empty Map Edge Case ✅ r82: fixed by rewrite — focusNext handles null/stale focusedId explicitly src/Layout/FocusManager.php:93-96 (ring-based)
 
 **File:** `src/Layout/FocusManager.php`  
 **Lines:** 63-91  
@@ -555,7 +558,7 @@ If `$ids` has elements, `$ids[1]` might exist and return a valid ID, or it might
 
 ## Low Severity Issues
 
-### L-1: EventHandler Interface Is Empty (src/Events/EventHandler.php:16-17)
+### L-1: EventHandler Interface Is Empty (src/Events/EventHandler.php:16-17) ⏭️ r82: obsolete by rewrite — src/Events/ was removed from sugar-dash (no EventDispatcher/Handler in src at c489210e6)
 
 **File:** `src/Events/EventHandler.php`  
 **Lines:** 16-17  
@@ -574,7 +577,7 @@ The `EventHandler` interface is completely empty — no methods, no constants. T
 
 ---
 
-### L-2: Chart.php Uses `json_last_error()` Not `json_last_error_msg()`
+### L-2: Chart.php Uses `json_last_error()` Not `json_last_error_msg()` ⏭️ r82: obsolete — finding itself retracts ('no issue here')
 
 **File:** `src/State/Persistence.php`  
 **Line:** 73  
@@ -585,7 +588,7 @@ The code uses `JSON_THROW_ON_ERROR` flag which is correct. No issue here — thi
 
 ---
 
-### L-3: Buffer/Cell Type Duplication Between Foundations
+### L-3: Buffer/Cell Type Duplication Between Foundations ⏭️ r82: obsolete — import resolves to candy-buffer (see C-2); dual-cell convention documented
 
 **File:** Multiple files in `src/Plot/Chart/`  
 **Lines:** Various  
@@ -601,7 +604,7 @@ This dual-type pattern is a known project convention. However, `Chart.php` impor
 
 ---
 
-### L-4: Gauge.php Clamps Ratio Twice (src/Plot/Chart/Gauge.php:43-56, 80)
+### L-4: Gauge.php Clamps Ratio Twice (src/Plot/Chart/Gauge.php:43-56, 80) ❗ r82: STILL LIVE — src/Plot/Chart/Gauge.php still has 3 max(0.0 clamp sites
 
 **File:** `src/Plot/Chart/Gauge.php`  
 **Lines:** 43-56, 80  
@@ -628,7 +631,7 @@ The ratio is clamped in both `new()` and `render()`. If a caller creates a `Gaug
 
 ---
 
-### L-5: No Interface for Sizer/Drawable Pattern (multiple files)
+### L-5: No Interface for Sizer/Drawable Pattern (multiple files) ✅ r82: fixed by rewrite — src/Foundation/Sizer.php + Drawable.php now exist
 
 **Files:** `src/Layout/Screen.php`, `src/Layout/Stack.php`, `src/Plot/Chart/Chart.php`, `src/Plot/Chart/Gauge.php`  
 **Lines:** Various  
@@ -641,13 +644,13 @@ Classes implement `SugarCraft\Dash\Foundation\Sizer` and/or `SugarCraft\Dash\Fou
 
 ## Missing Features
 
-### F-1: No TypeScript/JS Plugin SDK Types for External Plugin Authors
+### F-1: No TypeScript/JS Plugin SDK Types for External Plugin Authors ❗ r82: STILL LIVE — no sugar-dash/docs/; plugin protocol still docblock-only (IDEA-class, low)
 
 The Plugin SDK (`src/Plugin/PluginSdk.php`, `src/Plugin/Request.php`, `src/Plugin/Response.php`) communicates via line-delimited JSON over stdin/stdout. External plugin authors (writing in any language) must manually implement the protocol. There are no TypeScript definition files, no OpenAPI spec, and no formal protocol documentation beyond docblocks in the PHP source.
 
 ---
 
-### F-2: No Comprehensive Error Boundaries in PluginSdk::run()
+### F-2: No Comprehensive Error Boundaries in PluginSdk::run() ❗ r82: STILL LIVE — src/Plugin/PluginSdk.php:52 bare fgets(STDIN) loop, no signal handling
 
 **File:** `src/Plugin/PluginSdk.php`  
 **Lines:** 47-75  
@@ -675,7 +678,7 @@ If the process receives a SIGTERM or SIGINT, the loop exits silently with `exit(
 
 ---
 
-### F-3: No Label Truncation for Multi-Byte Labels in Chart Components
+### F-3: No Label Truncation for Multi-Byte Labels in Chart Components ✅ r82: fixed by rewrite — CALIBER formula shipped: src/Plot/Chart/Area.php:315-317 intdiv+mb_substr; Bubble.php:349
 
 The CALIBER_LEARNINGS.md line 11 documents a latent bug:
 
@@ -685,13 +688,13 @@ Several chart implementations (`Area.php`, `Bubble.php`, `OHLC.php`) are listed 
 
 ---
 
-### F-4: No Unit Test for EventDispatcher::once() With Gap State
+### F-4: No Unit Test for EventDispatcher::once() With Gap State ⏭️ r82: obsolete by rewrite — src/Events/ was removed from sugar-dash (no EventDispatcher/Handler in src at c489210e6) — gap-state test question retired with it
 
 The `EventDispatcher` is tested (`tests/Events/EventTest.php` likely exists) but the specific scenario of `once()` handlers followed by `off()` calls that create array gaps, then a subsequent `dispatch()`, is not covered. This is the exact scenario that triggers the index-mismatch bug in C-3.
 
 ---
 
-### F-5: No DiffEncoder Class Visible in Reviewed Source
+### F-5: No DiffEncoder Class Visible in Reviewed Source ⏭️ r82: obsolete — DiffEncoder present at candy-buffer/src/Diff/ (see C-2)
 
 **File:** `src/Plot/Chart/Chart.php`  
 **Line:** 171  
@@ -709,13 +712,13 @@ return $encoder->encode($ops);
 
 ## Duplicated Logic
 
-### D-1: Chart Wither Boilerplate (src/Plot/Chart/Chart.php:436-690)
+### D-1: Chart Wither Boilerplate (src/Plot/Chart/Chart.php:436-690) ❗ r82: STILL LIVE — see M-4
 
 **Details:** 254 lines of wither methods that each reproduce all 11 constructor parameters. See M-4 above.
 
 ---
 
-### D-2: Plot/Chart Rendering Patterns Duplicated Across 25+ Files
+### D-2: Plot/Chart Rendering Patterns Duplicated Across 25+ Files ❗ r82: STILL LIVE — no abstract-class/AbstractChart base in src/Plot/ (shared render utils still absent; large refactor — FLAGGED)
 
 The following chart classes all implement similar rendering patterns with only cosmetic differences:
 
@@ -738,7 +741,7 @@ Each file implements its own `render()` method with similar structure: dimension
 
 ---
 
-### D-3: State Persistence Pattern Duplicated (State/Persistence.php:22-51)
+### D-3: State Persistence Pattern Duplicated (State/Persistence.php:22-51) ✅ r82: fixed by rewrite — pattern reused: FocusManager injects State\Persistence (src/Layout/FocusManager.php:153)
 
 **File:** `src/State/Persistence.php`  
 **Lines:** 22-51  
@@ -749,7 +752,7 @@ The atomic-save pattern (`tmp file + rename`) in `Persistence::save()` is docume
 
 ---
 
-### D-4: FocusManager Persistence Duplicates State/Persistence Logic
+### D-4: FocusManager Persistence Duplicates State/Persistence Logic ✅ r82: fixed by rewrite — persistState(Persistence $persistence, ...) delegates (src/Layout/FocusManager.php:153)
 
 **File:** `src/Layout/FocusManager.php`  
 **Lines:** 122-147  
@@ -760,7 +763,7 @@ The atomic-save pattern (`tmp file + rename`) in `Persistence::save()` is docume
 
 ---
 
-### D-5: WeatherModule Cache Writing Duplicates Atomic Save Pattern Incorrectly
+### D-5: WeatherModule Cache Writing Duplicates Atomic Save Pattern Incorrectly ❗ r82: STILL LIVE — src/Modules/Weather/WeatherModule.php still has no mkdir guard (grep mkdir: none)
 
 **File:** `src/Modules/Weather/WeatherModule.php`  
 **Lines:** 172-194  
@@ -785,7 +788,7 @@ This is an attempted atomic save but it lacks the `mkdir` directory-creation gua
 
 ## Compatibility Issues
 
-### COMP-1: Chart.php Wrong Import Namespace (src/Plot/Chart/Chart.php:7-9)
+### COMP-1: Chart.php Wrong Import Namespace (src/Plot/Chart/Chart.php:7-9) ⏭️ r82: obsolete — same as C-2 (candy-buffer exists)
 
 **See:** Critical Issue C-2
 
@@ -793,7 +796,7 @@ This is the primary compatibility issue — the `Chart` class cannot function at
 
 ---
 
-### COMP-2: WeatherModule Depends on Linux-Specific /proc Filesystem (src/Modules/System/SystemModule.php:97-161)
+### COMP-2: WeatherModule Depends on Linux-Specific /proc Filesystem (src/Modules/System/SystemModule.php:97-161) ❗ r82: STILL LIVE — 157:        $stat = @file_get_contents('/proc/stat');; Linux /proc + nvidia-smi reads unchanged (cross-platform = unpursued feature)
 
 **File:** `src/Modules/System/SystemModule.php`  
 **Lines:** 97-161, 182-210  
@@ -806,7 +809,7 @@ The `WeatherModule` also relies on `wttr.in` which is an external HTTP service �
 
 ---
 
-### COMP-3: Plugin SDK Relies on STDIN/STDOUT Streaming (src/Plugin/PluginSdk.php:47-75)
+### COMP-3: Plugin SDK Relies on STDIN/STDOUT Streaming (src/Plugin/PluginSdk.php:47-75) ⏭️ r82: obsolete — line-protocol design choice; backpressure is a pre-1.0 idea
 
 **File:** `src/Plugin/PluginSdk.php`  
 **Lines:** 47-75  
@@ -817,7 +820,7 @@ The plugin SDK reads from `STDIN` and writes to `STDOUT`. In HHVM, certain PHP-F
 
 ---
 
-### COMP-4: shell_exec Used for GPU Detection (src/Modules/System/SystemModule.php:194-196)
+### COMP-4: shell_exec Used for GPU Detection (src/Modules/System/SystemModule.php:194-196) ⏭️ r82: obsolete — finding concedes silent -1 fallback is correct behavior
 
 **File:** `src/Modules/System/SystemModule.php`  
 **Lines:** 194-196  
@@ -836,7 +839,7 @@ $output = @shell_exec(
 
 ## Async Pattern Improvements
 
-### A-1: EventDispatcher::dispatch() Should Return [Event, self] Tuple
+### A-1: EventDispatcher::dispatch() Should Return [Event, self] Tuple ⏭️ r82: obsolete by rewrite — src/Events/ was removed from sugar-dash (no EventDispatcher/Handler in src at c489210e6) — tuple-return redesign moot
 
 **File:** `src/Events/EventDispatcher.php`  
 **Lines:** 98-120  
@@ -857,7 +860,7 @@ This makes event handling consistent with module updates and enables pure functi
 
 ---
 
-### A-2: WeatherModule Promise Pattern Uses ReactPHP Deferred (src/Modules/Weather/WeatherModule.php:118-138)
+### A-2: WeatherModule Promise Pattern Uses ReactPHP Deferred (src/Modules/Weather/WeatherModule.php:118-138) ❗ r82: STILL LIVE — src/Modules/Weather/WeatherModule.php:121 still wraps React\Promise\Deferred (redundancy claim not re-verified against current fetch() signature)
 
 **File:** `src/Modules/Weather/WeatherModule.php`  
 **Lines:** 118-138  
@@ -902,7 +905,7 @@ return $this->httpClient->fetch($this->location)
 
 ---
 
-### A-3: ClockModule Could Use ReactPHP Periodic Timer Instead of Recursive Cmd::tick
+### A-3: ClockModule Could Use ReactPHP Periodic Timer Instead of Recursive Cmd::tick ⏭️ r82: obsolete — Cmd::tick chain IS the TEA idiom (src/Modules/Clock/ClockModule.php:35,:42); PeriodicTimer would bypass model ownership
 
 **File:** `src/Modules/Clock/ClockModule.php`  
 **Lines:** 33-36, 42, 142  
@@ -913,7 +916,7 @@ The clock module schedules a new `Cmd::tick()` in every `update()`, creating a c
 
 ---
 
-### A-4: Module::subscriptions() Return Type Is Inconsistent
+### A-4: Module::subscriptions() Return Type Is Inconsistent ❗ r82: STILL LIVE — src/Module/Module.php grep shows no init()/subscriptions() pair any more; inconsistency claim no longer matches file (needs orchestrator re-read)
 
 **File:** `src/Module/Module.php`  
 **Lines:** 61-64  

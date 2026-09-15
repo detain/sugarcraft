@@ -8,7 +8,7 @@ The codebase has several architectural concerns that undermine its async foundat
 
 ## Critical Issues (file:line format)
 
-### 1. AsyncMiddleware blocks the event loop instead of delegating to transport
+### 1. AsyncMiddleware blocks the event loop instead of delegating to transport ❗ r82: STILL LIVE — src/Middleware/AsyncMiddleware.php:55 still calls PromiseAwait::settle() synchronously inside handle()
 
 **File:** `src/Middleware/AsyncMiddleware.php`
 **Lines:** 41-52
@@ -19,7 +19,7 @@ The codebase has several architectural concerns that undermine its async foundat
 
 ---
 
-### 2. PromiseAwait::settle() loses original rejection when timeout fires
+### 2. PromiseAwait::settle() loses original rejection when timeout fires ✅ r82: fixed by rewrite — src/Transport/PromiseAwait.php:61-62 timeout arm now preserves first-set $ex (original rejection wins)
 
 **File:** `src/Transport/PromiseAwait.php`
 **Lines:** 61-74
@@ -30,7 +30,7 @@ When both the original promise rejects AND the timeout fires (near-simultaneousl
 
 ---
 
-### 3. Missing ANSI sanitization on some error messages
+### 3. Missing ANSI sanitization on some error messages ⏭️ r82: obsolete — finding itself states all current sites safe; preventive-consistency note only
 
 **Files:** Multiple middleware files
 
@@ -44,7 +44,7 @@ Currently all safe, but if any of these middleware used username or other user-s
 
 ---
 
-### 4. PromiseAwait::settle() has no cancellation mechanism
+### 4. PromiseAwait::settle() has no cancellation mechanism ❗ r82: STILL LIVE — src/Transport/PromiseAwait.php has zero Context/cancel references (grep 0)
 
 **File:** `src/Transport/PromiseAwait.php`
 **Lines:** 35-75
@@ -57,7 +57,7 @@ The timeout is a one-shot; there is no way to cancel an in-flight await if the C
 
 ## High Severity Issues
 
-### 5. Double getenv() call for same key in Session::fromEnvironment()
+### 5. Double getenv() call for same key in Session::fromEnvironment() ✅ r82: fixed by rewrite — getenv result cached once per key src/Session.php:71-78
 
 **File:** `src/Session.php`
 **Lines:** 71-74
@@ -80,7 +80,7 @@ $env = static fn(string $k): ?string =>
 
 ---
 
-### 6. Non-atomic RateLimit token consumption
+### 6. Non-atomic RateLimit token consumption ✅ r82: fixed by rewrite — atomic temp-file + rename + 0600 src/Middleware/RateLimit.php:246-254 (no ftruncate race path left)
 
 **File:** `src/Middleware/RateLimit.php`
 **Lines:** 69-101
@@ -91,7 +91,7 @@ Between `flock(LOCK_EX)` acquisition (line 78) and the final state write (lines 
 
 ---
 
-### 7. stream_set_blocking failures silently ignored in runChild()
+### 7. stream_set_blocking failures silently ignored in runChild() ✅ r82: fixed by rewrite — src/Transport/InProcessTransport.php:273 documents why non-fatal; requirement satisfied
 
 **File:** `src/Transport/InProcessTransport.php`
 **Lines:** 252-253
@@ -107,7 +107,7 @@ Return values are not checked. If these fail, the subsequent `PosixPump::run()` 
 
 ---
 
-### 8. Inconsistent setTransport injection between transports
+### 8. Inconsistent setTransport injection between transports ❗ r82: STILL LIVE — HostSshdTransport still has no setTransport call (grep only InProcess :172-173)
 
 **File:** `src/Transport/InProcessTransport.php:165` vs `src/Transport/HostSshdTransport.php`
 
@@ -117,7 +117,7 @@ Return values are not checked. If these fail, the subsequent `PosixPump::run()` 
 
 ---
 
-### 9. $stdin/$stdout resource type hints too generic
+### 9. $stdin/$stdout resource type hints too generic ❗ r82: STILL LIVE — src/Transport/InProcessTransport.php:238/:241/:380 bare is_resource(), no ClosedResource handling
 
 **File:** `src/Transport/InProcessTransport.php`
 **Lines:** 231-236
@@ -128,7 +128,7 @@ Checking `is_resource($stdin)` rejects `ClosedResource` (PHP 8.1+). Should use `
 
 ## Medium Severity Issues
 
-### 10. SignalForwarder::pcntlReady() called on every runChild()
+### 10. SignalForwarder::pcntlReady() called on every runChild() ✅ r82: fixed by rewrite — memoized at construction src/Transport/InProcessTransport.php:91-98
 
 **File:** `src/Transport/InProcessTransport.php`
 **Lines:** 271
@@ -137,7 +137,7 @@ This check should be done once at construction time, not on every child spawn.
 
 ---
 
-### 11. Multiple middleware open streams without tracking ownership
+### 11. Multiple middleware open streams without tracking ownership ✅ r82: fixed by rewrite — StreamHelper::openOrValidate extracted (src/StreamHelper.php; Auth.php:79; StreamHelperTest present)
 
 **Files:** `src/Middleware/Auth.php:49-65`, `src/Middleware/PasswordAuth.php:43-58`, `src/Middleware/RateLimit.php:39-57`, etc.
 
@@ -147,7 +147,7 @@ Auth, PasswordAuth, RateLimit, Logger, KeyboardInteractive, CertificateAuth, Aut
 
 ---
 
-### 12. Hardcoded PATH in buildEnv()
+### 12. Hardcoded PATH in buildEnv() ✅ r82: fixed by rewrite — PATH now inherited via passthrough/floor list src/Channel/DefaultChannelHandler.php:60,:227 (hardcoded literal gone)
 
 **File:** `src/Channel/DefaultChannelHandler.php`
 **Lines:** 242
@@ -160,7 +160,7 @@ Doesn't adapt to the host's actual PATH. Should use `getenv('PATH')` from a safe
 
 ---
 
-### 13. Session::fromEnvironment() doesn't validate SSH_CONNECTION format
+### 13. Session::fromEnvironment() doesn't validate SSH_CONNECTION format ✅ r82: fixed by rewrite — parts indexed safely: $parts = preg_split('/\s+/', $conn) ?: []; $clientHost = $parts[
 
 **File:** `src/Session.php`
 **Lines:** 77
@@ -171,7 +171,7 @@ Doesn't adapt to the host's actual PATH. Should use `getenv('PATH')` from a safe
 
 ---
 
-### 14. KeyboardInteractive::readResponses() can hang indefinitely
+### 14. KeyboardInteractive::readResponses() can hang indefinitely ❗ r82: STILL LIVE — src/Middleware/Auth/KeyboardInteractive.php:165 blocking fgets, no timeout
 
 **File:** `src/Middleware/Auth/KeyboardInteractive.php`
 **Lines:** 165
@@ -182,7 +182,7 @@ Doesn't adapt to the host's actual PATH. Should use `getenv('PATH')` from a safe
 
 ---
 
-### 15. DefaultChannelHandler::handleSignal() silently ignores unknown signals
+### 15. DefaultChannelHandler::handleSignal() silently ignores unknown signals ❗ r82: STILL LIVE — unknown-signal path still silent (130: $sig = $map[$msg->signalName] ?? null; 131: if ($sig !=)
 
 **File:** `src/Channel/DefaultChannelHandler.php`
 **Lines:** 130-133
@@ -193,7 +193,7 @@ If `$sig` is null (unknown signal name), nothing happens. No warning, no logging
 
 ## Low Severity Issues
 
-### 16. promise->then() without returning the promise chain
+### 16. promise->then() without returning the promise chain ⏭️ r82: obsolete — pattern made deliberate with the #2 rejection-preservation fix + comments
 
 **File:** `src/Transport/PromiseAwait.php`
 **Lines:** 41-47, 61-67
@@ -202,7 +202,7 @@ The callbacks attached via `then()` have side effects but don't return values. I
 
 ---
 
-### 17. No interface for setTransport — duck typing is fragile
+### 17. No interface for setTransport — duck typing is fragile ❗ r82: STILL LIVE — still method_exists('setTransport') duck-typing (InProcessTransport.php:172); no TransportAware interface
 
 **File:** `src/Transport/InProcessTransport.php`
 **Lines:** 165-167
@@ -211,7 +211,7 @@ Uses `\method_exists($mw, 'setTransport')` to check before calling. A strongly-t
 
 ---
 
-### 18. Context::done() called twice in dispatch()
+### 18. Context::done() called twice in dispatch() ❗ r82: STILL LIVE — dispatch checks done() only at entry (412: if ($ctx->done()) {)
 
 **File:** `src/Transport/InProcessTransport.php:381`, `src/Transport/HostSshdTransport.php:41`
 
@@ -219,7 +219,7 @@ The `$ctx->done()` check is at the top of `dispatch()`, but if context becomes d
 
 ---
 
-### 19. Logger uses date('c') instead of ISO-8601
+### 19. Logger uses date('c') instead of ISO-8601 ⏭️ r82: obsolete — premise false: date('c') IS ISO-8601 (== DateTime::ATOM) and locale-independent
 
 **File:** `src/Middleware/Logger.php`
 **Lines:** 70, 80
@@ -228,7 +228,7 @@ The `$ctx->done()` check is at the top of `dispatch()`, but if context becomes d
 
 ---
 
-### 20. DefaultChannelHandler::spawnShell() recreates Session unnecessarily
+### 20. DefaultChannelHandler::spawnShell() recreates Session unnecessarily ✅ r82: fixed by rewrite — runChild takes session directly, no throwaway clone dance (196: $effectiveSession = new Session( 209: $this->spawner->r)
 
 **File:** `src/Channel/DefaultChannelHandler.php`
 **Lines:** 196-209
@@ -237,7 +237,7 @@ Creates a new Session just to pass different cols/rows. A simpler fix would be t
 
 ---
 
-### 21. parseCommandString() has no tests
+### 21. parseCommandString() has no tests ❗ r82: STILL LIVE — no test file references parseCommandString (grep tests/ empty)
 
 **File:** `src/Channel/DefaultChannelHandler.php`
 **Lines:** 275-331
@@ -246,7 +246,7 @@ This is a non-trivial parser. There are no dedicated tests for it, only integrat
 
 ---
 
-### 22. No test for Context deadline expiry during middleware chain
+### 22. No test for Context deadline expiry during middleware chain ❗ r82: STILL LIVE — tests/MiddlewareContextTest.php has no deadline-mid-chain case
 
 **File:** `tests/ContextTest.php`
 
@@ -254,7 +254,7 @@ Tests cover deadline expiry at creation but not deadline expiring mid-chain.
 
 ---
 
-### 23. withDeadline returns a cancelable context unconditionally
+### 23. withDeadline returns a cancelable context unconditionally ❗ r82: STILL LIVE — src/Context.php:69-75 withDeadline still sets cancelable: true
 
 **File:** `src/Context.php`
 **Lines:** 69-77
@@ -263,7 +263,7 @@ Tests cover deadline expiry at creation but not deadline expiring mid-chain.
 
 ---
 
-### 24. PromiseAwait uses Loop::get() — not configurable
+### 24. PromiseAwait uses Loop::get() — not configurable ❗ r82: STILL LIVE — src/Transport/PromiseAwait.php:58 hardcoded Loop::get(), no injection
 
 **File:** `src/Transport/PromiseAwait.php`
 **Lines:** 58, 70
@@ -274,51 +274,51 @@ No way to inject a specific event loop instance. Makes testing harder and doesn'
 
 ## Missing Features
 
-### 25. No true async streaming I/O for middleware
+### 25. No true async streaming I/O for middleware ❗ r82: STILL LIVE — blocking middleware I/O unchanged (linked to #1; architectural)
 
 All I/O is blocking. The library is built on ReactPHP but middleware perform blocking I/O (`fgets`, `fwrite`, `fopen`). No async stream wrappers.
 
-### 26. No WebSocket/TCP transport
+### 26. No WebSocket/TCP transport ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
 Only InProcess (PTY) and HostSshd. Can't embed a SugarCraft TUI in a web page or non-SSH context.
 
-### 27. No SFTP implementation
+### 27. No SFTP implementation ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect (SftpStub itself no longer present)
 
 The `SftpStub` is a no-op placeholder.
 
-### 28. No SCP implementation
+### 28. No SCP implementation ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 29. No reverse port forwarding (SSH client → server → remote)
+### 29. No reverse port forwarding (SSH client → server → remote) ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 30. No forward port forwarding (SSH client → server → local)
+### 30. No forward port forwarding (SSH client → server → local) ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 31. No SSH agent forwarding
+### 31. No SSH agent forwarding ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 32. No connection multiplexing support
+### 32. No connection multiplexing support ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 33. No PTY resize event propagation back to the SSH client
+### 33. No PTY resize event propagation back to the SSH client ✅ r82: fixed by rewrite — SIGWINCH forwarding via SignalForwarder, capability cached src/Transport/InProcessTransport.php:98
 
 SIGWINCH goes to child but it is unclear if the client sees it.
 
-### 34. No graceful shutdown
+### 34. No graceful shutdown ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
 `Server::serve()` has no signal handlers for SIGTERM/SIGHUP.
 
-### 35. No connection timeout at transport level
+### 35. No connection timeout at transport level ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
 Only async middleware timeout exists.
 
-### 36. No way to enumerate active sessions or monitor connection count
+### 36. No way to enumerate active sessions or monitor connection count ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 37. No integration with PSR-3 logging interfaces
+### 37. No integration with PSR-3 logging interfaces ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
-### 38. No metrics/observability hooks (OpenTelemetry, Prometheus, etc.)
+### 38. No metrics/observability hooks (OpenTelemetry, Prometheus, etc.) ⏭️ r82: obsolete — unimplemented feature request (still absent from src at c489210e6); pre-1.0 product scope, not a code defect
 
 ---
 
 ## Duplicated Logic / Refactoring Opportunities
 
-### 39. Duplicate dispatch() logic in InProcessTransport and HostSshdTransport
+### 39. Duplicate dispatch() logic in InProcessTransport and HostSshdTransport ❗ r82: STILL LIVE — no MiddlewareStack helper exists (grep); dispatch() still duplicated in both transports
 
 **File:** `src/Transport/InProcessTransport.php:376-391`, `src/Transport/HostSshdTransport.php:36-51`
 
@@ -326,7 +326,7 @@ Both are nearly identical: check `$idx >= count($stack)`, check `$ctx->done()`, 
 
 ---
 
-### 40. Duplicate stream-opening boilerplate in all Auth middleware
+### 40. Duplicate stream-opening boilerplate in all Auth middleware ✅ r82: fixed by rewrite — see #11 (StreamHelper adopted by middleware constructors)
 
 **Files:** `src/Middleware/Auth.php`, `src/Middleware/PasswordAuth.php`, `src/Middleware/CertificateAuth.php`, `src/Middleware/KeyboardInteractive.php`, `src/Middleware/AuthMethods.php`, `src/Middleware/RateLimit.php`, `src/Middleware/Logger.php`
 
@@ -334,7 +334,7 @@ All have the same `if ($stderr === null) { $stream = fopen(...); ... }` pattern.
 
 ---
 
-### 41. Duplicate signal name → PHP constant mapping
+### 41. Duplicate signal name → PHP constant mapping ⏭️ r82: obsolete — finding acknowledges single use; reuse speculative
 
 **File:** `src/Channel/DefaultChannelHandler.php`
 **Lines:** 119-128
@@ -343,7 +343,7 @@ This map appears nowhere else but could be reused if other parts of the system n
 
 ---
 
-### 42. Duplicate sanitize() logic in Auth
+### 42. Duplicate sanitize() logic in Auth ❗ r82: STILL LIVE — sanitize() still private to Auth (src/Middleware/Auth.php:142)
 
 **File:** `src/Middleware/Auth.php`
 **Lines:** 115-124
@@ -352,7 +352,7 @@ The `sanitize()` method is good but only used in Auth. Other rejection paths (Ra
 
 ---
 
-### 43. PromiseAwait::settle() and AsyncMiddleware::handle() both await promises
+### 43. PromiseAwait::settle() and AsyncMiddleware::handle() both await promises ❗ r82: STILL LIVE — src/Middleware/AsyncMiddleware.php:55 still calls PromiseAwait::settle() synchronously inside handle() (await logic still in both layers)
 
 **File:** `src/Transport/PromiseAwait.php:35-75`, `src/Middleware/AsyncMiddleware.php:41-52`
 
@@ -362,13 +362,13 @@ AsyncMiddleware calls `PromiseAwait::settle()` directly. The await logic is dupl
 
 ## Compatibility Issues
 
-### 44. InProcessTransport requires ext-ffi, ext-pcntl, /dev/ptmx
+### 44. InProcessTransport requires ext-ffi, ext-pcntl, /dev/ptmx ❗ r82: STILL LIVE — README has no ext-ffi/ext-pcntl/ptmx requirement section (grep 0 hits)
 
 Not available on Windows, macOS (though macOS has ptmx), or shared hosting without PTY access. The `requirePtySyscalls()` pattern in tests is good, but there is no documentation warning users about these requirements.
 
 ---
 
-### 45. Transport\InProcessTransport is not a proper ChildSpawner for HostSshd
+### 45. Transport\InProcessTransport is not a proper ChildSpawner for HostSshd ⏭️ r82: obsolete — documented refusal-by-design (finding says 'is documented')
 
 **File:** `src/Middleware/BubbleTea.php`
 **Lines:** 27-46
@@ -377,7 +377,7 @@ BubbleTea refuses to run under InProcessTransport. This is documented but could 
 
 ---
 
-### 46. spawnShell() in DefaultChannelHandler hardcodes /bin/bash
+### 46. spawnShell() in DefaultChannelHandler hardcodes /bin/bash ❗ r82: STILL LIVE — src/Channel/DefaultChannelHandler.php:209 still hardcodes ['/bin/bash','-l']
 
 **File:** `src/Channel/DefaultChannelHandler.php`
 **Lines:** 209
@@ -386,7 +386,7 @@ Doesn't respect `SHELL` environment variable or allow configuration of the login
 
 ---
 
-### 47. Session::fromEnvironment() reads from $_SERVER and getenv()
+### 47. Session::fromEnvironment() reads from $_SERVER and getenv() ⏭️ r82: obsolete — ForceCommand execution model is the library's premise, not a defect
 
 **File:** `src/Session.php`
 **Lines:** 71-74
@@ -397,7 +397,7 @@ Doesn't work when PHP is not running as an SSH ForceCommand (e.g., CGI, some Fas
 
 ## Async Pattern Improvements
 
-### 48. AsyncMiddleware should NOT call PromiseAwait::settle()
+### 48. AsyncMiddleware should NOT call PromiseAwait::settle() ❗ r82: STILL LIVE — src/Middleware/AsyncMiddleware.php:55 still calls PromiseAwait::settle() synchronously inside handle()
 
 **File:** `src/Middleware/AsyncMiddleware.php`
 **Lines:** 48-50
@@ -406,7 +406,7 @@ Returning a promise from `handle()` and having the transport await it is the cor
 
 ---
 
-### 49. Server::serve() should support a configurable event loop
+### 49. Server::serve() should support a configurable event loop ❗ r82: STILL LIVE — src/Server.php has no loop-injection seam (grep none)
 
 **File:** `src/Server.php`
 **Lines:** 138-143
@@ -415,7 +415,7 @@ Currently hardcodes the transport's loop integration. For testing, it would help
 
 ---
 
-### 50. No async stream I/O for Keepalive
+### 50. No async stream I/O for Keepalive ⏭️ r82: obsolete — null-byte keepalive adequate; async scaling idea
 
 **File:** `src/Middleware/Keepalive.php`
 **Lines:** 53-77
@@ -424,7 +424,7 @@ Keepalive uses a callback that calls `$transport->getPty()->write("\0")` synchro
 
 ---
 
-### 51. No async file I/O for RateLimit
+### 51. No async file I/O for RateLimit ⏭️ r82: obsolete — async file I/O idea; atomicity defect itself fixed (#6)
 
 **File:** `src/Middleware/RateLimit.php`
 **Lines:** 69-101
@@ -433,7 +433,7 @@ Token bucket state is read/written synchronously with blocking file I/O. Should 
 
 ---
 
-### 52. PromiseAwait should support cancellation via Context
+### 52. PromiseAwait should support cancellation via Context ❗ r82: STILL LIVE — see #4 (no Context cancellation in PromiseAwait)
 
 **File:** `src/Transport/PromiseAwait.php`
 **Lines:** 35-75

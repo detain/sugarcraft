@@ -23,7 +23,7 @@
 
 ---
 
-## 1. HIGH: Undefined Variable $cassette in TapeToGif
+## 1. HIGH: Undefined Variable $cassette in TapeToGif ✅ r82: fixed by rewrite — $cassette assigned src/Encode/TapeToGif.php:88 before fontSize/fontFamily reads at :95-97
 
 **Location:** src/TapeToGif.php:70-71
 
@@ -38,7 +38,7 @@ Recommendation: Move lines 70-71 after line 81, or compute after $cassette is av
 
 ---
 
-## 2. HIGH: ImagickRasterizer Shared Tile Cache Between Clones
+## 2. HIGH: ImagickRasterizer Shared Tile Cache Between Clones ✅ r82: fixed by rewrite — src/Raster/ImagickRasterizer.php:62-68 deep-clones tileCache per withTheme()
 
 **Location:** src/ImagickRasterizer.php:58-66
 
@@ -52,7 +52,7 @@ Recommendation: Deep-clone the cache array or implement copy-on-write.
 
 ---
 
-## 3. MEDIUM: FrameStream Mutation During Iteration
+## 3. MEDIUM: FrameStream Mutation During Iteration ✅ r82: fixed by rewrite — src/Encode/TapeToGif.php:130-131 snapshots captureCursor before iteration
 
 **Location:** src/TapeToGif.php:104-106
 
@@ -62,7 +62,7 @@ Recommendation: Snapshot state before iteration or expose via generator method.
 
 ---
 
-## 4. MEDIUM: Negative dt Validation Missing
+## 4. MEDIUM: Negative dt Validation Missing ✅ r82: fixed by rewrite — src/Format/RelativeFormat.php:201-203 throws InvalidArgumentException on dt < 0
 
 **Location:** src/RelativeFormat.php:201
 
@@ -77,7 +77,7 @@ Recommendation: Validate $dt >= 0.
 
 ---
 
-## 5. MEDIUM: preg_replace Error Handling Wrong
+## 5. MEDIUM: preg_replace Error Handling Wrong ❗ r82: STILL LIVE — src/Hook/SanitizingHook.php:81-82 still `?? $value`; comment now FALSELY claims preg_replace returns NULL on error (it returns false — ?? passes false through)
 
 **Location:** src/SanitizingHook.php:81
 
@@ -91,7 +91,7 @@ Recommendation: === false check instead of ??.
 
 ---
 
-## 6. MEDIUM: Double Iteration in InspectCommand
+## 6. MEDIUM: Double Iteration in InspectCommand ✅ r82: fixed by rewrite — src/Cli/InspectCommand.php:119-145 counts dedup inline in the single iteration
 
 **Location:** src/InspectCommand.php:137-142
 
@@ -101,7 +101,7 @@ Recommendation: Collect frames during first iteration and compute dedup count in
 
 ---
 
-## 7. MEDIUM: PHP 8.3 Only mb_str_split()
+## 7. MEDIUM: PHP 8.3 Only mb_str_split() ⏭️ r82: obsolete — finding itself confirms mb_str_split is correct for composer ^8.3; no action
 
 **Location:** src/Compiler.php:190
 
@@ -113,7 +113,7 @@ mb_str_split() added in PHP 8.3. composer.json requires ^8.3 so this is correct.
 
 ---
 
-## 8. MEDIUM: Blocking fflush() on Every Event
+## 8. MEDIUM: Blocking fflush() on Every Event ❗ r82: STILL LIVE — src/Recorder.php:306 per-event @fflush unchanged
 
 **Location:** src/Recorder.php:306
 
@@ -128,7 +128,7 @@ Recommendation: Batch N events before flush or use background writer with pipe.
 
 ---
 
-## 9. MEDIUM: Blocking Process::run() in FfmpegGifEncoder
+## 9. MEDIUM: Blocking Process::run() in FfmpegGifEncoder ❗ r82: STILL LIVE — src/Encode/FfmpegGifEncoder.php:92/:164 sequential blocking $process->run() for batch render
 
 **Location:** src/FfmpegGifEncoder.php:90-92
 
@@ -138,7 +138,7 @@ Recommendation: Process::start() with async event loop integration, or parallel 
 
 ---
 
-## 10. MEDIUM: Blocking stream_socket_pair() and fopen()
+## 10. MEDIUM: Blocking stream_socket_pair() and fopen() ⏭️ r82: obsolete — async playAsync() idea; synchronous Player is the design (src/Player.php:186 socketpair intact)
 
 **Location:** src/Player.php:186-196
 
@@ -148,7 +148,7 @@ Recommendation: Consider async Player::playAsync() using ReactPHP promises.
 
 ---
 
-## 11. LOW: LZW Pixel Encoding Performance
+## 11. LOW: LZW Pixel Encoding Performance ❗ r82: STILL LIVE — src/Encode/PhpGifEncoder.php:168+ lzwEncode still per-symbol string concat
 
 **Location:** src/PhpGifEncoder.php:151-156
 
@@ -158,7 +158,7 @@ Recommendation: Preallocate string or use pack() with pre-built format.
 
 ---
 
-## 12. LOW: FIFO Eviction O(n)
+## 12. LOW: FIFO Eviction O(n) ✅ r82: fixed by rewrite — src/Raster/Glyphs.php:26-54 SplQueue-based O(1) eviction
 
 **Location:** src/Glyphs.php:146-158
 
@@ -168,7 +168,7 @@ Recommendation: Use SplQueue or index-based FIFO for O(1) eviction.
 
 ---
 
-## 13. LOW: ImagickRasterizer Clone Sharing
+## 13. LOW: ImagickRasterizer Clone Sharing ✅ r82: fixed by rewrite — same as #2 (src/Raster/ImagickRasterizer.php:62-68)
 
 **Location:** src/ImagickRasterizer.php:58-66
 
@@ -176,7 +176,7 @@ Same as HIGH finding 2 — shared tileCache between clones.
 
 ---
 
-## 14. LOW: Variable Shadowing in formatHunk
+## 14. LOW: Variable Shadowing in formatHunk ✅ r82: fixed by rewrite — src/Diff/DiffWriter.php:272-274 renamed to $expCountOut/$actCountOut
 
 **Location:** src/DiffWriter.php:167-310
 
@@ -184,7 +184,7 @@ Parameter names $expCount and $actCount overwritten by local variables.
 
 ---
 
-## 15. LOW: DiffWriter Complexity
+## 15. LOW: DiffWriter Complexity ✅ r82: fixed by rewrite — same rename as #14
 
 **Location:** src/DiffWriter.php
 
@@ -192,7 +192,7 @@ formatHunk() has confusing variable reuse. Consider renaming to $expCountOut, $a
 
 ---
 
-## 16. LOW: V1ToV2Migrator Incomplete
+## 16. LOW: V1ToV2Migrator Incomplete ✅ r82: fixed by rewrite — src/Migration/V1ToV2Migrator.php adds formatVersion + migrationMeta (:22-23,:84-85)
 
 **Location:** src/V1ToV2Migrator.php
 
@@ -200,7 +200,7 @@ migrateHeader() only sets numeric version to 2. Doesn't add documented v2 fields
 
 ---
 
-## 17. LOW: Missing MouseScrollMsg and FocusMoveMsg Handlers
+## 17. LOW: Missing MouseScrollMsg and FocusMoveMsg Handlers ❗ r82: STILL LIVE — src/Msg/BuiltinSerializer.php handles MouseClick/Motion + Focus* but no MouseScroll mapping/doc note
 
 **Location:** src/BuiltinSerializer.php
 
@@ -208,7 +208,7 @@ Some candy-core Msg types fall through to JsonableSerializer. Should be document
 
 ---
 
-## 18. LOW: Screenshot Path Confinement Race
+## 18. LOW: Screenshot Path Confinement Race ⏭️ r82: obsolete — finding's own conclusion is 'adequately secured'; no action
 
 **Location:** src/TapeToGif.php:166-196
 

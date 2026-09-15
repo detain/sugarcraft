@@ -16,7 +16,7 @@ Overall code quality is high. The VT500 state machine port (Transitions), SGR ha
 
 ## High Severity Issues
 
-### 1. `CellGrid::set()` is NOT immutable despite returning `$this`
+### 1. `CellGrid::set()` is NOT immutable despite returning `$this` ❗ r82: STILL LIVE — src/CellGrid.php:67-79 (set() still returns $self after in-place mutation; API-break decision — flagged)
 
 **File:** `src/CellGrid.php:66-78`
 
@@ -40,7 +40,7 @@ This is misleading. `CellGrid` is **not** an immutable value object — it is a 
 
 ---
 
-### 2. `ScreenHandler` cursor visibility has two sources of truth
+### 2. `ScreenHandler` cursor visibility has two sources of truth ❗ r82: STILL LIVE — src/Handler/ModeHandler.php:72-74 (still dual write mode+cursor)
 
 **File:** `src/Handler/ScreenHandler.php:36-37` and `src/Handler/ModeHandler.php:71-74`
 
@@ -58,7 +58,7 @@ However, `ScreenHandler::enterAltScreen()` and `ScreenHandler::leaveAltScreen()`
 
 ---
 
-### 3. `Transitions::$table` static cache is not thread-safe
+### 3. `Transitions::$table` static cache is not thread-safe 🔀 r82: moved — parser de-forked onto candy-ansi (9952e3f5c); lazy ??= table now candy-ansi/src/Parser/Transitions.php:37
 
 **File:** `src/Parser/Transitions.php:27`
 
@@ -79,7 +79,7 @@ If two threads call `get()` simultaneously before `$table` is initialized, both 
 
 ---
 
-### 4. `Theme::$fgIndexMap` / `Theme::$bgIndexMap` same thread-safety concern
+### 4. `Theme::$fgIndexMap` / `Theme::$bgIndexMap` same thread-safety concern ✅ r82: fixed by rewrite — maps are eager literals src/Theme.php:33-36, buildAnsiMaps gone
 
 **File:** `src/Theme.php:31-35` and `src/Theme.php:295-307`
 
@@ -100,7 +100,7 @@ Same double-checked locking issue as `Transitions::$table`. The maps are current
 
 ---
 
-### 5. `Terminal\Terminal::resize()` does not resize the saved alt buffer
+### 5. `Terminal\Terminal::resize()` does not resize the saved alt buffer ❗ r82: STILL LIVE — src/Terminal/Terminal.php:120-127 resize() still touches only active buffer
 
 **File:** `src/Terminal/Terminal.php:118-124` + `src/Handler/ScreenHandler.php:463-475`
 
@@ -112,7 +112,7 @@ Real terminals resize both buffers. A downstream consumer exercising resize whil
 
 ---
 
-### 6. Root `Terminal` lacks `enableAltScreen()`/`disableAltScreen()` API
+### 6. Root `Terminal` lacks `enableAltScreen()`/`disableAltScreen()` API ❗ r82: STILL LIVE — src/Terminal.php has no alt-screen API (roster: new/feed/snapshot/cursor/grid/windowTitle)
 
 **File:** `src/Terminal.php:1-97`
 
@@ -124,7 +124,7 @@ The root `SugarCraft\Vt\Terminal` (vcr renderer path) has no alt-screen entry po
 
 ## Medium Severity Issues
 
-### 7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing
+### 7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing 🔀 r82: moved — now candy-ansi/src/Parser/Parser.php:138 (re-verify in candy-ansi)
 
 **File:** `src/Parser/Parser.php:82-86`
 
@@ -142,7 +142,7 @@ public function reset(): void
 
 ---
 
-### 8. `SgrHandler::apply()` uses `array_values(array_map('intval', $params))` unnecessarily
+### 8. `SgrHandler::apply()` uses `array_values(array_map('intval', $params))` unnecessarily ✅ r82: fixed by rewrite — no array_map/array_values left in src/Handler/SgrHandler.php
 
 **File:** `src/Handler/SgrHandler.php:175`
 
@@ -156,7 +156,7 @@ The `$params` passed from `ScreenHandler::csiDispatch()` already contains the pa
 
 ---
 
-### 9. `Transitions::build()` has an unused `$g` variable with static analysis noise
+### 9. `Transitions::build()` has an unused `$g` variable with static analysis noise 🔀 r82: moved — Transitions now in candy-ansi (9952e3f5c)
 
 **File:** `src/Parser/Transitions.php:52-53`
 
@@ -171,7 +171,7 @@ $t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);
 
 ---
 
-### 10. Color comparison logic is duplicated across `Sgr::equals()`, `Cell::equals()`, and `Color::equals()`
+### 10. Color comparison logic is duplicated across `Sgr::equals()`, `Cell::equals()`, and `Color::equals()` ❗ r82: STILL LIVE — no equalsOrBothNull utility; 4 null-compare sites each in src/Sgr/Sgr.php + src/Cell/Cell.php
 
 **Files:** `src/Sgr/Sgr.php:267-288`, `src/Cell/Cell.php:96-114`
 
@@ -194,7 +194,7 @@ This is verbose and repeated. A `Color::equalsOrBothNull(Color|null $a, Color|nu
 
 ---
 
-### 11. `Screen::diff()` iterates to max dimension, not actual dimensions
+### 11. `Screen::diff()` iterates to max dimension, not actual dimensions ❗ r82: STILL LIVE — src/Screen/Screen.php:59-62 still max-dimension iteration
 
 **File:** `src/Screen/Screen.php:56-73`
 
@@ -211,7 +211,7 @@ This iterates up to the larger screen's dimensions. For a 100×30 screen diffed 
 
 ---
 
-### 12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2)
+### 12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) 🔀 r82: moved — HandlerAdapter now candy-ansi/src/Parser/HandlerAdapter.php (re-verify OSC scope there)
 
 **File:** `src/Parser/HandlerAdapter.php:79-84`
 
@@ -232,7 +232,7 @@ The root `HandlerAdapter` only handles `OSC 0`, `OSC 1`, and `OSC 2` for window 
 
 ## Low Severity Issues
 
-### 13. `Theme::cubePalette()` is computed twice per theme instance
+### 13. `Theme::cubePalette()` is computed twice per theme instance ❗ r82: STILL LIVE — src/Theme.php:63+ cubePalette() still unmemoized, called by every factory
 
 **File:** `src/Theme.php:53-57`
 
@@ -259,7 +259,7 @@ The 216-element cube palette is generated twice per theme instance. Since themes
 
 ---
 
-### 14. `CsiHandlerImpl::scrollUpOne()` is O(cols²) per row scrolled
+### 14. `CsiHandlerImpl::scrollUpOne()` is O(cols²) per row scrolled ❗ r82: STILL LIVE — src/Parser/CsiHandlerImpl.php:548+ cell-by-cell scroll still
 
 **File:** `src/Parser/CsiHandlerImpl.php:370-386`
 
@@ -282,7 +282,7 @@ For a scroll of N rows, this calls `get()` and `set()` N×cols×2 times. A more 
 
 ---
 
-### 15. `SgrHandler::step()` silently ignores unknown SGR parameters
+### 15. `SgrHandler::step()` silently ignores unknown SGR parameters ⏭️ r82: obsolete — spec-correct silent skip, no functional issue by design
 
 **File:** `src/Handler/SgrHandler.php:92`
 
@@ -296,7 +296,7 @@ Unknown SGR parameters are skipped silently. This matches VT spec behavior (igno
 
 ---
 
-### 16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20
+### 16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 🔀 r82: moved — printChar now candy-ansi HandlerAdapter
 
 **File:** `src/Parser/HandlerAdapter.php:23-30`
 
@@ -316,7 +316,7 @@ C0 controls (0x00-0x1F) are rejected here because `printChar` is only called for
 
 ---
 
-### 17. Inconsistent factory method naming: `Terminal::new()` vs `Terminal::create()`
+### 17. Inconsistent factory method naming: `Terminal::new()` vs `Terminal::create()` ✅ r82: fixed by rewrite — root Terminal::new() only; full path @deprecated create() at src/Terminal/Terminal.php:59-61
 
 **Files:** `src/Terminal.php:45`, `src/Terminal/Terminal.php:51-62`
 
@@ -329,7 +329,7 @@ The root `Terminal` does not have a `create()` alias, while `Terminal\Terminal` 
 
 ---
 
-### 18. `Terminal\Terminal::__clone()` re-creates a new `Parser` with the cloned handler
+### 18. `Terminal\Terminal::__clone()` re-creates a new `Parser` with the cloned handler ❗ r82: STILL LIVE — src/Terminal/Terminal.php:129 __clone has no docblock note yet
 
 **File:** `src/Terminal/Terminal.php:126-130`
 
@@ -349,7 +349,7 @@ After cloning, the new `Terminal` has a fresh `Parser` in Ground state. Any in-f
 
 ## Missing Features
 
-### 19. `ScreenHandler::$focusEvents` has no `Terminal` accessor
+### 19. `ScreenHandler::$focusEvents` has no `Terminal` accessor ❗ r82: STILL LIVE — ScreenHandler.php:55 public focusEvents, no Terminal\Terminal::focusEvents() accessor
 
 **File:** `src/Handler/ScreenHandler.php:54-55`
 
@@ -359,7 +359,7 @@ The full `Terminal\Terminal` class has no `focusEvents()` method. Consumers who 
 
 ---
 
-### 20. No public API to clear the scrollback buffer
+### 20. No public API to clear the scrollback buffer ❗ r82: STILL LIVE — src/Screen/Scrollback.php has no clear() (push/all/at/count/maxSize only)
 
 **File:** `src/Screen/Scrollback.php`
 
@@ -369,7 +369,7 @@ The full `Terminal\Terminal` class has no `focusEvents()` method. Consumers who 
 
 ---
 
-### 21. `Terminal` (root) has no `flush()` method
+### 21. `Terminal` (root) has no `flush()` method ❗ r82: STILL LIVE — src/Terminal.php still lacks flush()
 
 **File:** `src/Terminal.php`
 
@@ -379,7 +379,7 @@ The full `Terminal\Terminal` has `flush()` to dispatch in-flight string sequence
 
 ---
 
-### 22. No `CellGrid::resize()` — inconsistent with `Buffer::resize()`
+### 22. No `CellGrid::resize()` — inconsistent with `Buffer::resize()` ❗ r82: STILL LIVE — same as #1 (src/CellGrid.php:67)
 
 **File:** `src/CellGrid.php`
 
@@ -402,7 +402,7 @@ This correctly creates a new `CellGrid` but then mutates its internal `$grid`. F
 
 ---
 
-### 23. No DCS dispatch implementation in `HandlerAdapter` or `OscHandlerImpl`
+### 23. No DCS dispatch implementation in `HandlerAdapter` or `OscHandlerImpl` ✅ r82: fixed by de-fork — DCS dispatch implemented in candy-ansi/src/Parser/HandlerAdapter.php:129
 
 **Files:** `src/Parser/HandlerAdapter.php:86-88`, `src/Parser/OscHandlerImpl.php:21-23`
 
@@ -414,7 +414,7 @@ DCS (Device Control String) dispatch is a no-op in both handler paths. While doc
 
 ## Duplicated Logic
 
-### 24. Three nearly identical `with*()` builders across `Sgr`, `Mode`, `CellGrid`
+### 24. Three nearly identical `with*()` builders across `Sgr`, `Mode`, `CellGrid` ❗ r82: STILL LIVE — mutate() still unused in Sgr/Mode/Cell (grep 0; only root Cursor.php uses it)
 
 Each `with*()` method follows this exact pattern across `Sgr`, `Mode`, and `Cursor`:
 
@@ -435,7 +435,7 @@ All 10+ `Sgr::with*()` methods repeat the same 12-line constructor call block. A
 
 ---
 
-### 25. `Theme` and `Cell` both define identical attribute constants
+### 25. `Theme` and `Cell` both define identical attribute constants ✅ r82: fixed by rewrite — src/Cell/Cell.php no longer defines ATTR_* constants
 
 **Files:** `src/Theme.php:18-22`, `src/Cell/Cell.php:17-21`
 
@@ -447,7 +447,7 @@ Both `Theme` and `Cell/Cell` define `ATTR_BOLD = 1`, `ATTR_ITALIC = 2`, `ATTR_UN
 
 ## Compatibility Issues
 
-### 26. `candy-vt` has no `candy-async` dependency but is async ecosystem
+### 26. `candy-vt` has no `candy-async` dependency but is async ecosystem ⏭️ r82: obsolete — pre-1.0 async-adapter idea, not a defect; sync core by design
 
 **File:** `candy-vt/composer.json`
 
@@ -457,7 +457,7 @@ The library is part of a ReactPHP-based ecosystem (`candy-async` is in the monor
 
 ---
 
-### 27. Two `Cell` classes: `SugarCraft\Vt\Cell` and `SugarCraft\Vt\Cell\Cell`
+### 27. Two `Cell` classes: `SugarCraft\Vt\Cell` and `SugarCraft\Vt\Cell\Cell` ❗ r82: STILL LIVE — dual Cell classes both present (src/Cell.php + src/Cell/Cell.php); rename breaks public API — FLAGGED, not decided
 
 **Files:** `src/Cell.php` (vcr renderer path), `src/Cell/Cell.php` (full path)
 
@@ -467,7 +467,7 @@ The root `Cell` uses a simple bitfield attrs and stores `char/fg/bg/attrs`. The 
 
 ---
 
-### 28. `CellGrid` and `Buffer` have overlapping responsibilities
+### 28. `CellGrid` and `Buffer` have overlapping responsibilities ❗ r82: STILL LIVE — CellGrid + Buffer both present; unification is public-API-breaking — FLAGGED, not decided
 
 **Files:** `src/CellGrid.php`, `src/Buffer/Buffer.php`
 
@@ -488,7 +488,7 @@ The root `Cell` uses a simple bitfield attrs and stores `char/fg/bg/attrs`. The 
 
 ## Async Pattern Improvements
 
-### 29. No async/streaming input support — `feed()` is sync only
+### 29. No async/streaming input support — `feed()` is sync only ⏭️ r82: obsolete — sync feed() is the documented v1 design; async wrapping is consumer-side
 
 **File:** `src/Parser/Parser.php:52-58`
 
@@ -516,7 +516,7 @@ public static function fromAsyncStream(ReadableStreamInterface $stream): \Genera
 
 ---
 
-### 30. `ScreenHandler::$focusEvents` accumulates but has no async notification
+### 30. `ScreenHandler::$focusEvents` accumulates but has no async notification ❗ r82: STILL LIVE — focus events still polling-only (ScreenHandler.php:55)
 
 **File:** `src/Handler/ScreenHandler.php:54-55`
 
@@ -541,7 +541,7 @@ public function __construct(
 
 ---
 
-### 31. `Transitions::build()` is eager but could be deferred or pre-computed
+### 31. `Transitions::build()` is eager but could be deferred or pre-computed 🔀 r82: moved — Transitions now candy-ansi; lazy first-use build still at Transitions.php:37 there
 
 **File:** `src/Parser/Transitions.php:50-238`
 

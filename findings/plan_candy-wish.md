@@ -54,7 +54,7 @@ Address all critical, high, medium, and low severity issues identified in the ca
   `src/Transport/InProcessTransport.php:252-253`  
   Fix: Documented why failure is acceptable (lines 259-265)
 
-- [x] **2.4 Inconsistent setTransport injection between transports** ✅  
+- [x] **2.4 Inconsistent setTransport injection between transports** ✅   ❗ r82: ✅ no longer true — setTransport still InProcess-only (candy-wish/src/Transport/InProcessTransport.php:172-173); HostSshdTransport never injects
   `InProcessTransport.php:165` vs `HostSshdTransport.php`  
   Fix: Only call setTransport() when transport implements ChildSpawner
 

@@ -15,7 +15,7 @@ candy-mosaic is a well-architected, mature port of charmbracelet/x/mosaic — a 
 
 ## Issues & Problems
 
-### 1. `MosaicBuilder::build()` defaults to Sixel when no renderer set — surprising API
+### 1. `MosaicBuilder::build()` defaults to Sixel when no renderer set — surprising API ❗ r82: STILL LIVE — src/Mosaic.php:487 builder still defaults to bare SixelRenderer
 
 **File**: `src/Mosaic.php:563-564`
 
@@ -29,7 +29,7 @@ The `MosaicBuilder` constructor initializes `$renderer = null`. A builder that i
 
 ---
 
-### 2. `autoFromPalette()` squanders the `TerminalProbe` report
+### 2. `autoFromPalette()` squanders the `TerminalProbe` report ❗ r82: STILL LIVE — src/Mosaic.php autoFromPalette() still discards most ProbeReport
 
 **File**: `src/Mosaic.php:144-166`
 
@@ -56,7 +56,7 @@ The `$report` parameter (a `ProbeReport` from `candy-palette`) is passed in but 
 
 ---
 
-### 3. Unreachable try/catch in `Mosaic::auto()`
+### 3. Unreachable try/catch in `Mosaic::auto()` ❗ r82: STILL LIVE — src/Mosaic.php:104-116 try/catch around Detect::probe() remains (now documented at :105-107, but dead-branch noise persists)
 
 **File**: `src/Mosaic.php:100-115`
 
@@ -79,7 +79,7 @@ The comment explicitly states this block is unreachable. The comment says it's "
 
 ---
 
-### 4. `ChafaRenderer::available()` does not clean up process handle on failure
+### 4. `ChafaRenderer::available()` does not clean up process handle on failure ✅ r82: fixed by rewrite — src/Renderer/ChafaRenderer.php:75-80 closes $pipes on proc_open failure path
 
 **File**: `src/Renderer/ChafaRenderer.php:44-58`
 
@@ -116,7 +116,7 @@ if (!is_resource($proc)) {
 
 ---
 
-### 5. `QuarterBlockRenderer::renderCell()` complexity
+### 5. `QuarterBlockRenderer::renderCell()` complexity ✅ r82: fixed by rewrite — QuarterBlockRenderer::renderCell now 24 lines (split helpers)
 
 **File**: `src/Renderer/QuarterBlockRenderer.php:100-155`
 
@@ -131,7 +131,7 @@ The `renderCell()` method is 56 lines and performs: most-distant-pair seed searc
 
 ---
 
-### 6. `SixelRenderer::emitBand()` is deeply nested
+### 6. `SixelRenderer::emitBand()` is deeply nested ✅ r82: fixed by rewrite — RLE emission extracted into emitRle* helper
 
 **File**: `src/Renderer/SixelRenderer.php:549-615`
 
@@ -143,7 +143,7 @@ The `emitBand` method has three levels of nesting (color iteration → column it
 
 ## Performance
 
-### 7. `SixelRenderer` accum array is heap-allocated at full image resolution
+### 7. `SixelRenderer` accum array is heap-allocated at full image resolution ❗ r82: STILL LIVE — src/Renderer/SixelRenderer.php:384 accum still full-resolution float[][]
 
 **File**: `src/Renderer/SixelRenderer.php:388-401`
 
@@ -167,7 +167,7 @@ For a 200×100 cell render with default 10×20 pixel cell size, this creates a 2
 
 ---
 
-### 8. `SixelRenderer::samplePixels()` iterates with striding rather than direct indexing
+### 8. `SixelRenderer::samplePixels()` iterates with striding rather than direct indexing ❗ r82: STILL LIVE — src/Renderer/SixelRenderer.php:176 ($i++ % $step) stride-continue loop unchanged
 
 **File**: `src/Renderer/SixelRenderer.php:178-201`
 
@@ -195,7 +195,7 @@ for ($y = 0; $y < $h; $y += $rowStep) {
 
 ---
 
-### 9. `ImageSource::fromString()` creates two temp files per call
+### 9. `ImageSource::fromString()` creates two temp files per call ✅ r82: fixed by rewrite — src/ImageSource.php:180 uses imagecreatefromstring() directly
 
 **File**: `src/ImageSource.php:96-112`
 
@@ -243,7 +243,7 @@ This would also fix the bug where if `fromFile()` throws after creating the temp
 
 ---
 
-### 10. `MosaicBuilder` clones itself via `new self()` in every `with*()` method
+### 10. `MosaicBuilder` clones itself via `new self()` in every `with*()` method ❗ r82: STILL LIVE — src/Mosaic.php still has 17 `new self(` builder copies
 
 **File**: `src/Mosaic.php:500-549`
 
@@ -255,7 +255,7 @@ Every `with*()` method creates a new `MosaicBuilder` instance by constructing a 
 
 ## Memory Leaks
 
-### 11. No issues found
+### 11. No issues found ⏭️ r82: obsolete — non-finding (no issues found)
 
 All renderers properly call `imagedestroy()` in `finally` blocks or immediately after use. `AdaptiveImage` properly destroys its LRU entries on eviction. No cyclic references that would prevent GC were found. GD resources are always released.
 
@@ -263,7 +263,7 @@ All renderers properly call `imagedestroy()` in `finally` blocks or immediately 
 
 ## Security
 
-### 12. SSRF protection is documented but relies on caller discipline
+### 12. SSRF protection is documented but relies on caller discipline ✅ r82: fixed by rewrite — src/ImageSource.php:322-325 fromUrl() now defaults $allowedSchemes = ['http','https'], redirects re-validated
 
 **File**: `src/ImageSource.php:163-169`
 
@@ -286,7 +286,7 @@ Default to `['http', 'https']` to match typical web usage. This makes the librar
 
 ---
 
-### 13. Header injection protection is correctly implemented
+### 13. Header injection protection is correctly implemented ⏭️ r82: obsolete — positive observation, no action
 
 **File**: `src/ImageSource.php:285-297`
 
@@ -294,7 +294,7 @@ The `formatHeaders()` method validates against CR/LF injection with `preg_match(
 
 ---
 
-### 14. `DiskCache` key hashing prevents directory escape
+### 14. `DiskCache` key hashing prevents directory escape ⏭️ r82: obsolete — positive observation, no action
 
 **File**: `src/DiskCache.php:270-273`
 
@@ -311,7 +311,7 @@ Keys are SHA-1 hashed before use in file paths, preventing arbitrary key injecti
 
 ## Complexity Issues
 
-### 15. Repeated `render()` boilerplate in every renderer
+### 15. Repeated `render()` boilerplate in every renderer ✅ r82: fixed by rewrite — shared render prep; invalid_width now only in: candy-mosaic/src/Concerns/RenderValidationTrait.php
 
 **Pattern found in**: `KittyRenderer::render()`, `SixelRenderer::render()`, `HalfBlockRenderer::render()`, `QuarterBlockRenderer::render()`, `Iterm2Renderer::render()`, `AsciiRenderer::render()`, `ChafaRenderer::render()`
 
@@ -342,7 +342,7 @@ This also ensures consistent error messages across all renderers (currently, som
 
 ---
 
-### 16. Duplicated `dist()` and `luma()` logic
+### 16. Duplicated `dist()` and `luma()` logic ✅ r82: fixed by rewrite — luma/distance shared: candy-mosaic/src/Renderer/QuarterBlockRenderer.php:8:use SugarCraft\Core\Util\ColorUtil;
 
 **File**: `src/Renderer/QuarterBlockRenderer.php:161-173`
 
@@ -371,7 +371,7 @@ final class ColorUtil
 
 ## Missing Features
 
-### 17. No GIF animation frame extraction
+### 17. No GIF animation frame extraction ❗ r82: STILL LIVE — no GIF frame decoder in candy-flip/src either
 
 **File**: N/A
 
@@ -381,7 +381,7 @@ The library has `Animation` and `AnimationDriver` for driving animated sequences
 
 ---
 
-### 18. No streaming/animation render for async context
+### 18. No streaming/animation render for async context ⏭️ r82: obsolete — ProcessAsyncRenderer is a new-capability idea, pre-1.0 scope
 
 **File**: `src/SyncAsyncRenderer.php`
 
@@ -391,7 +391,7 @@ The library has `Animation` and `AnimationDriver` for driving animated sequences
 
 ---
 
-### 19. No way to query supported protocols at runtime
+### 19. No way to query supported protocols at runtime ✅ r82: fixed by rewrite — src/Mosaic.php:331 supportedProtocols() now exists
 
 **File**: N/A
 
@@ -408,7 +408,7 @@ public static function supportedProtocols(): array<string>
 
 ## Compatibility with Other SugarCraft Libs
 
-### 20. `Mosaic::auto()` conflates two different detection systems
+### 20. `Mosaic::auto()` conflates two different detection systems ✅ r82: fixed by rewrite — src/Mosaic.php:105-107 documents Detect::probe() as primary detection path
 
 **File**: `src/Mosaic.php:94-125`
 
@@ -418,7 +418,7 @@ public static function supportedProtocols(): array<string>
 
 ---
 
-### 21. `ChafaRenderer` availability memoization is per-process
+### 21. `ChafaRenderer` availability memoization is per-process ✅ r82: fixed by rewrite — src/Renderer/ChafaRenderer.php:214 static reset() added
 
 **File**: `src/Renderer/ChafaRenderer.php:19`
 
@@ -434,7 +434,7 @@ If `chafa` is installed mid-process, the library won't detect it. Conversely, if
 
 ## Async Patterns (ReactPHP)
 
-### 22. `SyncAsyncRenderer` does not handle `Loop::futureTick` failure
+### 22. `SyncAsyncRenderer` does not handle `Loop::futureTick` failure ✅ r82: fixed by rewrite — src/SyncAsyncRenderer.php:34-38 try/catch around futureTick rejects deferred
 
 **File**: `src/SyncAsyncRenderer.php:31`
 
@@ -456,7 +456,7 @@ try {
 
 ---
 
-### 23. `AdaptiveImage::renderAsync()` resolves in next tick for cached hits
+### 23. `AdaptiveImage::renderAsync()` resolves in next tick for cached hits ✅ r82: fixed by rewrite — cached-hit path no longer defers via futureTick
 
 **File**: `src/AdaptiveImage.php:96-100`
 
@@ -476,7 +476,7 @@ return \React\Promise\Promise::resolve($this->cache[$key]);
 
 ---
 
-### 24. `AsyncRenderer` interface has no cancellation support
+### 24. `AsyncRenderer` interface has no cancellation support ⏭️ r82: obsolete — cancellation-token API is a design idea, pre-1.0 scope
 
 **File**: `src/AsyncRenderer.php`
 
@@ -488,7 +488,7 @@ The `AsyncRenderer` interface returns a `PromiseInterface` but provides no way t
 
 ## Additional Observations
 
-### 25. `Mosaic::auto()` nested try/catch swallows `Detect::probe()` failure silently
+### 25. `Mosaic::auto()` nested try/catch swallows `Detect::probe()` failure silently ✅ r82: fixed by rewrite — fallback catch now self-documented: } catch (\Throwable) { // Detect::probe() threw (not a TTY, probing ti
 
 **File**: `src/Mosaic.php:100-114`
 
@@ -498,7 +498,7 @@ The outer try/catch catches any exception from `Detect::probe()` but the inner c
 
 ---
 
-### 26. `PixelGrid::fromGd()` creates a double-height canvas without alpha blending
+### 26. `PixelGrid::fromGd()` creates a double-height canvas without alpha blending ✅ r82: fixed by rewrite — src/PixelGrid.php:16-21 documents semi-transparent alpha 1-126 limitation
 
 **File**: `src/PixelGrid.php:44-56`
 
@@ -516,7 +516,7 @@ The PixelGrid creates an opaque black background then disables alpha blending en
 
 ---
 
-### 27. `AnimationDriver::subscriptions()` always returns null
+### 27. `AnimationDriver::subscriptions()` always returns null ✅ r82: fixed by rewrite — src/AnimationDriver.php:105-109 docblock explains tick-only design
 
 **File**: `src/AnimationDriver.php:95-98`
 
@@ -533,7 +533,7 @@ This means `AnimationDriver` cannot receive subscription-based events (keyboard,
 
 ---
 
-### 28. `SixelRenderer` supports alpha but `supportsAlpha()` returns false
+### 28. `SixelRenderer` supports alpha but `supportsAlpha()` returns false ⏭️ r82: obsolete — non-finding (correct behavior per CALIBER_LEARNINGS)
 
 **File**: `src/Renderer/SixelRenderer.php:133-136`
 
