@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Mosaic\Dither;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Mosaic\MosaicBuilder;
+use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
 use SugarCraft\Mosaic\Scale;
 
@@ -16,11 +17,80 @@ use SugarCraft\Mosaic\Scale;
  */
 final class MosaicBuilderTest extends TestCase
 {
-    public function testBuildWithNoRendererDefaultsToSixel(): void
+    /** @var array<string,string|null> */
+    private array $savedEnv = [];
+
+    /**
+     * build() without an explicit renderer now auto-detects; clear the
+     * environment knobs Detect::probe() reads so the outcome is deterministic
+     * (no graphics protocol → halfblock) regardless of the dev/CI terminal.
+     */
+    protected function setUp(): void
     {
+        parent::setUp();
+        $keys = [
+            'CLICOLOR_FORCE', 'NO_COLOR', 'CLICOLOR', 'TERM', 'COLORTERM',
+            'WT_SESSION', 'GOOGLE_CLOUD_SHELL', 'TMUX', 'STY', 'TERM_PROGRAM',
+            'KITTY_WINDOW_ID', 'XTERM_VERSION', 'LC_TERMINAL',
+        ];
+        foreach ($keys as $key) {
+            $this->savedEnv[$key] = $_ENV[$key] ?? null;
+            unset($_ENV[$key]);
+            putenv($key);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        foreach ($this->savedEnv as $key => $value) {
+            if ($value === null) {
+                unset($_ENV[$key]);
+                putenv($key);
+            } else {
+                $_ENV[$key] = $value;
+                putenv("{$key}={$value}");
+            }
+        }
+    }
+
+    public function testBuildWithNoRendererAutoDetectsInsteadOfSixel(): void
+    {
+        // A cleared environment advertises no graphics protocol — the builder
+        // must land on the universal HalfBlock fallback, never on Sixel,
+        // whose DCS payload a non-Sixel terminal cannot display.
         $mosaic = Mosaic::builder()->build();
 
+        $this->assertSame('halfblock', $mosaic->protocol());
+    }
+
+    public function testBuildWithNoRendererPicksKittyWhenTerminalAdvertisesIt(): void
+    {
+        $_ENV['TERM'] = 'xterm-kitty';
+        putenv('TERM=xterm-kitty');
+
+        $mosaic = Mosaic::builder()->build();
+
+        $this->assertSame('kitty', $mosaic->protocol());
+    }
+
+    public function testBuildWithNoRendererHonoursDitherWhenAutoResolvesSixel(): void
+    {
+        // XTERM_VERSION + xterm TERM makes Detect report Sixel; the builder's
+        // dither must reach the auto-resolved SixelRenderer.
+        $_ENV['XTERM_VERSION'] = 'X11R5(370)';
+        putenv('XTERM_VERSION=X11R5(370)');
+        $_ENV['TERM'] = 'xterm';
+        putenv('TERM=xterm');
+
+        $mosaic = Mosaic::builder()
+            ->withDither(Dither::Atkinson)
+            ->build();
+
         $this->assertSame('sixel', $mosaic->protocol());
+        $renderer = $mosaic->renderer();
+        $this->assertInstanceOf(SixelRenderer::class, $renderer);
+        $this->assertSame(Dither::Atkinson, $renderer->dither());
     }
 
     public function testBuildDitherOverridesExplicitSixelRendererDither(): void
@@ -32,11 +102,19 @@ final class MosaicBuilderTest extends TestCase
             ->withDither(Dither::Stucki)
             ->build();
 
-        // The Stucki dither should be used, not None.
-        // We can verify through render output characteristics or by inspecting
-        // the built mosaic's scale (indirectly via the renderer's configured dither).
-        // The most direct way: verify the mosaic builds without error.
-        $this->assertSame('sixel', $mosaic->protocol());
+        $renderer = $mosaic->renderer();
+        $this->assertInstanceOf(SixelRenderer::class, $renderer);
+        $this->assertSame(Dither::Stucki, $renderer->dither());
+    }
+
+    public function testRendererAccessorReturnsConfiguredRenderer(): void
+    {
+        $renderer = new HalfBlockRenderer();
+        $mosaic = Mosaic::builder()
+            ->withRenderer($renderer)
+            ->build();
+
+        $this->assertSame($renderer, $mosaic->renderer());
     }
 
     public function testWithResizeCarriesWidthAndHeightIntoBuiltMosaic(): void
@@ -64,7 +142,8 @@ final class MosaicBuilderTest extends TestCase
         $originalMosaic = $builder->build();
         $scaledMosaic = $newBuilder->build();
 
-        $this->assertNotSame($originalMosaic, $scaledMosaic);
+        $this->assertNull($originalMosaic->scale());
+        $this->assertSame(Scale::Fill, $scaledMosaic->scale());
     }
 
     public function testWithRendererCarriesAllOtherFields(): void
@@ -78,6 +157,7 @@ final class MosaicBuilderTest extends TestCase
 
         // All other fields should be preserved.
         $this->assertNotSame($builder, $newBuilder);
+        $this->assertSame(Scale::Crop, $newBuilder->build()->scale());
     }
 
     public function testWithDitherReturnsNewBuilderInstance(): void
@@ -97,6 +177,9 @@ final class MosaicBuilderTest extends TestCase
             ->build();
 
         $this->assertInstanceOf(Mosaic::class, $mosaic);
-        $this->assertSame('sixel', $mosaic->protocol());
+        // Cleared env → auto-detect lands on halfblock, and the chain's
+        // scale still rides into the built mosaic.
+        $this->assertSame('halfblock', $mosaic->protocol());
+        $this->assertSame(Scale::Fit, $mosaic->scale());
     }
 }

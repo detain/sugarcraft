@@ -533,7 +533,7 @@ This means `AnimationDriver` cannot receive subscription-based events (keyboard,
 
 ---
 
-### 28. `SixelRenderer` supports alpha but `supportsAlpha()` returns false
+### 28. `SixelRenderer` supports alpha but `supportsAlpha()` returns false ✅ (fixed: transparent-background register `#0;2;P` emitted when the canvas has holes; supportsAlpha() true; opaque encoding byte-identical)
 
 **File**: `src/Renderer/SixelRenderer.php:133-136`
 

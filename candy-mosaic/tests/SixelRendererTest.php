@@ -38,7 +38,8 @@ final class SixelRendererTest extends TestCase
 
     public function testSupportsAlpha(): void
     {
-        $this->assertFalse($this->renderer->supportsAlpha());
+        // Sixel declares a transparent background register (#0;2;P).
+        $this->assertTrue($this->renderer->supportsAlpha());
     }
 
     public function testIsNotInline(): void
@@ -227,5 +228,79 @@ final class SixelRendererTest extends TestCase
         $atkinson = (new SixelRenderer(Dither::Atkinson))->render($source, 16, 12);
 
         $this->assertNotSame($none, $atkinson);
+    }
+
+    // ─── Transparent background (DEBT #28) ─────────────────────────────────
+
+    /** 4×4 PNG: transparent left column pair, opaque red right column pair. */
+    private function halfTransparent(): ImageSource
+    {
+        $gd = imagecreatetruecolor(4, 4);
+        $this->assertNotFalse($gd);
+        imagealphablending($gd, false);
+        imagesavealpha($gd, true);
+
+        $transparent = imagecolorallocatealpha($gd, 0, 0, 0, 127);
+        $red         = imagecolorallocate($gd, 255, 0, 0);
+        for ($y = 0; $y < 4; $y++) {
+            for ($x = 0; $x < 4; $x++) {
+                imagesetpixel($gd, $x, $y, $x < 2 ? $transparent : $red);
+            }
+        }
+
+        return ImageSource::fromGd($gd, 'image/png');
+    }
+
+    public function testTransparentImageDeclaresBackgroundRegisterAndShiftsPalette(): void
+    {
+        $out = $this->renderer->render($this->halfTransparent(), 2, 2);
+
+        // Register 0 becomes the transparent background (DEC `#0;2;P`)…
+        $this->assertStringContainsString('#0;2;P', $out);
+        // …the red palette entry moves to register 1…
+        $this->assertStringContainsString('#1;2;100;0;0', $out);
+        // …and register 0 is never declared with colour components.
+        $this->assertStringNotContainsString('#0;2;100', $out);
+
+        $this->assertStringStartsWith(self::ESC . 'P', $out);
+        $this->assertStringEndsWith(self::ESC . '\\', $out);
+    }
+
+    public function testOpaqueImageEncodingIsUnchangedByTheAlphaPath(): void
+    {
+        $out = $this->renderer->render($this->red(), 8, 4);
+
+        // No holes → no background register, palette stays 0-based.
+        $this->assertStringNotContainsString('#0;2;P', $out);
+        $this->assertStringContainsString('#0;2;100;0;0', $out);
+    }
+
+    public function testTransparentImageDithersWithoutBreakingTheBackground(): void
+    {
+        // Default renderer dithers (Floyd–Steinberg); holes must not diffuse
+        // error, but the encoding must still carry the background register.
+        $out = (new SixelRenderer(Dither::FloydSteinberg))
+            ->render($this->halfTransparent(), 2, 2);
+
+        $this->assertStringContainsString('#0;2;P', $out);
+        $this->assertStringEndsWith(self::ESC . '\\', $out);
+    }
+
+    public function testFullyTransparentImageEmitsOnlyTheBackground(): void
+    {
+        $gd = imagecreatetruecolor(2, 2);
+        $this->assertNotFalse($gd);
+        imagealphablending($gd, false);
+        imagesavealpha($gd, true);
+        $clear = imagecolorallocatealpha($gd, 0, 0, 0, 127);
+        imagesetpixel($gd, 0, 0, $clear);
+        imagesetpixel($gd, 1, 0, $clear);
+        imagesetpixel($gd, 0, 1, $clear);
+        imagesetpixel($gd, 1, 1, $clear);
+
+        $out = (new SixelRenderer(Dither::None))->render(ImageSource::fromGd($gd, 'image/png'), 1, 1);
+
+        $this->assertStringContainsString('#0;2;P', $out);
+        $this->assertStringEndsWith(self::ESC . '\\', $out);
     }
 }

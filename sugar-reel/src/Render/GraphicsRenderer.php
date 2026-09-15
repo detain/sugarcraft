@@ -71,12 +71,19 @@ final class GraphicsRenderer implements FrameRenderer
     /**
      * Build an ImageSource from the frame without a needless re-encode: a PNG
      * frame wraps its bytes directly (we already know the dimensions); a raw
-     * frame (GIF / no-ffmpeg fallback) is encoded once via GD.
+     * frame (GIF / no-ffmpeg fallback) is ingested straight from its RGB24
+     * scanline buffer via candy-mosaic's {@see ImageSource::fromRgb()} — no
+     * per-frame PNG round-trip. A malformed short buffer keeps the older
+     * GD-clamping path rather than throwing mid-playback.
      */
     private function toImageSource(RgbFrame $frame): ImageSource
     {
         if ($frame->png !== null) {
             return new ImageSource($frame->png, 'image/png', $frame->w, $frame->h);
+        }
+
+        if (strlen($frame->bytes) === $frame->w * $frame->h * 3) {
+            return ImageSource::fromRgb($frame->bytes, $frame->w, $frame->h);
         }
 
         $gd = $frame->toGd();

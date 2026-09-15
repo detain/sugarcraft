@@ -151,6 +151,7 @@ final class MosaicTest extends TestCase
     {
         $this->assertSame('halfblock', Mosaic::halfBlock()->protocol());
         $this->assertSame('iterm2', Mosaic::iterm2()->protocol());
+        $this->assertSame('kitty', Mosaic::kitty()->protocol());
         $this->assertSame('sixel', Mosaic::sixel()->protocol());
         $this->assertSame('quarterblock', Mosaic::quarterBlock()->protocol());
         $this->assertSame('chafa', Mosaic::chafa()->protocol());
@@ -165,8 +166,19 @@ final class MosaicTest extends TestCase
         $this->assertContains('iterm2', $protocols);
         $this->assertContains('halfblock', $protocols);
         $this->assertContains('quarterblock', $protocols);
+        $this->assertContains('ascii', $protocols);
         $this->assertContains('chafa', $protocols);
-        $this->assertCount(6, $protocols);
+        $this->assertCount(7, $protocols);
+    }
+
+    public function testKittyFactoryMirrorsForceFactories(): void
+    {
+        $m = Mosaic::kitty();
+        $this->assertInstanceOf(Mosaic::class, $m);
+        $this->assertSame('kitty', $m->protocol());
+        $this->assertTrue($m->capability()->kitty);
+        $this->assertFalse($m->isInline());
+        $this->assertTrue($m->renderer() instanceof \SugarCraft\Mosaic\Renderer\KittyRenderer);
     }
 
     public function testIsInlineForInlineRenderers(): void

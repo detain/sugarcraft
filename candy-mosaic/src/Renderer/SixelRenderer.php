@@ -36,6 +36,14 @@ final class SixelRenderer implements Renderer
      *                        fills its cell box (not one device pixel per cell).
      * @param int $cellHeight Pixel height of a terminal cell.
      */
+    /**
+     * Sixel background-declaration for register 0: coordinate system 2
+     * (RGB) with the `P` (transparent) qualifier instead of colour
+     * components — DEC spec, echoed by every sixel decoder that supports
+     * transparent backgrounds.
+     */
+    private const TRANSPARENT_BACKGROUND = '#0;2;P';
+
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
         private readonly int $maxColors = 256,
@@ -71,6 +79,11 @@ final class SixelRenderer implements Renderer
             imagedestroy($src);
             throw new \RuntimeException(Lang::t('renderer.gd_resize_failed'));
         }
+        // Carry the source alpha through the resample: with blending off the
+        // copy writes pixels verbatim, and only saveAlpha keeps the alpha byte
+        // visible to imagecolorat() downstream.
+        imagealphablending($resized, false);
+        imagesavealpha($resized, true);
         imagecopyresampled(
             $resized, $src,
             0, 0, 0, 0,
@@ -80,22 +93,31 @@ final class SixelRenderer implements Renderer
         imagedestroy($src);
 
         try {
+            // Fully-transparent pixels become the background register: when the
+            // canvas has any, palette indices shift up by one and register 0 is
+            // declared transparent (`#0;2;P`), so uncovered cells show the
+            // terminal's own background instead of a painted colour.
+            $offset = $this->hasTransparentPixels($resized) ? 1 : 0;
+
             // The palette only needs a representative sample, not every pixel —
             // median-cut over a capped subset is far cheaper and visually
             // indistinguishable at thumbnail sizes.
-            $palette = $this->medianCut($this->samplePixels($resized, 4096), $this->maxColors);
+            $palette = $this->medianCut($this->samplePixels($resized, 4096, $offset), $this->maxColors);
 
             // Apply error-diffusion dithering before building the index grid.
             $grid = $this->dither === Dither::None
-                ? $this->buildIndexGrid($resized, $palette)
-                : $this->ditheredIndexGrid($resized, $palette, $this->dither);
+                ? $this->buildIndexGrid($resized, $palette, $offset)
+                : $this->ditheredIndexGrid($resized, $palette, $this->dither, $offset);
 
             $out = Ansi::sixelDcsHeader($pixelW, $pixelH);
-            $out .= $this->emitPalette($palette);
+            if ($offset === 1) {
+                $out .= self::TRANSPARENT_BACKGROUND;
+            }
+            $out .= $this->emitPalette($palette, $offset);
 
             for ($bandTop = 0; $bandTop < $pixelH; $bandTop += 6) {
                 $bandBottom = min($bandTop + 6, $pixelH);
-                $out .= $this->emitBand($grid, $bandTop, $bandBottom, $pixelW, $palette);
+                $out .= $this->emitBand($grid, $bandTop, $bandBottom, $pixelW, $palette, $offset);
                 // Graphics newline `-` advances to the next 6-row band (NOT "\n",
                 // which a terminal reads as a literal line feed and which breaks
                 // the image).
@@ -117,9 +139,14 @@ final class SixelRenderer implements Renderer
         return 'sixel';
     }
 
+    /**
+     * Sixel supports transparent backgrounds via the `#0;2;P` background
+     * register: fully-transparent pixels are left unpainted and show the
+     * terminal's own background. See {@see render()}.
+     */
     public function supportsAlpha(): bool
     {
-        return false;
+        return true;
     }
 
     public function isInline(): bool
@@ -156,13 +183,38 @@ final class SixelRenderer implements Renderer
     // ─── Pixel extraction ─────────────────────────────────────────────────────
 
     /**
+     * Quick full-canvas scan for any fully-transparent pixel (GD alpha 127).
+     *
+     * GD resamples alpha by averaging, so only exact-127 pixels are treated
+     * as background; partially-blended edge pixels keep their colour. The
+     * scan short-circuits on the first hit — opaque images pay one pass of
+     * cheap integer tests, and only transparent ones pay the palette shift.
+     */
+    private function hasTransparentPixels(\GdImage $img): bool
+    {
+        $w = imagesx($img);
+        $h = imagesy($img);
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                if ((imagecolorat($img, $x, $y) >> 24) === 127) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Collect up to $max representative pixels by striding over the image, for
      * building the palette. Sampling instead of reading every pixel keeps
      * median-cut cheap on the larger pixel canvas.
      *
+     * @param int $offset 1 when a background register is reserved — fully
+     *                    transparent pixels are no colour and must not dilute
+     *                    the median-cut buckets.
      * @return list<array{int,int,int}>
      */
-    private function samplePixels(\GdImage $img, int $max): array
+    private function samplePixels(\GdImage $img, int $max, int $offset = 0): array
     {
         $w = imagesx($img);
         $h = imagesy($img);
@@ -180,6 +232,9 @@ final class SixelRenderer implements Renderer
                 // 0xAARRGGBB int — extract channels directly rather than paying for
                 // an imagecolorsforindex associative-array allocation per pixel.
                 $rgb = imagecolorat($img, $x, $y);
+                if ($offset === 1 && ($rgb >> 24) === 127) {
+                    continue;
+                }
                 $pixels[] = [($rgb >> 16) & 0xFF, ($rgb >> 8) & 0xFF, $rgb & 0xFF];
             }
         }
@@ -324,9 +379,13 @@ final class SixelRenderer implements Renderer
     /**
      * Map each pixel to its nearest palette entry by Euclidean RGB distance.
      *
+     * @param int $offset 1 when register 0 is the transparent background:
+     *                    opaque pixels index from $offset and fully-transparent
+     *                    pixels map to 0 (never painted); 0 preserves the
+     *                    plain 0-based encoding byte-for-byte.
      * @return list<list<int>>  grid[row][col] = palette index
      */
-    private function buildIndexGrid(\GdImage $img, array $palette): array
+    private function buildIndexGrid(\GdImage $img, array $palette, int $offset = 0): array
     {
         $w    = imagesx($img);
         $h    = imagesy($img);
@@ -338,6 +397,10 @@ final class SixelRenderer implements Renderer
                 // Truecolor canvas → packed int; extract channels directly (no
                 // per-pixel imagecolorsforindex associative-array allocation).
                 $rgb = imagecolorat($img, $x, $y);
+                if ($offset === 1 && ($rgb >> 24) === 127) {
+                    $row[] = 0;
+                    continue;
+                }
                 $r = ($rgb >> 16) & 0xFF;
                 $g = ($rgb >> 8) & 0xFF;
                 $b = $rgb & 0xFF;
@@ -345,7 +408,7 @@ final class SixelRenderer implements Renderer
                 // 32768 entries — nearestColor runs O(distinct cubes), not
                 // O(pixels), bounding cost regardless of image size.
                 $key = (($r >> 3) << 10) | (($g >> 3) << 5) | ($b >> 3);
-                $row[] = $cache[$key] ??= $this->nearestColor($r, $g, $b, $palette);
+                $row[] = $offset + ($cache[$key] ??= $this->nearestColor($r, $g, $b, $palette));
             }
             $grid[] = $row;
         }
@@ -363,11 +426,15 @@ final class SixelRenderer implements Renderer
      * coefficients before they are themselves quantized.
      *
      * @param list<array{int,int,int}> $palette
+     * @param int $offset 1 when register 0 is the transparent background —
+     *                    fully-transparent pixels map to 0 and diffuse no
+     *                    error (a hole is not a colour decision).
      */
     private function ditheredIndexGrid(
         \GdImage $img,
         array $palette,
         Dither $dither,
+        int $offset = 0,
     ): array {
         $w = imagesx($img);
         $h = imagesy($img);
@@ -376,11 +443,18 @@ final class SixelRenderer implements Renderer
         // during error diffusion — clamped before quantization).
         /** @var list<list<array{float,float,float}> $accum */
         $accum = [];
+        // When a background register is reserved, holes must be remembered
+        // across the diffusion pass — accum holds colour, not transparency.
+        /** @var list<list<bool>> $hole */
+        $hole = [];
         for ($y = 0; $y < $h; $y++) {
             $accum[$y] = [];
             for ($x = 0; $x < $w; $x++) {
                 // Truecolor canvas → packed int; extract channels directly.
                 $rgb = imagecolorat($img, $x, $y);
+                if ($offset === 1) {
+                    $hole[$y][$x] = ($rgb >> 24) === 127;
+                }
                 $accum[$y][$x] = [
                     (float) (($rgb >> 16) & 0xFF),
                     (float) (($rgb >> 8) & 0xFF),
@@ -395,6 +469,10 @@ final class SixelRenderer implements Renderer
         for ($y = 0; $y < $h; $y++) {
             $row = [];
             for ($x = 0; $x < $w; $x++) {
+                if ($offset === 1 && $hole[$y][$x]) {
+                    $row[] = 0;
+                    continue;
+                }
                 // Quantize the accumulated (possibly error-diffused) value.
                 [$r, $g, $b] = $accum[$y][$x];
                 $clampedR = max(0.0, min(255.0, $r));
@@ -417,7 +495,7 @@ final class SixelRenderer implements Renderer
 
                 $this->diffuseError($accum, $w, $h, $x, $y, $eR, $eG, $eB, $dither);
 
-                $row[] = $palIdx;
+                $row[] = $offset + $palIdx;
             }
             $grid[] = $row;
         }
@@ -519,12 +597,16 @@ final class SixelRenderer implements Renderer
 
     // ─── Sixel encoding ───────────────────────────────────────────────────────
 
-    /** @param list<array{int,int,int}> $palette */
-    private function emitPalette(array $palette): string
+    /**
+     * @param list<array{int,int,int}> $palette
+     * @param int $offset 1 when register 0 is reserved for the transparent
+     *                    background — palette entries then live at 1..N.
+     */
+    private function emitPalette(array $palette, int $offset = 0): string
     {
         $out = '';
         foreach ($palette as $i => [$r, $g, $b]) {
-            $out .= Ansi::sixelColorIntroducer($i, $r, $g, $b);
+            $out .= Ansi::sixelColorIntroducer($i + $offset, $r, $g, $b);
         }
         return $out;
     }
@@ -534,6 +616,8 @@ final class SixelRenderer implements Renderer
      *
      * @param list<list<int>>          $grid
      * @param list<array{int,int,int}> $palette
+     * @param int $offset 1 when register 0 is the transparent background —
+     *                    index 0 cells are holes and get no colour pass.
      */
     private function emitBand(
         array $grid,
@@ -541,11 +625,15 @@ final class SixelRenderer implements Renderer
         int $bandBottom,
         int $width,
         array $palette,
+        int $offset = 0,
     ): string {
         // Discover which palette indices appear in this band.
         $activeColors = [];
         for ($row = $bandTop; $row < $bandBottom; $row++) {
             foreach ($grid[$row] ?? [] as $pal) {
+                if ($offset === 1 && $pal === 0) {
+                    continue;
+                }
                 $activeColors[$pal] = true;
             }
         }

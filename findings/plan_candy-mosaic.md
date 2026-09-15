@@ -100,7 +100,7 @@ if (!is_resource($proc)) {
 
 ---
 
-### 1.3 Remove unreachable try/catch in `Mosaic::auto()` — FINDING 3
+### 1.3 Remove unreachable try/catch in `Mosaic::auto()` — FINDING 3 ✅
 
 **What:** Remove the nested inner try/catch block (L100-114) that wraps `Detect::probe()`. The comment explicitly states it is unreachable. Use `// @phpstan-ignore-next-line` if a future-proof comment is truly needed.
 
@@ -409,7 +409,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 ## Phase 4: API & Design Improvements [PENDING]
 
-### 4.1 Make `MosaicBuilder::build()` default explicit — FINDING 1
+### 4.1 Make `MosaicBuilder::build()` default explicit — FINDING 1 ✅ (resolved differently: build() no longer defaults to Sixel at all — it auto-detects via `Mosaic::auto()`; the `sixel()` explicit factory already exists)
 
 **What:** Add `MosaicBuilder::sixel(Dither $dither = Dither::FloydSteinberg): self` static factory for symmetry with `Mosaic::sixel()`, and update doc-comment to document the Sixel default.
 
@@ -429,7 +429,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 ---
 
-### 4.2 Document `Mosaic::autoFromPalette()` to use more of `ProbeReport` — FINDING 2
+### 4.2 Document `Mosaic::autoFromPalette()` to use more of `ProbeReport` — FINDING 2 ✅ (resolved differently: autoFromPalette is now the single explicit fallback stage of auto() — Detect::probe() first, palette ProbeReport only when it finds no graphics protocol; expanding it to TrueColor/Color256 branches was rejected as conflating colour with protocol capability. See also FINDING 20.)
 
 **What:** Expand `autoFromPalette()` (L144-166) to check `TrueColor`, `Color256`, and `BasicAscii` capabilities from the `ProbeReport` before falling back to `halfBlock()`.
 
@@ -510,7 +510,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 ## Phase 5: Missing Features — New APIs [PENDING]
 
-### 5.1 Implement GIF frame extraction in candy-flip — FINDING 17
+### 5.1 Implement GIF frame extraction in candy-flip — FINDING 17 ⏭️ deferred (API sketch + constraints recorded in `candy-mosaic/CALIBER_LEARNINGS.md` → “Deferred”)
 
 **What:** The finding correctly notes this belongs in `candy-flip`. Add a `GifDecoder` class that decodes `ImageSource` (GIF format) into `Animation`.
 
@@ -548,7 +548,7 @@ public function renderAsync(ImageSource $image, int $width, int $height): Promis
 
 ---
 
-### 5.3 Document relationship between `Detect::probe()` and `TerminalProbe` — FINDING 20
+### 5.3 Document relationship between `Detect::probe()` and `TerminalProbe` — FINDING 20 ✅ (auto() doc-comment now spells out the two-stage precedence: kitty → iterm2 → sixel → chafa → halfblock)
 
 **What:** Clarify in `Mosaic::auto()` doc-comment the precedence: `Detect::probe()` is tried first, falls back to `TerminalProbe::run()`, then to `halfBlock()`.
 

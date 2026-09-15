@@ -26,6 +26,8 @@ return [
     'image_source.too_many_redirects'   => 'Too many redirects while fetching image from URL: {url}',
     'image_source.url_host_blocked'     => 'URL host {host} resolves to a blocked private/reserved address ({ip})',
     'image_source.url_host_unresolved'  => 'URL host {host} could not be resolved to an IP address',
+    'image_source.rgb_bad_dimensions'   => 'Raw RGB dimensions must be positive, got {width}×{height}',
+    'image_source.rgb_size_mismatch'    => 'Raw RGB buffer is {actual} bytes; expected {expected}',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
