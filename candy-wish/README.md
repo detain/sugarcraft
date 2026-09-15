@@ -16,6 +16,34 @@ PHP port of [`charmbracelet/wish`](https://github.com/charmbracelet/wish) — an
 composer require sugarcraft/candy-wish
 ```
 
+## Runtime requirements
+
+- **PHP 8.3+** — declared in `composer.json`.
+- A **POSIX host** (Linux or macOS) — candy-wish's default transport builds on
+  candy-pty's POSIX PTY layer.
+- **OpenSSH `sshd` fronts the wire.** candy-wish does not implement the SSH
+  transport protocol; each connection runs the middleware stack in a fresh PHP
+  process spawned by `sshd` via `ForceCommand` (or a `command="..."` line in
+  `authorized_keys`). Authentication at the SSH layer (including RFC 4256
+  keyboard-interactive over the network) is sshd's job; the bundled auth
+  middlewares prompt on the session's own stdio.
+- The **default `InProcessTransport`** (PTY supervisor) additionally requires:
+  - **`ext-ffi`** — candy-pty binds libc through FFI to allocate the PTY;
+    without it the transport cannot run (and Windows is not a target).
+  - **`ext-pcntl`** — forking and reaping the session child. `runChild()`
+    raises a `PtyException` when pcntl is missing; SIGWINCH size forwarding
+    alone degrades gracefully without it.
+  - a usable **`/dev/ptmx`** — PTY allocation fails in restricted containers
+    and on many shared hosts.
+- The **legacy `HostSshdTransport`** runs the middleware chain inline against
+  the PTY sshd already allocated — it needs none of the three above.
+- **`ext-ssh2` is optional** and only relevant for *outbound* SSH opened from
+  inside a session (see [ext-ssh2](#ext-ssh2) below).
+
+Tests that exercise the PTY stack gate themselves on these capabilities, so
+the suite also passes on hosts without them (the default transport is then
+simply not covered).
+
 ## Shared foundations
 
 CandyWish uses **candy-palette** for terminal capability probing. Call
@@ -307,6 +335,14 @@ default PTY/shell wiring with a custom implementation.
 | `SignalMsg` | `signalName` |
 | `EnvMsg` | `name`, `value` |
 | `BreakMsg` | Break request (no fields) |
+
+On a shell request, `DefaultChannelHandler` resolves the login shell in this
+order: the explicit `$shell` configured at construction time, then the
+server-side `SHELL` environment variable (under sshd that is the authenticated
+user's login shell), then `FALLBACK_SHELL` (`/bin/sh`). The spawn is always
+`<shell> -l`. A client-supplied `SHELL` env var can never select the
+interpreter — `SHELL` is stripped from the child environment as a
+dangerous variable, and resolution reads only the server's own configuration.
 
 ```php
 use SugarCraft\Wish\Channel\ChannelHandler;

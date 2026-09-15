@@ -62,16 +62,30 @@ final class DefaultChannelHandler implements ChannelHandler
     ];
 
     /**
+     * Last-resort interpreter for shell requests when neither an explicit
+     * configured shell nor a `SHELL` environment variable is available
+     * (E727, round 82). `/bin/sh` is the POSIX-guaranteed path — unlike
+     * the historical hard-coded `/bin/bash` it exists on every host this
+     * library claims to run on; systems whose login shell is bash reach
+     * it earlier in the resolution order (sshd exports `SHELL`).
+     */
+    public const FALLBACK_SHELL = '/bin/sh';
+
+    /**
      * @param ChildSpawner|null $spawner   injected so `handleShell` can call `runChild()`
      * @param Session|null      $session   used to seed initial cols/rows when they're non-zero
      * @param list<string>      $acceptEnv allowlist of client env-var names that may be
      *                                     passed to the child; empty (the default) means
      *                                     accept none beyond the floor vars
+     * @param string|null       $shell     explicit login shell for shell requests;
+     *                                     blank/null falls through to `getenv('SHELL')`
+     *                                     and then to {@see FALLBACK_SHELL} (see `spawnShell()`)
      */
     public function __construct(
         private readonly ?ChildSpawner $spawner = null,
         ?Session $session = null,
         private readonly array $acceptEnv = [],
+        private readonly ?string $shell = null,
     ) {
         if ($session !== null && $session->cols > 0) {
             $this->cols = $session->cols;
@@ -206,7 +220,33 @@ final class DefaultChannelHandler implements ChannelHandler
             command: $session->command,
             lang: $session->lang,
         );
-        $this->spawner->runChild($effectiveSession, ['/bin/bash', '-l'], $env);
+        $this->spawner->runChild($effectiveSession, [$this->resolveShell(), '-l'], $env);
+    }
+
+    /**
+     * Resolve the login shell to spawn (E727, round 82).
+     *
+     * Order: explicit configured shell → the server-side process's
+     * `SHELL` variable (under sshd ForceCommand that is the
+     * authenticated user's login shell) → {@see FALLBACK_SHELL}.
+     *
+     * Client-supplied values never participate: `SHELL` sits in
+     * {@see DANGEROUS_VARS} and is stripped from the child environment,
+     * so a remote peer cannot pick the interpreter it gets exec'd into.
+     */
+    private function resolveShell(): string
+    {
+        $configured = $this->shell;
+        if ($configured !== null && trim($configured) !== '') {
+            return $configured;
+        }
+
+        $fromEnvironment = getenv('SHELL');
+        if (is_string($fromEnvironment) && trim($fromEnvironment) !== '') {
+            return $fromEnvironment;
+        }
+
+        return self::FALLBACK_SHELL;
     }
 
     /**

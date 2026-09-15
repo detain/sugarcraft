@@ -21,8 +21,12 @@ use SugarCraft\Wish\Session;
  *   1. Writes Name, Instruction, prompt count, and per-prompt
  *      prompt/echo-flag lines to STDOUT per RFC 4256.
  *   2. Reads newline-delimited responses from STDIN until all
- *      prompts have been answered.
- *   3. Optionally validates the responses via a callback. A validator
+ *      prompts have been answered. The read blocks by contract —
+ *      see {@see readResponses()} for the per-connection-process
+ *      reasoning and the EOF guarantee (E727, round 82).
+ *   3. Optionally validates the responses via a callback. An EOF
+ *      that leaves any prompt unanswered rejects the session before
+ *      the validator runs; a short exchange never authenticates. A validator
  *      that returns `false` rejects the session with a message on
  *      stderr; a validator that returns `true` (or no validator)
  *      passes control to `$next`.
@@ -124,6 +128,15 @@ final class KeyboardInteractive implements Middleware
         $this->writeChallenges();
         $responses = $this->readResponses();
 
+        if (\count($responses) !== \count($this->challenges)) {
+            // EOF before the exchange finished: the client hung up mid-
+            // prompt. An incomplete exchange is a failed authentication,
+            // never a passed one (E727, round 82) — reject without ever
+            // consulting a validator, which would face a short list.
+            fwrite($this->stderr, "Authentication failed.\n");
+            return;
+        }
+
         if ($this->validate !== null && !($this->validate)($responses)) {
             fwrite($this->stderr, "Authentication failed.\n");
             return;
@@ -155,7 +168,30 @@ final class KeyboardInteractive implements Middleware
     /**
      * Read exactly `$count` lines from stdin.
      *
-     * @return list<string>
+     * **Blocking by contract (E727, round 82).** This middleware runs in
+     * the dedicated per-connection PHP process that `sshd` forks under
+     * the ForceCommand model (see {@see \SugarCraft\Wish\Server}), and
+     * the transport walks the middleware chain synchronously *before*
+     * any pump loop is started — there is no shared event loop this read
+     * could stall. Waiting here has the semantics of an interactive
+     * prompt at a login shell: it waits for a human to type.
+     *
+     * Two properties bound the wait:
+     *   - a client disconnect surfaces as EOF on the stdio pipe, so
+     *     `fgets()` returns false and this loop ends immediately;
+     *     handle() then rejects the incomplete exchange;
+     *   - dead-but-connected peers are the documented domain of the
+     *     Keepalive middleware, and the SSH login grace time is enforced
+     *     by sshd upstream. Deliberately no response timeout is imposed
+     *     here: any fixed deadline would just cap human typing latency
+     *     with a fabricated policy number.
+     *
+     * Callers that need bounded or non-blocking prompting inject their
+     * own `$stdin` stream via the constructor — the seam every test in
+     * this library drives.
+     *
+     * @return list<string> lines read so far — fewer than the prompt
+     *                      count only when stdin hit EOF mid-exchange
      */
     private function readResponses(): array
     {

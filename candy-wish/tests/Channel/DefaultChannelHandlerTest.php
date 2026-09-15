@@ -343,4 +343,88 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame('bar', $capturedEnv['FOO']);
         $this->assertArrayNotHasKey('BAR', $capturedEnv);
     }
+
+    /**
+     * Run a shell request with the given explicit configured shell and
+     * process `SHELL` env value (null = unset) and capture the argv handed
+     * to the spawner. The env is restored in `finally` — putenv changes
+     * must never leak across tests.
+     *
+     * @return list<string>
+     */
+    private function captureShellArgv(?string $configuredShell, ?string $shellEnv): array
+    {
+        $capturedCmd = [];
+        $spy = new class($capturedCmd) implements ChildSpawner {
+            /** @var list<string> */
+            private array $cmd;
+
+            public function __construct(array &$cmd)
+            {
+                $this->cmd = &$cmd;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->cmd = $cmd;
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $originalShell = getenv('SHELL');
+        try {
+            if ($shellEnv === null) {
+                putenv('SHELL');
+            } else {
+                putenv('SHELL=' . $shellEnv);
+            }
+
+            $handler = new DefaultChannelHandler($spy, null, [], $configuredShell);
+            $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
+        } finally {
+            if ($originalShell === false) {
+                putenv('SHELL');
+            } else {
+                putenv('SHELL=' . $originalShell);
+            }
+        }
+
+        return $capturedCmd;
+    }
+
+    public function testConfiguredShellWinsOverEnvironment(): void
+    {
+        $this->assertSame(
+            ['/bin/zsh', '-l'],
+            $this->captureShellArgv('/bin/zsh', '/bin/fish'),
+        );
+    }
+
+    public function testShellEnvironmentHonoredWhenNoShellConfigured(): void
+    {
+        $this->assertSame(
+            ['/bin/fish', '-l'],
+            $this->captureShellArgv(null, '/bin/fish'),
+        );
+    }
+
+    public function testFallbackShellWhenNeitherConfiguredNorEnvironment(): void
+    {
+        $argv = $this->captureShellArgv(null, null);
+
+        $this->assertSame([DefaultChannelHandler::FALLBACK_SHELL, '-l'], $argv);
+        // The fallback is the POSIX-guaranteed interpreter — pin the value
+        // so a silent swap back to a distro-specific path is visible.
+        $this->assertSame('/bin/sh', DefaultChannelHandler::FALLBACK_SHELL);
+    }
+
+    public function testBlankConfiguredShellFallsThroughToEnvironment(): void
+    {
+        $this->assertSame(
+            ['/bin/fish', '-l'],
+            $this->captureShellArgv('   ', '/bin/fish'),
+        );
+    }
 }

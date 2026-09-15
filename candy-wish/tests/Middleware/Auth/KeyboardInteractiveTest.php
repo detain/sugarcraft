@@ -271,4 +271,52 @@ final class KeyboardInteractiveTest extends TestCase
         $this->assertSame('Second:', $lines[5]);
         $this->assertSame('false', $lines[6]);
     }
+
+    public function testEofMidExchangeRejectsWithoutCallingNext(): void
+    {
+        // Two prompts, one answer, then EOF — the client hung up.
+        $stdin = $this->makeStdin("only-one\n");
+        [$out] = $this->stdout();
+        [$err, $readErr] = $this->stderr();
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'First?'], ['prompt' => 'Second?']],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+        $reached = false;
+        $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached, 'a hung-up exchange must never reach $next');
+        $this->assertStringContainsString('Authentication failed', $readErr());
+    }
+
+    public function testEofBeforeAnyResponseNeverConsultsValidator(): void
+    {
+        // Client disconnects without answering: the completeness gate in
+        // handle() must reject BEFORE the validator sees a short list.
+        $stdin = $this->makeStdin('');
+        [$out] = $this->stdout();
+        [$err, $readErr] = $this->stderr();
+        $validatorConsulted = false;
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Password?']],
+            function (array $responses) use (&$validatorConsulted): bool {
+                $validatorConsulted = true;
+                return true;
+            },
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+        $reached = false;
+        $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($validatorConsulted, 'short exchange must be rejected before the validator runs');
+        $this->assertFalse($reached);
+        $this->assertStringContainsString('Authentication failed', $readErr());
+    }
 }
