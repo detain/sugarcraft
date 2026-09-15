@@ -314,7 +314,14 @@ final class PrometheusFileBackend implements Backend
         }
 
         $tmp = $this->path . '.tmp';
-        $fh = fopen($tmp, 'c+');
+        $dir = dirname($tmp);
+        // E740: fopen() raises an E_WARNING *before* returning false when its
+        // parent cannot host the file (missing dir, parent is a file,
+        // unwritable dir). The RuntimeException below is this door's documented
+        // contract, so probe the parent first and only reach fopen() when
+        // success is expected; the `=== false` check stays to close the
+        // probe-vs-open race with the same refusal.
+        $fh = is_dir($dir) && is_writable($dir) ? fopen($tmp, 'c+') : false;
         if ($fh === false) {
             throw new \RuntimeException(Lang::t('prom.cannot_open', ['path' => $tmp]));
         }

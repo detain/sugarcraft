@@ -342,30 +342,77 @@ final class PrometheusFileBackendTest extends TestCase
     {
         $dir = sys_get_temp_dir() . '/candy-metrics-prom-tmp-' . uniqid();
         mkdir($dir);
-        $path = $dir . '/nested/file.prom'; // Cannot be created
+        $path = $dir . '/nested/file.prom'; // parent dir cannot be created
 
         $b = new PrometheusFileBackend($path);
         $b->counter('x', 1);
 
-        // The explicit flush() surfaces the exception.
-        // The destructor warning (from @fopen inside flush) is unavoidable
-        // without modifying production code. We suppress it for this test.
-        $this->expectException(\RuntimeException::class);
+        // E740 turned this refusal silent: flush() rejects at the parent probe
+        // before fopen() can warn, so neither the explicit flush below nor the
+        // destructor's implicit second flush emits a PHP diagnostic — the old
+        // `@$b = null` suppression dance around the destructor is gone.
+        $thrown = null;
         try {
             $b->flush();
         } catch (\RuntimeException $e) {
-            // Clean up $b's internal state so the destructor doesn't re-trigger flush.
-            // We need to destroy $b while error_reporting is still silenced.
-            (function (PrometheusFileBackend $inst): void {
-                $inst->counter('x', 0); // marks dirty again — but we suppress flush via @ below
-            })($b);
-            // Suppress the destructor warning caused by the subsequent flush failure.
-            @$b = null;
-            throw $e; // re-throw so expectException sees it.
+            $thrown = $e;
+        }
+        unset($b);
+
+        self::assertNotNull($thrown, 'explicit flush() must surface the refusal');
+        self::assertStringContainsString($path . '.tmp', $thrown->getMessage());
+        @rmdir($dir);
+    }
+
+    /**
+     * E740: both uncreatable-tmp shapes — parent dir missing AND parent is a
+     * regular file — must refuse through the RuntimeException contract WITHOUT
+     * raising any PHP diagnostic. The file-as-parent shape (ENOTDIR) is the
+     * hermetic always-fails mechanism: it fails for every uid including root,
+     * unlike permission bits. A test-local error handler records anything the
+     * door might emit; failOnWarning alone cannot pin the same property when a
+     * stray `@` could hide it, so this test stands on its own.
+     */
+    public function testCannotOpenTmpPathRefusesWithoutWarning(): void
+    {
+        $dir = sys_get_temp_dir() . '/candy-metrics-e740-' . uniqid();
+        mkdir($dir);
+        $blocker = $dir . '/blocker';
+        file_put_contents($blocker, '');
+        $missingParent = $dir . '/nested/metrics.prom';
+        $fileParent = $blocker . '/metrics.prom';
+
+        $raised = [];
+        set_error_handler(static function (int $severity, string $message) use (&$raised): bool {
+            $raised[] = $message;
+
+            return true; // consume the diagnostic: the refusal must stay silent
+        });
+
+        $refusalMessages = [];
+        try {
+            foreach ([$missingParent, $fileParent] as $path) {
+                $b = new PrometheusFileBackend($path);
+                $b->counter('x', 1);
+                try {
+                    $b->flush();
+                } catch (\RuntimeException $e) {
+                    $refusalMessages[$path] = $e->getMessage();
+                }
+                unset($b); // destructor's second flush() must also stay silent
+            }
+        } finally {
+            restore_error_handler();
         }
 
-        // Should not reach here.
-        @unlink($dir . '/nested/file.prom.tmp');
+        self::assertSame([$missingParent, $fileParent], array_keys($refusalMessages), 'both uncreatable shapes must refuse');
+        foreach ($refusalMessages as $path => $message) {
+            self::assertStringStartsWith('prometheus textfile: cannot open ', $message, "refusal for {$path} must use the documented door message");
+            self::assertStringContainsString($path . '.tmp', $message, "refusal for {$path} must name the tmp path");
+        }
+        self::assertSame([], $raised, 'the refusal door must not raise a PHP diagnostic');
+
+        @unlink($blocker);
         @rmdir($dir);
     }
 
