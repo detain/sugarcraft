@@ -105,6 +105,39 @@ policy (one disclosed commit) stays in the merge cadence. Evidence-to-files, lan
 resume-blank-forever (≤10x, user directive 2026-09-14), ≤8 concurrent keep-filled, census-in-step,
 figures-cite-cwd+mode.
 
+**PHASE-4 MINTED 2026-09-15** — this paragraph SUPERSEDES the §2(c) decision point: operator m0225 called
+the **FRESH AUDIT SWEEP** of the other 51 libs — probe-first scoping executed, lanes minted. Evidence:
+read-only pattern sweep over all sibling libs (`/home/sites/crush-r61-artifacts/phase4/pattern-sweep.md`
++ `census.txt` + `whiletrue.txt`) — repo tools GREEN (`tools/check-child-lifetimes.php` rc=0: 57 libs /
+24 sites / 6 findings / all accounted; `tools/check-path-repos.php --no-lib-path-repos` rc=0 over 58
+libs), dep mode **linked=54 / published=0**, **4 unvendored libs** (candy-ansi / candy-focus / candy-fuzzy
+/ candy-layout — suite state unverified there), spot suites green (candy-sprinkles 751T, sugar-bits 493T,
+honey-bounce 193T), and **zero confirmed unescaped user-input CLI sites** (every interpolated shell-out
+escapeshellarg'd or argv-array; the one soft spot minted as E715). The sweep mints **E711–E723** (13 rows;
+file:line cites in the backlog entries): E711 sugar-prompt Spinner fork unbounded (HIGH) · E712 candy-vcr
+exit-in-src + suppressions (MED) · E713 sugar-readline busy-poll unbounded (MED) · E714 sugar-glow
+pure-poll watcher (LOW) · E715 candy-input `'tput '.$capability` interpolation (MED) · E716 candy-core
+WorkerPool lifetime + suppression posture (MED, FOUNDATION) · E717 candy-pty pump-deadline contract
+unpinned (HIGH) · E718 candy-query sync-DB blocks TUI (MED, known-defect) · E719 sugar-skate FIRST-EVER
+audit (MED) · E720 stale-findings re-verify verdict pass — six rewritten libs (HIGH, read-mostly) · E721
+candy-serve server-lifetime children + stale 28-F (MED) · E722 sugar-reel/candy-mosaic child-blocking
+audit (MED) · E723 sugar-dash PluginSdk exit-loop + candy-mold learnings gap (LOW). **Round-82 lanes**
+(two-letter ids, FIRST letter = round-group: **q\*=r82**, r\*=r83; sibling libs are file-disjoint across
+lanes — waves bound by headroom + the FOUNDATION rule, not collisions): **wave-1 q1**(E711) ∥ **q2**(E712)
+∥ **q3**(E713) ∥ **q4**(E715) ∥ **q5**(E720) ∥ **q6**(E719); **wave-2 q7**(E716 — FOUNDATION: ships after
+its gate prove-outs, dependent spot-runs follow) ∥ **q8**(E718) ∥ **q9**(E723); **wave-3 q10**(E717) ∥
+**q11**(E721) ∥ **q12**(E722). E714 (LOW) UNASSIGNED — carry. **Phase structure:** P1 hardening r61–r76
+(the E-series audit) · P2 MCP r77–r80 (E695–E703) · P3 operator UX r81 (E704–E710) · **P4 sibling-lib
+sweep r82+ (E711–E723)**. **NEW GATE LAW discovered closing r81** (drift-fix `086035f50` — the serial1
+redset of SIX: stacking-docblock-census burial, TreeWideGuardRoster both arms, OneSidedHomeSandbox — FOURTH
+co-shard-class demonstration): those whole-tree guards are **SERIAL-ONLY** and sit outside every lane
+filter list, therefore **sibling-lib lanes touching repo-wide tools must additionally run
+`php tools/check-child-lifetimes.php` AND the FULL suite of every lib they touch — the whole-tree serial
+remains the only complete gate at every weld.** Harness laws carry: serials PLAIN BASH PIPE never tmux/PTY
+(stdin-pin trio); five-guard + Config + citation + SwallowingCatch in every sugar-crush-touching brief;
+K=8 shardcheck with `--durations` + `--against-json`. The §2(b) trigger-watch roster carries UNCHANGED.
+Census re-run at this mint returns exactly **13 survivors**, all `OPEN` (E711–E723).
+
 ### RESTART INSTRUCTIONS — the new-session startup recipe
 
 **Tip chain:** `a39b34ee2` (W1 re-pin) → picks `fea4b3b26`+`772ef1b03`+`2a33d175b` → `0908d39aa` (W2
