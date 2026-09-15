@@ -93,3 +93,126 @@ Accumulated patterns and gotchas specific to this library.
    a known limitation for long-running renders (large GIFs, high-res images).
  - **[ImageLayer lives here now]** `SugarCraft\Mosaic\ImageLayer` (the turnkey per-frame image-registry helper) was extracted from candy-core into candy-mosaic. It reaches back into candy-core for the runtime overlay-contract via `use SugarCraft\Core\ImageOverlay;` + `use SugarCraft\Core\ImagePlacement;` — those two classes INTENTIONALLY stay in candy-core (driven by `Program::renderFrame()` / `View::$images`); moving them here would circular-dep against candy-core, which candy-mosaic already requires. This one-way `candy-mosaic → candy-core` edge is the intended direction.
  - **[placeTracked vs place]** `ImageLayer` has TWO placement accessors on purpose. `place(): string` returns only the marker block and deliberately KEEPS that `string` return — frame-composition callers just concatenate it, and changing its signature would break every one of them. `placeTracked(): PlacedImage` is the additive sibling that also reports the assigned overlay id; it exists for `sugar-gallery`'s `PosterCard::withImage(bytes, id)`, which needs the id the layer allocated (PR #1121 assumed the app owned id allocation, PR #1122 moved allocation into `ImageLayer` and hid it — this closes that gap). `place()` is now a one-line delegate to `placeTracked()`, so the two can never drift. Do NOT tell callers to recover the id via `array_key_last(placements())`: on a dedup hit `??=` returns the existing id and re-assigning an existing key preserves its original insertion position, so `array_key_last` reports the HIGHEST id instead of the one just placed; and the overflow branch returns early without writing a placement, so it reports a stale unrelated id. `count()` pre-flight breaks both ways too. Return type `PlacedImage` lives in candy-mosaic (NOT candy-core) to preserve the one-way edge above — same reasoning as `ImagePlacement` staying in candy-core. It follows the house value-object pattern set by `ImagePlacement` (PR #1130, `4fb6502a`): a `final readonly class`, not an `array{marker, imageId}` shape, and like all 10 sibling readonly VOs in candy-core/candy-mosaic it has no `::new()` factory (required-arg VOs are exempt from `[pattern:new-factory-required]`).
+
+## Deferred (audited, specified, deliberately NOT implemented)
+
+- **#17 Streaming sixel encode (deferred).** `SixelRenderer::render()` currently
+  materialises the whole pixel canvas (`imagecreatetruecolor(pixelW×pixelH)`),
+  a full per-row index grid, and the complete output string in memory before
+  returning bytes. For video playback the plan was an incremental encoder:
+  `SixelRenderer::encodeBandStream(ImageSource $image, int $width, callable $write): void`
+  (or a `Generator<string>` variant) that quantizes ONE 6-row band at a time —
+  header once, palette once, then per-band `yield`/callback emission — so peak
+  memory is O(pixelW) instead of O(pixelW × pixelH) and a consumer can start
+  writing to the TTY while later bands are still quantizing.
+  Constraints found while auditing: (a) the median-cut palette must be computed
+  from a sample of the FULL image before any band is emitted (a per-band
+  palette would break colour consistency across bands) — so the source decode
+  pass stays whole-image, only the index grid + encoding stream; (b) dithering
+  error diffuses only downward/forward, so band N can finish diffusing into
+  band N+1's first row before N is emitted — the streaming loop must carry the
+  one-row lookahead, not slice accum blindly; (c) `ImageSource::bytes` must be
+  re-decodable per band (keep one `GdImage` open; do not re-run
+  `imagecreatefromstring` per band); (d) tmux passthrough wrapping decorates
+  the FINAL string, so `TmuxPassthroughDecorator` needs a streaming branch
+  (`\x1bPtm;...ST` envelope around the DCS) or streaming must be refused under
+  tmux — decide before building. API sketch above is the contract a later
+  phase should keep so callers can migrate mechanically.
+
+- **#18 GIF/APNG multi-frame decode (deferred).** `ImageSource::fromFile()` /
+  `fromString()` collapse animated inputs to their FIRST frame (GD's
+  `imagecreatefromgif` does this implicitly; APNG decodes as the base PNG).
+  The ported `Animation` value object accepts caller-supplied frames + delays,
+  so nothing is broken — but a turnkey `ImageSource::fromAnimatedFile()` that
+  yields `list<ImageSource>` + per-frame delays was specced and NOT built.
+  Constraints: (a) GD 2.1 exposes no frame API — GIF frame extraction needs
+  ext-imagick (not a dependency of this lib and not installable in every CI
+  runner), a pure-PHP LZW/giflib bridge, or shelling out (`gifsicle`/ffmpeg);
+  any of these changes the lib's dependency posture, which is an
+  orchestrator-level decision, not an implementation detail. (b) APNG needs
+  fcTL/fdAT chunk walking over the PNG container (pure PHP is feasible: the
+  chunks are length-prefixed and zlib-inflatable) but frame compositing is
+  dispose-op stateful (none/background/previous) — budget a real state-machine,
+  not a decoder loop. (c) Whatever lands MUST thread `MAX_PIXELS` per frame
+  and across total decoded frames (an animation bomb can be small per-frame
+  and huge in aggregate) and respect the `DiskCache::FORMAT_VERSION` bump rule
+  if renderer-visible behaviour changes.
+
+## This session's API additions (2026-09, upstream-track PR)
+
+- **[kitty() force factory]** `Mosaic::kitty()` mirrors `iterm2()`/`sixel()` —
+  callers previously had to reach through `Mosaic::builder()->withRenderer(new
+  KittyRenderer())` for a Kitty pin. `supportedProtocols()` also lists `ascii`
+  now (the `ascii()` factory predated the roster; the list had drifted).
+- **[fromRgb()]** `ImageSource::fromRgb(string $bytes, int $w, int $h, bool
+  $hasAlpha = false)` ingests a raw RGB24/RGBA scanline buffer with no
+  container: exact-length + `MAX_PIXELS` guards first, one O(n)
+  imagesetpixel pass into a truecolor GD image, then the existing `fromGd()`
+  encode. sugar-reel's `GraphicsRenderer` switched its raw-frame path from a
+  per-frame `toGd()+imagepng` round-trip to this (short/malformed buffers keep
+  the old clamping path). RGBA byte alpha 255=opaque maps to GD 0=opaque via
+  `intdiv((255-$a)*127, 255)`.
+- **[ImageLayer windowing]** The phlix-console-client PosterLoader's
+  hand-rolled policy is now first-class: `ImageLayer::digestFor($bytes,$w,$h)`
+  (content+cell-footprint window key — same bytes at another size is a
+  different terminal allocation), placements register their window digest, and
+  `release(int $id): string` / `releaseAllExcept(array $keepIds):
+  array<int,string>` return the protocol delete sequences to emit when a
+  viewport window moves. The layer takes an OPTIONAL `?Renderer` at
+  construction for exactly that; without one the releases still un-register
+  and report `''`. Deliberate: releasing KEEPS the content→id dedup (ids are
+  content identity; a re-placed image reuses its id and stale scrollback
+  markers repaint correctly), matching the documented `removeById()`
+  never-reuse semantics. The two indexes split on purpose: WINDOW digests
+  (`imageIdForDigest`/`trackedDigests`) describe what is placed NOW, so
+  `release()`, `releaseAllExcept()` and `removeById()` forget the freed id's
+  digests — otherwise a check-then-place viewport would trust a stale entry
+  and skip the re-placement the terminal needs after a scroll-back.
+- **[poster conveniences]** `Mosaic::poster()` / `posterAsync()` /
+  `posterFile()` fetch-or-load → render at cell size → consult/populate a
+  `DiskCache` keyed by `DiskCache::key($url,$w,$h,$protocol)` in ONE call,
+  with the SSRF guards (`allowedHosts` seam) passed straight through to
+  `ImageSource::fromUrl[Async]()`. Null `$cellH` keys on a `-1` sentinel
+  (documented): the aspect-derived height is not stable across image swaps.
+  Default scale for posters is `Scale::Fill` when the mosaic has no explicit
+  scale — cover-cropping against CELL_ASPECT is what keeps portrait posters
+  unsquashed (see the v6 FORMAT_VERSION note).
+- **[fromModeString()]** `Mosaic::fromModeString(string $mode): ?self` parses
+  `auto|sixel|kitty|iterm2|halfblock|half|ansi|quarterblock|quarter|ascii|
+  ansi256|truecolor|chafa` (case-insensitive, trimmed; `ansi256`/`truecolor`
+  select the AsciiRenderer tinted accordingly — the client config's mapping).
+  Unknown → `null`, never throw, so callers phrase their own error.
+- **[Builder no longer defaults to Sixel]** `MosaicBuilder::build()` with no
+  renderer auto-detects via the same `Mosaic::auto()` path (and threads a
+  builder dither into the auto-resolved SixelRenderer when detection lands
+  there). The old silent-Sixel default emitted DCS payloads a non-Sixel
+  terminal cannot display. Tests that depend on the detection outcome MUST
+  clear the terminal env keys (see MosaicBuilderTest::setUp) — `Detect::probe()`
+  reads live env and is NOT cached (`cached()` is the caching wrapper).
+- **[auto() restructured]** `Mosaic::auto()` is now one path with two stages:
+  `Detect::probe()` is authoritative when it identifies any graphics protocol;
+  candy-palette's `TerminalProbe` runs ONLY as the explicit fallback when
+  Detect found none, and its Kitty/ITerm2 hints feed the same
+  `fromCapability()` selection (tmux wrap included) instead of a parallel
+  hand-rolled construction. Precedence everywhere: kitty → iterm2 → sixel →
+  chafa → halfblock. The old palette branches had a latent bug (passed
+  `has(Color256)` as `Capability::kitty()`'s `$inTmux` arg) — gone with the
+  unification.
+- **[Sixel alpha is real]** `SixelRenderer::supportsAlpha()` is now `true` and
+  the encoder emits DEC's `#0;2;P` transparent-background register when (and
+  only when) the resized canvas contains fully-transparent (GD alpha 127)
+  pixels — palette indices then shift to 1..N and hole pixels are simply never
+  painted (and diffuse no dither error). Opaque images encode byte-for-byte
+  exactly as before, so every pre-existing sixel snapshot stays valid. GD
+  averages alpha during `imagecopyresampled`, so only exact-127 counts as a
+  hole; blended edge pixels keep their colour deliberately.
+- **[Sixel alpha perf note]** The transparency probe (`hasTransparentPixels`)
+  is a full `imagecolorat` sweep of the pixel canvas on every render — cheap
+  per pixel but the hot sixel path (video frames) pays one extra
+  O(pixelW·pixelH) pass even for opaque sources, where it can never
+  short-circuit. Deliberate: the background register must be decided before
+  median-cut, so folding the probe into the sampling/grid passes cannot
+  remove the dependency, and gating on container alpha is blind here because
+  GD re-encodes every decoded source as colour-type-6 PNG. The deferred
+  streaming encode (#17) is the natural place to eliminate it (band-local
+  hole discovery).

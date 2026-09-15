@@ -19,6 +19,9 @@ use SugarCraft\Mosaic\TmuxPassthroughDecorator;
 use SugarCraft\Palette\Probe\TerminalProbe;
 use SugarCraft\Palette\Probe\ProbeReport;
 use SugarCraft\Palette\Probe\Capability as PaletteCapability;
+use React\Promise\PromiseInterface;
+
+use function React\Promise\resolve;
 
 /**
  * Public facade — the "Picker" from ratatui-image.
@@ -49,6 +52,13 @@ final class Mosaic
      */
     private const CELL_ASPECT = 2.0;
 
+    /**
+     * Height sentinel for {@see poster()}/{@see posterAsync()}/{@see posterFile()}
+     * cache keys when the caller lets the aspect ratio derive the cell height —
+     * the key must still be a stable integer.
+     */
+    private const AUTO_HEIGHT = -1;
+
     public function __construct(
         private readonly Renderer $renderer,
         private readonly Capability $capability,
@@ -60,41 +70,40 @@ final class Mosaic
     /**
      * Probe the terminal and pick the best available protocol.
      *
-     * Uses environment variables; DA1 probing is handled separately
-     * (PR5). Caches the result per-process via {@see Detect::cached()}.
+     * Full capability resolution every call: environment variables, DA1
+     * sixel query and XTWINOPS font-size probing via {@see Detect::probe()}.
+     * Wrap in {@see Detect::cached()} at the application boundary when the
+     * TTY round-trips should happen exactly once per process.
+     *
+     * Mirrors charmbracelet/x/mosaic Detect+best-backend selection.
      */
     public static function probe(): self
     {
         // Use Detect::probe() for full capability resolution including
-        // DA1 querying (sixel) and XTWINOPS font-size probing.  The
-        // result is cached per-process, so the TTY I/O happens once.
-        $cap      = Detect::probe();
-        $renderer = self::bestBackend($cap);
-
-        // When running inside tmux, wrap all renderer output in the
-        // tmux passthrough envelope so DCS/APC/OSC sequences pass
-        // through to the inner terminal.
-        if ($cap->inTmux) {
-            $renderer = new TmuxPassthroughDecorator($renderer);
-        }
-
-        return new self($renderer, $cap, null, null, null);
+        // DA1 querying (sixel) and XTWINOPS font-size probing.
+        return self::fromCapability(Detect::probe());
     }
 
     /**
-     * Auto-detect the best renderer using TerminalProbe.
+     * Auto-detect the best renderer.
      *
-     * NEVER throws — falls back to BasicAscii (HalfBlock) on every error.
+     * NEVER throws — falls back to HalfBlock on every error.
      * This is the safe, user-friendly entry point for new users.
      *
-     * Detection strategy: Primary detection via Detect::probe() which sends
-     * DA1 queries to the terminal for sixel capability detection and probes
-     * font size via XTWINOPS. This is the authoritative detection path.
-     * If Detect::probe() throws (e.g., not a TTY, probing times out),
-     * falls back to TerminalProbe capabilities from candy-palette via
-     * autoFromPalette(). If that also fails, falls back to HalfBlock.
+     * Detection strategy: one path, two stages.
      *
-     * Precedence: Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii
+     *  1. {@see Detect::probe()} is the authoritative stage — environment
+     *     variables plus DA1/XTWINOPS TTY queries. If it identifies any
+     *     graphics protocol (Kitty, iTerm2, Sixel, Chafa) that answer wins.
+     *  2. Only when Detect finds no graphics protocol at all does the
+     *     explicit fallback run: candy-palette's {@see TerminalProbe}
+     *     environment-derived {@see ProbeReport}, which can still spot a
+     *     Kitty-keyboard- or iTerm2-advertising terminal Detect's env table
+     *     missed. Its result feeds the same {@see self::fromCapability()}
+     *     selection; if the report yields nothing either, the Detect
+     *     snapshot stands and HalfBlock (always available) is chosen.
+     *
+     * Precedence: kitty → iterm2 → sixel → chafa → halfblock
      *
      * @see Mosaic::diagnose() for structured probe report
      * @see Detect::probe() for the primary TTY-probing implementation
@@ -102,25 +111,20 @@ final class Mosaic
     public static function auto(): self
     {
         try {
-            // Detect::probe() is the primary detection path: sends DA1 queries
-            // for sixel capability and XTWINOPS for font-size probing. Results
-            // are cached per-process. If this succeeds we have a definitive answer.
             $cap = Detect::probe();
-            $renderer = self::bestBackend($cap);
-
-            if ($cap->inTmux) {
-                $renderer = new TmuxPassthroughDecorator($renderer);
-            }
-
-            return new self($renderer, $cap, null, null, null);
-
         } catch (\Throwable) {
-            // Detect::probe() threw (not a TTY, probing timeout, etc.).
-            // Fall back to TerminalProbe from candy-palette which uses
-            // environment-variable detection only (no TTY I/O). If that
-            // also fails, fall back to HalfBlock (always available).
-            return self::autoFromPalette();
+            // Detect::probe() is documented never to throw; this belt keeps
+            // auto()'s own never-throws contract if that guarantee regresses.
+            $cap = null;
         }
+
+        if ($cap !== null && self::hasGraphicsProtocol($cap)) {
+            return self::fromCapability($cap);
+        }
+
+        // No graphics protocol found by the authoritative stage — consult
+        // candy-palette's env-derived report as the explicit fallback.
+        return self::autoFromPalette($cap ?? Capability::unknown());
     }
 
     /**
@@ -136,58 +140,45 @@ final class Mosaic
     }
 
     /**
-     * Auto-detect using candy-palette's TerminalProbe when Detect::probe() is unavailable.
+     * Explicit fallback detection via candy-palette's TerminalProbe.
      *
-     * Uses TerminalProbe to check TrueColor, Color256, and BasicAscii capabilities
-     * before falling back to HalfBlock. This provides graceful degradation for
-     * environments where TTY probing is not possible (daemons, CI, etc.).
+     * Only consulted when {@see Detect::probe()} identified no graphics
+     * protocol. The palette report can still see Kitty/iTerm2 environment
+     * advertisements Detect's env table misses; anything else keeps the
+     * Detect snapshot (whose bestBackend lands on HalfBlock).
      */
-    private static function autoFromPalette(): self
+    private static function autoFromPalette(Capability $fallbackCap): self
     {
         try {
             $report = TerminalProbe::run();
         } catch (\Throwable) {
-            // TerminalProbe itself threw — fall back to HalfBlock
-            return self::halfBlock();
+            // TerminalProbe itself threw — keep the Detect snapshot.
+            return self::fromCapability($fallbackCap);
         }
 
-        // Map palette capabilities to mosaic renderers
-        // Prefer: Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii
-
-        // Check for Kitty keyboard support (implies Kitty protocol)
+        // Kitty keyboard support implies the Kitty graphics protocol.
         if ($report->has(PaletteCapability::KittyKeyboard)) {
-            // If we also have truecolor, Kitty is ideal; otherwise fall back
-            $renderer = new KittyRenderer();
-            $cap = Capability::kitty(null, $report->has(PaletteCapability::Color256));
-            return new self($renderer, $cap, null, null, null);
+            return self::fromCapability(Capability::kitty($fallbackCap->cellSize, $fallbackCap->inTmux));
         }
 
-        // Check for iTerm2 inline image support
+        // iTerm2 inline image support.
         if ($report->has(PaletteCapability::ITerm2)) {
-            $renderer = new Iterm2Renderer();
-            $cap = Capability::universal();
-            return new self($renderer, $cap, null, null, null);
+            return self::fromCapability(Capability::iterm2($fallbackCap->cellSize, $fallbackCap->inTmux));
         }
 
-        // Check for TrueColor (24-bit) support — HalfBlock with color
-        if ($report->has(PaletteCapability::TrueColor)) {
-            // TrueColor terminals support HalfBlock with 24-bit color
-            return self::halfBlock();
-        }
+        return self::fromCapability($fallbackCap);
+    }
 
-        // Check for 256-color support
-        if ($report->has(PaletteCapability::Color256)) {
-            // At least 256 colors available
-            return self::halfBlock();
-        }
-
-        // NoColor terminal — still usable with HalfBlock (monochrome fallback)
-        if ($report->has(PaletteCapability::NoColor)) {
-            return self::halfBlock();
-        }
-
-        // For everything else (BasicAscii or unknown), HalfBlock is the safe fallback
-        return self::halfBlock();
+    /** Force the Kitty graphics-protocol renderer. */
+    public static function kitty(): self
+    {
+        return new self(
+            new KittyRenderer(),
+            Capability::universal(),
+            null,
+            null,
+            null,
+        );
     }
 
     /** Force the iTerm2 / WezTerm inline-image renderer. */
@@ -293,14 +284,24 @@ final class Mosaic
 
     /**
      * Return a new Mosaic with a different dither algorithm.
-     * Only meaningful when the current renderer is a SixelRenderer;
-     * returns the same instance otherwise.
+     * Only meaningful when the current renderer is a SixelRenderer (also
+     * through a tmux passthrough envelope); returns the same instance
+     * otherwise.
      */
     public function withDither(Dither $dither): self
     {
-        if ($this->renderer instanceof SixelRenderer) {
-            return new self(new SixelRenderer($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale);
+        if ($this->renderer instanceof TmuxPassthroughDecorator) {
+            $inner = $this->renderer->inner();
+
+            return $inner instanceof SixelRenderer
+                ? new self(new TmuxPassthroughDecorator($inner->withDither($dither)), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale)
+                : $this;
         }
+
+        if ($this->renderer instanceof SixelRenderer) {
+            return new self($this->renderer->withDither($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale);
+        }
+
         return $this;
     }
 
@@ -313,11 +314,20 @@ final class Mosaic
     }
 
     /**
-     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'chafa'.
+     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'ascii' | 'chafa'.
      */
     public function protocol(): string
     {
         return $this->renderer->name();
+    }
+
+    /**
+     * The renderer this mosaic encodes through (tmux decorator included
+     * when the terminal runs under tmux).
+     */
+    public function renderer(): Renderer
+    {
+        return $this->renderer;
     }
 
     /**
@@ -330,7 +340,7 @@ final class Mosaic
      */
     public static function supportedProtocols(): array
     {
-        return ['kitty', 'sixel', 'iterm2', 'halfblock', 'quarterblock', 'chafa'];
+        return ['kitty', 'sixel', 'iterm2', 'halfblock', 'quarterblock', 'ascii', 'chafa'];
     }
 
     /**
@@ -494,6 +504,35 @@ final class Mosaic
     }
 
     /**
+     * Whether the snapshot identifies at least one pixel-graphics protocol.
+     * HalfBlock alone does not count — it is the universal text fallback.
+     */
+    private static function hasGraphicsProtocol(Capability $cap): bool
+    {
+        return $cap->kitty || $cap->iterm2 || $cap->sixel || $cap->chafa;
+    }
+
+    /**
+     * Mint the mosaic for a capability snapshot: best backend for the
+     * detected protocols, tmux passthrough envelope added when the terminal
+     * runs under tmux. Shared by {@see probe()}, {@see auto()} and the
+     * palette fallback so every detection path ends in one place.
+     */
+    private static function fromCapability(Capability $cap): self
+    {
+        $renderer = self::bestBackend($cap);
+
+        // When running inside tmux, wrap all renderer output in the
+        // tmux passthrough envelope so DCS/APC/OSC sequences pass
+        // through to the inner terminal.
+        if ($cap->inTmux) {
+            $renderer = new TmuxPassthroughDecorator($renderer);
+        }
+
+        return new self($renderer, $cap, null, null, null);
+    }
+
+    /**
      * Set the scale mode for rendering.
      */
     public function withScale(Scale $scale): self
@@ -521,6 +560,181 @@ final class Mosaic
             $width,
             $height ?? (int) round($width / $image->aspectRatio()),
         );
+    }
+
+    /**
+     * Build a Mosaic from a protocol mode string.
+     *
+     * Accepts the vocabulary terminals/apps configure image output with —
+     * `auto`, `sixel`, `kitty`, `iterm2`, `halfblock` (aliases `half`,
+     * `ansi`), `quarterblock` (alias `quarter`), `ascii`, `ansi256`,
+     * `truecolor`, `chafa` — case-insensitively, whitespace-trimmed.
+     * `ansi256`/`truecolor` select the ASCII ramp renderer tinted with the
+     * matching colour mode, mirroring how the client config maps them.
+     *
+     * Returns null on an unknown mode so callers can phrase the error in
+     * their own words rather than unwinding an exception.
+     */
+    public static function fromModeString(string $mode): ?self
+    {
+        return match (strtolower(trim($mode))) {
+            'auto'         => self::auto(),
+            'sixel'        => self::sixel(),
+            'kitty'        => self::kitty(),
+            'iterm2'       => self::iterm2(),
+            'halfblock', 'half', 'ansi'  => self::halfBlock(),
+            'quarterblock', 'quarter'    => self::quarterBlock(),
+            'ascii'        => self::ascii(),
+            'ansi256'      => self::ascii(AsciiColorMode::Ansi256),
+            'truecolor'    => self::ascii(AsciiColorMode::TrueColor),
+            'chafa'        => self::chafa(),
+            default        => null,
+        };
+    }
+
+    /**
+     * Fetch a poster image from $url and render it at cell size in one call,
+     * consulting and populating an optional on-disk render cache.
+     *
+     * The synchronous companion of {@see posterAsync()}: fetches through
+     * {@see ImageSource::fromUrl()} — so the scheme allow-list, redirect
+     * re-validation and private/reserved-IP SSRF deny-list all apply, with
+     * $allowedHosts as the opt-in internal-endpoint seam — then renders via
+     * {@see render()}. When no explicit scale was configured the poster
+     * renders with {@see Scale::Fill}, cropping to the cell box's true
+     * display aspect so portrait posters are never squashed (see CELL_ASPECT).
+     *
+     * $cache, when given, is keyed with
+     * {@see DiskCache::key()} over ($url, $cellW, $cellH, protocol|scale) —
+     * a hit returns the stored bytes without touching the network. Pass
+     * {@see DiskCache::key()}-compatible explicit dimensions on both sides of
+     * a process restart for stable hits; a null $cellH hashes as the sentinel
+     * auto-height.
+     *
+     * @param string           $url          Absolute http(s) URL of the poster.
+     * @param int              $cellW        Target width in terminal cells.
+     * @param int|null         $cellH        Target height in cells (null = from aspect ratio).
+     * @param DiskCache|null   $cache        Optional render cache; consulted first, populated on miss.
+     * @param array<string>|null $allowedHosts Hosts allowed to bypass the SSRF deny-list.
+     * @throws \InvalidArgumentException  if the fetch or decode fails (SSRF, bad URL, unsupported image).
+     * @throws \RuntimeException          if GD cannot decode the fetched bytes (or is absent).
+     */
+    public function poster(
+        string $url,
+        int $cellW,
+        ?int $cellH = null,
+        ?DiskCache $cache = null,
+        ?array $allowedHosts = null,
+    ): string {
+        $key = $this->posterCacheKey($url, $cellW, $cellH);
+        if ($cache !== null) {
+            $cached = $cache->get($key);
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
+        $rendered = $this->renderPoster(ImageSource::fromUrl($url, allowedHosts: $allowedHosts), $cellW, $cellH);
+        $cache?->put($key, $rendered);
+
+        return $rendered;
+    }
+
+    /**
+     * Async variant of {@see poster()} — resolves with the rendered bytes.
+     *
+     * Fetches through {@see ImageSource::fromUrlAsync()} so the per-hop SSRF
+     * guarding applies on the event loop; a cache hit resolves immediately
+     * without touching the network. Cache population happens inside the
+     * fulfillment chain, so a rejected fetch stores nothing. Error semantics
+     * are inherited from the source call: an unsupported URL scheme throws
+     * synchronously, SSRF/host rejections come back as a rejected promise.
+     * The render itself is synchronous on the event loop (decode + resample
+     * + encode) — for large posters route the source through
+     * {@see Mosaic::adaptive()} + {@see AdaptiveImage::withAsync()} or
+     * offload the whole call so the loop keeps serving other sockets.
+     *
+     * @return PromiseInterface<string>
+     */
+    public function posterAsync(
+        string $url,
+        int $cellW,
+        ?int $cellH = null,
+        ?DiskCache $cache = null,
+        ?array $allowedHosts = null,
+    ): PromiseInterface {
+        $key = $this->posterCacheKey($url, $cellW, $cellH);
+        if ($cache !== null) {
+            $cached = $cache->get($key);
+            if ($cached !== null) {
+                return resolve($cached);
+            }
+        }
+
+        $poster = $this->scaledForPoster();
+
+        return ImageSource::fromUrlAsync($url, allowedHosts: $allowedHosts)
+            ->then(static function (ImageSource $source) use ($poster, $cellW, $cellH, $cache, $key): string {
+                $rendered = $poster->render($source, $cellW, $cellH);
+                $cache?->put($key, $rendered);
+
+                return $rendered;
+            });
+    }
+
+    /**
+     * Render a poster that already lives on local disk, with the same
+     * Fill-by-default scaling and optional {@see DiskCache} windowing as
+     * {@see poster()}. The cache key is derived from $path in place of a URL.
+     *
+     * @throws \InvalidArgumentException  if the file cannot be read or decoded.
+     */
+    public function posterFile(
+        string $path,
+        int $cellW,
+        ?int $cellH = null,
+        ?DiskCache $cache = null,
+    ): string {
+        $key = $this->posterCacheKey($path, $cellW, $cellH);
+        if ($cache !== null) {
+            $cached = $cache->get($key);
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
+        $rendered = $this->renderPoster(ImageSource::fromFile($path), $cellW, $cellH);
+        $cache?->put($key, $rendered);
+
+        return $rendered;
+    }
+
+    /**
+     * This mosaic with Fill scaling applied when no scale was chosen —
+     * posters crop to the cell box instead of squashing into it.
+     */
+    private function scaledForPoster(): self
+    {
+        return $this->scale === null ? $this->withScale(Scale::Fill) : $this;
+    }
+
+    private function renderPoster(ImageSource $source, int $cellW, ?int $cellH): string
+    {
+        return $this->scaledForPoster()->render($source, $cellW, $cellH);
+    }
+
+    /**
+     * Poster cache key: DiskCache::key() over (url, cellW, cellH-sentinel,
+     * protocol|scale). The scale rides in the protocol segment because it
+     * changes the encoded bytes (Fill crops, Fit letterboxes) for an
+     * otherwise identical (url, size, protocol) tuple — two mosaics at
+     * different scales must never cross-serve each other's cache entries.
+     */
+    private function posterCacheKey(string $urlOrPath, int $cellW, ?int $cellH): string
+    {
+        $protocol = $this->protocol() . '|' . ($this->scale ?? Scale::Fill)->name;
+
+        return DiskCache::key($urlOrPath, $cellW, $cellH ?? self::AUTO_HEIGHT, $protocol);
     }
 }
 
@@ -567,8 +781,8 @@ final class MosaicBuilder
     /**
      * Configure the builder to use Sixel rendering with an optional dither.
      *
-     * This is the explicit alternative to relying on build() defaulting to
-     * Sixel when no renderer is set — using this factory makes the intent
+     * This is the explicit way to pin Sixel — build() no longer defaults to
+     * it, auto-detecting instead — so using this method makes the intent
      * unambiguous in calling code.
      *
      * ```php
@@ -591,28 +805,53 @@ final class MosaicBuilder
     }
 
     /**
-     * Create a memoizing AdaptiveImage for the given source.
+     * Build the configured Mosaic.
      *
-     * The returned AdaptiveImage re-encodes on demand using this Mosaic
-     * instance (so scale, dither, and tmux wrapping are all applied).
+     * When no renderer was set, the terminal is auto-detected exactly as
+     * {@see Mosaic::auto()} does — never silently defaulting to Sixel, which
+     * would emit DCS payloads a non-Sixel terminal cannot display. A dither
+     * configured on the builder is honoured on any Sixel backend, explicit
+     * or auto-detected, wrapped in tmux passthrough or bare.
      */
     public function build(): Mosaic
     {
         $renderer = $this->renderer;
 
-        // When no renderer is specified, default to sixel with the configured
-        // dither (if any); when a SixelRenderer is passed we honour its dither.
         if ($renderer === null) {
-            $renderer = new SixelRenderer($this->dither ?? Dither::FloydSteinberg);
-            $cap = Capability::unknown();
-        } elseif ($renderer instanceof SixelRenderer && $this->dither !== null) {
-            // Builder dither overrides an explicit SixelRenderer dither.
-            $renderer = new SixelRenderer($this->dither);
-            $cap = Capability::universal();
+            $detected = Mosaic::auto();
+            $renderer = $detected->renderer();
+            $cap      = $detected->capability();
         } else {
             $cap = Capability::universal();
         }
 
+        // Builder dither overrides whatever dither the resolved Sixel backend
+        // carries; on non-Sixel backends it is (as everywhere else) a no-op.
+        if ($this->dither !== null) {
+            $renderer = self::applyDither($renderer, $this->dither);
+        }
+
         return new Mosaic($renderer, $cap, $this->width, $this->height, $this->scale);
+    }
+
+    /**
+     * Swap the dither of a Sixel backend without disturbing a wrapping
+     * tmux passthrough envelope or the renderer's own colour/cell tuning;
+     * non-Sixel renderers are returned as-is (dither only parameterises
+     * Sixel encoding).
+     */
+    private static function applyDither(Renderer $renderer, Dither $dither): Renderer
+    {
+        if ($renderer instanceof TmuxPassthroughDecorator) {
+            $inner = $renderer->inner();
+
+            return $inner instanceof SixelRenderer
+                ? new TmuxPassthroughDecorator($inner->withDither($dither))
+                : $renderer;
+        }
+
+        return $renderer instanceof SixelRenderer
+            ? $renderer->withDither($dither)
+            : $renderer;
     }
 }

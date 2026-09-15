@@ -47,7 +47,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:fake-audio-player-test-double]** `FakeAudioPlayer` test double overrides `buildCommand()` to return a controlled command (or null), enabling testing of the start/stop/isPlaying lifecycle without live ffplay/mpv binaries.
 
-- **[pattern:mosaic-kitty-no-static-factory]** candy-mosaic has `KittyRenderer` class and `Mosaic::iterm2()` but no `Mosaic::kitty()` static factory. For kitty mode, use `new Mosaic(new KittyRenderer(), Capability::universal(), null, null, null)->render(...)` directly. Always check the actual candy-mosaic API rather than assuming naming symmetry.
+- **[pattern:mosaic-kitty-static-factory]** Superseded (candy-mosaic upstream track, ai/mosaic-graphics-upstream): `Mosaic::kitty()` now EXISTS as a force factory mirroring `Mosaic::iterm2()` — use it for kitty mode instead of hand-minting `new Mosaic(new KittyRenderer(), Capability::universal(), null, null, null)`. Raw-GD pixels likewise enter via `ImageSource::fromRgb($bytes, $w, $h)` without a PNG round-trip (see `Render/GraphicsRenderer.php`). Always check the actual candy-mosaic API rather than assuming naming symmetry.
 
 - **[pattern:kitty-uses-dcs-apc-not-osc]** The kitty graphics protocol uses DCS `\x1b_Ga=...` (not the OSC `\x1b]1337;` that iTerm2 uses). These are distinct protocols — kitty uses DCS APC sequences while iTerm2 uses OSC 1337.
 
