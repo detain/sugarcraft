@@ -112,8 +112,8 @@ $key = $matcher->closest(new Color(12, 34, 56), $myColors);
 ```
 
 The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm
-CIEDE2000 search costs ~1 ms on a stock laptop — un-memoised, each search would
-recompute 256 sRGB→Lab conversions (≈40 % overhead; see `NearestColorTest`).
+CIEDE2000 search costs ~1 ms on a stock laptop; recomputing the 256 sRGB→Lab
+conversions per search would add ≈40 % on top (see `NearestColorTest`).
 
 ## Probe — Static Environment Detection
 

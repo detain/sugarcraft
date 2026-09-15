@@ -194,6 +194,20 @@ final class DeltaETest extends TestCase
         DeltaE::cie2000(['l' => 'ten', 'a' => 0.0, 'b' => 0.0], ['l' => 0.0, 'a' => 0.0, 'b' => 0.0]);
     }
 
+    public function testNonFiniteLabComponentsFailLoudly(): void
+    {
+        // is_numeric() admits NAN and overflow strings; they must not leak
+        // poisoned arithmetic downstream as silent NAN distances.
+        foreach ([NAN, \INF, -\INF, '1e999'] as $poison) {
+            try {
+                DeltaE::cie76(['l' => 50.0, 'a' => $poison, 'b' => 0.0], ['l' => 50.0, 'a' => 0.0, 'b' => 0.0]);
+                self::fail('non-finite component was accepted');
+            } catch (\InvalidArgumentException $expected) {
+                self::assertStringContainsString('missing a numeric "a" component', $expected->getMessage());
+            }
+        }
+    }
+
     public function testNumericStringComponentsAreParsed(): void
     {
         // Boundary parsing accepts numeric strings, casts to float internally.

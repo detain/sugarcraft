@@ -13,12 +13,12 @@ namespace SugarCraft\Palette;
  * strategy. The default strategy is EUCLIDEAN in sRGB; the CIE strategies are
  * opt-in perceptual upgrades.
  *
- * Cost control: L*a*b* values for the 240-entry ANSI-256 tail (cube + grey
- * ramp, plus the 16 standard colors) are computed once per process and memoized
- * statically — a CIEDE2000 match otherwise pays 256 conversions per call, and
- * media clients quantize palettes per frame. Measured on PHP 8.3 (see
- * NearestColorTest): a warm CIEDE2000 search over all 256 entries costs well
- * under a millisecond once the memo is primed.
+ * Cost control: L*a*b* values for the full 256-entry ANSI palette (the 16
+ * standard colors, the 6×6×6 cube and the grey ramp) are computed once per
+ * process and memoized statically — a CIEDE2000 match otherwise pays 256
+ * conversions per call, and media clients quantize palettes per frame. Measured
+ * on PHP 8.3 (see NearestColorTest): a warm CIEDE2000 search over all 256
+ * entries costs about 1 ms; re-converting the palette would add ~40 % on top.
  *
  * Palette table: indices 0-15 are the {@see StandardColors} ANSI-16 set; 16-231
  * are the 6×6×6 cube at this library's even 51-step quantization (the exact
@@ -27,7 +27,7 @@ namespace SugarCraft\Palette;
  * table: its cube decode divides with floats instead of `intdiv()`, so indices
  * 16-231 come back wrong (e.g. 17 -> #010933 instead of #000033).
  *
- * On exact ties the lowest palette index wins.
+ * Exact ties resolve to the first matching palette entry (lowest index).
  */
 final class NearestColor
 {

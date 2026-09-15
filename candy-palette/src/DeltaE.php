@@ -145,7 +145,7 @@ final class DeltaE
     }
 
     /**
-     * Parse one Lab triple into trusted floats, failing loudly on malformed input.
+     * Parse one Lab triple into trusted finite floats, failing loudly on malformed input.
      *
      * @return array{0: float, 1: float, 2: float} [L, a, b]
      */
@@ -158,7 +158,15 @@ final class DeltaE
                     Lang::t('deltae.invalid_lab', ['label' => $label, 'key' => $key]),
                 );
             }
-            $components[] = (float) $lab[$key];
+            $value = (float) $lab[$key];
+            if (!is_finite($value)) {
+                // is_numeric() happily admits NAN / "1e999"; those would poison
+                // every downstream sqrt/cos with silent NAN results.
+                throw new \InvalidArgumentException(
+                    Lang::t('deltae.invalid_lab', ['label' => $label, 'key' => $key]),
+                );
+            }
+            $components[] = $value;
         }
         return $components;
     }
