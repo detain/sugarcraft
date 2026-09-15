@@ -232,22 +232,40 @@ final class ReactPumpExtendedTest extends TestCase
         $pump = new ReactPump($loop);
         $safety = $loop->addTimer(5.0, static fn () => $loop->stop());
 
-        // Write a large amount to stress the partial-write path.
-        $input = \fopen('php://temp', 'r+');
-        \fwrite($input, str_repeat("x", 8192));
-        \fseek($input, 0);
+        // Stress the partial-write path with an 8192-byte burst on a REAL,
+        // selectable pipe — not a php://temp memory buffer. The pump's stdin
+        // read is fread(chunkBytes=4096); on a php://temp that holds more than
+        // one chunk, PHP's stdio pulls the whole buffer into userspace and
+        // returns 4096, leaving the remainder buffered. On the next React
+        // StreamSelectLoop tick PHP then warns "4096 bytes of buffered data
+        // lost during stream conversion" — it cannot hand those buffered bytes
+        // to select(). A socketpair is fd-backed (exactly like real host stdin:
+        // tty or pipe), so select() sees only kernel data and fread never
+        // over-buffers. Closing the writer end makes the reader EOF cleanly,
+        // mirroring real end-of-input.
+        $pipe = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $input = $pipe[0];
+        \fwrite($pipe[1], \str_repeat('x', 8192));
+        \fclose($pipe[1]);
 
-        $pump->start(
-            $pair->master(),
-            stdinStream: $input,
-            child: $child,
-        )->then(function (int $code) use (&$exit, $loop, $safety): void {
-            $exit = $code;
-            $loop->cancelTimer($safety);
-        });
+        try {
+            $pump->start(
+                $pair->master(),
+                stdinStream: $input,
+                child: $child,
+            )->then(function (int $code) use (&$exit, $loop, $safety): void {
+                $exit = $code;
+                $loop->cancelTimer($safety);
+            });
 
-        $loop->run();
-        $this->assertSame(0, $exit);
+            $loop->run();
+            $this->assertSame(0, $exit);
+        } finally {
+            if (\is_resource($input)) {
+                \fclose($input);
+            }
+            $pair->master()->close();
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
