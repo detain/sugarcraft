@@ -33,6 +33,24 @@ use SugarCraft\Reel\Subtitle\WebVtt;
 final class Reel
 {
     /**
+     * Fallback cell pixel width when the caller supplies no measurement.
+     *
+     * Deliberately mirrors {@see Player::open()}'s own `$cellPxW` default so the
+     * plumbing cannot change behavior for a caller that never uses
+     * {@see withCellPx()}. Ten by twenty is the long-standing guess this library
+     * made for a text cell — roughly a common font size at default DPI — and it
+     * is only a guess: graphics modes (kitty/sixel/iTerm2) decode at
+     * cells·cellPx, so an unmeasured cell is what makes those modes look soft.
+     * A host that knows its real cell size (candy-mosaic's
+     * {@see \SugarCraft\Mosaic\Mosaic::fontSize()}, derived from the terminal's
+     * XTWINOPS 16t reply) should say so with {@see withCellPx()}.
+     */
+    private const DEFAULT_CELL_PX_W = 10;
+
+    /** Fallback cell pixel height — see {@see DEFAULT_CELL_PX_W} for why 20. */
+    private const DEFAULT_CELL_PX_H = 20;
+
+    /**
      * @param string      $path  Video file path ('' for synthetic/unbound)
      * @param Mode|null   $mode  Rendering mode (null = auto-detect)
      * @param int          $cols  Terminal cell width
@@ -44,6 +62,14 @@ final class Reel
      * @param list<string>|null $allowedHosts  Host allowlist for remote (http(s)) sources,
      *               or null to disable host restriction (SSRF surface — see {@see openUrl()})
      * @param array<array-key, string> $headers  HTTP request headers for a remote source
+     * @param int|null     $cellPxW  Caller-measured pixel width of one terminal cell,
+     *               or null when unset (see {@see DEFAULT_CELL_PX_W})
+     * @param int|null     $cellPxH  Caller-measured pixel height of one terminal cell,
+     *               or null when unset
+     * @param bool         $cellPxSet Sentinel paired with the nullable cell size: true
+     *               only once {@see withCellPx()} supplied BOTH dimensions, so the
+     *               private update helper can tell "explicitly set" from "not passed"
+     *               (a null prop alone is ambiguous). Invariant: true ⇒ both ints non-null.
      */
     private function __construct(
         private readonly string $path,
@@ -56,6 +82,9 @@ final class Reel
         private readonly ?string $subtitlePath = null,
         private readonly ?array $allowedHosts = null,
         private readonly array $headers = [],
+        private readonly ?int $cellPxW = null,
+        private readonly ?int $cellPxH = null,
+        private readonly bool $cellPxSet = false,
     ) {
     }
 
@@ -231,6 +260,38 @@ final class Reel
     }
 
     /**
+     * The caller-supplied pixel size of one terminal cell, as `[width, height]`,
+     * or null when none was set.
+     *
+     * Null is the documented default, not a failure: it means "use the 10×20
+     * assumption the pipeline has always made". See {@see withCellPx()}.
+     *
+     * @return array{0:int,1:int}|null
+     */
+    public function cellPx(): ?array
+    {
+        if (!$this->cellPxSet || $this->cellPxW === null || $this->cellPxH === null) {
+            return null;
+        }
+
+        return [$this->cellPxW, $this->cellPxH];
+    }
+
+    /**
+     * The cell pixel size to hand to `Player::open()`: the caller's measurement
+     * when {@see withCellPx()} supplied one, otherwise the historical fallback.
+     *
+     * Shared by `toPlayer()` and `play()` so the two cannot drift apart — they
+     * must build the same Player.
+     *
+     * @return array{0:int,1:int}
+     */
+    private function resolveCellPx(): array
+    {
+        return $this->cellPx() ?? [self::DEFAULT_CELL_PX_W, self::DEFAULT_CELL_PX_H];
+    }
+
+    /**
      * Set the rendering mode. Returns a new Reel (immutable).
      */
     public function withMode(Mode $mode): self
@@ -342,6 +403,37 @@ final class Reel
     }
 
     /**
+     * Tell the player the real pixel size of one terminal cell.
+     *
+     * Graphics modes (kitty, sixel, iTerm2) decode at cells·cellPx so the image
+     * fills the terminal's pixel box, which makes the cell geometry a decode
+     * input rather than a render detail. Only the HOST knows it: a terminal's
+     * font size comes from a query the host has already answered (candy-mosaic's
+     * {@see \SugarCraft\Mosaic\Mosaic::fontSize()} exposes it, parsed from the
+     * XTWINOPS 16t reply), and sugar-reel must not issue terminal queries from
+     * inside a Model builder — that would block and would fight whatever the
+     * embedding program already owns. So the measurement is injected here.
+     *
+     * When this is never called, {@see toPlayer()} and {@see play()} fall back to
+     * the historical 10×20 assumption, keeping behavior identical for every
+     * existing caller.
+     *
+     * @param int $w Pixel width of one cell (≥ 1)
+     * @param int $h Pixel height of one cell (≥ 1)
+     * @throws \InvalidArgumentException When either dimension is not positive.
+     */
+    public function withCellPx(int $w, int $h): self
+    {
+        if ($w < 1 || $h < 1) {
+            throw new \InvalidArgumentException(
+                Lang::t('player.cellpx_non_positive', ['w' => $w, 'h' => $h]),
+            );
+        }
+
+        return $this->with(cellPxW: $w, cellPxH: $h, cellPxSet: true);
+    }
+
+    /**
      * Build the playback Model from the configured options WITHOUT running it.
      *
      * This is the embed-without-owning-the-loop seam. A host that already drives
@@ -393,6 +485,11 @@ final class Reel
             }
         }
 
+        // Cell geometry is threaded through instead of assumed: an embedding host
+        // that measured its terminal passes withCellPx() and gets a decode sized
+        // to the real pixel box; one that did not keeps the historical 10×20.
+        [$cellPxW, $cellPxH] = $this->resolveCellPx();
+
         return Player::open(
             $this->path,
             $this->cols,
@@ -401,8 +498,8 @@ final class Reel
             $resolvedMode,
             $this->loop,
             $this->ramp,
-            10,
-            20,
+            $cellPxW,
+            $cellPxH,
             $subtitles,
             $this->headers,
         );
@@ -439,8 +536,22 @@ final class Reel
         }
 
         // Create the Player with the configured dimensions, fps, render mode, loop flag and ramp,
-        // and the remote-source request headers (empty for a local file).
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop, $this->ramp, 10, 20, $subtitles, $this->headers);
+        // the remote-source request headers (empty for a local file), and the caller's measured
+        // cell pixel size when one was supplied (10×20 otherwise — see withCellPx()).
+        [$cellPxW, $cellPxH] = $this->resolveCellPx();
+        $player = Player::open(
+            $path,
+            $this->cols,
+            $this->rows,
+            $this->fps,
+            $resolvedMode,
+            $loop,
+            $this->ramp,
+            $cellPxW,
+            $cellPxH,
+            $subtitles,
+            $this->headers,
+        );
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -463,6 +574,12 @@ final class Reel
      * @param string|null        $subtitlePath  Path to subtitle file, leave null to keep current
      * @param list<string>|null  $allowedHosts  Remote-host allowlist, leave null to keep current
      * @param array<array-key, string>|null $headers  HTTP request headers, leave null to keep current
+     * @param int|null   $cellPxW Caller-measured cell pixel width, leave null to keep current
+     * @param int|null   $cellPxH Caller-measured cell pixel height, leave null to keep current
+     * @param bool|null  $cellPxSet Sentinel for the pair, leave null to keep current
+     *
+     * The cellPx trio is coupled: pass all three together (as withCellPx() does) —
+     * dimensions without cellPxSet stay inert, matching cellPx()'s set ⇒ non-null invariant.
      */
     private function with(
         ?string $path = null,
@@ -475,6 +592,9 @@ final class Reel
         ?string $subtitlePath = null,
         ?array $allowedHosts = null,
         ?array $headers = null,
+        ?int $cellPxW = null,
+        ?int $cellPxH = null,
+        ?bool $cellPxSet = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -490,6 +610,9 @@ final class Reel
             $subtitlePath ?? $this->subtitlePath,
             $allowedHosts ?? $this->allowedHosts,
             $headers ?? $this->headers,
+            $cellPxW ?? $this->cellPxW,
+            $cellPxH ?? $this->cellPxH,
+            $cellPxSet ?? $this->cellPxSet,
         );
     }
 

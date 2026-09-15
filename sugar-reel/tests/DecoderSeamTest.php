@@ -201,6 +201,109 @@ final class DecoderSeamTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Reel::withCellPx() — measured terminal cell geometry threaded to the decoder
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox cellPx() is null until withCellPx() supplies a measurement
+     */
+    public function testCellPxIsUnsetByDefault(): void
+    {
+        $this->assertNull(Reel::open('/tmp/x.mkv')->cellPx());
+        $this->assertNull(Reel::new()->cellPx());
+        // Unrelated builders must not conjure one.
+        $this->assertNull(Reel::open('/tmp/x.mkv')->withSize(80, 24)->withLoop(true)->cellPx());
+    }
+
+    /**
+     * @testdox withCellPx() is immutable and survives the rest of the value chain
+     */
+    public function testWithCellPxIsImmutable(): void
+    {
+        $base = Reel::open('/tmp/x.mkv');
+        $measured = $base->withCellPx(7, 14);
+
+        $this->assertNotSame($base, $measured, 'a with*() builder returns a new Reel');
+        $this->assertNull($base->cellPx(), 'the original is untouched');
+        $this->assertSame([7, 14], $measured->cellPx());
+        // Later builders must PRESERVE the measurement (the with() helper carries it) —
+        // a host configures size/mode/ramp in any order after measuring the cell.
+        $this->assertSame([7, 14], $measured->withSize(100, 40)->withRamp('dense')->cellPx());
+    }
+
+    /**
+     * @testdox withCellPx() rejects a zero or negative dimension at the boundary
+     */
+    public function testWithCellPxRejectsNonPositiveDimensions(): void
+    {
+        foreach ([[0, 20], [-1, 20], [10, 0], [10, -1]] as [$w, $h]) {
+            try {
+                Reel::open('/tmp/x.mkv')->withCellPx($w, $h);
+                $this->fail("withCellPx({$w}, {$h}) must fail loud, not be clamped");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString("got {$w}x{$h}", $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * @testdox toPlayer() threads withCellPx(7,14) into the Player AND its decode geometry
+     *
+     * The point of the seam is that a graphics mode decodes at cells·cellPx, so a
+     * caller that measured its terminal gets real detail instead of a 10×20 guess.
+     * Asserting the pixel size of the first decoded frame (4×3 cells at 7×14 →
+     * 28×42) proves the value reaches the decoder, not merely the Player field.
+     */
+    public function testToPlayerThreadsMeasuredCellPx(): void
+    {
+        // A local .gif decodes through GifDecoder (pure PHP + GD); ffprobe is
+        // only queried for metadata and degrades gracefully, so gate on GD alone.
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd required to build a test GIF');
+        }
+        $gif = $this->tempGif();
+
+        $player = Reel::open($gif)
+            ->withSize(4, 3)
+            ->withMode(Mode::Kitty)
+            ->withCellPx(7, 14)
+            ->toPlayer();
+
+        $this->assertSame(7, $player->cellPxW);
+        $this->assertSame(14, $player->cellPxH);
+
+        $frame = $player->decoder->next();
+        $this->assertNotNull($frame, 'the 4x3 clip must yield a frame');
+        $this->assertSame(28, $frame->w, '4 cells x 7px per cell');
+        $this->assertSame(42, $frame->h, '3 cells x 14px per cell');
+    }
+
+    /**
+     * @testdox toPlayer() WITHOUT withCellPx() still yields the historical 10×20 (BC)
+     *
+     * Every caller written before this plumbing exists passed no cell size and got
+     * 10×20. That must stay exactly true — the same 4×3 Kitty geometry decodes at
+     * 40×60 px, byte for byte as before.
+     */
+    public function testToPlayerFallsBackToLegacyCellPx(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd required to build a test GIF');
+        }
+        $gif = $this->tempGif();
+
+        $player = Reel::open($gif)->withSize(4, 3)->withMode(Mode::Kitty)->toPlayer();
+
+        $this->assertSame(10, $player->cellPxW);
+        $this->assertSame(20, $player->cellPxH);
+
+        $frame = $player->decoder->next();
+        $this->assertNotNull($frame, 'the 4x3 clip must yield a frame');
+        $this->assertSame(40, $frame->w);
+        $this->assertSame(60, $frame->h);
+    }
+
+    // -------------------------------------------------------------------------
     // SSRF advisory (warnRemoteSsrf)
     // -------------------------------------------------------------------------
 

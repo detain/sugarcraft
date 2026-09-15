@@ -172,6 +172,46 @@ $player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
   unbound `Reel::new()` throws `InvalidArgumentException` rather than
   silently substituting the synthetic pattern that `play()` uses.
 
+#### Tell the player how big one cell is
+
+In the graphics modes (`kitty`, `sixel`, `iTerm2`) the terminal's cell pixel size
+is a **decode** input: the frame is rasterised at `cols × cellPxW` by
+`rows × cellPxH` so the image fills the pixel box instead of being resampled up
+from one pixel per cell. Only the host knows that number, so `Reel` accepts it
+through `withCellPx()` and forwards it to `Player::open()` (and to `play()`,
+which builds the same player internally):
+
+```php
+use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Reel\Reel;
+use SugarCraft\Reel\Render\Mode;
+
+// Mosaic::auto()/probe() runs Detect::probe(), whose XTWINOPS 16t round-trip
+// yields ['cellWidth'=>…, 'cellHeight'=>…] — or null whenever there is no
+// interactive TTY (CI, piped stdout) or the terminal does not answer within
+// ~100 ms. Cache it at the application boundary; do not re-query per frame.
+$cell = Mosaic::auto()->fontSize();
+
+$reel = Reel::open('clip.mp4')
+    ->withMode(Mode::Kitty)
+    ->withSize(120, 45);
+
+if ($cell !== null) {
+    $reel = $reel->withCellPx($cell['cellWidth'], $cell['cellHeight']);
+}
+
+// 120·cellWidth × 45·cellHeight pixels when measured; the historical
+// 10×20 assumption when the terminal gave nothing back.
+$player = $reel->toPlayer();
+```
+
+`Reel` deliberately does **not** probe the terminal itself: a query issued from
+inside a Model builder would block and would contend with whatever the embedding
+program already owns, so the measurement is injected. Callers that never
+`withCellPx()` keep the long-standing 10×20 assumption unchanged (it is
+`Player::open()`'s own default), and `cellPx()` returns `null` until one is
+supplied — a non-positive dimension throws `InvalidArgumentException`.
+
 ## Keyboard controls
 
 | Key | Action |

@@ -34,6 +34,7 @@ return [
     'player.playing' => 'playing',
     'player.quit' => 'quit',
     'player.no_source_for_embedding' => 'Reel::toPlayer() needs a bound source; call Reel::open(path) or Reel::openUrl(url, headers) first',
+    'player.cellpx_non_positive' => 'Cell pixel size must be positive, got {w}x{h}',
 
     // Controls help
     'controls.help' => 'space=play  q=quit  m=mode  ? for help',
