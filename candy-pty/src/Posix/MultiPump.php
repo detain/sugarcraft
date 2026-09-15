@@ -104,11 +104,36 @@ final class MultiPump
      * exit code (null when there was no child or the child had not
      * captured an exit code at teardown).
      *
+     * ## Caller-bounding contract (E717)
+     *
+     * Carries no internal deadline; callers MUST bound. With the default
+     * `$pumpDeadlineUs = null` the loop only finishes once every session
+     * reaches its done state, so one live-but-silent child pins the whole
+     * multiplexer forever. Pass `$pumpDeadlineUs` (microseconds from this
+     * call) for an opt-in bound: on expiry run() returns the partial exit
+     * map WITHOUT marking anything done — sessions stay live and a later
+     * run() call resumes draining them. Nothing is killed.
+     *
+     * @param int<1, max>|null $pumpDeadlineUs optional wall-clock bound for
+     *                                         this drive of the loop, in
+     *                                         microseconds from call time
      * @return array<int, int|null>
      */
-    public function run(): array
+    public function run(?int $pumpDeadlineUs = null): array
     {
+        if ($pumpDeadlineUs !== null && $pumpDeadlineUs <= 0) {
+            throw new \InvalidArgumentException(
+                "pumpDeadlineUs must be > 0 or null (unbounded); got {$pumpDeadlineUs}"
+            );
+        }
+        $deadlineAt = $pumpDeadlineUs === null
+            ? null
+            : \microtime(true) + $pumpDeadlineUs / 1_000_000;
+
         while (!$this->allDone()) {
+            if ($deadlineAt !== null && \microtime(true) >= $deadlineAt) {
+                break;
+            }
             $this->tick();
         }
 

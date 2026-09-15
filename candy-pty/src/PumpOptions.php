@@ -69,6 +69,28 @@ final class PumpOptions
     public readonly string $veof;
 
     /**
+     * OPTIONAL caller-bound for the pump loop, microseconds measured from the
+     * moment the loop starts. Null (the default) means NO bound — the
+     * pump-family contract: a loop built on {@see \SugarCraft\Pty\Posix\PosixPump::run()},
+     * {@see \SugarCraft\Pty\Posix\MultiPump::run()} or the ReactPump promise
+     * carries no internal deadline; callers MUST bound.
+     *
+     * When set, the deadline is checked once per loop iteration (PosixPump /
+     * ReactPump poll tick), so the loop returns control at most one
+     * `selectTimeoutUs` tick late. Expiry is an EXIT CONDITION, not a kill:
+     * the child keeps running, the master stays open, the pump instance
+     * keeps its buffers — exactly like the stdin-EOF grace expiry, the
+     * caller inspects the return contract (-1 = still-running) and decides.
+     *
+     * E717. The bound exists for non-interactive consumers (supervisors,
+     * harnesses, batch record/replay); an interactive PTY session has no
+     * legitimate total deadline and must leave this null.
+     *
+     * @param int<1, max>|null microseconds from loop start; null = unbounded
+     */
+    public readonly ?int $pumpDeadlineUs;
+
+    /**
      * Called each pump loop iteration when idle (stream_select timed out).
      * Null when no callback is registered.
      *
@@ -130,6 +152,7 @@ final class PumpOptions
      * @param (\Closure(int, int): void)|null $onSigwinch
      * @param (\Closure(int): void)|null     $onChildExit
      * @param \SugarCraft\Core\Recorder|null $recorder
+     * @param int<1, max>|null               $pumpDeadlineUs
      */
     public function __construct(
         int $chunkBytes = self::DEFAULT_CHUNK_BYTES,
@@ -142,7 +165,13 @@ final class PumpOptions
         ?\Closure $onSigwinch = null,
         ?\Closure $onChildExit = null,
         ?\SugarCraft\Core\Recorder $recorder = null,
+        ?int $pumpDeadlineUs = null,
     ) {
+        if ($pumpDeadlineUs !== null && $pumpDeadlineUs <= 0) {
+            throw new \InvalidArgumentException(
+                "pumpDeadlineUs must be > 0 or null (unbounded); got {$pumpDeadlineUs}"
+            );
+        }
         $this->chunkBytes = $chunkBytes;
         $this->selectTimeoutUs = $selectTimeoutUs;
         $this->flushDeadlineSec = $flushDeadlineSec;
@@ -153,6 +182,7 @@ final class PumpOptions
         $this->onSigwinch = $onSigwinch;
         $this->onChildExit = $onChildExit;
         $this->recorder = $recorder;
+        $this->pumpDeadlineUs = $pumpDeadlineUs;
     }
 
     /**
@@ -185,6 +215,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -201,6 +232,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -217,6 +249,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -233,6 +266,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -249,6 +283,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -265,6 +300,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -281,6 +317,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -297,6 +334,7 @@ final class PumpOptions
             onSigwinch: $v,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -313,6 +351,7 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $v,
             recorder: $this->recorder,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
         );
     }
 
@@ -336,6 +375,30 @@ final class PumpOptions
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $v,
+            pumpDeadlineUs: $this->pumpDeadlineUs,
+        );
+    }
+
+    /**
+     * Attach (or detach) the optional pump-loop caller-bound (E717).
+     * Returns a new {@see PumpOptions} — never mutates `$this`.
+     *
+     * @param int<1, max>|null $v microseconds from loop start; null = unbounded
+     */
+    public function withPumpDeadlineUs(?int $v): self
+    {
+        return new self(
+            chunkBytes: $this->chunkBytes,
+            selectTimeoutUs: $this->selectTimeoutUs,
+            flushDeadlineSec: $this->flushDeadlineSec,
+            stdinEofGraceSec: $this->stdinEofGraceSec,
+            veof: $this->veof,
+            keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
+            onSigwinch: $this->onSigwinch,
+            onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
+            pumpDeadlineUs: $v,
         );
     }
 }

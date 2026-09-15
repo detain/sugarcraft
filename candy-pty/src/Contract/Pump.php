@@ -27,6 +27,17 @@ interface Pump
      * PTY close / final wait() so supervisors can enforce kill-on-
      * STDIN-EOF policy without the pump holding them hostage.
      *
+     * CONTRACT (E717): a loop built on run() carries no internal
+     * deadline; callers MUST bound. Every condition above is
+     * event-driven, so a live-but-silent child with an open, silent
+     * STDIN spins forever — by design (an interactive PTY has no
+     * legitimate total runtime). Bound from the outside: caller-side
+     * kill via an idle hook trips the child-exit condition, and
+     * implementations that take {@see \SugarCraft\Pty\PumpOptions}
+     * additionally honour the opt-in $pumpDeadlineUs. In tests, the
+     * process-level backstop is candy-pty's HangWatchdog: a test built
+     * on an unbounded pump can only hang, never fail.
+     *
      * @param MasterPty  $master
      * @param resource  $stdinStream  PHP stream resource (e.g. STDIN)
      * @param resource  $stdoutStream PHP stream resource (e.g. STDOUT)

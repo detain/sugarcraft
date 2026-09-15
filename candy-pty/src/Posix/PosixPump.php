@@ -18,6 +18,29 @@ use SugarCraft\Pty\PumpOptions;
  *
  * @see creack/pty.Pump
  * @see portable-pty.Pump
+ *
+ * ## Caller-bounding contract (E717)
+ *
+ * A loop built on this pump carries no internal deadline; callers MUST
+ * bound it. The exit conditions are all EVENT-driven — child exit, STDOUT
+ * EPIPE, STDIN EOF + grace expiry — so a live-but-silent child paired with
+ * an open, silent STDIN keeps the loop spinning forever. That is deliberate:
+ * an interactive PTY session has no legitimate total runtime, and a
+ * wall-clock baked into the pump would kill healthy sessions. The caller
+ * owns the bound, and has three mechanisms:
+ *
+ * - {@see PumpOptions::$pumpDeadlineUs} — opt-in per-iteration bound; on
+ *   expiry the loop returns as if any other condition fired (child alive →
+ *   run() answers -1; nothing is killed, no state destroyed).
+ * - an {@see PumpOptions::$onIdle} callback that flips a caller flag and
+ *   kills the child (the kill trips the child-exit condition).
+ * - a supervisor process bounding the whole run (test-suite pattern:
+ *   `candy-pty/tests/Support/HangWatchdog` — inside the process a pump
+ *   test can only hang, never fail).
+ *
+ * The same contract binds {@see MultiPump::run()} (which also takes a
+ * `run($pumpDeadlineUs)` bound) and the {@see ReactPump} promise (bound by
+ * `stop()`/cancellation, or by the same `$pumpDeadlineUs` option).
  */
 final class PosixPump implements PumpContract
 {
@@ -47,6 +70,13 @@ final class PosixPump implements PumpContract
      *              child to monitor (stdin→master only); -1 if a
      *              child was supplied but is still running (caller
      *              must kill + wait()).
+     *
+     * Carries no internal deadline; callers MUST bound — see the class
+     * docblock "Caller-bounding contract (E717)". When
+     * {@see PumpOptions::$pumpDeadlineUs} is set it acts as a fourth,
+     * caller-supplied exit condition checked once per loop iteration;
+     * expiry never kills the child and never closes the master.
+     *
      * @see portable-pty.Pump.Run()
      */
     public function run(
@@ -79,7 +109,11 @@ final class PosixPump implements PumpContract
      *  - STDOUT hits EPIPE (peer closed read end),
      *  - STDIN reached EOF AND the post-EOF grace window expired
      *    (child got VEOF + had stdinEofGraceSec to notice;
-     *    if it's still running we force-close the PTY).
+     *    if it's still running we force-close the PTY),
+     *  - the optional caller-bound {@see PumpOptions::$pumpDeadlineUs}
+     *    has lapsed (E717 — off by default; the loop itself carries no
+     *    internal deadline and would otherwise spin while a silent child
+     *    stays alive).
      *
      * @param resource $stdinStream
      * @param resource $stdoutStream
@@ -94,6 +128,15 @@ final class PosixPump implements PumpContract
         $masterStream = $master->stream();
         $stdinClosed = false;
         $stdinClosedDeadline = 0.0;
+
+        // E717 caller-supplied bound: absolute wall-clock deadline computed
+        // once, checked at the top of every iteration. Overshoot is bounded
+        // by one select tick (<= selectTimeoutUs). Expiry is an exit
+        // condition, NOT a kill: flushMaster still runs so already-produced
+        // tail bytes are not lost, and run() reports the live child as -1.
+        $pumpDeadlineAt = $opts->pumpDeadlineUs === null
+            ? null
+            : \microtime(true) + $opts->pumpDeadlineUs / 1_000_000;
 
         // Track last known PTY size so we can detect resize on idle
         // ticks and fire onSigwinch. This makes onSigwinch work with
@@ -113,6 +156,10 @@ final class PosixPump implements PumpContract
 
         while (true) {
             if ($child !== null && $child->exited()) {
+                return;
+            }
+
+            if ($pumpDeadlineAt !== null && \microtime(true) >= $pumpDeadlineAt) {
                 return;
             }
 

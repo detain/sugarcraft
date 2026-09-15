@@ -191,4 +191,71 @@ final class PumpOptionsTest extends TestCase
         $this->assertNull($modified->onSigwinch);
         $this->assertNull($modified->onChildExit);
     }
+
+    // ------------------------------------------------------------------
+    // E717 — pumpDeadlineUs: the opt-in caller-bound on the options DTO.
+    // ------------------------------------------------------------------
+
+    public function testPumpDeadlineUsDefaultsToNullUnbounded(): void
+    {
+        // The contract: NO default deadline. A fresh options object (and
+        // the ssh preset) must leave the pump unbounded exactly as before
+        // E717 — a default of anything here would silently kill healthy
+        // interactive sessions.
+        $this->assertNull((new PumpOptions())->pumpDeadlineUs);
+        $this->assertNull(PumpOptions::sshDefault()->pumpDeadlineUs);
+    }
+
+    public function testWithPumpDeadlineUsSetsCarriesAndDetaches(): void
+    {
+        $original = new PumpOptions();
+        $bounded = $original->withPumpDeadlineUs(250_000);
+
+        $this->assertNotSame($original, $bounded);
+        $this->assertNull($original->pumpDeadlineUs, 'with* must not mutate');
+        $this->assertSame(250_000, $bounded->pumpDeadlineUs);
+        $this->assertNull($bounded->withPumpDeadlineUs(null)->pumpDeadlineUs);
+    }
+
+    public function testPumpDeadlineUsSurvivesEveryOtherSetter(): void
+    {
+        // Propagation census: every with*() rebuilds via `new self(...)`,
+        // so any setter that forgets to carry pumpDeadlineUs silently
+        // un-bounds a caller's pump. One chain through ALL of them,
+        // asserting the value at each hop.
+        $opts = (new PumpOptions())->withPumpDeadlineUs(123_456);
+
+        $hops = [
+            'chunkBytes'      => $opts->withChunkBytes(8192),
+            'selectTimeoutUs' => $opts->withSelectTimeoutUs(10_000),
+            'flushDeadline'   => $opts->withFlushDeadlineSec(0.25),
+            'stdinEofGrace'   => $opts->withStdinEofGraceSec(0.1),
+            'veof'            => $opts->withVEOF("\x03"),
+            'keepalive'       => $opts->withKeepalive(static fn () => null),
+            'onIdle'          => $opts->withOnIdle(static fn () => null),
+            'onSigwinch'      => $opts->withOnSigwinch(static fn (int $c, int $r) => null),
+            'onChildExit'     => $opts->withOnChildExit(static fn (int $e) => null),
+            'recorder'        => $opts->withRecorder(null),
+        ];
+
+        foreach ($hops as $name => $hopped) {
+            $this->assertSame(
+                123_456,
+                $hopped->pumpDeadlineUs,
+                "with{$name}() dropped pumpDeadlineUs — the bound would silently vanish",
+            );
+        }
+    }
+
+    public function testPumpDeadlineUsRejectsNonPositive(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new PumpOptions(pumpDeadlineUs: 0);
+    }
+
+    public function testWithPumpDeadlineUsRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new PumpOptions())->withPumpDeadlineUs(-1);
+    }
 }

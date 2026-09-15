@@ -136,6 +136,14 @@ trait ChildPollTrait
 
     /**
      * @see creack/pty.Cmd.Wait()
+     *
+     * CONTRACT (E717): waitpid semantics — the poll loop below carries
+     * no internal deadline; callers MUST bound. It exits only when the
+     * child is reaped, so a child that never exits pins the caller
+     * forever, exactly like an unbounded pump loop. The bounded
+     * composition is the non-blocking {@see exited()} probe plus a
+     * caller-side kill; tests additionally sit behind the
+     * `candy-pty/tests/Support/HangWatchdog` process backstop.
      */
     public function wait(): int
     {

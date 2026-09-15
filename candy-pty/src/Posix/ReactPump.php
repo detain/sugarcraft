@@ -28,6 +28,12 @@ use SugarCraft\Pty\PumpOptions;
  * (stdin EOF grace elapsed, stdout EPIPE, or {@see stop()}) — the caller
  * must kill + wait(), same as the sync pump.
  *
+ * Caller-bounding contract (E717): the pump carries no internal deadline;
+ * callers MUST bound. start() itself never blocks — control stays with the
+ * caller — but the returned promise settles only on an event: bind it with
+ * {@see stop()} / promise cancellation (the caller-flag exit), or with the
+ * opt-in {@see PumpOptions::$pumpDeadlineUs} checked on every poll tick.
+ *
  * Child-exit detection is a periodic-timer poll of the non-blocking
  * {@see Child::exited()} probe (at `PumpOptions::$selectTimeoutUs`
  * cadence, matching the sync pump's idle tick). A SIGCHLD handler is
@@ -155,6 +161,14 @@ final class ReactPump
     /** Whether any master/stdin I/O happened since the last poll tick (idle detection). */
     private bool $sawIo = false;
 
+    /**
+     * Absolute wall-clock deadline for the E717 caller-bound, computed once
+     * in start() from {@see PumpOptions::$pumpDeadlineUs}. Null = unbounded
+     * (the default, and the correct shape for an interactive session — the
+     * pump carries no internal deadline; callers MUST bound).
+     */
+    private ?float $pumpDeadlineAt = null;
+
     private int $lastKnownCols = 0;
 
     private int $lastKnownRows = 0;
@@ -212,6 +226,9 @@ final class ReactPump
         $this->pendingStdin = '';
         $this->flushing = false;
         $this->sawIo = false;
+        $this->pumpDeadlineAt = $opts->pumpDeadlineUs === null
+            ? null
+            : \microtime(true) + $opts->pumpDeadlineUs / 1_000_000;
         $this->masterWriteAttached = false;
         $this->deadlineTimer = null;
         $this->deferred = new Deferred(function (): void {
@@ -403,6 +420,17 @@ final class ReactPump
     private function onPollTick(): void
     {
         if (!$this->running) {
+            return;
+        }
+
+        // E717 caller-bound: opt-in deadline checked once per poll tick
+        // (cadence = selectTimeoutUs, so overshoot is at most one tick).
+        // Expiry funnels through finish() — the same teardown every other
+        // exit path uses, so the loop registrations can never leak — and
+        // resolves with the live-child contract (-1): the bound hands
+        // control back, it does not kill anything.
+        if ($this->pumpDeadlineAt !== null && \microtime(true) >= $this->pumpDeadlineAt) {
+            $this->finish();
             return;
         }
 

@@ -144,6 +144,9 @@ final class PosixProcess implements Process
      * into a full pipe buffer while we're sleeping. Without this,
      * `/bin/sh -c 'yes | head'`-style commands deadlock.
      *
+     * E717 contract holds unchanged: the loop carries no internal
+     * deadline; callers MUST bound (exited() probe + caller-side kill).
+     *
      * Timing matches the trait's wait() byte-for-byte aside from the
      * drain call — same `usleep(10_000)`, same `proc_close()` reap.
      *
