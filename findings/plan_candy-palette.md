@@ -60,7 +60,7 @@ Address all 24 code review findings in candy-palette, consolidating duplicate en
 
 - [ ] 2.4 Extract ANSI256 RGB formula to shared helper — Create Color::ansi256IndexToRgb(int $idx) to eliminate duplicate formulas in toAnsi256() (lines 240-243) and fromAnsi256Index() (lines 214-216). Low severity. Verify: Existing conversion tests pass.
 
-- [ ] 2.5 Make Color::closestAnsi16() palette a class constant — Convert static palette at lines 312-321 to class constant ANSI16_BASIC_PALETTE. Low severity. Verify: Existing color conversion tests pass.
+- [ ] 2.5 Make Color::closestAnsi16() palette a class constant — Convert static palette at lines 312-321 to class constant ANSI16_BASIC_PALETTE. Low severity. Verify: Existing color conversion tests pass. ✅ the ANSI-16 table is now the class constant `Color::ANSI16_RGB` (candy-palette/src/Color.php:133), unified element-wise with candy-core's `\SugarCraft\Core\Util\Color::ANSI16_RGB` (xterm-modern blues #0000EE/#5C5CFF, replacing the mislabeled "VGA" #0000CD/#0000FF which were xterm's abandoned pre-2009 defaults). Drift is pinned by candy-palette/tests/Ansi16TableParityTest.php (2026-09-15).
 
 - [ ] 2.6 Optimize Color::perceivedBrightness() — Replace $this->r ** 2 with $this->r * $this->r. Low severity. Verify: Existing brightness-related tests pass.
 

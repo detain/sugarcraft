@@ -107,8 +107,9 @@ final class DegradeTest extends TestCase
         $input = "\x1b[48;5;21mX\x1b[0m";
         $out = $p->degrade($input);
 
-        // Slot 21 decodes to (0,0,255) = bright blue slot 12 → background SGR 104.
-        $this->assertSame("\x1b[104mX\x1b[0m", $out);
+        // Slot 21 decodes to (0,0,255), nearest to basic blue slot 4 (0,0,238)
+        // (d=289) over bright blue slot 12 (92,92,255) (d=16928) → background SGR 44.
+        $this->assertSame("\x1b[44mX\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[48;5;", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
