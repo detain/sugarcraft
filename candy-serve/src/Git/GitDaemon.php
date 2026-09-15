@@ -26,6 +26,19 @@ use SugarCraft\Serve\{AccessControl, Config, Repo, Stats, User};
  * findings/plan_candy-serve.md). Both modes share the same protocol
  * code — only the transport/readiness layer differs.
  *
+ * CHILD-PROCESS LIFETIME (E721). Every git child this daemon starts is
+ * REQUEST-scoped: `proc_open` in sendPack()/unpackObjects() drains its
+ * output and terminates-if-undrained + `proc_close()` in a `finally`;
+ * the `update-ref` writes run through `exec()`, which waits for the
+ * child by definition. Nothing returns, stores, or escapes a handle, so
+ * no git child can outlive the handler that spawned it — and because
+ * both transports dispatch a request synchronously on the daemon
+ * thread, stop paths (shutdown()/cleanup()/stopAsync()) only ever run
+ * BETWEEN handlers, which is why the daemon needs no standing child
+ * registry or reap ladder. Enforced by
+ * tests/ChildProcessLifetimeCensusTest (zero-survivor census around
+ * real and unwinding requests).
+ *
  * Port of charmbracelet/soft-serve GitDaemon.
  *
  * @see https://github.com/charmbracelet/soft-serve
@@ -741,22 +754,50 @@ final class GitDaemon
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) return;
 
-        // Write want revs to stdin (one per line, no ^ prefix)
-        foreach ($wants as $hash) {
-            \fwrite($pipes[0], $hash . "\n");
-        }
-        \fclose($pipes[0]);
+        // E721: the pack child is REQUEST-scoped. The finally makes that
+        // structural instead of control-flow-coincidental: on every exit —
+        // including an unwind from writeRaw's socket layer — the child that
+        // did not finish streaming is terminated so proc_close cannot wait on
+        // it forever, and every pipe and the handle are released. A git child
+        // can then never outlive the request that spawned it, which is what
+        // lets the daemon stop between handlers without a child registry.
+        $childDrained = false;
+        try {
+            // Write want revs to stdin (one per line, no ^ prefix)
+            foreach ($wants as $hash) {
+                \fwrite($pipes[0], $hash . "\n");
+            }
+            \fclose($pipes[0]);
 
-        // Stream pack data to socket
-        while (!\feof($pipes[1])) {
-            $chunk = \fread($pipes[1], 65536);
-            if ($chunk === false) break;
-            $this->writeRaw($socket, $chunk);
+            // Stream pack data to socket
+            while (!\feof($pipes[1])) {
+                $chunk = \fread($pipes[1], 65536);
+                if ($chunk === false) break;
+                $this->writeRaw($socket, $chunk);
+            }
+            $childDrained = \feof($pipes[1]);
+        } finally {
+            if (!$childDrained) {
+                @\proc_terminate($proc);
+            }
+            $this->closeIfResource($pipes[0]);
+            $this->closeIfResource($pipes[1]);
+            $this->closeIfResource($pipes[2]);
+            \proc_close($proc);
         }
+    }
 
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        \proc_close($proc);
+    /**
+     * Close a stream only while it is still open — the E721 reapers close
+     * pipes in the finally that a normal drain already closed.
+     *
+     * @param resource|null $pipe
+     */
+    private function closeIfResource($pipe): void
+    {
+        if (\is_resource($pipe)) {
+            \fclose($pipe);
+        }
     }
 
     /**
@@ -947,13 +988,29 @@ final class GitDaemon
             return [false, 'failed to start index-pack'];
         }
 
-        \fwrite($pipes[0], $packData);
-        \fclose($pipes[0]);
-        $out = (string) \stream_get_contents($pipes[1]);
-        $err = (string) \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        $rc = \proc_close($proc);
+        // E721: same request-scoped reap as sendPack() — the drain below reads
+        // to EOF, so the child is done by the time the finally terminates
+        // nothing; on any unwind (or a half-written pack) the child is stopped
+        // first and proc_close() cannot wait on it. $rc keeps its meaning:
+        // index-pack's real exit status, read in the finally before the
+        // verdict below.
+        $childDrained = false;
+        $rc = -1;
+        try {
+            \fwrite($pipes[0], $packData);
+            \fclose($pipes[0]);
+            $out = (string) \stream_get_contents($pipes[1]);
+            $err = (string) \stream_get_contents($pipes[2]);
+            $childDrained = true;
+        } finally {
+            if (!$childDrained) {
+                @\proc_terminate($proc);
+            }
+            $this->closeIfResource($pipes[0]);
+            $this->closeIfResource($pipes[1]);
+            $this->closeIfResource($pipes[2]);
+            $rc = \proc_close($proc);
+        }
 
         if ($rc !== 0) {
             $msg = \trim($err !== '' ? $err : $out);

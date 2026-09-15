@@ -11,6 +11,11 @@ use SugarCraft\Serve\{AccessControl, Repo, User};
  *
  * Implements the Git SSH protocol for read operations.
  *
+ * CHILD-PROCESS LIFETIME (E721): the single pack child is served inside
+ * sendPack() and reaped there (drain-to-EOF, terminate-if-undrained,
+ * proc_close in a finally) before serve() returns — this class holds no
+ * child across calls.
+ *
  * Port of charmbracelet/soft-serve Git.UploadPack.
  *
  * @see https://github.com/charmbracelet/soft-serve
@@ -157,21 +162,35 @@ final class UploadPack
         $proc = \proc_open($cmd, $desc, $pipes);
         if ($proc === false) return;
 
-        // Write want revs to stdin (one per line, no ^ prefix)
-        foreach ($wants as $hash) {
-            \fwrite($pipes[0], $hash . "\n");
-        }
-        \fclose($pipes[0]);
+        // E721: request-scoped reap, same contract as GitDaemon's pack child —
+        // the drain reads to EOF; on any unwind the child is terminated before
+        // proc_close() so it cannot outlive this serve() process's request.
+        $childDrained = false;
+        try {
+            // Write want revs to stdin (one per line, no ^ prefix)
+            foreach ($wants as $hash) {
+                \fwrite($pipes[0], $hash . "\n");
+            }
+            \fclose($pipes[0]);
 
-        // Stream pack data to stdout
-        while (!\feof($pipes[1])) {
-            $chunk = \fread($pipes[1], 65536);
-            if ($chunk === false) break;
-            \fwrite(\STDOUT, $chunk);
+            // Stream pack data to stdout
+            while (!\feof($pipes[1])) {
+                $chunk = \fread($pipes[1], 65536);
+                if ($chunk === false) break;
+                \fwrite(\STDOUT, $chunk);
+            }
+            $childDrained = \feof($pipes[1]);
+        } finally {
+            if (!$childDrained) {
+                @\proc_terminate($proc);
+            }
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            \proc_close($proc);
         }
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        \proc_close($proc);
     }
 
     /**

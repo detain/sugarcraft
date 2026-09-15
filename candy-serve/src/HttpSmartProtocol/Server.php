@@ -20,6 +20,15 @@ use SugarCraft\Serve\LFS\LFSHandler;
  * 2. Client POSTs /git-upload-pack with wants           → exchanges pack data
  * 3. For push: Client POSTs /git-receive-pack          → sends pack, receives status
  *
+ * CHILD-PROCESS LIFETIME (E721): every `git` child is REQUEST-scoped — the
+ * `proc_open` sites in handleUploadPack()/handleReceivePack()/
+ * generatePackData() terminate any child whose capped buffer did not consume
+ * the whole stream and release pipes + handle in a `finally`, so nothing
+ * outlives the synchronous handleRequest() call that spawned it. All
+ * `exec()` helpers (Repo metadata reads) wait for their child by definition.
+ * There is no daemon object here to stop: the host application owns the
+ * socket, and a request never returns while it has a live child.
+ *
  * Port of charmbracelet/soft-serve HttpSmartProtocol Server.
  *
  * @see https://github.com/charmbracelet/soft-serve
@@ -289,16 +298,30 @@ final class Server
             return $this->errorResponse(500, 'Failed to start upload-pack');
         }
 
-        // Write request body to stdin
-        \fwrite($pipes[0], $body);
-        \fclose($pipes[0]);
+        // E721: request-scoped reap. A capped read that overflowed leaves the
+        // child alive with output still flowing, so the finally terminates
+        // unless the buffer consumed the whole stream; pipes and handle are
+        // released on every path, so no git child outlives handleRequest().
+        $packData = null;
+        try {
+            // Write request body to stdin
+            \fwrite($pipes[0], $body);
+            \fclose($pipes[0]);
 
-        // Read response into buffer (with size cap)
-        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-        $packData = $this->readCapped($pipes[1], $maxBytes);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        \proc_close($proc);
+            // Read response into buffer (with size cap)
+            $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+            $packData = $this->readCapped($pipes[1], $maxBytes);
+        } finally {
+            if ($packData === null) {
+                @\proc_terminate($proc);
+            }
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            \proc_close($proc);
+        }
         if ($packData === null) {
             return $this->errorResponse(413, 'Packfile too large');
         }
@@ -349,16 +372,27 @@ final class Server
             return $this->errorResponse(500, 'Failed to start receive-pack');
         }
 
-        // Write request body (commands + packfile) to stdin
-        \fwrite($pipes[0], $body);
-        \fclose($pipes[0]);
+        // E721: request-scoped reap — see handleUploadPack() for the shape.
+        $packData = null;
+        try {
+            // Write request body (commands + packfile) to stdin
+            \fwrite($pipes[0], $body);
+            \fclose($pipes[0]);
 
-        // Read response (with memory cap to prevent OOM on large packfiles)
-        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-        $packData = $this->readCapped($pipes[1], $maxBytes);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        \proc_close($proc);
+            // Read response (with memory cap to prevent OOM on large packfiles)
+            $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+            $packData = $this->readCapped($pipes[1], $maxBytes);
+        } finally {
+            if ($packData === null) {
+                @\proc_terminate($proc);
+            }
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            \proc_close($proc);
+        }
         if ($packData === null) {
             return $this->errorResponse(413, 'Packfile too large');
         }
@@ -619,6 +653,12 @@ final class Server
 
     /**
      * Generate pack data for upload-pack.
+     *
+     * DORMANT (E721 census): this private helper has no callers — the live
+     * upload-pack route delegates to `git upload-pack --stateless-rpc` in
+     * handleUploadPack(). It is kept, carries the same request-scoped reap as
+     * its live siblings, and if it is ever re-wired it inherits that
+     * contract; removal was not taken under the dormant-code stop rule.
      */
     private function generatePackData(Repo $repo, string $requestBody): string
     {
@@ -643,19 +683,29 @@ final class Server
             return '';
         }
 
-        // Write want revs to stdin (one per line, no ^ prefix)
-        foreach ($wants as $hash) {
-            \fwrite($pipes[0], $hash . "\n");
+        // E721: request-scoped reap — see handleUploadPack() for the shape.
+        $packData = null;
+        try {
+            // Write want revs to stdin (one per line, no ^ prefix)
+            foreach ($wants as $hash) {
+                \fwrite($pipes[0], $hash . "\n");
+            }
+            \fclose($pipes[0]);
+
+            // TODO: stream via chunked callback for true streaming; cap buffered size for now
+            $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+            $packData = $this->readCapped($pipes[1], $maxBytes);
+        } finally {
+            if ($packData === null) {
+                @\proc_terminate($proc);
+            }
+            foreach ($pipes as $pipe) {
+                if (\is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            \proc_close($proc);
         }
-        \fclose($pipes[0]);
-
-        // TODO: stream via chunked callback for true streaming; cap buffered size for now
-        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-        $packData = $this->readCapped($pipes[1], $maxBytes);
-
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        \proc_close($proc);
         if ($packData === null) {
             throw new \RuntimeException('Packfile exceeds maximum size limit');
         }
