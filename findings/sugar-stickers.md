@@ -23,6 +23,8 @@ The sanitize() method strips bytes 0x80-0x9F claiming they are C1 controls, but 
 
 Recommendation: Remove `\x80-\x9F` from the regex pattern. C1 controls in UTF-8 are two-byte sequences starting with 0xC2.
 
+✅ **RESOLVED (ai/w4-sanitize).** `Column::sanitize()` now delegates to the canonical `Core\Util\Sanitize::untrusted()` (`Ansi::strip()`), which is UTF-8-aware: a 0x80–0x9F byte is treated as a lone C1 control only when it does *not* continue a well-formed UTF-8 lead, so `東京` survives while a hostile `\x9b`/`\x9d`/`\x90`/`\x9f` introducer (and its DCS/APC/SOS/PM payload, including unterminated) is discarded. Regression-locked by `tests/UntrustedSanitizerC1Test::testColumnPreservesValidUtf8AndTabNewline` and the C1-vector cases. This also closes the sibling gap the multibyte fix left open — the old regex was `\x1b`-only and thus 8-bit-blind.
+
 ---
 
 ## 2. HIGH: FlexBox::sanitize() Has Same Multibyte Destruction Bug
@@ -32,6 +34,8 @@ Recommendation: Remove `\x80-\x9F` from the regex pattern. C1 controls in UTF-8 
 Same issue. Line 302: `\x7F\x80-\x9F` corrupts CJK and other multibyte text.
 
 Recommendation: Same fix — remove `\x80-\x9F` from the regex.
+
+✅ **RESOLVED (ai/w4-sanitize).** `FlexBox::sanitize()` now delegates to `Core\Util\Sanitize::untrusted()` exactly as `Column::sanitize()` does — UTF-8-aware lone-C1 handling preserves `東京`, and the full 7-bit/8-bit escape family (incl. `\x9b` CSI, `\x9d` OSC, DCS/APC/SOS/PM payloads, truncation) is stripped fail-closed. `applyStyle()` still adds the box's own SGR downstream of the strip, so legitimate styling is untouched. Locked by `tests/UntrustedSanitizerC1Test::testFlexBox*` cases.
 
 ---
 
@@ -92,6 +96,8 @@ Same as Finding 3.
 ## Memory: No leaks detected.
 
 ## Security: Sanitization approach is sound but multibyte bug (Finding 1,2) corrupts text rather than protecting it.
+
+✅ **RESOLVED (ai/w4-sanitize):** both `Column::sanitize()` and `FlexBox::sanitize()` now route through the canonical `Core\Util\Sanitize::untrusted()` / `Ansi::strip()`, which simultaneously fixes the multibyte corruption (valid UTF-8 kept) and closes a 8-bit-C1 smuggling gap the `\x1b`-only regexes left open (a raw `\x9b` could emit cursor-move / title-set / sixel without ever using `\x1b`). See `tests/UntrustedSanitizerC1Test`.
 
 ## PHP 8.3+: Fully compatible.
 
