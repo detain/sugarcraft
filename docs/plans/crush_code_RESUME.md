@@ -53,24 +53,34 @@ logs were pipe-shaped all along and its "tmux" STATE label was wrong.)**
 
 ### 1b. THE STANDARD LOCAL GATE — unchanged (K=8 sharded, FAIL-CLOSED conservation, fresh `--out`, plain pipe; durations manifest must carry a row for every new test file BEFORE sharded conservation means anything — r81 re-proved the silent-drop; serial is the re-pin truth AND the only gate that sees whole-tree doc/comment/roster censuses). Canonical command + regeneration recipe: APPENDIX II §1b. Pass `--against-json sugar-crush/tests/Config/Support/suite-figure.json` for the script's own CONSERVATION verdict line.
 
-### 2. ACTIONABLE QUEUE — ZERO SURVIVORS: PHASE-3 COMPLETE — THE QUEUE IS AT AN ORCHESTRATOR DECISION POINT
+### 2. ACTIONABLE QUEUE — PHASE-4 LIVE (sibling-lib sweep r82+): 8 SURVIVORS AFTER ROUND-82 WAVE-1
 
-**(a) Row census = 0 survivors.** Command run against `docs/plans/crush_code_backlog_triage.md` at this
-closeout (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status/evidence cells lead-scanned
-per the census rule):
+**(a) Row census = 8 survivors.** Command RE-RUN LIVE against `docs/plans/crush_code_backlog_triage.md`
+at the round-82 wave-1 weld (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status/evidence
+cells lead-scanned per the census rule — recount by re-running, never by chained arithmetic):
 
 ```
 $ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
     /^## `STALE-CITATION`/{sec="STALE"} /^## `UNCERTAIN`/{sec="UNCERTAIN"}
     /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
     if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
-(no survivor lines)
+OPEN  **E714** 
+OPEN  **E716** 
+OPEN  **E717** 
+OPEN  **E718** 
+OPEN  **E720** 
+OPEN  **E721** 
+OPEN  **E722** 
+OPEN  **E723** 
 ```
 
-(EMPTY output = zero survivors — verified LIVE at this closeout after the seven E704–E710 CLOSED-in-place
-flips.) **PHASE 3 (operator UX, r81) is COMPLETE: E704, E705, E706, E707, E708, E709, E710 all CLOSED.**
-With PHASE 2 (r77–r80) and the hardening plan's earlier phases also at zero, the entire audit-derived
-campaign ledger is EMPTY — the operator's called-for next step is (c).
+13 minted at `279daf7bc` − 5 wave-1 closures: **E711, E712, E713, E715, E719 all CLOSED-in-place** at this
+weld (lanes q1/q2/q3/q4/q6, picks `3336bea5f`/`05f155145`/`2fc01a77e`/`8df8c26d8`/`174a12447` + companion
+fold `5c3bb3d1c`). Survivors by queue home: E714 (LOW — UNASSIGNED, r83 candidate); E720 (wave-1 lane q5 —
+review PENDING, DEFERRED from this weld); E716 (q7, FOUNDATION ordering) · E718 (q8) · E723 (q9) — wave-2;
+E717 (q10) · E721 (q11) · E722 (q12) — wave-3. [PHASE 3 (operator UX, r81: E704–E710) and PHASE 2
+(r77–r80: E695–E703) remain COMPLETE; PHASE-4 sweep supersedes the §2(c) decision point — see the
+minted-2026-09-15 paragraph above.]
 
 **(b) TRIGGER-WATCH ROSTER (watches are NOT rows — carry list):**
 

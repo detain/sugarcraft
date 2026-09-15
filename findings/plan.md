@@ -136,6 +136,7 @@ repeated_logic (extracts clamp/validateNonNeg to candy-core)
 | sugar-table | P1 | 2 | Table layout overflow |
 | sugar-spark | P1 | 2 | Empty data set guard |
 | sugar-toast | P1 | 2 | Viewport overflow; non-cancellable timer |
+| sugar-skate | P1 | 2 | YAML fallback newline/CR round-trip corruption; README Quick Start example (E719 first-ever audit) |
 | repeated_logic | P1 | 10 | Extract Clamp.php + validateNonNeg() to candy-core; remove 35+ duplicate mutate() implementations |
 
 **Concurrency:** 9 libs + repeated_logic — spawn 6 subagents, process in sub-batches of 6.
@@ -195,6 +196,7 @@ Each lib's implementation plan is at `findings/plan_<slug>.md`. The master plan 
 - `findings/plan_sugar-table.md` — Phase 1 (table layout overflow)
 - `findings/plan_sugar-spark.md` — Phase 1 (empty data set guard)
 - `findings/plan_sugar-toast.md` — Phase 1 (viewport overflow, non-cancellable timer)
+- `findings/plan_sugar-skate.md` — Phase 1 (YAML fallback newline round-trip corruption; README Quick Start data-corrupting example; P2/P3 lists carried — E719 first-ever audit, 2026-09-15)
 - `findings/plan_repeated_logic.md` — Phase 1 (extract Clamp.php + validateNonNeg() to candy-core; deduplicate mutate() across 35+ libs)
 
 ## Phase 1 Implementation Steps

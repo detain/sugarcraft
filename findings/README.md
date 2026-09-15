@@ -112,6 +112,7 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 | sugar-bits | (see findings/sugar-bits.md) | Stopwatch/teardown patterns |
 | sugar-dash | (see findings/sugar-dash.md) | Largest sugar-* project — 52KB findings |
 | candy-vt | (see findings/candy-vt.md) | Terminal emulation |
+| sugar-skate | (see findings/sugar-skate.md) | First-ever audit 2026-09-15 (E719, round 82): zero P0; two empirically-verified P1 defects + P2/P3 backlog, remediation planned |
 | others | various | See individual findings/*.md files |
 
 ---
@@ -175,6 +176,6 @@ See [repeated_logic.md](./repeated_logic.md) for 10 categories of repeated patte
 - `repeated_logic.md` — cross-cutting patterns repeated across 10+ projects
 - `candy-ansi.md` through `candy-zone.md` — 31 candy-* project audits
 - `honey-bounce.md`, `honey-flap.md` — 2 honey-* project audits
-- `sugar-bits.md` through `sugar-wishlist.md` — 22 sugar-* project audits
+- `sugar-bits.md` through `sugar-wishlist.md` — 23 sugar-* project audits
 
-**Total: 58 findings files covering 57 projects**
+**Total: 59 findings files covering 58 projects** — the 2026-06-30 pass (57 projects) plus `sugar-skate.md` (first-ever audit, 2026-09-15, E719)
