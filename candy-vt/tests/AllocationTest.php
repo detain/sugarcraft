@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Tests;
 
-use Generator;
 use PHPUnit\Framework\TestCase;
 use SplObjectStorage;
 use SugarCraft\Ansi\Parser\Handler;
@@ -72,7 +71,7 @@ final class AllocationTest extends TestCase
             self::assertCount(320, $cells, "row {$row} must expose exactly `cols` cells");
         }
 
-        // Churn: 250 alternating resize round-trips. The live structure is
+        // Churn: 120 alternating resize round-trips. The live structure is
         // re-created every call, so a widening grid or an appended stray row
         // would show up here even if the heap numbers stayed flat.
         for ($i = 0; $i < 120; $i++) {
@@ -104,7 +103,7 @@ final class AllocationTest extends TestCase
     {
         // The exact per-cell object census, re-measured every cycle: one
         // shared singleton + exactly the printed cells. Feeding the same
-        // stream 200 times must NOT raise the count — overwritten cells are
+        // stream 80 times must NOT raise the count — overwritten cells are
         // dropped on the floor, and the singleton keeps the blanks at one.
         $stream = "\x1b[2;3H" . str_repeat('x', 60) . "\x1b[3;1H" . '你好 world';
 
@@ -127,7 +126,7 @@ final class AllocationTest extends TestCase
         // The vcr path has no shared empty() singleton: every slot is its
         // own immutable value object. Assert the census is *exactly*
         // cols*rows — not cols*rows + slack retained by a stale resize —
-        // and that 200 clear/resize round-trips leave the count unchanged.
+        // and that 80 clear/resize round-trips leave the count unchanged.
         $grid = new CellGrid(160, 50);
         self::assertSame(160 * 50, $this->distinctCellCensus($grid));
 
@@ -151,12 +150,20 @@ final class AllocationTest extends TestCase
         $parser = new Parser($handler, maxStringBuffer: 65536);
 
         for ($i = 0; $i < 150; $i++) {
-            $parser->feed("\x1b[" . (1 + $i % 50) . ';' . (1 + $i % 160) . 'H' . 'z');
+            $row = $i % 50;
+            $col = $i % 160;
+            $parser->feed("\x1b[" . ($row + 1) . ';' . ($col + 1) . 'H' . 'z');
             $dirty = $grid->dirtyRegion();
-            self::assertGreaterThanOrEqual(0, $dirty['minRow']);
+            // The sentinel values (min=PHP_INT_MAX, max=-1) would satisfy a
+            // bare `0 <= x < rows` check forever; pin them to real, written
+            // bounds so the test can't pass on an empty grid.
+            self::assertNotSame(PHP_INT_MAX, $dirty['minRow'], 'dirty region must open after a write');
+            self::assertLessThanOrEqual($row, $dirty['minRow']);
+            self::assertGreaterThanOrEqual($row, $dirty['maxRow']);
             self::assertLessThan(50, $dirty['maxRow'], 'dirty region must never exceed the grid');
             self::assertGreaterThanOrEqual(0, $dirty['minCol']);
             self::assertLessThan(160, $dirty['maxCol'], 'dirty region must never exceed the grid');
+            self::assertSame('z', $grid->get($row, $col)->char, 'the dispatched write must land in the grid');
         }
     }
 
@@ -386,8 +393,8 @@ final class AllocationTest extends TestCase
         // with input volume (legitimately) and would measure the fixture,
         // not the parser's internal buffers (params, stringBuffer,
         // utf8Buffer), which is what reset() must reclaim.
-        $parser = new Parser(new NullHandler(), maxStringBuffer: 65536);
-        $stream = "\x1b[38;2;12;34;56;48;49;50m \x1b]8;;https://example.test/a\u07"
+        $parser = new Parser($handler = new NullHandler(), maxStringBuffer: 65536);
+        $stream = "\x1b[38;2;12;34;56;48;49;50m \x1b]8;;https://example.test/a\x07"
             . "\x1b[1;2;3;4H 日本 e\u{0301} \x1b[?25l\x1b[?25h";
 
         for ($i = 0; $i < 200; $i++) {
@@ -402,6 +409,9 @@ final class AllocationTest extends TestCase
             $parser->reset();
         }
 
+        // Liveness guard: the churn must have actually dispatched — an idle
+        // parser (state-machine regression) would keep the heap flat too.
+        self::assertGreaterThan(2000, $handler->dispatches, 'parser must keep dispatching across reset()');
         self::assertSame(State::Ground, $parser->currentState(), 'reset() must return the parser to ground');
         self::assertLessThan(
             self::GROWTH_CEILING_BYTES,
@@ -423,7 +433,7 @@ final class AllocationTest extends TestCase
             . "\x1b[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20"
             . ';21;22;23;24;25;26;27;28;29;30;31;32;33;34;35;36;37;38;39;40;41;42m';
 
-        $parser = new Parser(new NullHandler(), maxStringBuffer: 65536);
+        $parser = new Parser($handler = new NullHandler(), maxStringBuffer: 65536);
         $settledWarm = null;
         $peakWarm = 0;
 
@@ -437,6 +447,7 @@ final class AllocationTest extends TestCase
             }
         }
 
+        self::assertGreaterThan(5000, $handler->dispatches, 'hostile input must still drive dispatches');
         self::assertSame(State::Ground, $parser->currentState());
         self::assertLessThan(
             self::GROWTH_CEILING_BYTES,
@@ -555,7 +566,8 @@ final class AllocationTest extends TestCase
 /**
  * Discarding handler for parser-churn tests: counts dispatches instead of
  * recording them, so the measured heap is the parser's own state, not a
- * fixture log. (Nested in the test file so the proof ships as one unit.)
+ * fixture log. (Declares alongside the test in this file so the proof ships
+ * as one unit.)
  */
 final class NullHandler implements Handler
 {

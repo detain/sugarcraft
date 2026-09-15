@@ -1,10 +1,11 @@
 # candy-vt allocation-growth proof
 
-Audit P2 (source audit, ~lines 175-181, "unbounded allocation growth across
-repeated resize/feed cycles"). `candy-vt/tests/AllocationTest.php` pins the
-opposite property: the grid/Buffer/Screen/Parser surfaces are **bounded**
-across long churn. No src/ or composer.json change — the proof is a test +
-this record.
+Audit P2 — the "unbounded allocation growth across repeated resize/feed
+cycles" concern, as handed down in the brief at `sc-briefs/w3-vt.md` (that
+brief cites a `vt-source-code-audit.md` which is not committed to this
+repo). `candy-vt/tests/AllocationTest.php` pins the opposite property: the
+grid/Buffer/Screen/Parser surfaces are **bounded** across long churn. No
+src/ or composer.json change — the proof is a test + this record.
 
 ## Measurement methodology
 
