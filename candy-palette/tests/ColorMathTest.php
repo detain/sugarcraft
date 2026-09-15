@@ -123,7 +123,14 @@ final class ColorMathTest extends TestCase
             ColorMath::xyzToLab(['y' => 1.0, 'z' => 1.0]);
             self::fail('missing component was accepted');
         } catch (\InvalidArgumentException $expected) {
-            self::assertStringContainsString('"x" component', $expected->getMessage());
+            self::assertStringContainsString('XYZ component x is missing', $expected->getMessage());
+        }
+
+        try {
+            ColorMath::xyzToLab(['x' => 'ten', 'y' => 1.0, 'z' => 1.0]);
+            self::fail('non-numeric component was accepted');
+        } catch (\InvalidArgumentException $expected) {
+            self::assertStringContainsString('not a finite number', $expected->getMessage());
         }
 
         $this->expectException(\InvalidArgumentException::class);

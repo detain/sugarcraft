@@ -120,14 +120,10 @@ final class ColorMath
      */
     private static function component(array $xyz, string $key): float
     {
-        if (!isset($xyz[$key]) || !is_numeric($xyz[$key])) {
+        if (!isset($xyz[$key]) || !is_numeric($xyz[$key]) || !is_finite((float) $xyz[$key])) {
             throw new \InvalidArgumentException(Lang::t('colormath.invalid_xyz', ['key' => $key]));
         }
-        $value = (float) $xyz[$key];
-        if (!is_finite($value)) {
-            throw new \InvalidArgumentException(Lang::t('colormath.invalid_xyz', ['key' => $key]));
-        }
-        return $value;
+        return (float) $xyz[$key];
     }
 
     /**
