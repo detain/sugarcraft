@@ -34,7 +34,7 @@ Address all 25 findings from the sugar-bits code review, organized into phased i
   - **Files:** `src/Tabs/Tabs.php:462-466`, `src/Tree/Tree.php:366-372`, `src/Table/Table.php:580-584`, `candy-core/src/Util/Sanitize.php` (new)
   - **Verification:** All three components render identically before/after; unit test verifies C0 stripping
   - **Severity:** high
-  - **Notes:** Method replaces `\n\r\t` with space; strips `\x00-\x08\x0b\x0c\x0e-\x1f`; preserves ESC for SGR. All three implementations are byte-identical.
+  - **Notes:** Method replaces `\n\r\t` with space; strips `\x00-\x08\x0b\x0c\x0e-\x1f`. CORRECTED: the original note claimed it "preserves ESC for SGR" — it does not, ESC (0x1b) sits inside the stripped range and is deleted, while DEL/C1 pass through. Styled output must therefore be built by sanitizing plain text and applying SGR afterwards. All three implementations are byte-identical.
 
 - [ ] **2.2** `Table::sortedRows()` — Multiple Full Array Sorts — Refactor to single-pass `usort()` with comparator evaluating all criteria in priority order
   - **Files:** `src/Table/Table.php:506-526`, `tests/Table/SortTest.php`

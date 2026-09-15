@@ -150,11 +150,13 @@ final class Store
      *
      *  - A non-UTF-8 (binary) payload becomes a `<binary N bytes>` placeholder
      *    (N = raw byte length) instead of dumping raw bytes at the terminal.
-     *  - C0 control bytes are stripped and \n / \r / \t fold to spaces via
-     *    {@see Sanitize::controlChars()} — a deliberate single-line preview.
-     *  - ESC (0x1b) and DEL (0x7f) are additionally removed here: Sanitize
-     *    preserves ESC for trusted SGR output, but a *stored* value must never
-     *    be trusted to emit escape sequences.
+     *  - C0 control bytes are stripped — ESC (0x1b) among them, `controlChars()`
+     *    is not SGR-preserving — and \n / \r / \t fold to spaces via
+     *    {@see Sanitize::controlChars()}: a deliberate single-line preview.
+     *  - DEL (0x7f) is removed here because it falls outside that C0 range. The
+     *    paired ESC sweep is belt-and-braces redundancy: `controlChars()` has
+     *    already deleted every ESC, so a stored value cannot smuggle an escape
+     *    introducer onto the screen either way.
      *
      * @param string $value Raw stored value (already base64-decoded for binary).
      */

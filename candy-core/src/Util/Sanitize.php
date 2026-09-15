@@ -32,10 +32,46 @@ final class Sanitize
     private const NEWLINE_GLYPH = "\xE2\x86\xB5";
 
     /**
-     * Strip C0 control characters from caller-supplied text so they
-     * cannot inject newlines or corrupt the TUI render.
-     * \n \r \t are replaced with spaces; other C0 (\x00-\x08\x0b\x0c\x0e-\x1f)
-     * are removed. ESC (\x1b) is preserved for SGR sequences.
+     * Strip C0 control characters from caller-supplied text so they cannot
+     * inject newlines or corrupt the TUI render. NOT an escape-sequence
+     * stripper, and NOT SGR-preserving — read the contract below before
+     * "fixing" the code to match a memory of these docs.
+     *
+     * Contract (pinned byte-for-byte by `SanitizeTest`):
+     *   - `\n`, `\r`, `\t` each fold to exactly one space (0x20).
+     *   - Every other C0 byte — `\x00`-`\x08`, `\x0b`, `\x0c`, `\x0e`-`\x1f` —
+     *     is deleted. ESC (0x1b) falls inside that last range and is therefore
+     *     deleted too.
+     *   - DEL (0x7f) and the C1 range (0x80-0x9f, as raw bytes or as UTF-8
+     *     code points) pass through untouched. That is a declared scope
+     *     boundary, not an oversight — see the siblings below.
+     *
+     * Why ESC is dropped rather than preserved: no default policy over
+     * arbitrary caller-supplied text may keep the escape introducer alive. A
+     * surviving ESC lets that text open a CSI/OSC/DCS sequence of the
+     * attacker's choosing, and desynchronises the frame-diff renderer's line
+     * model — the exact injection this class exists to close. Preserving SGR
+     * here would trade a proven defence for a cosmetic convenience. What
+     * survives of `\x1b[31m` is the inert printable text `[31m`: ugly in a
+     * label, but never re-interpreted by a terminal. Components that want
+     * styled output sanitize the PLAIN text and apply their own SGR after
+     * (see sugar-bits `Help`, `Tabs`, `Table`), never before.
+     *
+     * Need more than a C0 sweep? Pick the hardened sibling rather than
+     * widening this method — the gap matters most for 8-bit input, where a raw
+     * `\x9b` survives this method as a fully functional CSI introducer:
+     *   - {@see untrusted()} — removes whole escape sequences and the lone C1
+     *     controls inside {@see Ansi::strip()}, then the remaining C0 controls
+     *     and DEL. It is NOT single-line: TAB, LF and CR pass through by
+     *     design, so a caller that needs one line must fold newlines itself.
+     *     The policy for terminal-bound text from a process, socket, or user.
+     *   - {@see cellValue()} — replaces C0, DEL and C1 with a visible stand-in
+     *     (· for controls, ↵ for collapsed newlines, U+FFFD for undecodable
+     *     bytes) and repairs invalid UTF-8. The policy for cell grids.
+     *
+     * @param string $s Caller-supplied text.
+     * @return string Single-line text: no C0 bytes, no ESC, unchanged payload
+     *                bytes outside those ranges.
      */
     public static function controlChars(string $s): string
     {
@@ -104,8 +140,15 @@ final class Sanitize
      *
      * Use this on any string that originates from an external process,
      * network response, or user-controlled source before writing to the
-     * terminal. Unlike {@see controlChars()}, this does NOT preserve SGR —
-     * plain-text sinks render no color, so a full strip is correct.
+     * terminal. Versus {@see controlChars()}: on 7-bit input both guarantee no
+     * ESC survives and the difference is residue — that method deletes the ESC
+     * introducer (and an OSC's BEL terminator, being C0) but leaves the
+     * sequence's printable body behind as inert text (`\x1b[31m` → `[31m`),
+     * and it keeps DEL, which this one deletes. On 8-bit input the difference
+     * is safety: a raw `\x9b` passes `controlChars()` untouched and still acts
+     * as a live CSI introducer, so only here is plain text actually delivered.
+     * Neither preserves ESC-introduced SGR, and plain-text sinks render no
+     * colour either way, so the full strip costs nothing.
      *
      * @param string $s Untrusted input string
      * @return string Sanitized string safe for terminal output
