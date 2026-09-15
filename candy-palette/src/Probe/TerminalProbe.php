@@ -24,7 +24,8 @@ use SugarCraft\Palette\DetectionChain;
  * 12. Optional Phase 2: infocmp Tc/RGB    → upgrade Color16 → TrueColor
  *
  * Additional capability detection:
- * - Sixel: via escape query (OSC 4 ; 1 ; ? \x07) if interactive
+ * - Sixel: via terminfo (`infocmp -1` Sixel capability) and, if interactive,
+ *   escape query (OSC 4 ; 1 ; ? \x07)
  * - Kitty: TERM=xterm-kitty or escape query
  * - ITerm2: TERM_PROGRAM=iTerm.app or escape query
  * - Hyperlinks: OSC 8 support via escape query
@@ -223,13 +224,78 @@ class TerminalProbe
             }
         }
 
-        // Check for Sixel support in terminfo
-        if (preg_match('/\bsixel\b/', $output)) {
+        // Check for Sixel support in terminfo.
+        //
+        // WHY this replaced `preg_match('/\bsixel\b/', $output)`: that pattern
+        // was case-SENSITIVE and required a bare lowercase word, so it could
+        // never fire on the capability names real `infocmp -1` actually emits —
+        // `Sixel#1` (numeric), `Sixel=true` (string), `SixelScreenMode`, `Ss1`,
+        // `Ss2` are all capitalised or glued to a `#`/`=` separator with no
+        // trailing word boundary. The result was that sixel was systematically
+        // UNDER-detected through the terminfo path. See terminfo(5) capnames
+        // and the xterm DECGCI/Sixel graphics extension.
+        if ($this->terminfoHasSixel($output)) {
             $key = capabilityKey(Capability::Sixel);
             $caps[$key] = 'terminfo:sixel';
         }
 
         return $caps;
+    }
+
+    /**
+     * Terminfo capability names that advertise Sixel graphics output.
+     *
+     * ncurses and downstream vendors spell the Sixel capability differently
+     * across releases: the boolean `sixel`/`Sixel` (and the abbreviated `sixl`),
+     * the numeric-as-boolean `Sixel#1`, the string `Sixel=true`, and the
+     * `SixelScreenMode` / `Ss1` / `Ss2` user-defined caps shipped by sixel
+     * terminals (foot, mlterm, xterm).
+     * Names are matched after lowercasing and stripping underscores, so
+     * `SixelScreenMode` and `sixel_screen_mode` collapse to one token.
+     *
+     * @see terminfo(5) user-defined capabilities
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (Sixel)
+     */
+    private const SIXEL_TERMCAPS = ['sixel', 'sixl', 'sixelscreenmode', 'ss1', 'ss2'];
+
+    /**
+     * Whether `infocmp -1` output declares a Sixel graphics capability.
+     *
+     * `-1` prints one capability per line as `<TAB>name#<num>,` (numeric),
+     * `<TAB>name=<str>,` (string) or `<TAB>name,` (boolean), with `# …`
+     * comment lines and a leading `<name>|<description>,` header. We inspect
+     * ONLY the capability-name position of each line and compare it to
+     * {@see self::SIXEL_TERMCAPS}, so the literal word "sixel" buried inside
+     * an unrelated value (e.g. `desc=xterm with sixel,`) or a comment can
+     * never be mistaken for the capability — the failure mode the old regex
+     * invited. Presence of the capability name is treated as support (mirrors
+     * the name-only `Tc`/`RGB` check above); we do not parse the numeric/string
+     * value that follows the separator.
+     *
+     * @param string $output Raw `infocmp -1 <TERM>` stdout.
+     */
+    private function terminfoHasSixel(string $output): bool
+    {
+        foreach (preg_split('/\R/', $output) ?: [] as $line) {
+            $capability = ltrim($line, " \t:");
+            if ($capability === '' || $capability[0] === '#') {
+                // Blank line or an infocmp comment header: no capability here.
+                continue;
+            }
+
+            // The capability name is the leading identifier run, terminated by
+            // the boolean ',' / numeric '#' / string '=' separator (or EOL).
+            if (preg_match('/^([A-Za-z0-9_]+)/', $capability, $match) !== 1) {
+                continue;
+            }
+
+            $name = str_replace('_', '', strtolower($match[1]));
+            if (in_array($name, self::SIXEL_TERMCAPS, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
