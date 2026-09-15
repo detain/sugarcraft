@@ -145,7 +145,14 @@ filter list, therefore **sibling-lib lanes touching repo-wide tools must additio
 remains the only complete gate at every weld.** Harness laws carry: serials PLAIN BASH PIPE never tmux/PTY
 (stdin-pin trio); five-guard + Config + citation + SwallowingCatch in every sugar-crush-touching brief;
 K=8 shardcheck with `--durations` + `--against-json`. The §2(b) trigger-watch roster carries UNCHANGED.
-Census re-run at this mint returns exactly **13 survivors**, all `OPEN` (E711–E723).
+Census re-run at this mint returns exactly **13 survivors**, all `OPEN` (E711–E723). **WAVE-3 MINTED (round 82 close)** — E720's residual ledger
+flows to five close mints **E724–E728** (candy-vcr SanitizingHook fail-soft keeps raw secrets HIGH ·
+candy-vt CellGrid VOID-ruled + saved-alt resize + cursor dual-write + __clone doc HIGH · sugar-dash
+small-defect quartet w/ two mint-time errata MED · candy-wish blocking-fgets + /bin/bash + README reqs
+MED · candy-ansi six moved-parser findings INHERITANCE docs-only HIGH), and the E714 survivor is now
+assigned: lanes **q13**(E714 sugar-glow idle-backoff pump contract à la E713) ∥ **q14**(E724) ∥
+**q15**(E725) ∥ **q16**(E726) ∥ **q17**(E727) ∥ **q18**(E728) — six file-disjoint sibling libs, single
+wave runnable. Census re-run at this mint returns exactly **6 survivors** (E714, E724–E728).
 
 ### RESTART INSTRUCTIONS — the new-session startup recipe
 
