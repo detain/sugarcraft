@@ -172,6 +172,7 @@ sugar-crush/tests/Agents/TaskListHooksTest.php	0.203	10
 sugar-crush/tests/Cli/HeadlessPermissionPromptAttachmentTest.php	0.202	29
 sugar-crush/tests/Support/ForkedChildTest.php	0.190	2
 sugar-crush/tests/Context/RepoMapBlockTest.php	0.189	68
+sugar-crush/tests/Tools/PtyShimAutoloadResolutionTest.php	0.187	8
 sugar-crush/tests/Commands/SlashDispatchTest.php	0.184	18
 sugar-crush/tests/Chat/CompactModelSummaryTest.php	0.178	38
 sugar-crush/tests/App/AppModelTest.php	0.173	60
