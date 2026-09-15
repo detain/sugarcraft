@@ -45,6 +45,12 @@ final class Terminal
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+
+        // SGR colon sub-parameters (4:N vs 4;N) ride the parser's per-dispatch
+        // continuation flags; late-bind so the handler sees them mid-dispatch.
+        $this->handler->attachSubparamsProvider(
+            fn(): array => $this->parser->subparams(),
+        );
     }
 
     /**
@@ -196,6 +202,14 @@ final class Terminal
     {
         $this->handler = clone $this->handler;
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+        // The cloned handler inherited the pre-clone closure, which late-binds
+        // to the ORIGINAL terminal's parser — it would feed this terminal's SGR
+        // dispatches with the other parser's colon flags (stale after the
+        // original saw `4:3`, empty-wrong before it saw anything). Re-attach to
+        // this instance's own parser, exactly as the constructor wires it.
+        $this->handler->attachSubparamsProvider(
+            fn(): array => $this->parser->subparams(),
+        );
     }
 
     /** @internal */

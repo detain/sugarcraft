@@ -34,8 +34,15 @@ final class SgrHandler
      * Apply a CSI m parameter list to the current SGR state.
      *
      * @param list<int> $params Parser params; -1 sentinels mean default.
+     * @param list<bool>|null $subparams Continuation flags from
+     *   {@see \SugarCraft\Ansi\Parser\Parser::subparams()} for this dispatch:
+     *   true at index i means params[i+1] is a COLON sub-parameter of
+     *   params[i], not an independent SGR (`4:3` curly vs `4;3` underline +
+     *   italic). Null — no parser wired — keeps the historical peek: any
+     *   usable next slot is treated as a sub-parameter, preserving the
+     *   direct-call behaviour SgrUnderlineStylesTest pins.
      */
-    public function apply(array $params, Sgr $current): Sgr
+    public function apply(array $params, Sgr $current, ?array $subparams = null): Sgr
     {
         if (empty($params)) {
             $params = [0];
@@ -49,23 +56,24 @@ final class SgrHandler
             if ($p === -1) {
                 $p = 0;
             }
-            [$sgr, $i] = $this->step($p, $i, $params, $sgr);
+            [$sgr, $i] = $this->step($p, $i, $params, $sgr, $subparams);
         }
         return $sgr;
     }
 
     /**
      * @param list<int> $params
+     * @param list<bool>|null $subparams
      * @return array{0: Sgr, 1: int}
      */
-    private function step(int $p, int $i, array $params, Sgr $sgr): array
+    private function step(int $p, int $i, array $params, Sgr $sgr, ?array $subparams): array
     {
         return match (true) {
             $p === 0 => [Sgr::empty(), $i + 1],
             $p === 1 => [$sgr->withBold(true), $i + 1],
             $p === 2 => [$sgr->withDim(true), $i + 1],
             $p === 3 => [$sgr->withItalic(true), $i + 1],
-            $p === 4 => $this->underlineStyle($i, $params, $sgr),
+            $p === 4 => $this->underlineStyle($i, $params, $sgr, $subparams),
             $p === 5, $p === 6 => [$sgr->withBlink(true), $i + 1], // slow + rapid both fold to blink
             $p === 7 => [$sgr->withReverse(true), $i + 1],
             $p === 8 => [$sgr->withHidden(true), $i + 1],
@@ -89,23 +97,52 @@ final class SgrHandler
             $p >= 90 && $p <= 97 => [$sgr->withForeground(Color::indexed16($p - 90 + 8)), $i + 1],
             $p >= 100 && $p <= 107 => [$sgr->withBackground(Color::indexed16($p - 100 + 8)), $i + 1],
 
+            // SGR 58/59 — underline colour (ECMA-48 8.4.43 set / 8.4.44 reset,
+            // xterm ctlseqs). Neither this pen model nor the renderer's Cell
+            // stores an underline colour, but the extended triplet MUST be
+            // consumed: without an arm here, `58;5;33` fell through to the
+            // default case as three independent SGRs and repainted the
+            // foreground green (33 - 30). Guarded identically in
+            // {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::sgrExtendedDiscard()}.
+            $p === 58 => [$sgr, $this->extendedLength($i, $params)],
+            $p === 59 => [$sgr, $i + 1],
+
             default => [$sgr, $i + 1],
         };
     }
 
     /**
-     * Handle CSI 4 (underline) with optional subparameter N in 4:N.
+     * Handle CSI 4 (underline) with optional sub-parameter N in 4:N.
+     *
+     * With parser flags, `CSI 4 ; 3 m` is TWO independent SGRs (underline +
+     * italic); only the COLON form `4:3` is one curly-underline parameter —
+     * the flattened param list alone cannot tell them apart, the
+     * continuation flags can. Without flags the historical peek remains.
      *
      * @param list<int> $params
+     * @param list<bool>|null $subparams
      * @return array{0: Sgr, 1: int}
      */
-    private function underlineStyle(int $i, array $params, Sgr $sgr): array
+    private function underlineStyle(int $i, array $params, Sgr $sgr, ?array $subparams): array
     {
         $sub = $params[$i + 1] ?? -1;
         $hasSubparam = isset($params[$i + 1]) && $params[$i + 1] !== -1;
-        if (!$hasSubparam || $sub === 1) {
-            // Plain 4 (no subparam) or 4:1 → single underline (existing behavior)
+        if (!$hasSubparam) {
+            // Plain 4 (no subparam) → single underline.
             return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
+        }
+        $colon = $subparams === null ? true : ($subparams[$i] ?? false);
+        if (!$colon) {
+            // `4;N` — semicolon form: N is an INDEPENDENT SGR, not a style.
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
+        }
+        if ($sub === 1) {
+            // `4:1` — xterm ctlseqs: single underline is ONE parameter, so the
+            // subparam must be consumed here. Re-reaching it as a standalone
+            // SGR would replay the `1` as bold — the renderer path (which the
+            // emulator is the parity reference for, but on this point the
+            // renderer follows the spec) treats `4:1` as underline only.
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 2];
         }
         if ($sub === 0) {
             return [$sgr->withUnderlineStyle(UnderlineStyle::None), $i + 2];
@@ -149,6 +186,22 @@ final class SgrHandler
         }
         // Unknown sub-form — skip just the 38/48 marker.
         return [$sgr, $i + 1];
+    }
+
+    /**
+     * How many slots an extended-colour form consumes starting at $i —
+     * marker + kind (+ index for ;5, + triple for ;2), defaulting to just
+     * the marker for unknown kinds. Used by the parse-and-discard 58 arm.
+     *
+     * @param list<int> $params
+     */
+    private function extendedLength(int $i, array $params): int
+    {
+        return match ($params[$i + 1] ?? -1) {
+            5 => $i + 3,
+            2 => $i + 5,
+            default => $i + 1,
+        };
     }
 
     private function resolveByte(int $value): int
