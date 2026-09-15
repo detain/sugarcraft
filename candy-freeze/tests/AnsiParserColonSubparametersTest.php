@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Freeze\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Freeze\AnsiParser;
+use SugarCraft\Freeze\Segment;
+use SugarCraft\Freeze\SgrState;
+use SugarCraft\Freeze\SgrStateHandler;
 use SugarCraft\Freeze\SvgRenderer;
 
 /**
@@ -95,16 +99,33 @@ final class AnsiParserColonSubparametersTest extends TestCase
         $this->assertSame('plain', $segments[1]->text);
     }
 
-    public function testColonUnderlineStyleIsNotMistakenForAColour(): void
+    public function testColonUnderlineGroupDoesNotPaintAColour(): void
     {
-        // `4:3` is one curly-underline group, not an extended colour: no
-        // 38/48 introducer means no component lookup at all.
+        // `4:3` is one curly-underline group, not an extended colour: with no
+        // 38/48 introducer the component lookup is never entered at all.
         $segments = AnsiParser::parse("\x1b[4:3mtext");
 
         $this->assertTrue($segments[0]->underline);
         $this->assertNull($segments[0]->fg);
         $this->assertNull($segments[0]->bg);
+        // Known limitation (findings/candy-freeze.md item 30): the sub-parameter
+        // `3` is still re-read as SGR 3, because only 38/48 groups are consumed
+        // as units. Pinned so a future strict pass changes it knowingly.
+        $this->assertTrue($segments[0]->italic);
         $this->assertSame('text', $segments[0]->text);
+    }
+
+    public function testUnresolvableColonGroupFallsBackAcrossParameterBoundaries(): void
+    {
+        // `38:2::;1;2;3` has an empty colour-space slot *and* an empty red slot,
+        // so the group resolves to nothing and the historic flat reading takes
+        // over — reaching past the `;` into parameters that xterm would treat as
+        // independent SGRs. Deterministic and pre-existing: pinned, not blessed.
+        $segment = AnsiParser::parse("\x1b[38:2::;1;2;3mX")[0];
+
+        $this->assertSame('#000001', $segment->fg);
+        // …and the components it did not consume come back as attributes.
+        $this->assertTrue($segment->italic);
     }
 
     public function testEveryColonSpellingResolvesToASixDigitHex(): void
@@ -174,5 +195,54 @@ final class AnsiParserColonSubparametersTest extends TestCase
         // Same colour, same drawing: the separator spelling is syntax, not data.
         $this->assertSame($plain, $colon);
         $this->assertStringContainsString('fill="#ff8000"', $plain);
+    }
+
+    public function testHandlerWithoutBoundParserStillReadsFlatParameters(): void
+    {
+        // `bindParser()` is what unlocks colon grouping. A handler driven
+        // without a binding must keep working for the flat spelling rather than
+        // degrade into a crash or a malformed value.
+        $state = new SgrState();
+        $textBuf = '';
+        $segments = [];
+        $flush = static function () use (&$segments, &$textBuf, &$state): void {
+            if ($textBuf === '') {
+                return;
+            }
+            $segments[] = new Segment(
+                text:      $textBuf,
+                fg:        $state->fg,
+                bold:      $state->bold,
+                italic:    $state->italic,
+                underline: $state->underline,
+                bg:        $state->bg,
+            );
+            $textBuf = '';
+        };
+
+        $handler = new SgrStateHandler($state, $textBuf, $flush, $segments);
+        $parser = new Parser($handler);
+        $parser->feed("\x1b[38;2;80;160;240mX");
+        $parser->flush();
+        $flush();
+
+        $this->assertCount(1, $segments);
+        $this->assertSame('#50a0f0', $segments[0]->fg);
+
+        // The bound path is what `AnsiParser::parse()` uses, and it is the one
+        // that reads the group. Unbound, the same bytes degrade to the flat
+        // reading — deterministic and still a colour, never a crash.
+        $unbound = new SgrStateHandler($state, $textBuf, $flush, $segments);
+        $unboundParser = new Parser($unbound);
+        $unboundParser->feed("\x1b[38:2::80:160:240mW");
+        $unboundParser->flush();
+        $flush();
+
+        $this->assertSame('#0050a0', $segments[1]->fg);
+
+        $bound = AnsiParser::parse("\x1b[38:2::80:160:240mY");
+        $this->assertSame('#50a0f0', $bound[0]->fg);
+        $oversized = AnsiParser::parse("\x1b[38;2;999;999;999mZ");
+        $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $oversized[0]->fg);
     }
 }

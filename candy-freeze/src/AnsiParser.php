@@ -228,7 +228,7 @@ final class SgrStateHandler implements Handler
                 continue;
             }
             if (($p === 38 || $p === 48) && isset($params[$i + 1])) {
-                [$colour, $reached] = $this->extendedColour($params, $subparams, $i);
+                [$colour, $reached] = self::extendedColour($params, $subparams, $i);
                 if ($colour !== null) {
                     if ($p === 38) {
                         $fg = $colour;
@@ -259,13 +259,18 @@ final class SgrStateHandler implements Handler
      * parsed on its own terms and only falls back to the flat reading when the
      * group cannot yield a colour of its own.
      *
+     * When nothing resolves, the start index comes back unchanged and the caller's
+     * loop re-reads the group's slots as ordinary SGRs. That is historic behaviour:
+     * strict ECMA-48 would consume the failed group, but changing it here would
+     * repaint malformed input that this fix was not meant to touch.
+     *
      * @param list<int>  $params
      * @param list<bool> $subparams
      * @return array{0:?string,1:int} `#rrggbb` (null when unresolved) and the index the scan reached
      */
-    private function extendedColour(array $params, array $subparams, int $start): array
+    private static function extendedColour(array $params, array $subparams, int $start): array
     {
-        $group = $this->parameterGroup($params, $subparams, $start);
+        $group = self::parameterGroup($params, $subparams, $start);
 
         if (count($group) > 1) {
             $colour = self::colourFromGroup($group);
@@ -285,7 +290,7 @@ final class SgrStateHandler implements Handler
      * @param list<bool> $subparams
      * @return list<int>
      */
-    private function parameterGroup(array $params, array $subparams, int $start): array
+    private static function parameterGroup(array $params, array $subparams, int $start): array
     {
         $group = [$params[$start]];
         for ($index = $start; ($subparams[$index] ?? false) === true; $index++) {
@@ -297,6 +302,11 @@ final class SgrStateHandler implements Handler
 
     /**
      * Colour carried by a single colon-separated parameter group.
+     *
+     * xterm counts the sub-parameters after the mode to decide whether the first
+     * one is a colour-space id: four values mean `CS:R:G:B`, three mean a bare
+     * `R:G:B`. Dropping the id slot is therefore tried first, and the tail is
+     * re-read whole only when that leaves too few components to paint with.
      *
      * @param list<int> $group `38` (or `48`) followed by its sub-parameters
      */
@@ -371,7 +381,7 @@ final class SgrStateHandler implements Handler
     /** An xterm-256 index, clamped into the table the renderer owns. */
     private static function paletteColour(int $index): string
     {
-        return AnsiParser::xterm256ToHex(self::component($index));
+        return AnsiParser::xterm256ToHex(self::clampComponent($index));
     }
 
     /**
@@ -385,14 +395,14 @@ final class SgrStateHandler implements Handler
     {
         return sprintf(
             '#%02x%02x%02x',
-            self::component($red),
-            self::component($green),
-            self::component($blue),
+            self::clampComponent($red),
+            self::clampComponent($green),
+            self::clampComponent($blue),
         );
     }
 
     /** A colour component is 8 bits; an omitted parameter defaults to 0. */
-    private static function component(int $value): int
+    private static function clampComponent(int $value): int
     {
         return max(0, min(255, $value));
     }

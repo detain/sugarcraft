@@ -97,7 +97,7 @@ Same issue in `PngRenderer::buildWindowsTerminalWindow()` at line 299 — `$butt
 
 ---
 
-#### 26. ✅ `AnsiParser::applySgr()` corrupts an extended colour written with colon sub-parameters
+#### 30. ✅ [FZ-R3] `AnsiParser::applySgr()` corrupts an extended colour written with colon sub-parameters
 
 **File:** `src/AnsiParser.php` (`SgrStateHandler::applySgr()`)
 
@@ -108,15 +108,26 @@ emitters habitually leave empty. candy-ansi flattens both into one
 read that flattened list positionally — so `38:2::80:160:240` was decoded as
 `R=-1, G=80, B=160`, and `sprintf('%02x', -1)` produced sixteen hex digits:
 `#ffffffffffffffff50a0`. Every renderer downstream inherited the malformed
-value (`SvgRenderer:::37` writes `fill="{fg}"` verbatim).
+value: `SvgRenderer.php:255` writes `fill="…"` from `$seg->fg` through
+`self::xmlEscape()`, which is a no-op on a hex string, and
+`PngRenderer::allocateColor()` slices `substr($hex, 1, 2)` three times, so the
+flood of `f`s silently painted white instead of failing.
 
-**FIXED (2026-09, wave-4 parsers):** `applySgr()` now consults
-`Parser::subparams()` and resolves a `38`/`48` parameter group on its own terms —
-mode, colour-space id, then the three components — falling back to the historic
-flat reading only when the group cannot yield a colour. Components and palette
-indices are coerced to 8 bits, so a `#rrggbb` is always exactly seven characters.
-Covered by `tests/AnsiParserColonSubparametersTest.php`, including the
-`fill="#50a0f0"` bytes the renderer emits.
+**FIXED (2026-09, wave-4 parsers):** `SgrStateHandler::csiDispatch()` now reads
+`Parser::subparams()` and passes the separator flags into `applySgr()`, which
+resolves a `38`/`48` parameter group on its own terms — mode, colour-space id,
+then the three components — falling back to the historic flat reading only when
+the group cannot yield a colour. Components and palette indices are coerced to 8
+bits, so a `#rrggbb` is always exactly seven characters. Covered by
+`tests/AnsiParserColonSubparametersTest.php`, including the `fill="#50a0f0"`
+bytes the renderer emits.
+
+**Known limitation carried forward:** a group that fails to resolve leaves its
+slots to be re-read as ordinary SGRs (`38:2::1` still sets bold, `38:0` still
+resets), and the flat fallback reads the global parameter list, so a malformed
+hybrid like `38:2::;1;2;3` can pull components from a *later* parameter. Both
+match historic behaviour and are pinned by tests rather than silently changed;
+strict ECMA would consume the failed group and ignore the stray slots.
 
 ---
 
