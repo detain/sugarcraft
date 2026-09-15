@@ -162,9 +162,16 @@ Pixel-graphics protocols (`sixel`, `kitty`, `iterm2`) are not cell text — a
 `ImageLayer`, and the card carries only the marker the runtime paints over:
 
 ```php
-$placed = $layer->placeTracked($bytes, $cardWidth, $posterHeight);   // ['sixel','kitty','iterm2']
-$grid   = $grid->withItem($index, $card->withImage($bytes, $placed->imageId));
+$placed = $layer->placeTracked($bytes, $cardWidth, $posterHeight);   // sixel / kitty / iterm2
+
+if ($placed->imageId !== null) {                 // null once the 6400-marker window is full
+    $grid = $grid->withItem($index, $card->withImage($bytes, $placed->imageId));
+}
 ```
+
+`imageId` is nullable for exactly that reason: the overlay addresses images with
+private-use-area cells, and there are only 6400 of them (`ImageOverlay::MAX_IMAGES`),
+so an exhausted layer leaves the cell as the skeleton instead of painting the wrong art.
 
 Cache the *rendered* bytes, not the source image — a render is expensive, a decode
 less so, and the cache key must change when the terminal's protocol does:
@@ -198,7 +205,9 @@ is untrusted, leave the styled title unset and rely on the sanitised plain
 `title`.
 
 Two opt-ins turn that documented contract into an enforced one. Both admit **SGR
-styling only** (`ESC [ <params> m`) — every other escape form (cursor movement,
+styling only** — `ESC [` followed by nothing but digits, `;` and `:` until a final
+`m`; a private (`ESC [ ?…m`) or intermediate-byte (`ESC [ 1 m`) SGR is *not*
+accepted — every other escape form (cursor movement,
 erase, OSC / DCS / APC payloads, bare C0 controls, an 8-bit C1 control written
 either as the raw byte or as the UTF-8 encoding of U+0080–U+009F, a truncated
 sequence) counts as unsafe, per `AnsiGuard`:

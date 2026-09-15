@@ -308,6 +308,8 @@ final class PosterGrid
      * owner otherwise hand-rolls as
      * `for ($i = $start; $i <= $end; $i++) { $grid->item($i) … }`: skeleton
      * indices are simply absent from the result, and the map is ascending.
+     *
+     * @return array<int, PosterCard>
      */
     public function visibleCards(int $overscanRows = 0): array
     {

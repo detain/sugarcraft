@@ -150,6 +150,16 @@ foreach ($pending as $index) {
     $grid = $grid->withItem($index, $grid->item($index)->withPoster($bytes));
 }
 
+// A cache hit is painted from disk rather than re-rendered — the same splice, fed
+// by `$cache->get()` instead of the renderer. Skipping this half of it is how a
+// demo ends up calling a grid "painted" with a skeleton still in the window.
+$cachedKey = DiskCache::key((string) $cards[$cachedIndex]->posterUrl, CARD_W, POSTER_H, $mosaic->protocol());
+$cachedBytes = $cache->get($cachedKey);
+
+if (is_string($cachedBytes)) {
+    $grid = $grid->withItem($cachedIndex, $grid->item($cachedIndex)->withPoster($cachedBytes));
+}
+
 heading('  3 · after the per-cell fill — the same grid, painted');
 echo $grid->render() . "\n";
 dim('  pending now: [' . implode(', ', $grid->indicesNeedingPoster(overscanRows: 1, isCached: $isCached)) . ']');

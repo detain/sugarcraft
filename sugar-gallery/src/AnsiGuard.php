@@ -19,13 +19,13 @@ use InvalidArgumentException;
  * escapes would destroy the very SGR sequences it exists to carry. This class is
  * the other half of that contract: it admits *styling* and nothing else.
  *
- * What passes: SGR sequences (`ESC [ <digits ; : > m`, the styling sequences
- * candy-sprinkles emits) and printable text. What does not: every other escape
- * form (CSI cursor/erase/mode, OSC/DCS/APC payloads, charset designators, Fe/Fs
- * pairs), a malformed or truncated sequence, a bare C0 control, DEL, and an 8-bit
- * C1 control in EITHER wire form — the raw byte (`0x9B`) or its UTF-8 re-encoding
- * (`C2 9B` = U+009B), which mainstream terminals act on as if the `ESC` had been
- * spelled out.
+ * What passes: SGR sequences (`ESC [` followed by nothing but digits, `;` and `:`
+ * until a final `m` — the styling sequences candy-sprinkles emits) and printable
+ * text. What does not: every other escape form (CSI cursor/erase/mode, OSC/DCS/APC
+ * payloads, charset designators, Fe/Fs pairs), a malformed or truncated sequence, a
+ * bare C0 control, DEL, and an 8-bit C1 control in EITHER wire form — the raw byte
+ * (`0x9B`) or its UTF-8 re-encoding (`C2 9B` = U+009B), which mainstream terminals
+ * act on as if the `ESC` had been spelled out.
  *
  * Two shapes of use, for the two kinds of call site:
  *

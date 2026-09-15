@@ -65,6 +65,16 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   callbacks rather than teaching the grid about any of them. A card the owner
   cannot source art for must be filtered OUT by the caller's predicate, or it gets
   re-queued on every scroll.
+- **Prove placement by comparing whole frame rows, not sliced cell bands.** The grid
+  composes a poster row as each cell's own line joined by `hSpacing`, so
+  `assertSame(implode($gap, $rowsOfThatLine), $lines[$n])` pins the visual column,
+  the vertical position and *which* card's art landed there in one comparison.
+  Slicing a cell out of the line first looks tidier and is weaker: `Width::takeAnsi()`
+  keeps the styling runs of the columns it skips, so a colour substring found in a
+  cell's slice may belong to a neighbour — a slice can prove a glyph is present,
+  never whose it is. And keep the fixtures per-index distinct (assert
+  `count(array_unique(...))` over the first rows), or even an exact comparison cannot
+  tell one cell from another.
 - **GD makes an offline image test possible** — `imagecreatetruecolor()` +
   `ImageSource::fromGd($gd, 'image/png')` (there is no `new GdImage(...)` in PHP 8;
   GD objects only come from GD functions). Vary the image per fixture:
@@ -74,7 +84,7 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
 ## Trust boundaries
 
 - **A styled title is echoed verbatim, so `AnsiGuard` is what makes that safe.**
-  SGR (`ESC [ <digits ; : > m`) passes; every other ECMA-48 escape form (CSI with
+  SGR (`ESC [` + only digits/`;`/`:` + `m`) passes; every other ECMA-48 escape form (CSI with
   any other final byte, OSC, DCS/SOS/PM/APC, charset designators, Fe/Fs pairs),
   every C0 control (including TAB/CR/LF — a title is one row), DEL and any 8-bit
   C1 control do not.
