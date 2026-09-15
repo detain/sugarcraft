@@ -11,7 +11,7 @@ use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Ansi\Parser\Parser;
 
 /**
- * Reset matrix: RIS (ESC c), DECSTR (CSI ! p), DECALN (CSI # 8).
+ * Reset matrix: RIS (ESC c), DECSTR (CSI ! p), DECALN (ESC # 8).
  *
  * RESET MATRIX (see also the ScreenHandler::hardReset()/softReset()
  * doc-blocks):
@@ -192,10 +192,8 @@ final class ResetTest extends TestCase
 
     public function testDecalnFillsScreenWithEAndHomesCursor(): void
     {
-        // Wire-level `CSI # 8` cannot be dispatched by the shared
-        // candy-ansi VT500 parser ('8' is a param byte, not a final — the
-        // sequence drops to Ground), so DECALN is exercised through its
-        // programmatic entry point, like enableAltScreen().
+        // Programmatic entry point only — the wire form `ESC # 8` and its
+        // parser seam are pinned end-to-end in DecalnWireTest.
         // Designate non-default sets FIRST so the charsets assertion below
         // proves DECALN reset them (it would be vacuously true otherwise).
         $h = $this->handler(self::DIRTY . "\x1b(0\x1b)U", cols: 6, rows: 3);

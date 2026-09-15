@@ -533,6 +533,34 @@ final class ScreenHandler implements Handler
 
     public function escDispatch(int $final, int $intermediate): void
     {
+        // ESC # <final> — DEC's private "hash" family, decoded BEFORE the
+        // SCS designation fallback: '#' (0x23) is NOT a charset designator,
+        // so letting it reach designate() would silently swallow DECALN.
+        // Authoritative encoding is `ESC # 8` — VT510 ch.4 ("ESC # 8 invokes
+        // the Screen Alignment test"), DEC ansicode.txt "#8 DECALN", and the
+        // vttest vector decaln(){ esc("#8"); }. NOTE FOR FUTURE READERS: the
+        // `ESC [ # 8` spelling that circulates in some references is a
+        // misquote — after `ESC [`, '#' enters xterm's separate palette-stack
+        // substate (csi_hash_table[] = the XT{PUSH,POP,REPORT}-COLORS family
+        // `CSI # P/Q/R/S`) where '8' is a collected digit, not a final; no
+        // surveyed emulator dispatches DECALN from a CSI form and the
+        // candy-ansi transition table we mirror agrees. Do not "fix" the
+        // parser for it. Unimplemented # finals (DECDHL ESC # 3/# 4,
+        // DECSWL/DECDWL ESC # 5/# 6 — follow-up work) fall through to
+        // designate(), preserving their historical silent-ignore exactly.
+        // (The candy-ansi parser keeps a SINGLE intermediate byte, last-wins,
+        // so the malformed double-intermediate stream `ESC ( # 8` arrives as
+        // ('8', '#') and now runs DECALN where it used to be ignored — an
+        // accepted consequence of mirroring the upstream table; xterm ignores
+        // it, garbage streams are the only way to send it.)
+        if ($intermediate === 0x23 /* '#' */) {
+            match ($final) {
+                0x38 /* '8' */ => $this->displayAlignmentTest(),
+                default => $this->designate($intermediate, $final),
+            };
+            return;
+        }
+
         if ($intermediate !== 0) {
             $this->designate($intermediate, $final);
             return;
@@ -1145,22 +1173,24 @@ final class ScreenHandler implements Handler
     }
 
     /**
-     * DECALN — CSI # 8, screen-alignment pattern.
+     * DECALN — ESC # 8, screen-alignment pattern.
      *
      * Fills the whole screen with 'E' (default rendition), resets the
      * scroll margins to full, homes the cursor, resets the SGR pen, and
      * restores the default character-set designation. xterm additionally
      * "toggles DECOM/DECAWM and then restores them" — a no-op here.
      *
-     * WIRE-LEVEL NOTE: the shared candy-ansi VT500 transition table
-     * treats '8' (0x38) as a parameter byte, so a raw `ESC [ # 8` never
-     * reaches csiDispatch() (the parser drops it to Ground without a
-     * dispatch — final bytes must be 0x40-0x7E). This entry point is
-     * therefore programmatic-only, like enableAltScreen(); enabling
-     * wire-level DECALN requires a candy-ansi parser change outside this
-     * lib (deferred; see PR notes).
+     * The authoritative wire encoding is `ESC # 8` (bytes 1B 23 38): DEC
+     * VT510 ch.4, DEC ansicode.txt, xterm ctlseqs, and vttest all agree.
+     * The `ESC [ # 8` rendering seen in some references is a misquote —
+     * in xterm `ESC [` + `#` switches to the palette-stack substate
+     * (`csi_hash_table[]`, the `CSI # P/Q/R/S` XT*COLORS family), never a
+     * DECALN trigger. The sequence reaches here through
+     * {@see self::escDispatch()}; candy-core's `Ansi::decaln()` emits the
+     * same bytes, closing the emitter→emulator round trip.
      *
-     * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECALN)
+     * @see https://vt100.net/docs/vt510-rm/DECALN.html (DECALN)
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (ESC # 8; CSI # = palette stack)
      */
     public function displayAlignmentTest(): void
     {
