@@ -23,7 +23,8 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
+        // 255,0,0 is exactly xterm slot 9 (bright red) — not black, not basic red.
+        $this->assertSame("\x1b[91mred\x1b[0m", $out);
         $this->assertStringContainsString('red', $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
@@ -51,7 +52,8 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
+        // 0,0,255 is exactly xterm slot 12 (bright blue).
+        $this->assertSame("\x1b[94mblue\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
     }
 
@@ -77,7 +79,7 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
+        $this->assertSame("\x1b[94mblue\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
     }
 
@@ -152,7 +154,9 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
+        // Slot 196 (255,0,0) is exactly xterm slot 9 — a bright colour must
+        // never collapse to black (the old basic-8 + luminance hack's failure).
+        $this->assertSame("\x1b[91mred\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;5;", $out);
     }
 }

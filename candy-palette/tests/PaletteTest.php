@@ -290,7 +290,7 @@ final class PaletteTest extends TestCase
     {
         $p = new Palette(null, ['FORCE_COLOR' => '1']); // ANSI
         $degraded = $p->degrade("\x1b[38;2;255;0;0mred\x1b[0m");
-        $this->assertStringStartsWith("\x1b[3", $degraded);
+        $this->assertSame("\x1b[91mred\x1b[0m", $degraded);
         $this->assertStringNotContainsString("\x1b[38;2;", $degraded);
     }
 }

@@ -31,7 +31,8 @@ final class DegradeTest extends TestCase
         $input = "\x1b[38;2;100;50;255mX\x1b[0m";
         $out = $p->degrade($input);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
+        // Nearest ANSI-16 to (100,50,255) is bright blue slot 12 → SGR 94.
+        $this->assertSame("\x1b[94mX\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;5;", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
@@ -42,7 +43,8 @@ final class DegradeTest extends TestCase
         $input = "\x1b[48;2;255;0;0mX\x1b[0m";
         $out = $p->degrade($input);
 
-        $this->assertStringStartsWith("\x1b[4", $out);
+        // (255,0,0) is exactly bright-red slot 9 → background SGR 101.
+        $this->assertSame("\x1b[101mX\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[48;5;", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
@@ -64,7 +66,8 @@ final class DegradeTest extends TestCase
         $input = "\x1b[38;5;196mX\x1b[0m";
         $out = $p->degrade($input);
 
-        $this->assertStringStartsWith("\x1b[3", $out);
+        // Slot 196 decodes to (255,0,0) = bright red slot 9 → SGR 91.
+        $this->assertSame("\x1b[91mX\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;5;196", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
@@ -104,7 +107,8 @@ final class DegradeTest extends TestCase
         $input = "\x1b[48;5;21mX\x1b[0m";
         $out = $p->degrade($input);
 
-        $this->assertStringStartsWith("\x1b[4", $out);
+        // Slot 21 decodes to (0,0,255) = bright blue slot 12 → background SGR 104.
+        $this->assertSame("\x1b[104mX\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[48;5;", $out);
         $this->assertStringNotContainsString("\x1b[\x1b[", $out);
     }
