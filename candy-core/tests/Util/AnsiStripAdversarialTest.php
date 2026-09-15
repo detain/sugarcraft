@@ -175,6 +175,78 @@ final class AnsiStripAdversarialTest extends TestCase
         $this->assertSame("\xe2\x86\x92", Ansi::strip("\x1b\xe2\x86\x92"));
     }
 
+    // ---- ill-formed UTF-8 must NOT re-admit C1 controls -------------------
+
+    /**
+     * A lenient "any lead claims any following 0x80-0xBF" scan smuggles
+     * 8-bit controls: per Unicode Conformance §3.9 the byte AFTER an
+     * ill-formed subpart is reprocessed, so `F5 9C` runs a real ST, `C1 9B`
+     * runs a real CSI, etc. Only FULL well-formed sequences (lead C2–F4,
+     * §3.9 first-continuation ranges, all tails present) may absorb a
+     * C1-range byte; every other 0x80–0x9F must hit the lone-C1 branch.
+     */
+    public function testIllFormedUtf8LeadDoesNotSmuggle8BitControl(): void
+    {
+        // Reproduced from the review round's attack table, expected values
+        // traced against the strict §3.9 claim rule: leads outside C2–F4
+        // (0xC1, 0xF5) are inert text and survive; the C1-range byte after
+        // them is reprocessed — stripped alone (ST) or dispatched as an
+        // introducer whose unterminated payload is discarded fail-closed.
+        $cases = [
+            // C1 (never a lead) + 8-bit CSI: 0x9B stripped, its params die, tail kept.
+            'C1+CSI'   => ["Re\xC1\x9b?1049h!", "Re\xC1!"],
+            // F5 (invalid lead) + 8-bit DCS opener: swallows the tail to EOF.
+            'F5+DCS'   => ["F5\xf5\x90q1;1~", "F5\xf5"],
+            // F0 truncated after a LEGAL first continuation byte: no claim,
+            // 0x9B reprocesses as CSI and eats "31m".
+            'F0trunc'  => ["\xf0\x9b31m!", "\xf0!"],
+            // F4 + out-of-range 2nd byte (0x9D): live 8-bit OSC, closed by ST.
+            'F4+OSC'   => ["A\xf4\x9d1;evil\x1b\\END", "A\xf4END"],
+            // E0 + overlong-range 2nd byte (0x90): 0x90 opens a DCS that
+            // runs to EOF — everything after the inert lead is discarded.
+            'E0+DCS'   => ["\xe0\x90\x9b31m", "\xe0"],
+            // A COMPLETE sixel frame smuggled behind bogus leads must die:
+            // 0xF0 is inert, 0x90 opens DCS, payload runs to the 0x9C ST
+            // (consumed as terminator, not leaked), trailing text survives.
+            'sixelPOC' => ["Report: \xf0\x90q1;1;1;1;2#0;1;1;1;1~\xf5\x9c DONE", "Report: \xf0 DONE"],
+        ];
+        foreach ($cases as $name => [$input, $expected]) {
+            $once = Ansi::strip($input);
+            $this->assertSame($expected, $once, "case {$name} (bytes: " . strtoupper(bin2hex($input)) . ')');
+            $this->assertSame($once, Ansi::strip($once), "case {$name} not idempotent");
+        }
+    }
+
+    public function testIllFormedLeadPlusC1NeverLeaksControlThroughUntrusted(): void
+    {
+        // The sanitizer's hard contract: after untrusted(), no ESC and no
+        // byte 0x80-0x9F may survive unless it is inside a fully well-formed
+        // UTF-8 sequence. A smuggled C1 must not reach the terminal.
+        foreach (['C1', 'F5', 'F0', 'F4', 'E0', 'ED'] as $leadBin) {
+            $lead = \chr((int) \hex2bin($leadBin));
+            foreach (["\x9b", "\x90", "\x9d", "\x9f", "\x9c", "\x1b"] as $c1) {
+                $out = Sanitize::untrusted($lead . $c1 . 'x');
+                $this->assertStringNotContainsString(
+                    $c1,
+                    $out,
+                    "lead {$leadBin} + 8-bit control " . strtoupper(bin2hex($c1)) . " leaked through untrusted()",
+                );
+            }
+        }
+    }
+
+    public function testWellFormedSequencesStillSurviveStrictClaim(): void
+    {
+        // The other side of the ledger: §3.9-legal sequences whose tails
+        // land in the C1 numeric range must STILL be preserved.
+        $this->assertSame("\xf4\x8f\xbf\xbf", Ansi::strip("\xf4\x8f\xbf\xbf")); // U+10FFFF (max legal)
+        $this->assertSame("\xf0\x90\x8f\xbf", Ansi::strip("\xf0\x90\x8f\xbf")); // U+103FF (F0 lead, 0x90 tail)
+        $this->assertSame("\xf0\x9f\x98\x80", Ansi::strip("\xf0\x9f\x98\x80")); // U+1F600 (has 0x9f tail)
+        $this->assertSame("\xc2\x9b", Ansi::strip("\xc2\x9b"));                   // U+009B encoded
+        $this->assertSame("\xe0\xa0\x80", Ansi::strip("\xe0\xa0\x80"));           // U+0800
+        $this->assertSame("\xed\x9f\xbf", Ansi::strip("\xed\x9f\xbf"));           // last pre-surrogate
+    }
+
     // ---- idempotency -------------------------------------------------------
 
     public function testIdempotentAcrossAdversarialCorpus(): void
@@ -207,6 +279,8 @@ final class AnsiStripAdversarialTest extends TestCase
             "\x1b", "\x1b[", "\x1b]", "\x1bP", "\x1b_", "\x1b^", "\x1bX",
             self::ST, "\x07", "\x9b", "\x9d", "\x90", "\x9f", "\x9c", "\x9e",
             'a', '1', ';', 'm', 'q', '~', '"', "\xe2\x86\x92",
+            "\xc1", "\xc2", "\xe0", "\xed", "\xf0", "\xf4", "\xf5",
+            "\xf0\x9f", "\xe0\xa0", "\xc2\x9b", "\x8f",
         ];
         for ($trial = 0; $trial < 400; $trial++) {
             $s = '';
@@ -218,6 +292,27 @@ final class AnsiStripAdversarialTest extends TestCase
                 $once,
                 Ansi::strip($once),
                 'strip() not idempotent for input bytes: ' . strtoupper(bin2hex($s)),
+            );
+        }
+
+        // Second pass of the fuzz: control-heavy inputs built WITHOUT any
+        // lead byte >= 0xC0 (so no legitimate UTF-8 may appear) must come
+        // back with zero ESC and zero C1 bytes from untrusted().
+        mt_srand(0xBADF00D);
+        $asciiC1 = ["\x1b", "\x1b[", "\x1b]", "\x1bP", "\x1b_", self::ST, "\x07",
+                    "\x9b", "\x9d", "\x90", "\x9f", "\x9c", "\x9e", 'a', '1', ';', 'm', '~'];
+        for ($trial = 0; $trial < 400; $trial++) {
+            $s = '';
+            for ($k = 0; $k < 12; $k++) {
+                $s .= $asciiC1[mt_rand(0, count($asciiC1) - 1)];
+            }
+            $out     = Sanitize::untrusted($s);
+            $leaked  = preg_match('/[\x1b\x80-\x9f]/', $out);
+            $this->assertSame(
+                0,
+                $leaked,
+                'untrusted() leaked an ESC/C1 control byte; input: ' . strtoupper(bin2hex($s))
+                    . ' output: ' . strtoupper(bin2hex($out)),
             );
         }
     }

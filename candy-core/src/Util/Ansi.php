@@ -639,7 +639,10 @@ final class Ansi
      * Covers the full ECMA-48 escape taxonomy, in both 7-bit and 8-bit form:
      *
      *  - CSI  — `ESC [` / `0x9B` (ECMA-48 §15.9); consumed through the final
-     *    byte (0x40–0x7E), with parameter/intermediate bytes 0x20–0x3F.
+     *    byte (0x40–0x7E); every byte before the final is consumed
+     *    unconditionally — including stray C0/DEL/C1 (the CSI grammar
+     *    allows only 0x20–0x3F parameters there, so over-consuming is the
+     *    fail-closed direction).
      *  - OSC  — `ESC ]` / `0x9D` (ECMA-48 §8.3.25, xterm "OSC"); terminated
      *    by ST (`ESC \` or `0x9C`) or — xterm's widely used extension — BEL.
      *  - String sequences DCS / SOS / PM / APC — `ESC P|X|^|_` and the 8-bit
@@ -659,15 +662,17 @@ final class Ansi
      * as a fresh introducer; `CAN`/`SUB` cancel a CSI outright (Williams VT
      * parser, ECMA-48 §5.4).
      *
-     * Valid UTF-8 survives untouched: a UTF-8 lead byte (0xC0–0xF7) claims
-     * its following continuation run (0x80–0xBF) into the passthrough, so
-     * C1-range bytes that are really sequence tails (e.g. the 0x92 of
-     * `→` U+2192) are never mistaken for controls. Only an UNCLAIMED
-     * 0x80–0x9F byte — one that cannot continue a lead — is a lone C1.
-     * Claiming runs forward (rather than scanning back over raw input) is
-     * what keeps strip() idempotent: bytes consumed as escapes can never
-     * serve as UTF-8 context on a later pass. A stray `ESC` consumes only
-     * itself so following text and multi-byte characters survive.
+     * Valid UTF-8 survives untouched: a 0x80–0x9F byte is treated as a C1
+     * control unless it is part of a FULL well-formed UTF-8 sequence
+     * (lead C2–F4 with §3.9-conformant continuations). Ill-formed or
+     * truncated sequences claim nothing — matching Unicode's rule that the
+     * byte after an ill-formed subpart is reprocessed, which is exactly how
+     * `F0|C1|F5` + `\x9b` would otherwise smuggle an 8-bit CSI past the
+     * sanitizer. A stray `ESC` consumes only itself so following text and
+     * multi-byte characters survive; `ESC`-led charset designators
+     * (`ESC ( B`) and ESC-prefixed charset invocations (`ESC 7`) leave
+     * their tail bytes as inert visible text — no introducer survives, so
+     * they cannot re-arm a sequence.
      *
      * The scan is a single O(n) byte pass with chunked copies — no regex,
      * no backtracking — so it stays safe on untrusted input of any size,
@@ -690,17 +695,35 @@ final class Ansi
                 $seg = $i;
                 continue;
             }
-            if ($b >= 0xc0 && $b <= 0xf7) {
-                // UTF-8 lead: absorb its immediately adjacent continuation
-                // run (leniently, as terminals decode truncated sequences).
-                $need = match (true) {
-                    $b >= 0xf0 => 3,
-                    $b >= 0xe0 => 2,
-                    default => 1,
-                };
-                for (++$i; $i < $len && $need > 0 && \ord($s[$i]) >= 0x80 && \ord($s[$i]) <= 0xbf; $i++) {
-                    $need--;
+            if ($b >= 0xc2 && $b <= 0xf4) {
+                // UTF-8: claim the run only when it is a FULL well-formed
+                // sequence — valid lead, first continuation byte inside the
+                // lead's legal range (Unicode Conformance §3.9), and all
+                // remaining continuations present. Anything shorter or
+                // out-of-range claims nothing: per §3.9 the C1-range byte
+                // that follows an ill-formed lead is REPROCESSED (and a
+                // conforming 8-bit decoder runs it as a control), so it must
+                // fall through to the lone-C1 branch. This is also what
+                // keeps the scan idempotent: claimed runs are self-contained
+                // and never re-classified by a later pass.
+                $shape = self::utf8Shape($b);
+                $need = $shape[0];
+                $j = $i + 1;
+                $claimed = false;
+                if ($j < $len && $shape[1] <= \ord($s[$j]) && \ord($s[$j]) <= $shape[2]) {
+                    $claimed = true;
+                    for (++$j; --$need > 0; $j++) {
+                        if ($j >= $len || \ord($s[$j]) < 0x80 || \ord($s[$j]) > 0xbf) {
+                            $claimed = false;
+                            break;
+                        }
+                    }
                 }
+                if ($claimed) {
+                    $i = $j;
+                    continue;
+                }
+                $i++; // Ill-formed lead: inert text; next byte judged fresh.
                 continue;
             }
             if ($b >= 0x80 && $b <= 0x9f) {
@@ -712,6 +735,29 @@ final class Ansi
             $i++;
         }
         return $out . substr($s, $seg);
+    }
+
+    /**
+     * Well-formed UTF-8 shape of a lead byte (Unicode Conformance §3.9):
+     * `[total continuation bytes required, low, high]` for the FIRST
+     * continuation byte — E0 excludes overlongs (A0–BF), ED excludes
+     * surrogates (80–9F), F0/F4 clamp the codepoint range (90–BF / 80–8F).
+     * Bytes outside C2–F4 are not leads (C0/C1 overlong, F5–FF out of range)
+     * and never claimed.
+     *
+     * @return array{0:int,1:int,2:int}
+     */
+    private static function utf8Shape(int $lead): array
+    {
+        return match (true) {
+            $lead >= 0xf0 => $lead === 0xf0
+                ? [3, 0x90, 0xbf]
+                : ($lead === 0xf4 ? [3, 0x80, 0x8f] : [3, 0x80, 0xbf]),
+            $lead >= 0xe0 => $lead === 0xe0
+                ? [2, 0xa0, 0xbf]
+                : ($lead === 0xed ? [2, 0x80, 0x9f] : [2, 0x80, 0xbf]),
+            default => [1, 0x80, 0xbf],
+        };
     }
 
     /**
@@ -912,8 +958,10 @@ final class Ansi
     public static function kittyGraphicsBegin(array $opts): string
     {
         $pairs = self::kittyFormatPairs($opts);
-        if (!array_key_exists('m', $opts)) {
-            $pairs .= ',m=1';
+        // A null `m` means "unset" (kittyFormatPairs drops it) — the frame
+        // still has to open the transaction, or later chunks are orphaned.
+        if (($opts['m'] ?? null) === null) {
+            $pairs = $pairs === '' ? 'm=1' : $pairs . ',m=1';
         }
         return self::APC . 'G' . $pairs . ';' . self::ST;
     }
