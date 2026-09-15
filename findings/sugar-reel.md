@@ -31,6 +31,25 @@ off the `view()` hot path, but still spawns ffmpeg synchronously).
 
 ---
 
+## Resolution status — branch `ai/w4-reel`
+
+Same legend as the block above.
+
+Resolved by this PR: **✅ #58** (`Reel::toPlayer()`/`play()` hardcoded the cell
+pixel size at 10×20; now injected via `Reel::withCellPx()`/`cellPx()`, with the
+unset path byte-identical to before and `Player::open()`'s signature untouched).
+
+Still deferred, unchanged by this work: #9 (HalfBlock inline-vs-mosaic parity),
+#13 (mode-cycle decoder churn), #45 (`FfmpegCommandBuilder`; = row 44 of the
+summary table), #52 remainder (fully-async SIGWINCH/decode), and the residual
+half of #8 — only the wide `mutate()` signature remains, since the `??`
+drops-`false`/`0` footgun was itself fixed on master (`Player::mutate()` now
+uses `array_key_exists()` per field). Not tracked as a numbered finding: the
+audio-header passthrough gap (documented in `sugar-reel/README.md`,
+*Known limitations* → "Authenticated video, unauthenticated audio").
+
+---
+
 ## Critical Issues (file:line format)
 
 ### ✅ 1. `AudioPlayer.php:122-128` — SIGSTOP pause mechanism likely ineffective
@@ -528,6 +547,12 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 > **Resolved (this PR).** Audio pause/resume no longer depends on `SIGSTOP`/`SIGCONT`: it terminates and re-spawns the audio subprocess from the banked `$seekMs` position, which works uniformly on Windows and under a PTY. Documented in the README *Known limitations* section.
 
 `AudioPlayer::pause()` and `resume()` check `\defined('SIGSTOP')` and `\defined('SIGCONT')` and return silently on Windows. This means audio pause/resume is completely non-functional on Windows — audio continues playing when the video is paused. This should be documented explicitly.
+
+### ✅ 58. `Reel.php:404-405`, `:443` — cell pixel size hardcoded to 10×20 in the `Player::open()` calls
+
+> **Resolved (branch `ai/w4-reel`).** `Reel` now carries the caller's measured cell geometry: `withCellPx(int $w, int $h): self` (immutable, paired `bool $cellPxSet` sentinel, non-positive dimensions throw at the boundary) and a bare `cellPx(): ?array` accessor. Both `toPlayer()` and `play()` thread the value into `Player::open()`'s existing `$cellPxW`/`$cellPxH` parameters instead of passing literal `10, 20`; a Reel that never called `withCellPx()` still yields 10×20, and `Player::open()`'s signature and defaults are untouched, so the change is fully backward-compatible. `Reel` deliberately does not probe the terminal itself — a query from inside a Model builder would block and would contend with the embedding program's own I/O — so the host supplies the measurement it already has (candy-mosaic's `Mosaic::fontSize()`, parsed from the XTWINOPS 16t reply). This seam is what unblocks the downstream client's `toPlayer()` adoption: in the graphics modes the decode happens at cells·cellPx, so the unmeasured 10×20 guess is exactly what made an embedded player look soft. Covered by `tests/DecoderSeamTest.php` (unset → 10×20 and a 4×3 Kitty grid decoding at 40×60 px; `withCellPx(7,14)` → 28×42 px).
+
+`toPlayer()` and `play()` passed literal `10, 20` for the cell geometry, so an embedding host had no way to supply the real terminal font metrics and its graphics-mode output was decoded at a guessed resolution.
 
 ---
 
