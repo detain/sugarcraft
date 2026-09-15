@@ -122,9 +122,33 @@ final class Terminal
         if ($cols < 1 || $rows < 1) {
             throw new \InvalidArgumentException('cols and rows must be >= 1');
         }
-        $this->handler->buffer = $this->handler->buffer->resize($cols, $rows);
+        // Resize both screens: the saved alt-state buffer must follow the
+        // active one, or leaving DEC 1049 later would restore a stale-size
+        // grid into a resized terminal (real terminals resize both; E725).
+        $this->handler->resizeBuffers($cols, $rows);
     }
 
+    /**
+     * Clone semantics (E725, documented as-is): the {@see ScreenHandler}
+     * is shallow-cloned and the {@see Parser} is rebuilt fresh on the clone.
+     *
+     * Copied per clone: handler object identity (its scalars — tabStops,
+     * scrollRegion bounds, windowTitle — are PHP-copied) and all parse
+     * machine state, which resets to Ground. Any in-flight sequence
+     * (partial UTF-8 rune, unterminated CSI/OSC/DCS string) is dropped,
+     * never resumed; `feed()` after a clone starts parsing clean.
+     *
+     * Shared with the original: the Buffer/Cursor/Sgr/Mode/Scrollback
+     * instances themselves — PHP's shallow `clone` copies the handler's
+     * property references, not the objects. That is safe for the readonly
+     * value objects (every mutation replaces the whole instance) and is
+     * deliberate for the in-place-mutated Buffer/Scrollback: the internal
+     * `with*()` façade methods re-point only the clone's handler slots, so
+     * snapshots isolate state changes, while a raw `clone $terminal` keeps
+     * both terminals viewing the same screen — a live window, by design.
+     * The alt-screen saved slots (savedBuffer/Cursor/Sgr) ride the clone
+     * by reference for the same reason.
+     */
     public function __clone(): void
     {
         $this->handler = clone $this->handler;

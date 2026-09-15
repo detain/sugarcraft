@@ -142,7 +142,7 @@ final class FrameDedupTest extends TestCase
     private function makeSnapshotWithChar(Terminal $terminal, int $row, int $col, string $char, float $time): Snapshot
     {
         $grid = new CellGrid(80, 24);
-        $grid = $grid->set($row, $col, new Cell($char));
+        $grid->set($row, $col, new Cell($char));
         $cursor = new Cursor();
         return new Snapshot($grid, $cursor, $time);
     }

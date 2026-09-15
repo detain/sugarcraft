@@ -79,7 +79,7 @@ final class GdRasterizerTest extends TestCase
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
         $grid = new CellGrid(5, 1);
         $cell = new Cell('A', 7, 0, Cell::ATTR_BOLD);
-        $grid = $grid->set(0, 0, $cell);
+        $grid->set(0, 0, $cell);
 
         $cursor = new Cursor();
         $snapshot = new Snapshot($grid, $cursor, 0.0);
@@ -95,7 +95,7 @@ final class GdRasterizerTest extends TestCase
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
         $grid = new CellGrid(5, 1);
         $cell = new Cell('A', 7, 0, Cell::ATTR_UNDERLINE);
-        $grid = $grid->set(0, 0, $cell);
+        $grid->set(0, 0, $cell);
 
         $cursor = new Cursor();
         $snapshot = new Snapshot($grid, $cursor, 0.0);
@@ -111,7 +111,7 @@ final class GdRasterizerTest extends TestCase
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
         $grid = new CellGrid(5, 1);
         $cell = new Cell('A', 7, 0, Cell::ATTR_INVERSE);
-        $grid = $grid->set(0, 0, $cell);
+        $grid->set(0, 0, $cell);
 
         $cursor = new Cursor();
         $snapshot = new Snapshot($grid, $cursor, 0.0);
@@ -253,7 +253,7 @@ final class GdRasterizerTest extends TestCase
         for ($i = 0; $i < strlen($text) && $i < $cols; $i++) {
             $char = $text[$i];
             $cell = new Cell($char, 7, 0);
-            $grid = $grid->set(0, $i, $cell);
+            $grid->set(0, $i, $cell);
         }
 
         $cursor = new Cursor(0, min(strlen($text), $cols - 1), 0, true);
@@ -278,7 +278,7 @@ final class GdRasterizerTest extends TestCase
         for ($i = 0; $i < strlen($text) && $i < $cols; $i++) {
             $char = $text[$i];
             $cell = new Cell($char, 7, 0);
-            $grid = $grid->set(0, $i, $cell);
+            $grid->set(0, $i, $cell);
         }
 
         $cursor = new Cursor($cursorRow, $cursorCol, $cursorShape, $cursorVisible);

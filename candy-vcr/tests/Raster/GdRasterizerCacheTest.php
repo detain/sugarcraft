@@ -131,7 +131,7 @@ final class GdRasterizerCacheTest extends TestCase
 
         foreach ($chars as $i => $char) {
             $cell = new Cell($char, 7, 0);
-            $grid = $grid->set(0, $i, $cell);
+            $grid->set(0, $i, $cell);
         }
 
         $cursor = new Cursor(0, 0, 0, false);

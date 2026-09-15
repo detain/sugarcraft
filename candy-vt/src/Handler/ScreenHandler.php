@@ -459,6 +459,40 @@ final class ScreenHandler implements Handler
     }
 
     /**
+     * Resize the active Buffer and, when alt-screen state is saved, the
+     * saved main Buffer to the new dimensions, preserving content overlap.
+     *
+     * A resize while in the alt screen (or in DECSET 47/1047 no-save alt)
+     * must not leave a stale-size grid waiting behind the swap — leaving
+     * alt would otherwise restore the old dimensions (real terminals
+     * resize both screens; E725).
+     */
+    public function resizeBuffers(int $cols, int $rows): void
+    {
+        $this->buffer = $this->buffer->resize($cols, $rows);
+        if ($this->savedBuffer !== null) {
+            $this->savedBuffer = $this->savedBuffer->resize($cols, $rows);
+        }
+    }
+
+    /**
+     * DEC 25 (DECTCEM) cursor visibility — the ONLY write path for this
+     * bit (E725).
+     *
+     * One boolean lives in two public value objects: {@see Cursor::$visible}
+     * is what renderers read (candy-vcr's rasterizers consume it directly)
+     * and {@see Mode::$cursorVisible} is what the DEC-mode snapshot reports.
+     * Flipping them independently let the two sources of truth drift; every
+     * visibility change now funnels through this method so the pair moves
+     * atomically. Alt-screen saves carry Cursor::$visible across the swap.
+     */
+    public function setCursorVisible(bool $visible): void
+    {
+        $this->mode = $this->mode->withCursorVisible($visible);
+        $this->cursor = $this->cursor->withVisible($visible);
+    }
+
+    /**
      * Enter the alt screen (DEC 1049 set). Saves the current Buffer +
      * Cursor + Sgr and swaps in a fresh blank Buffer of the same size.
      * Idempotent — re-entering while already in alt mode is a no-op.
@@ -489,10 +523,15 @@ final class ScreenHandler implements Handler
         $this->buffer = $this->savedBuffer;
         $this->cursor = $this->savedCursor ?? $this->cursor;
         $this->sgr = $this->savedSgr ?? Sgr::empty();
+        // The restored cursor is the visibility truth for the main screen —
+        // re-point the Mode mirror at it so a DEC 25 toggled inside the alt
+        // screen does not survive the restore (E725 invariant).
+        $this->mode = $this->mode
+            ->withCursorVisible($this->cursor->visible)
+            ->withAltScreenVariant(Mode::ALT_NONE);
         $this->savedBuffer = null;
         $this->savedCursor = null;
         $this->savedSgr = null;
-        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
     }
 
     /**
@@ -554,8 +593,11 @@ final class ScreenHandler implements Handler
         }
         $this->cursor = $this->savedCursor;
         $this->savedCursor = null;
-        // Do NOT restore buffer or SGR
-        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
+        // Do NOT restore buffer or SGR. Same visibility re-point as the
+        // full 1049 restore: the saved cursor is the truth (E725).
+        $this->mode = $this->mode
+            ->withCursorVisible($this->cursor->visible)
+            ->withAltScreenVariant(Mode::ALT_NONE);
     }
 
     /**

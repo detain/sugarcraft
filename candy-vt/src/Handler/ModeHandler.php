@@ -10,7 +10,7 @@ namespace SugarCraft\Vt\Handler;
  * Recognised modes (and their `Mode` field):
  *
  * - `7`    DECAWM auto-wrap        → `autoWrap`
- * - `25`   cursor visibility       → `cursorVisible`
+ * - `25`   cursor visibility       → {@see ScreenHandler::setCursorVisible()} (single write path)
  * - `1001` X10 mouse (button only) → `mouseHighlights`
  * - `1000` X11 mouse (button only) → `mouseAny`
  * - `1002` cell-motion mouse       → `mouseCellMotion`
@@ -49,7 +49,7 @@ final class ModeHandler
         match ($mode) {
             6 => $h->mode = $h->mode->withOriginMode($set),
             7 => $h->mode = $h->mode->withAutoWrap($set),
-            25 => $this->setCursorVisible($set, $h),
+            25 => $h->setCursorVisible($set),
             1001 => $h->mode = $h->mode->withMouseHighlights($set),
             1000 => $h->mode = $h->mode->withMouseAny($set),
             1002 => $h->mode = $h->mode->withMouseCellMotion($set),
@@ -66,11 +66,5 @@ final class ModeHandler
             2026 => $h->mode = $h->mode->withSyncUpdate($set),
             default => null,
         };
-    }
-
-    private function setCursorVisible(bool $set, ScreenHandler $h): void
-    {
-        $h->mode = $h->mode->withCursorVisible($set);
-        $h->cursor = $h->cursor->withVisible($set);
     }
 }

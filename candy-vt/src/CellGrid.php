@@ -63,10 +63,22 @@ final class CellGrid
         return $this->grid[$row][$col];
     }
 
-    public function set(int $row, int $col, Cell $cell): self
+    /**
+     * Write a cell and widen the dirty region; out-of-bounds coordinates
+     * are silently ignored.
+     *
+     * Orchestrator ruling (E725, round 82): returns `void` and mutates
+     * in place. `CellGrid` is a hot workspace — like {@see \SugarCraft\Vt\Buffer\Buffer}
+     * — not an immutable value object; the project's immutable+fluent law
+     * reserves `with*()` for new instances, and the old fluent `: self`
+     * return on a mutating `set()` implied chaining that was never intended.
+     * The caller census at ruling time found zero production-code return
+     * consumers; test/README re-bindings were collapsed in the same step.
+     */
+    public function set(int $row, int $col, Cell $cell): void
     {
         if ($row < 0 || $row >= $this->rows || $col < 0 || $col >= $this->cols) {
-            return $this;
+            return;
         }
 
         $this->grid[$row][$col] = $cell;
@@ -74,8 +86,6 @@ final class CellGrid
         $this->maxRow = max($this->maxRow, $row);
         $this->minCol = min($this->minCol, $col);
         $this->maxCol = max($this->maxCol, $col);
-
-        return $this;
     }
 
     public function clear(): self

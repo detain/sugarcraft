@@ -124,8 +124,8 @@ $cell = $cell->withAttrs(Cell::ATTR_ITALIC | Cell::ATTR_UNDERLINE);
 
 // CellGrid — 2D grid with dirty-region tracking
 $grid = new CellGrid(cols: 80, rows: 24);
-$grid = $grid->set(0, 0, new Cell(char: 'H'));
-$grid = $grid->set(0, 1, new Cell(char: 'i'));
+$grid->set(0, 0, new Cell(char: 'H'));   // mutates in place (returns void)
+$grid->set(0, 1, new Cell(char: 'i'));
 echo $grid->get(0, 0)->char;          // 'H'
 echo implode(',', $grid->dirtyRegion()); // minRow, maxRow, minCol, maxCol
 $grid = $grid->clear();               // resets dirtyRegion

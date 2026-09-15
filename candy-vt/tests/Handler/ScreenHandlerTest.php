@@ -131,6 +131,54 @@ final class ScreenHandlerTest extends TestCase
         $this->assertTrue($h->mode->cursorVisible);
     }
 
+    /**
+     * E725 invariant: the visibility bit has exactly one write path
+     * ({@see ScreenHandler::setCursorVisible()}), so the renderer-facing
+     * `Cursor::$visible` and the mode-snapshot `Mode::$cursorVisible`
+     * can never disagree — not across DEC 25 toggles, not across any of
+     * the three alt-screen swap/restore variants.
+     */
+    public function testCursorVisibilityFieldsNeverDiverge(): void
+    {
+        $assertSynced = function (ScreenHandler $h, string $step): void {
+            $this->assertSame(
+                $h->mode->cursorVisible,
+                $h->cursor->visible,
+                "DEC 25 mirror pair diverged after {$step}",
+            );
+        };
+
+        $h = new ScreenHandler(new Buffer(10, 5));
+        $p = new Parser($h);
+        $assertSynced($h, 'construction');
+
+        $sequences = [
+            ['DEC 25 hide', "\x1b[?25l"],
+            ['DEC 25 show', "\x1b[?25h"],
+            ['DEC 25 re-hide', "\x1b[?25l"],
+            ['DECSCUSR shape', "\x1b[1 q"],
+            ['1049 enter alt', "\x1b[?1049h"],
+            ['DEC 25 show inside alt', "\x1b[?25h"],
+            ['1049 leave alt', "\x1b[?1049l"],
+            ['1047 enter alt (no-save)', "\x1b[?1047h"],
+            ['DEC 25 hide inside alt', "\x1b[?25l"],
+            ['1047 leave alt', "\x1b[?1047l"],
+            ['1048 enter alt (cursor-only)', "\x1b[?1048h"],
+            ['DEC 25 show inside alt', "\x1b[?25h"],
+            ['1048 leave alt', "\x1b[?1048l"],
+        ];
+        foreach ($sequences as [$step, $bytes]) {
+            $p->feed($bytes);
+            $assertSynced($h, $step);
+        }
+
+        // The choke point itself moves both fields.
+        $h->setCursorVisible(false);
+        $assertSynced($h, 'direct setCursorVisible(false)');
+        $this->assertFalse($h->cursor->visible);
+        $this->assertFalse($h->mode->cursorVisible);
+    }
+
     public function testNonQuestionPrefixedHIgnored(): void
     {
         // Standard mode (not DEC private) — currently no-op in PR3.

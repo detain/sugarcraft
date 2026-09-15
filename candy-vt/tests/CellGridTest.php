@@ -44,10 +44,21 @@ final class CellGridTest extends TestCase
         $grid = new CellGrid(5, 5);
         $cell = new Cell(char: 'A');
 
-        $result = $grid->set(2, 3, $cell);
+        $grid->set(2, 3, $cell);
 
         $this->assertSame('A', $grid->get(2, 3)->char);
-        $this->assertSame($grid, $result, 'set() returns self for chaining');
+    }
+
+    public function testSetIsVoidAndMutatesInPlace(): void
+    {
+        $signature = new \ReflectionMethod(CellGrid::class, 'set');
+
+        $this->assertTrue($signature->hasReturnType(), 'set() must declare a return type');
+        $this->assertSame(
+            'void',
+            (string) $signature->getReturnType(),
+            'E725 ruling: set() returns void and mutates in place — the grid is a hot workspace, not a fluent builder',
+        );
     }
 
     public function testSetIgnoresOutOfBounds(): void
@@ -55,9 +66,17 @@ final class CellGridTest extends TestCase
         $grid = new CellGrid(5, 5);
         $cell = new Cell(char: 'X');
 
-        $result = $grid->set(-1, 0, $cell);
+        $grid->set(-1, 0, $cell);
+        $grid->set(5, 0, $cell);
+        $grid->set(0, -1, $cell);
+        $grid->set(0, 5, $cell);
 
-        $this->assertSame($grid, $result, 'set() returns self even on OOB');
+        // Out-of-bounds writes are dropped: the dirty region stays pristine.
+        $region = $grid->dirtyRegion();
+        $this->assertSame(PHP_INT_MAX, $region['minRow']);
+        $this->assertSame(-1, $region['maxRow']);
+        $this->assertSame(PHP_INT_MAX, $region['minCol']);
+        $this->assertSame(-1, $region['maxCol']);
     }
 
     public function testDirtyRegionInitiallyMaxValues(): void
