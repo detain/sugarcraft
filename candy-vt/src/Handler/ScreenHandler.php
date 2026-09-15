@@ -245,10 +245,15 @@ final class ScreenHandler implements Handler
      * the two are independent optional parameters, nothing about their types
      * enforces that, so a caller could inject `cursor: new Cursor(shape: 5)`
      * with no `$mode` and start life diverged (5 vs 0). The half that was NOT
-     * injected therefore follows the half that was, and the invariant holds
+     * injected therefore follows the half that was, so the pair is consistent
      * from construction onward. When BOTH are supplied they are taken
      * verbatim — an explicit pair is the caller's own statement of intent,
-     * and the next `CSI Ps SP q` resyncs it anyway.
+     * and the next `CSI Ps SP q` resyncs it anyway. The invariant this
+     * establishes is upheld by every path the handler itself takes; it is not
+     * enforced against an outside writer, because `$cursor` and `$mode` are
+     * public properties and {@see \SugarCraft\Vt\Terminal\Terminal::withCursor()}
+     * / {@see \SugarCraft\Vt\Terminal\Terminal::withMode()} assign one half
+     * without reconciling the other (both `@internal`, no in-tree caller).
      */
     public function __construct(
         Buffer $buffer,
@@ -516,7 +521,11 @@ final class ScreenHandler implements Handler
                 $this->tabStops = $this->tabHandler->clear($mode === -1 ? 0 : $mode, $this->cursor->col, $this->tabStops);
                 return;
             case 'q':
-                // DECSCUSR — cursor shape (CSI Ps SP q).
+                // DECSCUSR — cursor shape (CSI Ps SP q). Ps is stored verbatim:
+                // a non-conformant value (e.g. `CSI 9 SP q`) is kept as given
+                // rather than ignored the way xterm's switch drops it. Both
+                // fields still receive the same number, so the pair invariant
+                // survives; only the 0-6 vocabulary in CursorShape is unenforced.
                 // intermediate 0x20 = space (SP), final = 'q' (0x71).
                 if ($intermediate === ord(' ') && $prefix === 0) {
                     $shape = $params[0] ?? 0;
@@ -1195,9 +1204,10 @@ final class ScreenHandler implements Handler
      * an earlier revision zeroed `cursor->shape` while leaving
      * `mode->cursorShape` at its DECSCUSR value, so `CSI 4 SP q` then
      * `CSI ! p` left the two fields holding different shapes. Nothing in-tree
-     * renders or reports either one yet (`Mode::$cursorShape` has no reader
-     * outside {@see Mode::equals()}, and no rasterizer consumes this Cursor
-     * class), so this is state-integrity work, not a visible-drawing fix.
+     * renders or reports either one yet: the only consumers of
+     * `Mode::$cursorShape` are {@see Mode::equals()} and the reconcile in
+     * {@see self::__construct()}, and no rasterizer reads this Cursor class,
+     * so this is state-integrity work, not a visible-drawing fix.
      *
      * DIVERGENCE (our choice, not xterm's): xterm also resets the scrolling
      * region (`resetMarginMode(xw)`, `charproc.c:14398`, likewise above the
@@ -1544,9 +1554,14 @@ final class ScreenHandler implements Handler
         $this->savedCursor = $this->cursor;
         $this->savedWrapPending = $this->wrapPending;
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
-        // Homed, visibility kept, DECSCUSR shape CARRIED through — cursor style
-        // is per-terminal in xterm and survives the swap; see
-        // {@see self::enterAltScreen()} for the source lines.
+        // Homed, visibility kept, DECSCUSR shape CARRIED through. NOTE the
+        // asymmetry with xterm: DEC 1048 there is `srm_SAVE_CURSOR`
+        // (`ptyx.h:1275`), a bare `CursorSave(xw)` / `CursorRestore(xw)` with
+        // NO buffer swap at all (`charproc.c:7915-7922`); candy-vt's 1048 is a
+        // cursor-only alt swap, which is this port's own pre-existing model.
+        // The shape survives either way for the same reason — cursor style is
+        // per-terminal and `SavedCursor` carries none (see
+        // {@see self::enterAltScreen()} for those lines).
         $this->cursor = new Cursor(visible: $this->cursor->visible, shape: $this->cursor->shape);
         $this->wrapPending = false;
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_CURSOR_ONLY);

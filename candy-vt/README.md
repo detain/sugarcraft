@@ -444,9 +444,10 @@ when leaving origin mode — both happen together via `CSI ?6 l`.
 ## Cursor shape (DECSCUSR)
 
 DECSCUSR (`CSI Ps SP q`) sets the terminal cursor shape. The handler records it
-on **two** fields — `Cursor::$shape` for the renderer and `Mode::$cursorShape`
-for mode state — which are always written together and are kept equal by every
-rebuild of the cursor. `Mode` exposes the value as an integer:
+on **two** fields — `Cursor::$shape`, the copy a renderer would read, and
+`Mode::$cursorShape`, the copy mode state carries — which the handler writes
+together and keeps equal across every rebuild of the cursor. `Mode` exposes the
+value as an integer:
 
 ```php
 use SugarCraft\Vt\Mode\Mode;
@@ -475,7 +476,9 @@ to match the VT spec.
 
 Across the reset and screen-swap paths the shape follows xterm-411: RIS
 (`ESC c`) and DECSTR (`CSI ! p`) reset it to `0` on both fields, while DECALN
-(`ESC # 8`) and the alt-screen swaps (DECSET 1048/1049) preserve it. DECSTR
+(`ESC # 8`) and the alt-screen swaps (DECSET 1048/1049) preserve it. Injecting
+both a `Cursor` and a `Mode` into `ScreenHandler` is the one documented case
+where the pair is taken exactly as supplied. DECSTR
 resets it because xterm's soft reset shares RIS's cursor block and
 `InitCursorShape()` recomputes the style from resources, so a DECSCUSR setting
 does not outlive a soft reset.

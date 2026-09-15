@@ -38,15 +38,16 @@ use SugarCraft\Ansi\Parser\Parser;
  * RIS preserves the scrollback (charmbracelet/x/vt `Emulator.fullReset`
  * resets both Screen buffers but never the ring — only ED 3 clears it)
  * and clears the saved cursor (upstream `Screen.Reset` zeroes `saved`).
- * DECSTR is the soft variant, and the tab stops, charsets, saved cursor and
- * ring that survive it do so as a DELIBERATE candy-vt subset, not because
- * xterm agrees: xterm-411 `ReallyReset()` resets the scrolling region
+ * DECSTR is the soft variant. The margins, character sets and saved cursor
+ * that survive it do so as a DELIBERATE candy-vt subset, not because xterm
+ * agrees: xterm-411 `ReallyReset()` resets the scrolling region
  * (`charproc.c:14398`) and the character sets (`charproc.c:14410`) above the
  * RIS-only `if (full)` gate at `charproc.c:14432`, and the DECSTR branch
  * itself overwrites the DECSC slot with home (`charproc.c:14559-14561`).
- * Only tab stops (`TabReset` inside `if (full)`, `charproc.c:14449`) and the
- * scrollback (flushed on the separate `saved` argument, `charproc.c:14372-14375`,
- * which DECSTR passes False) genuinely match xterm. Cursor shape is reset by
+ * Tab stops and the scrollback, by contrast, genuinely match xterm —
+ * `TabReset` sits inside `if (full)` (`charproc.c:14449`) and the ring is
+ * flushed on the separate `saved` argument (`charproc.c:14372-14375`), which
+ * DECSTR passes False. Cursor shape is reset by
  * BOTH variants because xterm's shared cursor block at `charproc.c:14377-14387`
  * runs for the soft reset too — see the CURSOR SHAPE paragraph on
  * {@see ScreenHandler::softReset()} and CursorShapeAgreementTest.

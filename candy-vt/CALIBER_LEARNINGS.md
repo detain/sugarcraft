@@ -371,8 +371,12 @@ arm (guarded on `$intermediate === 0x20 && $prefix === 0`), NOT by
 TWO fields, and they are written together.**
 
 **Gotcha: keep `Cursor::$shape` and `Mode::$cursorShape` equal.** Believing the
-shape "is stored in `Mode`" is the mental model that produced three separate
-divergence bugs: any site that rebuilds the cursor with `new Cursor(...)` and
+shape "is stored in `Mode`" is the mental model behind every instance of this
+bug so far — four `new Cursor(...)` sites that dropped the field, three of them
+still unfixed on master (`softReset()`, `enterAltScreen()`,
+`enterAltScreenCursorOnly()`) plus `displayAlignmentTest()`, fixed earlier in
+d110bb398 — and a fifth, independent way to desynchronise the pair found in
+review: the constructor. Any site that rebuilds the cursor with `new Cursor(...)` and
 omits the `shape:` named argument silently drops the renderer's copy to its 0
 default while the mode keeps the DECSCUSR value. Audit every `new Cursor(` when
 touching reset or screen-swap code. Current policy, each backed by xterm-411
@@ -384,10 +388,17 @@ not outlive a soft reset); `displayAlignmentTest()`/DECALN and both alt-screen
 carries (`enterAltScreen()` 1049, `enterAltScreenCursorOnly()` 1048) PRESERVE it
 (`SavedCursor` at `ptyx.h:2347-2363` has no style member and `cursor_shape` is
 one per-terminal field, `ptyx.h:2806`). The constructor reconciles a lone
-injected `Cursor` or `Mode` so the pair is consistent from time zero; a caller
-supplying BOTH halves verbatim is the one documented exception.
-`CursorShapeAgreementTest` pins all of it, seeded from shape 4/5 so no
-assertion can be satisfied by the accidental 0 that is the symptom.
+injected `Cursor` or `Mode` so the pair is consistent from time zero. Two ways
+the invariant is NOT enforced, both deliberate: a caller supplying BOTH halves
+takes them verbatim (an explicit pair, resynced by the next `CSI Ps SP q`), and
+because `$cursor`/`$mode` are public properties that
+`Terminal::withCursor()`/`withMode()` assign singly, an outside writer can still
+split them — so treat the pair as "equal for every path the handler itself
+takes", not as a theorem. `CursorShapeAgreementTest` pins the handler's own
+paths; every behavioural case is seeded from a non-default shape (4, 5 or 6) so
+no behavioural assertion can be satisfied by the accidental 0 that is the
+symptom, and the two tests that intentionally pin 0 (default construction, RIS)
+say so in place.
 
 Consumers that need the `CursorShape` enum call
 `CursorShape::fromInt($mode->cursorShape)`.

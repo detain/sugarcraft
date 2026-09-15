@@ -16,10 +16,14 @@ final readonly class Cursor
         public int $col = 0,
         public bool $visible = true,
         /**
-         * Raw DECSCUSR parameter from `CSI Ps SP q`, 0-6: 0/1 blinking block,
-         * 2 steady block, 3 blinking underline, 4 steady underline, 5 blinking
-         * bar, 6 steady bar (see {@see \SugarCraft\Vt\CursorShape}). Kept equal
-         * to {@see \SugarCraft\Vt\Mode\Mode::$cursorShape} by every writer.
+         * Raw DECSCUSR parameter from `CSI Ps SP q`. For conformant input that
+         * is 0-6: 0/1 blinking block, 2 steady block, 3 blinking underline,
+         * 4 steady underline, 5 blinking bar, 6 steady bar
+         * (see {@see \SugarCraft\Vt\CursorShape}). The handler stores Ps
+         * verbatim, so a non-conformant larger value can land here; it is not
+         * clamped, and {@see \SugarCraft\Vt\CursorShape::fromInt()} maps
+         * anything unknown back to BlinkingBlock. Kept equal to
+         * {@see \SugarCraft\Vt\Mode\Mode::$cursorShape} by every writer.
          */
         public int $shape = 0,
         public ?int $savedRow = null,

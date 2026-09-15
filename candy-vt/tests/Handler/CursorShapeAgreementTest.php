@@ -21,13 +21,15 @@ use SugarCraft\Vt\Mode\Mode;
  * that rebuilds the Cursor with `new Cursor(...)` and omits `shape:`
  * silently zeroes the renderer's copy while the mode keeps its value, so the
  * two disagree. No in-tree consumer renders or reports either field today
- * (`Mode::$cursorShape`'s only reader is {@see \SugarCraft\Vt\Mode\Mode::equals()},
+ * (`Mode::$cursorShape` is read only by {@see \SugarCraft\Vt\Mode\Mode::equals()}
+ * and the reconcile in {@see \SugarCraft\Vt\Handler\ScreenHandler::__construct()},
  * and the candy-vcr rasterizers drive a different Cursor class), which is
  * exactly why the divergence went unnoticed — it is a broken internal
  * invariant and an API contract any future renderer will rely on. Every test
- * here asserts BOTH fields and their agreement, always seeded from a
- * non-default shape (4 or 5) so the assertions cannot be satisfied by the
- * accidental 0 that is the symptom.
+ * here asserts BOTH fields and their agreement. Each BEHAVIOURAL case is
+ * seeded from a non-default shape (4, 5 or 6) so it cannot be satisfied by the
+ * accidental 0 that is the symptom; the two tests that deliberately pin 0
+ * (default construction, and RIS) say so in their own comments.
  *
  * Per-path expected outcomes, all from xterm-411 `charproc.c` (line numbers
  * cited at each site in ScreenHandler):
@@ -40,7 +42,9 @@ use SugarCraft\Vt\Mode\Mode;
  * | DECALN `ESC # 8`     | never touches cursor style          | preserved |
  * | DECSET 1049h alt swap| `SavedCursor` has no style field;   | preserved |
  * |                      | `cursor_shape` is per-terminal      |          |
- * | DECSET 1048h cursor  | same                              | preserved |
+ * | DECSET 1048h cursor  | xterm's 1048 is a bare save/        | preserved |
+ * |                      | restore, no swap (7915-7922); ours  |          |
+ * |                      | swaps, and style rides through      |          |
  * | DECSET 47h / 1047h   | buffer swap only, cursor untouched  | preserved |
  * | DECSC / DECRC        | `SavedCursor` carries no style      | preserved |
  *
@@ -109,6 +113,9 @@ final class CursorShapeAgreementTest extends TestCase
 
     public function testDefaultConstructionAgreesAtZero(): void
     {
+        // Deliberate 0/0 pin (one of two in this file, the other being RIS): it
+        // passes on the pre-fix code too, because its job is to freeze the
+        // construction contract, not to detect the bug.
         $h = $this->handler();
         $this->assertSame(0, $h->cursor->shape);
         $this->assertSame(0, $h->mode->cursorShape);
@@ -274,8 +281,12 @@ final class CursorShapeAgreementTest extends TestCase
 
     public function testEnterAltScreenCursorOnlyPreservesShape(): void
     {
-        // 1048 shares the 1049 cursor swap, so the same xterm lines apply
-        // (see the 1049 test above for the file:line evidence).
+        // candy-vt's 1048 shares the 1049 cursor swap, so the same xterm facts
+        // apply to the SHAPE (see the 1049 test above for the file:line
+        // evidence). xterm itself treats 1048 differently — `srm_SAVE_CURSOR`
+        // (ptyx.h:1275) is a bare `CursorSave(xw)`/`CursorRestore(xw)` with no
+        // buffer swap (charproc.c:7915-7922) — so the mode number's xterm
+        // meaning is cited here only for the style-preservation argument.
         $h = $this->handler(self::UNDERLINE);
         $h->enterAltScreenCursorOnly();
 
@@ -327,7 +338,9 @@ final class CursorShapeAgreementTest extends TestCase
     public function testHardResetLeavesBothShapeFieldsAtDefault(): void
     {
         // hardReset() rebuilds Cursor AND Mode from scratch, so both land on 0
-        // and agree. Pinned because it is the one reset where 0 IS the right
+        // and agree. The second deliberate 0/0 pin in this file (the other is
+        // default construction), and it passes on the pre-fix code by design:
+        // RIS is the one reset where 0 IS the right
         // answer (xterm's `ReallyReset(full=True)` runs the same
         // `charproc.c:14377-14387` cursor block), and because the paired
         // construction is what keeps it consistent — a future edit that reset
