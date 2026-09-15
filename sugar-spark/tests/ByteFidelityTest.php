@@ -344,6 +344,10 @@ final class ByteFidelityTest extends TestCase
         $segments = Inspector::parse("\x1b]0;unfinished");
 
         $this->assertCount(1, $segments);
+        // The documented normalisation: an OSC ended by the stream instead of by
+        // BEL or ST is re-emitted with a BEL terminator, so the byte account is
+        // exact and pinned here rather than only implied by the count.
+        $this->assertSame("\x1b]0;unfinished\x07", $segments[0]->raw());
         $this->assertStringContainsString('set window title', $segments[0]->describe());
     }
 
@@ -568,6 +572,78 @@ final class ByteFidelityTest extends TestCase
 
         foreach ($cases as $bytes => $expected) {
             $this->assertSame($expected, Inspector::describeTruncated($bytes), strtoupper(bin2hex($bytes)));
+        }
+    }
+
+    // --- SP-R5 beyond CSI: the same replay rule applies to DCS parameters ----
+
+    public function testDcsParametersKeepTheirOwnSeparators(): void
+    {
+        // `Action::Param` in candy-ansi feeds DCS sub-parameters through the
+        // very same slot/flag arrays as a CSI, so a colon inside a DCS prelude
+        // must survive exactly like one inside an SGR — and an omitted
+        // parameter must stay an empty slot rather than the literal `-1` master
+        // printed.
+        //
+        // The expected bytes still show the one documented pre-existing
+        // normalisation: a re-emitted DCS drops the prelude's final byte (`q`
+        // here), which is outside this PR and recorded in CALIBER_LEARNINGS.
+        $cases = [
+            'colon sub-parameters' => ["\x1bP1:2q data\x1b\\", "\x1bP1:2 data\x1b\\"],
+            'omitted parameter' => ["\x1bP;5q data\x1b\\", "\x1bP;5 data\x1b\\"],
+            'plain semicolons' => ["\x1bP1;2q data\x1b\\", "\x1bP1;2 data\x1b\\"],
+            'mixed separators' => ["\x1bP0;1:2;3q data\x1b\\", "\x1bP0;1:2;3 data\x1b\\"],
+        ];
+
+        foreach ($cases as $label => [$input, $expected]) {
+            $raw = Inspector::parse($input)[0]->raw();
+            $this->assertSame($expected, $raw, $label);
+            $this->assertStringNotContainsString('-1', $raw, $label);
+        }
+    }
+
+    // --- documented limit: candy-ansi's 32-parameter cap --------------------
+
+    public function testParameterCapIsReportedAsTheParserSawIt(): void
+    {
+        // `Parser::MAX_PARAMS` is 32: past the cap the separator is dropped and
+        // further digits keep accumulating into the last slot, so `32;33`
+        // reaches the handler as the single parameter `3233`. The inspector
+        // reports what the parser saw — pinning the loss rather than leaving it
+        // a silent hole in the byte account.
+        $input = "\x1b[" . implode(';', range(1, 33)) . 'm';
+        $segments = Inspector::parse($input);
+
+        $this->assertCount(1, $segments);
+        $this->assertSame("\x1b[1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30;31;3233m", $segments[0]->raw());
+        $this->assertSame(strlen($input) - 1, strlen($segments[0]->raw()), 'one separator is consumed by the cap');
+
+        // At the cap itself the round-trip is still exact.
+        $within = "\x1b[" . implode(';', range(1, 32)) . 'm';
+        $this->assertSame($within, Inspector::parse($within)[0]->raw());
+    }
+
+    // --- ambiguous truecolour spellings: the count rule both libs share -----
+
+    public function testAmbiguousColonTruecolourUsesTheCountRule(): void
+    {
+        // xterm allows the colour-space id slot to be omitted *entirely*, so a
+        // group of three sub-parameters after the mode is bare R:G:B and a group
+        // of four is CS:R:G:B. sugar-spark's label and candy-freeze's resolved
+        // colour apply the same rule to the same bytes; pinning the reading here
+        // keeps the two parsers from drifting apart silently.
+        $cases = [
+            "\x1b[38:2:1:2:3m" => 'SGR foreground rgb(1,2,3)',
+            "\x1b[38:2:1:2:3:4m" => 'SGR foreground rgb(2,3,4)',
+            "\x1b[38:2::1:2:3m" => 'SGR foreground rgb(1,2,3)',
+            "\x1b[38:2:::1:2:3m" => 'SGR foreground rgb(1,2,3)',
+            "\x1b[38:2:1m" => 'SGR foreground truncated truecolor',
+        ];
+
+        foreach ($cases as $input => $expected) {
+            $segments = Inspector::parse($input);
+            $this->assertSame($input, $segments[0]->raw());
+            $this->assertStringContainsString($expected, $segments[0]->describe(), $input);
         }
     }
 }

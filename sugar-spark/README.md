@@ -83,10 +83,19 @@ nothing is silently swallowed.
 
 Reported bytes are the bytes that were sent: parameters keep the separator the
 sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
-parameter keeps its empty slot); a string's `ESC \` terminator is reported once,
+parameter keeps its empty slot) — in a CSI **and** in a DCS prelude, which travel
+through the same parameter arrays; a string's `ESC \` terminator is reported once,
 inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
+
+Three normalisations remain, each pinned by a test rather than hidden: an OSC is
+re-emitted with a BEL terminator; a re-emitted DCS prelude is lossy (its final
+byte is dropped and an intermediate byte comes back ahead of the parameters) —
+the parameters themselves now keep their own separators; and candy-ansi caps a
+sequence at 32 parameters, past which the separator is dropped and digits keep
+accumulating into the last slot, so `ESC[1;…;32;33m` arrives as the single
+parameter `3233`.
 
 ## Test
 

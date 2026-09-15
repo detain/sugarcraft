@@ -250,6 +250,15 @@ final class Inspector
      * id (emitters almost always leave it empty), which is why the components
      * are NOT simply the tail of the group: reading the id as red is what turns
      * `38:2::80:160:240` into a wrong colour.
+     *
+     * <p>The slot may also be omitted entirely, and the two spellings are
+     * genuinely ambiguous on their face — `38:2:1:2:3` is either CS 1 with a
+     * missing blue, or bare R:G:B. The rule applied here (and in
+     * `SugarCraft\Freeze\SgrStateHandler`, measured to agree on every shape) is
+     * xterm's count rule: four sub-parameters after the mode are `cs:r:g:b`,
+     * three are bare `r:g:b`. A future change to one parser's rule must be
+     * mirrored in the other, or the same bytes will mean different colours in
+     * the inspector and in the rendered output.
      */
     private static function describeColonColour(string $kind, string $group): string
     {

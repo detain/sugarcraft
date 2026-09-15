@@ -59,10 +59,21 @@ final class AnsiHandler implements Handler
      * {@see escDispatch()}. candy-ansi ends DCS/OSC/SOS/PM/APC on the ESC and
      * then dispatches the `\` as a two-byte escape; the terminator already
      * lives in the emitted segment, so it must not surface a second time.
+     *
+     * `feed()` is what keeps the window exactly one byte wide (any byte other
+     * than `\` closes it before the parser runs). Each string dispatch also
+     * opens by clearing the flag so a sequence can only ever inherit its *own*
+     * terminator — the guarantee does not depend on who drove the parser.
      */
     private bool $awaitingStringTerminator = false;
 
-    protected bool $ss3Buffered = false;
+    /**
+     * True while an `ESC O` waits for its single final byte (ECMA-48 §5.6 Fb).
+     *
+     * `final` on the class, so this is private state — the visibility a
+     * subclass would need is unreachable by construction.
+     */
+    private bool $ss3Buffered = false;
 
     private int $ss3Intermediate = 0;
 
@@ -84,7 +95,7 @@ final class AnsiHandler implements Handler
     /**
      * Feed bytes through the state machine, accumulating segments.
      *
-     * Bytes travel one at a time so the {@see $inFlightBytes()} window always
+     * Bytes travel one at a time so the {@see $inFlightBytes} window always
      * covers exactly the sequence in progress: a chunk that completes one
      * sequence and starts another must not let the first dispatch blind the
      * second. The end result is byte-identical to a single `Parser::feed()`
@@ -204,13 +215,7 @@ final class AnsiHandler implements Handler
         // A pending SS3 is always the earliest unemitted thing in the stream:
         // any later dispatch would already have flushed it. Report it before
         // the tail that follows it.
-        if ($this->ss3Buffered === true) {
-            $this->segments[] = new SequenceSegment(
-                "\x1b" . chr($this->ss3Intermediate),
-                'SS3 ' . chr($this->ss3Intermediate),
-            );
-            $this->ss3Buffered = false;
-        }
+        $this->flushPendingSs3();
 
         if ($stateBeforeFlush === State::Escape) {
             $this->segments[] = new SequenceSegment("\x1b", Inspector::describeEsc(''));
@@ -357,6 +362,7 @@ final class AnsiHandler implements Handler
 
     public function oscDispatch(string $data): void
     {
+        $this->awaitingStringTerminator = false;
         $this->flushPendingSs3();
         $this->flushText();
         // OSC terminator normalized to BEL; original ST (\x1b\\) is not
@@ -377,10 +383,11 @@ final class AnsiHandler implements Handler
 
         $prefixStr = $prefix !== 0 ? chr($prefix) : '';
         $intermediateStr = $intermediate !== 0 ? chr($intermediate) : '';
-        $paramsStr = implode(';', array_map(
-            static fn(int $p): string => (string) $p,
-            $params,
-        ));
+        // Same replay rule as a CSI: `Action::Param` feeds DCS sub-parameters
+        // through the identical slot/flag arrays, so `ESC P 1:2 q` must come
+        // back with its colon and an omitted parameter with an empty slot —
+        // never as a canonical `;` or a literal `-1`.
+        $paramsStr = $this->joinParams($params);
 
         $fullPayload = $intermediateStr . $prefixStr . $paramsStr . $data;
         $rawBytes = "\x1bP{$fullPayload}\x1b\\";
@@ -430,7 +437,8 @@ final class AnsiHandler implements Handler
     /**
      * Emit an SS3 introduced by `ESC O` that never received a final byte.
      *
-     * Called before any other sequence starts so the abandoned SS3 keeps its
+     * Called before any other sequence starts — and by `finishPending()`
+     * before it reports the dangling tail — so the abandoned SS3 keeps its
      * place in the stream instead of gluing itself onto whatever comes next.
      */
     private function flushPendingSs3(): void
