@@ -11,13 +11,15 @@ namespace SugarCraft\Spark;
  * and bracketed-paste / focus / mouse mode sequences. Anything it
  * doesn't recognise still gets a Segment with a generic `"CSI"` /
  * `"OSC"` / `"SS3"` label, so no sequence that reaches the segmenter is
- * dropped without a report; the bytes that can still vanish are the ones
- * candy-ansi cancels before dispatch (illegal parameter byte, CAN/SUB) —
- * see {@see AnsiHandler} and `README.md`.
+ * dropped without a report. Bytes can still vanish further upstream, inside
+ * candy-ansi, before this code ever sees a dispatch — `README.md` keeps the
+ * closed list of every known case and `ByteFidelityTest` pins each one.
  *
- * Every sequence is recognised by candy-ansi's {@see Parser} state machine;
- * this class does no scanning of its own, so OSC/DCS/APC strings are handled
- * by the same machine as CSI rather than by a separate fast path.
+ * Sequence *recognition* lives entirely in candy-ansi's {@see Parser} state
+ * machine; this class only labels the sequences it dispatches, plus the
+ * truncated tails {@see AnsiHandler} recovers at end of stream. There is no
+ * scanning of the input stream of its own, so OSC/DCS/APC strings go through
+ * the same machine as CSI rather than a separate fast path.
  */
 final class Inspector
 {

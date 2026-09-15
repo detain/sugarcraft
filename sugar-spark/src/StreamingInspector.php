@@ -54,7 +54,9 @@ final class StreamingInspector
      * A bare ESC at the end of the stream (e.g. "\x1b" with no following byte),
      * a buffered SS3 intermediate (ESC O with no final byte) and the exact
      * bytes of any sequence the stream never completed are emitted as their own
-     * SequenceSegments, so nothing the caller sent goes unreported.
+     * SequenceSegments, so no *dangling tail* the caller sent goes unreported.
+     * (Bytes candy-ansi drops before dispatch — the losses `README.md` lists —
+     * never reach this method and are not reported by it.)
      *
      * @return list<Segment>
      */

@@ -549,12 +549,16 @@ final class ByteFidelityTest extends TestCase
      * stream at once, and one byte per call; this pins everything in between: every
      * single split point of every corpus input, plus deterministic 2- to 5-way
      * splits, compared on segment class, raw bytes and description rather than on
-     * the reassembled stream alone. A slip in the in-flight byte bookkeeping or in
-     * the one-byte terminator window surfaces here at the exact boundary that broke.
+     * the reassembled stream alone. Anything whose result depends on where a chunk
+     * ends — the one-byte terminator window above all — surfaces here at the exact
+     * boundary that broke. A slip in the in-flight byte window that corrupts the
+     * one-shot parse just as badly is invisible to a differential test like this
+     * one; the absolute raw pins elsewhere in this file own that case.
      */
     public function testChunkBoundariesDoNotChangeTheSegmentList(): void
     {
         $corpus = [
+            "\x1b[31;-2m\x1b[3",
             "text\x1b[4;3mmixed separators\x1b[0m",
             "\x1b[1;4:3;31m\x1b[;31mempty slots\x1b[m",
             "\x1b[38:2::80:160:240mtruecolor\x1b[38:2:1:2:3mcount rule\x1b[0m",
@@ -742,12 +746,17 @@ final class ByteFidelityTest extends TestCase
     public function testCancelledSequenceIsLostExactlyAsTheParserLosesIt(): void
     {
         // Candy-ansi cancels a CSI on an illegal parameter byte or on CAN/SUB and
-        // discards the bytes collected so far, per the ECMA-48 general form. That
-        // is the one place the inspector's byte account is not total, so the exact
-        // shape of the loss is pinned: the handler must neither leak the discarded
-        // bytes into a later segment nor invent a segment for a sequence that
-        // never dispatched. Byte-identical to `master` — a deliberate guard on the
-        // `inFlightBytes` bookkeeping, not a fix claimed here.
+        // discards the bytes collected so far, per the ECMA-48 general form. The
+        // exact shape of the loss is pinned: no segment may be invented for a
+        // sequence that never dispatched, and a cancelled sequence's bytes may not
+        // leak into a later *completed* one. They do survive into a later truncated
+        // tail, because nothing tells the handler to reset its byte window when the
+        // parser abandons a prelude without a callback - the two last cases pin that
+        // asymmetry (over-report, never an under-report). The first six shapes reach
+        // this handler byte-identically to `master`; the last two cannot be compared
+        // with it, because the truncated tail they pin is exactly what `master`
+        // dropped (SP-R1) - on `master` those two inputs yield only `m` and only CAN.
+        // A deliberate guard on the `inFlightBytes` bookkeeping, not a fix claimed here.
         $cases = [
             // Cancelled mid-CSI; the final byte falls through to Ground as text.
             "\x1b[31;-2mX" => ['mX'],
@@ -760,6 +769,11 @@ final class ByteFidelityTest extends TestCase
             // the next sequence must still report cleanly, with none of the
             // discarded bytes leaking into it.
             "\x1b[31;-2m\x1b[32mY" => ['m', "\x1b[32m", 'Y'],
+            // A cancel followed by a truncated CSI replays the cancelled prelude in
+            // the tail report; a cancel followed by CAN does not, because `execute`
+            // flushes the window and an illegal byte leaves no callback behind.
+            "\x1b[31;-2m\x1b[3" => ['m', "\x1b[31;-2m\x1b[3"],
+            "\x1b[31\x18\x1b[3" => ["\x18", "\x1b[3"],
         ];
 
         foreach ($cases as $input => $expected) {
@@ -797,6 +811,46 @@ final class ByteFidelityTest extends TestCase
                 array_map(static fn($segment): string => $segment->raw(), $segments),
                 bin2hex($input),
             );
+        }
+    }
+
+    public function testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem(): void
+    {
+        // Three more ways the re-emitted bytes can differ from the input, all of
+        // them candy-ansi policies rather than this inspector's doing, pinned so a
+        // future change to the shared parser must pass through this contract:
+        //  - a parameter accumulates only up to Parser::MAX_PARAM_VALUE (65535), so
+        //    an oversized value arrives clamped instead of mid-digit truncated;
+        //  - Parser::put() refuses payload past MAX_STRING_BUFFER (64 KiB), so a long
+        //    OSC arrives cut at exactly that length with its terminator intact;
+        //  - OscString maps C0 (0x00-0x06, 0x08-0x17, 0x19, 0x1C-0x1F) to `None`, so
+        //    an ignored control byte vanishes from an OSC payload - while the very
+        //    same byte survives in a DCS, SOS, PM or APC payload.
+        // Byte-identical to `master`: guards on the byte account, not fixes.
+        $this->assertSame("\x1b[65535m", Inspector::parse("\x1b[99999m")[0]->raw());
+        $this->assertSame(
+            "\x1b[38;2;65535;0;0m",
+            Inspector::parse("\x1b[38;2;99999;0;0m")[0]->raw(),
+        );
+
+        $cap = 65536;
+        // The buffer holds "0;" plus the payload, so two of its slots are taken by
+        // the parameter text and 65534 x's fit before the remaining two are refused.
+        $oversized = "\x1b]0;" . str_repeat('x', $cap + 2) . "\x07";
+        $this->assertSame(
+            "\x1b]0;" . str_repeat('x', $cap - 2) . "\x07",
+            Inspector::parse($oversized)[0]->raw(),
+        );
+
+        $this->assertSame(
+            ["\x1b]0;ab\x07"],
+            array_map(static fn($segment): string => $segment->raw(), Inspector::parse("\x1b]0;a\x02b\x07")),
+        );
+
+        foreach (['P' => 'DCS', 'X' => 'SOS', '^' => 'PM', '_' => 'APC'] as $introducer => $family) {
+            $raw = Inspector::parse("\x1b{$introducer}0;a\x02b\x1b\\")[0]->raw();
+
+            $this->assertStringContainsString("\x02", $raw, $family . ' must pass the C0 byte through');
         }
     }
 
