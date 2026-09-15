@@ -39,6 +39,22 @@ final class ByteFidelityTest extends TestCase
         return implode('', array_map(static fn($segment): string => $segment->raw(), $segments));
     }
 
+    /**
+     * Identity of a segment list: which class each segment is, its exact bytes and
+     * its description. Stricter than re-assembly, which can hide a segment that
+     * split or merged with a neighbour while preserving the concatenated stream.
+     *
+     * @param list<\SugarCraft\Spark\Segment> $segments
+     * @return list<string>
+     */
+    private static function fingerprint(array $segments): array
+    {
+        return array_map(
+            static fn($segment): string => get_class($segment) . '|' . $segment->raw() . '|' . $segment->describe(),
+            $segments
+        );
+    }
+
     // --- SP-R5: parameter separator fidelity -----------------------------
 
     public function testSemicolonParametersAreNotRewrittenAsColons(): void
@@ -138,6 +154,17 @@ final class ByteFidelityTest extends TestCase
             'foreground truncated 256-color',
             Inspector::parse("\x1b[38:5:m")[0]->describe(),
         );
+
+        // The exact bytes candy-freeze resolves to `#000001` by falling back to
+        // the flat parameter list. Here the same input is labelled for what it
+        // says and never guessed into a colour, which is the divergence both
+        // libs' docblocks promise is pinned on each side — so pin it literally,
+        // not merely as one of the split-invariance corpus inputs.
+        $segments = Inspector::parse("\x1b[38:2::;1;2;3m");
+
+        $this->assertCount(1, $segments);
+        $this->assertSame("\x1b[38:2::;1;2;3m", $segments[0]->raw());
+        $this->assertStringContainsString('foreground truncated truecolor', $segments[0]->describe());
     }
 
     public function testColonSeparatorsAreFaithfulOutsideSgr(): void
@@ -513,6 +540,74 @@ final class ByteFidelityTest extends TestCase
 
             $this->assertSame(self::reemit($oneShot), self::reemit($streamed), strtoupper(bin2hex($input)));
             $this->assertCount(count($oneShot), $streamed, strtoupper(bin2hex($input)));
+        }
+    }
+
+    /**
+     * The handler drives the parser one byte at a time, so where a chunk happens to
+     * end must be irrelevant. The test above covers the two extremes — the whole
+     * stream at once, and one byte per call; this pins everything in between: every
+     * single split point of every corpus input, plus deterministic 2- to 5-way
+     * splits, compared on segment class, raw bytes and description rather than on
+     * the reassembled stream alone. A slip in the in-flight byte bookkeeping or in
+     * the one-byte terminator window surfaces here at the exact boundary that broke.
+     */
+    public function testChunkBoundariesDoNotChangeTheSegmentList(): void
+    {
+        $corpus = [
+            "text\x1b[4;3mmixed separators\x1b[0m",
+            "\x1b[1;4:3;31m\x1b[;31mempty slots\x1b[m",
+            "\x1b[38:2::80:160:240mtruecolor\x1b[38:2:1:2:3mcount rule\x1b[0m",
+            "\x1bP q 0;1m\x1b\\status\x1b]0;title\x1b\\done",
+            "\x1bP1:2;3 data\x1b\\after",
+            "abc\x1b[31",
+            "\x1b[?1",
+            "\x1b/",
+            "\x1bP1",
+            "\x1bO\x1b[31mX",
+            "\x1bOP\x1bO hello\x1b[A",
+            "\x1b[31mA\x1b\\lone st\x1b\\again",
+            "\x1b]0;T\x07\x1b\\B",
+            "\x1bX\x1b\\\x1b_\x1b\\\x1b^pm\x1b\\",
+            "caf\xc3\xa9\x1b[32mgreen\x1b[0mna\xc3\xafve",
+            "\x1b[38:2::;1;2;3mhybrid\x1b[3m",
+            "\x1b[1:2:3p\x1b[?1;2:3c",
+        ];
+
+        foreach ($corpus as $input) {
+            $expected = self::fingerprint(Inspector::parse($input));
+            $length = strlen($input);
+            $splits = [];
+
+            for ($offset = 1; $offset < $length; $offset++) {
+                $splits[] = [$offset];
+            }
+
+            for ($parts = 2; $parts <= 5; $parts++) {
+                $points = [];
+                for ($part = 1; $part < $parts; $part++) {
+                    $points[] = intdiv($length * $part, $parts);
+                }
+                $splits[] = array_values(array_unique($points));
+            }
+
+            foreach ($splits as $points) {
+                $inspector = new StreamingInspector();
+                $streamed = [];
+                $offset = 0;
+                foreach ($points as $boundary) {
+                    $streamed = array_merge($streamed, $inspector->feed(substr($input, $offset, $boundary - $offset)));
+                    $offset = $boundary;
+                }
+                $streamed = array_merge($streamed, $inspector->feed(substr($input, $offset)));
+                $streamed = array_merge($streamed, $inspector->finish());
+
+                $this->assertSame(
+                    $expected,
+                    self::fingerprint($streamed),
+                    strtoupper(bin2hex($input)) . ' split at ' . implode(',', $points)
+                );
+            }
         }
     }
 

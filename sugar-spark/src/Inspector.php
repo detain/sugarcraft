@@ -10,12 +10,14 @@ namespace SugarCraft\Spark;
  * attributes), CSI cursor moves, CSI erase/mode toggles, OSC titles,
  * and bracketed-paste / focus / mouse mode sequences. Anything it
  * doesn't recognise still gets a Segment with a generic `"CSI"` /
- * `"OSC"` / `"SS3"` label so the output never silently swallows
- * sequences.
+ * `"OSC"` / `"SS3"` label, so no sequence that reaches the segmenter is
+ * dropped without a report; the bytes that can still vanish are the ones
+ * candy-ansi cancels before dispatch (illegal parameter byte, CAN/SUB) —
+ * see {@see AnsiHandler} and `README.md`.
  *
- * Uses candy-ansi's {@see Parser} state machine for CSI sequences and
- * simple ESC sequences, with a fast pre-scan for complex multi-byte
- * sequences (OSC/DCS/APC) that need exact raw-byte preservation.
+ * Every sequence is recognised by candy-ansi's {@see Parser} state machine;
+ * this class does no scanning of its own, so OSC/DCS/APC strings are handled
+ * by the same machine as CSI rather than by a separate fast path.
  */
 final class Inspector
 {
@@ -261,9 +263,12 @@ final class Inspector
      * same bytes will mean different colours in the inspector and in the
      * rendered output. A group that resolves in neither lib may still be
      * *described* differently: this one labels what the bytes say
-     * (`38:2::;1;2;3` is a truncated truecolour group), candy-freeze falls back
-     * to reading the flat parameter list and paints something. Both behaviours
-     * are pinned deliberately in their own suites.
+     * (`38:2::;1;2;3` is a truncated truecolor group and no colour is
+     * invented for it), candy-freeze falls back to reading the flat parameter
+     * list and paints `#000001`. Both sides pin that divergence literally:
+     * `ByteFidelityTest::testColonTruncatedExtendedColoursAreReportedAsTruncated`
+     * here, `AnsiParserColonSubparametersTest::testUnresolvableColonGroupFallsBackAcrossParameterBoundaries`
+     * there.
      */
     private static function describeColonColour(string $kind, string $group): string
     {

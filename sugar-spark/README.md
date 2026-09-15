@@ -78,8 +78,8 @@ echo Inspector::report($capturedTerminalOutput);
 - **2-byte ESC** — DECSC / DECRC / keypad mode / index / reverse-index /
   reset.
 
-Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor —
-nothing is silently swallowed.
+Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor — an
+unrecognised sequence is never silently swallowed.
 
 Reported bytes are the bytes that were sent: parameters keep the separator the
 sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
