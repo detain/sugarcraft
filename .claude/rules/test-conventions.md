@@ -16,6 +16,7 @@ paths:
 - **Snapshot cell-grid** — drive bytes through `SugarCraft\Vt\Terminal\Terminal`, assert `$term->screen()->cell($r,$c)` (note `$screen->cols`/`$screen->rows` are readonly PROPERTIES, not methods).
 - **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]` tuple.
 - **Coercion** — feed negative/oversized index, empty, null; assert clamp/no-op matching upstream.
+- **Cross-lib parity** — `candy-vcr/tests/VtParityTest.php` diffs the `candy-vcr` renderer against the `candy-vt` engine and must stay green against BOTH the linked monorepo `candy-vt` and the stale Packagist `dev-master` the CI matrix resolves. Gate a version-dependent assertion on a feature marker (`Scrollback::clear()`) probed through the `vtCarriesMarker()` helper — a bare `\method_exists()` on a literal class name constant-folds under PHPStan and the arm reports as always-true/always-false. Delete the legacy arm once published `dev-master` carries the fix.
 - **Documentation drift** — `sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php` re-derive the rosters printed in `sugar-crush/README.md` + `sugar-crush/docs/*.md` from their generators in `sugar-crush/src/`. Adding a tool, slash command, env var, or key binding without the doc edit goes red.
 
 **Stream-write gotcha**: don't `ftruncate; rewind;` between writes — slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `candy-core/tests/RendererTest.php`).

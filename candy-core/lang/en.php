@@ -29,6 +29,8 @@ return [
     'ansi.invalid_fg_code'        => 'invalid 16-color fg code: {code}',
     'ansi.invalid_bg_code'        => 'invalid 16-color bg code: {code}',
     'ansi.component_out_of_range' => '{label} out of range [0,255]: {value}',
+    'ansi.invalid_scs_slot'       => 'invalid SCS slot: {slot} (expected 0-3 for G0-G3)',
+    'ansi.invalid_scs_designator' => 'invalid SCS designator: {designator} (expected one byte in 0x30-0x7E)',
 
     // Program.php
     'program.proc_open_failed'    => 'proc_open failed for: {cmd}',

@@ -14,9 +14,15 @@ use SugarCraft\Vt\Sgr\Sgr;
  *
  * All operations mutate the {@see Buffer} in place (or queue into
  * $pending when non-null). The cursor never moves: erasing leaves it
- * where it was. Erased cells are replaced with a blank cell. When a
- * non-null {@see Sgr} with a background color is provided, the blank cell
- * carries that background (BCE — Background Color Erase, CSI ?12 h/l).
+ * where it was. Erased cells are replaced with a blank cell. When the
+ * pen has an explicit background colour, the blank carries that
+ * background and default foreground/attributes (BCE — Background Color
+ * Erase, VT500 §BCE; always on for DEC models, no ?12 gate — that DEC
+ * private mode is the reverse-cursor blink in xterm). The new-row blanks
+ * of the line/region scrolls (IL/DL/SU/SD via ScrollHandler) intentionally
+ * stay default cells — documented divergence, no known emitter depends on
+ * bce-filled scroll rows, kept out of this class so every blank it writes
+ * is uniform.
  *
  * When $pending is provided (synchronized-output DEC 2026 mode), all
  * cell writes are appended to the array instead of applied to the
@@ -39,8 +45,8 @@ final class EraseHandler
             'K' => $this->eraseInLine($buffer, $cursor, $first === -1 ? 0 : $first, $sgr, $pending),
             'J' => $this->eraseInDisplay($buffer, $cursor, $first === -1 ? 0 : $first, $sgr, $pending),
             'X' => $this->eraseChars($buffer, $cursor, $first === -1 ? 1 : max(1, $first), $sgr, $pending),
-            'P' => $this->deleteChars($buffer, $cursor, $first === -1 ? 1 : max(1, $first), $pending),
-            '@' => $this->insertChars($buffer, $cursor, $first === -1 ? 1 : max(1, $first), $pending),
+            'P' => $this->deleteChars($buffer, $cursor, $first === -1 ? 1 : max(1, $first), $sgr, $pending),
+            '@' => $this->insertChars($buffer, $cursor, $first === -1 ? 1 : max(1, $first), $sgr, $pending),
             default => null,
         };
     }
@@ -79,7 +85,8 @@ final class EraseHandler
                 }
                 return;
             case 3:
-                // Erase scrollback — handled by caller via ScreenHandler.
+                // ED 3 = erase scrollback — no grid effect; the caller
+                // (ScreenHandler) drains the Scrollback ring via clear().
                 return;
         }
     }
@@ -90,7 +97,7 @@ final class EraseHandler
         $this->fillRow($buf, $cur->row, $cur->col, $end, $sgr, $pending);
     }
 
-    private function deleteChars(Buffer $buf, Cursor $cur, int $count, ?array &$pending): void
+    private function deleteChars(Buffer $buf, Cursor $cur, int $count, ?Sgr $sgr, ?array &$pending): void
     {
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
             return;
@@ -99,12 +106,13 @@ final class EraseHandler
         for ($c = $cur->col; $c + $shift < $buf->cols; $c++) {
             $this->putOrQueue($buf, $cur->row, $c, $buf->cell($cur->row, $c + $shift), $pending);
         }
+        $blank = $this->blankCell($sgr);
         for ($c = $buf->cols - $shift; $c < $buf->cols; $c++) {
-            $this->putOrQueue($buf, $cur->row, $c, Cell::empty(), $pending);
+            $this->putOrQueue($buf, $cur->row, $c, $blank, $pending);
         }
     }
 
-    private function insertChars(Buffer $buf, Cursor $cur, int $count, ?array &$pending): void
+    private function insertChars(Buffer $buf, Cursor $cur, int $count, ?Sgr $sgr, ?array &$pending): void
     {
         if ($cur->row < 0 || $cur->row >= $buf->rows) {
             return;
@@ -113,14 +121,32 @@ final class EraseHandler
         for ($c = $buf->cols - 1; $c >= $cur->col + $shift; $c--) {
             $this->putOrQueue($buf, $cur->row, $c, $buf->cell($cur->row, $c - $shift), $pending);
         }
+        $blank = $this->blankCell($sgr);
         for ($c = $cur->col; $c < $cur->col + $shift; $c++) {
-            $this->putOrQueue($buf, $cur->row, $c, Cell::empty(), $pending);
+            $this->putOrQueue($buf, $cur->row, $c, $blank, $pending);
         }
     }
 
     /**
-     * Fill a row range with blank cells, optionally carrying the current
-     * background color (BCE — Background Color Erase).
+     * The BCE blank: a space carrying ONLY the pen's background colour,
+     * foreground/attributes default; no background set → plain empty cell.
+     * Shared by ED/EL/ECH (fillRow) and the DCH/ICH shift gaps, matching
+     * xterm's application of the erase colour to those operations too.
+     */
+    private function blankCell(?Sgr $sgr): Cell
+    {
+        return $sgr?->background !== null
+            ? new Cell(grapheme: ' ', sgr: Sgr::empty()->withBackground($sgr->background))
+            : Cell::empty();
+    }
+
+    /**
+     * Fill a row range with blank cells using proper BCE (Background Color
+     * Erase) semantics: an erased cell inherits ONLY the pen's background
+     * colour; foreground and every attribute reset to default. Copying the
+     * whole pen — bold/underline/fg included into the blanks — is the
+     * classic mis-render the VT500 §BCE / xterm `bce` option warns about
+     * ("erase colour is the background colour attribute").
      *
      * @param array<int, array{row: int, col: int, cell: Cell}>|null $pending
      *   When non-null, mutations are queued instead of applied.
@@ -130,9 +156,7 @@ final class EraseHandler
         if ($start > $end) {
             return;
         }
-        $blank = $sgr?->background !== null
-            ? new Cell(grapheme: ' ', sgr: $sgr)
-            : Cell::empty();
+        $blank = $this->blankCell($sgr);
         for ($c = $start; $c <= $end; $c++) {
             $this->putOrQueue($buf, $row, $c, $blank, $pending);
         }

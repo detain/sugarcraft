@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Color\Color;
+use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 use SugarCraft\Vt\Sgr\UnderlineStyle;
 use SugarCraft\Vt\Terminal as RendererTerminal;
@@ -66,8 +67,8 @@ final class VtParityTest extends TestCase
      *    dedicated field by the emulator.
      *  - REP (`CSI b`) — replays the last printable on the renderer path;
      *    the emulator does not dispatch it at all.
-     *  - BCE erases — the emulator paints ED/EL/ECH with the active pen;
-     *    the renderer blanks with default cells (pinned below).
+     *  - BCE erases — the emulator fills ED/EL/ECH with the pen BACKGROUND
+     *    (xterm BCE, w4-vt); the renderer blanks with default cells (pinned below).
      *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
      *    HandlerAdapter clamps the count to 1 before the renderer sees it
      *    (pinned below).
@@ -394,20 +395,36 @@ final class VtParityTest extends TestCase
 
     public function testCataloguedDivergenceEmulatorErasesWithActiveBackground(): void
     {
-        // xterm semantics: erase cells inherit the ACTIVE pen, so `CSI 31m`
-        // + `CSI 100m` before an ED/EL paints the erased region. The
-        // emulator implements that (and is the correct one); the renderer
-        // path blanks with default cells — its erase writes bare empty cells,
-        // so colour-wiped regions diverge on every ED/EL under a set
-        // background (the quirk: with an fg-only pen the emulator optimises
-        // the blank back to default, hiding the divergence there). (candy-vt
-        // Parser\CsiHandlerImpl erase — renderer side is the outlier.)
+        // xterm BCE: erase cells inherit ONLY the pen's BACKGROUND colour —
+        // foreground and attributes reset to default. The w4-vt candy-vt fix
+        // removed the pen-foreground bleed, so the emulator's erased-cell fg
+        // now agrees with the renderer's default blank. What remains is the
+        // background itself: the renderer blanks with a bare default cell,
+        // the erases with the pen background (SGR 100 → bright black,
+        // index 8) as the erase colour. (candy-vt Parser\CsiHandlerImpl
+        // erase — renderer side is the outlier.)
         $bytes = "\x1b[31m\x1b[100m\x1b[1;3H\x1b[2K";
         $renderer = self::feedRenderer($bytes);
         $emulator = self::feedEmulator($bytes);
 
+        // Published-mode caveat: while the w4 BCE fix is unmerged (or the
+        // split-repo sync lags), candy-vcr's CI resolves candy-vt from
+        // Packagist dev-master, whose erase still bleeds the pen fg into
+        // erased cells ('I1'). Scrollback::clear() is the public marker that
+        // shipped with the BCE fix, so it discriminates the two engines
+        // honestly. Once published dev-master carries the fix the 'I1' arm is
+        // dead — delete it and the ternary.
+        $bceFixed = self::vtCarriesMarker(Scrollback::class, 'clear');
         self::assertSame('I7', self::rendererFg($renderer, 0, 5), 'renderer: default-pen blank');
-        self::assertSame('I1', self::emulatorFg($emulator, 0, 5), 'emulator: active-pen blank');
+        self::assertSame(
+            $bceFixed ? 'I7' : 'I1',
+            self::emulatorFg($emulator, 0, 5),
+            $bceFixed
+                ? 'emulator: BCE keeps only the background — fg is default'
+                : 'emulator: pre-w4 published vt bleeds the pen fg (stale Packagist dev-master)',
+        );
+        self::assertSame('I0', 'I' . $renderer->grid()->get(0, 5)->bg, 'renderer: erase drops the pen background');
+        self::assertSame('I8', self::emulatorBg($emulator, 0, 5), 'emulator: erase carries SGR 100 as the erase colour');
     }
 
     public function testCataloguedDivergencePrivatePrefixedIlActsOnRendererOnly(): void
@@ -726,5 +743,25 @@ final class VtParityTest extends TestCase
     private static function emulatorFg(EmulatorTerminal $terminal, int $row, int $col): string
     {
         return self::normaliseColour($terminal->screen()->cell($row, $col)->sgr()->foreground, 7);
+    }
+
+    private static function emulatorBg(EmulatorTerminal $terminal, int $row, int $col): string
+    {
+        return self::normaliseColour($terminal->screen()->cell($row, $col)->sgr()->background, 0);
+    }
+
+    /**
+     * Does the candy-vt actually installed in vendor/ carry $method on $marker?
+     * Routing through a parameter defeats PHPStan's constant folding: it
+     * analyses the body once against `class-string`, so the probe is neither
+     * "always true" (linked monorepo vt) nor "always false" (the stale
+     * Packagist dev-master the CI matrix resolves) — both vintages are
+     * legitimate subjects of this differential test.
+     *
+     * @param class-string $marker
+     */
+    private static function vtCarriesMarker(string $marker, string $method): bool
+    {
+        return \method_exists($marker, $method);
     }
 }

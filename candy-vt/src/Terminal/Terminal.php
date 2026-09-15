@@ -175,6 +175,14 @@ final class Terminal
         if ($cols < 1 || $rows < 1) {
             throw new \InvalidArgumentException('cols and rows must be >= 1');
         }
+        $oldRows = $this->handler->buffer->rows;
+        // A full-screen scroll region must track the screen across a resize
+        // GROWTH: under the scrollback full-screen gate (w4-vt) a stale
+        // [0, oldRows-1] region becomes a strict sub-region after the view
+        // grows, permanently silencing history for apps that never re-issue
+        // DECSTBM (the plain-shell-in-a-resized-window case).
+        $wasFullScreenRegion = $this->handler->scrollRegionTop === 0
+            && $this->handler->scrollRegionBottom === $oldRows - 1;
         $this->handler->buffer = $this->handler->buffer->resize($cols, $rows);
         // Deferred-wrap + bounds maintenance on the new geometry, mirroring
         // charmbracelet/x/vt Emulator.Resize (emulator.go L218-221): a
@@ -195,9 +203,18 @@ final class Terminal
         if ($this->handler->scrollRegionBottom > $rows - 1) {
             $this->handler->scrollRegionBottom = $rows - 1;
             $this->handler->scrollRegionTop = min($this->handler->scrollRegionTop, $rows - 1);
+        } elseif ($wasFullScreenRegion) {
+            $this->handler->scrollRegionBottom = $rows - 1;
         }
     }
 
+    /**
+     * Snapshot clone: a fresh Parser starts in Ground, so any in-flight
+     * string sequence (partial OSC/DCS payload, partial UTF-8 rune) is
+     * intentionally dropped — the clone captures committed state only.
+     * ScreenHandler::__clone() deep-copies the mutable Buffer/Scrollback
+     * so the clone can never write through into this terminal's grid.
+     */
     public function __clone(): void
     {
         $this->handler = clone $this->handler;
