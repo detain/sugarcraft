@@ -19,7 +19,17 @@ namespace SugarCraft\Core\Util;
  *   - {@see cellValue()}    — glyph-replacement + UTF-8 repair for data grids.
  *   - {@see untrusted()}    — full ANSI strip for plain-text module sinks.
  *
- * Mirrors charmbracelet/<repo>.sanitize helpers.
+ * No single upstream counterpart is cited here because this class is a
+ * SugarCraft-original assembled from three separate internal predecessors, not a
+ * port (candy-core's ported upstream is `charmbracelet/bubbletea`, an
+ * Elm-architecture TUI runtime with no text sanitizer — see `docs/MATCHUPS.md`):
+ *   - `controlChars()` — extracted from sugar-bits' per-cell `sanitizeCell`
+ *     helper (commit 114118393);
+ *   - `cellValue()` — byte-identical to candy-query's `CellValue::sanitize()`
+ *     (commit 8ac981ebf);
+ *   - `untrusted()` — ported from sugar-dash (commit 8ac981ebf).
+ * Consolidating them gives every component one audited injection boundary.
+ * Provenance: `git log --follow -- candy-core/src/Util/Sanitize.php`.
  */
 final class Sanitize
 {

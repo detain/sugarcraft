@@ -157,6 +157,61 @@ final class DecalnWireTest extends TestCase
         $this->assertSame('X', $h2->buffer->cell(0, 1)->grapheme);
     }
 
+    // ─── DECOM / DECSTBM semantics (xterm-411 CASE_DECALN parity) ──────────
+
+    public function testDecalnClearsOriginModeAndItCanBeSetAgain(): void
+    {
+        // xterm-411 charproc.c CASE_DECALN does `UIntClr(xw->flags, ORIGIN)`
+        // and never restores it: DECALN turns DECOM OFF. Before the alignment
+        // fix candy-vt left it ON, an undocumented divergence.
+        $h = $this->handler("\x1b[?6h\x1b#8", cols: 6, rows: 3);
+        $this->assertFalse($h->mode->originMode, 'DECALN must clear DECOM (xterm-411 UIntClr ORIGIN)');
+
+        // The clear must not wedge the mode: a later DECSET 6 still turns it on.
+        (new Parser($h))->feed("\x1b[?6h");
+        $this->assertTrue($h->mode->originMode, 'DECOM remains settable after DECALN cleared it');
+        (new Parser($h))->feed("\x1b[?6l");
+        $this->assertFalse($h->mode->originMode, 'and still resettable');
+    }
+
+    public function testDecalnFillsWholeScreenDespiteScrollRegionAndLeavesDecomOff(): void
+    {
+        // The fill walks rows x cols of the buffer rather than the active
+        // region, and homes to absolute 0,0, so a DECSTBM sub-region plus DECOM
+        // must not shrink the 'E' pattern. Margins go back to full screen and
+        // origin mode is off afterwards.
+        $h = $this->handler("\x1b[2;3r\x1b[?6h\x1b#8", cols: 5, rows: 4);
+
+        for ($r = 0; $r < 4; $r++) {
+            $this->assertSame('EEEEE', $this->cellRun($h, $r, 5), "row {$r} filled outside the old region");
+        }
+        $this->assertSame(0, $h->cursor->row, 'cursor homed to absolute top-left');
+        $this->assertSame(0, $h->cursor->col);
+        $this->assertSame(0, $h->scrollRegionTop, 'DECSTBM reset to full screen');
+        $this->assertSame(3, $h->scrollRegionBottom);
+        $this->assertFalse($h->mode->originMode, 'DECOM off after DECALN');
+    }
+
+    // ─── DECSCUSR / Cursor-mode agreement ──────────────────────────────────
+
+    public function testDecalnPreservesCursorShapeKeepingCursorAndModeInAgreement(): void
+    {
+        // xterm-411 CASE_DECALN does not touch cursor style. The CSI Ps SP q
+        // handler sets Cursor::$shape and Mode::$cursorShape together, so DECALN
+        // must carry the shape through rather than dropping it to the default
+        // 0 while the mode still reports 5.
+        $h = $this->handler("\x1b[5\x20q\x1b#8", cols: 4, rows: 2);
+        $this->assertSame(5, $h->cursor->shape, 'DECALN must not reset the DECSCUSR shape');
+        $this->assertSame(5, $h->mode->cursorShape);
+        $this->assertSame($h->mode->cursorShape, $h->cursor->shape, 'renderer and mode state cannot diverge');
+
+        // Same guarantee through the programmatic entry point.
+        $direct = $this->handler("\x1b[6\x20q", cols: 4, rows: 2);
+        $direct->displayAlignmentTest();
+        $this->assertSame(6, $direct->cursor->shape);
+        $this->assertSame($direct->mode->cursorShape, $direct->cursor->shape);
+    }
+
     // ─── Negative: unsupported '#' finals must not corrupt state ───────────
 
     public function testUnsupportedHashFinalsRemainSilentIgnores(): void

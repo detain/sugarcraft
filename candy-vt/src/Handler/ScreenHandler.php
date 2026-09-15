@@ -1175,10 +1175,39 @@ final class ScreenHandler implements Handler
     /**
      * DECALN — ESC # 8, screen-alignment pattern.
      *
-     * Fills the whole screen with 'E' (default rendition), resets the
-     * scroll margins to full, homes the cursor, resets the SGR pen, and
-     * restores the default character-set designation. xterm additionally
-     * "toggles DECOM/DECAWM and then restores them" — a no-op here.
+     * Fills the whole screen with 'E' (default rendition), resets the scroll
+     * margins to full, homes the cursor, resets the SGR pen, and resets the
+     * character-set designations to ASCII.
+     *
+     * xterm-411 `charproc.c` `CASE_DECALN` does, in order (eliding three steps
+     * that change no persistent emulator state: the leading `HideCursor`
+     * draw-time cursor bookkeeping — DECALN does not alter DECTCEM visibility —
+     * the `xtermParseRect` fill-argument setup, and the trailing `ResetState(sp)`
+     * parser housekeeping): clear ORIGIN
+     * (`UIntClr(xw->flags, ORIGIN)`) — DECOM goes OFF, never toggled-then-
+     * restored as was previously mis-stated here; clear the pending-wrap FLAG
+     * (`screen->do_wrap = False`) — NOT the DECAWM mode; `resetRendition`;
+     * `resetMargins`; `xterm_ResetDouble`; `CursorSet(screen, 0, 0, ...)`; and
+     * `ScrnFillRectangle(..., 'E', nrc_ASCII, ...)`. This method reproduces every
+     * step of that list which candy-vt models; `xterm_ResetDouble` has no
+     * counterpart because line-width/height modes (DECDHL/DECSWL/DECDWL) are
+     * unimplemented here — see {@see self::escDispatch()}. Because the fill walks
+     * the whole buffer (rows × cols) and homes to absolute 0,0, the 'E' pattern
+     * covers the screen regardless of any DECSTBM region or origin mode left
+     * behind, and origin mode is off afterwards.
+     *
+     * DECSCUSR cursor shape is DELIBERATELY PRESERVED: CASE_DECALN does not
+     * touch cursor style, so `cursor->shape` is carried through (see the body)
+     * and stays equal to `mode->cursorShape`.
+     *
+     * Charset DEVIATION (the `$this->charsets` / `$this->gl` / `$this->singleShift`
+     * assignments below): candy-vt resets the G0-G3 designations, GL and any
+     * armed single-shift PERSISTENTLY to ASCII. xterm's `CASE_DECALN` issues no
+     * SCS designator at all — it leaves the designation state untouched and
+     * simply passes `nrc_ASCII` as the charset ARGUMENT of `ScrnFillRectangle`,
+     * filling with a raw ASCII 'E' — so a line-drawing designation set before
+     * DECALN resumes on the next printable in xterm, but is gone here.
+     * Deliberate, documented divergence, not an oversight.
      *
      * The authoritative wire encoding is `ESC # 8` (bytes 1B 23 38): DEC
      * VT510 ch.4, DEC ansicode.txt, xterm ctlseqs, and vttest all agree.
@@ -1201,12 +1230,21 @@ final class ScreenHandler implements Handler
             }
         }
         $this->sgr = Sgr::empty();
+        // Re-home and reset rendition, but CARRY the DECSCUSR shape through:
+        // xterm-411 CASE_DECALN never touches cursor style, so `cursor->shape`
+        // and `mode->cursorShape` (set together by the CSI Ps SP q handler) must
+        // stay in agreement across DECALN.
         $this->cursor = new Cursor(
             visible: $this->cursor->visible,
+            shape: $this->cursor->shape,
             savedRow: $this->cursor->savedRow,
             savedCol: $this->cursor->savedCol,
         );
         $this->wrapPending = false;
+        // xterm-411 CASE_DECALN does `UIntClr(xw->flags, ORIGIN)` — DECOM goes
+        // OFF and is never restored. (It also clears the pending-wrap FLAG above,
+        // not the DECAWM MODE.)
+        $this->mode = $this->mode->withOriginMode(false);
         $this->scrollRegionTop = 0;
         $this->scrollRegionBottom = $this->buffer->rows - 1;
         $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
