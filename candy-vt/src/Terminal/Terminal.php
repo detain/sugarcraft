@@ -45,6 +45,12 @@ final class Terminal
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+
+        // SGR colon sub-parameters (4:N vs 4;N) ride the parser's per-dispatch
+        // continuation flags; late-bind so the handler sees them mid-dispatch.
+        $this->handler->attachSubparamsProvider(
+            fn(): array => $this->parser->subparams(),
+        );
     }
 
     /**

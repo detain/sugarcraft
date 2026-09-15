@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
+use Closure;
 use SugarCraft\Ansi\Parser\CsiHandler;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Cell;
@@ -35,6 +36,38 @@ final class CsiHandlerImpl implements CsiHandler
     /** Last printed graphic grapheme, replayed by REP (CSI b). */
     private string $lastPrintable = '';
 
+    /**
+     * DECAWM (`CSI ? 7 h/l`) — auto-wrap on at power-on, mirroring the
+     * emulator's {@see \SugarCraft\Vt\Mode\Mode::$autoWrap} default (PR #1417
+     * fixed the emulator to the xterm/VT500 default of ON; the renderer
+     * previously had no DECAWM concept and always wrapped).
+     */
+    private bool $autoWrap = true;
+
+    /**
+     * Phantom-cell / deferred-wrap flag, mirroring the emulator's
+     * {@see \SugarCraft\Vt\Handler\ScreenHandler::$wrapPending} and xterm's
+     * `wrapnext`: a graphic that lands in the last column parks the cursor
+     * there WITHOUT advancing; the next graphic consumes the pending line
+     * break first. The flag is set by GEOMETRY alone so a mid-stream DECAWM
+     * toggle behaves like xterm — `?7l` printing overwrites the last cell
+     * (the flag re-arms), `?7h` resumes the deferred wrap.
+     */
+    private bool $wrapPending = false;
+
+    /**
+     * Late-bound continuation flags ({@see \SugarCraft\Ansi\Parser\Parser::subparams()})
+     * for the CSI sequence currently being dispatched. Wired by
+     * {@see \SugarCraft\Vt\Terminal::new()} to the owning parser so SGR can
+     * tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
+     * italic). Unattached — direct construction in unit tests — SGR `4`
+     * treats every parameter as an independent SGR, the renderer's
+     * long-standing flat-list behaviour.
+     *
+     * @var (Closure(): list<bool>)|null
+     */
+    private ?Closure $subparamsProvider = null;
+
     public function __construct(
         private CellGrid $grid,
         private Cursor $cursor,
@@ -55,8 +88,30 @@ final class CsiHandlerImpl implements CsiHandler
         return $this->cursor;
     }
 
+    /** Deferred-wrap (phantom-cell) state — mirrors the emulator's `Terminal\Terminal::isWrapPending()`. */
+    public function wrapPending(): bool
+    {
+        return $this->wrapPending;
+    }
+
+    /**
+     * Wire the parser's sub-parameter continuation flags for SGR colon
+     * handling. Called once at terminal construction; see
+     * {@see $subparamsProvider}.
+     *
+     * @param Closure(): list<bool> $provider
+     */
+    public function attachSubparamsProvider(Closure $provider): void
+    {
+        $this->subparamsProvider = $provider;
+    }
+
     public function printable(string $grapheme): void
     {
+        if ($this->cursor->row < 0 || $this->cursor->row >= $this->grid->rows) {
+            return;
+        }
+
         $row = $this->cursor->row;
         $col = $this->cursor->col;
 
@@ -80,13 +135,34 @@ final class CsiHandlerImpl implements CsiHandler
         // Remember the last graphic grapheme so REP (CSI b) can replay it.
         $this->lastPrintable = $grapheme;
 
-        // If the character doesn't fit on this row, wrap to the next line.
+        // DECAWM wrap-through: a graphic landed in the last column and
+        // deferred its advance; THIS graphic consumes it — move to
+        // (row+1, 0), scrolling at the region bottom, before writing.
+        // Mirrors {@see \SugarCraft\Vt\Handler\ScreenHandler::printChar()}.
+        if ($this->wrapPending && $this->autoWrap) {
+            $this->lineFeedWrap();
+            $row = $this->cursor->row;
+            $col = $this->cursor->col;
+        }
+
+        // If the character doesn't fit at all on this row: with DECAWM on,
+        // take the deferred break and clamp if still too wide; with it off
+        // the glyph is dropped and the cursor parks on the last column —
+        // the phantom flag untouched (xterm cursor_off recomputes it only
+        // when a cell is actually painted).
         if ($col + $width > $this->grid->cols) {
-            $col = 0;
-            $row++;
-            if ($row > $this->scrollBottom) {
-                $this->scrollUp(1);
-                $row = $this->scrollBottom;
+            if ($this->autoWrap) {
+                $this->lineFeedWrap();
+                $row = $this->cursor->row;
+                $col = $this->cursor->col;
+                if ($col + $width > $this->grid->cols) {
+                    $this->cursor = $this->cursor->at($row, $this->grid->cols - 1);
+                    $this->wrapPending = false;
+                    return;
+                }
+            } else {
+                $this->cursor = $this->cursor->at($row, $this->grid->cols - 1);
+                return;
             }
         }
 
@@ -104,41 +180,43 @@ final class CsiHandlerImpl implements CsiHandler
             $this->grid->set($row, $col + $i, Cell::empty());
         }
 
-        // Advance cursor by character width, wrapping to next row if needed.
+        // Park on the last column with the phantom flag set instead of
+        // advancing a full line; the advance happens on the next graphic
+        // print (xterm `cursor_off` semantics).
         $nextCol = $col + $width;
-        $nextRow = $row;
-        if ($nextCol >= $this->grid->cols) {
-            $nextCol = 0;
-            $nextRow = $row + 1;
-            if ($nextRow > $this->scrollBottom) {
-                $this->scrollUp(1);
-                $nextRow = $this->scrollBottom;
-            }
-        }
-
-        $this->cursor = $this->cursor->at($nextRow, $nextCol);
+        $this->cursor = $this->cursor->at($row, min($this->grid->cols - 1, $nextCol));
+        $this->wrapPending = $nextCol >= $this->grid->cols;
     }
 
     public function cuu(int $count = 1): void
     {
-        $newRow = max($this->scrollTop, $this->cursor->row - $count);
+        // Cursor motion disarms the deferred wrap (xterm reset_wrapnext);
+        // clamp to the buffer, not the scroll region — matching the
+        // emulator's CursorHandler with DECOM off (not modelled here).
+        $this->wrapPending = false;
+        $newRow = max(0, $this->cursor->row - $count);
         $this->cursor = $this->cursor->at($newRow, $this->cursor->col);
     }
 
     public function cud(int $count = 1): void
     {
-        $newRow = min($this->scrollBottom, $this->cursor->row + $count);
+        $this->wrapPending = false;
+        $newRow = min($this->grid->rows - 1, $this->cursor->row + $count);
         $this->cursor = $this->cursor->at($newRow, $this->cursor->col);
     }
 
     public function cuf(int $count = 1): void
     {
+        $this->wrapPending = false;
         $newCol = min($this->grid->cols - 1, $this->cursor->col + $count);
         $this->cursor = $this->cursor->at($this->cursor->row, $newCol);
     }
 
     public function cub(int $count = 1): void
     {
+        // Also the BS route (HandlerAdapter maps 0x08 here) — the emulator's
+        // backspace moves out of the phantom cell the same way.
+        $this->wrapPending = false;
         $newCol = max(0, $this->cursor->col - $count);
         $this->cursor = $this->cursor->at($this->cursor->row, $newCol);
     }
@@ -148,21 +226,14 @@ final class CsiHandlerImpl implements CsiHandler
         $row = $row < 1 ? 1 : $row;
         $col = $col < 1 ? 1 : $col;
 
-        $top = $this->scrollTop;
-        $bottom = $this->scrollBottom;
+        // Absolute screen coordinates clamped to the buffer — mirroring the
+        // emulator's CursorHandler::cup (DECOM off). The renderer's former
+        // scroll-region clamping was a catalogued divergence: `CSI 1;1H`
+        // under `CSI 2;4r` belongs on line 1, not yanked into the region.
+        $absRow = max(0, min($this->grid->rows - 1, $row - 1));
+        $absCol = max(0, min($this->grid->cols - 1, $col - 1));
 
-        $absRow = $row - 1;
-        $absCol = $col - 1;
-
-        if ($absRow < $top) {
-            $absRow = $top;
-        }
-        if ($absRow > $bottom) {
-            $absRow = $bottom;
-        }
-
-        $absCol = max(0, min($this->grid->cols - 1, $absCol));
-
+        $this->wrapPending = false;
         $this->cursor = $this->cursor->at($absRow, $absCol);
     }
 
@@ -177,6 +248,7 @@ final class CsiHandlerImpl implements CsiHandler
             $params = [0];
         }
 
+        $subs = $this->currentSubparams();
         $i = 0;
         $paramCount = count($params);
         while ($i < $paramCount) {
@@ -185,27 +257,57 @@ final class CsiHandlerImpl implements CsiHandler
                 $p = 0;
             }
 
-            [$this->fg, $this->bg, $this->attrs, $i] = $this->applySgrParam($p, array_values(array_map('intval', $params)), $i);
+            [$this->fg, $this->bg, $this->attrs, $i] = $this->applySgrParam(
+                $p,
+                array_values(array_map('intval', $params)),
+                $i,
+                $subs,
+            );
         }
     }
 
     /**
+     * Continuation flags for the CSI sequence being dispatched, or null
+     * when no parser is attached (flat-parameter behaviour).
+     *
+     * @return list<bool>|null
+     */
+    private function currentSubparams(): ?array
+    {
+        $provider = $this->subparamsProvider;
+        return $provider === null ? null : $provider();
+    }
+
+    /**
      * @param list<int> $params
+     * @param list<bool>|null $subs Parser colon-continuation flags (null = no parser attached).
      * @return array{0: int, 1: int, 2: int, 3: int}
      */
-    private function applySgrParam(int $p, array $params, int $i): array
+    private function applySgrParam(int $p, array $params, int $i, ?array $subs): array
     {
         return match (true) {
             $p === 0 => [$this->theme->defaultFg, $this->theme->defaultBg, 0, $i + 1],
             $p === 1 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_BOLD, $i + 1],
             $p === 3 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_ITALIC, $i + 1],
-            $p === 4 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_UNDERLINE, $i + 1],
+            // `CSI 4 : 3 m` is ONE parameter (curly underline); `CSI 4 ; 3 m`
+            // is TWO independent SGRs (underline + italic). The candy-ansi
+            // parser flattens both to [4, 3]; only the continuation flags
+            // distinguish them. Without a wired parser the renderer keeps its
+            // historical flat reading. Styles beyond single have no bit in
+            // this cell model — they all light ATTR_UNDERLINE, matching the
+            // emulator's normalised `underline || style !== None`.
+            $p === 4 => $this->sgrUnderline($params, $i, $subs),
             $p === 7 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_INVERSE, $i + 1],
             $p === 9 => [$this->fg, $this->bg, $this->attrs | Cell::ATTR_STRIKETHROUGH, $i + 1],
             $p === 22 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_BOLD & ~0x20000, $i + 1],
             $p === 23 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_ITALIC, $i + 1],
             $p === 24 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_UNDERLINE, $i + 1],
             $p === 27 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_INVERSE, $i + 1],
+            // 25/28 reset blink/hidden — this cell model has no such bits and
+            // the pen never lights them, so they are parity no-ops. 21
+            // (double underline in xterm; a no-op in the emulator too —
+            // charm folds it nowhere) falls through identically.
+            $p === 29 => [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_STRIKETHROUGH, $i + 1],
 
             $p >= 30 && $p <= 37 => [$p - 30, $this->bg, $this->attrs, $i + 1],
             $p >= 40 && $p <= 47 => [$this->fg, $p - 40, $this->attrs, $i + 1],
@@ -226,13 +328,59 @@ final class CsiHandlerImpl implements CsiHandler
 
             $p === 38 => $this->sgrExtended($params, $i, fg: true),
             $p === 48 => $this->sgrExtended($params, $i, fg: false),
+            // Underline colour — neither this pen nor the emulator's Sgr
+            // model stores it; both CONSUME the extended triplet so its
+            // components cannot masquerade as independent SGRs (the old
+            // default-arm let `58;5;33` repaint the fg green on both paths).
+            $p === 58 => $this->sgrExtendedDiscard($params, $i),
+            $p === 59 => [$this->fg, $this->bg, $this->attrs, $i + 1],
 
             default => [$this->fg, $this->bg, $this->attrs, $i + 1],
         };
     }
 
     /**
-     * Handle 38;5;n (256-color fg) or 48;5;n (256-color bg).
+     * SGR 4 with optional colon sub-parameter — see the table arm.
+     *
+     * @param list<int> $params
+     * @param list<bool>|null $subs
+     * @return array{0: int, 1: int, 2: int, 3: int}
+     */
+    private function sgrUnderline(array $params, int $i, ?array $subs): array
+    {
+        $colon = $subs !== null && ($subs[$i] ?? false);
+        if ($colon) {
+            // Mirror of SgrHandler::underlineStyle branch table: consume the
+            // sub-parameter; every defined and unknown style lights the one
+            // underline bit this cell model has; `4:0` clears it.
+            $sub = $params[$i + 1] ?? -1;
+            if ($sub === 0) {
+                return [$this->fg, $this->bg, $this->attrs & ~Cell::ATTR_UNDERLINE, $i + 2];
+            }
+            if ($sub === -1) {
+                // `CSI 4 : m` — empty sub-parameter; the emulator reads it as
+                // plain single underline and leaves the default slot to the
+                // next step (which resets it as SGR 0). Stay byte-identical.
+                return [$this->fg, $this->bg, $this->attrs | Cell::ATTR_UNDERLINE, $i + 1];
+            }
+            return [$this->fg, $this->bg, $this->attrs | Cell::ATTR_UNDERLINE, $i + 2];
+        }
+        // Semicolon or flat form: plain underline; the next parameter is an
+        // independent SGR (pre-fix behaviour preserved exactly when no
+        // parser is attached).
+        return [$this->fg, $this->bg, $this->attrs | Cell::ATTR_UNDERLINE, $i + 1];
+    }
+
+    /**
+     * Handle 38;5;n (256-color) / 38;2;r;g;b (truecolor) and their 48;
+     * background twins.
+     *
+     * The renderer cell stores palette indices only — no RGB slot — so a
+     * truecolor triplet cannot be painted; but it MUST still be consumed.
+     * Before this arm existed, `38;2;1;2;3` fell through as five independent
+     * SGRs (2=…, 3=italic) and corrupted the pen. Dropping the colour to the
+     * default pen is the closest faithful rendering; the emulator keeps the
+     * RGB, a documented representation limit (VtParityTest::DIVERGENCE_NOTE).
      *
      * @param list<int> $params
      * @return array{0: int, 1: int, 2: int, 3: int}
@@ -247,6 +395,31 @@ final class CsiHandlerImpl implements CsiHandler
             } else {
                 return [$this->fg, $index, $this->attrs, $i + 3];
             }
+        }
+        if ($kind === 2) {
+            // Truecolor triplet: consume r;g;b, leave the pen's palette slot
+            // untouched (see docblock — no RGB storage in this model).
+            return [$this->fg, $this->bg, $this->attrs, $i + 5];
+        }
+        return [$this->fg, $this->bg, $this->attrs, $i + 1];
+    }
+
+    /**
+     * Handle 58 (underline colour): parse-and-discard the extended form so
+     * its components never run as independent SGRs. 59 resets it — also a
+     * no-op here, as the pen stores nothing to reset.
+     *
+     * @param list<int> $params
+     * @return array{0: int, 1: int, 2: int, 3: int}
+     */
+    private function sgrExtendedDiscard(array $params, int $i): array
+    {
+        $kind = $params[$i + 1] ?? -1;
+        if ($kind === 5) {
+            return [$this->fg, $this->bg, $this->attrs, $i + 3];
+        }
+        if ($kind === 2) {
+            return [$this->fg, $this->bg, $this->attrs, $i + 5];
         }
         return [$this->fg, $this->bg, $this->attrs, $i + 1];
     }
@@ -306,16 +479,35 @@ final class CsiHandlerImpl implements CsiHandler
 
     public function decset(int $mode, int $prefix = 0): void
     {
-        if ($mode === 25) {
-            $this->cursor = $this->cursor->hidden();
+        // DEC private modes only — the emulator forwards `CSI h` without the
+        // '?' prefix nowhere (see ScreenHandler case 'h'), and the renderer
+        // must ignore the bare form identically.
+        if ($prefix !== 0x3F /* '?' */) {
+            return;
         }
+        // DECTCEM: `CSI ? 25 h` SHOWS the cursor (set = enabled = visible).
+        // The old arms had this inverted — a catalogued divergence (the grid
+        // never noticed; only the cursor state did).
+        match ($mode) {
+            7 => $this->autoWrap = true,   // DECAWM on: deferred wrap resumes
+            25 => $this->cursor = $this->cursor->shown(),
+            default => null,               // Mouse/other modes: no grid effect.
+        };
     }
 
     public function decrst(int $mode, int $prefix = 0): void
     {
-        if ($mode === 25) {
-            $this->cursor = $this->cursor->shown();
+        if ($prefix !== 0x3F /* '?' */) {
+            return;
         }
+        // DECAWM off: printing at the right margin overwrites the last cell
+        // instead of wrapping — the phantom flag re-arms by geometry but is
+        // never consumed while the mode stays off (xterm behaviour).
+        match ($mode) {
+            7 => $this->autoWrap = false,
+            25 => $this->cursor = $this->cursor->hidden(),
+            default => null,
+        };
     }
 
     public function decstbm(int $top, int $bottom): void
@@ -333,12 +525,9 @@ final class CsiHandlerImpl implements CsiHandler
         $this->scrollTop = $top - 1;
         $this->scrollBottom = $bottom - 1;
 
-        if ($this->cursor->row < $this->scrollTop) {
-            $this->cursor = $this->cursor->at($this->scrollTop, $this->cursor->col);
-        }
-        if ($this->cursor->row > $this->scrollBottom) {
-            $this->cursor = $this->cursor->at($this->scrollBottom, $this->cursor->col);
-        }
+        // DECSTBM does NOT yank the cursor into the new region — the
+        // emulator's setScrollRegion only records the margins. The old
+        // clamping was a catalogued divergence.
     }
 
     public function tbc(int $mode = 0): void
@@ -349,6 +538,8 @@ final class CsiHandlerImpl implements CsiHandler
 
     public function cbt(int $count = 1): void
     {
+        // Tab-family motion deliberately leaves the phantom flag armed —
+        // the emulator's HT/CHT/CBT route does (xterm _wrapnext survives).
         $newCol = max(0, $this->cursor->col - $count);
         $this->cursor = $this->cursor->at($this->cursor->row, $newCol);
     }
@@ -361,9 +552,11 @@ final class CsiHandlerImpl implements CsiHandler
 
     /**
      * CR — carriage return: move cursor to column 0 (row unchanged).
+     * Column motion disarms the deferred wrap (xterm carriage_return).
      */
     public function cr(): void
     {
+        $this->wrapPending = false;
         $this->cursor = $this->cursor->at($this->cursor->row, 0);
     }
 
@@ -371,9 +564,11 @@ final class CsiHandlerImpl implements CsiHandler
      * LF — line feed: advance cursor down one row, scrolling the
      * scroll region if the cursor is at scrollBottom.
      * Handles VT (0x0B) and FF (0x0C) the same way.
+     * Vertical motion consumes the phantom cell (emulator index()).
      */
     public function lf(): void
     {
+        $this->wrapPending = false;
         if ($this->cursor->row >= $this->scrollBottom) {
             $this->scrollUp(1);
         } else {
@@ -402,7 +597,10 @@ final class CsiHandlerImpl implements CsiHandler
     /**
      * IL — Insert Line (CSI L). Insert $count blank lines at the cursor row,
      * shifting existing lines down within the scroll region. No-op when the
-     * cursor sits outside the scroll region. Cursor position unchanged.
+     * cursor sits outside the scroll region. On success the cursor homes to
+     * column 0 on its row — matching the emulator's insertLines() (VT500 §IL
+     * "cursor to home position"; charm keeps the phantom armed against the OLD
+     * margin, so column-home disarms it — see ScreenHandler::insertLines).
      */
     public function il(int $count = 1): void
     {
@@ -423,12 +621,17 @@ final class CsiHandlerImpl implements CsiHandler
                 $this->grid->set($r, $c, Cell::empty());
             }
         }
+        $this->wrapPending = false;
+        $this->cursor = $this->cursor->at($row, 0);
     }
 
     /**
      * DL — Delete Line (CSI M). Delete $count lines at the cursor row,
      * shifting lines below up within the scroll region. No-op when the
-     * cursor sits outside the scroll region. Cursor position unchanged.
+     * cursor sits outside the scroll region. Cursor homes to column 0 like
+     * {@see il()}. (The emulator additionally pushes deleted rows into its
+     * scrollback when the region spans the screen; the renderer has no
+     * scrollback, so its visible-grid edit is identical.)
      */
     public function dl(int $count = 1): void
     {
@@ -449,6 +652,8 @@ final class CsiHandlerImpl implements CsiHandler
                 $this->grid->set($r, $c, Cell::empty());
             }
         }
+        $this->wrapPending = false;
+        $this->cursor = $this->cursor->at($row, 0);
     }
 
     /**
@@ -523,13 +728,32 @@ final class CsiHandlerImpl implements CsiHandler
 
     /**
      * SCORC — SCO Restore Cursor (CSI u). Restore the cursor saved by SCOSC;
-     * no-op when nothing was saved.
+     * no-op when nothing was saved. A position change on the way back
+     * disarms the phantom cell (emulator: cursor-handler dispatch clears for
+     * every final except 's').
      */
     public function scorc(): void
     {
         if ($this->savedCursor !== null) {
             $this->cursor = $this->savedCursor;
         }
+        $this->wrapPending = false;
+    }
+
+    /**
+     * Consume a pending line break: column 0 of the next row, scrolling the
+     * region when already at its bottom. Mirrors the emulator's
+     * ScreenHandler::lineFeedNext() — the phantom flag is cleared here.
+     */
+    private function lineFeedWrap(): void
+    {
+        $this->wrapPending = false;
+        $this->cursor = $this->cursor->at($this->cursor->row, 0);
+        if ($this->cursor->row >= $this->scrollBottom) {
+            $this->scrollUp(1);
+            return;
+        }
+        $this->cursor = $this->cursor->at($this->cursor->row + 1, 0);
     }
 
     private function scrollUp(int $count): void

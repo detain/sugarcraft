@@ -32,12 +32,18 @@ use SugarCraft\Vt\Terminal\Terminal as EmulatorTerminal;
  *
  * Equivalence is asserted over a shared NORMALISED grid: char, palette
  * index (both models reduced to 0-255 indices), and the five attributes the
- * renderer model has bits for. Sequences whose semantics differ by
- * representation (truecolor, blink/dim/hidden, tab stops, combining marks)
- * are catalogued in {@see DIVERGENCE_NOTE} rather than silently normalised
- * away; sequences where the engines genuinely DISAGREE today are pinned as
- * tripwires by the catalogue tests at the bottom — they fail the moment
- * parity is reached, so the sequence graduates into the curated corpus.
+ * renderer model has bits for. #1417 corrected the EMULATOR (DECAWM
+ * default, deferred/phantom wrap, RIS/DECSTR, IL/DL, SCS, reply channel);
+ * this track brought the RENDERER path (Parser\CsiHandlerImpl) to the same
+ * semantics — deferred wrap with DECAWM, IL/DL cursor homing, absolute CUP
+ * clamping, DECTCEM, the 4/4:3 colon distinction via Parser::subparams(),
+ * and consumption of SGR 29/58/59 and the 38;2/48;2 triplets. The former
+ * divergence tripwires are graduated into {@see curatedStreams} plus the
+ * per-feature parity pins below. What remains in the catalogue are genuine
+ * REPRESENTATION limits (truecolor value, blink/dim/hidden, 58 colour
+ * storage, tab stops, combining marks, BCE erases) and one ADAPTER limit
+ * (the explicit `CSI 0 L/M` count no-op, clamped to 1 by candy-ansi's
+ * HandlerAdapter before the renderer can see it).
  */
 final class VtParityTest extends TestCase
 {
@@ -46,17 +52,25 @@ final class VtParityTest extends TestCase
 
     /**
      * Representation limits — not tested for equality on either side:
-     *  - truecolor SGR 38;2 / 48;2 — the renderer pen has no RGB slot
-     *    (asserted as a divergence below, since candy-core emits it).
+     *  - truecolor SGR 38;2 / 48;2 — both engines now CONSUME the triplet
+     *    cleanly, but the renderer pen has no RGB slot, so the stored
+     *    colour VALUE diverges (pinned below; asserted as a value-only gap
+     *    since candy-core emits truecolor at those profiles).
      *  - blink / dim / hidden SGR — the renderer cell has no such bits.
-     *  - SGR 58/59 underline colour — neither pen stores it yet; the
-     *    candy-ansi PARSER round-trip is guarded by
-     *    candy-ansi/tests/SgrSubparameterTest.php, and parity of the
-     *    downstream corruption is asserted here as grid invariance.
+     *  - SGR 58/59 underline colour — both engines consume the
+     *    specification without corrupting the pen, but neither pen STORES
+     *    the colour (no slot in Sgr or the renderer Cell).
      *  - HT / CHT / CBT tab stops — renderer moves by $count, emulator
      *    advances to stops.
      *  - combining marks — attached into the char by the renderer, a
      *    dedicated field by the emulator.
+     *  - REP (`CSI b`) — replays the last printable on the renderer path;
+     *    the emulator does not dispatch it at all.
+     *  - BCE erases — the emulator paints ED/EL/ECH with the active pen;
+     *    the renderer blanks with default cells (pinned below).
+     *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
+     *    HandlerAdapter clamps the count to 1 before the renderer sees it
+     *    (pinned below).
      */
     private const DIVERGENCE_NOTE = 'see VtParityTest::DIVERGENCE_NOTE';
 
@@ -94,6 +108,17 @@ final class VtParityTest extends TestCase
             'decawm extreme cup agrees' => ["\x1b[?7h\x1b[999;999HZ"],
             'decawm motion at line end' => ["\x1b[?7h" . str_repeat('x', 20) . "\x1b[2C\x1b[1D\x1b[1A\x1b[3;4H\x1b[2B\x1b[1DAB"],
             'decawm backspace and fill at line end' => ["\x1b[?7h" . str_repeat('y', 20) . "\x1b[1D\x1b[0KY\x1b[1P\x1b[2@Z"],
+            'long run wraps on default modes' => [str_repeat('x', 21)],
+            'extreme cup without explicit decawm' => ["\x1b[999;999HZ"],
+            'extreme cup print at the corner scrolls' => ["\x1b[999;999HZW"],
+            'decawm off clips at right margin' => ["\x1b[?7l" . str_repeat('z', 25) . "\x1b[?7h" . 'www'],
+            'phantom wrap survives erase then motion' => ["\x1b[?7l" . str_repeat('v', 20) . "\x1b[0K\x1b[C\x1b[?7hW"],
+            'insert line then write' => ["AAAA\r\nBBBB\x1b[2;1H\x1b[1LCC"],
+            'insert two lines then write' => ["AAAA\r\nBBBB\r\nCCCC\x1b[2;1H\x1b[2LXY"],
+            'delete line then write' => ["AAAA\r\nBBBB\r\nCCCC\x1b[2;1H\x1b[1MDD"],
+            'strike off' => ["\x1b[9mS\x1b[29mN"],
+            'underline colon vs semicolon' => ["\x1b[4:3mC\x1b[0m\x1b[4;3mS\x1b[0mE"],
+            'decstbm cup is absolute' => ["\x1b[2;4r\x1b[1;1HA"],
             'mouse modes multi set reset' => ["\x1b[?1000;1002;1006h\x1b[?1006lreport-on\x1b[0m!"],
             'mixed output' => ["\x1b[2J\x1b[H\x1b[1;1HHeader\r\n\x1b[36mvalue:\x1b[39m 42\x1b[K\r\nfooter\x1b[s\x1b[99;99H\x1b[u!"],
             'wide sgr runs in one dispatch' => ["\x1b[1;31;42mx\x1b[m\x1b[0my"],
@@ -140,128 +165,209 @@ final class VtParityTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Divergence catalogue — each case pins a place where the engines
-    // currently DISAGREE. They are tripwires, not endorsements: when the
-    // candy-vt owner lands the parity fix, the pinned value changes and the
-    // matching test fails — move that sequence into {@see curatedStreams}
-    // and delete the catalogue case.
+    // Graduated tripwires — each sequence below was pinned in this
+    // catalogue as a place where the two engines DISAGREED. The emulator
+    // fixes (#1417) and the renderer-path parity fix (this PR) brought them
+    // together, so each now asserts AGREEMENT, per feature, with a specific
+    // failure message; the sequences also live in {@see curatedStreams}.
+    // What is left in the catalogue are representation/adapter limits that
+    // a handler change cannot close.
     // ------------------------------------------------------------------
 
-    public function testCataloguedDivergenceDectcemIsInvertedOnRendererPath(): void
+    public function testParityDectcemMatchesEmulator(): void
     {
-        // DECTCEM: `CSI ? 25 h` shows the cursor, `l` hides it.
+        // DECTCEM: `CSI ? 25 h` shows the cursor, `l` hides it — the
+        // renderer used to invert this.
         $emulator = self::feedEmulator("\x1b[?25l");
         self::assertFalse($emulator->mode()->cursorVisible, 'emulator tracks DECTCEM correctly');
+        $renderer = self::feedRenderer("\x1b[?25l");
+        self::assertFalse($renderer->cursor()->visible, 'renderer: ?25l hides the cursor');
 
-        $renderer = self::feedRenderer("\x1b[?25h");
-        self::assertFalse(
-            $renderer->cursor()->visible,
-            'KNOWN DIVERGENCE (candy-vt Parser\CsiHandlerImpl::decset inverts DECTCEM — ?25h hides instead of '
-            . 'showing). When fixed this assertion fails: delete this case; the grid-invariant behaviour is '
-            . 'already in the curated corpus.',
+        self::assertTrue(
+            self::feedRenderer("\x1b[?25l\x1b[?25h")->cursor()->visible,
+            'renderer: ?25h shows the cursor',
+        );
+        self::assertTrue(self::feedEmulator("\x1b[?25l\x1b[?25h")->mode()->cursorVisible);
+    }
+
+    public function testParityCupIsAbsoluteUnderDecstbmOnBothPaths(): void
+    {
+        // With DECSTBM 2..4 active, `CSI 1;1H` addresses screen line 1 on
+        // BOTH engines: the renderer no longer clamps CUP into the scroll
+        // region, and DECSTBM no longer yanks the renderer cursor either.
+        $bytes = "\x1b[2;4r\x1b[1;1HA";
+
+        self::assertSame('A', self::charAt(self::feedRenderer($bytes), 0, 0), 'renderer prints at absolute line 1');
+        self::assertSame(
+            'A',
+            self::emulatorCharAt(self::feedEmulator($bytes), 0, 0),
+            'emulator prints at absolute line 1',
         );
     }
 
-    public function testCataloguedDivergenceCupClampsToScrollRegionOnRendererPath(): void
-    {
-        // With DECSTBM 2..4 active, `CSI 1;1H` addresses screen line 1.
-        // The emulator honours that; the renderer path clamps into the
-        // scroll region, printing at line 2 instead — and DECSTBM itself
-        // yanks the renderer cursor into the region.
-        $bytes = "\x1b[2;4r\x1b[1;1HA";
-        $renderer = self::feedRenderer($bytes);
-        $emulator = self::feedEmulator($bytes);
-
-        self::assertSame('A', self::emulatorCharAt($emulator, 0, 0), 'emulator prints at absolute line 1');
-        self::assertSame(' ', self::charAt($renderer, 0, 0), 'renderer never puts it on line 1');
-        self::assertSame('A', self::charAt($renderer, 1, 0), 'renderer clamped into the 2..4 region');
-    }
-
-    public function testCataloguedDivergenceSemicolonFourThreeMisreadAsSubparamByEmulator(): void
+    public function testParitySemicolonFourThreeIsIndependentSgrsOnBothPaths(): void
     {
         // `CSI 4 ; 3 m` is underline + italic (two independent SGRs);
         // `CSI 4 : 3 m` is one parameter with a curly sub-parameter.
-        // candy-ansi flattens both to [4, 3]; the emulator's heuristic
-        // (peek the next slot) reads the SEMICOLON form as the colon form,
-        // while the renderer applies both as independent SGRs. The fix is
-        // to plumb Parser::subparams() into the emulator — a candy-vt job.
+        // candy-ansi flattens both to [4, 3]; both engines now consult
+        // Parser::subparams() for the colon flags instead of peeking, so
+        // the forms keep their distinct meanings on either path.
         $bytes = "\x1b[4;3mX\x1b[0m";
-        $rendererAttrs = self::rendererAttrs(self::feedRenderer($bytes), 0, 0);
-        $emulatorAttrs = self::emulatorAttrs(self::feedEmulator($bytes), 0, 0);
+        self::assertSame(4 | 2, self::rendererAttrs(self::feedRenderer($bytes), 0, 0), 'renderer: underline + italic');
+        self::assertSame(
+            4 | 2,
+            self::emulatorAttrs(self::feedEmulator($bytes), 0, 0),
+            'emulator no longer folds the semicolon form into 4:3',
+        );
 
-        self::assertSame(4 | 2, $rendererAttrs, 'renderer: underline + italic');
-        self::assertSame(4, $emulatorAttrs, 'emulator folded 4;3 into 4:3 — italic bit lost');
+        $bytes = "\x1b[4:3mX\x1b[0m";
+        self::assertSame(
+            4,
+            self::rendererAttrs(self::feedRenderer($bytes), 0, 0),
+            'renderer: colon form is underline only',
+        );
+        self::assertSame(4, self::emulatorAttrs(self::feedEmulator($bytes), 0, 0), 'emulator: same');
     }
+
+    public function testParityExtremeCupClampsToBufferCornerOnBothPaths(): void
+    {
+        // `CSI 999;999H` then a print WITHOUT touching DECAWM: both engines
+        // now default auto-wrap ON, clamp the cursor at the last cell and
+        // drop Z there — the renderer no longer advances past the corner
+        // and scrolls one line early. The follow-up print that consumes the
+        // armed phantom (scroll at the corner) is pinned in the curated
+        // corpus ('extreme cup print at the corner scrolls').
+        $bytes = "\x1b[999;999HZ";
+
+        self::assertSame('Z', self::charAt(self::feedRenderer($bytes), self::ROWS - 1, self::COLS - 1));
+        self::assertSame('Z', self::emulatorCharAt(self::feedEmulator($bytes), self::ROWS - 1, self::COLS - 1));
+    }
+
+    public function testParityDefaultModesAutoWrapLongRuns(): void
+    {
+        // DECAWM defaults ON on both engines (#1417 fixed the emulator's
+        // mode default; this PR made the renderer honour the mode at all).
+        // A 20-glyph run arms the phantom cell on both, and the 21st wraps
+        // onto the next line in both grids instead of being dropped.
+        $emulator = self::feedEmulator(str_repeat('x', self::COLS));
+        self::assertTrue($emulator->isWrapPending(), 'emulator arms the deferred wrap at the right margin');
+        $renderer = self::feedRenderer(str_repeat('x', self::COLS));
+        self::assertTrue($renderer->isWrapPending(), 'renderer mirrors the phantom flag');
+
+        $bytes = str_repeat('x', 21);
+        self::assertSame('x', self::emulatorCharAt(self::feedEmulator($bytes), 1, 0), '21st glyph wraps, not dropped');
+        self::assertSame('x', self::charAt(self::feedRenderer($bytes), 1, 0), 'renderer: same');
+    }
+
+    public function testParityStrikeOffResetsPenOnBothPaths(): void
+    {
+        // SGR 29 (strikethrough off) resets the pen in both engines now the
+        // renderer carries the arm. 21/25/28 are parity no-ops either way:
+        // neither model stores double-underline/blink/hidden bits, so the
+        // emulator's fold and the renderer's fall-through agree under the
+        // normalisation mask.
+        $bytes = "\x1b[9mS\x1b[29mN";
+
+        self::assertSame(0, self::rendererAttrs(self::feedRenderer($bytes), 0, 1), 'renderer: strike off');
+        self::assertSame(0, self::emulatorAttrs(self::feedEmulator($bytes), 0, 1), 'emulator: strike off');
+    }
+
+    public function testParityInsertDeleteLinesOnBothPaths(): void
+    {
+        // CSI L / CSI M shift lines on BOTH engines, home the cursor to
+        // column 0 and drop the phantom flag (VT500 §IL/§DL, mirrored by
+        // #1417's emulator implementation and this PR's renderer cursor
+        // handling). Grid equality over the streams lives in the curated
+        // corpus; this pin keeps the cursor-homing intent explicit.
+        $bytes = "AAAA\r\nBBBB\x1b[2;1H\x1b[1L";
+        $renderer = self::feedRenderer($bytes);
+        self::assertSame(' ', self::charAt($renderer, 1, 0), 'renderer: blank line inserted at cursor row');
+        self::assertSame('B', self::charAt($renderer, 2, 0), 'renderer: content shifted down');
+        self::assertSame(' ', self::emulatorCharAt(self::feedEmulator($bytes), 1, 0), 'emulator: blank line inserted');
+
+        $bytes = "AAAA\r\nBBBB\r\nCCCC\x1b[2;1H\x1b[1M";
+        self::assertSame('C', self::charAt(self::feedRenderer($bytes), 1, 0), 'renderer: lines shifted up');
+        self::assertSame('C', self::emulatorCharAt(self::feedEmulator($bytes), 1, 0), 'emulator: lines shifted up');
+    }
+
+    public function testParityUnderlineColourIsConsumedByBothEngines(): void
+    {
+        // candy-core EMITS `58;5;N` (Util/Color::toUnderline). Both SGR
+        // consumers now carry a 58 arm (renderer CsiHandlerImpl, emulator
+        // Handler\SgrHandler) that eats the whole colour specification
+        // without touching the pen — the shared misparse this catalogue
+        // pinned is gone. The underline COLOUR itself stays unrepresented
+        // on both pens (no slot in Sgr or the renderer Cell), so grid
+        // equality is asserted, not colour storage.
+        $bytes = "\x1b[58;5;33mU";
+        self::assertSame(
+            'I7',
+            self::rendererFg(self::feedRenderer($bytes), 0, 0),
+            'renderer: 33 no longer eats the fg',
+        );
+        self::assertSame(
+            'I7',
+            self::emulatorFg(self::feedEmulator($bytes), 0, 0),
+            'emulator: 33 no longer eats the fg',
+        );
+
+        $bytes = "\x1b[58;2;148;199;255mU\x1b[0m";
+        self::assertSame('I7', self::rendererFg(self::feedRenderer($bytes), 0, 0), 'renderer: truecolor form consumed');
+        self::assertSame('I7', self::emulatorFg(self::feedEmulator($bytes), 0, 0), 'emulator: truecolor form consumed');
+    }
+
+    // ------------------------------------------------------------------
+    // Remaining catalogue — genuine representation/adapter limits. Each
+    // stays a tripwire: when the model gains the missing slot (or the
+    // adapter contract changes), the pinned value shifts and the test
+    // fails; graduate the sequence then.
+    // ------------------------------------------------------------------
 
     public function testCataloguedDivergenceTruecolorDroppedByRendererPath(): void
     {
         // candy-core emits `38;2;R;G;B` at truecolor profiles
-        // (Util/Color::toSgr); the renderer pen only knows 58;5/38;5/16-colour,
-        // so the two grids diverge on fg. Representation limit, documented.
+        // (Util/Color::toSgr). The renderer now CONSUMES the triplet
+        // cleanly (this PR fixed the misparse), but its Cell has no RGB
+        // slot — so the grids differ in the colour VALUE only: identical
+        // chars and attributes, default palette versus stored truecolor.
+        // Closing this needs an RGB field in SugarCraft\Vt\Cell, not a
+        // handler change.
         $bytes = "\x1b[38;2;255;0;0mX\x1b[0mY";
         $renderer = self::feedRenderer($bytes);
         $emulator = self::feedEmulator($bytes);
 
         self::assertSame('I7', self::rendererFg($renderer, 0, 0), 'renderer keeps the default pen');
         self::assertSame('TC', self::emulatorFg($emulator, 0, 0), 'emulator stores truecolor');
+        // The triplet must not leak into anything the grid models:
+        self::assertSame('X', self::charAt($renderer, 0, 0));
+        self::assertSame('Y', self::charAt($renderer, 0, 1));
+        self::assertSame(0, self::rendererAttrs($renderer, 0, 0), 'no stray attributes from 38;2');
+        self::assertSame(0, self::rendererAttrs($renderer, 0, 1));
+        self::assertSame(0, self::emulatorAttrs($emulator, 0, 1));
+        self::assertSame('Y', self::emulatorCharAt($emulator, 0, 1), 'chars agree on both engines');
     }
 
-    public function testCataloguedDivergenceExtremeCupClampsDifferently(): void
+    public function testCataloguedDivergenceExplicitZeroIlDlCountsDiffer(): void
     {
-        // `CSI 999;999H` then a print, WITHOUT enabling DECAWM: the emulator
-        // clamps the cursor at the last cell (autoWrap defaults to FALSE in
-        // candy-vt Mode — see the DECAWM catalogue case below) while the
-        // renderer path always wraps, advancing past the bottom-right corner
-        // and scrolling one line early — so the character lands one row
-        // above the emulator's copy. With `CSI ? 7 h` the two agree (proven
-        // in the curated corpus), pinning this to the mode default, not the
-        // corner maths.
-        $bytes = "\x1b[999;999HZ";
+        // `CSI 0 L` / `CSI 0 M` are no-ops on the emulator (ECMA-48 default
+        // parameter, pinned by #1417's charm parity guard). The renderer can
+        // never see the zero: candy-ansi's Parser\HandlerAdapter clamps
+        // every count with `max(1, p0)` before calling CsiHandlerImpl::il().
+        // Fixing it means changing the adapter contract for ALL CsiHandler
+        // implementors — deferred to a candy-ansi follow-up; no real-world
+        // emitter sends `0 L`.
+        $bytes = "AAAA\r\nBBBB\x1b[2;1H\x1b[0L";
 
-        self::assertSame('Z', self::emulatorCharAt(self::feedEmulator($bytes), self::ROWS - 1, self::COLS - 1));
-        self::assertSame('Z', self::charAt(self::feedRenderer($bytes), self::ROWS - 2, self::COLS - 1));
-    }
-
-    public function testCataloguedDivergenceEmulatorDefaultsDecawmOff(): void
-    {
-        // DECAWM (`CSI ? 7 h`) controls auto-wrap on the emulator, and
-        // candy-vt defaults `Mode::$autoWrap` to FALSE — while the renderer
-        // path always wraps and ignores DECAWM entirely. Any print run that
-        // crosses the last column therefore diverges until the program
-        // enables DECAWM: the emulator clamps the cursor at the last cell
-        // and DROPS the remaining glyphs (xterm, VT and ANSI.SYS all default
-        // DECAWM ON; a candy-vt job). With `?7h` emitted, long runs,
-        // motion, save/restore and fills at the line end all agree — pinned
-        // by the curated corpus cases, so the parity guard below can simply
-        // start its streams with `?7h`.
-        $bytes = str_repeat('x', 21);
-        $emulator = self::feedEmulator($bytes);
-        $renderer = self::feedRenderer($bytes);
-
-        self::assertSame('x', self::emulatorCharAt($emulator, 0, self::COLS - 1), 'emulator printed 20 and clamped');
-        self::assertSame(' ', self::emulatorCharAt($emulator, 1, 0), '21st glyph dropped by the emulator');
-        self::assertSame('x', self::charAt($renderer, 1, 0), 'renderer wrapped it to the next line');
-    }
-
-    public function testCataloguedDivergenceStrikeOffMissingOnRendererPath(): void
-    {
-        // SGR 29 (strikethrough off) — also 25 (blink off) and 28 (hidden
-        // off), same gap — resets the pen in the emulator but falls through
-        // to the renderer's default arm, leaving the attribute lit.
-        $bytes = "\x1b[9mS\x1b[29mN";
-
-        self::assertSame(16, self::rendererAttrs(self::feedRenderer($bytes), 0, 1), 'renderer: strike stays on');
-        self::assertSame(0, self::emulatorAttrs(self::feedEmulator($bytes), 0, 1), 'emulator: strike off');
-    }
-
-    public function testCataloguedDivergenceInsertDeleteLinesRendererOnly(): void
-    {
-        // CSI L / CSI M shift lines on the renderer path; the emulator's
-        // ScreenHandler does not dispatch them at all.
-        $bytes = "AAAA\r\nBBBB\x1b[2;1H\x1b[1L";
-
-        self::assertSame(' ', self::charAt(self::feedRenderer($bytes), 1, 0), 'renderer: blank line inserted');
-        self::assertSame('B', self::emulatorCharAt(self::feedEmulator($bytes), 1, 0), 'emulator: IL ignored');
+        self::assertSame(
+            'B',
+            self::emulatorCharAt(self::feedEmulator($bytes), 1, 0),
+            'emulator: explicit 0 L is a no-op',
+        );
+        self::assertSame(
+            ' ',
+            self::charAt(self::feedRenderer($bytes), 1, 0),
+            'renderer: adapter clamped 0 to 1 — a line was inserted',
+        );
     }
 
     public function testCataloguedDivergenceRepeatLastCharRendererOnly(): void
@@ -272,22 +378,6 @@ final class VtParityTest extends TestCase
 
         self::assertSame('b', self::charAt(self::feedRenderer($bytes), 0, 2), 'renderer: b repeated');
         self::assertSame('c', self::emulatorCharAt(self::feedEmulator($bytes), 0, 2), 'emulator: REP ignored');
-    }
-
-    public function testCataloguedSharedDefectUnderlineColorIsMisparsedByBothEngines(): void
-    {
-        // candy-core EMITS `58;5;N` (Util/Color::toUnderline). Neither SGR
-        // consumer has a 58 arm, so `5` and `33` are read as independent SGRs
-        // and the underline colour corrupts the pen — both engines turn the
-        // fg green (33 - 30). The candy-ansi PARSER is correct (see
-        // candy-ansi SgrSubparameterTest); the handlers must consume the
-        // 58/48/38 triplets — a candy-vt job. When either engine gains a 58
-        // arm this test fails: then move these sequences into the parity
-        // corpus and delete this case.
-        $bytes = "\x1b[58;5;33mU";
-
-        self::assertSame('I3', self::rendererFg(self::feedRenderer($bytes), 0, 0), 'renderer: 33 ate the fg');
-        self::assertSame('I3', self::emulatorFg(self::feedEmulator($bytes), 0, 0), 'emulator: 33 ate the fg');
     }
 
     public function testCataloguedDivergenceEmulatorErasesWithActiveBackground(): void
@@ -433,12 +523,14 @@ final class VtParityTest extends TestCase
     /**
      * Deterministic Park-Miller generator over a parity-safe token alphabet,
      * so CI and local runs diverge identically. Every stream starts with
-     * `CSI ? 7 h` (DECAWM) because the emulator defaults auto-wrap to OFF
-     * while the renderer always wraps (catalogued below) — with DECAWM
-     * enabled the two engines' line-end, corner and motion semantics agree,
-     * which is what the random mix relies on. DECSTBM, tabs, truecolor and
-     * the engines' one-sided primitives (IL/DL/REP on the renderer only)
-     * stay excluded — they live in the divergence catalogue.
+     * `CSI ? 7 h` (DECAWM) because both engines now default auto-wrap ON and
+     * honour it; explicit `?7h`/`?7l` toggles are mixed in to exercise the
+     * phantom-cell flag surviving a mid-stream DECAWM flip on both sides.
+     * IL/DL graduated into this mix with the renderer parity fix (they fill
+     * default cells and home the cursor identically). DECSTBM, tabs, the
+     * 38;2/48;2 truecolor PEN VALUES (58;2 joins as a pen-inert consume
+     * token) and the engines' one-sided primitives (REP on the renderer
+     * only) stay excluded — they live in the divergence catalogue.
      */
     private static function randomStream(int $seed): string
     {
@@ -456,16 +548,18 @@ final class VtParityTest extends TestCase
         $penAndMode = [
             "\x1b[31m", "\x1b[100m", "\x1b[38;5;200m", "\x1b[48;5;17m",
             "\x1b[1m", "\x1b[4m", "\x1b[7m",
-            "\x1b[58;5;178m", "\x1b[59m", "\x1b[21m", "\x1b[0m",
+            "\x1b[58;5;178m", "\x1b[59m", "\x1b[58;2;1;2;3m", "\x1b[21m", "\x1b[0m",
             "\x1b[s", "\x1b[u", "\x1b[?25h", "\x1b[?25l", "\x1b[?1000;1006h", "\x1b[?1006l",
+            "\x1b[?7l", "\x1b[?7h",
         ];
         $moves = ['A', 'B', 'C', 'D'];
-        $fills = ['J', 'K', '@', 'P', 'S', 'T'];
+        $fills = ['J', 'K', '@', 'P', 'S', 'T', 'L', 'M'];
         $penDirtying = array_flip([
             "\x1b[31m", "\x1b[100m", "\x1b[38;5;200m", "\x1b[48;5;17m", "\x1b[1m", "\x1b[4m", "\x1b[7m",
         ]);
 
-        // DECAWM on for the whole stream — see the method docblock.
+        // DECAWM on up front — both engines default it on, but `?7l`/`?7h`
+        // toggles come through $penAndMode later. See the method docblock.
         $bytes = "\x1b[?7h";
         $penDirty = false;
         for ($step = 0; $step < 150; $step++) {
@@ -489,8 +583,8 @@ final class VtParityTest extends TestCase
                 if (($token === 'J' || $token === 'K') && $penDirty) {
                     // ED/EL blank with the active pen on the emulator but with
                     // default cells on the renderer path (catalogued) — reset
-                    // to the common ground first. ICH/DCH/SU/SD insert default
-                    // cells on both and stay unguarded.
+                    // to the common ground first. ICH/DCH/SU/SD/IL/DL insert
+                    // default cells on both and stay unguarded.
                     $bytes .= "\x1b[0m";
                     $penDirty = false;
                 }

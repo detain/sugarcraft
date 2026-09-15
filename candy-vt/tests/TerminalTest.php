@@ -139,20 +139,23 @@ final class TerminalTest extends TestCase
         $this->assertSame(' ', $t->grid()->get(0, 5)->char);
     }
 
-    public function testFeedCSIDecsetCursorHidden(): void
+    public function testFeedCSIDectcemHidesCursor(): void
     {
+        // DECTCEM `CSI ? 25 l` hides; `h` shows. (These two tests used to
+        // pin the renderer's inverted mapping — corrected with the emulator
+        // parity pass, see candy-vcr VtParityTest DECTCEM case.)
         $t = Terminal::new();
 
-        $t->feed("\x1b[?25h");
+        $t->feed("\x1b[?25l");
 
         $this->assertFalse($t->cursor()->visible);
     }
 
-    public function testFeedCSIDecrstCursorVisible(): void
+    public function testFeedCSIDectcemShowsCursor(): void
     {
         $t = Terminal::new();
 
-        $t->feed("\x1b[?25h\x1b[?25l");
+        $t->feed("\x1b[?25l\x1b[?25h");
 
         $this->assertTrue($t->cursor()->visible);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Handler;
 
+use Closure;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell\Cell;
@@ -79,6 +80,44 @@ final class ScreenHandler implements Handler
      * @see xterm ctlseqs "DECAWM" wraparound paragraph
      */
     public bool $wrapPending = false;
+
+    /**
+     * Late-bound ECMA-48 colon-continuation flags for the CSI sequence
+     * currently being dispatched — wired by {@see
+     * \SugarCraft\Vt\Terminal\Terminal::new()} to the owning parser's
+     * {@see \SugarCraft\Ansi\Parser\Parser::subparams()}. SGR needs them to
+     * tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
+     * italic), because candy-ansi flattens both to [4, 3]. Unattached —
+     * direct construction — SGR keeps its historical next-slot peek.
+     *
+     * @var (Closure(): list<bool>)|null
+     */
+    private ?Closure $subparamsProvider = null;
+
+    /**
+     * Wire the parser's sub-parameter continuation flags for SGR colon
+     * handling. Called once at terminal construction; see
+     * {@see $subparamsProvider}.
+     *
+     * @param Closure(): list<bool> $provider
+     */
+    public function attachSubparamsProvider(Closure $provider): void
+    {
+        $this->subparamsProvider = $provider;
+    }
+
+    /**
+     * Continuation flags for the in-flight dispatch, or null when no parser
+     * is attached. Safe to call only from inside a dispatch — the parser has
+     * not cleared its flags yet at that point.
+     *
+     * @return list<bool>|null
+     */
+    private function currentSubparams(): ?array
+    {
+        $provider = $this->subparamsProvider;
+        return $provider === null ? null : $provider();
+    }
 
     /**
      * Query→reply channel: answer strings produced by DA1/DA2/DSR-CPR/
@@ -285,7 +324,7 @@ final class ScreenHandler implements Handler
 
         switch ($finalChar) {
             case 'm':
-                $this->sgr = $this->sgrHandler->apply($params, $this->sgr);
+                $this->sgr = $this->sgrHandler->apply($params, $this->sgr, $this->currentSubparams());
                 return;
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
             case 'H': case 'd': case 'f': case 's': case 'u':

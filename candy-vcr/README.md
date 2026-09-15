@@ -944,12 +944,17 @@ Known limits:
 tooling elsewhere uses the full emulator (`SugarCraft\Vt\Terminal\Terminal`).
 `tests/VtParityTest.php` feeds curated + seeded-random escape streams through
 **both** engines and asserts identical normalised cell grids, so the two
-candy-vcr surfaces cannot drift silently. Known candy-vt engine divergences
-(inverted DECTCEM on the renderer path, CUP clamping into the scroll region,
-truecolor dropped there, emulator `DECAWM` defaulting off, emulator ED/EL
-erasing with the active background, `4;3` vs `4:3`, renderer-only IL/DL/REP)
-are pinned as explicit tripwire cases with fix pointers rather than left to
-surface as mystery assertion failures.
+candy-vcr surfaces cannot drift silently. The renderer-path parity pass
+(deferred `DECAWM` wrap, absolute CUP clamping, IL/DL cursor homing, correct
+DECTCEM, `4;3` vs `4:3` via `Parser::subparams()`, SGR 29/58/59 + triplet
+consumption) and #1417's emulator fixes graduated the former divergences
+into parity assertions. What remains catalogued are representation/adapter
+limits — truecolor VALUES (the renderer `Cell` has no RGB slot), the stored
+underline colour, emulator ED/EL erasing with the active background (BCE),
+renderer-only REP, and the explicit `CSI 0 L/M` count no-op that candy-ansi's
+`HandlerAdapter` clamps to 1 before the renderer sees it — each pinned as an
+explicit tripwire case with a fix pointer rather than left to surface as a
+mystery assertion failure.
 
 `ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [candy-vt](../candy-vt/)) is the recommended choice for round-trip tests:
 
