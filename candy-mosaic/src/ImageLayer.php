@@ -174,6 +174,12 @@ final class ImageLayer
      * has never been placed or was since removed/released. Lets a viewport
      * check its scratch digest against the layer before deciding to
      * re-fetch/re-render.
+     *
+     * Note (inherited from the id model, not the digest index): identical
+     * bytes placed at two sizes share ONE content id, and the id's single
+     * placement slot holds the most recent size — both digests therefore map
+     * to that id. Callers needing size-accurate placements should vary the
+     * bytes per variant, as they already must for markers.
      */
     public function imageIdForDigest(string $digest): ?int
     {
