@@ -18,9 +18,13 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  *
  * Supported sequences:
  *  - Plain ASCII + control codes (Backspace, Tab, Enter, Esc, Ctrl+letter)
- *  - Legacy CSI sequences (arrows, F1-F12, Home/End/PgUp/PgDn, Insert, Delete)
+ *  - Legacy CSI sequences (arrows, F1-F12, Home/End/PgUp/PgDn, Insert, Delete,
+ *    Backtab CSI Z)
  *  - Kitty keyboard protocol events (CSI code ; mods u — no private prefix)
- *  - SGR 1006 mouse (CSI < button ; x ; y M|m) and X10 mouse (CSI M b x y)
+ *  - xterm modifyOtherKeys reports (CSI 27 ; mods ; keysym ~)
+ *  - Mouse: SGR 1006 / 1016 (CSI < b ; x ; y M|m), urxvt 1015
+ *    (CSI b ; x ; y M), and X10 (CSI M b x y)
+ *  - SS3 keys incl. application-keypad mode (ESC O p..y, l, m, M — DECKPAM)
  *  - Focus events (CSI I / CSI O)
  *  - Bracketed paste (CSI 200 ~ ... CSI 201 ~)
  *  - Unsolicited terminal REPLIES (DA1/DA2, DSR/CPR, XTWINOPS, kitty flags,
@@ -410,6 +414,29 @@ final class EscapeDecoder
             // Application keypad mode: ESC O M is keypad Enter.
             // @see xterm ctlseqs — "ESC O ... (SS3)".
             'M' => 'Enter',
+            // Application-keypad mode (DECKPAM, `ESC =`) sends the whole numeric
+            // keypad as SS3 letters. ansicode.txt:742-753 pins the table: Op..Oy
+            // are digits 0..9, Ol the decimal separator (labelled "COMMA on keypad"
+            // on the VT100, the modern kp_decimal), Om minus. A stateless decoder
+            // cannot track DECKPAM itself (candy-input models no DEC modes), but the
+            // ESC O <letter> frames are unambiguous, so decoding them is always
+            // correct regardless of whether the host toggled the mode. Frames beyond
+            // this table (e.g. ESC O n / ESC O o) are not VT100 keypad codes and stay
+            // dropped as unknown SS3.
+            // @see ansicode.txt:742-753 (tmux tools/ansicode.txt, VT100 keypad
+            //      application-mode table) and xterm ctlseqs — SS3 `ESC O p..y` etc.
+            'p' => 'KP0',
+            'q' => 'KP1',
+            'r' => 'KP2',
+            's' => 'KP3',
+            't' => 'KP4',
+            'u' => 'KP5',
+            'v' => 'KP6',
+            'w' => 'KP7',
+            'x' => 'KP8',
+            'y' => 'KP9',
+            'l' => 'KPDecimal',
+            'm' => 'KPSubtract',
         ];
 
         if (!isset($ss3Map[$final])) {
@@ -883,6 +910,37 @@ final class EscapeDecoder
             return ['events' => [new KeyEvent('Backtab', KeyModifier::shift(), "\x1b[Z")], 'remaining' => $rest];
         }
 
+        // modifyOtherKeys report (xterm): CSI 27 ; <mods> ; <keysym> ~. When a key
+        // that has no dedicated CSI sequence is pressed with modifiers under
+        // modifyOtherKeys=1/2, xterm wraps it in this unmistakable "27;" form so a
+        // plain 'a' and Ctrl+'a' never collide. The SET/RESET request is the
+        // private "CSI > 4 ; level m" — a '>' frame drained as a terminal reply
+        // above, never a keystroke. Not gated by enableKitty: this is the legacy
+        // xterm extended-key family (final '~'), and the "27;n;n~" shape cannot be
+        // produced by any ordinary keystroke, so decoding it is always safe.
+        // @see xterm ctlseqs — "modifyOtherKeys".
+        if (preg_match('/^27;(\d+);(\d+)~$/', $seq, $mk)) {
+            $mods = (int) $mk[1];
+            if ($mods < 1) {
+                // The modifyOtherKeys modifier field is 1 + bitmask; 0 is malformed.
+                // Passing 0 to fromXtermParam computes (0 - 1) = -1 and sets EVERY
+                // bit, fabricating phantom Shift+Alt+Ctrl+Meta — reject it (fail fast)
+                // the same way the kitty path clamps its de-based field.
+                return $this->dropUnknown($rest);
+            }
+            $moKeyName = $this->modifyOtherKeysName((int) $mk[2]);
+            if ($moKeyName === null) {
+                // Valid modifyOtherKeys frame carrying a keysym we neither name nor
+                // print — consume it rather than leak the bytes.
+                return $this->dropUnknown($rest);
+            }
+
+            return [
+                'events' => [new KeyEvent($moKeyName, KeyModifier::fromXtermParam($mods), "\x1b[" . $seq)],
+                'remaining' => $rest,
+            ];
+        }
+
         // Numbered function keys and special keys: 1~, 2~, 3~, 15~, etc.
         if (preg_match('/^(\d+)~$/', $seq, $m)) {
             $num = (int) $m[1];
@@ -917,9 +975,64 @@ final class EscapeDecoder
             }
         }
 
+        // Mouse 1015 (urxvt) report: CSI <b> ; <x> ; <y> M — three decimal
+        // parameters and a final byte that is ALWAYS 'M'. It is distinguished from
+        // the SGR 1006/1016 path solely by the absence of the '<' introducer
+        // (handleCSI routes '<'-led reports to handleSgrMouse before ever reaching
+        // here), so the two encodings never collide. Like X10 there is no lowercase
+        // 'm': release is signalled by the button code's low bits (== 3).
+        // @see xterm ctlseqs — mode 1015 ("urxvt"-style extended mouse).
+        if ($this->options->enableMouse && $final === 'M') {
+            return $this->handleUrxvtMouse($seq, $rest);
+        }
+
         // Complete but unrecognized CSI — consume it, emit nothing, and return
         // the genuine suffix so trailing bytes in the same chunk are preserved.
         return $this->dropUnknown($rest);
+    }
+
+    /**
+     * Decode a urxvt mouse-1015 report body: "<b>;<x>;<y>M" (already split to its
+     * grammar boundary by splitCsi(), so no '<' and a guaranteed trailing 'M').
+     *
+     * Only the exact three-decimal-parameter shape is a mouse report; anything
+     * else ending in 'M' (e.g. SU "CSI Ps M", one parameter) falls through to the
+     * generic unknown-CSI drop.
+     *
+     * @param string $seq  Complete CSI body ending in 'M'
+     * @param string $rest Genuine suffix after the sequence
+     * @return array{events: list<Event>, remaining: string}
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html — mode 1015.
+     */
+    private function handleUrxvtMouse(string $seq, string $rest): array
+    {
+        $parts = explode(';', substr($seq, 0, -1));
+        if (
+            count($parts) !== 3
+            || preg_match('/^\d+$/', $parts[0]) !== 1
+            || preg_match('/^\d+$/', $parts[1]) !== 1
+            || preg_match('/^\d+$/', $parts[2]) !== 1
+        ) {
+            return $this->dropUnknown($rest);
+        }
+
+        // rxvt-unicode and xterm (mode 1015) print the X10 button code biased by 32
+        // — left press 32, release 35, drag 64, wheel-up 96 — so a field at or above
+        // 32 is de-biased back into the 0..127 X10 space mouseFromButtonCode expects.
+        // A field below 32 can only be an already-raw code (the biased form's minimum
+        // is 32), which some hosts/tests emit; it is passed through unchanged. The one
+        // value the two conventions cannot distinguish is a raw wheel/drag code sent
+        // UNbiased (>= 64 with no +32) — not produced by rxvt/xterm — which would read
+        // as a lower button; the biased reading is the intended one for real terminals.
+        $code = (int) $parts[0];
+        if ($code >= 32) {
+            $code -= 32;
+        }
+
+        return [
+            'events' => [$this->mouseFromButtonCode($code, (int) $parts[1], (int) $parts[2], false)],
+            'remaining' => $rest,
+        ];
     }
 
     /**
@@ -1352,6 +1465,40 @@ final class EscapeDecoder
         if (isset($special[$code])) return $special[$code];
 
         return null;
+    }
+
+    /**
+     * Resolve a modifyOtherKeys `keysym` field to a key name.
+     *
+     * The `CSI 27 ; <mods> ; <keysym> ~` report carries an X11 keysym, NOT a kitty
+     * functional codepoint, so it must not be fed to kittyKeyCodeToName() directly:
+     * that table's legacy 11..34 -> F1..F20 / 1..6 -> Home..PageDown entries would
+     * mis-name printable ASCII (keysym 33 '!' -> 'F19', 34 '"' -> 'F20'). Printable
+     * ASCII (32..126) is reported as the literal character so typing '!', '"' or
+     * ' ' under modifyOtherKeys=2 still reaches the app; the shared control keysyms
+     * keep their symbolic names; only the modern kitty functional range (>= 0xE000,
+     * arrows etc.) falls back to the shared table. Anything else is unnamed -> null.
+     *
+     * @see xterm ctlseqs — "modifyOtherKeys".
+     * @see X11 keysym definitions (<X11/keysymdef.h>: XK_exclam = 0x21 = 33).
+     */
+    private function modifyOtherKeysName(int $keysym): string|null
+    {
+        if ($keysym >= 32 && $keysym <= 126) {
+            return chr($keysym);
+        }
+
+        if ($keysym >= 0xe000) {
+            return $this->kittyKeyCodeToName($keysym);
+        }
+
+        return match ($keysym) {
+            9   => 'Tab',
+            13  => 'Enter',
+            27  => 'Escape',
+            127 => 'Backspace',
+            default => null,
+        };
     }
 
     /**

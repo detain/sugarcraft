@@ -1,15 +1,18 @@
 # CandyInput
 
-Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboard protocol) and mouse (SGR 1006). Provides the `InputDriver` interface and `EscapeDecoder` implementation.
+Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboard protocol + xterm modifyOtherKeys) and mouse (SGR 1006/1016, urxvt 1015, X10). Provides the `InputDriver` interface and `EscapeDecoder` implementation.
 
 ## Overview
 
 `candy-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
-- **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape
+- **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Backtab (`CSI Z`)
 - **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press)
-- **SGR 1006 mouse** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support
+- **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
+- **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
+- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 is byte-identical to 1006 so a stateless decoder reports its coordinate field verbatim
+- **urxvt mouse 1015** — `CSI b ; x ; y M` decimal reports (no `<` introducer, so it never collides with 1006)
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
 - **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap
