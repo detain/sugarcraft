@@ -426,7 +426,8 @@ final class Ansi
      *
      * Mirrors charmbracelet/x/ansi. SelectCharacterSet — the same
      * `ESC <intermediate> <final>` helper that candy-vt's `Charsets` docblock
-     * records as its own upstream source.
+     * records as its own upstream source (same wire shape; this port takes a
+     * 0-3 slot index where upstream takes a gset byte).
      *
      * ECMA-48 §25 (character set designation); ansicode.txt:222-249
      * ("SCS - Select G0/G1/G2/G3 character set").
@@ -1040,8 +1041,9 @@ final class Ansi
      * digits: `(0` line drawing, `(<` supplemental graphics (ansicode.txt:223-230).
      *
      * Below 0x30 nothing designates, so no charset can land: 0x20-0x2F collects as
-     * an *additional* intermediate (ansicode.txt:246-249 designates the `ESC , - . /`
-     * sets that way), a C0 byte is executed with the escape left open — CAN/SUB
+     * an *additional* intermediate at this position (the same collect rule is what
+     * lets ansicode.txt:246-249 spell the `ESC , - . /` sets, there as *leading*
+     * intermediates), a C0 byte is executed with the escape left open — CAN/SUB
      * likewise execute but then abandon the sequence to Ground, and ESC discards it
      * by starting a new escape — while DEL is ignored in place.
      */

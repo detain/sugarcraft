@@ -45,8 +45,11 @@ spells DECALN as `ESC # 8` (VT510/xterm), not the `CSI # 8` that candy-vt's
 `ScreenHandler::displayAlignmentTest()` heading still carries — its own wire-level note documents the gap correctly,
 and the stale label is left to the vt track. The CSI form never completes: a CSI final must be 0x40-0x7E, so candy-ansi
 drops it to Ground undispatched while a real receiver swallows the next graphic.
-Still missing in candy-core: DECCOLM (`?3`) and DECKPAM/DECKPNM emitters (no consumer models them: candy-vt
-has no DECCOLM mode field and candy-input still decodes `ESC =`/`ESC >` as Alt+=/Alt+>), and an OSC 4 query emitter.
+Still missing in candy-core: a named `DECCOLM` constant — the bytes are already expressible via the generic
+`Ansi::decSet(3)`/`decReset(3)` (`ESC [ ? 3 h`), what is absent is the 132-column mode itself, which no consumer
+models (candy-vt's `Mode` has no DECCOLM field) · DECKPAM/DECKPNM emitters (`ESC =`/`ESC >`; `Ansi` has no generic
+two-character-escape helper to spell them with, and candy-input still decodes both as Alt+=/Alt+>) · an OSC 4 *query*
+emitter (candy-vt has no reply channel, so it could not be round-tripped).
 
 ### Deferred / out of scope
 
