@@ -376,4 +376,90 @@ final class ColorTest extends TestCase
         $this->assertSame("\x1b[58;5;244m", $slot->toUnderline(ColorProfile::Ansi256));
         $this->assertSame("\x1b[90m", $slot->toUnderline(ColorProfile::Ansi));
     }
+
+    /**
+     * The canonical ANSI-16 table is now public API (so downstream consumers and
+     * cross-lib equality tests reference one table rather than forking copies);
+     * its shape is therefore pinned — exactly 16 entries, keyed 0..15 in order,
+     * each an `array{int,int,int}` of bytes in `[0,255]`. A malformed slot would
+     * poison every distance computation ({@see Color::hex()} → 16-colour
+     * downsample) silently, so this guards the container, not the individual
+     * numbers (which the tests below pin).
+     */
+    public function testCanonicalAnsi16TableHasTheDocumentedShape(): void
+    {
+        $table = Color::ANSI16_RGB;
+
+        $this->assertCount(16, $table);
+        $this->assertSame(range(0, 15), array_keys($table), 'slots are keyed 0..15 in order');
+
+        foreach ($table as $slot => $rgb) {
+            $this->assertIsArray($rgb, "slot {$slot} is a triple");
+            $this->assertCount(3, $rgb, "slot {$slot} has exactly three components");
+            foreach ($rgb as $channel => $value) {
+                $this->assertIsInt($value, "slot {$slot} channel {$channel} is an int");
+                $this->assertGreaterThanOrEqual(0, $value, "slot {$slot} channel {$channel} >= 0");
+                $this->assertLessThanOrEqual(255, $value, "slot {$slot} channel {$channel} <= 255");
+            }
+        }
+    }
+
+    /**
+     * The two slots that make this table xterm's rather than charmbracelet's or
+     * candy-palette's fork — pinned by name so a silent edit to a single number
+     * fails loudly with the slot in the message. slot 4 is xterm `DEF_COLOR4
+     * "blue2"` (#0000EE), slot 12 is `DEF_COLOR12 "rgb:5c/5c/ff"` (#5C5CFF).
+     */
+    public function testCanonicalAnsi16TablePinsTheXtermBlues(): void
+    {
+        $this->assertSame([0, 0, 238], Color::ANSI16_RGB[4], 'slot 4 = xterm #0000EE');
+        $this->assertSame([92, 92, 255], Color::ANSI16_RGB[12], 'slot 12 = xterm #5C5CFF');
+    }
+
+    /**
+     * Four more slots pinned by name so a silent edit to any one fails loudly.
+     * Slot 1 red (#CD0000), 7 white (#E5E5E5) and 8 bright-black (#7F7F7F) are
+     * this table's distinctive non-#00/#FF choices; slot 15 bright-white
+     * (#FFFFFF) pins the top corner. The two blues (4, 12) are pinned in the
+     * test above, and the remaining primaries/black (0, 2, 3, 5, 6, 9, 10, 11,
+     * 13, 14) are plain #00/#CD/#FF values guarded only by the shape test.
+     */
+    public function testCanonicalAnsi16TablePinsTheDistinctiveSlots(): void
+    {
+        $this->assertSame([205, 0, 0], Color::ANSI16_RGB[1], 'slot 1 red = #CD0000');
+        $this->assertSame([229, 229, 229], Color::ANSI16_RGB[7], 'slot 7 white = #E5E5E5');
+        $this->assertSame([127, 127, 127], Color::ANSI16_RGB[8], 'slot 8 bright black = #7F7F7F');
+        $this->assertSame([255, 255, 255], Color::ANSI16_RGB[15], 'slot 15 bright white = #FFFFFF');
+    }
+
+    /**
+     * Publishing the table changed its ACCESSIBILITY, never its ARITHMETIC.
+     * `nearestAnsi16()` is private, but its observable result is the 16-colour
+     * SGR the downsampler picks at {@see ColorProfile::Ansi}. These pairs were
+     * captured on master BEFORE the const was renamed and are asserted verbatim
+     * so any future edit to a slot value that shifts a quantisation boundary
+     * trips here. #0000ff → slot 4 (xterm's #0000EE is nearer pure blue than
+     * slot 12's #5C5CFF) is exactly the boundary the charmbracelet palette would
+     * move, so it doubles as a guard against an accidental upstream "correction".
+     */
+    public function testQuantiserOutputsAreUnchangedByPublishingTheTable(): void
+    {
+        // probe hex => expected 16-colour fg SGR, captured on master before the const rename.
+        $capturedBeforeEdit = [
+            '#0000ff' => "\x1b[34m",
+            '#1e90ff' => "\x1b[94m",
+            '#0000cd' => "\x1b[34m",
+            '#5c5cff' => "\x1b[94m",
+            '#ff00ff' => "\x1b[95m",
+            '#808080' => "\x1b[90m",
+        ];
+
+        foreach ($capturedBeforeEdit as $hex => $expectedSgr) {
+            $this->assertSame(
+                $expectedSgr,
+                Color::hex($hex)->toFg(ColorProfile::Ansi),
+                "downsample of {$hex} to the 16-colour palette",
+            );
+        }
+    }
 }
