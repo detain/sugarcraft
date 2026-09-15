@@ -19,8 +19,9 @@ namespace SugarCraft\Input;
 final class EscapeDecoderOptions
 {
     /**
-     * @param bool $enableMouse   SGR 1006 mouse reporting (CSI < button ; x ; y M|m)
-     * @param bool $enableKitty   Kitty keyboard protocol (CSI ?u with disambiguation)
+     * @param bool $enableMouse   Mouse reporting: SGR 1006 (CSI < b ; x ; y M|m) and X10 (CSI M b x y)
+     * @param bool $enableKitty   Kitty keyboard protocol events (CSI code ; mods u — no private prefix;
+     *                            the private `CSI ? … u` form is the flags reply family and is always drained)
      * @param bool $enableFocus   Focus change events (CSI I / CSI O)
      * @param bool $enablePaste   Bracketed paste mode (CSI 200 ~ ... CSI 201 ~)
      */

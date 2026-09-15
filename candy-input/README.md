@@ -8,10 +8,12 @@ Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboa
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
 - **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape
-- **Kitty keyboard protocol** — disambiguation flags via CSI `?u`, including key release events
-- **SGR 1006 mouse** — press, release, drag, and scroll with modifier support
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (release via the legacy `0x20` flag or the spec `:event-type` sub-param)
+- **SGR 1006 mouse** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support
+- **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
 - **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap
+- **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, kitty flags, DECRPM and OSC/DCS strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
 
 ## Quickstart
 
@@ -80,6 +82,45 @@ interface InputDriver {
 | `FocusEvent` | `gained` |
 | `PasteEvent` | `content` |
 | `ResizeEvent` | `cols`, `rows` |
+| `TerminalReplyEvent` | `family`, `params`, `raw`, `body`, `truncated` |
+
+## Terminal replies — drained, not dropped
+
+A terminal answers its queries on the **same file descriptor the user types
+on**, so unsolicited reply bytes land in the middle of the keystroke stream:
+a DA1 answer right after an arrow key, a cursor-position report (`ESC [ row ;
+col R`) while the user holds a key, kitty keyboard flags (`ESC [ ? flags u`).
+The decoder recognizes every reply family below, **structurally consumes it**
+(so the buffer never stalls and later keystrokes never vanish behind it), and
+surfaces it as a `TerminalReplyEvent`:
+
+| `family` | Sequence | Meaning |
+|---|---|---|
+| `device-attributes` | `CSI ? Pm c` / `CSI > Pm c` | DA1 / DA2 reply |
+| `cursor-position` | `CSI row ; col R` | DSR/CPR report (never a phantom `F3`) |
+| `dsr-status` | `CSI 0 n` | DSR "is terminal OK" reply |
+| `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
+| `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | kitty keyboard flags query/reply |
+| `mode-report` | `CSI ? mode ; status $ y` | DECRPM mode report |
+| `csi-private` | any other complete `CSI ? …` / `CSI > …` | private-mode sequence, drained |
+| `string` | `OSC / DCS / APC / PM … ST/BEL` | string replies (color reports, termcap, tmux echo); `body` + `truncated` carry the payload |
+
+Hosts that ignore `TerminalReplyEvent` lose nothing — the bytes are consumed
+either way, so the input stream stays in sync. Hosts that do care (terminal
+probers, nested-TMUX diagnostics) get `params` and the exact `raw` bytes.
+
+### Observability: drained reply vs dropped unknown
+
+Two counters on `EscapeDecoder` tell the two silent paths apart:
+
+```php
+$decoder->drainedReplyCount();  // replies recognized and surfaced as TerminalReplyEvent
+$decoder->droppedUnknownCount(); // complete-but-unrecognized sequences consumed with no event
+```
+
+A rising `drainedReplyCount()` is normal terminal chatter; a rising
+`droppedUnknownCount()` means the terminal is sending sequences this decoder
+does not model yet. `reset()` zeroes both counters along with the buffers.
 
 ## Key constants (KeyModifier)
 

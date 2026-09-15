@@ -11,6 +11,7 @@ use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
 use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\PasteEvent;
+use SugarCraft\Input\Event\TerminalReplyEvent;
 use SugarCraft\Input\KeyModifier;
 
 /**
@@ -430,86 +431,85 @@ final class EscapeDecoderTest extends TestCase
 
     /**
      * Focus event with private-mode prefix — e.g. CSI ? 1 I.
-     * The private-mode prefix routes the sequence to the Kitty keyboard
-     * protocol handler, which does not recognize '1I' as a valid Kitty key.
-     * This test documents the current behavior: no crash, no focus event.
+     * A private-mode CSI can never be a keystroke (ECMA-48); the decoder drains
+     * it as a TerminalReplyEvent instead of buffering it forever and poisoning
+     * every later keystroke in the stream (the audit's "input-stream poisoning").
      */
     public function testFocusEventWithPrivateModePrefix(): void
     {
-        // CSI ? 1 I — private-mode focus tracking sequence
+        // CSI ? 1 I — private-mode sequence: drained as a reply, not a key.
         $events = $this->decoder->decode("\x1b[?1I");
-        $this->assertCount(0, $events, 'Private-mode focus sequence is not recognized');
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(TerminalReplyEvent::class, $events[0]);
+        $this->assertSame(TerminalReplyEvent::FAMILY_CSI_PRIVATE, $events[0]->family);
+        $this->assertSame('', $this->decoder->remainder());
+        // The stream stays alive: the next keystroke decodes normally.
+        $events = $this->decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
     }
 
     /**
      * Focus event with private-mode prefix and explicit mode number.
-     * CSI ? 1004 I is the DECSET 1004 sequence some terminals send.
-     * Currently routed to Kitty handler (which doesn't match '1004I').
+     * CSI ? 1004 I is a DECSET 1004 echo — private mode, drained as a reply.
      */
     public function testFocusEventWithDecset1004Sequence(): void
     {
-        // CSI ? 1004 I — DECSET 1004 focus tracking
+        // CSI ? 1004 I — DECSET 1004 echo
         $events = $this->decoder->decode("\x1b[?1004I");
-        $this->assertCount(0, $events, 'DECSET 1004 sequence not recognized');
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(TerminalReplyEvent::class, $events[0]);
+        $this->assertSame(TerminalReplyEvent::FAMILY_CSI_PRIVATE, $events[0]->family);
+        $this->assertSame([1004], $events[0]->params);
+        $this->assertSame('', $this->decoder->remainder());
     }
 
     /**
-     * Focus event immediately followed by another sequence — the decoder
-     * does NOT partition cleanly in a single call when '\x1b[I' is followed
-     * by bytes that look like a CSI modifier (e.g., 'I' followed by 'A').
-     * The '\x1b[IA' is interpreted as CSI with 'I' as a modifier byte,
-     * producing KeyEvent('A') rather than a focus event. The modifier byte
-     * 'I' (value 1 in xterm format) does not match the required format
-     * '1;<mod><final>' so the sequence falls through to produce 'A'.
+     * Focus event immediately followed by another sequence in the SAME chunk.
+     * The focus report is recognized structurally at its final byte, so
+     * '\x1b[IA\x1b[C' yields focus-gained, then the 'A' key, then ArrowRight —
+     * the report is never lost by a whole-tail string comparison.
      */
     public function testFocusEventFollowedByArrow(): void
     {
-        // '\x1b[IA\x1b[C' — 'I' is consumed as a modifier byte in the CSI
-        // sequence, 'A' is emitted (uppercase, not lowercased since it goes
-        // through a different path), then '\x1b[C' emits ArrowRight.
-        // No focus event: 'I' was consumed as CSI modifier, not focus.
         $events = $this->decoder->decode("\x1b[IA\x1b[C");
-        $this->assertCount(2, $events);
-        $this->assertSame('A', $events[0]->key, 'IA produces uppercase A (I consumed as modifier)');
-        $this->assertSame('ArrowRight', $events[1]->key);
+        $this->assertCount(3, $events);
+        $this->assertInstanceOf(FocusEvent::class, $events[0]);
+        $this->assertTrue($events[0]->gained, 'bare CSI I is focus gained even mid-chunk');
+        $this->assertSame('A', $events[1]->key);
+        $this->assertSame('ArrowRight', $events[2]->key);
+        $this->assertSame('', $this->decoder->remainder());
     }
 
     /**
-     * Focus lost followed by a key — '\x1b[O' is consumed as an SS3 prefix
-     * (waiting for P/Q/R/S). Since 'a' is not a valid SS3 final byte, 'O' is
-     * treated as an unknown final byte and the 'a' key is emitted separately.
-     * On a subsequent decode call, '\x1b[O' alone would emit focus lost.
+     * Focus lost followed by a key in the same chunk: '\x1b[Oa' yields the
+     * focus-lost report and then the 'a' keystroke.
      */
     public function testFocusLostFollowedByKey(): void
     {
-        // '\x1b[Oa' — 'O' is treated as incomplete SS3, 'a' is plain key
+        // '\x1b[Oa' — CSI O is focus lost; 'a' is the next byte.
         $events = $this->decoder->decode("\x1b[Oa");
-        $this->assertCount(1, $events);
-        $this->assertSame('a', $events[0]->key);
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(FocusEvent::class, $events[0]);
+        $this->assertFalse($events[0]->gained);
+        $this->assertSame('a', $events[1]->key);
+        $this->assertSame('', $this->decoder->remainder());
         $this->decoder->reset();
     }
 
     /**
-     * Multiple consecutive focus sequences: when '\x1b[I\x1b[O' is fed in one
-     * chunk, the 'I' intermediate byte acts as an xterm modifier value (1)
-     * rather than the focus byte. The sequence '\x1b[O' is then recognized
-     * as focus lost. The 'I' byte does not produce a separate event in this
-     * context. A second decode('') call returns no events since the remainder
-     * was fully consumed.
-     *
-     * This test documents current behavior: for reliable focus event handling,
-     * feed '\x1b[I' and '\x1b[O' in separate decode() calls.
+     * Multiple consecutive focus sequences in one chunk both produce events:
+     * '\x1b[I\x1b[O' partitions cleanly at each final byte.
      */
     public function testMultipleFocusEventsInOneChunk(): void
     {
-        // 'I' is consumed as xterm modifier byte; 'O' becomes focus lost
         $events = $this->decoder->decode("\x1b[I\x1b[O");
-        $this->assertCount(1, $events, 'Only one event: I consumed as modifier, O is focus');
+        $this->assertCount(2, $events, 'Both focus events decode from one chunk');
         $this->assertInstanceOf(FocusEvent::class, $events[0]);
-        $this->assertFalse($events[0]->gained, 'O produces focus lost, not I as focus gained');
-        // No remainder to flush — both sequences consumed in first call
-        $events = $this->decoder->decode('');
-        $this->assertCount(0, $events, 'Remainder fully consumed; second call yields nothing');
+        $this->assertTrue($events[0]->gained, 'first: focus gained');
+        $this->assertInstanceOf(FocusEvent::class, $events[1]);
+        $this->assertFalse($events[1]->gained, 'second: focus lost');
+        $this->assertSame('', $this->decoder->remainder());
     }
 
     // ─── Bracketed paste ────────────────────────────────────────────────────
@@ -576,7 +576,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyTabKey(): void
     {
         // CSI ? 9 ; Pm u — Kitty keyboard protocol for Tab
-        $events = $this->decoder->decode("\x1b[?9;0u");
+        $events = $this->decoder->decode("\x1b[9;0u");
         $this->assertCount(1, $events);
         $this->assertInstanceOf(KeyEvent::class, $events[0]);
         $this->assertSame('Tab', $events[0]->key);
@@ -584,21 +584,21 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyEnterKey(): void
     {
-        $events = $this->decoder->decode("\x1b[?13;0u");
+        $events = $this->decoder->decode("\x1b[13;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Enter', $events[0]->key);
     }
 
     public function testKittyEscapeKey(): void
     {
-        $events = $this->decoder->decode("\x1b[?27;0u");
+        $events = $this->decoder->decode("\x1b[27;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Escape', $events[0]->key);
     }
 
     public function testKittyBackspaceKey(): void
     {
-        $events = $this->decoder->decode("\x1b[?127;0u");
+        $events = $this->decoder->decode("\x1b[127;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Backspace', $events[0]->key);
     }
@@ -606,35 +606,35 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyArrowUp(): void
     {
         // Kitty uses code 57399 for arrow up
-        $events = $this->decoder->decode("\x1b[?57399;0u");
+        $events = $this->decoder->decode("\x1b[57399;0u");
         $this->assertCount(1, $events);
         $this->assertSame('ArrowUp', $events[0]->key);
     }
 
     public function testKittyArrowDown(): void
     {
-        $events = $this->decoder->decode("\x1b[?57400;0u");
+        $events = $this->decoder->decode("\x1b[57400;0u");
         $this->assertCount(1, $events);
         $this->assertSame('ArrowDown', $events[0]->key);
     }
 
     public function testKittyF1(): void
     {
-        $events = $this->decoder->decode("\x1b[?11;0u");
+        $events = $this->decoder->decode("\x1b[11;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F1', $events[0]->key);
     }
 
     public function testKittyF12(): void
     {
-        $events = $this->decoder->decode("\x1b[?24;0u");
+        $events = $this->decoder->decode("\x1b[24;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F12', $events[0]->key);
     }
 
     public function testKittyLetterKey(): void
     {
-        $events = $this->decoder->decode("\x1b[?97;0u");
+        $events = $this->decoder->decode("\x1b[97;0u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
     }
@@ -642,7 +642,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyUpperCaseLetter(): void
     {
         // Uppercase (A=65) should return lowercase 'a'
-        $events = $this->decoder->decode("\x1b[?65;0u");
+        $events = $this->decoder->decode("\x1b[65;0u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
     }
@@ -650,7 +650,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyWithShiftModifier(): void
     {
         // Shift = bit 0 in modifier field
-        $events = $this->decoder->decode("\x1b[?97;1u");
+        $events = $this->decoder->decode("\x1b[97;1u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
@@ -659,7 +659,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyWithCtrlModifier(): void
     {
         // Ctrl = bit 2 in modifier field
-        $events = $this->decoder->decode("\x1b[?97;4u");
+        $events = $this->decoder->decode("\x1b[97;4u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
@@ -668,7 +668,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyKeyRelease(): void
     {
         // Key release: modifier OR 0x20
-        $events = $this->decoder->decode("\x1b[?97;33u"); // 33 = 1 + 32 (Shift + release bit)
+        $events = $this->decoder->decode("\x1b[97;33u"); // 33 = 1 + 32 (Shift + release bit)
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
     }
@@ -772,7 +772,7 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittySpaceKey(): void
     {
-        $events = $this->decoder->decode("\x1b[?32;0u");
+        $events = $this->decoder->decode("\x1b[32;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Space', $events[0]->key);
     }
@@ -780,35 +780,35 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyDeleteKey(): void
     {
         // Delete = code 3 in Kitty
-        $events = $this->decoder->decode("\x1b[?3;0u");
+        $events = $this->decoder->decode("\x1b[3;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Delete', $events[0]->key);
     }
 
     public function testKittyPageUp(): void
     {
-        $events = $this->decoder->decode("\x1b[?5;0u");
+        $events = $this->decoder->decode("\x1b[5;0u");
         $this->assertCount(1, $events);
         $this->assertSame('PageUp', $events[0]->key);
     }
 
     public function testKittyPageDown(): void
     {
-        $events = $this->decoder->decode("\x1b[?6;0u");
+        $events = $this->decoder->decode("\x1b[6;0u");
         $this->assertCount(1, $events);
         $this->assertSame('PageDown', $events[0]->key);
     }
 
     public function testKittyHome(): void
     {
-        $events = $this->decoder->decode("\x1b[?1;0u");
+        $events = $this->decoder->decode("\x1b[1;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Home', $events[0]->key);
     }
 
     public function testKittyEnd(): void
     {
-        $events = $this->decoder->decode("\x1b[?4;0u");
+        $events = $this->decoder->decode("\x1b[4;0u");
         $this->assertCount(1, $events);
         $this->assertSame('End', $events[0]->key);
     }
@@ -816,7 +816,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyWithAltModifier(): void
     {
         // Alt = bit 1
-        $events = $this->decoder->decode("\x1b[?97;2u");
+        $events = $this->decoder->decode("\x1b[97;2u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
@@ -825,7 +825,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyWithMetaModifier(): void
     {
         // Meta = bit 3
-        $events = $this->decoder->decode("\x1b[?97;8u");
+        $events = $this->decoder->decode("\x1b[97;8u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::META));
@@ -834,7 +834,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyWithSuperModifier(): void
     {
         // Super = bit 4
-        $events = $this->decoder->decode("\x1b[?97;16u");
+        $events = $this->decoder->decode("\x1b[97;16u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SUPER));
@@ -1301,7 +1301,7 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $paste);
         $this->assertInstanceOf(PasteEvent::class, $paste[0]);
 
-        $kitty = $decoder->decode("\x1b[?97;1u");
+        $kitty = $decoder->decode("\x1b[97;1u");
         $this->assertCount(1, $kitty);
         $this->assertInstanceOf(KeyEvent::class, $kitty[0]);
         $this->assertSame('a', $kitty[0]->key);
@@ -1351,7 +1351,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyDisabledSuppressesKeyEvent(): void
     {
         $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableKitty: false));
-        $events = $decoder->decode("\x1b[?97;1u");
+        $events = $decoder->decode("\x1b[97;1u");
         $this->assertSame([], $events);
         $this->assertSame('', $decoder->remainder());
     }
@@ -1398,35 +1398,35 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyF13(): void
     {
         // CSI ? 25 ; Ps u — F13
-        $events = $this->decoder->decode("\x1b[?25;0u");
+        $events = $this->decoder->decode("\x1b[25;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F13', $events[0]->key);
     }
 
     public function testKittyF14(): void
     {
-        $events = $this->decoder->decode("\x1b[?26;0u");
+        $events = $this->decoder->decode("\x1b[26;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F14', $events[0]->key);
     }
 
     public function testKittyF15(): void
     {
-        $events = $this->decoder->decode("\x1b[?28;0u");
+        $events = $this->decoder->decode("\x1b[28;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F15', $events[0]->key);
     }
 
     public function testKittyF16(): void
     {
-        $events = $this->decoder->decode("\x1b[?29;0u");
+        $events = $this->decoder->decode("\x1b[29;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F16', $events[0]->key);
     }
 
     public function testKittyF17(): void
     {
-        $events = $this->decoder->decode("\x1b[?31;0u");
+        $events = $this->decoder->decode("\x1b[31;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F17', $events[0]->key);
     }
@@ -1434,21 +1434,21 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyF18IsSpace(): void
     {
         // Note: code 32 maps to Space, not F18 (conflict in original mapping)
-        $events = $this->decoder->decode("\x1b[?32;0u");
+        $events = $this->decoder->decode("\x1b[32;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Space', $events[0]->key);
     }
 
     public function testKittyF19(): void
     {
-        $events = $this->decoder->decode("\x1b[?33;0u");
+        $events = $this->decoder->decode("\x1b[33;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F19', $events[0]->key);
     }
 
     public function testKittyF20(): void
     {
-        $events = $this->decoder->decode("\x1b[?34;0u");
+        $events = $this->decoder->decode("\x1b[34;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F20', $events[0]->key);
     }
@@ -1504,7 +1504,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyPartialSequence(): void
     {
         // Incomplete Kitty sequence
-        $events = $this->decoder->decode("\x1b[?97");
+        $events = $this->decoder->decode("\x1b[97");
         $this->assertCount(0, $events);
     }
 
@@ -1512,7 +1512,7 @@ final class EscapeDecoderTest extends TestCase
     {
         // Key release: modifiers OR 0x20
         // Shift (1) + release bit (0x20) = 33
-        $events = $this->decoder->decode("\x1b[?97;33u");
+        $events = $this->decoder->decode("\x1b[97;33u");
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
@@ -1521,7 +1521,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyKeyReleaseWithCtrl(): void
     {
         // Ctrl (4) + release bit (0x20) = 36
-        $events = $this->decoder->decode("\x1b[?97;36u");
+        $events = $this->decoder->decode("\x1b[97;36u");
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
@@ -1530,7 +1530,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyKeyReleaseWithAlt(): void
     {
         // Alt (2) + release bit (0x20) = 34
-        $events = $this->decoder->decode("\x1b[?97;34u");
+        $events = $this->decoder->decode("\x1b[97;34u");
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
