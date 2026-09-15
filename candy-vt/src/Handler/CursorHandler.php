@@ -45,6 +45,11 @@ final class CursorHandler
             'G' => $cursor->withCol($this->clampCol($count - 1, $buffer)),
             'd' => $cursor->withRow($this->clampRowOrigin($count - 1, $scrollTop, $scrollBottom, $originMode, $buffer)),
             'H', 'f' => $this->cup($params, $cursor, $buffer, $scrollTop, $originMode),
+            // Legacy position-only arms: ScreenHandler::csiDispatch routes
+            // CSI s / CSI u to its own saveCursor()/restoreCursor() (the full
+            // VT500 DECSC general slot, w4-vt) and never reaches these lines
+            // from the wire. They remain for direct callers that want the
+            // bare position snapshot semantics.
             's' => $cursor->save(),
             'u' => $cursor->restore(),
             default => $cursor,

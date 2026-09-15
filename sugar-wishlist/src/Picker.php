@@ -195,7 +195,8 @@ class Picker
      */
     private function stripControls(string $s): string
     {
-        // Ansi::strip() removes CSI, OSC, and lone ESC sequences.
+        // Ansi::strip() removes every 7-bit and 8-bit escape sequence,
+        // including DCS/APC/PM/SOS string payloads (ANSI audit #9).
         $s = Ansi::strip($s);
         // Remove remaining C0 control characters except CR/LF (which the
         // picker handles as line terminators). This catches BEL, STX, etc.

@@ -69,10 +69,10 @@ final class Sixel256FallbackTest extends TestCase
         new SixelRenderer(Dither::None, 257);
     }
 
-    public function testSupportsAlphaReturnsFalse(): void
+    public function testSupportsAlphaReturnsTrue(): void
     {
         $r = new SixelRenderer();
-        $this->assertFalse($r->supportsAlpha());
+        $this->assertTrue($r->supportsAlpha());
     }
 
     public function testNameReturnsSixel(): void

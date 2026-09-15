@@ -57,6 +57,13 @@ final class Terminal
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         $parser = new Parser($handler, maxStringBuffer: 65536);
 
+        // The parser records ECMA-48 colon continuation flags per dispatch
+        // (Parser::subparams()); SGR reads them through this late binding to
+        // tell `CSI 4 : 3 m` from `CSI 4 ; 3 m`. The capture of the local is
+        // safe — unlike the emulator's reset(), the renderer never rebuilds
+        // its parser (single construction site).
+        $csi->attachSubparamsProvider(static fn(): array => $parser->subparams());
+
         return new self($cols, $rows, $grid, $cursor, $parser, $csi, $osc, $theme);
     }
 
@@ -80,6 +87,15 @@ final class Terminal
     public function cursor(): Cursor
     {
         return $this->cursor;
+    }
+
+    /**
+     * Deferred-wrap (phantom-cell) state — mirrors the emulator's
+     * {@see \SugarCraft\Vt\Terminal\Terminal::isWrapPending()}.
+     */
+    public function isWrapPending(): bool
+    {
+        return $this->csi->wrapPending();
     }
 
     public function grid(): CellGrid

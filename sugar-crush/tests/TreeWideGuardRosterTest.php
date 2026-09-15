@@ -605,6 +605,7 @@ final class TreeWideGuardRosterTest extends TestCase
         'SuiteChildStdinPrependResidualTest.php' => ['scandir($dir)'],
         'SuiteSkipRosterTest.php' => ['scandir($cache)', 'scandir($dir)', 'scandir($path)'],
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
+        'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
     ];
 

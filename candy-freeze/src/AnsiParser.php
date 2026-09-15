@@ -1,11 +1,9 @@
 <?php
 
-// codacy ignore UndefinedVariable
 declare(strict_types=1);
 
 namespace SugarCraft\Freeze;
 
-use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Ansi\Parser\Parser;
 
 /**
@@ -16,6 +14,11 @@ use SugarCraft\Ansi\Parser\Parser;
  * / 24-bit RGB) and the standard attribute flags (bold, italic,
  * underline). Background colours are passed through to segments for
  * per-segment rendering.
+ *
+ * Both separator spellings are understood for the extended colours — the
+ * flat `38;2;R;G;B` and the ECMA-48 §14.1.1 grouped `38:2::R:G:B` form xterm
+ * documents — because the colour-space id slot in the grouped form is not a
+ * colour component.
  *
  * Other ANSI sequences (CSI cursor moves, OSC, etc.) pass through
  * silently — they have no visible effect in a static SVG.
@@ -60,6 +63,12 @@ final class AnsiParser
         $handler = new SgrStateHandler($state, $textBuf, $flush, $segments);
 
         $parser = new Parser($handler);
+        // The flattened `list<int>` a handler receives cannot distinguish
+        // `38:2::80:160:240` (one parameter group) from `38;2;80;160;240`, so
+        // the handler reads the parser's ECMA-48 sub-parameter flags to tell
+        // them apart. Binding after construction: the parser needs the handler,
+        // the handler needs the parser — neither can own the other's creation.
+        $handler->bindParser($parser);
         $parser->feed($line);
         $parser->flush();
         $flush();
@@ -86,144 +95,3 @@ final class AnsiParser
         );
     }
 }
-
-/**
- * Handler implementation for SGR (Select Graphic Rendition) state parsing.
- *
- * Mirrors charmbracelet/vterm's state machine logic inside a TEA-friendly
- * closure-based renderer.
- *
- * @internal
- */
-final class SgrStateHandler implements Handler
-{
-    private SgrState $state;
-    private string $textBuf;
-    /** @var callable */
-    private $flush;
-    /** @var list<Segment> */
-    private array $segments;
-
-    public function __construct(SgrState &$state, string &$textBuf, callable $flush, array &$segments)
-    {
-        $this->state = &$state;
-        $this->textBuf = &$textBuf;
-        $this->flush = $flush;
-        $this->segments = &$segments;
-    }
-
-    public function printChar(string $rune): void
-    {
-        $this->textBuf .= $rune;
-    }
-
-    public function execute(int $_byte): void
-    {
-        // Interface required; byte value not needed for SGR-only handler.
-    }
-
-    public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
-    {
-        if (chr($final) !== 'm') {
-            return;
-        }
-
-        ($this->flush)();
-        $this->state = $this->applySgr($params, $this->state);
-    }
-
-    public function escDispatch(int $_final, int $_intermediate): void
-    {
-        // Interface required; not needed for SGR-only handler.
-    }
-
-    public function oscDispatch(string $data): void
-    {
-    }
-
-    public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
-    {
-    }
-
-    public function sosPmApcDispatch(string $_kind, string $_data): void
-    {
-        // Interface required; SOS/PM/APC sequences not needed for SGR-only handler.
-    }
-
-    private function applySgr(array $params, SgrState $cur): SgrState
-    {
-        $fg = $cur->fg;
-        $bg = $cur->bg;
-        $bold = $cur->bold;
-        $italic = $cur->italic;
-        $underline = $cur->underline;
-
-        $count = count($params);
-        for ($i = 0; $i < $count; $i++) {
-            $p = $params[$i];
-            $applied = match (true) {
-                $p === 0  => fn() => ['fg' => null, 'bg' => null, 'bold' => false, 'italic' => false, 'underline' => false],
-                $p === 1  => fn() => ['bold' => true],
-                $p === 3  => fn() => ['italic' => true],
-                $p === 4  => fn() => ['underline' => true],
-                $p === 22 => fn() => ['bold' => false],
-                $p === 23 => fn() => ['italic' => false],
-                $p === 24 => fn() => ['underline' => false],
-                $p === 39 => fn() => ['fg' => null],
-                $p === 49 => fn() => ['bg' => null],
-                default   => null,
-            };
-            if ($applied !== null) {
-                $changes = $applied();
-                foreach ($changes as $k => $v) {
-                    $$k = $v;
-                }
-                continue;
-            }
-            if ($p >= 30 && $p <= 37) {
-                $fg = AnsiParser::ANSI16[$p - 30] ?? null;
-                continue;
-            }
-            if ($p >= 90 && $p <= 97) {
-                $fg = AnsiParser::ANSI16[$p - 90 + 8] ?? null;
-                continue;
-            }
-            if ($p >= 40 && $p <= 47) {
-                $bg = AnsiParser::ANSI16[$p - 40] ?? null;
-                continue;
-            }
-            if ($p >= 100 && $p <= 107) {
-                $bg = AnsiParser::ANSI16[$p - 100 + 8] ?? null;
-                continue;
-            }
-            if ($p === 38 && isset($params[$i + 1])) {
-                $mode = $params[$i + 1];
-                if ($mode === 5 && isset($params[$i + 2])) {
-                    $fg = AnsiParser::xterm256ToHex($params[$i + 2]);
-                    $i += 2;
-                    continue;
-                }
-                if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                    $fg = sprintf('#%02x%02x%02x', $params[$i + 2], $params[$i + 3], $params[$i + 4]);
-                    $i += 4;
-                    continue;
-                }
-            }
-            if ($p === 48 && isset($params[$i + 1])) {
-                $mode = $params[$i + 1];
-                if ($mode === 5 && isset($params[$i + 2])) {
-                    $bg = AnsiParser::xterm256ToHex($params[$i + 2]);
-                    $i += 2;
-                    continue;
-                }
-                if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                    $bg = sprintf('#%02x%02x%02x', $params[$i + 2], $params[$i + 3], $params[$i + 4]);
-                    $i += 4;
-                    continue;
-                }
-            }
-        }
-        return new SgrState($fg, $bg, $bold, $italic, $underline);
-    }
-}
-

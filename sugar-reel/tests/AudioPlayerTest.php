@@ -48,6 +48,35 @@ final class FakeAudioPlayer extends AudioPlayer
 }
 
 /**
+ * A FakeAudioPlayer that spawns a real-but-inert long-sleep subprocess (no audio
+ * device needed) and runs its pause/resume position accounting off an injected
+ * clock, so elapsed-time tracking is deterministic without sleeping.
+ *
+ * @internal
+ */
+final class ClockAudioPlayer extends AudioPlayer
+{
+    /** Fake clock, in seconds. Public so a test can advance it between calls. */
+    public float $now = 1000.0;
+
+    public function __construct(string $videoPath = '/tmp/video.mp4', ?int $startMs = null)
+    {
+        parent::__construct($videoPath, $startMs, fn (): float => $this->now);
+    }
+
+    /**
+     * A real, harmless process: `sleep 30` runs until pause()/stop() kills it, so
+     * the subprocess exists for is_resource() while position tracking is provable.
+     *
+     * @return list<string>
+     */
+    protected function buildCommand(): ?array
+    {
+        return ['sleep', '30'];
+    }
+}
+
+/**
  * Unit tests for AudioPlayer subprocess wrapper.
  *
  * Tests spawn/terminate behavior using test doubles (FakeAudioPlayer, FakeProbe)
@@ -219,7 +248,7 @@ final class AudioPlayerTest extends TestCase
         $cmd = $this->invokeBuildCommand($player);
         $this->assertNotNull($cmd);
         $this->assertContains('-ss', $cmd);
-        $ssIndex = array_search('-ss', $cmd);
+        $ssIndex = array_search('-ss', $cmd, true);
         $this->assertSame('5', $cmd[$ssIndex + 1]);
     }
 
@@ -264,10 +293,10 @@ final class AudioPlayerTest extends TestCase
         $player = new AudioPlayer('/tmp/video.mp4', 5000);
         $cmd = $this->invokeBuildCommand($player);
         $this->assertNotNull($cmd);
-        // ffplay: -ss <seconds> <escaped-path>
+        // ffplay: -ss <seconds> <escaped-path>; fixed S.mmm from integer math.
         $this->assertContains('-ss', $cmd);
-        $ssIndex = array_search('-ss', $cmd);
-        $this->assertSame('5', $cmd[$ssIndex + 1]);
+        $ssIndex = array_search('-ss', $cmd, true);
+        $this->assertSame('5.000', $cmd[$ssIndex + 1]);
     }
 
     /**
@@ -584,7 +613,9 @@ final class AudioPlayerTest extends TestCase
                 $genPipes,
             );
             foreach ($genPipes as $p) {
-                if (is_resource($p)) { fclose($p); }
+                if (is_resource($p)) {
+                    fclose($p);
+                }
             }
             proc_close($gen);
 
@@ -606,7 +637,95 @@ final class AudioPlayerTest extends TestCase
     }
 
     /**
-     * @testdox getExitCode() returns integer exit code after process exits
+     * @testdox pause() banks the elapsed play time so position() advances
+     *
+     * The old SIGSTOP path left audio running while video paused (the signal is
+     * dropped under a PTY). Now pause() terminates the subprocess but records how
+     * long it actually played, so resume() continues from there instead of replaying
+     * from the original seek — the A/V-sync guarantee. Uses an injected clock so the
+     * arithmetic is exact without a real audio device or a real sleep.
+     */
+    public function testPauseAdvancesPositionByElapsedPlay(): void
+    {
+        $player = new ClockAudioPlayer('/tmp/video.mp4', 500);
+        $player->now = 1000.0;
+        $player->start();
+        $this->assertSame(500, $player->position(), 'position starts at the seek offset');
+
+        // 2.5s of wall-clock playback elapse, then pause.
+        $player->now = 1002.5;
+        $player->pause();
+
+        $this->assertSame(3000, $player->position(), '500ms seek + 2500ms played = 3000ms tracked');
+        $this->assertFalse($player->isPlaying(), 'subprocess is gone after pause');
+        $player->stop();
+    }
+
+    /**
+     * @testdox resume() restarts from the advanced position, not the original seek
+     */
+    public function testResumeContinuesFromAdvancedPosition(): void
+    {
+        $player = new ClockAudioPlayer('/tmp/video.mp4', 0);
+        $player->now = 100.0;
+        $player->start();
+        $player->now = 101.0;
+        $player->pause();
+        $this->assertSame(1000, $player->position());
+
+        // A second play segment adds another 500ms on top of the banked 1000ms.
+        $player->resume();
+        $player->now = 101.5;
+        $player->pause();
+
+        $this->assertSame(1500, $player->position(), 'position accumulates across pause/resume cycles');
+        $player->stop();
+    }
+
+    /**
+     * @testdox resume() while STILL PLAYING banks the in-flight segment before respawning
+     *
+     * Player::play() calls audioPlayer->resume() unconditionally, so a host that
+     * presses play twice used to discard the current segment's elapsed time and
+     * respawn from a stale position. resume() must bank first — exactly like pause().
+     */
+    public function testResumeWhilePlayingDoesNotLoseElapsedPosition(): void
+    {
+        $player = new ClockAudioPlayer('/tmp/video.mp4', 0);
+        $player->now = 100.0;
+        $player->start();
+
+        // Still playing; a second "play" arrives 700ms in.
+        $player->now = 100.7;
+        $player->resume();
+
+        $this->assertSame(700, $player->position(), 'the unbanked 700ms segment survives the respawn');
+        $this->assertTrue($player->isPlaying(), 'resume() leaves audio playing');
+
+        // And the respawned child keeps counting from the banked position.
+        $player->now = 101.2;
+        $player->pause();
+        $this->assertSame(1200, $player->position(), 'bank + post-resume segment accumulate');
+        $player->stop();
+    }
+
+    /**
+     * @testdox stop() while playing banks position; a later resume continues, not replays
+     */
+    public function testStopBanksPositionForLaterResume(): void
+    {
+        $player = new ClockAudioPlayer('/tmp/video.mp4', 1200);
+        $player->now = 50.0;
+        $player->start();
+
+        $player->now = 51.0;
+        $player->stop();
+        $this->assertSame(2200, $player->position(), 'stop() must not discard the played segment');
+        $this->assertFalse($player->isPlaying());
+    }
+
+    /**
+     * @testdox getExitCode() retrieves the last process exit code
      */
     public function testGetExitCodeReturnsCodeAfterExit(): void
     {

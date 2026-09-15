@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery\Tests;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Sprinkles\Layout;
 
@@ -374,5 +377,209 @@ final class PosterCardTest extends TestCase
         self::assertSame(10, $filled + $empty, 'progress bar has exactly 10 cells');
         self::assertSame(3, $filled, 'progress 0.3 × width 10 = 3 filled cells');
         self::assertSame(7, $empty, '10 - 3 = 7 empty cells');
+    }
+
+    // ---- the styled-title trust boundary --------------------------------
+
+    public function testWithStyledTitleIsStillVerbatimByDefault(): void
+    {
+        // Backwards compatibility: the guard is opt-in, so an existing caller that
+        // passes raw bytes gets exactly what it always got — the payload is stored
+        // and echoed, NOT sanitised. This is the documented trust boundary.
+        $hostile = "\e[1mHi\e[0m there\e[2J";
+        $card = (new PosterCard('1', 'Hi there'))->withStyledTitle($hostile);
+
+        self::assertSame($hostile, $card->styledTitle, 'default path stores the bytes untouched');
+        self::assertStringContainsString("\e[2J", $card->render(false, 20, 1), 'and renders them untouched');
+    }
+
+    public function testAssertSafeOptionAcceptsStylingProducedByTheCaller(): void
+    {
+        $styled = "\e[1mHi\e[0mghlight";
+        $card = (new PosterCard('1', 'Highlight'))->withStyledTitle($styled, assertSafe: true);
+
+        self::assertSame($styled, $card->styledTitle);
+        $line = explode("\n", $card->render(false, 14, 1))[1];
+        self::assertSame(14, Width::of($line), 'the styled title still fills its row');
+        // render() pads every row unconditionally, so the width alone says nothing
+        // about the title surviving the guard and the ANSI-aware truncate.
+        self::assertStringContainsString(
+            'Highlight',
+            AnsiGuard::stripControls($line),
+            'the guard must keep the word and lose only the styling',
+        );
+    }
+
+    public function testAnOverlayImageTakesPrecedenceOverAnInlinePosterOnTheSameCard(): void
+    {
+        // The constructor documents the two fills as one-or-the-other; this pins
+        // what actually happens if a caller holds both, so the doc cannot rot.
+        $card = PosterCard::new('1', 'Both')
+            ->withPoster("\x1b[38;2;1;2;3m▀▀▀▀\x1b[0m")
+            ->withImage("\x1bP0;1;q1#0\x9c", 7);
+
+        $frame = $card->render(false, 10, 3);
+
+        self::assertStringContainsString(ImageOverlay::marker(7), $frame, 'the overlay is what the cell reserves');
+        self::assertStringNotContainsString('▀', $frame, 'the inline bytes are not painted alongside it');
+    }
+
+    public function testAssertSafeOptionRejectsAnythingThatIsNotStyling(): void
+    {
+        $card = new PosterCard('1', 'Highlight');
+
+        // A cursor move, an erase, an OSC hyperlink … all throw instead of being
+        // written into a cell the runtime will echo verbatim.
+        foreach (["\e[2Ahi", "hi\e[2J", "\e]8;;https://evil\x07click", "ring\x07", "a\nb"] as $hostile) {
+            $thrown = null;
+            try {
+                $card->withStyledTitle($hostile, assertSafe: true);
+            } catch (InvalidArgumentException $e) {
+                $thrown = $e;
+            }
+
+            self::assertNotNull($thrown, 'the guard must reject ' . json_encode($hostile));
+            self::assertNull($card->styledTitle, 'a rejected title leaves the receiver untouched (immutable builder)');
+        }
+    }
+
+    public function testWithSafeStyledTitleKeepsStyleAndDropsPayload(): void
+    {
+        $card = (new PosterCard('1', 'Blade Runner'))
+            ->withSafeStyledTitle("\e[1mBlade" . "\e[2J" . "\e[0m Runner");
+
+        self::assertSame("\e[1mBlade\e[0m Runner", $card->styledTitle, 'coerced, not refused: the styling survives');
+        self::assertStringNotContainsString("\e[2J", $card->render(false, 20, 1));
+        self::assertSame(20, Width::of(explode("\n", $card->render(false, 20, 1))[1]));
+    }
+
+    public function testWithSafeStyledTitleFallsBackToThePlainTitleWhenNothingSurvives(): void
+    {
+        $card = new PosterCard('1', 'Plain Title');
+
+        // Sanitising to empty would render a blank row and lose the title, so the
+        // builder declines the change (identity) and the plain — sanitised — path wins.
+        self::assertSame($card, $card->withSafeStyledTitle("\e[2J"));
+        self::assertNull($card->styledTitle);
+        self::assertStringContainsString('Plain Title', $card->render(false, 20, 1));
+    }
+
+    public function testWithSafeStyledTitleFallsBackWhenOnlyInvisibleStylingSurvives(): void
+    {
+        $card = new PosterCard('1', 'Plain Title');
+
+        // A payload-only input sanitises to a lone colour sequence: not the empty
+        // string, yet a terminal shows nothing for it. Accepting it would blank the
+        // title row and throw away the plain title the fallback exists to protect.
+        self::assertSame($card, $card->withSafeStyledTitle("\e[31m\e[2J"), 'styling with no text left is nothing');
+        self::assertSame($card, $card->withSafeStyledTitle("\e[31m"));
+        self::assertSame($card, $card->withSafeStyledTitle("\e[41m \e[0m"), 'a row of blank space says nothing either');
+        self::assertNull($card->styledTitle);
+        self::assertStringContainsString('Plain Title', $card->render(false, 20, 1));
+
+        // Styling that does carry text still wins, colour and all — including text
+        // the strip cannot mistake for a control: a digit, a wide glyph, an emoji.
+        $styled = $card->withSafeStyledTitle("\e[31mNeon\e[2J");
+        self::assertNotSame($card, $styled);
+        self::assertSame("\e[31mNeon", $styled->styledTitle);
+        self::assertStringContainsString('Neon', $styled->render(false, 20, 1));
+
+        foreach (["\e[31m日\e[0m", "\e[31m7\e[0m", "\e[31m🎬\e[0m"] as $carries) {
+            $kept = $card->withSafeStyledTitle($carries);
+            self::assertNotSame($card, $kept, $carries . ' carries a glyph the plain title does not');
+            self::assertSame($carries, $kept->styledTitle);
+        }
+    }
+
+    public function testWithSafeStyledTitleTreatsANonBreakingSpaceAsTextNotEmpty(): void
+    {
+        $card = new PosterCard('1', 'Plain Title');
+
+        // The blankness rule is trim(), and trim() does not know U+00A0. A
+        // non-breaking space is TEXT to AnsiGuard — it survives the guard and the
+        // stripper untouched — so styling wrapped around it is a fill the caller
+        // asked for, not an empty row. Pinned so the boundary stays deliberate: if
+        // this ever flips, the docblock on withSafeStyledTitle() must flip with it.
+        $nbsp = "\e[41m\u{a0}\e[0m";
+        $kept = $card->withSafeStyledTitle($nbsp);
+
+        self::assertNotSame($card, $kept, 'an NBSP is a character, not whitespace');
+        self::assertSame($nbsp, $kept->styledTitle);
+        self::assertStringContainsString("\u{a0}", AnsiGuard::stripControls($kept->styledTitle));
+
+        // Contrast the ASCII space, which the same rule calls blank.
+        self::assertSame($card, $card->withSafeStyledTitle("\e[41m \e[0m"));
+    }
+
+    public function testAnOverlayImageWithoutAnIdIsNotAFilledCell(): void
+    {
+        // withImage() cannot build this state (it takes an int), but the constructor
+        // can — and a blob with no marker id paints nothing, so it must not read as
+        // filled or the cell parks as a permanent skeleton outside the fill policy.
+        $card = PosterCard::new('1', 'Orphan', 'https://cdn.example/1.png', posterImage: 'bytes');
+
+        self::assertFalse($card->hasPoster(), 'an overlay with no id paints no marker');
+        self::assertStringContainsString('░', $card->render(false, 12, 3));
+        self::assertTrue($card->withImage('bytes', 3)->hasPoster(), 'the same blob with an id is a fill');
+    }
+
+    public function testAssertSafeAnsiIsTheCardLevelEntryWayIntoTheGuard(): void
+    {
+        self::assertSame("\e[31mX\e[0m", PosterCard::assertSafeAnsi("\e[31mX\e[0m"));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Unsafe escape sequence at offset \d+/');
+        PosterCard::assertSafeAnsi("\e[H\e[2J");
+    }
+
+    public function testGuardedStyledTitleThreadsThroughTheOtherBuilders(): void
+    {
+        $card = (new PosterCard('1', 'X', 'https://cdn/y.png'))
+            ->withStyledTitle("\e[1mX\e[0m", assertSafe: true)
+            ->withPoster('poster')
+            ->withProgress(0.5);
+
+        self::assertSame("\e[1mX\e[0m", $card->styledTitle, 'the guard option does not disturb the immutable chain');
+        self::assertSame('https://cdn/y.png', $card->posterUrl);
+        self::assertSame(0.5, $card->progress);
+    }
+
+    public function testPlainTitleWithInvalidUtf8StillLosesItsControlBytes(): void
+    {
+        // The plain path is the documented safe fallback, so it must not fail open:
+        // the old /u-based strip turned into a no-op the moment any byte was not
+        // valid UTF-8, and the escape reached the frame with the rest of the title.
+        $frame = (new PosterCard('1', "\xff\x1b[2J\x07Blade"))->render(false, 40, 3);
+
+        self::assertStringNotContainsString("\x1b[2J", $frame, 'erase sequence must not survive an opaque byte');
+        self::assertStringNotContainsString("\x07", $frame);
+        self::assertStringContainsString('Blade', $frame, 'the text the user came for still renders');
+    }
+
+    public function testPlainTitleLosesC1ControlsInEitherWireForm(): void
+    {
+        // 8-bit C1 needs no ESC to act on a terminal, and a UTF-8 re-encoding
+        // (U+009B) decodes to the same control — neither may reach the frame.
+        foreach (["\x9b2J", "\xc2\x9b2J", "\xc2\x9d8;;https://evil\xc2\x9c"] as $i => $hostile) {
+            $frame = (new PosterCard('1', 'Blade' . $hostile . ' Runner'))->render(false, 40, 3);
+
+            self::assertStringNotContainsString("\x9b", $frame, 'case ' . $i . ' raw C1 byte');
+            self::assertStringNotContainsString("\xc2\x9b", $frame, 'case ' . $i . ' encoded C1');
+            self::assertStringNotContainsString("\xc2\x9d", $frame, 'case ' . $i . ' encoded OSC');
+            self::assertStringContainsString('Blade', $frame);
+            self::assertStringContainsString('Runner', $frame);
+        }
+    }
+
+    public function testPlainTitleKeepsWideUtf8AndDropsStrayStyling(): void
+    {
+        // Stripping the C1 band must not cost the world its non-Latin titles: the
+        // bytes in 0x80–0x9F are ordinary continuation bytes inside a real
+        // sequence, which the scanner consumes whole.
+        $frame = (new PosterCard('1', "\e[1m因果の物語 🎬 Süß"))->render(false, 40, 3);
+
+        self::assertStringContainsString('因果の物語', $frame);
+        self::assertStringContainsString('Süß', $frame);
+        self::assertStringNotContainsString("\x1b", $frame, 'a plain title carries no styling');
     }
 }

@@ -239,11 +239,14 @@ used by `SugarCraft\Vt\Terminal\Terminal`. The renderer path
 (`SugarCraft\Vt\Terminal`) implements the rows with an explicit
 `Method` column — the rest of the CSI sequences are ignored when the
 renderer encounters them (they're already simplified-away by upstream
-applications writing rendered output).
+applications writing rendered output). Since the parity pass the
+renderer honours the same DECAWM/DECTCEM private modes, IL/DL and SGR
+set as the emulator (`Parser\CsiHandlerImpl`).
 
 The `printable` and `execute` paths also route through the same
 adapter — printable bytes call `CsiHandlerImpl::printable()` (writes
-the cell + advances cursor + auto-wraps), and C0 controls (`\b \t \n
+the cell and defers the wrap at the right margin, exactly like the
+emulator's `ScreenHandler`), and C0 controls (`\b \t \n
 \r`) call the corresponding cursor handler.
 
 ## OSC coverage
@@ -336,10 +339,15 @@ var_dump($mode->autoWrap);  // bool
 $wrapped = $mode->withAutoWrap(true);
 ```
 
-When auto-wrap is **off** (the default), characters written at the
-rightmost column are silently discarded. When **on**, the cursor moves
-to column 0 of the next row before writing — and if that row is within a
-scroll region the region scrolls up by one line, matching VT100 behavior.
+When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS —
+see #1417 and the renderer parity pass), a graphic landing in the
+rightmost column parks the cursor there arming a deferred (phantom)
+wrap; the next graphic consumes it, moving to column 0 of the next row
+before writing — and if that row is within a scroll region the region
+scrolls up by one line, matching VT100 behavior. When **off**, the
+cursor clamps at the rightmost column and subsequent graphics overwrite
+it (the phantom flag is set by geometry alone, so a mid-stream `?7l` /
+`?7h` toggles like xterm).
 
 Scroll regions (DECSTBM, `CSI r`) and auto-wrap interact correctly:
 wrapping at the bottom of a scroll region triggers a scroll within that

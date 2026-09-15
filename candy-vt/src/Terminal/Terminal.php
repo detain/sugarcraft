@@ -45,6 +45,12 @@ final class Terminal
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+
+        // SGR colon sub-parameters (4:N vs 4;N) ride the parser's per-dispatch
+        // continuation flags; late-bind so the handler sees them mid-dispatch.
+        $this->handler->attachSubparamsProvider(
+            fn(): array => $this->parser->subparams(),
+        );
     }
 
     /**
@@ -63,9 +69,45 @@ final class Terminal
         return self::new($cols, $rows);
     }
 
-    public function feed(string $bytes): void
+    /**
+     * Drive bytes through the parser.
+     *
+     * Backwards-compatible query→reply channel (audit §B): when
+     * `$respond` is given, the full queue of terminal→host answers —
+     * DA1/DA2, DECRPM, CPR, XTWINOPS … — produced by this feed (plus any
+     * earlier ones still queued) is handed to it in request order as the
+     * raw bytes a real terminal would write back to the application's
+     * tty. Without a callback the answers queue for {@see replies()}
+     * draining, which keeps the original `feed(string): void` contract
+     * untouched for all existing callers.
+     *
+     * Mirrors charmbracelet/x/vt's `Emulator.Read()` io.Pipe semantics in
+     * pull form (x/vt emulator.go L265-281).
+     *
+     * @param (callable(string): void)|null $respond
+     */
+    public function feed(string $bytes, ?callable $respond = null): void
     {
         $this->parser->feed($bytes);
+        if ($respond !== null) {
+            foreach ($this->handler->replies as $reply) {
+                $respond($reply);
+            }
+            $this->handler->replies = [];
+        }
+    }
+
+    /**
+     * Drain the queued terminal→host replies (DA1/DA2, DECRPM, CPR,
+     * XTWINOPS …) in request order.
+     *
+     * @return list<string>
+     */
+    public function replies(): array
+    {
+        $pending = $this->handler->replies;
+        $this->handler->replies = [];
+        return $pending;
     }
 
     /**
@@ -86,6 +128,17 @@ final class Terminal
     public function cursor(): Cursor
     {
         return $this->handler->cursor;
+    }
+
+    /**
+     * True while a DECAWM deferred wrap is armed: a glyph has landed in
+     * the last column and the cursor is parked there until the next
+     * graphic print consumes it (mirrors xterm `_wrapnext` / charmbracelet
+     * x/vt `Emulator.atPhantom`).
+     */
+    public function isWrapPending(): bool
+    {
+        return $this->handler->wrapPending;
     }
 
     public function mode(): Mode
@@ -129,30 +182,26 @@ final class Terminal
     }
 
     /**
-     * Clone semantics (E725, documented as-is): the {@see ScreenHandler}
-     * is shallow-cloned and the {@see Parser} is rebuilt fresh on the clone.
-     *
-     * Copied per clone: handler object identity (its scalars — tabStops,
-     * scrollRegion bounds, windowTitle — are PHP-copied) and all parse
-     * machine state, which resets to Ground. Any in-flight sequence
-     * (partial UTF-8 rune, unterminated CSI/OSC/DCS string) is dropped,
-     * never resumed; `feed()` after a clone starts parsing clean.
-     *
-     * Shared with the original: the Buffer/Cursor/Sgr/Mode/Scrollback
-     * instances themselves — PHP's shallow `clone` copies the handler's
-     * property references, not the objects. That is safe for the readonly
-     * value objects (every mutation replaces the whole instance) and is
-     * deliberate for the in-place-mutated Buffer/Scrollback: the internal
-     * `with*()` façade methods re-point only the clone's handler slots, so
-     * snapshots isolate state changes, while a raw `clone $terminal` keeps
-     * both terminals viewing the same screen — a live window, by design.
-     * The alt-screen saved slots (savedBuffer/Cursor/Sgr) ride the clone
-     * by reference for the same reason.
+     * Snapshot clone (w4-vt deep-clone semantics): a fresh Parser starts in
+     * Ground, so any in-flight string sequence (partial OSC/DCS payload,
+     * partial UTF-8 rune) is intentionally dropped — the clone captures
+     * committed state only. ScreenHandler::__clone() deep-copies the mutable
+     * Buffer/Scrollback (and the saved alt-state buffer) so the clone can
+     * never write through into this terminal's grid.
+     * The alt-screen saved slots ride that deep copy (E725).
      */
     public function __clone(): void
     {
         $this->handler = clone $this->handler;
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+        // The cloned handler inherited the pre-clone closure, which late-binds
+        // to the ORIGINAL terminal's parser — it would feed this terminal's SGR
+        // dispatches with the other parser's colon flags (stale after the
+        // original saw `4:3`, empty-wrong before it saw anything). Re-attach to
+        // this instance's own parser, exactly as the constructor wires it.
+        $this->handler->attachSubparamsProvider(
+            fn(): array => $this->parser->subparams(),
+        );
     }
 
     /** @internal */
@@ -221,6 +270,23 @@ final class Terminal
         $clone = clone $this;
         $clone->scrollbackSize = $size;
         $clone->handler->scrollback = new Scrollback($size);
+        return $clone;
+    }
+
+    /**
+     * Return a new Terminal reporting the given nominal cell pixel size
+     * in XTWINOPS 14t/16t replies. The emulator renders no font, so the
+     * classic 8×16 defaults are advisory; mosaic's `probeFontSize()` only
+     * consumes them as cell/window ratios.
+     */
+    public function withCellPixels(int $widthPx, int $heightPx): self
+    {
+        if ($widthPx < 1 || $heightPx < 1) {
+            throw new \InvalidArgumentException('cell pixel size must be >= 1');
+        }
+        $clone = clone $this;
+        $clone->handler->cellWidthPx = $widthPx;
+        $clone->handler->cellHeightPx = $heightPx;
         return $clone;
     }
 

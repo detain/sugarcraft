@@ -23,6 +23,12 @@ final class Ansi
     public const PM  = "\x1b^";
     public const ST  = "\x1b\\";
     public const BEL = "\x07";
+    // C0 locking shifts (ansicode.txt:133-134 — "SO Shift Out, switch to G1"
+    // / "SI Shift In, switch to G0"): SO swaps G1 into GL, SI swaps G0 back.
+    // Needed to *use* a G1 SCS designation — designating without
+    // invoking renders nothing different.
+    public const SO  = "\x0e";
+    public const SI  = "\x0f";
 
     public const RESET     = 0;
     public const BOLD      = 1;
@@ -46,6 +52,16 @@ final class Ansi
     public const ALT_SCREEN_BUFFER   = 1049; // Alternate screen buffer
     public const BRACKETED_PASTE    = 2004; // Bracketed paste mode
     public const SYNCHRONIZED_OUTPUT = 2026; // Synchronized output
+
+    // SCS designator finals — the four sets candy-vt's `Charset\Charsets`
+    // translates. Named here so an emitter call site can only spell a
+    // designator the receiver actually models; candy-vcr/tests/
+    // CoreEmitterRoundTripTest.php pins this roster against the emulator's own
+    // public constants in both directions, so neither side can grow alone.
+    public const CHARSET_ASCII        = 'B'; // US ASCII (the default)
+    public const CHARSET_DEC_SPECIAL  = '0'; // DEC Special Graphics / line drawing
+    public const CHARSET_UK           = 'A'; // UK Latin-1 (0x23 = £)
+    public const CHARSET_NO_BREAK_SPACE = 'U'; // ISO Latin-1, 0xA0 renders as space
 
     public static function sgr(int ...$codes): string
     {
@@ -325,6 +341,163 @@ final class Ansi
     public static function scoRestore(): string
     {
         return self::CSI . 'u';
+    }
+
+    // RIS / DECALN / SCS emitters. These are standards sequences, so each docblock
+    // cites ECMA-48, VT510 and ansicode.txt directly, and this file's
+    // `Mirrors charmbracelet/x/ansi.*` convention is honoured only where this repo
+    // already records an upstream symbol to mirror (see scs()) rather than guessed
+    // at. candy-ansi holds the parse side of all three and no emitter of its own.
+
+    /**
+     * RIS — Reset to Initial State (`ESC c`).
+     *
+     * The full power-on reset. Distinct from {@see reset()}, which is only
+     * `SGR 0` (the pen): RIS also restores modes, margins, tab stops, the SCS
+     * designations and — on a physical terminal — the screen contents, which is
+     * why it is the right teardown for a crashed or replayed session. candy-vt
+     * models it as `ScreenHandler::hardReset()`, which like the hardware
+     * PRESERVES scrollback, the window title and the OSC 4 palette — matching
+     * charmbracelet/x/vt `Emulator.fullReset()`.
+     *
+     * ECMA-48 two-character escape: `ESC` + a lowercase final, which X3.64
+     * Appendix E reserves for independent control functions (ansicode.txt:297-300;
+     * `143 63 c * RIS` at :307); VT510 ch. 4; xterm ctlseqs "ESC c".
+     */
+    public static function ris(): string
+    {
+        return self::ESC . 'c';
+    }
+
+    /**
+     * DECALN — screen alignment test pattern (`ESC # 8`), filling the screen
+     * with 'E' so an operator can adjust focus/geometry.
+     *
+     * WIRE SPELLING MATTERS: VT100 and xterm define DECALN as an intermediate
+     * escape — `ESC`, intermediate `#` (0x23), final `8` (ansicode.txt:217) —
+     * which is what this emits. The `CSI # 8` spelling that circulates in some
+     * notes is not a complete sequence: a CSI final byte must be 0x40-0x7E, so
+     * on a standards-conformant receiver `ESC [ # 8` stays inside the CSI, where
+     * it consumes whatever the caller prints next as the final — eating output
+     * instead of testing alignment. candy-vt's
+     * `ScreenHandler::displayAlignmentTest()` still heads itself with that stale
+     * spelling, while its own wire-level note documents the gap accurately and
+     * exposes the pattern programmatically only.
+     *
+     * Neither spelling runs the pattern in candy-vt yet: the shared parser drops
+     * the CSI form in CsiIntermediate without dispatching, and reports `ESC # 8`
+     * as escDispatch(0x38, 0x23), which the emulator ignores as a
+     * non-designation. The bytes are pinned by an exact-byte test here and, in
+     * candy-vcr, by the dispatch the parser really reports.
+     *
+     * VT510 ch. 4 (DECALN); ansicode.txt:217 ("#8 * DECALN - Alignment
+     * display, fill screen with \"E\" to adjust focus").
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECALN)
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECALN)
+     */
+    public static function decaln(): string
+    {
+        return self::ESC . '#8';
+    }
+
+    /**
+     * SCS slot index (0-3, i.e. G0-G3) to its intermediate byte — the four
+     * `(`/`)`/`*`/`+` positions of ansicode.txt:222, 240, 242, 244. Indexed
+     * access makes an out-of-range slot a plain null lookup rather than a
+     * silent default.
+     *
+     * @var array<int, string>
+     */
+    private const SCS_SLOTS = [0 => '(', 1 => ')', 2 => '*', 3 => '+'];
+
+    /**
+     * SCS — select a character set into one of the G0-G3 slots.
+     *
+     * The designation itself is state, not output: it changes how *later*
+     * graphics are translated. G0 is invoked by default; G1 needs
+     * {@see shiftOut()}, G2/G3 need a single shift. Recognised designators
+     * in candy-vt are `B` (US ASCII), `0` (DEC Special Graphics), `A` (UK),
+     * `U` (ISO Latin-1 no-break space); see {@see decSpecialGraphics()}.
+     *
+     * Fails fast on an unknown slot or a designator outside the 0x30-0x7E
+     * designation-final range (see {@see isScsDesignator()}): such a string
+     * would desynchronise the receiver's parser, which is precisely the class
+     * of bug this emitter exists to prevent.
+     *
+     * Mirrors charmbracelet/x/ansi. SelectCharacterSet — the same
+     * `ESC <intermediate> <final>` helper that candy-vt's `Charsets` docblock
+     * records as its own upstream source (same wire shape; this port keys the
+     * designation on a 0-3 slot index).
+     *
+     * ECMA-48 §25 (character set designation); ansicode.txt:222-249
+     * ("SCS - Select G0/G1/G2/G3 character set").
+     *
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (SCS)
+     */
+    public static function scs(int $slot, string $designator): string
+    {
+        $intermediate = self::SCS_SLOTS[$slot] ?? null;
+        if ($intermediate === null) {
+            throw new \InvalidArgumentException(Lang::t('ansi.invalid_scs_slot', ['slot' => $slot]));
+        }
+        if (strlen($designator) !== 1 || !self::isScsDesignator(\ord($designator))) {
+            throw new \InvalidArgumentException(Lang::t('ansi.invalid_scs_designator', [
+                'designator' => $designator === '' ? '<empty>' : '<' . bin2hex($designator) . '>',
+            ]));
+        }
+
+        return self::ESC . $intermediate . $designator;
+    }
+
+    /** Designate into G0 — `ESC ( F`, the slot GL reads from by default. */
+    public static function scsG0(string $designator): string
+    {
+        return self::scs(0, $designator);
+    }
+
+    /** Designate into G1 — `ESC ) F`; invoke with {@see shiftOut()}. */
+    public static function scsG1(string $designator): string
+    {
+        return self::scs(1, $designator);
+    }
+
+    /** Designate into G2 — `ESC * F`; a VT220+ slot, invoked by SS2/LS2. */
+    public static function scsG2(string $designator): string
+    {
+        return self::scs(2, $designator);
+    }
+
+    /** Designate into G3 — `ESC + F`; a VT220+ slot, invoked by SS3/LS3. */
+    public static function scsG3(string $designator): string
+    {
+        return self::scs(3, $designator);
+    }
+
+    /**
+     * The classic VT100 line-drawing idiom: DEC Special Graphics into G0
+     * (`ESC ( 0`), after which `lqqqqk` paints `┌────┐` (ansicode.txt:223).
+     */
+    public static function decSpecialGraphics(): string
+    {
+        return self::scs(0, self::CHARSET_DEC_SPECIAL);
+    }
+
+    /** US ASCII into G0 (`ESC ( B`) — restores plain text after line drawing. */
+    public static function asciiCharset(): string
+    {
+        return self::scs(0, self::CHARSET_ASCII);
+    }
+
+    /** LS1 — Shift Out (`SO`, 0x0E): swap the G1 designation into GL. */
+    public static function shiftOut(): string
+    {
+        return self::SO;
+    }
+
+    /** LS0 — Shift In (`SI`, 0x0F): swap the G0 designation back into GL. */
+    public static function shiftIn(): string
+    {
+        return self::SI;
     }
 
     /** Set a horizontal tab stop at the current column (HTS). */
@@ -636,67 +809,247 @@ final class Ansi
     /**
      * Strip every ANSI escape sequence from the input.
      *
-     * Handles CSI (ESC[...), OSC (ESC]...ST|BEL), single-char ESC sequences,
-     * and lone ESCs.
+     * Covers the full ECMA-48 escape taxonomy, in both 7-bit and 8-bit form:
+     *
+     *  - CSI  — `ESC [` / `0x9B` (ECMA-48 §15.9); consumed through the final
+     *    byte (0x40–0x7E); every byte before the final is consumed
+     *    unconditionally — including stray C0/DEL/C1 (the CSI grammar
+     *    allows only 0x20–0x3F parameters there, so over-consuming is the
+     *    fail-closed direction).
+     *  - OSC  — `ESC ]` / `0x9D` (ECMA-48 §8.3.25, xterm "OSC"); terminated
+     *    by ST (`ESC \` or `0x9C`) or — xterm's widely used extension — BEL.
+     *  - String sequences DCS / SOS / PM / APC — `ESC P|X|^|_` and the 8-bit
+     *    `0x90|0x98|0x9E|0x9F` (ECMA-48 §15.10–15.12, §8.3.9/8.3.13); the
+     *    whole payload runs to ST. This is what stops sixel (`DCS … q … ST`)
+     *    and Kitty graphics (`APC G … ST`) payloads from smuggling control
+     *    text through a sanitizer.
+     *  - Two-byte Fe escapes — `ESC` followed by 0x40–0x5F (e.g. `ESC \` ST,
+     *    `ESC D` index), consumed as a pair.
+     *  - Lone 8-bit C1 controls (0x80–0x9F outside a UTF-8 continuation
+     *    chain, including a stray `0x9C` ST) — removed as single bytes.
+     *
+     * A sequence that hits end-of-input unterminated is discarded entirely
+     * (fail-closed): a partial sequence is never released as a false "safe"
+     * remainder that a re-synchronising terminal could execute. An `ESC`
+     * inside a CSI or string sequence cancels it and the `ESC` is re-scanned
+     * as a fresh introducer; `CAN`/`SUB` cancel a CSI outright (Williams VT
+     * parser, ECMA-48 §5.4).
+     *
+     * Valid UTF-8 survives untouched: a 0x80–0x9F byte is treated as a C1
+     * control unless it is part of a FULL well-formed UTF-8 sequence
+     * (lead C2–F4 with §3.9-conformant continuations). Ill-formed or
+     * truncated sequences claim nothing — matching Unicode's rule that the
+     * byte after an ill-formed subpart is reprocessed, which is exactly how
+     * `F0|C1|F5` + `\x9b` would otherwise smuggle an 8-bit CSI past the
+     * sanitizer. A stray `ESC` consumes only itself so following text and
+     * multi-byte characters survive; `ESC`-led charset designators
+     * (`ESC ( B`) and ESC-prefixed charset invocations (`ESC 7`) leave
+     * their tail bytes as inert visible text — no introducer survives, so
+     * they cannot re-arm a sequence.
+     *
+     * The scan is a single O(n) byte pass with chunked copies — no regex,
+     * no backtracking — so it stays safe on untrusted input of any size,
+     * and is idempotent: `strip(strip($s)) === strip($s)`.
+     *
+     * @param string $s Potentially hostile input
+     * @return string Text with every escape sequence removed
      */
     public static function strip(string $s): string
     {
         $out = '';
         $len = strlen($s);
         $i = 0;
+        $seg = 0; // Start of the current passthrough run.
         while ($i < $len) {
-            $c = $s[$i];
-            if ($c !== self::ESC) {
-                $out .= $c;
-                $i++;
+            $b = \ord($s[$i]);
+            if ($b === 0x1b) {
+                $out .= substr($s, $seg, $i - $seg);
+                $i = self::stripEscape($s, $i, $len);
+                $seg = $i;
                 continue;
             }
-            $next = $s[$i + 1] ?? '';
-            if ($next === '[') {
-                $i += 2;
-                while ($i < $len) {
-                    $b = ord($s[$i]);
-                    $i++;
-                    if ($b >= 0x40 && $b <= 0x7e) {
-                        break;
+            if ($b >= 0xc2 && $b <= 0xf4) {
+                // UTF-8: claim the run only when it is a FULL well-formed
+                // sequence — valid lead, first continuation byte inside the
+                // lead's legal range (Unicode Conformance §3.9), and all
+                // remaining continuations present. Anything shorter or
+                // out-of-range claims nothing: per §3.9 the C1-range byte
+                // that follows an ill-formed lead is REPROCESSED (and a
+                // conforming 8-bit decoder runs it as a control), so it must
+                // fall through to the lone-C1 branch. This is also what
+                // keeps the scan idempotent: claimed runs are self-contained
+                // and never re-classified by a later pass.
+                $shape = self::utf8Shape($b);
+                $need = $shape[0];
+                $j = $i + 1;
+                $claimed = false;
+                if ($j < $len && $shape[1] <= \ord($s[$j]) && \ord($s[$j]) <= $shape[2]) {
+                    $claimed = true;
+                    for (++$j; --$need > 0; $j++) {
+                        if ($j >= $len || \ord($s[$j]) < 0x80 || \ord($s[$j]) > 0xbf) {
+                            $claimed = false;
+                            break;
+                        }
                     }
                 }
-                continue;
-            }
-            if ($next === ']') {
-                $i += 2;
-                while ($i < $len) {
-                    if ($s[$i] === self::BEL) {
-                        $i++;
-                        break;
-                    }
-                    if ($s[$i] === self::ESC && ($s[$i + 1] ?? '') === '\\') {
-                        $i += 2;
-                        break;
-                    }
-                    $i++;
+                if ($claimed) {
+                    $i = $j;
+                    continue;
                 }
+                $i++; // Ill-formed lead: inert text; next byte judged fresh.
                 continue;
             }
-            // Not [, not ] — if the next byte is an ECMA-48 Fe final
-            // (0x40-0x5f: the C1-equivalent commands, e.g. ESC M
-            // reverse-index, ESC D index, ESC E next-line), the pair is a
-            // two-byte escape: consume both. Anything else (lowercase text
-            // after a stray ESC, control bytes, or a UTF-8 continuation
-            // byte 0x80-0xbf) is treated as a LONE ESC — skip only the ESC
-            // so ordinary following text and multi-byte characters survive.
-            $b = $next === '' ? -1 : ord($next);
-            $i += ($b >= 0x40 && $b <= 0x5f) ? 2 : 1;
-            continue;
+            if ($b >= 0x80 && $b <= 0x9f) {
+                $out .= substr($s, $seg, $i - $seg);
+                $i = self::stripC1($s, $i, $len);
+                $seg = $i;
+                continue;
+            }
+            $i++;
         }
-        return $out;
+        return $out . substr($s, $seg);
     }
+
+    /**
+     * Well-formed UTF-8 shape of a lead byte (Unicode Conformance §3.9):
+     * `[total continuation bytes required, low, high]` for the FIRST
+     * continuation byte — E0 excludes overlongs (A0–BF), ED excludes
+     * surrogates (80–9F), F0/F4 clamp the codepoint range (90–BF / 80–8F).
+     * Bytes outside C2–F4 are not leads (C0/C1 overlong, F5–FF out of range)
+     * and never claimed.
+     *
+     * @return array{0:int,1:int,2:int}
+     */
+    private static function utf8Shape(int $lead): array
+    {
+        return match (true) {
+            $lead >= 0xf0 => $lead === 0xf0
+                ? [3, 0x90, 0xbf]
+                : ($lead === 0xf4 ? [3, 0x80, 0x8f] : [3, 0x80, 0xbf]),
+            $lead >= 0xe0 => $lead === 0xe0
+                ? [2, 0xa0, 0xbf]
+                : ($lead === 0xed ? [2, 0x80, 0x9f] : [2, 0x80, 0xbf]),
+            default => [1, 0x80, 0xbf],
+        };
+    }
+
+    /**
+     * Consume one 7-bit `ESC`-introduced sequence; returns the index just
+     * past it (an unterminated sequence runs to end of input and is dropped).
+     */
+    private static function stripEscape(string $s, int $i, int $len): int
+    {
+        $next = $i + 1 < $len ? ord($s[$i + 1]) : -1;
+        if ($next === 0x5b) { // ESC [ — CSI
+            return self::stripCsi($s, $i + 2, $len);
+        }
+        if ($next === 0x5d) { // ESC ] — OSC (BEL also terminates, xterm)
+            return self::stripString($s, $i + 2, $len, true);
+        }
+        // ESC P (DCS), ESC X (SOS), ESC ^ (PM), ESC _ (APC): string
+        // sequences terminated only by ST — never by BEL.
+        if ($next === 0x50 || $next === 0x58 || $next === 0x5e || $next === 0x5f) {
+            return self::stripString($s, $i + 2, $len, false);
+        }
+        // Any other ECMA-48 Fe final (0x40–0x5f: ESC M, ESC D, ESC \ …) is a
+        // two-byte escape. Anything else (lowercase text after a stray ESC,
+        // a control byte, or a UTF-8 lead/continuation byte 0x80–0xff) is a
+        // LONE ESC — skip only the ESC; the main scan then reads the bytes
+        // after it on their own merits, so ordinary text and whole multi-byte
+        // characters survive.
+        return ($next >= 0x40 && $next <= 0x5f) ? $i + 2 : $i + 1;
+    }
+
+    /**
+     * Consume a CSI body after its introducer; $i is the first body byte.
+     */
+    private static function stripCsi(string $s, int $i, int $len): int
+    {
+        while ($i < $len) {
+            $b = ord($s[$i]);
+            if ($b >= 0x40 && $b <= 0x7e) {
+                return $i + 1; // Final byte — the CSI is complete.
+            }
+            if ($b === 0x1b) {
+                return $i; // ESC cancels; the outer scan re-reads it fresh.
+            }
+            if ($b === 0x18 || $b === 0x1a) {
+                return $i + 1; // CAN/SUB cancel the sequence (ECMA-48 §5.4).
+            }
+            $i++;
+        }
+        return $i; // Truncated CSI — discard the remainder.
+    }
+
+    /**
+     * Consume a string-sequence body (OSC/DCS/SOS/PM/APC) after its
+     * introducer, up to ST (`ESC \` or `0x9C`) or, when `$belTerminates`
+     * (OSC only), BEL. A stray `ESC` not starting an ST cancels the string
+     * and is re-scanned as a new introducer (Williams VT parser); a sequence
+     * that hits end of input discards its payload entirely.
+     */
+    private static function stripString(string $s, int $i, int $len, bool $belTerminates): int
+    {
+        while ($i < $len) {
+            $b = ord($s[$i]);
+            if ($b === 0x1b) {
+                if ($i + 1 < $len && $s[$i + 1] === '\\') {
+                    return $i + 2; // ST — sequence complete.
+                }
+                return $i; // Cancel; re-scan this ESC as a fresh introducer.
+            }
+            if ($b === 0x07 && $belTerminates) {
+                return $i + 1;
+            }
+            if ($b === 0x9c) {
+                return $i + 1; // 8-bit ST.
+            }
+            $i++;
+        }
+        return $i; // Truncated string sequence — payload never resurfaces.
+    }
+
+    /**
+     * Consume a lone 8-bit C1 byte: the introducer forms dispatch into the
+     * same CSI/string consumers as their 7-bit equivalents; every other C1
+     * (and a stray 0x9C ST) is a single-byte control.
+     */
+    private static function stripC1(string $s, int $i, int $len): int
+    {
+        return match ($s[$i]) {
+            "\x9b" => self::stripCsi($s, $i + 1, $len),
+            "\x9d" => self::stripString($s, $i + 1, $len, true),
+            "\x90", "\x98", "\x9e", "\x9f" => self::stripString($s, $i + 1, $len, false),
+            default => $i + 1,
+        };
+    }
+
+
 
     private static function assertByte(int $v, string $label): void
     {
         if ($v < 0 || $v > 255) {
             throw new \InvalidArgumentException(Lang::t('ansi.component_out_of_range', ['label' => $label, 'value' => $v]));
         }
+    }
+
+    /**
+     * Is `$byte` a legal SCS designation final? The accepted band is 0x30-0x7E —
+     * ECMA-48's Fp/Fe/Fs final bands taken together (the names are ECMA-48's;
+     * ansicode.txt:222-249 is the designator inventory). That is wider than the
+     * 0x40-0x7E range of ordinary escape finals because DEC's own sets are
+     * digits: `(0` line drawing, `(<` supplemental graphics (ansicode.txt:223-230).
+     *
+     * Below 0x30 nothing designates, so no charset can land: 0x20-0x2F collects as
+     * an *additional* intermediate at this position (the same collect rule is what
+     * lets ansicode.txt:246-249 spell the `ESC , - . /` sets, there as *leading*
+     * intermediates), a C0 byte is executed with the escape left open — CAN/SUB
+     * likewise execute but then abandon the sequence to Ground, and ESC discards it
+     * by starting a new escape — while DEL is ignored in place.
+     */
+    private static function isScsDesignator(int $byte): bool
+    {
+        return $byte >= 0x30 && $byte <= 0x7e;
     }
 
     /**
@@ -743,22 +1096,36 @@ final class Ansi
     }
 
     /**
-     * Emit a Kitty graphics protocol data chunk.
+     * Emit one self-contained Kitty graphics data chunk.
      *
-     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     * Format: APC `ESC _ G m=<0|1>;<base64> ST` — the Kitty graphics
+     * protocol is APC-based (xterm ctlseqs `ESC _`, ECMA-48 §8.3.1 APC),
+     * and the `m` flag carries the more-chunks semantics: `m=1` keeps the
+     * transaction open, `m=0` transmits the final chunk and closes it.
+     *
+     * Mirrors charmbracelet/x/ansi. GraphicsData.
      *
      * @param string $base64  Base64-encoded data chunk
      * @param bool   $more    True if more chunks follow (sets m=1)
      */
     public static function kittyGraphicsChunk(string $base64, bool $more): string
     {
-        return 'm=' . ($more ? '1' : '0') . ',' . $base64;
+        return self::APC . 'G' . 'm=' . ($more ? '1' : '0') . ';' . $base64 . self::ST;
     }
 
     /**
-     * Emit the Kitty graphics protocol begin sequence.
+     * Emit the Kitty graphics protocol begin sequence — the first frame of
+     * a chunked transmission.
      *
-     * Format: DCS q <key>=<value>,<key>=<value>,... ST
+     * Format: APC `ESC _ G <key>=<value>,…[,m=1]; ST` (empty first data
+     * chunk). The frame opens the transaction so every following
+     * {@see kittyGraphicsChunk()} inherits these attributes until an
+     * `m=0` chunk or {@see kittyGraphicsEnd()} closes it. `m=1` is appended
+     * unless `$opts` already sets `m` explicitly.
+     *
+     * NOT DCS `ESC P q` — that introducer is DECSIXEL (vt3xx sixel graphics,
+     * ECMA-48 §15.10 DCS), byte-identical to a sixel start and guaranteed
+     * garbage on a sixel-capable terminal (ANSI audit defect, ansicode:277).
      *
      * Common keys:
      *   - a: action (T=inline transmit, p=place, d=delete)
@@ -773,30 +1140,49 @@ final class Ansi
      *   - v: source height (pixels)
      *   - q: quantization (0-100, 2 is default)
      *
-     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     * For a one-shot control frame that must NOT open a chunked
+     * transaction (place/delete by id), use {@see kittyGraphicsControl()}.
+     *
+     * Mirrors charmbracelet/x/ansi. GraphicsBegin.
      *
      * @param array<string, mixed> $opts  Key-value pairs for the begin sequence
      */
     public static function kittyGraphicsBegin(array $opts): string
     {
-        $pairs = [];
-        foreach ($opts as $key => $value) {
-            if ($value === null) {
-                continue;
-            }
-            $pairs[] = $key . '=' . $value;
+        $pairs = self::kittyFormatPairs($opts);
+        // A null `m` means "unset" (kittyFormatPairs drops it) — the frame
+        // still has to open the transaction, or later chunks are orphaned.
+        if (($opts['m'] ?? null) === null) {
+            $pairs = $pairs === '' ? 'm=1' : $pairs . ',m=1';
         }
-        return self::DCS . 'q' . implode(',', $pairs) . self::ST;
+        return self::APC . 'G' . $pairs . ';' . self::ST;
     }
 
     /**
-     * Emit the final end-of-transmission chunk for Kitty graphics.
+     * Emit a complete single-frame Kitty graphics control sequence
+     * (`a=p` place, `a=d` delete, transformation-only ops) — attributes
+     * only, no data, no open transaction.
      *
-     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     * Mirrors charmbracelet/x/ansi. GraphicsEnd-without-chunks.
+     *
+     * @param array<string, mixed> $opts  Key-value control pairs
+     */
+    public static function kittyGraphicsControl(array $opts): string
+    {
+        return self::APC . 'G' . self::kittyFormatPairs($opts) . self::ST;
+    }
+
+    /**
+     * Emit the final end-of-transmission frame for Kitty graphics: an
+     * empty `m=0` chunk that closes a transaction opened by
+     * {@see kittyGraphicsBegin()} (redundant but harmless after a final
+     * chunk already sent `m=0`).
+     *
+     * Mirrors charmbracelet/x/ansi. GraphicsEnd.
      */
     public static function kittyGraphicsEnd(): string
     {
-        return 'm=0' . self::ST;
+        return self::APC . 'G' . 'm=0;' . self::ST;
     }
 
     /**
@@ -807,6 +1193,24 @@ final class Ansi
     public static function kittyGraphicsClear(int $imageId = 0): string
     {
         return self::APC . 'G' . "a=d,i=$imageId" . self::ST;
+    }
+
+    /**
+     * Render Kitty graphics options as comma-joined `key=value` pairs,
+     * skipping nulls (absent attribute = terminal default).
+     *
+     * @param array<string, mixed> $opts
+     */
+    private static function kittyFormatPairs(array $opts): string
+    {
+        $pairs = [];
+        foreach ($opts as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $pairs[] = $key . '=' . $value;
+        }
+        return implode(',', $pairs);
     }
 
     /**

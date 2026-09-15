@@ -10,12 +10,16 @@ namespace SugarCraft\Spark;
  * attributes), CSI cursor moves, CSI erase/mode toggles, OSC titles,
  * and bracketed-paste / focus / mouse mode sequences. Anything it
  * doesn't recognise still gets a Segment with a generic `"CSI"` /
- * `"OSC"` / `"SS3"` label so the output never silently swallows
- * sequences.
+ * `"OSC"` / `"SS3"` label, so no sequence that reaches the segmenter is
+ * dropped without a report. Bytes can still vanish further upstream, inside
+ * candy-ansi, before this code ever sees a dispatch — `README.md` keeps the
+ * closed list of every known case and `ByteFidelityTest` pins each one.
  *
- * Uses candy-ansi's {@see Parser} state machine for CSI sequences and
- * simple ESC sequences, with a fast pre-scan for complex multi-byte
- * sequences (OSC/DCS/APC) that need exact raw-byte preservation.
+ * Sequence *recognition* lives entirely in candy-ansi's {@see Parser} state
+ * machine; this class only labels the sequences it dispatches, plus the
+ * truncated tails {@see AnsiHandler} recovers at end of stream. There is no
+ * scanning of the input stream of its own, so OSC/DCS/APC strings go through
+ * the same machine as CSI rather than a separate fast path.
  */
 final class Inspector
 {
@@ -198,6 +202,13 @@ final class Inspector
             // 38;5;n (256-color fg) and 38;2;r;g;b (truecolor fg).
             if ($code === 38 || $code === 48) {
                 $kind = $code === 38 ? 'foreground' : 'background';
+                // Colon spelling (`38:5:n`, `38:2::r:g:b`) carries the whole
+                // colour spec in one parameter group (ECMA-48 §14.1.1); the
+                // semicolon spelling spreads it over adjacent parameters.
+                if (str_contains($codeStr, ':') === true) {
+                    $parts[] = self::describeColonColour($kind, $codeStr);
+                    continue;
+                }
                 $sub  = (int) ($codes[$i + 1] ?? 0);
                 if ($sub === 5) {
                     if (isset($codes[$i + 2]) === false) {
@@ -232,6 +243,70 @@ final class Inspector
             $parts[] = self::sgrName($code);
         }
         return implode(', ', $parts);
+    }
+
+    /**
+     * Label an extended-colour parameter group written with ECMA-48 §14.1.1
+     * colon sub-parameters — `38:5:n` for 256-colour, `38:2:cs:r:g:b` for
+     * direct colour.
+     *
+     * xterm reserves the first sub-parameter after the mode for a colour-space
+     * id (emitters almost always leave it empty), which is why the components
+     * are NOT simply the tail of the group: reading the id as red is what turns
+     * `38:2::80:160:240` into a wrong colour.
+     *
+     * <p>The slot may also be omitted entirely, and the two spellings are
+     * genuinely ambiguous on their face — `38:2:1:2:3` is either CS 1 with a
+     * missing blue, or bare R:G:B. The rule applied here (and in
+     * `SugarCraft\Freeze\SgrStateHandler`, measured to agree on every
+     * colour-resolving shape both suites pin) is xterm's count rule: four
+     * sub-parameters after the mode are `cs:r:g:b`, three are bare `r:g:b`. A
+     * future change to one parser's rule must be mirrored in the other, or the
+     * same bytes will mean different colours in the inspector and in the
+     * rendered output. A group that resolves in neither lib may still be
+     * *described* differently: this one labels what the bytes say
+     * (`38:2::;1;2;3` is a truncated truecolor group and no colour is
+     * invented for it), candy-freeze falls back to reading the flat parameter
+     * list and paints `#000001`. Both sides pin that divergence literally:
+     * `ByteFidelityTest::testColonTruncatedExtendedColoursAreReportedAsTruncated`
+     * here, `AnsiParserColonSubparametersTest::testUnresolvableColonGroupFallsBackAcrossParameterBoundaries`
+     * there.
+     */
+    private static function describeColonColour(string $kind, string $group): string
+    {
+        $subs = explode(':', $group);
+        array_shift($subs);
+        $mode = (int) ($subs[0] ?? -1);
+        $rest = array_slice($subs, 1);
+        $filled = static fn(array $values): array => array_values(array_filter($values, static fn(string $v): bool => $v !== ''));
+
+        if ($mode === 5) {
+            $index = $filled($rest);
+            return $index === []
+                ? "$kind truncated 256-color"
+                : sprintf('%s 256-color %d', $kind, (int) $index[0]);
+        }
+
+        if ($mode === 2) {
+            $components = $filled(array_slice($rest, 1));
+            if (count($components) < 3) {
+                // No colour-space id slot to skip — the components start at the
+                // first sub-parameter after the mode.
+                $components = $filled($rest);
+            }
+            if (count($components) < 3) {
+                return "$kind truncated truecolor";
+            }
+            return sprintf(
+                '%s rgb(%d,%d,%d)',
+                $kind,
+                (int) $components[0],
+                (int) $components[1],
+                (int) $components[2],
+            );
+        }
+
+        return "$kind unknown";
     }
 
     private static function sgrName(int $code): string
@@ -440,6 +515,31 @@ final class Inspector
             'c' => 'reset to initial state',
             default => 'ESC ' . $byte,
         };
+    }
+
+    /**
+     * Label a sequence the stream never terminated (ECMA-48 §5.6 escape
+     * sequences run introducer → parameters → intermediates → final byte, and
+     * the final byte is what completes them).
+     *
+     * Naming the family from the introducer keeps the report honest: the bytes
+     * are real, they simply never formed a complete sequence.
+     */
+    public static function describeTruncated(string $bytes): string
+    {
+        $family = match (true) {
+            str_starts_with($bytes, "\x1b[") => 'CSI',
+            str_starts_with($bytes, "\x1bP") => 'DCS',
+            str_starts_with($bytes, "\x1b]") => 'OSC',
+            str_starts_with($bytes, "\x1b_") => 'APC',
+            str_starts_with($bytes, "\x1bX") => 'SOS',
+            str_starts_with($bytes, "\x1b^") => 'PM',
+            str_starts_with($bytes, "\x1bO") => 'SS3',
+            str_starts_with($bytes, "\x1b") => 'ESC',
+            default => 'escape',
+        };
+
+        return 'truncated ' . $family . ' (unterminated)';
     }
 
     private static function underlineStyleName(int $n): string

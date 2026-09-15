@@ -199,7 +199,18 @@ This is a ReactPHP-based ecosystem (`php: ^8.3` with `candy-core` which uses Rea
 
 **Recommendation:** Add an `EscapeDecoderOptions` class with flags like `$enableMouse`, `$enableKitty`, `$enableFocus`, `$enablePaste`, allowing applications to disable unused protocol parsing.
 
-### 4. No Support for SGR 1003 (highlight mouse) or SGR 1015 (urxvt mouse)
+### 4. ✅ No Support for SGR 1003 (highlight mouse) or SGR 1015 (urxvt mouse)
+
+> **RESOLVED (wave-4, ai/w4-input):** the urxvt 1015 decimal encoding `ESC [ b ; x ; y M`
+> is now decoded to a `MouseEvent` (`EscapeDecoder::handleUrxvtMouse`, byte-level tests in
+> `EscapeDecoderTest`), distinguished from the 1006 SGR path solely by the absence of the
+> `'<` introducer (no collision). Mode 1016 (SGR-pixels) is byte-identical to 1006 — a
+> stateless decoder reports its coordinate field verbatim (documented). Mode 1000/X10
+> (`ESC [ M`) was already handled and is now locked by a regression test. 1003 is a
+> *reporting* mode (what to send), not an *encoding* — the `+32` motion bit it relies on
+> is already decoded as `ACTION_DRAG`. Also closed this wave: application-keypad SS3
+> letters (`ESC O p..y`/`l`/`m`, ansicode.txt:742-753) and xterm modifyOtherKeys
+> (`ESC [ 27 ; mods ; keysym ~`).
 
 The library only supports SGR 1006. Terminal emulators also commonly send:
 - **SGR 1003**: highlight (mouse highlight mode)

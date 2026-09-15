@@ -11,6 +11,7 @@ use SugarCraft\Reel\Decode\GifDecoder;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
+use SugarCraft\Reel\Tests\Concerns\CapturesErrorLog;
 
 /**
  * Unit tests for GifDecoder.
@@ -22,6 +23,8 @@ use SugarCraft\Reel\Source\Probe;
  */
 final class GifDecoderTest extends TestCase
 {
+    use CapturesErrorLog;
+
     private ?string $tempGifPath = null;
 
     protected function tearDown(): void
@@ -206,8 +209,8 @@ final class GifDecoderTest extends TestCase
 
         // R=0, G=0, B=0 for black pixel
         $this->assertSame(0, ($rgb >> 16) & 0xff, 'R component should be 0');
-        $this->assertSame(0, ($rgb >> 8) & 0xff,  'G component should be 0');
-        $this->assertSame(0, $rgb & 0xff,          'B component should be 0');
+        $this->assertSame(0, ($rgb >> 8) & 0xff, 'G component should be 0');
+        $this->assertSame(0, $rgb & 0xff, 'B component should be 0');
 
         imagedestroy($img);
         $decoder->close();
@@ -337,5 +340,39 @@ final class GifDecoderTest extends TestCase
         $this->assertNotNull($frame);
         $this->assertSame(4 * 6, $frame->w);
         $this->assertSame(3 * 8, $frame->h);
+    }
+
+    /**
+     * @testdox GifDecoder reports it does NOT reopen in place (factory-owned)
+     */
+    public function testGifDecoderIsNotReopenedInPlace(): void
+    {
+        $this->assertFalse((new GifDecoder())->reopensInPlace());
+    }
+
+    /**
+     * @testdox a GIF source with headers decodes anyway and logs that they were dropped
+     *
+     * The brief's "headers ignored, with a documented reason, not silently": a GIF
+     * is fetched from disk, never over HTTP, so request headers are meaningless —
+     * but we say so in the log rather than swallowing the caller's credentials.
+     */
+    public function testGifHeadersIgnoredWithLoggedReason(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempGif();
+
+        $logged = $this->captureErrorLog(function () use ($path): void {
+            $decoder = new GifDecoder();
+            $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 0.0, ['Authorization' => 'Bearer x']);
+            // Decoding still works — headers are dropped, not fatal.
+            $this->assertNotNull($decoder->next());
+            $decoder->close();
+        });
+
+        $this->assertStringContainsString('ignoring 1 HTTP request header', $logged);
     }
 }

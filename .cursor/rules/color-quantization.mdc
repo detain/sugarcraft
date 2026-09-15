@@ -1,0 +1,15 @@
+---
+description: ANSI 16 / 256 color quantization tables and rounding rules
+globs: "candy-palette/src/**,candy-core/src/Util/Color.php"
+alwaysApply: false
+---
+
+# ANSI color quantization
+
+- xterm cube axes are `0, 95, 135, 175, 215, 255` (`Color::CUBE_LEVELS` in `candy-palette/src/Color.php`) — NOT an even 0-255 spread.
+- Cube index `16 + 36R + 6G + B` (16-231); grey ramp `232 + i` over levels `8, 18, …, 238`. `toAnsi256Index()` picks the nearer of the two candidates by squared RGB, matching `nearest256()` in `candy-core/src/Util/Color.php`.
+- **Never quantize RGB onto slots 0-15** — they are themeable; truecolor red maps to 196, not basic slot 1.
+- `toAnsi16Index()` searches all 16 entries of `Color::ANSI16_RGB` by squared RGB in one pass. No "basic 8 + luminance +8" hack — it collapses xterm's slot-2 green `(0,205,0)` to slot 10 and breaks round-tripping.
+- `candy-palette`'s table uses VGA blues (`#0000CD`/`#0000FF`), `candy-core`'s uses xterm's (`#0000EE`/`#5C5CFF`); they diverge for slots 4 and 12 only. Inside `candy-palette` one table feeds `fromAnsi256Index()`, `toAnsi16Index()` and `toAnsi16()`.
+- `fromAnsi256Index()` clamps `<0`/`>255` instead of throwing.
+- `candy-palette/tests/DegradeFidelityTest.php` pins degrade byte-exactly (identity on `38;5;n`/`48;5;n`/`58;5;n` for all 256 slots, plus channel-swap and basic/bright-collapse regressions) — update it with any table or rounding change.

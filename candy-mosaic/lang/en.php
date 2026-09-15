@@ -26,6 +26,12 @@ return [
     'image_source.too_many_redirects'   => 'Too many redirects while fetching image from URL: {url}',
     'image_source.url_host_blocked'     => 'URL host {host} resolves to a blocked private/reserved address ({ip})',
     'image_source.url_host_unresolved'  => 'URL host {host} could not be resolved to an IP address',
+    'image_source.rgb_bad_dimensions'   => 'Raw RGB dimensions must be positive, got {width}×{height}',
+    'image_source.rgb_size_mismatch'    => 'Raw RGB buffer is {actual} bytes; expected {expected}',
+    'image_source.gd_alloc_failed'      => 'GD failed to allocate a raw-RGB image buffer',
+    'image_source.gd_load_failed_from_string' => 'GD failed to decode image bytes',
+    'image_source.crop_failed'          => 'GD failed to crop the image',
+    'image_source.gd_create_failed'     => 'GD failed to create an image buffer',
 
     // DiskCache
     'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
@@ -40,6 +46,7 @@ return [
     'renderer.invalid_width'  => 'Width must be positive, got {width}',
     'renderer.invalid_height' => 'Height must be positive, got {height}',
     'renderer.gd_load_failed' => 'GD failed to load image',
+    'renderer.gd_resize_failed' => 'GD failed to resize the image',
     'renderer.gzcompress_failed' => 'gzcompress() failed — image data could not be compressed',
 
     // Chafa

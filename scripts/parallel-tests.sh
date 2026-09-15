@@ -198,6 +198,11 @@ for i in $(seq 0 $((K - 1))); do
 		echo $((SECONDS - s)) >"$OUT/wall-$i"
 		[ $rc -eq 0 ] && touch "$OUT/done-$i"
 		echo "shard $i: rc=$rc wall=$((SECONDS - s))s"
+		# The subshell MUST end on the shard's own rc: `wait` below feeds
+		# FAILED, and FAILED is what prints the failing shard's tail. A
+		# trailing command that always succeeds (the echo above is rc 0)
+		# silently swallowed every shard failure — the harness went blind.
+		exit "$rc"
 	) &
 	PIDS[$i]=$!
 done

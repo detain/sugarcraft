@@ -142,7 +142,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>PosterGrid</td><td>new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
+<tr><td>PosterGrid</td><td>static new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
 <tr><td>PosterGrid</td><td>reset(int $total): self</td><td>Begin a fresh result set — drop cached cards, return the cursor to the top</td></tr>
 <tr><td>PosterGrid</td><td>withTotal(int $total): self</td><td>Update the known total without dropping cards, clamping the cursor</td></tr>
 <tr><td>PosterGrid</td><td>withItems(array $items): self</td><td>Splice a page of cards in at their absolute indices (new cards win)</td></tr>
@@ -153,6 +153,10 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterGrid</td><td>home/end(): self</td><td>Jump the cursor to the first / last item</td></tr>
 <tr><td>PosterGrid</td><td>moveTo(int $index): self</td><td>Jump the cursor to an absolute index (e.g. an A–Z offset), clamped</td></tr>
 <tr><td>PosterGrid</td><td>visibleRange(int $overscanRows = 0): array</td><td>The inclusive [start, end] absolute-index window on screen — the need-range; [0, -1] when empty</td></tr>
+<tr><td>PosterGrid</td><td>visibleCards(int $overscanRows = 0): array</td><td>The loaded cards inside the window, keyed by absolute index — skeletons absent, order ascending</td></tr>
+<tr><td>PosterGrid</td><td>indicesNeedingPoster(int $overscanRows = 0, ?callable $isFillable = null, ?callable $isCached = null): array</td><td>Which cells to queue an async poster for — the renderer-agnostic half of the fill loop; what counts as sourceable or already cached arrives as callbacks</td></tr>
+<tr><td>PosterGrid</td><td>needsFetch(?array $lastFetched, int $overscanRows = 0): bool</td><td>Whether the visible window reaches past the range already fetched</td></tr>
+<tr><td>PosterGrid</td><td>withoutItemsOutside(array $range): self</td><td>Drop the art of cells outside the live window, so a long scroll does not hold every poster ever rendered</td></tr>
 <tr><td>PosterGrid</td><td>columns/visibleRows/totalRows/cellHeight(): int</td><td>Derived geometry of the current layout</td></tr>
 <tr><td>PosterGrid</td><td>total/loadedCount/cursorIndex/cursorRow/scrollRow(): int</td><td>Counts and cursor/scroll position accessors</td></tr>
 <tr><td>PosterGrid</td><td>item(int $index): ?PosterCard</td><td>The card at an absolute index, or null when not loaded</td></tr>
@@ -165,13 +169,21 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>Rail</td><td>focusedCard(): ?PosterCard</td><td>The card under the cursor, or null</td></tr>
 <tr><td>Rail</td><td>isEmpty(): bool</td><td>Whether the rail has no cards</td></tr>
 <tr><td>Rail</td><td>moveCursor(int $delta, int $perRow): self</td><td>Move the cursor by $delta, scrolling so it stays visible</td></tr>
-<tr><td>Rail</td><td>perRow(int $railWidth, int $cardWidth, int $spacing = 2): int</td><td>How many cards of $cardWidth fit in $railWidth at $spacing gap</td></tr>
+<tr><td>Rail</td><td>static perRow(int $railWidth, int $cardWidth, int $spacing = 2): int</td><td>How many cards of $cardWidth fit in $railWidth at $spacing gap</td></tr>
 <tr><td>Rail</td><td>render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string</td><td>Render the title plus the visible slice of cards</td></tr>
-<tr><td>PosterCard</td><td>__construct(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null)</td><td>One tile: poster area, title, and optional progress bar</td></tr>
+<tr><td>PosterCard</td><td>__construct(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null, ?string $styledTitle = null, ?string $posterImage = null, ?int $imageId = null)</td><td>One tile: poster area, title, and optional progress bar</td></tr>
 <tr><td>PosterCard</td><td>withPoster(string $ansi): self</td><td>Attach the rendered ANSI poster (e.g. when an async render resolves)</td></tr>
+<tr><td>PosterCard</td><td>withImage(string $bytes, int $id): self</td><td>Attach an overlay fill (sixel / kitty / iterm2): the card draws only the marker cell, the runtime paints the art over it</td></tr>
+<tr><td>PosterCard</td><td>withStyledTitle(string $ansi, bool $assertSafe = false): self</td><td>A pre-styled title, emitted verbatim — the caller is the trust boundary; $assertSafe guards the bytes first and throws on anything but SGR</td></tr>
+<tr><td>PosterCard</td><td>withSafeStyledTitle(string $ansi): self</td><td>The coercion half: keep the SGR, drop every other escape — and keep the plain title when only styling and ASCII blank space survive (`trim` semantics; a non-breaking space is text)</td></tr>
+<tr><td>PosterCard</td><td>static assertSafeAnsi(string $ansi): string</td><td>Return the styled title or throw — the same guard, standalone</td></tr>
 <tr><td>PosterCard</td><td>withProgress(?float $progress): self</td><td>Set (or clear) the continue-watching progress bar</td></tr>
-<tr><td>PosterCard</td><td>hasPoster(): bool</td><td>Whether a rendered poster is attached</td></tr>
+<tr><td>PosterCard</td><td>hasPoster(): bool</td><td>Whether art will actually paint here — inline text or a marker-addressed overlay</td></tr>
 <tr><td>PosterCard</td><td>render(bool $focused, int $width, int $posterHeight): string</td><td>Render a fixed-$width block: poster (or placeholder) rows, a title row, and a progress row when set</td></tr>
+<tr><td>AnsiGuard</td><td>static assertSafe(string $ansi): string</td><td>Return $ansi when it carries only SGR styling and printable text, else throw with the byte offset and hex of the offender</td></tr>
+<tr><td>AnsiGuard</td><td>static isSafe(string $ansi): bool</td><td>The same question without the exception</td></tr>
+<tr><td>AnsiGuard</td><td>static sanitize(string $ansi): string</td><td>Drop every non-SGR escape and control byte, keeping styling and text — colour may be lost, a cursor move never will be</td></tr>
+<tr><td>AnsiGuard</td><td>static stripControls(string $text): string</td><td>Drop escapes and styling alike — what a plain, untrusted title is rendered through</td></tr>
 </table>
   </div>
 </section>

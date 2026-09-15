@@ -184,29 +184,31 @@ final class StreamingInspectorTest extends TestCase
     public function testDcsSequence(): void
     {
         $inspector = new StreamingInspector();
-        // Input has trailing \x1b\\ which becomes a separate ESC sequence.
-        // The first \x1b\\ terminates the DCS; the second is leftover.
+        // The single trailing \x1b\\ in the input IS the DCS terminator: it is
+        // consumed by the DCS segment and must not reappear as a second,
+        // bare-ESC segment. Regression (SP-R2): 2 segments — DCS + ghost ESC \.
         // Also, '|' (0x7C) is NOT an intermediate byte (those are 0x20-0x2F),
         // so it becomes part of the data: ">xterm" not ">|xterm".
         $segs = $inspector->feed("\x1bP>|xterm\x1b\\");
-        $this->assertCount(2, $segs); // DCS sequence + leftover ESC \
+        $this->assertCount(1, $segs); // the DCS sequence alone
         $this->assertInstanceOf(SequenceSegment::class, $segs[0]);
         $this->assertStringContainsString('terminal version', $segs[0]->describe());
-        $this->assertInstanceOf(SequenceSegment::class, $segs[1]);
-        $this->assertSame("\x1b\\", $segs[1]->raw());
+        // The terminator survives exactly once, inside the DCS segment.
+        $this->assertSame(1, substr_count($segs[0]->raw(), "\x1b\\"));
+        $this->assertStringEndsWith("\x1b\\", $segs[0]->raw());
     }
 
     public function testApcSequence(): void
     {
         $inspector = new StreamingInspector();
-        // Input has trailing \x1b\\ which becomes a separate ESC sequence.
-        // The first \x1b\\ terminates the APC; the second is leftover.
-        $segs = $inspector->feed("\x1b_candyzone:S:btn\x1b\\");
-        $this->assertCount(2, $segs); // APC sequence + leftover ESC \
+        // Same terminator contract as the DCS case above: one APC segment whose
+        // raw bytes already end in the ST, no ghost `ESC \` behind it.
+        $input = "\x1b_candyzone:S:btn\x1b\\";
+        $segs = $inspector->feed($input);
+        $this->assertCount(1, $segs); // APC sequence only
         $this->assertInstanceOf(SequenceSegment::class, $segs[0]);
+        $this->assertSame($input, $segs[0]->raw());
         $this->assertStringContainsString('CandyZone marker', $segs[0]->describe());
-        $this->assertInstanceOf(SequenceSegment::class, $segs[1]);
-        $this->assertSame("\x1b\\", $segs[1]->raw());
     }
 
     // --- Step 9: streaming matches one-shot for C0, split CSI, APC, underline colon ---

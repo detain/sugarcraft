@@ -8288,12 +8288,21 @@ final class Chat implements Model
     private static function sanitizeSessionTitle(string $raw): string
     {
         $text = preg_replace('#<think>.*?</think>#is', '', $raw) ?? $raw;
-        // OSC (…BEL or ST terminated) before CSI, so an OSC payload
-        // containing bracket bytes isn't shredded into visible garbage.
-        $text = preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)?/', '', $text) ?? $text;
-        $text = preg_replace('/\x1b[@-_][0-?]*[ -\/]*[@-~]?/', '', $text) ?? $text;
-        // Everything else in C0 except the newlines the line split needs.
-        $text = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $text) ?? $text;
+        // Route the whole ECMA-48 escape family through the canonical, C1-aware
+        // sanitizer (`Ansi::strip()` + a C0/DEL sweep), the same hardened source
+        // {@see reportField()} and {@see sanitizeSessionField()} in this class
+        // already call. The pre-hardening regexes this replaces matched only
+        // \x1b-led OSC/CSI plus the C0 block, so an 8-bit C1 introducer (`\x9b`
+        // CSI, `\x9d` OSC, `\x90` DCS, `\x9f` APC) or an unterminated DCS/APC
+        // payload — a `DCS`-led sixel, a `\x9b` cursor-move, a nested `\x1b]0;`
+        // title re-wrap — slid straight through the guard into the tab strip,
+        // where a real terminal repaints it. `Sanitize::untrusted()` is a strict
+        // superset: strip every escape in 7-bit AND 8-bit form (fail-closed on
+        // truncation), then drop C0/DEL while keeping \t \n \r. Newlines survive
+        // only to be split on below, so the single-line-title contract is
+        // byte-for-byte unchanged; see docs/research/ansi-tmux-ansicode-audit.md
+        // #9 for the escape-family taxonomy this closes against.
+        $text = Sanitize::untrusted($text);
 
         foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $line) {
             $line = trim($line);

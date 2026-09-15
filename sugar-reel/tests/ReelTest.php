@@ -50,7 +50,7 @@ final class ReelTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Remote host not in allowlist');
-        Reel::openUrl('https://evil.example/media/stream', ['trusted.example']);
+        Reel::openUrl('https://evil.example/media/stream', allowedHosts: ['trusted.example']);
     }
 
     /**
@@ -58,7 +58,7 @@ final class ReelTest extends TestCase
      */
     public function testOpenUrlWithAllowlistAcceptsAllowlistedHost(): void
     {
-        $reel = Reel::openUrl('https://trusted.example/media/stream', ['trusted.example']);
+        $reel = Reel::openUrl('https://trusted.example/media/stream', allowedHosts: ['trusted.example']);
         $this->assertSame('https://trusted.example/media/stream', $reel->path());
         $this->assertSame(['trusted.example'], $reel->allowedHosts());
     }
@@ -68,7 +68,7 @@ final class ReelTest extends TestCase
      */
     public function testOpenUrlAllowlistIsCaseInsensitive(): void
     {
-        $reel = Reel::openUrl('https://TRUSTED.Example/s.mkv', ['trusted.example']);
+        $reel = Reel::openUrl('https://TRUSTED.Example/s.mkv', allowedHosts: ['trusted.example']);
         $this->assertSame('https://TRUSTED.Example/s.mkv', $reel->path());
     }
 

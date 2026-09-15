@@ -40,7 +40,9 @@ final class ScreenHandlerTest extends TestCase
 
     public function testCursorClampsAtRightEdgeWithoutWrap(): void
     {
-        $h = $this->feed('ABCDEF', cols: 4);
+        // DECAWM is power-on default now — disable explicitly to exercise
+        // the no-wrap clamp path this test exists for.
+        $h = $this->feed("\x1b[?7lABCDEF", cols: 4);
         // 'A','B','C','D' fill cols 0-3; 'E' overwrites col 3 (clamp); 'F' overwrites col 3.
         $this->assertSame('F', $h->buffer->cell(0, 3)->grapheme);
         $this->assertSame(3, $h->cursor->col);

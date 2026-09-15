@@ -91,8 +91,12 @@ final class KeyModifier
     }
 
     /**
-     * Build a modifier mask from a raw integer (Kitty format: bit 0=Shift,
-     * bit 1=Alt, bit 2=Control, bit 3=Meta, bit 4=Super, bit 5=Hyper).
+     * Build a modifier mask from a raw kitty modifier bitmask (bits already
+     * de-based by the caller: the wire field is 1 + mask). Bit layout per the
+     * kitty keyboard protocol: bit 0=Shift, bit 1=Alt, bit 2=Control,
+     * bit 3=Super, bit 4=Hyper, bit 5=Meta.
+     *
+     * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ - modifier keys
      */
     public static function fromKittyInt(int $raw): self
     {
@@ -100,9 +104,9 @@ final class KeyModifier
         if ($raw & 1)  { $mask |= self::SHIFT; }
         if ($raw & 2)  { $mask |= self::ALT; }
         if ($raw & 4)  { $mask |= self::CTRL; }
-        if ($raw & 8)  { $mask |= self::META; }
-        if ($raw & 16) { $mask |= self::SUPER; }
-        if ($raw & 32) { $mask |= self::HYPER; }
+        if ($raw & 8)  { $mask |= self::SUPER; }
+        if ($raw & 16) { $mask |= self::HYPER; }
+        if ($raw & 32) { $mask |= self::META; }
 
         return new self($mask);
     }

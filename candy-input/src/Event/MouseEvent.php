@@ -8,7 +8,7 @@ use SugarCraft\Input\Event;
 use SugarCraft\Input\KeyModifier;
 
 /**
- * A mouse event (SGR 1006).
+ * A mouse event (SGR 1006 / X10).
  *
  * @see Mirrors charmbracelet/bubbletea (input handling).
  * @readonly
@@ -61,5 +61,17 @@ final readonly class MouseEvent implements Event
     public static function scrollDown(int $x, int $y, ?KeyModifier $modifiers = null): self
     {
         return new self($x, $y, 97, self::ACTION_SCROLL, $modifiers ?? KeyModifier::none());
+    }
+
+    /** Horizontal wheel left (SGR/X10 wire button code 66; stored as 98) */
+    public static function scrollLeft(int $x, int $y, ?KeyModifier $modifiers = null): self
+    {
+        return new self($x, $y, 98, self::ACTION_SCROLL, $modifiers ?? KeyModifier::none());
+    }
+
+    /** Horizontal wheel right (SGR/X10 wire button code 67; stored as 99) */
+    public static function scrollRight(int $x, int $y, ?KeyModifier $modifiers = null): self
+    {
+        return new self($x, $y, 99, self::ACTION_SCROLL, $modifiers ?? KeyModifier::none());
     }
 }

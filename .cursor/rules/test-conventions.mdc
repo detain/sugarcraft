@@ -16,6 +16,7 @@ Patterns (`sugar-bits/tests/`, `candy-core/tests/`, `candy-vt/tests/`):
 - **Snapshot cell-grid** — drive through `SugarCraft\Vt\Terminal\Terminal`, assert `$term->screen()->cell($r,$c)` (`$screen->cols`/`rows` are properties).
 - **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]`.
 - **Coercion** — negative/oversized index, empty, null; assert clamp/no-op.
+- **Cross-lib parity** — `candy-vcr/tests/VtParityTest.php` diffs the `candy-vcr` renderer against `candy-vt` and must pass against BOTH the linked monorepo `candy-vt` and the stale Packagist `dev-master` CI resolves. Gate version-dependent arms on a feature marker (`Scrollback::clear()`) via the `vtCarriesMarker()` helper — a literal `\method_exists()` constant-folds under PHPStan into an always-true/always-false report.
 - **Documentation drift** — `sugar-crush/tests/Config/ReadmeRosterDriftTest.php`, `EnvRosterDriftTest.php`, `TrustKeyDocumentationDriftTest.php`, `sugar-crush/tests/Commands/KeyBindingDriftTest.php` re-derive `sugar-crush/README.md` + `sugar-crush/docs/*.md` rosters from `sugar-crush/src/`. New tool/command/env var/key binding without the doc edit = red.
 
 **Stream-write gotcha**: don't `ftruncate; rewind;` between writes. Slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical `candy-core/tests/RendererTest.php`).

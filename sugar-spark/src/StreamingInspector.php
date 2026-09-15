@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Spark;
 
-use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Ansi\Parser\Parser;
 
 /**
@@ -26,16 +25,15 @@ use SugarCraft\Ansi\Parser\Parser;
  */
 final class StreamingInspector
 {
-    /** Persistent ANSI parser. */
-    private Parser $parser;
-
-    /** Segment-collecting handler backed by $this. */
+    /**
+     * Segment-collecting handler, owning the incremental parser it drives so
+     * one-shot and streaming runs share one byte-fidelity implementation.
+     */
     private AnsiHandler $handler;
 
     public function __construct()
     {
         $this->handler = new AnsiHandler();
-        $this->parser = new Parser($this->handler);
     }
 
     /**
@@ -46,30 +44,25 @@ final class StreamingInspector
      */
     public function feed(string $data): array
     {
-        $this->parser->feed($data);
+        $this->handler->feed($data);
         return $this->handler->drainSegments();
     }
 
     /**
      * Flush any remaining buffered text and finalise pending sequences.
      *
-     * A bare ESC at the end of the stream (e.g. "\x1b" with no following byte)
-     * is emitted as its own SequenceSegment.  A buffered SS3 intermediate
-     * (ESC O with no final byte) is also emitted.
+     * A bare ESC at the end of the stream (e.g. "\x1b" with no following byte),
+     * a buffered SS3 intermediate (ESC O with no final byte) and the exact
+     * bytes of any sequence the stream never completed are emitted as their own
+     * SequenceSegments, so no *dangling tail* the caller sent goes unreported.
+     * (Bytes candy-ansi drops before dispatch — the losses `README.md` lists —
+     * never reach this method and are not reported by it.)
      *
      * @return list<Segment>
      */
     public function finish(): array
     {
-        // Capture the parser state BEFORE flush(): flush() resets it to Ground,
-        // so a post-flush check would never observe State::Escape and a trailing
-        // bare ESC would be silently dropped. finishPending() then flushes any
-        // remaining text and emits the bare ESC / dangling SS3 tail via public
-        // AnsiHandler API — no reaching into private/protected members.
-        $stateBeforeFlush = $this->parser->currentState();
-        $this->parser->flush();
-
-        $this->handler->finishPending($stateBeforeFlush);
+        $this->handler->finish();
 
         $out = $this->handler->drainSegments();
         $this->handler->reset();

@@ -178,6 +178,7 @@ sugar-crush/tests/Cli/HeadlessPermissionPromptAttachmentTest.php	0.213	29
 sugar-crush/tests/Commands/SlashDispatchTest.php	0.202	18
 sugar-crush/tests/Context/RepoMapBlockTest.php	0.189	68
 sugar-crush/tests/Support/ForkedChildTest.php	0.189	2
+sugar-crush/tests/Tools/PtyShimAutoloadResolutionTest.php	0.187	8
 sugar-crush/tests/App/AppModelTest.php	0.175	60
 sugar-crush/tests/StdinConstantReaderCensusTest.php	0.170	23
 sugar-crush/tests/MCP/McpClientStartedSnapshotTest.php	0.169	6
@@ -527,3 +528,4 @@ sugar-crush/tests/Chat/LengthStopTranscriptNoticeTest.php	0.000	3
 sugar-crush/tests/Cli/HeadlessPermissionPromptStdinDefaultTest.php	0.000	3
 sugar-crush/tests/Providers/CompleteResponseUsageCarrierTest.php	0.000	4
 sugar-crush/tests/AssistantMsgTest.php	0.000	2
+sugar-crush/tests/Chat/SessionTitleSanitizeTest.php	0.009	9

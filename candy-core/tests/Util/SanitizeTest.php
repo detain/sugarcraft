@@ -180,9 +180,20 @@ final class SanitizeTest extends TestCase
 
     public function testUntrustedStripsLoneC1Bytes(): void
     {
-        // A lone 0x80 with an ASCII predecessor is a malformed C1 byte.
+        // A lone 0x80 (PAD) with an ASCII predecessor is a single-byte
+        // malformed C1 control: removed, following text survives. A lone
+        // 0x9C (ST) likewise. (ANSI audit defect #9: before the fix, ANY
+        // 0x80-0x9F byte made the /u preg fail and the `?? $stripped`
+        // fallback let every C0 control — BEL included — pass through.)
         $this->assertSame('ab', Sanitize::untrusted("a\x80b"));
-        $this->assertSame('ab', Sanitize::untrusted("a\x9fb"));
+        $this->assertSame('ab', Sanitize::untrusted("a\x9cb"));
+        // The remaining C1 bytes are 8-bit introducers: ECMA-48 makes them
+        // string/sequence openers, and an unterminated one runs to end of
+        // input — fail-closed, the trailing text is payload, not survivors.
+        $this->assertSame('a', Sanitize::untrusted("a\x9fb"));   // APC
+        $this->assertSame('a', Sanitize::untrusted("a\x9db"));   // OSC
+        $this->assertSame('a', Sanitize::untrusted("a\x90b"));   // DCS
+        $this->assertSame('a', Sanitize::untrusted("a\x9bb"));   // CSI
     }
 
     public function testUntrustedPreservesValidUtf8IncludingC1CodePoints(): void

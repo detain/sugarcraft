@@ -277,6 +277,98 @@ final class ImageSource
     }
 
     /**
+     * Ingest a raw RGB24/RGBA scanline buffer with no container format.
+     *
+     * Decoders that already hold decoded pixels (a video frame, a generator
+     * canvas) can hand them straight over instead of paying a container
+     * round-trip (`imagepng()` → `fromString()`) per frame. The buffer is
+     * rastered into a truecolor GD image in a single O(n) pass and encoded
+     * once through {@see self::fromGd()}, so the resulting ImageSource is a
+     * PNG container identical to what that round-trip would have produced —
+     * minus the intermediate encode.
+     *
+     * `$hasAlpha` selects RGBA (4 bytes/pixel, 255 = opaque); without it the
+     * buffer is RGB24 (3 bytes/pixel). Length must match exactly — a short
+     * or long buffer is a caller bug and fails loud.
+     *
+     * @param string $bytes     Raw scanline buffer, row-major, w×h×(3|4) bytes.
+     * @param int    $width     Pixel width  (> 0).
+     * @param int    $height    Pixel height (> 0).
+     * @param bool   $hasAlpha  True for RGBA32, false for RGB24.
+     * @param int    $maxPixels Pixel ceiling (same semantics as the other
+     *                          ingress factories); a trusted decoder with a
+     *                          known-small frame grid may lower it.
+     * @throws \RuntimeException          if ext-gd is not available
+     * @throws \InvalidArgumentException  if dimensions are non-positive, the
+     *                                    buffer length doesn't match w×h×(3|4),
+     *                                    or the pixel count exceeds $maxPixels
+     */
+    public static function fromRgb(string $bytes, int $width, int $height, bool $hasAlpha = false, int $maxPixels = self::MAX_PIXELS): self
+    {
+        if (!extension_loaded('gd')) {
+            throw new \RuntimeException(Lang::t('image_source.no_gd'));
+        }
+
+        if ($width <= 0 || $height <= 0) {
+            throw new \InvalidArgumentException(Lang::t('image_source.rgb_bad_dimensions', [
+                'width'  => $width,
+                'height' => $height,
+            ]));
+        }
+
+        $channels = $hasAlpha ? 4 : 3;
+        $expected = $width * $height * $channels;
+        if (strlen($bytes) !== $expected) {
+            throw new \InvalidArgumentException(Lang::t('image_source.rgb_size_mismatch', [
+                'expected' => $expected,
+                'actual'   => strlen($bytes),
+            ]));
+        }
+
+        // Decompression-bomb parity with the container paths: a huge declared
+        // canvas is refused before GD allocates the pixel buffer.
+        self::guardPixelCount($width, $height, $maxPixels);
+
+        $img = imagecreatetruecolor($width, $height);
+        if ($img === false) {
+            throw new \RuntimeException(Lang::t('image_source.gd_alloc_failed'));
+        }
+
+        if ($hasAlpha) {
+            // Write pixels verbatim (no blending against the black default) and
+            // carry the alpha byte through to the PNG encode in fromGd().
+            imagealphablending($img, false);
+            imagesavealpha($img, true);
+        }
+
+        $offset = 0;
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                $r = ord($bytes[$offset]);
+                $g = ord($bytes[$offset + 1]);
+                $b = ord($bytes[$offset + 2]);
+                // Truecolor images accept the packed 0xRRGGBB int directly —
+                // no palette allocation, no per-pixel array.
+                $color = ($r << 16) | ($g << 8) | $b;
+                if ($hasAlpha) {
+                    // Byte alpha is 0..255 opaque-at-255; GD wants 0..127
+                    // opaque-at-0. Integer scale keeps the pass allocation-free.
+                    $a = intdiv((255 - ord($bytes[$offset + 3])) * 127, 255);
+                    $color = imagecolorallocatealpha($img, $r, $g, $b, $a);
+                }
+                imagesetpixel($img, $x, $y, $color);
+                $offset += $channels;
+            }
+        }
+
+        try {
+            return self::fromGd($img, 'image/png', $maxPixels);
+        } finally {
+            imagedestroy($img);
+        }
+    }
+
+    /**
      * Load from a remote URL synchronously.
      *
      * Fetches the bytes with PHP stream wrappers (`file_get_contents`), so

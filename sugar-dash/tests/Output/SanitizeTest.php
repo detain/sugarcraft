@@ -103,10 +103,18 @@ final class SanitizeTest extends TestCase
 
     public function testStripC1ControlBytes(): void
     {
-        // C1 range: \x80-\x9f (including delta, inquiry, etc.)
-        $dirty = "start\x80\x81\x82middle\x9e\x9fend";
+        // Single C1 controls (\x80 PAD, \x81 HOP, \x82 BPH) are removed and
+        // surrounding text survives.
+        $dirty = "start\x80\x81\x82middle";
         $clean = Sanitize::untrusted($dirty);
-        $this->assertSame('startmiddleend', $clean);
+        $this->assertSame('startmiddle', $clean);
+
+        // \x9e is the 8-bit PM (Privacy Message) STRING OPENER: per ECMA-48
+        // everything up to ST is its payload — fail-closed, the unterminated
+        // tail goes with it (ANSI audit defect #9; the old byte-by-byte C1
+        // sweep used to strip \x9e alone and release `end` as "safe" text).
+        $dirty = "start\x9e\x9fend";
+        $this->assertSame('start', Sanitize::untrusted($dirty));
     }
 
     public function testStripDeleteByte(): void
