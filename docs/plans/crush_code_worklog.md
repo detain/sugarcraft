@@ -11598,6 +11598,63 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 82 (2026-09-15) — PHASE 4 (sibling-lib audit sweep) ships COMPLETE: eighteen lanes q1–q18 across six waves + closeout mint, fourteen mints E711–E728 ALL CLOSED; sugar-crush floor UNCHANGED 11,991 / 172,291 — the first sibling-lib round that moved ZERO sugar-crush tests; ACTIONABLE = 0 BY ROW CENSUS — PHASE-4 COMPLETE
+
+**Closed 2026-09-15 at the FINAL weld `e765b1742`-base chain; NEVER pushed.** The round the campaign
+leaned entirely on the OTHER 51 libs: phase-4 opened with three scoping probes (audit-material inventory,
+repo-wide tool+pattern sweep, suite-health sample, operator m0225 directive), minted E711–E720 at
+`279daf7bc`, and closed them plus five closeout mints E724–E728 (from the E720/q5 residual ledger, minted
+at `e765b1742`) over six waves.
+
+### The wave ledger
+
+| wave | lanes → picks | closures | weld/closeout |
+|---|---|---|---|
+| 1 | q1 `42a46a3e6`→`3336bea5f`, q2 `35430bfb2`→`05f155145`, q3 `15cb07ec6`→`2fc01a77e`, q4 `044dac54a`→`8df8c26d8`, q6 `3ca9273ab`→`174a12447` | E711, E712, E713, E715, E719 CLOSED-in-place | companion fold `5c3bb3d1c` |
+| 2 | q7 `e49040de3`→`364c43b16`, q8 `700cbb2fb`→`57a270cb1`, q9 `c1a914e64`+`09c58d6c5`→`2dfeaf3b4`+`87c3f5ab4`, q5 `d57b34b5e`→`3d053be7b` | E716, E718, E720 CLOSED-MARKS, E723-dash-half | corruption repair `d51bb2a6f` + companion fold `269101e30` → weld 2214ee8d4-era |
+| 3 | q10 `291b822e0`→`38a284716`, q11 `17c7bb29b`→`4436e7ebc`, q12 `d894850d3`+`e59435108`→`4f6637d1c`+`bd07426d2` | E717, E721, E722 CLOSED-in-place (census survivor: E714) | mosaic reword `61d7d7deb` + stamps `6c2faaaac` + citation fix-up `2214ee8d4` |
+| — | closeout mint `e765b1742` | E720's 20 residuals → five rows E724–E728 minted (+E714 carried) | — |
+| 3b | q13 `2960463a6`→`c66df93b9`, q14 `955c04f85`→`37db286ba`, q15 `2b12ead28`→`b797b6d39`, q16 `8ce0df6ce`→`fb9f813ac`, q17 `22734813c`→`3d8c0d533`, q18 `051675b6e`→`fb7ec3ac5` | E714, E724, E725, E726, E727, E728 — ALL CLOSED; census 0 | companions `395bfe60a` (rv-q14 MINOR-2 comment truth) + `3079dbea2` (rv-q18 m1 OSC-52 cite) |
+
+### Per-lib suite figures at the FINAL weld (all linked, plain pipe)
+
+sugar-glow **89/142** (+18), candy-vcr **775/3531/14S** (+7 over E712's 768), candy-vt **607/2388** (+5),
+sugar-dash **5955/9794/1S** (+6 over the E723 5949), candy-wish **199/501** (+6), candy-input 307/40762/1S,
+candy-pty 663/1862/1W(base-carry)/17S, candy-core 862/7646/27S, candy-serve 354/875, sugar-reel 361/2473/1S,
+candy-mosaic 465/7783/6S, candy-query 1483/4203, sugar-skate 206/427 (audit-only); sugar-crush
+**11,991 / 172,291 / 0F / 0E / 1S (McpClientTest canary) / EXIT 0 — UNCHANGED**: a sibling-lib round that
+touched ZERO sugar-crush files moved ZERO sugar-crush figures (q15's eight candy-vcr test rebinds are the
+closest approach; the `Vt|Terminal|Buffer` filter re-measured byte-identical 288T/20970A).
+`tools/check-child-lifetimes.php` + `check-path-repos.php --no-lib-path-repos` rc=0 at tip; config.json md5
+`05480c743aff302fd6c06c5a4a4c2210` start==end.
+
+### Death modes, salvages and the three lessons
+
+(1) **q4 one-resume salvage**: the builder blanked once; RESUME same task_id landed everything (rule held).
+(2) **q15 five-blank-then-self-completion**: the lane died mid-REPORT with ALL work already committed —
+the reviewer reconstructed the lane REPORT from the tree, and the merge reconciled the disclosed cross-lane
+overlap (CellGrid-consuming candy-vcr test rebinds, DISJOINT files from q14's Hook work) with zero conflicts.
+Land-verify-over-reports converted a dead session into a shipped item.
+(3) **q11 commit-message FICTION**: the message claimed a precedence bug (`$packData ?? null === null`) that
+never existed in any committed blob — the REAL fix (overflow path lacked terminate) was restated in the
+backlog stamp; the pick message itself was NOT rewritten (precedent-law: never rewrite landed history,
+disclose instead). rv-q17's stuck session (repeated garbage replies — the dead-session NOT-blank mode)
+was superseded by a fresh rv-q17b review rather than an 11th resume, the boundary the ≤10-resume rule
+leaves open.
+
+### Notable verdicts
+
+E720's verdict pass (q5) was a READ-ONLY lane that minted the whole wave-3 roster from its residual ledger.
+E724 re-refuted the mint brief's `false`-return premise by live measurement (preg_replace returns NULL).
+E725's orchestrator VOID ruling on `CellGrid::set` is quoted verbatim in the docblock; the invariant test
+caught a REAL pre-lane leaveAltScreen Mode-mirror divergence. E726's FIX-vs-CONTRACT split left three of
+four items pin-only (both mint errata held). E727's contract verdict (fresh-process-per-connection) refused
+the timeout and found the EOF auth hole live. E728 consumed the six 🔀 MOVED marks — ✅3/⏭️3/❗0.
+Three future-options recorded un-minted at the stamps: candy-vcr phpunit.xml failOnWarning (own-measured-
+lane candidate), sugar-dash Meter/GaugeCircle render-clamps (same family as E726-4), wish `SHELL=`
+set-but-empty pin. The deferred FLAG list survives: vt dual-Cell/Buffer unification, wish async-core
+restructure, dash AbstractChart/COMP-2, mosaic sixel-default.
+
 ## ROUND 81 (2026-09-14) — PHASE 3 (operator UX findings) ships COMPLETE: all seven mints E704–E710 CLOSED by lanes pa–pg in three waves; floor moves 11,870 → 11,991 (+121T); ACTIONABLE drops to ZERO again — PHASE-3 COMPLETE
 
 **Closed 2026-09-14.** Seven lanes, ALL reviewed BEFORE merge: pa APPROVE 0C/0M/1MINOR;
