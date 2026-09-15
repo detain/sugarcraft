@@ -36,7 +36,8 @@ use SugarCraft\Crush\Tools\ToolResult;
  * serialize boundary so the async half of the app tells the same truth as the
  * sync half.
  *
- * HOME is redirected to a sandbox for the whole class (same convention as
+ * HOME is redirected to a sandbox for the whole class on BOTH spellings —
+ * the process environment and the superglobal (same convention as
  * EngineBackendParallelConfigTest), so nothing here can read or write the
  * real ~/.sugar-crush/config.json.
  */
@@ -46,6 +47,8 @@ final class EngineBackendLengthStopTest extends TestCase
 
     private string|false $originalHome;
 
+    private mixed $originalServerHome = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -54,7 +57,9 @@ final class EngineBackendLengthStopTest extends TestCase
         mkdir($this->sandboxDir . '/home', 0o700, true);
 
         $this->originalHome = getenv('HOME');
+        $this->originalServerHome = $_SERVER['HOME'] ?? null;
         putenv('HOME=' . $this->sandboxDir . '/home');
+        $_SERVER['HOME'] = $this->sandboxDir . '/home';
     }
 
     protected function tearDown(): void
@@ -63,6 +68,12 @@ final class EngineBackendLengthStopTest extends TestCase
             putenv('HOME');
         } else {
             putenv('HOME=' . $this->originalHome);
+        }
+
+        if (null === $this->originalServerHome) {
+            unset($_SERVER['HOME']);
+        } else {
+            $_SERVER['HOME'] = $this->originalServerHome;
         }
 
         $this->removeSandboxTree();

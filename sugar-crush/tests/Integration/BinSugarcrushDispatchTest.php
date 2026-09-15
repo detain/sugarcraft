@@ -1413,15 +1413,6 @@ final class BinSugarcrushDispatchTest extends TestCase
     }
 
     /**
-     * E678 — `mcp list --output-format json` rows are truthful to the LIVE
-     * inventory: every server row carries the `wirePrefix` the permission
-     * grammar actually matches, computed from that row's own name. The rows
-     * enumerate FROM the fixture (identity-spelled and rewritten servers
-     * asserted by the same rule), so another server added to the fixture is
-     * covered without a new line here — the guard grows with the roster
-     * (E191 discipline), and a hard-coded current roster could not.
-     */
-    /**
      * E710 — the real binary, real argv, real streams: `mcp import` prints the
      * translated block on STDOUT and nothing else, narrates its renames on
      * stderr, names where the block belongs, and writes no file anywhere.
@@ -1483,6 +1474,15 @@ final class BinSugarcrushDispatchTest extends TestCase
         $this->assertSame('', $result['stdout'], 'a refused door must print nothing on the document channel');
     }
 
+    /**
+     * E678 — `mcp list --output-format json` rows are truthful to the LIVE
+     * inventory: every server row carries the `wirePrefix` the permission
+     * grammar actually matches, computed from that row's own name. The rows
+     * enumerate FROM the fixture (identity-spelled and rewritten servers
+     * asserted by the same rule), so another server added to the fixture is
+     * covered without a new line here — the guard grows with the roster
+     * (E191 discipline), and a hard-coded current roster could not.
+     */
     public function testMcpListJsonRowsCarryTheirLiveWireNames(): void
     {
         $home = $this->privateHome();

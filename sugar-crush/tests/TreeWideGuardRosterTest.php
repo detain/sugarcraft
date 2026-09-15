@@ -577,6 +577,7 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/BootstrapToolAndPermissionSettingsTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/BootstrapTrustGateSelfGrantTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'scandir($probe)'],
         'Cli/RulesStateWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Context/EnvironmentBlockTest.php' => ['scandir($dir)'],
         'Integration/BinSugarcrushAutoloadGuardTest.php' => ['scandir($dir)'],
