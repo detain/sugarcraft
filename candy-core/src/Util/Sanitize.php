@@ -97,10 +97,10 @@ final class Sanitize
 
     /**
      * Strip all C0 control bytes (\x00–\x1f) and C1 (\x80–\x9f)
-     * except \n (\x0a) and \t (\x09), and remove every escape sequence
-     * — CSI/OSC/SGR introduced by \x1b, the 8-bit C1 forms (\x9b CSI,
-     * \x90 DCS, \x9d OSC, \x9f APC …), and string-sequence payloads
-     * (DCS/SOS/PM/APC, sixel and Kitty included).
+     * except \t (\x09), \n (\x0a) and \r (\x0d), and remove every escape
+     * sequence — CSI/OSC/SGR introduced by \x1b, the 8-bit C1 forms
+     * (\x9b CSI, \x90 DCS, \x9d OSC, \x9f APC …), and string-sequence
+     * payloads (DCS/SOS/PM/APC, sixel and Kitty included).
      *
      * Use this on any string that originates from an external process,
      * network response, or user-controlled source before writing to the

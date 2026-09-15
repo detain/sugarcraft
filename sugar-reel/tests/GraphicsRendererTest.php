@@ -144,7 +144,7 @@ final class GraphicsRendererTest extends TestCase
     }
 
     /**
-     * @testdox Kitty output (when non-empty) starts with DCS kitty header \x1b[_
+     * @testdox Kitty output (when non-empty) starts with the APC G header \x1b_G
      */
     public function testKittyOutputContainsKittyHeader(): void
     {
@@ -155,9 +155,12 @@ final class GraphicsRendererTest extends TestCase
             $this->markTestSkipped('Kitty protocol returned empty — skipping header check');
         }
 
-        // DCS kitty intro: ESC P (0x1b 0x50) — the Kitty protocol uses DCS (0x1b 0x50)
-        // followed by 'q' (graphics command) and 'c=<w>,r=<h>' as the first payload chunk.
-        $this->assertStringStartsWith("\x1bPqc=", $output, 'Kitty output should begin with DCS kitty header qc=');
+        // APC kitty intro: ESC _ G (0x1b 0x5f 0x47) — the Kitty graphics
+        // protocol is APC-framed (xterm ctlseqs `ESC _`), followed by the
+        // `c=<w>,r=<h>,f=100,m=1;` begin chunk. (The old DCS `ESC P q` pin
+        // here was the DECSIXEL introducer — ANSI audit defect #10, fixed
+        // in candy-core kittyGraphicsBegin.)
+        $this->assertStringStartsWith("\x1b_Gc=", $output, 'Kitty output should begin with APC kitty header _Gc=');
     }
 
     /**
@@ -226,7 +229,7 @@ final class GraphicsRendererTest extends TestCase
 
         $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
 
-        $this->assertStringStartsWith("\x1bPqc=", $output);
+        $this->assertStringStartsWith("\x1b_Gc=", $output);
     }
 
     /**

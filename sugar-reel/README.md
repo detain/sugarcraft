@@ -73,7 +73,7 @@ SUGAR_REEL_COLS=120 SUGAR_REEL_ROWS=40 php examples/play.php
 | `truecolor` | 24-bit RGB truecolor | 24-bit color |
 | `halfblock` | 24-bit `▀` half-blocks, 2× vertical resolution | 24-bit color |
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
-| `kitty` | Kitty graphics protocol (DCS APC) | Kitty-compatible |
+| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |
 | `auto` | Probe terminal, pick best available (default) | — |
 

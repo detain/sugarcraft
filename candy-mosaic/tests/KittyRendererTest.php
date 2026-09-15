@@ -37,7 +37,7 @@ final class KittyRendererTest extends TestCase
         // and the begin frame opens the transaction with m=1 (ANSI audit:
         // the old DCS `ESC P q` header was DECSIXEL and never activated
         // Kitty graphics).
-        $this->assertStringStartsWith("\x1b_Gc=8,r=4,m=1;\x1b\\", $out);
+        $this->assertStringStartsWith("\x1b_Gc=8,r=4,f=100,m=1;\x1b\\", $out);
         $this->assertStringContainsString('c=8', $out);    // cell columns
         $this->assertStringContainsString('r=4', $out);    // cell rows
     }

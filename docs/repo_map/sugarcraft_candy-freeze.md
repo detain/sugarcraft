@@ -357,4 +357,4 @@ The package is at the **output edge** of the rendering pipeline — it produces 
 - `src/WindowStyle.php:12` — Enum cases: Macos, WindowsTerminal, ITerm2, Hyper, None
 - `src/Lang.php:18` — Extends `SugarCraft\Core\I18n\Lang` with namespace `'freeze'`
 - `bin/candyfreeze:67` — Theme name matching with kebab-case normalization
-- `candy-core/src/Util/Ansi.php:622` — `Ansi::strip()` used for visible-width computation
+- `candy-core/src/Util/Ansi.php:684` — `Ansi::strip()` used for visible-width computation

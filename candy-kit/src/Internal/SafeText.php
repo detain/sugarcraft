@@ -24,10 +24,12 @@ final class SafeText
     /**
      * Strip escape sequences and control bytes from a one-line display string.
      *
-     * {@see Ansi::strip()} removes CSI / OSC / lone-ESC sequences; the second
-     * pass drops the remaining C0 control bytes (0x00-0x1f) and DEL (0x7f).
-     * Every removed byte is pure ASCII, so multi-byte UTF-8 — whose lead and
-     * continuation bytes are all >= 0x80 — is preserved untouched, and clean
+     * {@see Ansi::strip()} removes every escape sequence in 7-bit and 8-bit
+     * form — CSI / OSC / DCS / SOS / PM / APC payloads, string-terminator
+     * controls, and lone C1 bytes; the second pass drops the remaining C0
+     * control bytes (0x00-0x1f) and DEL (0x7f). Multi-byte UTF-8 survives
+     * untouched (its C1-range continuation bytes sit inside fully
+     * well-formed sequences), and clean
      * printable text is returned identical.
      */
     public static function line(string $s): string

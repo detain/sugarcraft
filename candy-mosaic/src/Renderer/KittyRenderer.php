@@ -43,6 +43,11 @@ final class KittyRenderer implements Renderer
         $out = Ansi::kittyGraphicsBegin([
             'c' => $width,
             'r' => $effectiveHeight,
+            // f=100 declares the payload as PNG. An absent `f` means raw
+            // RGBA pixels in the Kitty protocol — harmless while this
+            // renderer emitted sixel-shaped DCS garbage, mandatory now
+            // that the APC frames actually activate the graphics path.
+            'f' => 100,
         ]);
 
         foreach ($chunks as $idx => $chunk) {
