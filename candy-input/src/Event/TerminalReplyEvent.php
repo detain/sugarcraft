@@ -29,6 +29,10 @@ use SugarCraft\Input\Event;
  * other unhandled Event; bytes it carries are already consumed, so the input
  * stream stays in sync either way.
  *
+ * No upstream charmbracelet counterpart — this is a SugarCraft drain extension
+ * that makes input-stream poisoning observable (bubbletea silently discards
+ * replies; here they surface as a typed Event with an exact raw byte record).
+ *
  * @see xterm control sequences — Device Attributes, CSI 6 n, CSI ... t:
  *      https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
  * @see Kitty keyboard protocol — flag query/review `CSI ? flags u`:

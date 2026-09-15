@@ -8,7 +8,7 @@ Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboa
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
 - **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape
-- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (release via the legacy `0x20` flag or the spec `:event-type` sub-param)
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param)
 - **SGR 1006 mouse** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
@@ -101,7 +101,7 @@ surfaces it as a `TerminalReplyEvent`:
 | `dsr-status` | `CSI 0 n` | DSR "is terminal OK" reply |
 | `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
 | `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | kitty keyboard flags query/reply |
-| `mode-report` | `CSI ? mode ; status $ y` | DECRPM mode report |
+| `mode-report` | `CSI ? mode ; status $ y` (public `CSI mode ; status $ y` too) | DECRPM mode report |
 | `csi-private` | any other complete `CSI ? …` / `CSI > …` | private-mode sequence, drained |
 | `string` | `OSC / DCS / APC / PM … ST/BEL` | string replies (color reports, termcap, tmux echo); `body` + `truncated` carry the payload |
 
@@ -109,18 +109,56 @@ Hosts that ignore `TerminalReplyEvent` lose nothing — the bytes are consumed
 either way, so the input stream stays in sync. Hosts that do care (terminal
 probers, nested-TMUX diagnostics) get `params` and the exact `raw` bytes.
 
+`string` payloads are bounded: a reply longer than 1 KiB is surfaced once with
+`truncated` set and `body` clipped to 1 KiB, and the decoder then keeps
+swallowing the rest of that open OSC/DCS until its terminator rather than
+resuming key decoding mid-string (which would leak the tail as keystrokes). A
+stream that never terminates the string is abandoned after 64 KiB of swallowed
+payload so keystrokes resume; the abandon boundary is byte-exact, so chunk size
+cannot change the decoded event stream.
+
 ### Observability: drained reply vs dropped unknown
 
 Two counters on `EscapeDecoder` tell the two silent paths apart:
 
 ```php
-$decoder->drainedReplyCount();  // replies recognized and surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount(); // complete-but-unrecognized sequences consumed with no event
+$decoder->drainedReplyCount();   // replies recognized and surfaced as TerminalReplyEvent
+$decoder->droppedUnknownCount(); // complete sequences consumed with no event
 ```
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
-`droppedUnknownCount()` means the terminal is sending sequences this decoder
-does not model yet. `reset()` zeroes both counters along with the buffers.
+`droppedUnknownCount()` means bytes were consumed but produced no event. That
+includes genuinely unrecognized sequences (unknown private CSIs, unmapped SS3
+finals, malformed mouse reports) **and** recognized-but-filtered ones — a kitty
+event frame when the progressive protocol is disabled, or a stray `CSI 201~`
+paste-end marker with no paste open — so a non-zero count is not necessarily a
+terminal this decoder fails to model. `reset()` zeroes both counters along with
+the buffers.
+
+### Deferred trailing escape (opt-in)
+
+By default a chunk that ends on a bare `ESC` resolves to an `Escape` key
+immediately — the historical contract. Slow TTY reads that split a sequence
+right after the escape byte then decode its remainder as literal keystrokes
+(observe `ESC`+`[1;20R` as `Escape`, `[`, `1`… — and on a real terminal a
+cursor-position report can absolutely arrive that way). Apps that bound reads
+with their own idle timer can opt into the bubbletea-style behaviour:
+
+```php
+$decoder = new EscapeDecoder(
+    options: new EscapeDecoderOptions(deferTrailingEscape: true),
+);
+
+$events = $decoder->decode("a\x1b");   // [a]; the ESC stays buffered
+$events = $decoder->decode("[1;20R");  // drains as a cursor-position reply
+$events = $decoder->flushDeferredEscape(); // timeout → [Escape] if one is pending
+```
+
+`flushDeferredEscape()` returns `[Escape]` and clears the buffer when the
+pending remainder is exactly one `ESC`, and `[]` otherwise — call it from an
+input-idle timer. Caveat: with the option on, a deferred `ESC` followed by a
+plain byte in the *next* chunk still merges into `Alt+char`; flush before
+resolving an Escape-only keystroke.
 
 ## Key constants (KeyModifier)
 

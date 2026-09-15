@@ -8,7 +8,6 @@ use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
 use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\PasteEvent;
-use SugarCraft\Input\Event\ResizeEvent;
 use SugarCraft\Input\Event\TerminalReplyEvent;
 
 /**
@@ -56,6 +55,15 @@ final class EscapeDecoder
      */
     private const MAX_STRING_LENGTH = 1024;
 
+    /**
+     * Upper bound on how many bytes past MAX_STRING_LENGTH we keep swallowing
+     * from an unterminated OSC/DCS/APC/PM string before giving up and resuming
+     * normal decoding. A legit long reply (multi-capability XTGETTCAP) stays
+     * drained; a truly unterminated hostile flood is bounded and the decoder
+     * resyncs on its own instead of poisoning the stream forever.
+     */
+    private const MAX_STRING_ABANDON = 65536;
+
     /** Remaining bytes after last decode() that couldn't form a complete sequence */
     private string $remainder = '';
 
@@ -73,6 +81,12 @@ final class EscapeDecoder
 
     /** Accumulated payload bytes of the in-progress string, excluding introducer (capped) */
     private string $stringBuffer = '';
+
+    /** True once a string reply exceeded MAX_STRING_LENGTH and was drained as truncated */
+    private bool $stringOverflow = false;
+
+    /** Bytes swallowed past the cap while draining an over-long string toward its terminator */
+    private int $stringDiscarded = 0;
 
     /** Lifetime count of terminal replies drained into TerminalReplyEvent */
     private int $drainedReplyCount = 0;
@@ -295,6 +309,15 @@ final class EscapeDecoder
     private function handleEscape(string $stream): array
     {
         if (strlen($stream) === 1) {
+            if ($this->options->deferTrailingEscape) {
+                // A chunk that ends on ESC may be the split of a longer escape
+                // sequence (slow TTY reads end after ESC routinely). Return it
+                // un-consumed so decodeClean buffers it; the app resolves it
+                // with flushDeferredEscape() once no follower arrives (bubbletea
+                // uses the same timeout strategy).
+                return ['events' => [], 'remaining' => "\x1b"];
+            }
+
             // Lone ESC
             return ['events' => [new KeyEvent('Escape', KeyModifier::none(), "\x1b")], 'remaining' => ''];
         }
@@ -424,17 +447,23 @@ final class EscapeDecoder
      */
     private function handleSgrMouse(string $afterLt): array
     {
-        // Find the final M or m
-        $endPos = strpos($afterLt, 'M');
-        $isReleaseChar = false;
+        // Find the FIRST final byte: 'M' (press/motion) or 'm' (release).
+        // Searching for 'M' unconditionally first would let a chunk carrying a
+        // release followed by a press ("…1m…2M") match the LATER 'M' as the end
+        // of the first report, turning both events into one malformed drop.
+        $mPos = strpos($afterLt, 'M');
+        $lowerPos = strpos($afterLt, 'm');
+        $endPos = match (true) {
+            $mPos !== false && $lowerPos !== false => min($mPos, $lowerPos),
+            $mPos !== false => $mPos,
+            $lowerPos !== false => $lowerPos,
+            default => false,
+        };
         if ($endPos === false) {
-            $endPos = strpos($afterLt, 'm');
-            if ($endPos === false) {
-                // Incomplete
-                return ['events' => [], 'remaining' => "\x1b[<" . $afterLt];
-            }
-            $isReleaseChar = true;
+            // Incomplete
+            return ['events' => [], 'remaining' => "\x1b[<" . $afterLt];
         }
+        $isReleaseChar = $afterLt[$endPos] === 'm';
 
         $params = substr($afterLt, 0, $endPos);
         $remaining = substr($afterLt, $endPos + 1);
@@ -581,9 +610,19 @@ final class EscapeDecoder
             }
         }
 
-        // Key release: legacy 0x20 flag in the modifier field, or event-type 3.
-        $isRelease = ($modRaw & 0x20) !== 0 || $eventType === 3;
-        $modifiers = KeyModifier::fromKittyInt($modRaw & 0x1f);
+        // The wire modifier field is 1 + the actual bitmask (a bare press is
+        // "1", not "0") — de-base before interpreting any bit. When an explicit
+        // event-type sub-param is present, release is event-type 3 and the full
+        // spec mask (incl. bit 5 = Meta) maps to modifiers; in the legacy form
+        // the 0x20 bit doubles as the release flag and cannot carry Meta.
+        $mask = max(0, $modRaw - 1);
+        if ($eventType !== 0) {
+            $isRelease = $eventType === 3;
+            $modifiers = KeyModifier::fromKittyInt($mask);
+        } else {
+            $isRelease = ($mask & 0x20) !== 0;
+            $modifiers = KeyModifier::fromKittyInt($mask & 0x1f);
+        }
 
         $keyName = $codeRaw === 0 ? null : $this->kittyKeyCodeToName($codeRaw);
         if ($keyName === null) {
@@ -615,13 +654,14 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1b["];
         }
 
-        // Bracketed paste markers (CSI 200~ / CSI 201~) are handled by decode()
-        // as paste sentinels, never as key events. A bare marker only reaches
-        // here split across chunks; buffer it so the paste path picks it up.
-        // When paste parsing is disabled the markers are not sentinels, so we let
-        // them fall through and be consumed as ordinary (ignored) CSI sequences.
-        if ($this->options->enablePaste && ($csi === '200~' || $csi === '201~')) {
-            return ['events' => [], 'remaining' => "\x1b[" . $csi];
+        // A stray paste-END marker outside a paste is terminal noise: consume it
+        // (counted as a drop) rather than parking it in the remainder forever.
+        // A full paste-START never reaches here — decode()'s sentinel scan owns
+        // it — and a partial marker is held back by splitCsi()'s incomplete path.
+        if ($this->options->enablePaste && str_starts_with($csi, '201~')) {
+            $this->droppedUnknownCount++;
+
+            return ['events' => [], 'remaining' => substr($csi, 4)];
         }
 
         $split = $this->splitCsi($csi);
@@ -883,11 +923,12 @@ final class EscapeDecoder
                 $this->pasteBuffer .= $stream;
             }
             if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
-                // Force-close on oversized paste
+                // Force-close on oversized paste. Leave any held-back partial end
+                // marker in $remainder untouched — wiping it would turn the
+                // marker split across the overflow boundary into literal keys.
                 $event = PasteEvent::truncate($this->pasteBuffer);
                 $this->pasteBuffer = '';
                 $this->inPaste = false;
-                $this->remainder = '';
                 return [$event];
             }
             return [];
@@ -898,9 +939,13 @@ final class EscapeDecoder
 
         $this->pasteBuffer = '';
         $this->inPaste = false;
-        $this->remainder = $afterEnd;
 
-        return [PasteEvent::truncate($pasteContent)];
+        // Decode the post-paste tail now instead of parking it in $remainder:
+        // a long tail (bytes that legitimately follow the end marker in the same
+        // read) stays bounded by the sequence cap applied to its incomplete suffix.
+        $events = [PasteEvent::truncate($pasteContent)];
+
+        return $afterEnd === '' ? $events : array_merge($events, $this->decode($afterEnd));
     }
 
     /**
@@ -921,6 +966,16 @@ final class EscapeDecoder
                 $afterStart = substr($afterStart, 0, -$partial);
             }
             $this->pasteBuffer .= $afterStart;
+            if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
+                // Same oversized force-close as handlePasteStream(); a held-back
+                // partial end marker in $remainder survives untouched.
+                $event = PasteEvent::truncate($this->pasteBuffer);
+                $this->pasteBuffer = '';
+                $this->inPaste = false;
+
+                return array_merge($prefixEvents, [$event]);
+            }
+
             return $prefixEvents;
         }
 
@@ -929,9 +984,10 @@ final class EscapeDecoder
 
         $this->pasteBuffer = '';
         $this->inPaste = false;
-        $this->remainder = $afterEnd;
+        $events = array_merge($prefixEvents, [PasteEvent::truncate($pasteContent)]);
 
-        return array_merge($prefixEvents, [PasteEvent::truncate($pasteContent)]);
+        // Same in-place tail decode as handlePasteStream() — keeps $remainder bounded.
+        return $afterEnd === '' ? $events : array_merge($events, $this->decode($afterEnd));
     }
 
     /**
@@ -1060,20 +1116,65 @@ final class EscapeDecoder
         };
 
         if ($endPos === false) {
-            $this->stringBuffer = $haystack;
+            if ($this->stringOverflow === true) {
+                // Past the cap already: payload is discarded, not accumulated —
+                // we are only waiting for the terminator (never resume key
+                // decoding mid-string).
+                $this->stringDiscarded += strlen($fresh);
+                if ($this->stringDiscarded > self::MAX_STRING_ABANDON) {
+                    // A stream that never terminates the string must not silence
+                    // keystrokes forever — abandon and resync. Replay only the
+                    // bytes past the boundary so chunk sizes cannot change the
+                    // event stream.
+                    $this->inString = false;
+                    $this->stringOverflow = false;
+                    $this->stringBuffer = '';
+                    $replay = $this->stringDiscarded - self::MAX_STRING_ABANDON;
+                    $this->stringDiscarded = 0;
+
+                    return [
+                        'events' => [],
+                        'remaining' => substr($fresh, strlen($fresh) - $replay),
+                    ];
+                }
+
+                return ['events' => [], 'remaining' => ''];
+            }
+
+            $this->stringBuffer .= $fresh;
+
             if (strlen($this->stringBuffer) > self::MAX_STRING_LENGTH) {
-                // Cap breached: drain what we have as a truncated reply and
-                // resync — bounded memory beats swallowing the stream forever.
+                // Cap breached: drain the head as one truncated reply, then keep
+                // swallowing the rest of the payload until its terminator. The
+                // old behaviour cleared the string state outright, so every
+                // later byte of a >1 KiB OSC/DCS reply leaked back as keys.
+                $overflowed = $this->stringBuffer;
+                $body = substr($overflowed, 0, self::MAX_STRING_LENGTH);
+                $this->stringBuffer = '';
+                $this->stringOverflow = true;
+                $this->stringDiscarded = strlen($overflowed) - strlen($body);
                 $this->drainedReplyCount++;
                 $event = new TerminalReplyEvent(
                     TerminalReplyEvent::FAMILY_STRING,
                     [],
-                    $this->stringIntroducer . $this->stringBuffer,
-                    $this->stringBuffer,
+                    $this->stringIntroducer . $body,
+                    $body,
                     truncated: true,
                 );
-                $this->inString = false;
-                $this->stringBuffer = '';
+
+                if ($this->stringDiscarded > self::MAX_STRING_ABANDON) {
+                    // A single chunk already blew past the abandon budget — give
+                    // up exactly as the incremental path would, so the byte
+                    // size of a read cannot change the event stream.
+                    $this->inString = false;
+                    $this->stringOverflow = false;
+                    $this->stringDiscarded = 0;
+
+                    return [
+                        'events' => [$event],
+                        'remaining' => substr($overflowed, self::MAX_STRING_LENGTH + self::MAX_STRING_ABANDON),
+                    ];
+                }
 
                 return ['events' => [$event], 'remaining' => ''];
             }
@@ -1081,12 +1182,22 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => ''];
         }
 
+        $truncated = $this->stringOverflow;
         $terminator = $haystack[$endPos] === "\x07" ? "\x07" : "\x1b\\";
-        $body = substr($haystack, 0, $endPos);
         $remaining = substr($haystack, $endPos + strlen($terminator));
 
         $this->inString = false;
+        $this->stringOverflow = false;
+        $this->stringDiscarded = 0;
+        $body = $truncated ? '' : substr($haystack, 0, $endPos);
         $this->stringBuffer = '';
+
+        if ($truncated === true) {
+            // The truncated reply was already emitted at the cap; swallow the
+            // terminator quietly so it cannot surface as Alt+key.
+            return ['events' => [], 'remaining' => $remaining];
+        }
+
         $this->drainedReplyCount++;
 
         return [
@@ -1232,6 +1343,25 @@ final class EscapeDecoder
     }
 
     /**
+     * Resolve a lone trailing ESC deferred by the `deferTrailingEscape` option
+     * into the Escape key it (probably) was. Call from an application timer once
+     * no more input arrives within the escape-timeout window; if the buffered
+     * tail is exactly one ESC byte, clear it and return that KeyEvent.
+     *
+     * @return list<Event> one Escape event, or empty when nothing is deferred
+     */
+    public function flushDeferredEscape(): array
+    {
+        if ($this->remainder !== "\x1b") {
+            return [];
+        }
+
+        $this->remainder = '';
+
+        return [new KeyEvent('Escape', KeyModifier::none(), "\x1b")];
+    }
+
+    /**
      * Clear the partial-sequence buffer, paste/string state, and reply counters.
      */
     public function reset(): void
@@ -1242,6 +1372,8 @@ final class EscapeDecoder
         $this->inString = false;
         $this->stringIntroducer = '';
         $this->stringBuffer = '';
+        $this->stringOverflow = false;
+        $this->stringDiscarded = 0;
         $this->drainedReplyCount = 0;
         $this->droppedUnknownCount = 0;
     }

@@ -7,11 +7,13 @@ namespace SugarCraft\Input\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Input\EscapeDecoder;
 use SugarCraft\Input\EscapeDecoderOptions;
+use SugarCraft\Input\Event;
 use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
 use SugarCraft\Input\Event\PasteEvent;
 use SugarCraft\Input\Event\TerminalReplyEvent;
+use SugarCraft\Input\KeyModifier;
 
 /**
  * Byte-level tests for unsolicited terminal REPLIES on the input stream.
@@ -399,6 +401,22 @@ final class TerminalReplyDrainTest extends TestCase
         $this->assertSame(1, $this->decoder->droppedUnknownCount());
     }
 
+    public function testSgrReleaseThenPressInOneChunkYieldsBoth(): void
+    {
+        // Release ('m') and press ('M') coalesce into one read() routinely. The
+        // final byte must be matched EARLIEST-of, not 'M' first — searching 'M'
+        // first used to eat the release report's params into the press report and
+        // drop both events.
+        $events = $this->decoder->decode("\x1b[<0;1;1m\x1b[<0;1;2M");
+        $this->assertCount(2, $events);
+        $this->assertSame(MouseEvent::ACTION_RELEASE, $events[0]->action);
+        $this->assertSame(1, $events[0]->y);
+        $this->assertSame(MouseEvent::ACTION_PRESS, $events[1]->action);
+        $this->assertSame(2, $events[1]->y);
+        $this->assertSame(0, $this->decoder->droppedUnknownCount());
+        $this->assertStreamAlive();
+    }
+
     // ─── OSC / DCS / APC / PM string replies ────────────────────────────────
 
     public function testOscColorQueryReplyIsDrainedNotAltKeySpam(): void
@@ -452,9 +470,105 @@ final class TerminalReplyDrainTest extends TestCase
         $events = $this->decoder->decode($flood);
         $this->assertCount(1, $events);
         $this->assertTrue($events[0]->truncated, 'oversized unterminated string drains as truncated');
-        // Stream resyncs afterwards: the next keystroke decodes.
-        $events = $this->decoder->decode("\x1b[A");
+        $this->assertSame(1024, strlen($events[0]->body));
+        // Past the cap the decoder keeps swallowing toward the terminator — the
+        // remainder of the open DCS must NEVER resurface as keystrokes.
+        $this->assertCount(0, $this->decoder->decode(str_repeat('q', 500)));
+        $this->assertCount(0, $this->decoder->decode("\x1b[A"));
+        $this->assertSame('', $this->decoder->remainder());
+        // Closing the string resyncs the stream for good.
+        $events = $this->decoder->decode("\x1b\\\x1b[A");
+        $this->assertCount(1, $events, 'no second event for an already-drained truncation');
         $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame(1, $this->decoder->drainedReplyCount());
+    }
+
+    public function testUnterminatedStringAbandonsAndResyncs(): void
+    {
+        // A truly hostile never-terminated string is bounded: once MAX_STRING_ABANDON
+        // (64 KiB) past the cap is swallowed, the decoder gives up waiting for the
+        // terminator and resumes normal decoding instead of eating the session.
+        // The replay tail past the abandon boundary decodes as keys IN THE SAME
+        // call — chunk size cannot shift the boundary (see the invariance test).
+        $events = $this->decoder->decode("\x1bP" . str_repeat('q', 1024 + 65536 + 16));
+        $this->assertCount(17, $events, 'one truncated drain plus the 16 bytes past the abandon boundary');
+        $this->assertTrue($events[0]->truncated);
+        $this->assertSame('q', $events[1]->key);
+        $this->assertSame(1, $this->decoder->drainedReplyCount());
+        // After abandoning, keystrokes decode again.
+        $events = $this->decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+    }
+
+    public function testOversizedStringWithinAbandonBudgetStaysSilent(): void
+    {
+        // A flood past the 1 KiB drain cap but within the 64 KiB abandon budget is
+        // swallowed whole even in 7-byte chunks: one truncated reply, zero key spam.
+        $flood = "\x1bP" . str_repeat('q', 2048);
+        $total = 0;
+        for ($off = 0; $off < strlen($flood); $off += 7) {
+            $total += count($this->decoder->decode(substr($flood, $off, 7)));
+        }
+        $this->assertSame(1, $total, 'exactly the truncated drain event across every chunk');
+        $this->assertSame(1, $this->decoder->drainedReplyCount());
+        // Real terminator: swallowed quietly, no duplicate event, stream alive.
+        $events = $this->decoder->decode("\x1b\\\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testStringFloodDecodingIsChunkingInvariant(): void
+    {
+        // The reviewer's unterminated-DCS flood must yield the IDENTICAL event
+        // stream whether delivered in one chunk or in 7-byte reads: one truncated
+        // drain, the same bytes replayed after the abandon boundary, no more.
+        $flood = "\x1bP" . str_repeat('zx', 40000);
+        $oneShot = new EscapeDecoder();
+        $chunked = new EscapeDecoder();
+        $chunkEvents = [];
+        for ($off = 0; $off < strlen($flood); $off += 7) {
+            $chunkEvents = array_merge($chunkEvents, $chunked->decode(substr($flood, $off, 7)));
+        }
+        $this->assertSame(
+            self::signatures($oneShot->decode($flood)),
+            self::signatures($chunkEvents),
+            'chunk size must not alter the event stream',
+        );
+        $this->assertSame($oneShot->drainedReplyCount(), $chunked->drainedReplyCount());
+        // Both decoders abandoned the phantom string; the stream is live and identical.
+        $this->assertSame(
+            self::signatures($oneShot->decode("\x1b[A")),
+            self::signatures($chunked->decode("\x1b[A")),
+        );
+        $this->assertSame('', $oneShot->remainder());
+        $this->assertSame('', $chunked->remainder());
+    }
+
+    /**
+     * Stable per-event signature for stream-equivalence assertions.
+     *
+     * @param list<Event> $events
+     *
+     * @return list<string>
+     */
+    private static function signatures(array $events): array
+    {
+        return array_map(static function (Event $event): string {
+            if ($event instanceof TerminalReplyEvent) {
+                return 'reply:' . $event->family . ':' . implode(',', $event->params)
+                    . ($event->truncated ? ':truncated' : '');
+            }
+            if ($event instanceof KeyEvent) {
+                return 'key:' . $event->key . ':' . $event->modifiers->value();
+            }
+            if ($event instanceof PasteEvent) {
+                return 'paste:' . $event->content;
+            }
+
+            return $event::class;
+        }, $events);
     }
 
     public function testMidStringBytesNeverBecomeKeys(): void
@@ -520,12 +634,74 @@ final class TerminalReplyDrainTest extends TestCase
         // partial marker must complete the paste instead of rotting in the body.
         $this->decoder->decode("\x1b[200~data\x1b[201");
         $events = $this->decoder->decode("~tail");
-        $this->assertCount(1, $events);
+        $this->assertCount(5, $events, 'paste closes and its tail decodes in the same call');
         $this->assertInstanceOf(PasteEvent::class, $events[0]);
         $this->assertSame('data', $events[0]->content);
         // Bytes after the paste end still decode.
-        $events = $this->decoder->decode('');
-        $this->assertSame('t', $events[0]->key);
+        $this->assertSame('t', $events[1]->key);
+        $this->assertSame('l', $events[4]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testStrayPasteEndMarkerOutsidePasteIsDroppedNotParked(): void
+    {
+        // A `CSI 201~` with no paste open is noise from a peer that left mode 2004
+        // on: consume it, count the drop, keep the buffer clean (it must not sit in
+        // remainder() forever, and suffix bytes must still decode).
+        $events = $this->decoder->decode("\x1b[201~x");
+        $this->assertCount(1, $events, 'only the trailing keystroke survives');
+        $this->assertSame('x', $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+        $this->assertSame(1, $this->decoder->droppedUnknownCount());
+        $events = $this->decoder->decode("\x1b[201~");
+        $this->assertCount(0, $events);
+        $this->assertSame('', $this->decoder->remainder(), 'even bare, the stray marker is consumed');
+    }
+
+    // ─── Trailing lone ESC: eager (default) vs deferred (opt-in) ──────────────
+
+    public function testDeferTrailingEscapeKeepsSequenceIntactAcrossReads(): void
+    {
+        // With the option on, a chunk ending on ESC buffers instead of committing
+        // Escape, so a reply split as `\x1b` + `[1;20R` still drains as CPR rather
+        // than surfacing as seven literal keystrokes.
+        $decoder = new EscapeDecoder(options: new EscapeDecoderOptions(deferTrailingEscape: true));
+        $events = $decoder->decode("a\x1b");
+        $this->assertCount(1, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertSame("\x1b", $decoder->remainder());
+        $events = $decoder->decode("[1;20R");
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(TerminalReplyEvent::class, $events[0]);
+        $this->assertSame(TerminalReplyEvent::FAMILY_CURSOR_POSITION, $events[0]->family);
+        $this->assertSame('', $decoder->remainder());
+    }
+
+    public function testFlushDeferredEscapeResolvesPendingKeystroke(): void
+    {
+        $decoder = new EscapeDecoder(options: new EscapeDecoderOptions(deferTrailingEscape: true));
+        $this->assertSame([], $decoder->flushDeferredEscape(), 'nothing pending → nothing flushed');
+        $decoder->decode("\x1b");
+        $this->assertSame("\x1b", $decoder->remainder());
+        $events = $decoder->flushDeferredEscape();
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(KeyEvent::class, $events[0]);
+        $this->assertSame('Escape', $events[0]->key);
+        $this->assertSame('', $decoder->remainder());
+        $this->assertSame([], $decoder->flushDeferredEscape());
+    }
+
+    public function testDeferredEscapeBeforePlainCharStillMergesAsAlt(): void
+    {
+        // Documented caveat: without a flush in between, a deferred ESC followed by
+        // a printable byte still forms Alt+char, exactly like the eager path when
+        // both bytes share a chunk.
+        $decoder = new EscapeDecoder(options: new EscapeDecoderOptions(deferTrailingEscape: true));
+        $decoder->decode("\x1b");
+        $events = $decoder->decode("x");
+        $this->assertCount(1, $events);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('x', $events[0]->key);
     }
 
     // ─── Observability: drained reply vs dropped unknown ─────────────────────

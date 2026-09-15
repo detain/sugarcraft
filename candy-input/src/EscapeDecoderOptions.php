@@ -24,11 +24,19 @@ final class EscapeDecoderOptions
      *                            the private `CSI ? … u` form is the flags reply family and is always drained)
      * @param bool $enableFocus   Focus change events (CSI I / CSI O)
      * @param bool $enablePaste   Bracketed paste mode (CSI 200 ~ ... CSI 201 ~)
+     * @param bool $deferTrailingEscape  When true, a chunk ending on a lone ESC is buffered instead of
+     *                            emitted as the Escape key, so an escape sequence split across reads is
+     *                            never decoded as literal keys. The application resolves the held ESC by
+     *                            calling EscapeDecoder::flushDeferredEscape() after its input-idle timer
+     *                            fires. When false (default) a trailing ESC resolves eagerly to Escape —
+     *                            the historical contract. Caveat with true: a deferred ESC followed later
+     *                            by a plain byte merges into Alt+<char> unless flushed first.
      */
     public function __construct(
         public bool $enableMouse = true,
         public bool $enableKitty = true,
         public bool $enableFocus = true,
         public bool $enablePaste = true,
+        public bool $deferTrailingEscape = false,
     ) {}
 }

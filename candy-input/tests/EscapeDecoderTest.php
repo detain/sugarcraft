@@ -649,8 +649,8 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyWithShiftModifier(): void
     {
-        // Shift = bit 0 in modifier field
-        $events = $this->decoder->decode("\x1b[97;1u");
+        // modifiers field = 1 + bitmask; Shift = bit 0 → wire 2
+        $events = $this->decoder->decode("\x1b[97;2u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
@@ -658,8 +658,8 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyWithCtrlModifier(): void
     {
-        // Ctrl = bit 2 in modifier field
-        $events = $this->decoder->decode("\x1b[97;4u");
+        // Ctrl = bit 2 → mask 4 → wire 5
+        $events = $this->decoder->decode("\x1b[97;5u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
@@ -668,7 +668,7 @@ final class EscapeDecoderTest extends TestCase
     public function testKittyKeyRelease(): void
     {
         // Key release: modifier OR 0x20
-        $events = $this->decoder->decode("\x1b[97;33u"); // 33 = 1 + 32 (Shift + release bit)
+        $events = $this->decoder->decode("\x1b[97;33u"); // 33 = 1 + 0x20 (legacy release bit)
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
     }
@@ -815,8 +815,8 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyWithAltModifier(): void
     {
-        // Alt = bit 1
-        $events = $this->decoder->decode("\x1b[97;2u");
+        // Alt = bit 1 → mask 2 → wire 3
+        $events = $this->decoder->decode("\x1b[97;3u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
@@ -824,8 +824,10 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyWithMetaModifier(): void
     {
-        // Meta = bit 3
-        $events = $this->decoder->decode("\x1b[97;8u");
+        // Meta = bit 5 → mask 0x20. The legacy release convention claims that
+        // same bit when no explicit event-type sub-param is present, so Meta is
+        // only expressible in the extended form "mods:event-type".
+        $events = $this->decoder->decode("\x1b[97;33:1u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::META));
@@ -833,8 +835,8 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyWithSuperModifier(): void
     {
-        // Super = bit 4
-        $events = $this->decoder->decode("\x1b[97;16u");
+        // Super = bit 3 → mask 8 → wire 9
+        $events = $this->decoder->decode("\x1b[97;9u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SUPER));
@@ -919,17 +921,19 @@ final class EscapeDecoderTest extends TestCase
 
     public function testPasteThenType(): void
     {
-        // Paste completes in one call — remainder "world" buffered for next decode
-        $this->decoder->decode("\x1b[200~hello\x1b[201~world");
-        // Now remainder is "world" — calling decode("") flushes it
-        $events = $this->decoder->decode("");
-        $this->assertCount(5, $events); // "world" = 5 key events
-        $this->assertSame('w', $events[0]->key);
-        $this->assertSame('o', $events[1]->key);
-        $this->assertSame('r', $events[2]->key);
-        $this->assertSame('l', $events[3]->key);
-        $this->assertSame('d', $events[4]->key);
-        // After flush, normal typing works
+        // Paste completes in one call — the bytes after the end marker decode in
+        // the SAME call (they are complete keystrokes, not a held partial).
+        $events = $this->decoder->decode("\x1b[200~hello\x1b[201~world");
+        $this->assertCount(6, $events);
+        $this->assertInstanceOf(PasteEvent::class, $events[0]);
+        $this->assertSame('hello', $events[0]->content);
+        $this->assertSame('w', $events[1]->key);
+        $this->assertSame('o', $events[2]->key);
+        $this->assertSame('r', $events[3]->key);
+        $this->assertSame('l', $events[4]->key);
+        $this->assertSame('d', $events[5]->key);
+        $this->assertSame('', $this->decoder->remainder());
+        // Normal typing keeps working
         $events = $this->decoder->decode("xyz");
         $this->assertCount(3, $events);
     }
@@ -1510,9 +1514,9 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyKeyReleaseWithModifiers(): void
     {
-        // Key release: modifiers OR 0x20
-        // Shift (1) + release bit (0x20) = 33
-        $events = $this->decoder->decode("\x1b[97;33u");
+        // Key release: 1 + (modifiers OR legacy release bit 0x20)
+        // Shift (1) + release bit (0x20) = mask 33 → wire 34
+        $events = $this->decoder->decode("\x1b[97;34u");
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
@@ -1520,8 +1524,8 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyKeyReleaseWithCtrl(): void
     {
-        // Ctrl (4) + release bit (0x20) = 36
-        $events = $this->decoder->decode("\x1b[97;36u");
+        // Ctrl (4) + release bit (0x20) = mask 36 → wire 37
+        $events = $this->decoder->decode("\x1b[97;37u");
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
@@ -1529,8 +1533,8 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyKeyReleaseWithAlt(): void
     {
-        // Alt (2) + release bit (0x20) = 34
-        $events = $this->decoder->decode("\x1b[97;34u");
+        // Alt (2) + release bit (0x20) = mask 34 → wire 35
+        $events = $this->decoder->decode("\x1b[97;35u");
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
