@@ -133,11 +133,23 @@ final class SrcExitCensusTest extends TestCase
 
         $stdoutRest = \stream_get_contents($pipes[1]);
         $stderr = \stream_get_contents($pipes[2]);
-        $closedWhileDraining = (bool) (\proc_get_status($process)['running'] ?? false);
+        // Kernel exit ordering: the child's stdio fds close BEFORE exit_notify()
+        // makes the task waitable, so a single-shot proc_get_status() here races
+        // and can read running=true on a child that already died. Poll in 10 ms
+        // ticks to a 2 s deadline — the ExternalModule::hasExited idiom in this
+        // very lib — before judging the door hung.
+        $deadline = \microtime(true) + 2.0;
+        do {
+            $closedWhileDraining = (bool) (\proc_get_status($process)['running'] ?? false);
+            if (!$closedWhileDraining) {
+                break;
+            }
+            \usleep(10_000);
+        } while (\microtime(true) < $deadline);
         if ($closedWhileDraining) {
-            // A stream_get_contents() that returned while the child still
-            // runs means the timeout fired — the EOF door regressed into a
-            // hang. Kill it, and fail loudly rather than inherit the leash.
+            // Still running after the bounded poll means the drain's read
+            // timeout fired — the EOF door regressed into a hang. Kill it,
+            // and fail loudly rather than inherit the leash.
             \proc_terminate($process, 9);
         }
 
