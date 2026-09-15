@@ -11,6 +11,7 @@ use SugarCraft\Mosaic\MosaicBuilder;
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
 use SugarCraft\Mosaic\Scale;
+use SugarCraft\Mosaic\TmuxPassthroughDecorator;
 
 /**
  * @covers \SugarCraft\Mosaic\MosaicBuilder
@@ -105,6 +106,43 @@ final class MosaicBuilderTest extends TestCase
         $renderer = $mosaic->renderer();
         $this->assertInstanceOf(SixelRenderer::class, $renderer);
         $this->assertSame(Dither::Stucki, $renderer->dither());
+    }
+
+    public function testBuildHonoursDitherOnTmuxWrappedAutoSixel(): void
+    {
+        // Same Sixel advertising env as above, plus TMUX: auto() wraps the
+        // backend in the passthrough envelope, and the builder dither must
+        // still reach the inner SixelRenderer instead of being dropped.
+        $_ENV['XTERM_VERSION'] = 'X11R5(370)';
+        putenv('XTERM_VERSION=X11R5(370)');
+        $_ENV['TERM'] = 'xterm';
+        putenv('TERM=xterm');
+        $_ENV['TMUX'] = '/tmp/tmux-1000/default,1234,0';
+        putenv('TMUX=/tmp/tmux-1000/default,1234,0');
+
+        $renderer = Mosaic::builder()
+            ->withDither(Dither::Atkinson)
+            ->build()
+            ->renderer();
+
+        $this->assertInstanceOf(TmuxPassthroughDecorator::class, $renderer);
+        $inner = $renderer->inner();
+        $this->assertInstanceOf(SixelRenderer::class, $inner);
+        $this->assertSame(Dither::Atkinson, $inner->dither());
+    }
+
+    public function testBuildHonoursDitherOnExplicitTmuxWrappedSixel(): void
+    {
+        $mosaic = Mosaic::builder()
+            ->withRenderer(new TmuxPassthroughDecorator(new SixelRenderer(Dither::None)))
+            ->withDither(Dither::Stucki)
+            ->build();
+
+        $renderer = $mosaic->renderer();
+        $this->assertInstanceOf(TmuxPassthroughDecorator::class, $renderer);
+        $inner = $renderer->inner();
+        $this->assertInstanceOf(SixelRenderer::class, $inner);
+        $this->assertSame(Dither::Stucki, $inner->dither());
     }
 
     public function testRendererAccessorReturnsConfiguredRenderer(): void

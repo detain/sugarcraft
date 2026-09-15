@@ -29,6 +29,15 @@ final class TmuxPassthroughDecorator implements Renderer
         private readonly Renderer $inner,
     ) {}
 
+    /**
+     * The wrapped renderer — lets callers reach protocol-specific behaviour
+     * (dither, palette size) through the passthrough envelope.
+     */
+    public function inner(): Renderer
+    {
+        return $this->inner;
+    }
+
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         return $this->wrap($this->inner->render($image, $width, $height));

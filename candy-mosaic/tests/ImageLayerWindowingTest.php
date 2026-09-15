@@ -224,4 +224,58 @@ final class ImageLayerWindowingTest extends TestCase
         $this->assertNull((new ImageLayer())->renderer());
         $this->assertSame($renderer, (new ImageLayer($renderer))->renderer());
     }
+
+    // ---- window digests follow placement state -------------------------------
+
+    public function testReleaseForgetsTheWindowDigest(): void
+    {
+        $layer = new ImageLayer();
+        $placed = $layer->placeTracked('ONE', 4, 1);
+        $digest = ImageLayer::digestFor('ONE', 4, 1);
+
+        $layer->release($placed->imageId);
+
+        $this->assertNull($layer->imageIdForDigest($digest));
+        $this->assertSame([], $layer->trackedDigests());
+    }
+
+    public function testReleaseAllExceptForgetsOnlyFreedWindowDigests(): void
+    {
+        $layer = new ImageLayer();
+        $a = $layer->placeTracked('A', 4, 1);
+        $b = $layer->placeTracked('B', 4, 1);
+
+        $layer->releaseAllExcept([$b->imageId]);
+
+        $this->assertNull($layer->imageIdForDigest(ImageLayer::digestFor('A', 4, 1)));
+        $this->assertSame(
+            $b->imageId,
+            $layer->imageIdForDigest(ImageLayer::digestFor('B', 4, 1)),
+        );
+    }
+
+    public function testRemoveByIdForgetsTheWindowDigest(): void
+    {
+        $layer = new ImageLayer();
+        $placed = $layer->placeTracked('ONE', 4, 1);
+
+        $layer->removeById($placed->imageId);
+
+        $this->assertNull($layer->imageIdForDigest(ImageLayer::digestFor('ONE', 4, 1)));
+    }
+
+    public function testRePlacingAfterReleaseReRegistersTheDigestUnderTheSameId(): void
+    {
+        $layer = new ImageLayer();
+        $first = $layer->placeTracked('ONE', 4, 1);
+        $digest = ImageLayer::digestFor('ONE', 4, 1);
+        $layer->release($first->imageId);
+
+        $again = $layer->placeTracked('ONE', 4, 1);
+
+        // Scroll back into view: same content id, digest tracked again.
+        $this->assertSame($first->imageId, $again->imageId);
+        $this->assertSame($again->imageId, $layer->imageIdForDigest($digest));
+        $this->assertSame([$digest], $layer->trackedDigests());
+    }
 }

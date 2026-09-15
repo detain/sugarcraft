@@ -31,12 +31,6 @@ final class SixelRenderer implements Renderer
     use \SugarCraft\Mosaic\Concerns\RenderValidationTrait;
 
     /**
-     * @param int $cellWidth  Pixel width of a terminal cell — the render() cell
-     *                        dimensions are multiplied by this so a sixel poster
-     *                        fills its cell box (not one device pixel per cell).
-     * @param int $cellHeight Pixel height of a terminal cell.
-     */
-    /**
      * Sixel background-declaration for register 0: coordinate system 2
      * (RGB) with the `P` (transparent) qualifier instead of colour
      * components — DEC spec, echoed by every sixel decoder that supports
@@ -44,6 +38,12 @@ final class SixelRenderer implements Renderer
      */
     private const TRANSPARENT_BACKGROUND = '#0;2;P';
 
+    /**
+     * @param int $cellWidth  Pixel width of a terminal cell — the render() cell
+     *                        dimensions are multiplied by this so a sixel poster
+     *                        fills its cell box (not one device pixel per cell).
+     * @param int $cellHeight Pixel height of a terminal cell.
+     */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
         private readonly int $maxColors = 256,

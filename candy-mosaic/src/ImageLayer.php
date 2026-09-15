@@ -148,11 +148,14 @@ final class ImageLayer
      * The content keeps its id (dedup is content-addressed), so re-placing
      * the same bytes returns that id — but the bytes must be re-sent to the
      * terminal. No delete sequence is emitted; use {@see release()} when the
-     * terminal-side allocation must be freed too.
+     * terminal-side allocation must be freed too. The removed image's window
+     * digests stop being tracked either way — a digest maps to a placement
+     * that exists now, not one that existed.
      */
     public function removeById(int $imageId): void
     {
         unset($this->placementById[$imageId]);
+        $this->forgetWindowDigests($imageId);
     }
 
     /**
@@ -167,9 +170,10 @@ final class ImageLayer
     }
 
     /**
-     * The image id a window digest was placed under, or null when it has
-     * never been placed. Lets a viewport check its scratch digest against
-     * the layer before deciding to re-fetch/re-render.
+     * The image id a window digest is currently placed under, or null when it
+     * has never been placed or was since removed/released. Lets a viewport
+     * check its scratch digest against the layer before deciding to
+     * re-fetch/re-render.
      */
     public function imageIdForDigest(string $digest): ?int
     {
@@ -177,8 +181,9 @@ final class ImageLayer
     }
 
     /**
-     * Free one image: drop its placement and return the escape sequence that
-     * deletes its terminal-side allocation. Unknown id → no-op, empty string.
+     * Free one image: drop its placement (and its window-digest tracking) and
+     * return the escape sequence that deletes its terminal-side allocation.
+     * Unknown id → no-op, empty string.
      */
     public function release(int $imageId): string
     {
@@ -187,6 +192,7 @@ final class ImageLayer
         }
 
         unset($this->placementById[$imageId]);
+        $this->forgetWindowDigests($imageId);
 
         return $this->deleteSequence($imageId);
     }
@@ -213,10 +219,26 @@ final class ImageLayer
                 continue;
             }
             unset($this->placementById[$id]);
+            $this->forgetWindowDigests($id);
             $released[$id] = $this->deleteSequence($id);
         }
 
         return $released;
+    }
+
+    /**
+     * Drop every window digest that pointed at a now-gone placement, so
+     * {@see imageIdForDigest()} never hands back an id the terminal no longer
+     * holds. Content-addressed dedup ($idByDigest) is deliberately untouched:
+     * the bytes keep their id for re-placement.
+     */
+    private function forgetWindowDigests(int $imageId): void
+    {
+        foreach ($this->idByWindowDigest as $digest => $id) {
+            if ($id === $imageId) {
+                unset($this->idByWindowDigest[$digest]);
+            }
+        }
     }
 
     /**

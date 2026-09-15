@@ -163,7 +163,11 @@ Accumulated patterns and gotchas specific to this library.
   and report `''`. Deliberate: releasing KEEPS the content→id dedup (ids are
   content identity; a re-placed image reuses its id and stale scrollback
   markers repaint correctly), matching the documented `removeById()`
-  never-reuse semantics.
+  never-reuse semantics. The two indexes split on purpose: WINDOW digests
+  (`imageIdForDigest`/`trackedDigests`) describe what is placed NOW, so
+  `release()`, `releaseAllExcept()` and `removeById()` forget the freed id's
+  digests — otherwise a check-then-place viewport would trust a stale entry
+  and skip the re-placement the terminal needs after a scroll-back.
 - **[poster conveniences]** `Mosaic::poster()` / `posterAsync()` /
   `posterFile()` fetch-or-load → render at cell size → consult/populate a
   `DiskCache` keyed by `DiskCache::key($url,$w,$h,$protocol)` in ONE call,

@@ -635,7 +635,9 @@ final class Mosaic
      * Fetches through {@see ImageSource::fromUrlAsync()} so the per-hop SSRF
      * guarding applies on the event loop; a cache hit resolves immediately
      * without touching the network. Cache population happens inside the
-     * fulfillment chain, so a rejected fetch stores nothing.
+     * fulfillment chain, so a rejected fetch stores nothing. Error semantics
+     * are inherited from the source call: an unsupported URL scheme throws
+     * synchronously, SSRF/host rejections come back as a rejected promise.
      *
      * @return PromiseInterface<string>
      */
@@ -784,7 +786,8 @@ final class MosaicBuilder
      * When no renderer was set, the terminal is auto-detected exactly as
      * {@see Mosaic::auto()} does — never silently defaulting to Sixel, which
      * would emit DCS payloads a non-Sixel terminal cannot display. A dither
-     * configured on such an auto-resolved Sixel backend is honoured.
+     * configured on the builder is honoured on any Sixel backend, explicit
+     * or auto-detected, wrapped in tmux passthrough or bare.
      */
     public function build(): Mosaic
     {
@@ -794,19 +797,36 @@ final class MosaicBuilder
             $detected = Mosaic::auto();
             $renderer = $detected->renderer();
             $cap      = $detected->capability();
-            // Auto-detect landed on Sixel and the builder pins a dither:
-            // re-mint with it (the decorator case passes through untouched).
-            if ($this->dither !== null && $renderer instanceof SixelRenderer) {
-                $renderer = new SixelRenderer($this->dither);
-            }
-        } elseif ($renderer instanceof SixelRenderer && $this->dither !== null) {
-            // Builder dither overrides an explicit SixelRenderer dither.
-            $renderer = new SixelRenderer($this->dither);
-            $cap = Capability::universal();
         } else {
             $cap = Capability::universal();
         }
 
+        // Builder dither overrides whatever dither the resolved Sixel backend
+        // carries; on non-Sixel backends it is (as everywhere else) a no-op.
+        if ($this->dither !== null) {
+            $renderer = self::applyDither($renderer, $this->dither);
+        }
+
         return new Mosaic($renderer, $cap, $this->width, $this->height, $this->scale);
+    }
+
+    /**
+     * Swap the dither of a Sixel backend without disturbing a wrapping
+     * tmux passthrough envelope; non-Sixel renderers are returned as-is
+     * (dither only parameterises Sixel encoding).
+     */
+    private static function applyDither(Renderer $renderer, Dither $dither): Renderer
+    {
+        if ($renderer instanceof TmuxPassthroughDecorator) {
+            $inner = $renderer->inner();
+
+            return $inner instanceof SixelRenderer
+                ? new TmuxPassthroughDecorator(new SixelRenderer($dither))
+                : $renderer;
+        }
+
+        return $renderer instanceof SixelRenderer
+            ? new SixelRenderer($dither)
+            : $renderer;
     }
 }
