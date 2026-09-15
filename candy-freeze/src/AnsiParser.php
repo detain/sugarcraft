@@ -308,6 +308,11 @@ final class SgrStateHandler implements Handler
      * `R:G:B`. Dropping the id slot is therefore tried first, and the tail is
      * re-read whole only when that leaves too few components to paint with.
      *
+     * <p>`SugarCraft\Spark\Inspector` labels an SGR with the same count rule on
+     * the same bytes (measured to agree on every shape), so the
+     * inspector's label and the rendered colour cannot disagree; a change here
+     * must be mirrored there.
+     *
      * @param list<int> $group `38` (or `48`) followed by its sub-parameters
      */
     private static function colourFromGroup(array $group): ?string

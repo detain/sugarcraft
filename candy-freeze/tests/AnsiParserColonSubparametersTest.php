@@ -25,6 +25,14 @@ use SugarCraft\Freeze\SvgRenderer;
  * Every assertion here is on the bytes that reach the drawing: the resolved
  * `#rrggbb` string, and the `fill=` attribute the renderer writes with it.
  *
+ * <p>Thirteen of these seventeen tests are regression guards: with `master`'s
+ * `src/AnsiParser.php` checked back in they fail. Four are deliberate
+ * backward-compatibility pins — `testGroupWithoutIdSlotStillResolves`,
+ * `testColonTwentyFiveColourIndexResolves`,
+ * `testColonUnderlineGroupDoesNotPaintAColour` and
+ * `testTruncatedColonGroupLeavesTheColourUntouched` — each labelled below, so a
+ * future refactor does not read them as coverage of the fixed path.
+ *
  * @see https://www.ecma-international.org/publications-and-standards/standards/ecma-48/
  */
 final class AnsiParserColonSubparametersTest extends TestCase
@@ -57,6 +65,8 @@ final class AnsiParserColonSubparametersTest extends TestCase
 
     public function testGroupWithoutIdSlotStillResolves(): void
     {
+        // BC pin — with the id slot omitted entirely the positional reading was
+        // already right on master. Guards the count rule, not the fix.
         $segments = AnsiParser::parse("\x1b[38:2:80:160:240mX");
 
         $this->assertSame('#50a0f0', $segments[0]->fg);
@@ -81,6 +91,8 @@ final class AnsiParserColonSubparametersTest extends TestCase
 
     public function testColonTwentyFiveColourIndexResolves(): void
     {
+        // BC pin — `38:5:196` resolved correctly on master too (the index is the
+        // first value after the mode, so flattening was harmless here).
         $segments = AnsiParser::parse("\x1b[38:5:196mX");
 
         $this->assertSame('#ff0000', $segments[0]->fg);
@@ -101,6 +113,8 @@ final class AnsiParserColonSubparametersTest extends TestCase
 
     public function testColonUnderlineGroupDoesNotPaintAColour(): void
     {
+        // BC pin — a `4:3` group never painted a colour on master either; this
+        // documents where the known limitation lands, not a change.
         // `4:3` is one curly-underline group, not an extended colour: with no
         // 38/48 introducer the component lookup is never entered at all.
         $segments = AnsiParser::parse("\x1b[4:3mtext");
@@ -120,7 +134,9 @@ final class AnsiParserColonSubparametersTest extends TestCase
         // `38:2::;1;2;3` has an empty colour-space slot *and* an empty red slot,
         // so the group resolves to nothing and the historic flat reading takes
         // over — reaching past the `;` into parameters that xterm would treat as
-        // independent SGRs. Deterministic and pre-existing: pinned, not blessed.
+        // independent SGRs. The cross-`;` reach is pre-existing and
+        // deterministic — pinned, not blessed — but the *value* is new: on
+        // master this same input froze as an 18-hex garbage colour.
         $segment = AnsiParser::parse("\x1b[38:2::;1;2;3mX")[0];
 
         $this->assertSame('#000001', $segment->fg);
@@ -140,6 +156,10 @@ final class AnsiParserColonSubparametersTest extends TestCase
             "\x1b[38:2;1;2;3m",
         ];
 
+        foreach (self::colourShapeCorpus() as $generated) {
+            $inputs[] = $generated;
+        }
+
         foreach ($inputs as $input) {
             $segment = AnsiParser::parse($input . 'X')[0];
             foreach ([$segment->fg, $segment->bg] as $colour) {
@@ -151,10 +171,54 @@ final class AnsiParserColonSubparametersTest extends TestCase
         }
     }
 
+    /**
+     * Cartesian torture set: each extended-colour introducer crossed with each
+     * colour-space id, each sub-parameter tail real emitters are known to send
+     * (empty id slot, extra empty slots, a trailing colour-space triple, an
+     * out-of-range component, nothing at all) and both separator spellings.
+     *
+     * <p>The invariant is the point: every component passes through
+     * {@see SgrStateHandler::clampComponent()}, so no shape — however malformed —
+     * may yield a value outside `#rrggbb`. Before this fix the positional read
+     * handed `sprintf('%02x', -1)` to the renderer, which is how an 18-hex
+     * truecolour like `#ffffffffffffffff50a0` reached an SVG `fill` attribute.
+     *
+     * @return array<string, string> label => CSI sequence
+     */
+    public static function colourShapeCorpus(): array
+    {
+        $tails = [
+            'none' => [],
+            'rgb' => [1, 2, 3],
+            'cs:rgb' => ['', 1, 2, 3],
+            'cs::rgb' => ['', '', 1, 2, 3],
+            'rgb+extra' => [1, 2, 3, 4],
+            'empty-then-index' => ['', '5'],
+            'huge' => [999, 65535, 0],
+            'all-empty' => ['', '', ''],
+            'single-empty' => [''],
+        ];
+        $corpus = [];
+
+        foreach (['38', '48', '58'] as $code) {
+            foreach ([2, 5, 6] as $mode) {
+                foreach ([':', ';'] as $separator) {
+                    foreach ($tails as $tailName => $tail) {
+                        $body = $code . ':' . $mode . $separator . implode($separator, array_map(strval(...), $tail));
+                        $corpus[$body] = "\x1b[" . $body . 'm';
+                    }
+                }
+            }
+        }
+
+        return $corpus;
+    }
+
     public function testTruncatedColonGroupLeavesTheColourUntouched(): void
     {
-        // A group that cannot supply three components must not repaint — and
-        // above all must not emit a malformed value.
+        // BC pin on the outcome (master also left `#cd0000` in force) and a
+        // guard on the reasoning: a group that cannot supply three components
+        // must not repaint — and above all must not emit a malformed value.
         $segments = AnsiParser::parse("\x1b[31mA\x1b[38:2::1mB");
 
         $this->assertSame('#cd0000', $segments[0]->fg);

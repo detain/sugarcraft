@@ -127,7 +127,12 @@ slots to be re-read as ordinary SGRs (`38:2::1` still sets bold, `38:0` still
 resets), and the flat fallback reads the global parameter list, so a malformed
 hybrid like `38:2::;1;2;3` can pull components from a *later* parameter. Both
 match historic behaviour and are pinned by tests rather than silently changed;
-strict ECMA would consume the failed group and ignore the stray slots.
+strict ECMA would consume the failed group and ignore the stray slots. A third
+policy is baked into the group reader: empty slots inside a group are *skipped*
+rather than defaulted to `0`, so `38:2:::5:6:7` paints the first three supplied
+values (`#050607`) where a literal ECMA-48 §5.4.1 reading of each omitted slot
+would give `rgb(0,5,6)`. That reading is what the `38:2::R:G:B` spelling from
+real emitters needs, and `testEmptySlotsBeforeComponentsAreSkipped` pins it.
 
 ---
 
