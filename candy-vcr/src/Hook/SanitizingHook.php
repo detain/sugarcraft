@@ -106,8 +106,11 @@ final class SanitizingHook implements Hook
                 // limit exhaustion on a hostile payload; there the old value
                 // survives rather than NULL being written into the payload
                 // or the whole recording aborting mid-event.
-                // @ kept: the null result IS the handler for that warning —
-                // letting it print would double-report outside our channel.
+                // @ kept as cheap insurance: pcre.backtrack/recursion
+                // exhaustion returns NULL SILENTLY on PHP 8.3 (measured), so
+                // the ?? above is the real handler there; the suppression only
+                // earns its keep on warning-emitting PCRE errors, where an
+                // printed warning would double-report outside our channel.
                 $data[$key] = @preg_replace($pattern, $replacement, $value) ?? $value;
             } elseif (is_array($value)) {
                 $data[$key] = $this->applyPattern($value, $pattern, $replacement);
