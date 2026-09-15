@@ -426,8 +426,8 @@ final class Ansi
      *
      * Mirrors charmbracelet/x/ansi. SelectCharacterSet — the same
      * `ESC <intermediate> <final>` helper that candy-vt's `Charsets` docblock
-     * records as its own upstream source (same wire shape; this port takes a
-     * 0-3 slot index where upstream takes a gset byte).
+     * records as its own upstream source (same wire shape; this port keys the
+     * designation on a 0-3 slot index).
      *
      * ECMA-48 §25 (character set designation); ansicode.txt:222-249
      * ("SCS - Select G0/G1/G2/G3 character set").
