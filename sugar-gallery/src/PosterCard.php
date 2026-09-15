@@ -28,12 +28,19 @@ final readonly class PosterCard
      * @param string|null $posterImage  Raw pixel-graphics bytes (sixel/kitty/iTerm2)
      *                                   for the poster, painted as an out-of-band
      *                                   overlay rather than inline cell text — see
-     *                                   {@see withImage()}. Mutually exclusive with
-     *                                   {@see $poster} (the inline cell rendering).
+     *                                   {@see withImage()}. Only one fill is drawn:
+     *                                   when both are set the overlay wins and the
+     *                                   inline {@see $poster} bytes are not painted
+     *                                   (pinned by PosterCardTest, because a caller
+     *                                   migrating between the two modes can hold
+     *                                   both for a frame).
      * @param int|null    $imageId      Overlay id for {@see $posterImage}; the card
      *                                   draws a one-cell {@see ImageOverlay::marker()}
      *                                   at the poster's top-left and the runtime
-     *                                   paints the bytes there.
+     *                                   paints the bytes there. Null with an image
+     *                                   set means nothing can address the art, so
+     *                                   the cell renders as a skeleton and
+     *                                   {@see hasPoster()} reports it unfilled.
      */
     public function __construct(
         public string $id,
@@ -89,7 +96,8 @@ final readonly class PosterCard
      * plain {@see $title} is kept for identity/sort.
      *
      * TRUST BOUNDARY — the styled title is NOT sanitised. Where the plain
-     * {@see $title} is run through {@see stripC0()} in {@see render()} to
+     * {@see $title} is run through {@see AnsiGuard::stripControls()} in
+     * {@see render()} to
      * neutralise cursor-move / clear-screen / ESC bytes from untrusted DB text,
      * a styled title is emitted verbatim (only ANSI-aware *truncated*, never
      * stripped) — stripping C0 would destroy the very SGR escapes it exists to
@@ -98,15 +106,80 @@ final readonly class PosterCard
      * a sanitised title), NEVER raw untrusted / DB-sourced bytes. When the
      * source is untrusted, leave this unset and rely on the plain
      * {@see $title} — that is the sanitised path.
+     *
+     * Two opt-ins make the contract enforceable instead of merely documented —
+     * both accept SGR styling only, everything else (cursor moves, erase, OSC /
+     * DCS payloads, bare controls) counts as unsafe, per {@see AnsiGuard}:
+     *
+     *  - `$assertSafe: true` fails fast on a byte the widget would have echoed
+     *    verbatim, for a call site that claims the bytes are self-produced and
+     *    wants the lie caught in development. It throws
+     *    {@see \InvalidArgumentException} with the offset + hex of the offender.
+     *  - {@see withSafeStyledTitle()} coerces instead of throwing, for a call
+     *    site holding bytes it cannot vouch for.
+     *
+     * Leaving `$assertSafe` false is the historical behaviour, unchanged.
      */
-    public function withStyledTitle(string $ansi): self
+    public function withStyledTitle(string $ansi, bool $assertSafe = false): self
     {
+        if ($assertSafe) {
+            self::assertSafeAnsi($ansi);
+        }
+
         return new self($this->id, $this->title, $this->posterUrl, $this->progress, $this->poster, $ansi, $this->posterImage, $this->imageId);
     }
 
+    /**
+     * Attach a styled title after dropping everything that is not SGR styling
+     * ({@see AnsiGuard::sanitize()}) — the coercion half of the
+     * {@see withStyledTitle()} trust boundary, for a highlight built over text
+     * the caller does not control. Colour may be lost; a cursor move never will be.
+     *
+     * When sanitising leaves nothing to show — empty, or styling and ASCII blank
+     * space only — the card keeps its plain {@see $title} (and the receiver is
+     * returned unchanged) rather than rendering a blank title row: the plain path
+     * is the sanitised one by design. A payload-only input like `"\e[31m\e[2J"`
+     * sanitises to a lone colour sequence — non-empty, but carrying no text at
+     * all — and is treated the same way.
+     *
+     * The line is drawn at `trim()`'s whitespace, not at every blank-looking
+     * glyph: a non-breaking space is text to {@see AnsiGuard} (it survives the
+     * guard and the stripper alike), so styling wrapped around `"\u{a0}"` is kept
+     * rather than discarded — a deliberate residue, since a caller who asked for
+     * an invisible-but-present run of background colour gets the one they wrote.
+     */
+    public function withSafeStyledTitle(string $ansi): self
+    {
+        $safe = AnsiGuard::sanitize($ansi);
+
+        return trim(AnsiGuard::stripControls($safe)) === '' ? $this : $this->withStyledTitle($safe);
+    }
+
+    /**
+     * Guard for the {@see withStyledTitle()} trust boundary: return $ansi when it
+     * carries nothing but SGR styling and printable text, throw otherwise.
+     *
+     * A convenience delegate to {@see AnsiGuard::assertSafe()} so the widget's own
+     * entry point is one call away at the call site that assembles a highlight:
+     *
+     *     $card->withStyledTitle(PosterCard::assertSafeAnsi($highlight));
+     *
+     * @throws \InvalidArgumentException when $ansi carries a non-SGR escape or control byte
+     */
+    public static function assertSafeAnsi(string $ansi): string
+    {
+        return AnsiGuard::assertSafe($ansi);
+    }
+
+    /**
+     * Whether this cell holds art the grid can paint — either inline cell text or
+     * an overlay fill. The fill policy keys on this, so it must agree with what
+     * {@see render()} actually draws: an overlay blob with no id has no marker to
+     * paint, renders as a skeleton, and must count as unfilled so the owner re-queues it.
+     */
     public function hasPoster(): bool
     {
-        return $this->poster !== null || $this->posterImage !== null;
+        return $this->poster !== null || ($this->posterImage !== null && $this->imageId !== null);
     }
 
     /**
@@ -126,12 +199,13 @@ final readonly class PosterCard
         $lines = $this->bodyRows($width, $posterHeight);
 
         $marker = $focused ? '▸' : ' ';
-        // Plain titles are DB-sourced; strip C0 controls to prevent terminal
-        // corruption. styledTitle is pre-styled ANSI and goes through the
-        // ANSI-aware truncate path unchanged.
+        // Plain titles are DB-sourced, so they go through the same scanner the
+        // styled-title guard uses: every C0/C1 control and any stray escape
+        // sequence (SGR included) is removed before the row is drawn. A styled
+        // title is the caller's own bytes and takes the ANSI-preserving path.
         $title = $this->styledTitle !== null
             ? Width::truncateAnsi($this->styledTitle, $width - 2)
-            : self::truncate(self::stripC0($this->title), $width - 2);
+            : self::truncate(AnsiGuard::stripControls($this->title), $width - 2);
         $lines[] = Width::padRight($marker . ' ' . $title, $width);
 
         if ($this->progress !== null) {
@@ -315,19 +389,5 @@ final readonly class PosterCard
         $filled = (int) round($progress * $width);
 
         return str_repeat('▓', $filled) . str_repeat('░', max(0, $width - $filled));
-    }
-
-    /**
-     * Strip C0 control bytes from a plain (non-ANSI) title before rendering.
-     * No C0 byte is needed in a title — this prevents cursor-move/clear/ESC
-     * sequences from untrusted DB titles reaching the terminal. The styledTitle
-     * path intentionally skips this (escapes are preserved there per contract).
-     */
-    private static function stripC0(string $text): string
-    {
-        // Remove C0 controls except CR/LF (which preg_replace handles separately).
-        // ESC (\x1B) and Bell (\x07) are also removed as they could corrupt the
-        // render even from a "plain" title that accidentally contains ANSI bytes.
-        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? $text;
     }
 }

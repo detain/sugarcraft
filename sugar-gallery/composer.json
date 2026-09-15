@@ -33,7 +33,8 @@
         "sugarcraft/candy-zone": "dev-master"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-mosaic": "dev-master"
     },
     "autoload": {
         "psr-4": {

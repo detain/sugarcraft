@@ -406,4 +406,83 @@ final class PosterGridTest extends TestCase
         self::assertSame('Replacement', $g->item(5)?->title);
         self::assertSame(1, $g->loadedCount(), 'count unchanged since we replaced');
     }
+
+    // ---- visibleCards() / indicesNeedingPoster() --------------------------
+
+    public function testPendingHelpersAreEmptyOnAnEmptyGrid(): void
+    {
+        $g = $this->grid(0);
+
+        self::assertSame([], $g->visibleCards());
+        self::assertSame([], $g->indicesNeedingPoster());
+        self::assertSame([], $g->visibleCards(4), 'overscan cannot widen a window that has no items');
+    }
+
+    public function testVisibleCardsReturnsLoadedCardsAtTheirAbsoluteIndices(): void
+    {
+        // 4 cols × 3 visible rows → the window is [0, 11]; nothing outside it.
+        $g = $this->grid(50)->withItems([
+            0 => new PosterCard('0', 'Zero'),
+            3 => PosterCard::new('3', 'Three')->withPoster('ansi'),
+            11 => new PosterCard('11', 'Eleven'),
+            12 => new PosterCard('12', 'Twelve — just past the window'),
+        ]);
+
+        self::assertSame([0, 3, 11], array_keys($g->visibleCards()), 'ascending, and only what the window covers');
+        self::assertSame([0, 3, 11, 12], array_keys($g->visibleCards(1)), 'one overscan row reaches index 12');
+    }
+
+    public function testIndicesNeedingPosterSkipsSkeletonsAndFilledCells(): void
+    {
+        $g = $this->grid(50)->withItems([
+            0 => new PosterCard('0', 'No url'),
+            // A card that names an empty url is not fetchable either — the default
+            // predicate's other branch.
+            9 => PosterCard::new('9', 'Blank url', ''),
+            1 => PosterCard::new('1', 'Url, no art', 'https://cdn/1.png'),
+            2 => PosterCard::new('2', 'Art already inlined', 'https://cdn/2.png')->withPoster('ansi'),
+            3 => PosterCard::new('3', 'Art as an overlay', 'https://cdn/3.png')->withImage('bytes', 7),
+            // An overlay blob with no id paints no marker, so it is not a fill: the
+            // owner has to be able to re-queue it or the cell stays a skeleton forever.
+            4 => PosterCard::new('4', 'Overlay, no id', 'https://cdn/4.png', posterImage: 'bytes'),
+        ]);
+
+        // 0 has no source to fetch from; 2 and 3 are filled (hasPoster() spans both
+        // fill modes); only 1 and 4 are pending — 4 because an overlay with no id
+        // paints nothing, so the window must offer it again rather than park a
+        // permanent skeleton. Index 9 is loaded but names no URL, and indices
+        // 5..8/10..11 are absent from the sparse map — skeletons either way.
+        self::assertSame([1, 4], $g->indicesNeedingPoster());
+        self::assertFalse($g->item(4)->hasPoster());
+    }
+
+    public function testPendingHelpersNeverMutateTheGrid(): void
+    {
+        $g = $this->grid(50)->withItem(1, PosterCard::new('1', 'Pending', 'https://cdn/1.png'));
+
+        $g->visibleCards();
+        $g->indicesNeedingPoster(2);
+
+        self::assertSame(1, $g->loadedCount());
+        self::assertSame(0, $g->cursorIndex(), 'read-only queries cannot move the cursor');
+        self::assertSame(0, $g->scrollRow());
+    }
+
+    public function testEvictionMakesCellsPendingAgainAfterRefetch(): void
+    {
+        $loaded = $this->grid(50)->withItems([
+            0 => PosterCard::new('0', 'Zero', 'https://cdn/0.png')->withPoster('ansi'),
+            1 => PosterCard::new('1', 'One', 'https://cdn/1.png'),
+        ]);
+        self::assertSame([1], $loaded->indicesNeedingPoster());
+
+        // Pruning to an empty window drops the map; the indices are then skeleton
+        // cells (absent from the pending list) until the owner re-fetches them.
+        $evicted = $loaded->withoutItemsOutside([0, -1]);
+        self::assertSame(0, $evicted->loadedCount());
+        self::assertSame([], $evicted->indicesNeedingPoster());
+
+        $refetched = $evicted->withItems([0 => new PosterCard('0', 'Zero', 'https://cdn/0.png')]);
+        self::assertSame([0], $refetched->indicesNeedingPoster(), 'the poster was evicted with the card, so it is pending again');
+    }
 }
