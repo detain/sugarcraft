@@ -650,7 +650,8 @@ final class Mosaic
      * are inherited from the source call: an unsupported URL scheme throws
      * synchronously, SSRF/host rejections come back as a rejected promise.
      * The render itself is synchronous on the event loop (decode + resample
-     * + encode) — for large posters wrap the mosaic in {@see withAsync()} or
+     * + encode) — for large posters route the source through
+     * {@see Mosaic::adaptive()} + {@see AdaptiveImage::withAsync()} or
      * offload the whole call so the loop keeps serving other sockets.
      *
      * @return PromiseInterface<string>

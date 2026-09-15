@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Mosaic\DiskCache;
+use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Mosaic\Scale;
 use SugarCraft\Mosaic\Tests\Support\LoopbackHttpServer;
@@ -175,6 +176,29 @@ final class MosaicPosterTest extends TestCase
         $this->awaitIdle();
 
         $this->assertInstanceOf(\InvalidArgumentException::class, $rejected);
+    }
+
+    public function testPosterAsyncThrowsSynchronouslyOnDisallowedScheme(): void
+    {
+        // The documented error split: scheme refusals throw at call time
+        // (misuse, not I/O), host/SSRF refusals come back rejected. No loop
+        // run here — a rejected promise would leave this test unresolved.
+        $this->expectException(\InvalidArgumentException::class);
+
+        Mosaic::halfBlock()->posterAsync('file:///etc/passwd', 8, 4);
+    }
+
+    public function testPosterFileMissPathRendersWithFillScale(): void
+    {
+        // Fill-by-default is requirement 4's anti-squash guarantee — pin it
+        // on the RENDER BYTES, not just the cache key: a cache-less miss
+        // must equal the explicit Fill render of the same source.
+        $path     = __DIR__ . '/fixtures/4x2.png';
+        $mosaic   = Mosaic::kitty();
+        $expected = $mosaic->withScale(Scale::Fill)
+            ->render(ImageSource::fromFile($path), 8, 4);
+
+        $this->assertSame($expected, $mosaic->posterFile($path, 8, 4));
     }
 
     // ---- posterFile() -----------------------------------------------------
