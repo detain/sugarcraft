@@ -28,9 +28,10 @@ use SugarCraft\Crush\MCP\McpForeignTranslate;
 final class McpForeignTranslateTest extends TestCase
 {
     /**
-     * The operator's opencode servers block — byte-identical to
-     * McpConfigToleranceTest::OPERATOR_OPENCODE (hand-copied on purpose: a
-     * shared fixture would let one edit move BOTH sides of the parity).
+     * The operator's opencode servers block — structurally identical to
+     * McpConfigToleranceTest::OPERATOR_OPENCODE, differing only in the
+     * SEARXNG_URL value (hand-copied on purpose: a shared fixture would
+     * let one edit move BOTH sides of the parity).
      */
     private const OPENCODE_SERVERS = [
         'searxng' => [
@@ -45,9 +46,9 @@ final class McpForeignTranslateTest extends TestCase
     ];
 
     /**
-     * The same four servers in sugar-crush's canonical shape — byte-identical
-     * to McpConfigToleranceTest::OPERATOR_TRANSLATED, the map the loader is
-     * proven to build correctly.
+     * The same four servers in sugar-crush's canonical shape — structurally
+     * identical to McpConfigToleranceTest::OPERATOR_TRANSLATED (same URL
+     * deviation as above), the map the loader is proven to build correctly.
      */
     private const CANONICAL_SERVERS = [
         'searxng' => [

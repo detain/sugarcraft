@@ -184,7 +184,7 @@ through it, and for the other two the second name lives in another class —
 `StatusLineCommand::fromSettings()`, public because the runner is testable
 without a launch, and `RulesState::new()`, which *consumes* the value that
 `chat()` reads and filters through the private
-`Bootstrap::rulePacksToDisable()` on the way in. The previous revisionof this row named `StatusLineCommand::fromSettings()` first and
+`Bootstrap::rulePacksToDisable()` on the way in. The previous revision of this row named `StatusLineCommand::fromSettings()` first and
 `Renderer::renderStatusBar()` second, and neither half fitted the convention:
 nothing calls `fromSettings()` on a launch except `Bootstrap::chat()`, and
 `renderStatusBar()` does not read the settings key at all — it reads the
