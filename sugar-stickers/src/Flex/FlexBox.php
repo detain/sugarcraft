@@ -282,27 +282,24 @@ final class FlexBox
     }
 
     /**
-     * Strip dangerous control characters from content destined for the terminal.
+     * Neutralize data-origin content before it reaches the terminal.
      *
-     * Removes C0 controls (0x00-0x08, 0x0B-0x1F), C1 escape (0x7F),
-     * and OSC/DCS sequences that could corrupt terminal state. Library-emitted
-     * SGR sequences are preserved as they are added downstream via applyStyle.
+     * Delegates to the canonical {@see \SugarCraft\Core\Util\Sanitize::untrusted()}
+     * — `Ansi::strip()` over the whole ECMA-48 family in BOTH 7-bit and 8-bit
+     * form (CSI/OSC/SGR + DCS/SOS/PM/APC payloads + lone C1 bytes, fail-closed
+     * on an unterminated sequence) followed by a C0-minus-{\t,\n,\r} + DEL sweep,
+     * valid UTF-8 (e.g. CJK `東京`) preserved. `renderRow()`/`renderColumn()` run
+     * this on each item line BEFORE `alignCell()` (ANSI-aware truncate/pad) and
+     * BEFORE `applyStyle()` wraps the result in `CSI <style> m … reset`, so the
+     * box's own colour is applied downstream of the strip and survives it —
+     * exactly as {@see \SugarCraft\Stickers\Table\Column::sanitize()} relies on.
+     * The pre-hardening hand-rolled regexes this replaces were \x1b-only: blind
+     * to 8-bit C1 (`\x9b` CSI → cursor-move / sixel / title-set without ever
+     * using \x1b) and they leaked unterminated DCS/APC payload text.
+     * See docs/research/ansi-tmux-ansicode-audit.md #9.
      */
     private function sanitize(string $s): string
     {
-        // Remove OSC sequences (ESC ] ... BEL or ESC \).
-        $s = \preg_replace('/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', '', $s);
-        // Remove DCS sequences (ESC P ... ESC \).
-        $s = \preg_replace('/\x1bP[^\x1b]*(?:\x1b\\\\)/', '', $s);
-        // Remove bare ESC introducers not followed by [ (not CSI).
-        $s = \preg_replace('/\x1b(?!\[)/', '', $s);
-        // Remove C0 controls except HT (0x09) and LF (0x0A).
-        $s = \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
-        // Remove DEL (0x7F).  Do NOT remove 0x80-0x9F — those are valid
-        // UTF-8 continuation bytes (e.g. CJK `東京` = e6[9d]b1 e4[ba]ac
-        // where bytes in brackets fall in that range).  Stripping them
-        // corrupts any multi-byte character whose encoding includes them.
-        $s = \preg_replace('/\x7F/', '', $s);
-        return $s;
+        return \SugarCraft\Core\Util\Sanitize::untrusted($s);
     }
 }
