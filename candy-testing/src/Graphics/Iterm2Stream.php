@@ -77,7 +77,7 @@ final class Iterm2Stream
     }
 
     /**
-     * The reassembled base64 payload (empty for control-only sequences).
+     * The decoded image bytes (empty for control-only sequences).
      */
     public function payload(): string
     {
@@ -201,7 +201,7 @@ final class Iterm2Stream
             }
             $eq = strpos($pair, '=');
             if ($eq === false) {
-                continue;
+                throw new MalformedGraphicsException(Lang::t('graphics.iterm2.bad_parameter', ['token' => $pair]));
             }
             $params[substr($pair, 0, $eq)] = urldecode(substr($pair, $eq + 1));
         }

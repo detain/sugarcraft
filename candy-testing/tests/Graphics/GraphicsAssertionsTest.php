@@ -66,6 +66,25 @@ final class GraphicsAssertionsTest extends TestCase
         self::assertTrue(true);
     }
 
+    public function testAssertRendersToToleranceIsEnforced(): void
+    {
+        // The same 3/2-channel offset that passes at tolerance 4 must fail at 0,
+        // proving the tolerance value is actually honoured by the comparison.
+        $grid = GraphicsAssertions::renderGrid(Fixture::bytes('sixel_red.six'), Mode::Sixel);
+        $rows = [];
+        for ($y = 0; $y < $grid->height(); $y++) {
+            $row = [];
+            for ($x = 0; $x < $grid->width(); $x++) {
+                [$r, $g, $b] = $grid->pixel($x, $y) ?? [0, 0, 0];
+                $row[] = [$r - 3, $g + 2, $b];
+            }
+            $rows[] = $row;
+        }
+
+        $this->expectException(AssertionFailedError::class);
+        GraphicsAssertions::assertRendersTo(Fixture::bytes('sixel_red.six'), Mode::Sixel, $rows, 0);
+    }
+
     public function testAssertRendersToFailsOnColourMismatch(): void
     {
         $rows = [];

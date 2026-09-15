@@ -23,8 +23,10 @@ enum Mode: string
      * Sniff the protocol a byte stream speaks from its control introducer.
      *
      * Sixel rides a DCS with a `q` color-space introducer; Kitty (as emitted by
-     * candy-mosaic) rides a DCS whose parameter starts with `q`; iTerm2 rides an
-     * OSC 1337. Detection is best-effort framing only — the streams are still
+     * candy-mosaic) rides a DCS whose parameter starts with `q`, or the standard
+     * APC `_G` form; iTerm2 rides an OSC 1337. The probe matches the framing the
+     * decoders themselves accept — a transmit embedded in surrounding screen text
+     * still sniffs correctly. Detection is best-effort framing only; the stream is
      * parsed strictly once a mode is chosen.
      */
     public static function detect(string $stream): self
@@ -33,8 +35,12 @@ enum Mode: string
             return self::Iterm2;
         }
 
-        if (str_starts_with($stream, "\x1bP")) {
-            return str_starts_with($stream, "\x1bPq") ? self::Kitty : self::Sixel;
+        if (str_contains($stream, "\x1bPq") || str_contains($stream, "\x1b_G")) {
+            return self::Kitty;
+        }
+
+        if (str_contains($stream, "\x1bP")) {
+            return self::Sixel;
         }
 
         throw new MalformedGraphicsException(Lang::t('graphics.detect.unknown_protocol'));

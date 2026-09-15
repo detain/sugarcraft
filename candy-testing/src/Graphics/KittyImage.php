@@ -96,7 +96,9 @@ final class KittyImage
     }
 
     /**
-     * The reassembled payload as originally transmitted (before any inflate).
+     * The reassembled, decoded payload bytes for this transmit — already
+     * zlib-inflated for an `f=1` image and empty for a data-less placement.
+     * Unlike {@see png()} this never throws on an empty payload.
      */
     public function rawPayload(): string
     {

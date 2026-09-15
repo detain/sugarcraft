@@ -109,4 +109,12 @@ final class Iterm2StreamTest extends TestCase
         $this->expectExceptionMessage('not valid base64');
         Iterm2Stream::decode("\x1b]1337;File=width=1:!!!nope!!!\x07");
     }
+
+    public function testMalformedArgumentThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('key=value pair');
+        // An argument segment with no `=` is malformed, not ignorable.
+        Iterm2Stream::decode("\x1b]1337;File=width=1;oops:AAAA\x07");
+    }
 }

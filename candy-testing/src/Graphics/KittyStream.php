@@ -149,6 +149,13 @@ final class KittyStream
         $params = self::parseParams(substr($stream, $paramsStart, $beginEnd - $paramsStart));
         $chunkStart = $beginEnd + strlen(self::ST);
 
+        // candy-mosaic emits no gap between the header ST and the first `m=`
+        // chunk; skip any stray whitespace so a padded transmission is never
+        // misread as a bare placement (the probe and region below both start here).
+        while (in_array(substr($stream, $chunkStart, 1), [' ', "\t", "\r", "\n"], true)) {
+            $chunkStart++;
+        }
+
         // A transmission that carries data is followed by `m=` chunks and closed
         // by an `m=0` ST terminator. A bare placement (`a=p` with no stored data)
         // is a complete self-closing DCS — the begin ST ends it. Distinguish the
@@ -296,7 +303,7 @@ final class KittyStream
             }
             $eq = strpos($pair, '=');
             if ($eq === false) {
-                continue;
+                throw new MalformedGraphicsException(Lang::t('graphics.kitty.bad_parameter', ['token' => $pair]));
             }
             $params[substr($pair, 0, $eq)] = substr($pair, $eq + 1);
         }

@@ -150,4 +150,45 @@ final class SixelStreamTest extends TestCase
         $this->expectExceptionMessage('unexpected character');
         SixelStream::decode("\x1bP0;1;0q\"1;1;4;4#0;2;100;0;0#0\x00\x1b\\");
     }
+
+    public function testSpaceSeparatedRunDecodes(): void
+    {
+        // Canonical RLE is `!4~`; be lenient about the `!4 ~` spacing some
+        // encoders emit and still paint four lit columns across the band.
+        $sixel = SixelStream::decode("\x1bP0;1;0q\"1;1;4;6#0;2;100;0;0#0!4 ~\x1b\\");
+
+        self::assertSame([255, 0, 0], $sixel->pixel(0, 0));
+        self::assertSame([255, 0, 0], $sixel->pixel(3, 0));
+    }
+
+    public function testNonRgbColorSpaceThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('not supported');
+        // Model 5 is HLS, which the decoder deliberately refuses to guess.
+        SixelStream::decode("\x1bP0;1;0q\"1;1;4;4#0;5;100;0;0#0~\x1b\\");
+    }
+
+    public function testColorComponentOutOfRangeThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('exceeds the 0..100');
+        SixelStream::decode("\x1bP0;1;0q\"1;1;4;4#0;2;150;0;0#0~\x1b\\");
+    }
+
+    public function testTruncatedColorDefinitionThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('malformed');
+        // `#idx;model;r;g` — four numbers, blue missing; must not default it.
+        SixelStream::decode("\x1bP0;1;0q\"1;1;4;4#0;2;100;0#0~\x1b\\");
+    }
+
+    public function testDataBeforeColorSelectedThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('before a color register');
+        // A bare data byte appears with only a raster decl, never a `#` select.
+        SixelStream::decode("\x1bP0;1;0q\"1;1;4;4~\x1b\\");
+    }
 }

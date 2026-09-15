@@ -95,10 +95,22 @@ final class GraphicsAssertions extends Assert
     private static function renderedDimensions(string $stream, Mode $mode): array
     {
         return match ($mode) {
-            Mode::Sixel => [SixelStream::decode($stream)->width(), SixelStream::decode($stream)->height()],
+            Mode::Sixel => self::sixelDimensions($stream),
             Mode::Kitty => KittyStream::decode($stream)->image()->pixelDimensions(),
             Mode::Iterm2 => Iterm2Stream::decode($stream)->pixelDimensions(),
         };
+    }
+
+    /**
+     * Decode a Sixel stream once and read both declared dimensions.
+     *
+     * @return array{int, int}
+     */
+    private static function sixelDimensions(string $stream): array
+    {
+        $sixel = SixelStream::decode($stream);
+
+        return [$sixel->width(), $sixel->height()];
     }
 
     private static function gridFromPng(string $png): PixelGrid
@@ -139,6 +151,11 @@ final class GraphicsAssertions extends Assert
             $sixel->width(),
             $grid->width(),
             self::describe($message, 'decoded width does not match the declared raster'),
+        );
+        self::assertSame(
+            $sixel->height(),
+            $grid->height(),
+            self::describe($message, 'decoded height does not match the declared raster'),
         );
         self::assertNotEmpty(
             $grid->paintedPixels(),

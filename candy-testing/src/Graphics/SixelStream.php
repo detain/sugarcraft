@@ -227,17 +227,27 @@ final class SixelStream
             throw new MalformedGraphicsException(Lang::t('graphics.sixel.bad_color_introducer'));
         }
 
-        if (count($numbers) >= 4) {
+        $arity = count($numbers);
+        if ($arity >= 5) {
             // `#idx;model;r;g;b` — models 1 and 2 carry RGB as 0..100 percent.
-            [$model, $red, $green, $blue] = [$numbers[1], $numbers[2], $numbers[3], $numbers[4] ?? 0];
+            [$model, $red, $green, $blue] = [$numbers[1], $numbers[2], $numbers[3], $numbers[4]];
             if ($model !== 1 && $model !== 2) {
                 throw new MalformedGraphicsException(Lang::t('graphics.sixel.unknown_color_space', ['model' => $model]));
+            }
+            foreach ([$red, $green, $blue] as $component) {
+                if ($component > 100) {
+                    throw new MalformedGraphicsException(Lang::t('graphics.sixel.color_component_out_of_range', ['value' => $component]));
+                }
             }
             $this->palette[$index] = [
                 self::percentToByte($red),
                 self::percentToByte($green),
                 self::percentToByte($blue),
             ];
+        } elseif ($arity !== 1) {
+            // A bare `#idx` selects an existing register; two-to-four numbers are a
+            // truncated/invalid colour definition and must not be guessed at.
+            throw new MalformedGraphicsException(Lang::t('graphics.sixel.bad_color_introducer'));
         }
 
         if (!isset($this->palette[$index])) {
@@ -255,7 +265,15 @@ final class SixelStream
             throw new MalformedGraphicsException(Lang::t('graphics.sixel.rle_missing_count'));
         }
 
-        if (($body[$this->cursor] ?? '') === ';') {
+        // Canonical RLE is `!count<char>` with no separator; tolerate a stray `;`
+        // or run of whitespace before the data byte (`!count char`), which some
+        // encoders emit. None of these characters are data bytes, so the skip is
+        // unambiguous and always terminates.
+        while (true) {
+            $peek = $body[$this->cursor] ?? '';
+            if ($peek !== ';' && $peek !== ' ' && $peek !== "\t") {
+                break;
+            }
             $this->cursor++;
         }
 
@@ -362,10 +380,12 @@ final class SixelStream
         return $digits === '' ? null : (int) $digits;
     }
 
+    /**
+     * Map a 0..100 percent channel to a 0..255 byte. The caller (`readColor`)
+     * has already bounded the value, so this is a pure formatter.
+     */
     private static function percentToByte(int $percent): int
     {
-        $clamped = max(0, min(100, $percent));
-
-        return (int) round($clamped * 255 / 100);
+        return (int) round($percent * 255 / 100);
     }
 }

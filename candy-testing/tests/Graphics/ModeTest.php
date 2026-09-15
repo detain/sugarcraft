@@ -30,6 +30,19 @@ final class ModeTest extends TestCase
         self::assertSame(Mode::Iterm2, Mode::detect(Fixture::bytes('iterm2_red.iterm2')));
     }
 
+    public function testDetectRecognisesApcKitty(): void
+    {
+        self::assertSame(Mode::Kitty, Mode::detect("\x1b_Ga=T,c=8,r=4;AAAA\x1b\\"));
+    }
+
+    public function testDetectRecognisesTransmitEmbeddedInText(): void
+    {
+        // The decoders locate a transmit via strpos anywhere in the stream, so the
+        // sniff must too — leading screen text must not defeat detection.
+        self::assertSame(Mode::Sixel, Mode::detect('scrollbar ' . Fixture::bytes('sixel_red.six')));
+        self::assertSame(Mode::Kitty, Mode::detect('frame ' . Fixture::bytes('kitty_red.kitty')));
+    }
+
     public function testDetectFailsFastOnUnknownProtocol(): void
     {
         $this->expectException(MalformedGraphicsException::class);

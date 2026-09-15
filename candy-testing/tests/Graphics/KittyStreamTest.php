@@ -171,6 +171,21 @@ final class KittyStreamTest extends TestCase
         KittyStream::decode("\x1bPqa=T,f=1,c=8,r=4\x1b\\m=0,aGVsbG8=m=0\x1b\\");
     }
 
+    public function testUnterminatedApcThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('APC transmit is not closed');
+        KittyStream::decode("\x1b_Ga=T,c=8,r=4");
+    }
+
+    public function testMalformedControlParameterThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('key=value pair');
+        // A header token with no `=` must fail loud, not be silently dropped.
+        KittyStream::decode("\x1bPqc=8,garbage\x1b\\m=0,AAAA=m=0\x1b\\");
+    }
+
     /**
      * A minimal standard-APC transmit wrapping the real 8x4 red PNG.
      *
