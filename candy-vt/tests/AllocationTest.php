@@ -6,16 +6,22 @@ namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SplObjectStorage;
-use SugarCraft\Ansi\Parser\Handler;
+use SugarCraft\Ansi\Parser\HandlerAdapter;
 use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Ansi\Parser\State;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell as RendererCell;
 use SugarCraft\Vt\Cell\Cell;
 use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Cursor;
+use SugarCraft\Vt\Parser\CsiHandlerImpl;
+use SugarCraft\Vt\Parser\OscHandlerImpl;
 use SugarCraft\Vt\Screen\Screen;
 use SugarCraft\Vt\Screen\Scrollback;
+use SugarCraft\Vt\Terminal as RendererTerminal;
 use SugarCraft\Vt\Terminal\Terminal;
+use SugarCraft\Vt\Tests\Support\NullHandler;
+use SugarCraft\Vt\Theme;
 
 /**
  * Allocation-growth proof for the grid/Buffer/Screen/Parser surfaces.
@@ -51,13 +57,31 @@ final class AllocationTest extends TestCase
     /**
      * Live-heap growth ceiling allowed across a full churn phase, in bytes.
      *
-     * Sized generously for shared CI: allocator metadata and the single
-     * retained clone account for a few KiB at most, while one leaked
-     * 320x120 Buffer clone is ~1.5 MB and one leaked CellGrid ~6.3 MB —
-     * i.e. a genuine leak overshoots this ceiling by two orders of magnitude
-     * within a handful of iterations.
+     * The warm baseline and the cold measurement hold the same steady-state
+     * live set (one grid of the current geometry), so that shared instance
+     * cancels out of the delta — what the ceiling actually bounds is
+     * *per-iteration retention*. A genuine leak overshoots it immediately:
+     * one leaked 320x120 Buffer clone is ~1.5 MB and one leaked CellGrid
+     * ~6.3 MB, i.e. two orders of magnitude over this 256 KiB slack, which
+     * is sized only for allocator metadata on a shared CI runner.
      */
     private const GROWTH_CEILING_BYTES = 262_144;
+
+    /**
+     * Peak-usage ceiling across a churn phase, in bytes — deliberately an
+     * order of magnitude looser than {@see GROWTH_CEILING_BYTES} because it
+     * measures a different thing: the working set, not the retained set.
+     *
+     * Healthy churn transiently holds one extra full grid: `resize()` and
+     * `Screen::fromBuffer()` build the new structure before the old one is
+     * released, so peak sits ~one grid above the settled value by design
+     * (measured ~1.3-3.0 MB for the 320x120 Buffer path, ~1.3 MB for the
+     * 160x50 CellGrid path). 8 MiB covers the largest such transient with
+     * slack; a per-iteration retention (≥1.5 MB leaked clone × dozens of
+     * cycles) smashes straight through it. Each test scopes this to its own
+     * phase via {@see capturePeakBaseline()} resetting the monotone mark.
+     */
+    private const PEAK_CEILING_BYTES = 8_388_608;
 
     // ─── Structural counts: grids are exactly cols x rows, never more ───
 
@@ -143,9 +167,9 @@ final class AllocationTest extends TestCase
     public function testDirtyRegionBoundsStayInsideGridAcrossChurn(): void
     {
         $grid = new CellGrid(160, 50);
-        $handler = new \SugarCraft\Ansi\Parser\HandlerAdapter(
-            new \SugarCraft\Vt\Parser\CsiHandlerImpl($grid, new \SugarCraft\Vt\Cursor(), new \SugarCraft\Vt\Theme()),
-            new \SugarCraft\Vt\Parser\OscHandlerImpl(),
+        $handler = new HandlerAdapter(
+            new CsiHandlerImpl($grid, new Cursor(), new Theme()),
+            new OscHandlerImpl(),
         );
         $parser = new Parser($handler, maxStringBuffer: 65536);
 
@@ -158,6 +182,7 @@ final class AllocationTest extends TestCase
             // bare `0 <= x < rows` check forever; pin them to real, written
             // bounds so the test can't pass on an empty grid.
             self::assertNotSame(PHP_INT_MAX, $dirty['minRow'], 'dirty region must open after a write');
+            self::assertNotSame(PHP_INT_MAX, $dirty['minCol'], 'dirty region must open after a write');
             self::assertLessThanOrEqual($row, $dirty['minRow']);
             self::assertGreaterThanOrEqual($row, $dirty['maxRow']);
             self::assertLessThan(50, $dirty['maxRow'], 'dirty region must never exceed the grid');
@@ -249,7 +274,7 @@ final class AllocationTest extends TestCase
             $buffer = $buffer->resize(321, 121)->resize(320, 120);
         }
         $settledWarm = $this->settledUsage();
-        $peakWarm = memory_get_peak_usage();
+        $peakWarm = $this->capturePeakBaseline();
 
         for ($i = 0; $i < 150; $i++) {
             $buffer = $buffer->resize(321, 121)->resize(320, 120);
@@ -280,7 +305,7 @@ final class AllocationTest extends TestCase
             $terminal->screen();
         }
         $settledWarm = $this->settledUsage();
-        $peakWarm = memory_get_peak_usage();
+        $peakWarm = $this->capturePeakBaseline();
 
         for ($i = 0; $i < 100; $i++) {
             $terminal->resize(320, 120);
@@ -348,7 +373,7 @@ final class AllocationTest extends TestCase
             $screen = Screen::fromBuffer($buffer);
         }
         $settledWarm = $this->settledUsage();
-        $peakWarm = memory_get_peak_usage();
+        $peakWarm = $this->capturePeakBaseline();
 
         for ($i = 0; $i < 500; $i++) {
             $screen = Screen::fromBuffer($buffer);
@@ -373,7 +398,7 @@ final class AllocationTest extends TestCase
             unset($before, $after, $changes);
             if ($cycle === 30) {
                 $settledWarm = $this->settledUsage();
-                $peakWarm = memory_get_peak_usage();
+                $peakWarm = $this->capturePeakBaseline();
             }
         }
 
@@ -402,7 +427,7 @@ final class AllocationTest extends TestCase
             $parser->reset();
         }
         $settledWarm = $this->settledUsage();
-        $peakWarm = memory_get_peak_usage();
+        $peakWarm = $this->capturePeakBaseline();
 
         for ($i = 0; $i < 2000; $i++) {
             $parser->feed($stream);
@@ -443,7 +468,7 @@ final class AllocationTest extends TestCase
             $parser->reset();
             if ($i === 500) {
                 $settledWarm = $this->settledUsage();
-                $peakWarm = memory_get_peak_usage();
+                $peakWarm = $this->capturePeakBaseline();
             }
         }
 
@@ -458,10 +483,11 @@ final class AllocationTest extends TestCase
 
     public function testRendererTerminalGridAndSnapshotChurnDoesNotGrowHeap(): void
     {
-        // The second pipeline (`SugarCraft\Vt\Terminal`, vcr renderer path)
+        // The second pipeline ({@see RendererTerminal}, vcr renderer path)
         // owns a CellGrid + Snapshot per frame. 300 feed/snapshot cycles at
-        // 160x50 — ~6.3 MB per grid — with snapshots dropped each cycle.
-        $terminal = \SugarCraft\Vt\Terminal::new(160, 50);
+        // 160x50 (~1.3 MB per grid of value cells) — with snapshots dropped
+        // each cycle.
+        $terminal = RendererTerminal::new(160, 50);
         $stream = "\x1b[1;1Hhello 日本 \x1b[2J\x1b[10;20Hx";
 
         for ($i = 0; $i < 20; $i++) {
@@ -469,7 +495,7 @@ final class AllocationTest extends TestCase
             self::assertSame(160, $terminal->snapshot()->grid->cols);
         }
         $settledWarm = $this->settledUsage();
-        $peakWarm = memory_get_peak_usage();
+        $peakWarm = $this->capturePeakBaseline();
 
         for ($i = 0; $i < 300; $i++) {
             $terminal->feed($stream);
@@ -547,6 +573,20 @@ final class AllocationTest extends TestCase
         return count($ids);
     }
 
+    /**
+     * Reset the process-monotone peak high-water mark and return the current
+     * usage as this test's peak baseline. Without the reset, an earlier test
+     * in the same PHPUnit process can leave the high-water mark above
+     * anything this test allocates, making the peak assertion read 0 and pass
+     * vacuously; resetting scopes it to the test's own transients.
+     */
+    private function capturePeakBaseline(): int
+    {
+        memory_reset_peak_usage();
+
+        return memory_get_peak_usage();
+    }
+
     private function assertNoGrowth(int $settledWarm, int $peakWarm): void
     {
         $settledNow = $this->settledUsage();
@@ -556,55 +596,9 @@ final class AllocationTest extends TestCase
             "settled heap grew " . ($settledNow - $settledWarm) . ' bytes across churn',
         );
         self::assertLessThan(
-            self::GROWTH_CEILING_BYTES,
+            self::PEAK_CEILING_BYTES,
             memory_get_peak_usage() - $peakWarm,
-            'peak usage climbed during churn — allocation rate outran release',
+            'peak working set climbed during churn — allocation outran release beyond one transient grid',
         );
-    }
-}
-
-/**
- * Discarding handler for parser-churn tests: counts dispatches instead of
- * recording them, so the measured heap is the parser's own state, not a
- * fixture log. (Declares alongside the test in this file so the proof ships
- * as one unit.)
- */
-final class NullHandler implements Handler
-{
-    public int $dispatches = 0;
-
-    public function printChar(string $rune): void
-    {
-        $this->dispatches++;
-    }
-
-    public function execute(int $byte): void
-    {
-        $this->dispatches++;
-    }
-
-    public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
-    {
-        $this->dispatches++;
-    }
-
-    public function escDispatch(int $final, int $intermediate): void
-    {
-        $this->dispatches++;
-    }
-
-    public function oscDispatch(string $data): void
-    {
-        $this->dispatches++;
-    }
-
-    public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
-    {
-        $this->dispatches++;
-    }
-
-    public function sosPmApcDispatch(string $kind, string $data): void
-    {
-        $this->dispatches++;
     }
 }

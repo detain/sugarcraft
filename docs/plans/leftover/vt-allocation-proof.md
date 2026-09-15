@@ -18,17 +18,34 @@ growing data structure can pass:
    `Buffer`, where `Cell::empty()` memoises one shared immutable instance
    across all blank slots), `Scrollback::count()` == `min(pushed, maxSize)`
    exactly, `Parser::currentState() === State::Ground` after `reset()`.
-2. **Settled live-heap growth**: `memory_get_usage()` after
-   `gc_collect_cycles()` + `gc_mem_caches()` (`settledUsage()` helper).
-   This is this process's zend EMALLOC live bytes — unaffected by other
-   processes on a shared runner (unlike raw RSS). Each loop warms the
-   allocator first (identical shapes recycle the same chunks), then
-   measures a cold phase; the ceiling is **256 KiB** of growth between
-   warm and cold phase. A single retained 320x120 `Buffer` clone is
-   ~1.5 MB and a `CellGrid` ~6.3 MB (measured), so a per-iteration leak
-   overshoots the ceiling within a handful of cycles, while allocator
-   bookkeeping slack does not. `memory_get_peak_usage()` deltas are
-   asserted alongside, to catch allocation rate outrunning release.
+2. **Settled live-heap growth** (`GROWTH_CEILING_BYTES` = **256 KiB**):
+   `memory_get_usage()` after `gc_collect_cycles()` + `gc_mem_caches()`
+   (`settledUsage()` helper) — this process's zend EMALLOC live bytes,
+   unaffected by other processes on a shared runner (unlike raw RSS). Each
+   loop warms the allocator first (identical shapes recycle the same chunks)
+   and samples the settled baseline at a steady point, then measures the
+   cold phase. Because the warm baseline and cold measurement hold the same
+   steady-state live set (one grid of the current geometry), that shared
+   instance cancels out of the delta — the 256 KiB ceiling bounds
+   *per-iteration retention*. A single leaked 320x120 `Buffer` clone is
+   ~1.5 MB and a `CellGrid` ~6.3 MB (measured), so a leak overshoots within
+   a handful of cycles while allocator bookkeeping slack does not.
+3. **Peak working-set growth** (`PEAK_CEILING_BYTES` = **8 MiB**, scoped per
+   test by `capturePeakBaseline()` calling `memory_reset_peak_usage()`):
+   `memory_get_peak_usage()` is process-monotone, so without a per-test
+   reset an earlier heavy test's high-water mark makes a later test's peak
+   delta read 0 — the assertion would pass vacuously. Resetting scopes it to
+   each test's own transients. The ceiling is an order of magnitude looser
+   than the settled one because it measures a different quantity: healthy
+   churn transiently holds **one extra full grid** (`resize()` and
+   `Screen::fromBuffer()` build the new structure before releasing the old),
+   so peak sits ~1.3–3.0 MB above settled by design. 8 MiB bounds that
+   one-grid hump; a per-iteration retention smashes straight through it.
+
+`NullHandler` (a discarding `Handler` that counts dispatches so the parser
+tests measure the parser's own buffers, not a growing log) lives at
+`candy-vt/tests/Support/NullHandler.php` under the `SugarCraft\Vt\Tests\`
+→ `tests/` autoload-dev mapping.
 
 ## Scenarios covered (15 tests)
 
