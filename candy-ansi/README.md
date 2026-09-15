@@ -45,6 +45,34 @@ interface Handler
 }
 ```
 
+## Subparameters and multi-mode dispatch
+
+ECMA-48 separates parameter *slots* with `;` and *subparameters* with `:` —
+`CSI 4:3 m` (curly underline) is one slot with a subparameter, not two
+parameters, and `CSI ? 1000 ; 1006 h` sets **two** modes. The parser exposes
+both faithfully:
+
+- `Parser::subparams()` returns, during and after each `csiDispatch`, a
+  `list<bool>` aligned with `$params`: `true` at index *i* when the value at
+  *i* was followed by a `:` (the slot continues). A leading `:` marks the
+  implicit default at index 0. This mirrors upstream's `Param.HasMore`
+  side-channel, so SGR consumers can implement `58:2::148:199:255`-style
+  colon forms without re-splitting the byte stream, and `Parser::groupSubparameters($params, $flags)`
+  reconstitutes the nested `list<list<int>>` grouping in one call. SGR 58/59
+  (underline colour set/unset) and the ambiguous `21` are pure handler
+  concerns — this library guarantees the parameter structure they need,
+  including lossless round-trips of what `candy-core`'s
+  `Util\Color::toUnderline()` emits (`58;2;r;g;b`, `58;5;n`).
+- `HandlerAdapter` dispatches **every** parameter of `CSI h/l` to
+  `CsiHandler::decset()/decrst()`, one call per mode, preserving the prefix —
+  previously only the first mode was delivered, so `?1000;1006h` silently
+  dropped `1006` downstream. Consumers (e.g. `candy-vcr`'s mouse-mode
+  tracker) can therefore attribute a later mouse byte sequence to the
+  encoding that enabled it instead of assuming SGR.
+
+Limits: the parser flags colon structure but does not interpret it; handlers
+that ignore `subparams()` keep their old (semicolon-split) view of `$params`.
+
 ## Packages
 
 | Badge | Description |

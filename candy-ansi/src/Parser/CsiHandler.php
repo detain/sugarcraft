@@ -56,6 +56,12 @@ interface CsiHandler
     /**
      * Select Graphic Rendition — set text attributes from $params.
      *
+     * The list is flattened: `:`-separated sub-parameters arrive as adjacent
+     * entries. Handlers that must tell `SGR 4 : 3` (curly underline) from
+     * `SGR 4 ; 3` (underline + italic) consult {@see Parser::subparams()}
+     * through the parser instance they are wired to, or reconstitute groups
+     * with {@see Parser::groupSubparameters()}.
+     *
      * @param list<int> $params  CSI parameter bytes; -1 means default.
      */
     public function sgr(array $params): void;

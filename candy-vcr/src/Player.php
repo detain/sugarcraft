@@ -14,6 +14,8 @@ use SugarCraft\Vcr\Format\CassetteLoader;
 use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\RelativeFormat;
+use SugarCraft\Vcr\Input\MouseModeTracker;
+use SugarCraft\Vcr\Input\MouseReplayDecoder;
 use SugarCraft\Vcr\Matcher\EventMatcher;
 use SugarCraft\Vcr\Msg\Registry;
 
@@ -70,6 +72,13 @@ final class Player
         private readonly ?float $idleTrimSeconds = null,
     ) {
     }
+
+    /**
+     * DEC mouse reporting modes observed in recorded output during the
+     * current {@see play()} — tells the raw-input path which encoding
+     * produced a mouse byte sequence instead of assuming SGR.
+     */
+    private MouseModeTracker $mouseModes;
 
     public static function open(string $path): self
     {
@@ -179,6 +188,7 @@ final class Player
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
+        $this->mouseModes = new MouseModeTracker();
         // Resolve idleThresholdSeconds: explicit parameter wins, otherwise
         // fall back to the fluent withIdleTrim() setting.
         $idleThreshold = $idleThresholdSeconds ?? $this->idleTrimSeconds;
@@ -368,6 +378,14 @@ final class Player
                         // InputReader and send the resulting Msgs directly.
                         // Bypassing the program's stream watcher avoids the
                         // async race between fwrite + fread + parse.
+                        // Mouse bytes carry no encoding marker in X10/1005/1015
+                        // form, so try the mode-explicit decoder first; SGR and
+                        // all other sequences keep using InputReader unchanged.
+                        $mouse = MouseReplayDecoder::decode($event->payload['b'], $this->mouseModes);
+                        if ($mouse !== null) {
+                            $program->send($mouse);
+                            break;
+                        }
                         $reader = new InputReader();
                         foreach ($reader->parse($event->payload['b']) as $msg) {
                             $program->send($msg);
@@ -377,7 +395,9 @@ final class Player
 
                 case EventKind::Output:
                     $tally['output']++;
-                    $expectedOutput .= (string) ($event->payload['b'] ?? '');
+                    $outputBytes = (string) ($event->payload['b'] ?? '');
+                    $this->mouseModes->observe($outputBytes);
+                    $expectedOutput .= $outputBytes;
                     break;
 
                 case EventKind::Quit:
