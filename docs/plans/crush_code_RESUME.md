@@ -82,6 +82,26 @@ wave-1-COMPLETION pick (lane r5 `e4f6e7e23` → pick `76218c66e` — ProgressRin
 5964T/9823A/1S exit0). Census VERBATIM re-run after the completion stamps: SAME 7 survivors (r5 was
 pre-stamped pending-CLOSED inside the CLOSED §E733 paragraph — no census movement, as predicted).
 
+**(a-r83w2) Row census RE-RUN LIVE at the round-83 wave-2 weld (2026-09-15,** after the E729 declined-CLOSED +
+E730 CLOSED + E731/E737/E738 note stamps + E739/E740 mints; same command, verbatim output):
+
+```
+$ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
+    /^## `STALE-CITATION`/{sec="STALE"} /^## `UNCERTAIN`/{sec="UNCERTAIN"}
+    /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
+    if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
+OPEN  **E731** 
+OPEN  **E735** 
+OPEN  **E736** 
+OPEN  **E737** 
+OPEN  **E738** 
+OPEN  **E739** 
+OPEN  **E740** 
+$   # 7 survivors: E731 E735 E736 E738 E739 E740 (OPEN rows; E739/E740 NEW mints) + E737 (PARTIAL-status row,
+#   listed inside the OPEN table as at wave-1). E729 EXITED (declined-by-ruling) and E730 EXITED (single-settle
+#   shipped) — exactly the predicted set: OPEN-table rows -E729 -E730 +E739 +E740, net 7.
+```
+
 The phase-4 ledger: 13 minted at `279daf7bc` (E711–E723) + 5 minted at `e765b1742` (E724–E728) =
 **18 rows, ALL CLOSED** — wave-1 five (q1/q2/q3/q4/q6), wave-2 four (q7/q8/q9/q5-marks), wave-3 three
 (q10/q11/q12), closeout six (q13–q18 + companions `395bfe60a`/`3079dbea2`). E714's queue home was
