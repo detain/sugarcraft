@@ -206,3 +206,13 @@ Accumulated patterns and gotchas specific to this library.
   exactly as before, so every pre-existing sixel snapshot stays valid. GD
   averages alpha during `imagecopyresampled`, so only exact-127 counts as a
   hole; blended edge pixels keep their colour deliberately.
+- **[Sixel alpha perf note]** The transparency probe (`hasTransparentPixels`)
+  is a full `imagecolorat` sweep of the pixel canvas on every render — cheap
+  per pixel but the hot sixel path (video frames) pays one extra
+  O(pixelW·pixelH) pass even for opaque sources, where it can never
+  short-circuit. Deliberate: the background register must be decided before
+  median-cut, so folding the probe into the sampling/grid passes cannot
+  remove the dependency, and gating on container alpha is blind here because
+  GD re-encodes every decoded source as colour-type-6 PNG. The deferred
+  streaming encode (#17) is the natural place to eliminate it (band-local
+  hole discovery).

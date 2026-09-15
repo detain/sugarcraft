@@ -101,8 +101,11 @@ final class SixelRenderer implements Renderer
 
             // The palette only needs a representative sample, not every pixel —
             // median-cut over a capped subset is far cheaper and visually
-            // indistinguishable at thumbnail sizes.
-            $palette = $this->medianCut($this->samplePixels($resized, 4096, $offset), $this->maxColors);
+            // indistinguishable at thumbnail sizes. When a background register
+            // is reserved, the colour budget shrinks by one so the highest
+            // shifted register stays inside DEC's 0..255 range (#256 aliases
+            // onto the transparent background on tolerant decoders).
+            $palette = $this->medianCut($this->samplePixels($resized, 4096, $offset), $this->maxColors - $offset);
 
             // Apply error-diffusion dithering before building the index grid.
             $grid = $this->dither === Dither::None

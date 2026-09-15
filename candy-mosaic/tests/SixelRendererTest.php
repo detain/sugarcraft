@@ -303,4 +303,31 @@ final class SixelRendererTest extends TestCase
         $this->assertStringContainsString('#0;2;P', $out);
         $this->assertStringEndsWith(self::ESC . '\\', $out);
     }
+
+    public function testTransparentSaturatedPaletteNeverAddressesRegister256(): void
+    {
+        // The background register is paid for out of the colour budget: with
+        // any transparent pixel present and 256 distinct colours to spend,
+        // the shifted palette may reach #255 at most — #256 is outside DEC's
+        // 0..255 range and decoders that alias it onto 0 would paint over
+        // the transparent background. 1×1 cells keep the pixel canvas at the
+        // source's exact 17×16 grid, so resampling preserves the colour set.
+        $gd = imagecreatetruecolor(17, 16);
+        $this->assertNotFalse($gd);
+        imagealphablending($gd, false);
+        imagesavealpha($gd, true);
+
+        imagesetpixel($gd, 0, 0, imagecolorallocatealpha($gd, 0, 0, 0, 127));
+        for ($i = 0; $i < 271; $i++) {
+            $x = ($i + 1) % 17;
+            $y = intdiv($i + 1, 17);
+            imagesetpixel($gd, $x, $y, imagecolorallocate($gd, $i % 256, intdiv($i, 256) * 4, ($i * 7) % 256));
+        }
+
+        $out = (new SixelRenderer(Dither::None, 256, 1, 1))->render(ImageSource::fromGd($gd, 'image/png'), 17, 16);
+
+        $this->assertStringContainsString('#0;2;P', $out);
+        $this->assertStringContainsString('#255;', $out, 'the palette must saturate the reduced budget');
+        $this->assertStringNotContainsString('#256', $out);
+    }
 }
