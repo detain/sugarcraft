@@ -127,14 +127,22 @@ final class SgrHandler
     {
         $sub = $params[$i + 1] ?? -1;
         $hasSubparam = isset($params[$i + 1]) && $params[$i + 1] !== -1;
-        if (!$hasSubparam || $sub === 1) {
-            // Plain 4 (no subparam) or 4:1 → single underline (existing behavior)
+        if (!$hasSubparam) {
+            // Plain 4 (no subparam) → single underline.
             return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
         }
         $colon = $subparams === null ? true : ($subparams[$i] ?? false);
         if (!$colon) {
             // `4;N` — semicolon form: N is an INDEPENDENT SGR, not a style.
             return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
+        }
+        if ($sub === 1) {
+            // `4:1` — xterm ctlseqs: single underline is ONE parameter, so the
+            // subparam must be consumed here. Re-reaching it as a standalone
+            // SGR would replay the `1` as bold — the renderer path (which the
+            // emulator is the parity reference for, but on this point the
+            // renderer follows the spec) treats `4:1` as underline only.
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 2];
         }
         if ($sub === 0) {
             return [$sgr->withUnderlineStyle(UnderlineStyle::None), $i + 2];

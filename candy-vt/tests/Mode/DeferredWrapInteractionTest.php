@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\Vt\Sgr\UnderlineStyle;
 use SugarCraft\Vt\Terminal\Terminal;
 
 /**
@@ -170,6 +171,27 @@ final class DeferredWrapInteractionTest extends TestCase
         $this->assertSame('C', $h->buffer->cell(0, 2)->grapheme);
         $this->assertStringContainsString("\u{0301}", $h->buffer->cell(0, 2)->combining);
         $this->assertSame('', $h->buffer->cell(0, 1)->combining);
+    }
+
+    public function testCloneReattachesSubparamsProviderToOwnParser(): void
+    {
+        // Emulator terminals are cloned by the with*() builders; the cloned
+        // handler must read colon continuation flags from the CLONE's own
+        // parser. Left bound to the original it serves stale flags (a prior
+        // `4:3` on the original leaking into the clone's `4;3`) or an empty
+        // list (a fresh original making the clone read `4:3` as `4;3`).
+        $a = Terminal::new(8, 6);
+        $a->feed("\x1b[4:3mA");
+        $b = clone $a;
+        $b->feed("\x1b[2;2H\x1b[0m\x1b[4;3mB");
+        $sgr = $b->screen()->cell(1, 1)->sgr();
+        $this->assertTrue($sgr->italic, 'stale colon flag must not swallow the independent `3`');
+
+        $fresh = clone Terminal::new(8, 6);
+        $fresh->feed("\x1b[3;3H\x1b[4:3mC");
+        $sgr2 = $fresh->screen()->cell(2, 2)->sgr();
+        $this->assertFalse($sgr2->italic, 'empty flag list must not degrade `4:3` to `4;3`');
+        $this->assertSame(UnderlineStyle::Curly, $sgr2->underlineStyle);
     }
 
     // ─── Resize resolves the phantom cell ─────────────────────────────────

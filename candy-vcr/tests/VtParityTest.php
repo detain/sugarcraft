@@ -71,6 +71,13 @@ final class VtParityTest extends TestCase
      *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
      *    HandlerAdapter clamps the count to 1 before the renderer sees it
      *    (pinned below).
+     *  - `CSI ? N L` / `CSI ? N M` — the emulator rejects prefixed IL/DL
+     *    (`prefix === 0` guard); the renderer acts on them because the
+     *    adapter strips the prefix before dispatch (pinned below).
+     *  - DECOM (`? 6`) and the alt-screen buffers (`47/1047/1048/1049`) —
+     *    genuine emulator features with no renderer implementation (pinned
+     *    below). ESC 7/8 and CNL/CPL/CHA/VPA are not dispatched by the
+     *    adapter on either path, so they stay parity no-ops on both sides.
      */
     private const DIVERGENCE_NOTE = 'see VtParityTest::DIVERGENCE_NOTE';
 
@@ -119,6 +126,11 @@ final class VtParityTest extends TestCase
             'strike off' => ["\x1b[9mS\x1b[29mN"],
             'underline colon vs semicolon' => ["\x1b[4:3mC\x1b[0m\x1b[4;3mS\x1b[0mE"],
             'decstbm cup is absolute' => ["\x1b[2;4r\x1b[1;1HA"],
+            'colon one underline consumes subparam' => ["\x1b[4:1mA"],
+            'region scroll at phantom wrap' => [
+                "\x1b[2;4r\x1b[4;20H" . str_repeat('a', 21) . 'BCDEFGHIJKLMNOPQRSTUVWX',
+            ],
+            'phantom straddles save and restore' => [str_repeat('x', 20) . "\x1b[s" . "A\x1b[u" . 'B'],
             'mouse modes multi set reset' => ["\x1b[?1000;1002;1006h\x1b[?1006lreport-on\x1b[0m!"],
             'mixed output' => ["\x1b[2J\x1b[H\x1b[1;1HHeader\r\n\x1b[36mvalue:\x1b[39m 42\x1b[K\r\nfooter\x1b[s\x1b[99;99H\x1b[u!"],
             'wide sgr runs in one dispatch' => ["\x1b[1;31;42mx\x1b[m\x1b[0my"],
@@ -396,6 +408,84 @@ final class VtParityTest extends TestCase
 
         self::assertSame('I7', self::rendererFg($renderer, 0, 5), 'renderer: default-pen blank');
         self::assertSame('I1', self::emulatorFg($emulator, 0, 5), 'emulator: active-pen blank');
+    }
+
+    public function testCataloguedDivergencePrivatePrefixedIlActsOnRendererOnly(): void
+    {
+        // `CSI ? 1 L` is not a standard IL and the emulator rejects it via
+        // its `prefix === 0` guard. The renderer cannot make that call:
+        // candy-ansi's HandlerAdapter dispatches 'L'/'M' without forwarding
+        // the private prefix. Same adapter follow-up as the explicit-zero
+        // pin above; no known real-world emitter sends it.
+        $bytes = "AAAA\r\nBBBB\x1b[2;1H\x1b[?1L";
+
+        self::assertSame(
+            'B',
+            self::emulatorCharAt(self::feedEmulator($bytes), 1, 0),
+            'emulator: prefixed L rejected',
+        );
+        self::assertSame(
+            ' ',
+            self::charAt(self::feedRenderer($bytes), 1, 0),
+            'renderer: acted on the prefixed L the emulator rejected',
+        );
+    }
+
+    public function testCataloguedDivergenceDecomOriginModeIsEmulatorOnly(): void
+    {
+        // `CSI ? 6 h` makes CUP region-relative on the emulator; the renderer
+        // ignores mode 6 entirely (region-relative addressing is its own
+        // feature, out of this parity pass' DECAWM/IL/DL/CUP scope).
+        $bytes = "\x1b[2;4r\x1b[?6h\x1b[1;1HX";
+
+        self::assertSame(
+            'X',
+            self::emulatorCharAt(self::feedEmulator($bytes), 1, 0),
+            'emulator: origin mode — CUP 1;1 lands at the region top',
+        );
+        self::assertSame(
+            'X',
+            self::charAt(self::feedRenderer($bytes), 0, 0),
+            'renderer: addressing stays absolute',
+        );
+    }
+
+    public function testCataloguedDivergenceAltScreenIsEmulatorOnly(): void
+    {
+        // `CSI ? 1049 h` swaps the emulator to the alternate buffer and homes
+        // the cursor; the renderer has no second buffer, so the mode is a
+        // grid no-op there. This is the most consequential surviving gap for
+        // full-screen tapes (candy-vcr itself renders scrollback regions
+        // through the emulator path, where it is honoured).
+        $bytes = "\x1b[2;2H\x1b[?1049hX";
+
+        self::assertSame(
+            'X',
+            self::emulatorCharAt(self::feedEmulator($bytes), 0, 0),
+            'emulator: alt screen begins fresh at home',
+        );
+        self::assertSame(
+            'X',
+            self::charAt(self::feedRenderer($bytes), 1, 1),
+            'renderer: printed at the original cursor',
+        );
+    }
+
+    public function testParityScorcRestoresPositionKeepingVisibilityOnBothPaths(): void
+    {
+        // DECSC/DECRC restore POSITION only on both engines — a hide between
+        // save and restore stays hidden. The renderer initially clobbered
+        // live visibility/shape by restoring the whole saved value object;
+        // it now mirrors the emulator's field-selective Cursor::restore().
+        $bytes = "\x1b[3;5H\x1b[s\x1b[1;1H\x1b[?25l\x1b[u";
+
+        $renderer = self::feedRenderer($bytes);
+        $emulator = self::feedEmulator($bytes);
+
+        self::assertSame(2, $renderer->cursor()->row);
+        self::assertSame(4, $renderer->cursor()->col);
+        self::assertFalse($renderer->cursor()->visible, 'renderer keeps the cursor hidden');
+        self::assertFalse($emulator->cursor()->visible, 'emulator keeps the cursor hidden');
     }
 
     // ------------------------------------------------------------------

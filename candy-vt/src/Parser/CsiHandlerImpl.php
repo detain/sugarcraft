@@ -117,17 +117,22 @@ final class CsiHandlerImpl implements CsiHandler
 
         $width = Width::string($grapheme);
 
-        // Combining mark (width 0): attach to the previous cell if present.
+        // Combining mark (width 0): attach to the host cell. Normally that is
+        // the one before the cursor — but while a phantom cell is armed the
+        // last graphic sits UNDER the cursor (parked at the margin), so the
+        // mark belongs there (emulator: ScreenHandler::attachCombiningChar
+        // keys the same way off wrapPending).
         if ($width <= 0) {
-            if ($col > 0) {
-                $prev = $this->grid->get($row, $col - 1);
+            $host = $this->wrapPending ? $col : $col - 1;
+            if ($host >= 0) {
+                $prev = $this->grid->get($row, $host);
                 $updated = new Cell(
                     char: $prev->char . $grapheme,
                     fg: $this->fg,
                     bg: $this->bg,
                     attrs: $this->attrs,
                 );
-                $this->grid->set($row, $col - 1, $updated);
+                $this->grid->set($row, $host, $updated);
             }
             return;
         }
@@ -731,11 +736,15 @@ final class CsiHandlerImpl implements CsiHandler
      * no-op when nothing was saved. A position change on the way back
      * disarms the phantom cell (emulator: cursor-handler dispatch clears for
      * every final except 's').
+     *
+     * Position only — visibility and shape are live state the emulator does
+     * not snapshot either (`Cursor\Cursor::restore()` carries savedRow/savedCol
+     * alone), so a `CSI s` … `CSI ? 25 l` … `CSI u` keeps the cursor hidden.
      */
     public function scorc(): void
     {
         if ($this->savedCursor !== null) {
-            $this->cursor = $this->savedCursor;
+            $this->cursor = $this->cursor->at($this->savedCursor->row, $this->savedCursor->col);
         }
         $this->wrapPending = false;
     }

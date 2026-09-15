@@ -43,6 +43,10 @@ final class SgrUnderlineStylesTest extends TestCase
         $sgr = $this->apply([4, 1]);
         $this->assertTrue($sgr->underline);
         $this->assertSame(UnderlineStyle::Single, $sgr->underlineStyle);
+        // The `1` is a colon sub-parameter of `4:1`, not a standalone SGR —
+        // consuming it here is what keeps `4:1` from replaying as bold+xterm
+        // ctlseqs lists single-underline among the underline styles.
+        $this->assertFalse($sgr->bold);
     }
 
     public function testUnderlineStyleDouble(): void

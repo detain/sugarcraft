@@ -491,6 +491,39 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertFalse($this->csi->wrapPending(), 'SCORC disarms after restoring');
     }
 
+    public function testScorcRestoresPositionOnlyNotVisibility(): void
+    {
+        // The emulator's Cursor::restore() carries saved row/col alone —
+        // visibility and shape are live state, so a hide between save and
+        // restore stays hidden.
+        $this->csi->cup(4, 6);
+        $this->csi->scosc();
+        $this->csi->cup(1, 1);
+        $this->csi->decrst(25, 0x3F);
+        $this->csi->scorc();
+
+        $this->assertSame(3, $this->csi->cursor()->row);
+        $this->assertSame(5, $this->csi->cursor()->col);
+        $this->assertFalse($this->csi->cursor()->visible, 'restore must not resurrect a hidden cursor');
+    }
+
+    public function testCombiningMarkAttachesToPhantomHostCell(): void
+    {
+        // While the phantom cell is armed the last graphic sits UNDER the
+        // cursor, so a combining mark belongs there — not one column before
+        // (emulator: ScreenHandler::attachCombiningChar keys on wrapPending;
+        // pinned for that engine in Mode\DeferredWrapInteractionTest).
+        $this->cursor = new Cursor(row: 0, col: 79);
+        $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
+        $this->csi->printable('X');
+        $this->assertTrue($this->csi->wrapPending(), 'precondition: phantom armed at right margin');
+
+        $this->csi->printable("\u{0301}");
+
+        $this->assertStringContainsString("\u{0301}", $this->grid->get(0, 79)->char);
+        $this->assertSame(' ', $this->grid->get(0, 78)->char, 'neighbour cell must stay untouched');
+    }
+
     public function testDecawmOffOverwritesLastColumn(): void
     {
         // `CSI ? 7 l`: printing at the right margin stops at the last cell —
