@@ -507,6 +507,32 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertFalse($this->csi->cursor()->visible, 'restore must not resurrect a hidden cursor');
     }
 
+    public function testScorcRestoresPenSavedByScosc(): void
+    {
+        // w4-vt emulator parity: the GENERAL DECSC slot restores the active
+        // rendition along with the position; the renderer expresses that
+        // snapshot as its fg/bg/attrs triple.
+        $this->csi->sgr([1, 31]);           // bold red
+        $this->csi->cup(2, 2);
+        $this->csi->scosc();
+
+        $this->csi->sgr([0, 32]);           // reset to green
+        $this->csi->scorc();
+        $this->csi->printable('Q');
+
+        $cell = $this->csi->grid()->get(1, 1);
+        $this->assertSame('Q', $cell->char);
+        $this->assertSame(1, $cell->fg & 0x0F, 'red pen back from the save');
+        $this->assertNotSame(2, $cell->fg & 0x0F, 'the green set after the save must not stick');
+
+        // With nothing saved, restore leaves the live pen untouched.
+        $fresh = new CsiHandlerImpl(new CellGrid(5, 2), new Cursor(), $this->theme);
+        $fresh->sgr([34]);
+        $fresh->scorc();
+        $fresh->printable('Z');
+        $this->assertSame(4, $fresh->grid()->get(0, 0)->fg & 0x0F, 'un-saved scorc keeps the live pen');
+    }
+
     public function testCombiningMarkAttachesToPhantomHostCell(): void
     {
         // While the phantom cell is armed the last graphic sits UNDER the
@@ -546,14 +572,15 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertSame(1, $this->csi->cursor()->col, 'C landed at (1,0), cursor advanced to (1,1)');
     }
 
-    public function testDecstbmLeavesCursorInPlace(): void
+    public function testDecstbmHomesCursor(): void
     {
         $this->cursor = new Cursor(row: 15, col: 0);
         $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
 
         $this->csi->decstbm(5, 10);
 
-        $this->assertSame(15, $this->csi->cursor()->row, 'DECSTBM records margins; it does not yank the cursor');
+        $this->assertSame(0, $this->csi->cursor()->row, 'DECSTBM homes the cursor (VT500 §DECSTBM, emulator parity)');
+        $this->assertSame(0, $this->csi->cursor()->col);
     }
 
     public function testTbcMode0IsNoOp(): void

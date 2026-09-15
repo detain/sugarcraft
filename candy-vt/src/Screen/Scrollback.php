@@ -104,6 +104,19 @@ final class Scrollback
         return $this->count;
     }
 
+    /**
+     * Drop every stored row (ED 3 — "clear scrollback", xterm ctlseqs
+     * CSI 3 J). The ring keeps its capacity; head/tail/count rewind to a
+     * pristine state so subsequent pushes append from the start again.
+     */
+    public function clear(): void
+    {
+        $this->rows = array_fill(0, $this->maxSize, null);
+        $this->head = 0;
+        $this->tail = 0;
+        $this->count = 0;
+    }
+
     public function maxSize(): int
     {
         return $this->maxSize;

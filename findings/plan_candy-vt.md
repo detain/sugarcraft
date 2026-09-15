@@ -373,7 +373,7 @@ public function focusEvents(): array
 
 ---
 
-### 4.2 Add `Scrollback::clear()` method
+### 4.2 Add `Scrollback::clear()` method ✅ (w4-vt: `clear(): void` added and wired to `CSI 3 J` — ring drains, screen/cursor untouched; pinned by candy-vt `tests/Handler/ScrollbackHygieneTest.php`)
 
 **File:** `src/Screen/Scrollback.php`
 
@@ -865,7 +865,7 @@ public function printChar(string $rune): void
 
 ---
 
-### 7.2 Document `Terminal::__clone()` parse state loss
+### 7.2 Document `Terminal::__clone()` parse state loss ✅ (w4-vt: documented; `ScreenHandler::__clone()` also deep-copies Buffer/Scrollback so clones no longer share grids — `tests/CloneIsolationTest.php`)
 
 **File:** `src/Terminal/Terminal.php:126-130`
 

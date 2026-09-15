@@ -30,8 +30,11 @@ final class CsiHandlerImpl implements CsiHandler
     private int $bg;
     private int $attrs = 0;
 
-    /** Saved cursor for SCO SC/RC (CSI s / CSI u). */
+    /** Saved cursor for SCO SC/RC (CSI s / CSI u), with the pen triple. */
     private ?Cursor $savedCursor = null;
+    private ?int $savedFg = null;
+    private ?int $savedBg = null;
+    private ?int $savedAttrs = null;
 
     /** Last printed graphic grapheme, replayed by REP (CSI b). */
     private string $lastPrintable = '';
@@ -530,9 +533,13 @@ final class CsiHandlerImpl implements CsiHandler
         $this->scrollTop = $top - 1;
         $this->scrollBottom = $bottom - 1;
 
-        // DECSTBM does NOT yank the cursor into the new region — the
-        // emulator's setScrollRegion only records the margins. The old
-        // clamping was a catalogued divergence.
+        // VT500 §DECSTBM homes the cursor on success (emulator
+        // ScreenHandler::setScrollRegion parity, w4-vt): page home (0,0) —
+        // the renderer models no DECOM, so there is no origin-adjusted
+        // variant — and the phantom cell is dropped with the move. An
+        // invalid (top > bottom) region took the early return and stays put.
+        $this->cursor = $this->cursor->at(0, 0);
+        $this->wrapPending = false;
     }
 
     public function tbc(int $mode = 0): void
@@ -724,27 +731,40 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
-     * SCOSC — SCO Save Cursor (CSI s). Remember the current cursor position.
+     * SCOSC — SCO Save Cursor (CSI s). Remembers the cursor position AND
+     * the active pen: the emulator's GENERAL DECSC slot restores position +
+     * rendition + designations (w4-vt), and the renderer's expressive range
+     * for that snapshot is the fg/bg/attrs triple.
      */
     public function scosc(): void
     {
         $this->savedCursor = $this->cursor;
+        $this->savedFg = $this->fg;
+        $this->savedBg = $this->bg;
+        $this->savedAttrs = $this->attrs;
     }
 
     /**
-     * SCORC — SCO Restore Cursor (CSI u). Restore the cursor saved by SCOSC;
-     * no-op when nothing was saved. A position change on the way back
-     * disarms the phantom cell (emulator: cursor-handler dispatch clears for
-     * every final except 's').
+     * SCORC — SCO Restore Cursor (CSI u). Restore the cursor (and pen) saved
+     * by SCOSC; no-op when nothing was saved. A position change on the way
+     * back disarms the phantom cell (emulator parity: ScreenHandler routes
+     * CSI s/CSI u to saveCursor()/restoreCursor() directly, DECRC clearing
+     * the wrap flag the same way graphic-position moves do).
      *
-     * Position only — visibility and shape are live state the emulator does
-     * not snapshot either (`Cursor\Cursor::restore()` carries savedRow/savedCol
-     * alone), so a `CSI s` … `CSI ? 25 l` … `CSI u` keeps the cursor hidden.
+     * Visibility and shape stay live — the emulator's DECRC restores the
+     * GENERAL slot's position/rendition/SCS/DECOM, not cursor blink state
+     * (`Cursor\Cursor::restore()` carries savedRow/savedCol alone), so a
+     * `CSI s` … `CSI ? 25 l` … `CSI u` keeps the cursor hidden.
      */
     public function scorc(): void
     {
         if ($this->savedCursor !== null) {
             $this->cursor = $this->cursor->at($this->savedCursor->row, $this->savedCursor->col);
+            if ($this->savedFg !== null && $this->savedBg !== null && $this->savedAttrs !== null) {
+                $this->fg = $this->savedFg;
+                $this->bg = $this->savedBg;
+                $this->attrs = $this->savedAttrs;
+            }
         }
         $this->wrapPending = false;
     }

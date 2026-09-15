@@ -66,8 +66,8 @@ final class VtParityTest extends TestCase
      *    dedicated field by the emulator.
      *  - REP (`CSI b`) — replays the last printable on the renderer path;
      *    the emulator does not dispatch it at all.
-     *  - BCE erases — the emulator paints ED/EL/ECH with the active pen;
-     *    the renderer blanks with default cells (pinned below).
+     *  - BCE erases — the emulator fills ED/EL/ECH with the pen BACKGROUND
+     *    (xterm BCE, w4-vt); the renderer blanks with default cells (pinned below).
      *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
      *    HandlerAdapter clamps the count to 1 before the renderer sees it
      *    (pinned below).
@@ -394,20 +394,22 @@ final class VtParityTest extends TestCase
 
     public function testCataloguedDivergenceEmulatorErasesWithActiveBackground(): void
     {
-        // xterm semantics: erase cells inherit the ACTIVE pen, so `CSI 31m`
-        // + `CSI 100m` before an ED/EL paints the erased region. The
-        // emulator implements that (and is the correct one); the renderer
-        // path blanks with default cells — its erase writes bare empty cells,
-        // so colour-wiped regions diverge on every ED/EL under a set
-        // background (the quirk: with an fg-only pen the emulator optimises
-        // the blank back to default, hiding the divergence there). (candy-vt
-        // Parser\CsiHandlerImpl erase — renderer side is the outlier.)
+        // xterm BCE: erase cells inherit ONLY the pen's BACKGROUND colour —
+        // foreground and attributes reset to default. The w4-vt candy-vt fix
+        // removed the pen-foreground bleed, so the emulator's erased-cell fg
+        // now agrees with the renderer's default blank. What remains is the
+        // background itself: the renderer blanks with a bare default cell,
+        // the erases with the pen background (SGR 100 → bright black,
+        // index 8) as the erase colour. (candy-vt Parser\CsiHandlerImpl
+        // erase — renderer side is the outlier.)
         $bytes = "\x1b[31m\x1b[100m\x1b[1;3H\x1b[2K";
         $renderer = self::feedRenderer($bytes);
         $emulator = self::feedEmulator($bytes);
 
         self::assertSame('I7', self::rendererFg($renderer, 0, 5), 'renderer: default-pen blank');
-        self::assertSame('I1', self::emulatorFg($emulator, 0, 5), 'emulator: active-pen blank');
+        self::assertSame('I7', self::emulatorFg($emulator, 0, 5), 'emulator: BCE keeps only the background — fg is default');
+        self::assertSame('I0', 'I' . $renderer->grid()->get(0, 5)->bg, 'renderer: erase drops the pen background');
+        self::assertSame('I8', self::emulatorBg($emulator, 0, 5), 'emulator: erase carries SGR 100 as the erase colour');
     }
 
     public function testCataloguedDivergencePrivatePrefixedIlActsOnRendererOnly(): void
@@ -726,5 +728,10 @@ final class VtParityTest extends TestCase
     private static function emulatorFg(EmulatorTerminal $terminal, int $row, int $col): string
     {
         return self::normaliseColour($terminal->screen()->cell($row, $col)->sgr()->foreground, 7);
+    }
+
+    private static function emulatorBg(EmulatorTerminal $terminal, int $row, int $col): string
+    {
+        return self::normaliseColour($terminal->screen()->cell($row, $col)->sgr()->background, 0);
     }
 }

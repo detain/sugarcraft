@@ -1,0 +1,18 @@
+---
+description: candy-vt VT500 emulator semantics — BCE, DECSC slot, ED 3, DEC 2026, clone isolation
+globs: "candy-vt/src/**,candy-vt/tests/**"
+alwaysApply: false
+---
+
+# candy-vt terminal-emulator semantics
+
+- **BCE blank = background ONLY** — `EraseHandler::blankCell()` emits a space with just the pen's `background` (`Sgr::empty()->withBackground(...)`); fg + attributes reset. Copying the whole pen is the classic mis-render (VT500 §BCE / xterm "erase colour is the background colour attribute"). See `candy-vt/tests/Handler/BceBackgroundOnlyTest.php`.
+- BCE covers ED/EL/ECH (`fillRow`) and the DCH/ICH shift gaps; the IL/DL/SU/SD scroll blanks in `ScrollHandler` stay default cells (documented divergence). No `CSI ?12` gate — BCE is always on.
+- **One GENERAL save slot** shared by `ESC 7`/`ESC 8` and `CSI s`/`CSI u`. `ScreenHandler::csiDispatch` routes `s`/`u` to `saveCursor()`/`restoreCursor()`; position on `Cursor::save()`, rendition + SCS designations + GL + origin mode on `ScreenHandler`. Never-saved (`null` SGR) → DECRC is a no-op. The `'s'`/`'u'` arms in `CursorHandler::apply()` are unreachable from the wire. See `candy-vt/tests/Handler/SaveRestoreSlotsTest.php`.
+- The slot is per screen — the DEC 1049 swap parks/unparks the companions and discards the in-alt save when the alt screen dies.
+- **`CSI 3 J` drains `Scrollback::clear()`**, not the grid: screen + cursor untouched, applied immediately even inside a DEC 2026 window. xterm's `eraseSavedLines` gate not modelled. See `candy-vt/tests/Handler/ScrollbackHygieneTest.php`.
+- **DEC 2026: pass `$pendingMutations` BY REFERENCE** to `EraseHandler::apply()` — by value, every queued erase landed in a throw-away copy and vanished on flush. See `candy-vt/tests/Handler/SyncOutputEraseTest.php`.
+- **DECSTBM homes the cursor** to `(0,0)` and clears `wrapPending` on a valid region; invalid `top > bottom` leaves it put. Mirrored in `candy-vt/src/Parser/CsiHandlerImpl.php`. See `candy-vt/tests/Handler/DecstbmHomeTest.php`.
+- `Terminal::resize()` keeps a full-screen scroll region full-screen across growth, or scrollback silently dies for apps that never re-issue DECSTBM.
+- **Clone deeply**: `ScreenHandler::__clone()` deep-copies `Buffer`/`Scrollback`/parked alt buffer; `Terminal::__clone()` resets the `Parser` to Ground (in-flight OSC/DCS/UTF-8 dropped). See `candy-vt/tests/CloneIsolationTest.php`.
+- Doc-comments cite `VT500 §<section>` / xterm `ctlseqs` and the `charmbracelet/x/vt` line being mirrored.
