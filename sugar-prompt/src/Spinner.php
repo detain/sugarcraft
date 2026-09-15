@@ -7,6 +7,7 @@ namespace SugarCraft\Prompt;
 use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Util\TtyDetect;
+use SugarCraft\Prompt\Support\BoundedReaper;
 
 /**
  * Blocking "loading" prompt with a spinner. Mirrors huh's
@@ -40,6 +41,12 @@ use SugarCraft\Core\Util\TtyDetect;
  *   exit code; `run()` throws a `\RuntimeException` with the exit
  *   code. The original exception type and message cannot cross the
  *   fork boundary.
+ * - The fork path is lifetime-bounded: an action that outlives
+ *   {@see self::MAX_RUNTIME_SECONDS} (tune with
+ *   {@see self::withMaxRuntimeSeconds()}) is torn down through a
+ *   SIGTERM→SIGKILL ladder and `run()` throws. The inline fallback
+ *   (no `pcntl_fork`) cannot be bounded without threads and runs
+ *   unbounded, exactly like any other blocking call.
  *
  * Usage:
  *
@@ -60,6 +67,19 @@ final class Spinner
 {
     use Mutable;
 
+    /**
+     * Wall-clock ceiling on a FORKED action's lifetime (E711, round 82).
+     *
+     * The spin loop's only exit was "the child reaped" — a wedged worker
+     * (pipe nobody drains, lock held by a dead peer) spun forever. This is
+     * a spinner-lifetime bound, not a per-request budget: the action owns
+     * its own pacing; the bound exists so the animation can never outlive
+     * the thing it is animating by more than the teardown ladder allows.
+     * Ten minutes clears every honest "long-running" CLI gesture while
+     * still putting a number on "forever".
+     */
+    public const MAX_RUNTIME_SECONDS = 600.0;
+
     private string $title = '';
     // SpinnerStyle is immutable (confirmed: has readonly props, no setters per
     // candy-forms/src/Spinner/Style.php:17-30). Defensive clone in withStyle is
@@ -67,6 +87,9 @@ final class Spinner
     private SpinnerStyle $style;
     /** @var ?\Closure(): void */
     private ?\Closure $action = null;
+
+    /** Per-instance lifetime bound for the forked action — see {@see self::MAX_RUNTIME_SECONDS}. */
+    private float $maxRuntimeSeconds = self::MAX_RUNTIME_SECONDS;
 
     /**
      * @inheritDoc
@@ -109,6 +132,26 @@ final class Spinner
     public function withAction(\Closure $fn): self
     {
         return $this->mutate(['action' => $fn]);
+    }
+
+    /**
+     * Bound the FORKED action's lifetime (E711). See
+     * {@see self::MAX_RUNTIME_SECONDS} for what the bound is and the
+     * class docblock for why the inline fallback stays unbounded.
+     *
+     * @throws \InvalidArgumentException on a non-positive or non-finite bound —
+     *         a zero ceiling would kill every action at the first frame, and
+     *         INF is the "forever" this setter exists to remove (Fail Fast).
+     */
+    public function withMaxRuntimeSeconds(float $seconds): self
+    {
+        if ($seconds <= 0.0 || is_finite($seconds) === FALSE) {
+            throw new \InvalidArgumentException(
+                'Spinner lifetime bound must be a positive finite number of seconds, got ' . var_export($seconds, TRUE)
+            );
+        }
+
+        return $this->mutate(['maxRuntimeSeconds' => $seconds]);
     }
 
     /**
@@ -169,10 +212,11 @@ final class Spinner
             $prevSigintHandler = pcntl_signal_get_handler(SIGINT);
             $prevSigtermHandler = pcntl_signal_get_handler(SIGTERM);
             pcntl_signal(SIGINT, function (int $signo) use ($pid, $isTty) {
-                if ($pid > 0 && function_exists('posix_kill') === TRUE) {
-                    posix_kill($pid, SIGTERM);
-                }
-                pcntl_waitpid($pid, $waitStatus);
+                // E711: bounded TERM→KILL ladder, never an unflagged wait —
+                // the child is free to ignore the SIGTERM this used to hand
+                // its fate to, and this handler is the parent's LAST chance
+                // to guarantee it does not outlive the spin.
+                BoundedReaper::escalatePid($pid);
                 if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
@@ -182,10 +226,8 @@ final class Spinner
                 }
             });
             pcntl_signal(SIGTERM, function (int $signo) use ($pid, $isTty) {
-                if ($pid > 0 && function_exists('posix_kill') === TRUE) {
-                    posix_kill($pid, SIGTERM);
-                }
-                pcntl_waitpid($pid, $waitStatus);
+                // E711: same bounded ladder as the SIGINT arm above.
+                BoundedReaper::escalatePid($pid);
                 if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
@@ -195,6 +237,12 @@ final class Spinner
                 }
             });
         }
+        // E711: the spin loop's only exit used to be "the child reaped";
+        // the deadline puts a number on forever, and expiry escalates the
+        // child through the same bounded ladder the signal handlers use.
+        $deadlineAt = microtime(true) + $this->maxRuntimeSeconds;
+        $ceilingExpired = false;
+        $ceilingStatus = null;
         while (true) {
             $glyph = $this->style->frames[$frame % count($this->style->frames)];
             if ($isTty === TRUE) {
@@ -204,7 +252,16 @@ final class Spinner
             // $waitStatus is always set by waitpid before any signal handler fires.
             $waitStatus = 0;
             $check = @pcntl_waitpid($pid, $waitStatus, WNOHANG);
-            if ($check === $pid) {
+            if ($check === $pid || $check === -1) {
+                // -1: the child is no longer ours — a signal handler already
+                // reaped it via the ladder (it runs between ticks, off this
+                // variable). Treating "not ours" as gone keeps the loop from
+                // spinning on ESRCH forever.
+                break;
+            }
+            if (microtime(true) >= $deadlineAt) {
+                $ceilingExpired = true;
+                $ceilingStatus = BoundedReaper::escalatePid($pid);
                 break;
             }
             $frame++;
@@ -221,6 +278,16 @@ final class Spinner
         if ($isTty === TRUE) {
             // Erase the spinner line cleanly.
             fwrite(STDERR, "\r\x1b[2K");
+        }
+        if ($ceilingExpired === TRUE) {
+            // E711: the action outlived its bound; the ladder already ran.
+            // A null status means even SIGKILL could not be delivered
+            // (no ext-POSIX) or could not land (uninterruptible wait) —
+            // the honest report is "abandoned", never a silent success.
+            if ($ceilingStatus === null) {
+                throw new \RuntimeException('Spinner action exceeded its ' . $this->maxRuntimeSeconds . 's lifetime bound and could not be terminated (child abandoned, pid ' . $pid . ')');
+            }
+            throw new \RuntimeException('Spinner action exceeded its ' . $this->maxRuntimeSeconds . 's lifetime bound and was terminated');
         }
         // Reap and check exit status — throw if the child action failed.
         // Note: the original exception type/message cannot cross the fork
