@@ -59,6 +59,27 @@ $ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
 $   # EMPTY OUTPUT: zero survivors
 ```
 
+**(a-r83) Row census RE-RUN LIVE at the round-83 wave-1 weld (2026-09-15,** after the E732/E733/E734 → CLOSED +
+E737 → PARTIAL stamps + E738 mint; same command, verbatim output):
+
+```
+$ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
+    /^## `STALE-CITATION`/{sec="STALE"} /^## `UNCERTAIN`/{sec="UNCERTAIN"}
+    /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
+    if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
+OPEN  **E729** 
+OPEN  **E730** 
+OPEN  **E731** 
+OPEN  **E735** 
+OPEN  **E736** 
+OPEN  **E737** 
+OPEN  **E738** 
+$   # 7 survivors: E729 E730 E731 E735 E736 (OPEN, unchanged) + E737 (PARTIAL survivor) + E738 (NEW mint)
+```
+
+r83 wave-1 welded E732/E733(2-of-3)/E734 CLOSED + E737 PARTIAL(test half); ProgressRing third site rides
+lane r5 (in-flight); E738 minted from r3's method.
+
 The phase-4 ledger: 13 minted at `279daf7bc` (E711–E723) + 5 minted at `e765b1742` (E724–E728) =
 **18 rows, ALL CLOSED** — wave-1 five (q1/q2/q3/q4/q6), wave-2 four (q7/q8/q9/q5-marks), wave-3 three
 (q10/q11/q12), closeout six (q13–q18 + companions `395bfe60a`/`3079dbea2`). E714's queue home was
