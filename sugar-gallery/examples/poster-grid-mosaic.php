@@ -86,7 +86,17 @@ foreach ($names as $i => $title) {
 }
 
 $mosaic = Mosaic::halfBlock()->withScale(Scale::Fill);
-$cache = new DiskCache(sys_get_temp_dir() . '/sugar-gallery-example-cache');
+// A cache directory of our own, removed on exit: a fixed shared path would
+// collide with another user on the same machine (DiskCache writes through a
+// tempnam in its directory) and litter /tmp for ever.
+$cacheDir = sys_get_temp_dir() . '/sugar-gallery-example-cache-' . bin2hex(random_bytes(4));
+register_shutdown_function(static function () use ($cacheDir): void {
+    foreach (glob($cacheDir . '/*') ?: [] as $leftover) {
+        @unlink($leftover);
+    }
+    @rmdir($cacheDir);
+});
+$cache = new DiskCache($cacheDir);
 
 /** The GD poster for one item, so every renderer below sees identical art. */
 $posterFor = static function (int $index) use ($titles): ImageSource {
@@ -181,9 +191,16 @@ if (!$sixel->isInline()) {
     foreach ([0, 1, 2] as $index) {
         $bytes = $sixel->render($posterFor($index), CARD_W, POSTER_H);
         $placed = $layer->placeTracked($bytes, CARD_W, POSTER_H);
+
+        if ($placed->imageId === null) {
+            // The layer holds at most ImageOverlay::MAX_IMAGES; past that a card
+            // must keep its skeleton. Coercing null to 0 would paint every
+            // overflowed cell with the same poster.
+            continue;
+        }
+
         // withImage(), not withPoster(): the card reserves the box, the runtime paints it.
-        $overlay[$index] = PosterCard::new((string) $index, $names[$index])
-            ->withImage($bytes, (int) $placed->imageId);
+        $overlay[$index] = PosterCard::new((string) $index, $names[$index])->withImage($bytes, $placed->imageId);
     }
 
     $overlayGrid = PosterGrid::new(cardWidth: CARD_W, posterHeight: POSTER_H)->withViewport(60, 18)
@@ -205,7 +222,7 @@ heading('  6 · styled titles: guard or sanitize');
 $highlight = "\e[1;35mMa\e[0mtreeix";                       // self-produced: passes
 $fromTheDb = "\e[1mMa\x1b[2Jtrix\e]8;;https://evil\x07!";  // untrusted: does not
 
-dim('  plain title ........... ' . (new PosterCard('t', 'Matrix'))->title);
+dim('  plain title ........... ' . PosterCard::new('t', 'Matrix')->title);
 dim('  own bytes are safe .... ' . (AnsiGuard::isSafe($highlight) ? 'yes' : 'no') . ' → withStyledTitle($s, assertSafe: true)');
 dim('  db bytes are safe ..... ' . (AnsiGuard::isSafe($fromTheDb) ? 'yes' : 'no') . ' → the guard would throw');
 try {
@@ -214,7 +231,7 @@ try {
     dim('  thrown: ' . $e->getMessage());
 }
 
-$safe = (new PosterCard('t', 'Matrix'))->withSafeStyledTitle($fromTheDb);
+$safe = PosterCard::new('t', 'Matrix')->withSafeStyledTitle($fromTheDb);
 echo '  withSafeStyledTitle ... ' . $safe->render(false, CARD_W, 1) . "\n";
 dim('  (the erase + hyperlink are gone, the colour survived)');
 
@@ -224,7 +241,7 @@ $eightBit = "Ma\xc2\x9b2Jtrix";
 dim('  c1 (no ESC) is safe ... ' . (AnsiGuard::isSafe($eightBit) ? 'yes' : 'no') . ', sanitized to ' . json_encode(AnsiGuard::sanitize($eightBit)));
 
 // A plain title needs no guard flag: render() already refuses every control.
-$plain = (new PosterCard('t', "\e[1mMatrix\x07"))->render(false, CARD_W, 1);
+$plain = PosterCard::new('t', "\e[1mMatrix\x07")->render(false, CARD_W, 1);
 dim('  plain title is safe ... ' . (str_contains($plain, "\x1b") || str_contains($plain, "\x07") ? 'NO — leaked' : 'yes, escapes stripped'));
 
 echo "\n";

@@ -179,8 +179,9 @@ final class AnsiGuard
     /**
      * Split $ansi into runs of text / SGR style / unsafe bytes.
      *
-     * The single scanner behind {@see assertSafe()}, {@see isSafe()} and
-     * {@see sanitize()}, so the three can never disagree about what is safe.
+     * The single scanner behind {@see assertSafe()}, {@see isSafe()},
+     * {@see sanitize()} and {@see stripControls()}, so the four can never disagree
+     * about what is safe.
      * Every run is non-empty and the runs concatenate back to the input exactly.
      *
      * @return list<array{0:self::TEXT|self::STYLE|self::UNSAFE, 1:string}>
@@ -219,8 +220,8 @@ final class AnsiGuard
                 // introducers a terminal acts on exactly as if `ESC` had been
                 // spelled out, so the parameters that belong to them go too —
                 // otherwise `C2 9B 32 4A` would shed its CSI and keep "2J" as text.
-                $size = self::encodedC1Length($ansi, $i, $length);
-                $end = self::c1SequenceEnd($ansi, $i + $size, self::c1CodeAt($ansi, $i));
+                [$size, $code] = self::classifyC1($ansi, $i);
+                $end = self::c1SequenceEnd($ansi, $i + $size, $code);
                 $runs[] = [self::UNSAFE, substr($ansi, $i, $end - $i)];
                 $i = $end;
                 continue;
@@ -279,28 +280,28 @@ final class AnsiGuard
         return $byte >= 0x80 && $byte <= 0x9f;
     }
 
-    /** Byte length of the C1 control at $start — 2 when UTF-8-encoded, else 1. */
-    private static function encodedC1Length(string $ansi, int $start, int $length): int
-    {
-        return self::isC1At($ansi, $start, $length) && ord($ansi[$start]) === 0xc2 ? 2 : 1;
-    }
-
     /**
-     * The C1 codepoint at $start as its control number (0x80–0x9F), whether it was
-     * written as one raw byte or re-encoded in UTF-8.
+     * The C1 control at $start as `[byteLength, controlCode]`: a raw byte is one
+     * byte long and carries its own value, its UTF-8 re-encoding is two bytes and
+     * decodes to the second. Only call this where {@see isC1At()} already said yes,
+     * which is what makes reading $start + 1 safe for the `C2` form — a lone `C2`
+     * at end of input is not a C1 and never reaches here.
+     *
+     * @return array{0:int, 1:int}
      */
-    private static function c1CodeAt(string $ansi, int $start): int
+    private static function classifyC1(string $ansi, int $start): array
     {
-        return ord($ansi[$start]) === 0xc2 ? ord($ansi[$start + 1]) : ord($ansi[$start]);
+        return ord($ansi[$start]) === 0xc2 ? [2, ord($ansi[$start + 1])] : [1, ord($ansi[$start])];
     }
 
     /**
      * Exclusive end of an unsafe sequence introduced by the 8-bit C1 control of
      * code $code at $after — the same forms {@see escapeSequenceEnd()} knows, with
-     * the one-byte introducer already consumed: 0x9B is CSI, 0x9D an OSC string,
-     * and 0x90/0x98/0x99/0x9A the DCS/SOS/PM/APC strings. Every other C1 (the Fe
-     * controls, a stray ST) is a single byte — the guard removes it but does not
-     * let it swallow the text behind it. Nothing here admits 8-bit *styling*:
+     * the one-byte introducer already consumed. The mapping is the ECMA-48
+     * `ESC F` → `F + 0x40` pairing, so the string introducers are 0x90/0x98/0x9E/0x9F
+     * for DCS/SOS/PM/APC, beside 0x9B (CSI) and 0x9D (OSC). Every other C1 — the Fe
+     * controls, 0x99 SGCI, 0x9A SCI, a stray 0x9C ST — is a single byte: removed, but
+     * not allowed to swallow the text behind it. Nothing here admits 8-bit *styling*:
      * `9B … m` is rejected even though a terminal would honour it, because every
      * renderer in this ecosystem emits the 7-bit form.
      */
@@ -309,16 +310,19 @@ final class AnsiGuard
         return match ($code) {
             0x9b => self::csiSequenceEnd($ansi, $after),
             0x9d => self::stringSequenceEnd($ansi, $after, true),
-            0x90, 0x98, 0x99, 0x9a => self::stringSequenceEnd($ansi, $after, false),
+            0x90, 0x98, 0x9e, 0x9f => self::stringSequenceEnd($ansi, $after, false),
             default => $after,
         };
     }
 
     /**
      * Length of the well-formed UTF-8 sequence starting at $start (1 for ASCII),
-     * or 0 when the bytes there are not one — a lone lead byte, a truncated tail,
-     * or an over-long/surrogate form all report 0 and are treated as one byte of
-     * opaque text rather than rejected: mojibake is not a control sequence.
+     * or 0 when the bytes there are not one. The first continuation byte is checked
+     * against the RFC 3629 ranges, not merely `80–BF`, because that is what excludes
+     * the over-long and surrogate forms: `E0 81 9B` is a lenient decoder's `ESC`, and
+     * accepting it as a text sequence would hand an injection straight back to
+     * whatever logs or transcodes the title later. A rejected form reports 0 and is
+     * then read byte by byte, so its bytes fall to the C1 test individually.
      */
     private static function utf8SequenceLength(string $ansi, int $start, int $length): int
     {
@@ -336,7 +340,19 @@ final class AnsiGuard
             return 0;
         }
 
-        for ($i = $start + 1; $i < $start + $expected; $i++) {
+        $first = ord($ansi[$start + 1]);
+        [$lo, $hi] = match ($lead) {
+            0xe0 => [0xa0, 0xbf],   // no over-long 3-byte forms (U+0800+)
+            0xed => [0x80, 0x9f],   // no surrogates (U+D800–U+DFFF)
+            0xf0 => [0x90, 0xbf],   // no over-long 4-byte forms (U+10000+)
+            0xf4 => [0x80, 0x8f],   // nothing past U+10FFFF
+            default => [0x80, 0xbf],
+        };
+        if ($first < $lo || $first > $hi) {
+            return 0;
+        }
+
+        for ($i = $start + 2; $i < $start + $expected; $i++) {
             $continuation = ord($ansi[$i]);
             if ($continuation < 0x80 || $continuation > 0xbf) {
                 return 0;
@@ -385,7 +401,7 @@ final class AnsiGuard
             return $i + 1;
         }
 
-        return min($i, $length);
+        return $i;
     }
 
     /**

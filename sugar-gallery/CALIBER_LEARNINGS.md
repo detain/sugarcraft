@@ -95,6 +95,19 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   introduces, else `C2 9B 32 4A` sheds its CSI and leaves `2J` behind as "text".
   ST likewise has three spellings (`ESC \`, `9C`, `C2 9C`) and a string-sequence
   scanner that knows only the first over-deletes the tail of every title.
+- **C1 codes follow the 7-bit pairing `ESC F` → `F + 0x40`, so the string
+  introducers are 0x90/0x98/0x9E/0x9F (DCS/SOS/PM/APC)** — NOT 0x99/0x9A, which are
+  SGCI/SCI and single bytes. A table transcribed from prose instead of derived from
+  the pairing breaks both ends at once: PM/APC payloads get reclassified as *title
+  text*, and two inert controls start swallowing everything to the next ST. The same
+  class of trap sits in the UTF-8 decoder — accepting an over-long (`E0 81 9B`) or
+  surrogate (`ED A0 9B`) form as one text sequence hands an `ESC` straight back to
+  whatever transcodes the title later, so validate the first continuation byte
+  against the RFC 3629 ranges, not merely `80–BF`.
+- **`AnsiGuard`'s exception message is deliberately NOT routed through `Lang::t`.**
+  It is a developer diagnostic — byte offset plus a hex dump — thrown because the
+  *programmer* passed the wrong bytes, and the tests assert it verbatim. `lang/en.php`
+  is for user-facing strings; do not "fix" this on a future audit pass.
 - **Never write a security filter as `preg_replace('/[\x00-\x1f]/u', …, $s) ?? $s`.**
   The `/u` makes the call return `null` when the *subject* holds a single invalid
   UTF-8 byte, and the `?? $s` fallback then returns it **completely unstripped** —

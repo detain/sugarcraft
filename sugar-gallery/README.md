@@ -183,8 +183,10 @@ The plain `title` is treated as **untrusted** (it is typically DB-sourced):
 removes every control byte and every escape sequence — C0 (including `BEL`, `TAB`,
 CR/LF, and the `ESC` that introduces a cursor-move or clear-screen), DEL, the 8-bit
 C1 controls in both wire forms, and any SGR styling a plain title has no business
-carrying. Opaque bytes that are simply not valid UTF-8 stay put: they are mojibake,
-not controls, and one of them must never be able to disable the strip.
+carrying. Opaque bytes that are simply not valid UTF-8 stay put — they
+are mojibake, not controls, and one of them must never be able to disable the
+strip — with the single exception of a byte in the 8-bit C1 band that no
+well-formed sequence claimed: a terminal reads that one as a control, so it goes.
 
 `withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
 [candy-fuzzy](https://github.com/sugarcraft/candy-fuzzy) match highlight). It is

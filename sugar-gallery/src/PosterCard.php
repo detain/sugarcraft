@@ -28,8 +28,12 @@ final readonly class PosterCard
      * @param string|null $posterImage  Raw pixel-graphics bytes (sixel/kitty/iTerm2)
      *                                   for the poster, painted as an out-of-band
      *                                   overlay rather than inline cell text — see
-     *                                   {@see withImage()}. Mutually exclusive with
-     *                                   {@see $poster} (the inline cell rendering).
+     *                                   {@see withImage()}. Only one fill is drawn:
+     *                                   when both are set the overlay wins and the
+     *                                   inline {@see $poster} bytes are not painted
+     *                                   (pinned by PosterCardTest, because a caller
+     *                                   migrating between the two modes can hold
+     *                                   both for a frame).
      * @param int|null    $imageId      Overlay id for {@see $posterImage}; the card
      *                                   draws a one-cell {@see ImageOverlay::marker()}
      *                                   at the poster's top-left and the runtime

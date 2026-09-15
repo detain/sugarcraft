@@ -6,7 +6,9 @@ namespace SugarCraft\Gallery\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Sprinkles\Layout;
 
@@ -397,7 +399,29 @@ final class PosterCardTest extends TestCase
         $card = (new PosterCard('1', 'Highlight'))->withStyledTitle($styled, assertSafe: true);
 
         self::assertSame($styled, $card->styledTitle);
-        self::assertSame(14, Width::of(explode("\n", $card->render(false, 14, 1))[1]));
+        $line = explode("\n", $card->render(false, 14, 1))[1];
+        self::assertSame(14, Width::of($line), 'the styled title still fills its row');
+        // render() pads every row unconditionally, so the width alone says nothing
+        // about the title surviving the guard and the ANSI-aware truncate.
+        self::assertStringContainsString(
+            'Highlight',
+            AnsiGuard::stripControls($line),
+            'the guard must keep the word and lose only the styling',
+        );
+    }
+
+    public function testAnOverlayImageTakesPrecedenceOverAnInlinePosterOnTheSameCard(): void
+    {
+        // The constructor documents the two fills as one-or-the-other; this pins
+        // what actually happens if a caller holds both, so the doc cannot rot.
+        $card = PosterCard::new('1', 'Both')
+            ->withPoster("\x1b[38;2;1;2;3m▀▀▀▀\x1b[0m")
+            ->withImage("\x1bP0;1;q1#0\x9c", 7);
+
+        $frame = $card->render(false, 10, 3);
+
+        self::assertStringContainsString(ImageOverlay::marker(7), $frame, 'the overlay is what the cell reserves');
+        self::assertStringNotContainsString('▀', $frame, 'the inline bytes are not painted alongside it');
     }
 
     public function testAssertSafeOptionRejectsAnythingThatIsNotStyling(): void

@@ -50,7 +50,7 @@ final class AnsiGuardTest extends TestCase
             'cursor home' => ["\e[Hhi", 'same'],
             'erase display' => ["hi\e[2J", 'clears the screen from a title cell'],
             'erase line' => ["hi\e[K", 'clears the rest of the row'],
-            'set mode (DECSTBM)' => ["\e[?1;2r", 'private-parameter CSI'],
+            'set scroll region (private DECSTBM)' => ["\e[?1;2r", 'private-parameter CSI'],
             'hyperlink OSC BEL' => ["\e]8;;https://evil\x07click", 'an OSC 8 hyperlink'],
             'hyperlink OSC ST' => ["\e]8;;https://evil\e\\click", 'the same payload using ST'],
             'window title OSC' => ["\e]0;pwned\e\\", 'OSC rewrites the terminal tab'],
@@ -76,6 +76,12 @@ final class AnsiGuardTest extends TestCase
             'C1 CSI (UTF-8 C2 9B)' => ["\xc2\x9b2J", 'U+009B re-encoded — decodes to 8-bit CSI'],
             'C1 OSC (UTF-8 C2 9D)' => ["\xc2\x9d8;;https://evil\xc2\x9c", 'the OSC-8 hyperlink in UTF-8 form'],
             'C1 APC (UTF-8 C2 9F)' => ["\xc2\x9fsecret", 'U+009F, the last C1 codepoint'],
+            'C1 PM (raw 0x9E)' => ["\x9e8;;https://evil\x9c", '8-bit privacy message — ESC ^'],
+            'C1 APC (raw 0x9F)' => ["\x9f8;;https://evil\x9c", '8-bit application control — ESC _'],
+            'C1 SCI is not a string form' => ["a\x9ab", '0x9A is SCI: it goes, the text behind it stays'],
+            'over-long ESC (E0 81 9B)' => ["\xe0\x81\x9b2J", 'a lenient decoder sees ESC here'],
+            'surrogate-encoded ESC' => ["\xed\xa0\x9b2J", 'U+D800 cannot be encoded; do not read it as text'],
+            'encoded above U+10FFFF' => ["\xf4\x90\x80\x80", 'invalid lead/continuation pairing'],
         ];
     }
 
@@ -95,6 +101,9 @@ final class AnsiGuardTest extends TestCase
             'cyrillic' => ['Солярис'],
             'no-break space' => ["Blade\xc2\xa0Runner"],
             'hebrew' => ['מטריקס'],
+            'replacement char' => ["\xef\xbf\xbd"],
+            'last non-surrogate 3-byte' => ["\xed\x9f\xbf"],
+            'last valid 4-byte' => ["\xf4\x8f\xbf\xbf"],
         ];
     }
 
@@ -218,6 +227,40 @@ final class AnsiGuardTest extends TestCase
         foreach ($titles as $i => $styled) {
             self::assertTrue(AnsiGuard::isSafe($styled), 'sprinkles output #' . $i . ' must pass: ' . json_encode($styled));
             self::assertSame($styled, AnsiGuard::sanitize($styled));
+        }
+    }
+
+    public function testSanitizeNeverTakesTheTextAroundASelfTerminatedPayload(): void
+    {
+        // The provider rows only prove the output is acceptable, idempotent and no
+        // longer than the input — a sanitizer that deleted the entire title would
+        // satisfy all three. Every payload below is self-terminated, so the text on
+        // either side of it must survive verbatim through both entry points.
+        $hostile = [
+            'erase' => "\e[2J",
+            'cursor home then erase' => "\e[H\e[2J",
+            'hyperlink' => "\e]8;;https://evil\e\\",
+            'window title' => "\e]2;evil\x07",
+            'dcs' => "\eP0;1;q1#0\x9c",
+            'charset designator' => "\e(B",
+            '8-bit csi' => "\xc2\x9b2J",
+            '8-bit osc' => "\x9d8;;x\x9c",
+            '8-bit apc' => "\x9fprivate\x9c",
+            '8-bit pm' => "\x9eprivate\x9c",
+            'over-long esc' => "\xe0\x81\x9b2J",
+            'bell' => "\x07",
+            'nul' => "\x00",
+            'del' => "\x7f",
+        ];
+
+        foreach ($hostile as $what => $payload) {
+            $dirty = 'before' . $payload . 'after';
+
+            foreach ([AnsiGuard::sanitize($dirty), AnsiGuard::stripControls($dirty)] as $i => $clean) {
+                $entry = $i === 0 ? 'sanitize' : 'stripControls';
+                self::assertStringContainsString('before', $clean, $entry . ' ate the text before ' . $what);
+                self::assertStringContainsString('after', $clean, $entry . ' ate the text after ' . $what);
+            }
         }
     }
 
