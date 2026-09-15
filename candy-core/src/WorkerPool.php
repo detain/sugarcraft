@@ -24,10 +24,31 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  *
  * Mirrors charmbracelet/bubbletea's worker pool for offloading heavy
  * computation off the UI thread.
+ *
+ * Child lifetime is owned by the pool: {@see stop()} — which the destructor
+ * also runs — closes each worker's stdin, waits a bounded grace, escalates
+ * SIGTERM→SIGKILL, and reaps, so a wedged task can delay shutdown by seconds
+ * but never forever, and no worker outlives the pool (E716).
  */
 final class WorkerPool
 {
     private const DEFAULT_CONCURRENCY = 4;
+
+    /** Seconds a worker gets to notice its closed stdin and exit on its own. */
+    private const REAP_GRACE_SECONDS = 1.5;
+
+    /** Seconds between SIGTERM and escalation to SIGKILL. */
+    private const REAP_TERM_SECONDS = 1.0;
+
+    /** Window to confirm a SIGKILL landed (9 cannot be caught; a leash, not a hope). */
+    private const REAP_KILL_SECONDS = 1.0;
+
+    /** Poll granularity for the reap ladder, in microseconds. */
+    private const REAP_TICK_MICROS = 10_000;
+
+    /** Literal signal numbers: candy-core does not require ext-pcntl and proc_terminate() takes the number directly. */
+    private const SIGTERM = 15;
+    private const SIGKILL = 9;
 
     /** @var array<int, WorkerState> */
     private array $workers = [];
@@ -98,6 +119,11 @@ final class WorkerPool
 
     /**
      * Stop all workers and drain the queue.
+     *
+     * Every job that has not settled yet — running or queued — is REJECTED
+     * with a RuntimeException naming the pool stop. Silently dropping the
+     * pending promises would leave dispatch() callers awaiting a result that
+     * can never arrive (E716: fail loud, never hang).
      */
     public function stop(): void
     {
@@ -111,7 +137,12 @@ final class WorkerPool
         }
         $this->workers = [];
         $this->queue = [];
+
+        $pending = $this->pending;
         $this->pending = [];
+        foreach ($pending as $jobId => $deferred) {
+            $deferred->reject(new \RuntimeException("Worker pool stopped before job {$jobId} completed"));
+        }
     }
 
     private function start(): void
@@ -245,6 +276,11 @@ final class WorkerPool
             $this->handleWorkerDeath($worker, 'Failed to write to worker stdin', $jobId);
             return;
         }
+        // Unchecked on purpose: stdin is a blocking pipe (spawnWorker), so fwrite
+        // has already handed the payload to the kernel unless the pipe broke —
+        // and a broken pipe is exactly what the next poll tick's feof(stdout)
+        // catches, rejecting this job through the death path. Checking fflush's
+        // bool here would only race the same condition twice (E716 triage).
         @fflush($worker->stdin);
     }
 
@@ -433,7 +469,13 @@ PHP;
 
     private function closeWorker(WorkerState $worker): void
     {
-        $this->loop->removeReadStream($worker->stderr);
+        // Only a live stderr pipe was ever registered; a synthetic WorkerState
+        // (spawn failed before any pipe existed) carries null, and the loop
+        // would cast it to fd 0 and silently unregister the APPLICATION's
+        // stdin watcher (E716).
+        if ($worker->stderr !== null && is_resource($worker->stderr)) {
+            $this->loop->removeReadStream($worker->stderr);
+        }
 
         if ($worker->stdin !== null && is_resource($worker->stdin)) {
             @fclose($worker->stdin);
@@ -445,6 +487,12 @@ PHP;
             @fclose($worker->stderr);
         }
         if ($worker->process !== null && is_resource($worker->process)) {
+            // Closing stdin above is the polite "leave" for a healthy worker —
+            // its read loop hits EOF and exits. A worker wedged INSIDE a task
+            // never notices, so bound the wait and escalate; without this the
+            // bare proc_close() handed the event loop (or PHP shutdown via
+            // __destruct) to whoever the task was, forever (E716).
+            $this->reapBounded($worker->process);
             proc_close($worker->process);
         }
 
@@ -452,6 +500,54 @@ PHP;
         if ($worker->scriptPath !== null && is_file($worker->scriptPath)) {
             @unlink($worker->scriptPath);
         }
+    }
+
+    /**
+     * Grace-poll, SIGTERM, poll, SIGKILL — the bounded reap ladder.
+     *
+     * A per-package copy of the tree's house pattern (sugar-crush
+     * ProcessReaper, sugar-reel BoundedReaper, sugar-dash
+     * ExternalModule::terminateBounded): candy-core is a foundation library
+     * and may not depend on any of them for one helper. After this returns,
+     * the child is exited on every path the ladder can reach, so the
+     * caller's proc_close() reaps rather than waits.
+     *
+     * @param resource $process
+     */
+    private function reapBounded($process): void
+    {
+        if ($this->hasExited($process, self::REAP_GRACE_SECONDS)) {
+            return;
+        }
+
+        // @: the kill can race the child's own exit (ESRCH); the poll below is
+        // the authority on whether the rung took, not the warning.
+        @proc_terminate($process, self::SIGTERM);
+        if (!$this->hasExited($process, self::REAP_TERM_SECONDS)) {
+            @proc_terminate($process, self::SIGKILL);
+            $this->hasExited($process, self::REAP_KILL_SECONDS);
+        }
+    }
+
+    /**
+     * Poll the child up to $seconds for an exit, in ticks.
+     *
+     * proc_get_status() reaps internally once the child is gone, so a false
+     * 'running' here means proc_close() cannot block afterwards.
+     *
+     * @param resource $process
+     */
+    private function hasExited($process, float $seconds): bool
+    {
+        $deadline = microtime(true) + $seconds;
+        do {
+            if (!(bool) (proc_get_status($process)['running'] ?? false)) {
+                return true;
+            }
+            usleep(self::REAP_TICK_MICROS);
+        } while (microtime(true) < $deadline);
+
+        return !(bool) (proc_get_status($process)['running'] ?? false);
     }
 
     public function __destruct()
