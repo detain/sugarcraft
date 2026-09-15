@@ -41,11 +41,11 @@
 DECCKM/DECCOLM/DECSCNM/DECARM/LNM/SRM modes · IRM insert mode · DECOM re-anchor on toggle · DECSCA/DECPRO protected cells · DECRQM/DECRPM + **any reply channel in candy-vt** (CPR/DA/DSR/XTWINOPS/kitty `?u` go unanswered — `feed(): void`) · XTSETALT/ICON (OSC 1) + `CSI 21 t` emitters · OSC 4/10/11/12 **query-side consumption**, OSC 21/22/52-consume/1337 · Sixel/DECDMA (framing-only discard is safe) · DECSLPP/DECSHORP/DECREQTPARM/DECTTC/DECPRO/DECID/DECHTS/DECCAHT/DECSHTS (`u` is currently *mis-captured* as SCORC → bug) · CTC/vertical tabs · urxvt-1015/pixel-1016/modifyOtherKeys/kitty-flag negotiation in candy-input · **all terminal probing in candy-palette** (`checkEscapeQueries()` is comments-only; `TerminalProbe.php:241-283`) incl. sixel `infocmp` regex that never matches real output (`:227`) · ✅ `ESC c` (RIS), SCS (`ESC ( ) * + F`, G0-G3) and DECALN emitters **added in candy-core**
 (`Ansi::ris()` / `scs()`+`scsG0()`-`scsG3()` / `decSpecialGraphics()` / `asciiCharset()` / `decaln()`, plus
 `shiftOut()`/`shiftIn()`), round-trip-guarded by `candy-vcr/tests/CoreEmitterRoundTripTest.php`. Note the emitter
-spells DECALN as `ESC # 8` (VT510/xterm) rather than the `CSI # 8` of this audit's notes — the CSI form never
-completes as a sequence (a CSI final must be 0x40-0x7E, so candy-ansi drops it to Ground undispatched while a real
-receiver swallows the next graphic). candy-vt's `ScreenHandler::displayAlignmentTest()` heading still reads
-"DECALN — CSI # 8" while its own wire-level note documents the gap correctly; the stale label is left to the vt track.
-Still missing there: DECCOLM (`?3`) and DECKPAM/DECKPNM emitters (no consumer models them: candy-vt
+spells DECALN as `ESC # 8` (VT510/xterm), not the `CSI # 8` that candy-vt's
+`ScreenHandler::displayAlignmentTest()` heading still carries — its own wire-level note documents the gap correctly,
+and the stale label is left to the vt track. The CSI form never completes: a CSI final must be 0x40-0x7E, so candy-ansi
+drops it to Ground undispatched while a real receiver swallows the next graphic.
+Still missing in candy-core: DECCOLM (`?3`) and DECKPAM/DECKPNM emitters (no consumer models them: candy-vt
 has no DECCOLM mode field and candy-input still decodes `ESC =`/`ESC >` as Alt+=/Alt+>), and an OSC 4 query emitter.
 
 ### Deferred / out of scope

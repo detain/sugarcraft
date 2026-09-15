@@ -174,9 +174,10 @@ final class CoreEmitterRoundTripTest extends TestCase
         // Core names the designators; vt decides which ones mean anything. If
         // either roster drifts alone, an emitter would produce a designation the
         // receiver silently discards — the failure this pins out. Read through
-        // reflection so the comparison stays a genuine runtime one (a literal
-        // `assertSame('B', 'B')` would also break loudly on a rename in either
-        // lib instead of silently comparing two stale string literals).
+        // reflection so the comparison stays a genuine runtime one: a literal
+        // `assertSame('B', 'B')` would survive a rename in either lib and go on
+        // comparing two stale string literals forever, which is why the constant
+        // names are checked here rather than only their values.
         $core = new \ReflectionClass(Ansi::class);
         $emulator = new \ReflectionClass(Charsets::class);
         $pairs = [

@@ -179,7 +179,7 @@ final class AnsiResetScsTest extends TestCase
         Ansi::scs($slot, '0');
     }
 
-    public function testNewEmittersComposeIntoAFrameWithoutLeavingSequenceBytes(): void
+    public function testNewEmittersComposeIntoAFrameWithoutEatingTheNextGraphic(): void
     {
         // The emitters must interleave with existing ones and still be
         // recognised as escapes by strip(). strip() is documented to drop the
