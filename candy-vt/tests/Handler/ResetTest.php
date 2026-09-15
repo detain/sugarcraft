@@ -38,7 +38,9 @@ use SugarCraft\Ansi\Parser\Parser;
  * resets both Screen buffers but never the ring — only ED 3 clears it)
  * and clears the saved cursor (upstream `Screen.Reset` zeroes `saved`).
  * DECSTR is the soft variant: margins, tabs, charsets, saved cursor and
- * the ring all survive, per xterm ctlseqs.
+ * the ring all survive (xterm's ctlseqs records DECSTR in one line;
+ * VT510 Table 5-9 lists DEC hardware, which resets more — we follow the
+ * narrower xterm semantics the brief anchors).
  *
  * @see https://vt100.net/docs/vt510-rm/chapter4.html (RIS)
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR, DECALN)

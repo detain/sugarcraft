@@ -900,17 +900,17 @@ final class ScreenHandler implements Handler
     /**
      * DECSTR — CSI ! p, soft reset.
      *
-     * The xterm contract: like RIS but "does not reset the scrolling
-     * region, tab stops, character-set designations, saved cursor, or
-     * scrollback". Resets: SGR pen, cursor home + visible, DECOM off,
+     * Design choice — xterm's ctlseqs records DECSTR in a single line;
+     * VT510 Table 5-9 enumerates DEC hardware, whose variant resets more.
+     * We follow the narrower xterm-anchored semantics the brief names:
+     * like RIS but does NOT reset the scrolling region, tab stops,
+     * character-set designations, saved cursor, or scrollback.
+     * Resets: SGR pen, cursor home + visible, DECOM off,
      * DECAWM back to its power-on ON, sync output off (flushing whatever
      * the queue held), wrap flag dropped. SCOPED SUBSET: the DEC-private
-     * extension modes DECSTR does not name — mouse tracking, bracketed
-     * paste, focus reporting, alt screen, cursor shape — SURVIVE, exactly
-     * xterm's "anything else not explicitly mentioned" rule. (VT510
-     * Table 5-9 additionally resets DECSTBM and the designations on the
-     * DEC hardware; the brief anchors xterm semantics, so we follow
-     * xterm here.)
+     * extension modes outside this list — mouse tracking, bracketed
+     * paste, focus reporting, alt screen, cursor shape — SURVIVE, per
+     * the "does not reset … anything else" reading above.
      *
      * @see https://vt100.net/docs/vt510-rm/DECSTR.html (DECSTR)
      * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR)

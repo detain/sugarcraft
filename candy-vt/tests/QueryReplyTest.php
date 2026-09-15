@@ -229,18 +229,21 @@ final class QueryReplyTest extends TestCase
         // Hostile program output spamming CSI 6n at a terminal nobody
         // drains must not grow memory without bound (candy-pty renders
         // exactly such untrusted streams). Drop-OLDEST at MAX_REPLIES:
-        // each query is issued from a rotating row so head and tail
-        // differ, pinning which end the ring sheds.
-        $t = Terminal::new(10, 3);
+        // queries rotate over 5 rows — 5 is coprime with the 1024-entry
+        // window, so head (push 76) and tail (push 1099) answer distinct
+        // rows and the assertions pin WHICH end the ring sheds
+        // (drop-newest would put row 1's reply at the head).
+        $t = Terminal::new(10, 6);
         $storm = '';
         for ($i = 0; $i < 1100; $i++) {
-            $storm .= "\x1b[" . ($i % 3 + 1) . ";1H\x1b[6n";
+            $storm .= "\x1b[" . ($i % 5 + 1) . ";1H\x1b[6n";
         }
         $t->feed($storm);
         $replies = $t->replies();
         $this->assertCount(1024, $replies, 'queue capped, not unbounded');
-        // Kept window is pushes 76..1099: head answers i=76 (row 76%3+1=2).
+        // Kept window is pushes 76..1099: 76 % 5 + 1 = row 2.
         $this->assertSame("\x1b[2;1R", $replies[0], 'oldest replies were shed');
-        $this->assertSame("\x1b[" . (1099 % 3 + 1) . ";1R", $replies[1023], 'newest reply kept');
+        // 1099 % 5 + 1 = row 5 — head and tail genuinely differ.
+        $this->assertSame("\x1b[5;1R", $replies[1023], 'newest reply kept');
     }
 }
