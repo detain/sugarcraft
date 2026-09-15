@@ -37,11 +37,38 @@ use SugarCraft\Core\Lang;
 final class Color
 {
     /**
-     * Standard 16-color ANSI palette as 24-bit RGB triples (xterm defaults).
+     * Standard 16-color ANSI palette as 24-bit RGB triples — xterm's
+     * compiled-in defaults for slots 0-15.
+     *
+     * Published as public API so downstream consumers and cross-lib equality
+     * tests reference ONE canonical table rather than each forking a copy.
+     * (Sibling palettes that deliberately diverge are governed by the project
+     * color-quantization rule and are out of scope for this const.)
+     *
+     * WHY THESE EXACT NUMBERS. Slots 0-15 are THEMEABLE: a terminal owner's
+     * config, not these bytes, decides what the user sees. So this table is
+     * not the source of any wire value — it exists for colour-SPACE questions
+     * (distance maths in {@see nearestAnsi16()}, luminance, downsampling) and
+     * for DECODING a slot back to a representative RGB. {@see ansi()} remembers
+     * the index and {@see toSgr()} emits the palette code for slots 0-15, never
+     * these triples. VERIFIED TRUTH about literal bytes: the foreground/background
+     * path never spells a slot 0-15 colour as `38;2;r;g;b`, but
+     * {@see toUnderline()} at the TrueColor profile DOES emit `58;2;r;g;b` built
+     * from these very triples (SGR 58 has no 4-bit form — see that method's
+     * docblock). So "no wire bytes" holds for fg/bg, not for the underline
+     * exception.
+     *
+     * WHY xterm AND NOT charmbracelet. This is deliberately xterm's own default
+     * set: slot 4 = `DEF_COLOR4 "blue2"` (#0000EE) and slot 12 =
+     * `DEF_COLOR12 "rgb:5c/5c/ff"` (#5C5CFF), the compiled-in defaults in xterm's
+     * `main.h`. Note that charmbracelet/x/ansi's `ansiHex` uses DIFFERENT blues
+     * (#000080 / #0000FF); this table is NOT in parity with upstream
+     * charmbracelet and must NOT be "corrected" toward it — the xterm values are
+     * the intended canon.
      *
      * @var array<int,array{int,int,int}>
      */
-    private const ANSI16 = [
+    public const ANSI16_RGB = [
          0 => [  0,   0,   0],   1 => [205,   0,   0],   2 => [  0, 205,   0],   3 => [205, 205,   0],
          4 => [  0,   0, 238],   5 => [205,   0, 205],   6 => [  0, 205, 205],   7 => [229, 229, 229],
          8 => [127, 127, 127],   9 => [255,   0,   0],  10 => [  0, 255,   0],  11 => [255, 255,   0],
@@ -112,10 +139,10 @@ final class Color
      */
     public static function ansi(int $index): self
     {
-        if (!isset(self::ANSI16[$index])) {
+        if (!isset(self::ANSI16_RGB[$index])) {
             throw new \InvalidArgumentException(Lang::t('color.ansi_out_of_range', ['index' => $index]));
         }
-        [$r, $g, $b] = self::ANSI16[$index];
+        [$r, $g, $b] = self::ANSI16_RGB[$index];
         return new self($r, $g, $b, $index);
     }
 
@@ -617,7 +644,7 @@ final class Color
     {
         $best = 0;
         $bestDist = PHP_INT_MAX;
-        foreach (self::ANSI16 as $idx => [$r, $g, $b]) {
+        foreach (self::ANSI16_RGB as $idx => [$r, $g, $b]) {
             $dr = $r - $this->r;
             $dg = $g - $this->g;
             $db = $b - $this->b;
