@@ -903,6 +903,54 @@ $result = $player->play(
 );
 ```
 
+### Mouse replay encodings (DEC 1000–1016)
+
+Mouse reporting is not one protocol: the bytes a terminal sends for the same
+click depend on which DEC private modes the program had enabled at record
+time, and only the SGR form is self-identifying. The `Player` therefore feeds
+every recorded **output** chunk through `Input\MouseModeTracker` (a
+candy-ansi `Parser` handler that records `CSI ? h/l` for the mouse modes), and
+the raw-input path runs `Input\MouseReplayDecoder` before falling back to
+`InputReader`, so a byte sequence is decoded in the mode that produced it
+instead of being assumed to be SGR:
+
+| Mode | Encoding | Replay behaviour |
+|------|----------|------------------|
+| 1000 / 1002 / 1003 | X10 `ESC [ M` + 3 raw bytes (`coord = byte − 32`) | decoded when any is on and 1005 is off |
+| 1005 | X10 lead, UTF-8-encoded coordinates | decoded when on |
+| 1006 | SGR `CSI < b ; x ; y M/m` | self-identifying — handled by `InputReader` exactly as before |
+| 1015 | urxvt `CSI b ; x ; y M` | decoded only while 1015 is on (shape alone is ambiguous) |
+| 1016 | SGR + pixel coordinates (`…; x ; y ; z`) | **dropped, by design** — see limits |
+
+Known limits:
+
+- **1016 pixel reports are dropped.** `MouseMsg` carries 1-based *cell*
+  coordinates and has no pixel fields, so a faithful decode is impossible;
+  discarding them (the pre-existing behaviour) beats inventing a cell mapping
+  the program never asked for.
+- **A legacy mouse payload must be exactly one sequence.** Multi-mode
+  DECSET/DECRST (`CSI ? 1000 ; 1006 h`) is tracked per mode, but a recorded
+  input chunk that coalesces an X10/1015 event with other bytes falls through
+  to `InputReader` unchanged — same as before, no mis-decode.
+- **Mode state follows output order.** If a cassette enables mouse reporting
+  only via bytes the tracker never saw (e.g. replaying with the Output branch
+  filtered out by a custom `EventMatcher`), legacy sequences stay gated off
+  and defer to the fallback, never guessed.
+
+### Engine parity tests
+
+`ScreenAssertion` grids come from candy-vt's renderer path
+(`SugarCraft\Vt\Terminal`), while `Render\Renderer` frames share it and
+tooling elsewhere uses the full emulator (`SugarCraft\Vt\Terminal\Terminal`).
+`tests/VtParityTest.php` feeds curated + seeded-random escape streams through
+**both** engines and asserts identical normalised cell grids, so the two
+candy-vcr surfaces cannot drift silently. Known candy-vt engine divergences
+(inverted DECTCEM on the renderer path, CUP clamping into the scroll region,
+truecolor dropped there, emulator `DECAWM` defaulting off, emulator ED/EL
+erasing with the active background, `4;3` vs `4:3`, renderer-only IL/DL/REP)
+are pinned as explicit tripwire cases with fix pointers rather than left to
+surface as mystery assertion failures.
+
 `ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [candy-vt](../candy-vt/)) is the recommended choice for round-trip tests:
 
 ```php

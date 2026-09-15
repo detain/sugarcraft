@@ -68,8 +68,8 @@ final class HandlerAdapter implements Handler
                 $p0 === -1 ? 1 : $p0,
                 $p1 === -1 ? $this->csi->gridRows() : $p1,
             ),
-            'h' => $this->csi->decset($p0 === -1 ? 0 : $p0, $prefix),
-            'l' => $this->csi->decrst($p0 === -1 ? 0 : $p0, $prefix),
+            'h' => $this->dispatchModes($params, $prefix, set: true),
+            'l' => $this->dispatchModes($params, $prefix, set: false),
             'g' => $this->csi->tbc($p0 === -1 ? 0 : $p0),
             'Z' => $this->csi->cbt($count),
             'I' => $this->csi->cht($count),
@@ -84,6 +84,31 @@ final class HandlerAdapter implements Handler
             'u' => $this->csi->scorc(),
             default => null,
         };
+    }
+
+    /**
+     * DECSET/DECRST may carry several mode numbers in one sequence — e.g.
+     * `CSI ? 1000 ; 1006 h` arms X11 button tracking AND SGR coordinate
+     * reporting together. Dispatch every parameter, not just the first, so a
+     * consumer can tell which encoding produced a later mouse byte sequence
+     * instead of assuming a default. A default (missing) parameter maps to 0,
+     * matching the single-mode behaviour this adapter has always had.
+     *
+     * @param list<int> $params
+     */
+    private function dispatchModes(array $params, int $prefix, bool $set): void
+    {
+        if ($params === []) {
+            $params = [-1];
+        }
+        foreach ($params as $mode) {
+            $mode = $mode === -1 ? 0 : $mode;
+            if ($set) {
+                $this->csi->decset($mode, $prefix);
+            } else {
+                $this->csi->decrst($mode, $prefix);
+            }
+        }
     }
 
     public function escDispatch(int $final, int $intermediate): void

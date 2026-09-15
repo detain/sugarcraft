@@ -25,6 +25,23 @@ final class Parser
     /** @var list<int> Numeric CSI/DCS params; -1 marks a default/missing slot. */
     private array $params = [];
 
+    /**
+     * ECMA-48 sub-parameter continuation flags parallel to {@see $params}:
+     * true at index i means `params[i]` was followed by a `:` separator, so
+     * `params[i + 1]` is a SUB-parameter of the same parameter group rather
+     * than an independent parameter. Without this, `CSI 4 : 3 m` (curly
+     * underline) and `CSI 4 ; 3 m` (single underline + italic) arrive at the
+     * handler as the identical flat list `[4, 3]` — the mis-split the VT500
+     * grammar forbids. The flattened list is still dispatched unchanged for
+     * handler compatibility; consumers that need the grouping read
+     * {@see subparams()} or reconstitute it with {@see groupSubparameters()}.
+     *
+     * Mirrors charmbracelet/x/ansi `Param.HasMore` / `Params.HasMore(i)`.
+     *
+     * @var list<bool>
+     */
+    private array $subparams = [];
+
     /** Packed command: intermediate << 16 | prefix << 8 | final. */
     private int $cmd = 0;
 
@@ -192,6 +209,52 @@ final class Parser
         return $this->fastPathRuns;
     }
 
+    /**
+     * ECMA-48 sub-parameter continuation flags for the current (in-flight) or
+     * most recently dispatched CSI/DCS parameter list: true at index i means
+     * params[i] was followed by `:`, i.e. params[i + 1] belongs to the same
+     * parameter group. Indices beyond the last flag default to false — an
+     * empty result means the list held no `:` separators.
+     *
+     * The flags are read during a {@see Handler} dispatch callback (the
+     * handler holds no parser reference of its own, so a front-end that owns
+     * the Parser — e.g. an emulator terminal — consults them there) or after
+     * `feed()` for the last completed sequence. They reset when the next
+     * sequence's params start accumulating.
+     *
+     * @return list<bool>
+     */
+    public function subparams(): array
+    {
+        return $this->subparams;
+    }
+
+    /**
+     * Reconstitute ECMA-48 parameter groups from a flattened params list plus
+     * the {@see subparams()} continuation flags: each group is one parameter
+     * followed by its `:`-separated sub-parameters. `CSI 4 : 3 m` yields
+     * `[[4, 3]]` (one underline-style parameter) while `CSI 4 ; 3 m` yields
+     * `[[4], [3]]` (underline, then a separate SGR 3) — the distinction the
+     * flat list alone cannot express.
+     *
+     * @param list<int>  $params  Params as dispatched by the parser.
+     * @param list<bool> $flags   Flags from {@see subparams()}.
+     * @return list<list<int>>
+     */
+    public static function groupSubparameters(array $params, array $flags): array
+    {
+        $groups = [];
+        foreach ($params as $i => $value) {
+            $open = count($groups) - 1;
+            if ($i === 0 || $open < 0 || ($flags[$i - 1] ?? false) !== true) {
+                $groups[] = [$value];
+                continue;
+            }
+            $groups[$open][] = $value;
+        }
+        return $groups;
+    }
+
     private function advance(int $byte): void
     {
         if ($this->state === State::Utf8) {
@@ -259,6 +322,7 @@ final class Parser
     private function clear(): void
     {
         $this->params = [];
+        $this->subparams = [];
         $this->cmd = 0;
         $this->stringBuffer = '';
     }
@@ -279,8 +343,9 @@ final class Parser
 
     private function param(int $byte): void
     {
-        // ';' (0x3B) and ':' (0x3A) both start a new param slot.
-        // ':' is the sub-parameter separator per VT500 spec.
+        // ';' (0x3B) and ':' (0x3A) both start a new param slot; ':' additionally
+        // marks the PRECEDING slot as a sub-parameter group continuation (ECMA-48
+        // §14.1.1), which is recorded in $subparams and surfaced via subparams().
         $n = count($this->params);
         if ($byte === 0x3B || $byte === 0x3A) {
             if ($n >= self::MAX_PARAMS) {
@@ -288,14 +353,21 @@ final class Parser
             }
             if ($n === 0) {
                 $this->params[] = -1; // implicit default before the separator
+                $this->subparams[] = false;
+                $n = 1;
+            }
+            if ($byte === 0x3A) {
+                $this->subparams[$n - 1] = true;
             }
             $this->params[] = -1;
+            $this->subparams[] = false;
             return;
         }
 
         $digit = $byte - 0x30;
         if ($n === 0) {
             $this->params[] = $digit;
+            $this->subparams[] = false;
             return;
         }
         $last = $n - 1;
