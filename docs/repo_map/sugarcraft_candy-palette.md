@@ -181,12 +181,12 @@ final class StandardColors {
 }
 ```
 
-Static initialization uses the classic XTerm/ANSI palette values (not the Windows console defaults):
+Static initialization uses xterm's compiled-in default palette values (identical to `candy-core`'s `\SugarCraft\Core\Util\Color::ANSI16_RGB`, not the Windows console defaults):
 - Black: `#000000`, Red: `#cd0000`, Green: `#00cd00`, Yellow: `#cdcd00`
 
-- Blue: `#0000cd`, Magenta: `#cd00cd`, Cyan: `#00cdcd`, White: `#e5e5e5`
+- Blue: `#0000ee` (xterm `blue2`), Magenta: `#cd00cd`, Cyan: `#00cdcd`, White: `#e5e5e5`
 
-- Bright Black: `#7f7f7f`, Bright Red: `#ff0000`, etc.
+- Bright Black: `#7f7f7f`, Bright Red: `#ff0000`, Bright Blue: `#5c5cff` (xterm `rgb:5c/5c/ff`), etc.
 
 ---
 
@@ -499,7 +499,7 @@ if (\array_key_exists('NO_COLOR', $env)) { return Profile::NoTTY; }
 
 - **Ansi256 indexing**: Pure arithmetic, O(1)
 
-- **Ansi16 nearest-color search**: Iterates over 8 palette entries, O(8) — constant time
+- **Ansi16 nearest-color search**: Iterates over all 16 `Color::ANSI16_RGB` entries, O(16) — constant time
 
 - **Perceived brightness**: O(1) arithmetic
 

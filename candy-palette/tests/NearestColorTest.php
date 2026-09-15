@@ -124,7 +124,8 @@ final class NearestColorTest extends TestCase
 
     public function testAnsi16HandMatchesBasicBlue(): void
     {
-        // (0,0,200) sits 5 away from basic blue (0,0,205) — index 4, not bright.
+        // (0,0,200) sits nearest basic blue (0,0,238) — d=1444 vs bright blue
+        // (92,92,255) d=19953 — so index 4, not bright.
         self::assertSame(4, (new NearestColor())->ansi16(new Color(0, 0, 200)));
     }
 
