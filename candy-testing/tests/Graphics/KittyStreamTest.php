@@ -254,6 +254,7 @@ final class KittyStreamTest extends TestCase
         self::assertSame(1, $kitty->count(), 'a chunked transaction is ONE image');
         self::assertSame(8, $kitty->image()->cols(), 'attributes come from the begin frame');
         self::assertSame(4, $kitty->image()->rows());
+        self::assertArrayNotHasKey('m', $kitty->image()->params(), 'the chunking flag is framing state, not image metadata');
         self::assertSame($png, $kitty->image()->png());
     }
 

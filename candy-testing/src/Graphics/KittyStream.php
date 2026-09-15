@@ -39,8 +39,8 @@ final class KittyStream
 
     /**
      * Attributes accumulated from `m=1` APC frames of the open transmission
-     * (first frame wins; later frames may add per-chunk z/f). Null when no
-     * chunked APC transaction is open.
+     * (later frames override shared keys, so a per-chunk `z`/`f` is honored;
+     * new keys are additive). Null when no chunked APC transaction is open.
      *
      * @var array<string, string>|null
      */
@@ -203,7 +203,8 @@ final class KittyStream
      * Parse one standard APC frame and return the offset just past it.
      *
      * Frames with `m=1` open (or continue) a chunked transmission: the
-     * attribute set is taken from the first frame, payloads concatenate in
+     * attribute set merges from all frames (later frames may override shared
+     * keys); payloads concatenate in
      * order, and the first `m=0` frame closes the transaction and yields the
      * image — the exact mirror of `Ansi::kittyGraphicsBegin()` +
      * `Ansi::kittyGraphicsChunk()` as candy-mosaic emits them (one self-
@@ -225,8 +226,8 @@ final class KittyStream
         $params = self::parseParams($paramsString);
 
         if (($params['m'] ?? '0') === '1') {
-            // More chunks follow — accumulate; later frames' attributes
-            // override (per-chunk z/f are legal in the protocol).
+            // More chunks follow — accumulate; later frames may override shared
+            // keys (per-chunk z/f are legal in the protocol).
             $this->txParams = array_merge($this->txParams ?? [], $params);
             $this->txPayload .= $payloadBase64;
 
@@ -234,8 +235,11 @@ final class KittyStream
         }
 
         // m=0 (or absent): close any open transaction, or decode this frame
-        // as a standalone single-frame transmit.
-        $params = $this->txParams ?? $params;
+        // as a standalone single-frame transmit. The closer's own attributes
+        // win (it is the last chunk), and the `m` chunking flag is framing
+        // state — it never belongs to the decoded image's metadata.
+        $params = array_merge($this->txParams ?? [], $params);
+        unset($params['m']);
         $payload = self::decodeBase64($this->txPayload . $payloadBase64);
         $this->txParams = null;
         $this->txPayload = '';
