@@ -11598,6 +11598,83 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 81 (2026-09-14) — PHASE 3 (operator UX findings) ships COMPLETE: all seven mints E704–E710 CLOSED by lanes pa–pg in three waves; floor moves 11,870 → 11,991 (+121T); ACTIONABLE drops to ZERO again — PHASE-3 COMPLETE
+
+**Closed 2026-09-14.** Seven lanes, ALL reviewed BEFORE merge: pa APPROVE 0C/0M/1MINOR;
+pb APPROVE-WITH-FIX 0C/1MAJOR+1MINOR (healed in fix-round `1a7d67823`); pc APPROVE 0C/0M/0MINOR;
+pd APPROVE 0C/0M/2MINOR; pe APPROVE-WITH-FIX(minor-only) 0C/0M/2MINOR (fix `f42ef1794`);
+pf APPROVE 0C/0M/3MINOR; pg APPROVE 0C/0M/2MINOR. Chain
+`8cd2c5f4a` (PHASE-3 MINTED docs) → W1: picks `2452947ba` (pa) + `4b767f85c` (pb) + `56a71d134`
+(pb fix) + `0bf64d08e` (pc) → re-pin `a39b34ee2` (floor 11,899/171,108) → W2: picks
+`fea4b3b26` (pd) + `772ef1b03` (pe) + `2a33d175b` (pe fix) → re-pin `0908d39aa` (floor
+11,911/171,706) → W3: picks `ab21cfd48` (pf `244c6b2a8`) + `0c347e995` (pg `f73112e7b`) →
+companion drift-fix `8dd48df9d` (rv MINORs: SETTINGS.md 'revisionof' glue; pg fixture docblocks
+reworded to 'structurally identical' — both pairs deviate in SEARXNG_URL, widened honestly) →
+drift-fix `086035f50` (three whole-tree guards serial1 caught PAST the lane gates — see
+Process) → weld `a5d0033d9` floor **11,991 / 172,259 / 0F / 0E / 1 skipped (McpClientTest
+canary) / EXIT 0** linked @cwd=sugar-crush (serial2 green in one pass, 10m1s); NEVER pushed.
+All NINE cherry-picks of the round landed ZERO-conflict.
+
+- **pa (E704, +12T):** bracketed paste enabled (`programOptions()` gains `bracketedPaste`) and
+  `Chat::update()` now INGESTS `PasteMsg` — multi-line paste lands as ONE draft, Enter submits
+  once, sanitize default-ON, the pinned drop-test flipped IN-STEP with its prose,
+  paste-without-final-Enter stays unsent. rv 1MINOR carried as trigger-watch: the
+  paste-while-modal behavioral pin (pa declined the modal hand-over side-effect test).
+- **pb (E708, +16T +fix):** `startServer()` normalizes foreign shapes — `local`→stdio,
+  `remote`→http, `command[]`→command+args, `environment`→env, `enabled:false`→loud skip —
+  a verbatim opencode block now builds servers indistinguishable from the translated block
+  (parity pin `McpConfigToleranceTest`); the silent-drop class is closed on the LOAD side.
+  rv MAJOR (transport parity fixture gap) healed in `1a7d67823`.
+- **pc (E706, +1T):** the settled 💭 row DROPS the head-120 clip and rides the existing
+  `fitToPane` WRAP (operator rule honored: wrap, never truncate); the live ticker keeps its
+  bounded tail-120 WITH the new honest `REASONING_LIVE_TRAILER` count-suffix. Render-only —
+  full text was always retained.
+- **pd (E709, +3T):** docs/MCP.md gains the "Adding servers" recipe + translation table; the
+  `/mcp` empty-state and panel guidance now NAME the declaration door
+  (`<projectRoot>/.mcp.json`), ending the auth-only impression.
+- **pe (E705, +9T +fix):** `App::init()` pushes `Cmd::pushKittyKeyboard(DISAMBIGUATE)`; the
+  pop rides `bin/sugarcrush` after the loop (pop is not a model turn — Quit/ SIGINT/kill all
+  exit without one); Ctrl/Shift+Enter now insert newlines on capable terminals, fail-soft
+  unchanged, `modifyOtherKeys` deliberately NEVER enabled.
+- **pf (E707, +57T):** BOTH halves — every chat provider now parses its wire length-stop into
+  `CompleteResponse::$truncated` (OpenAI/Custom/Vertex/Bedrock/ClaudeCode/Sglang; Bedrock's
+  context-window stop judged a DIFFERENT knob and excluded), the flag rides Runtime →
+  AssistantMessage → EngineBackend → transcript (root `Message::lengthStopped`, fork-safe via
+  the result frame) and settles as ONE honest system notice; NEW user-tier `max-output-tokens`
+  settings key (#13 of LAYERED_KEYS) threaded into the request. Honest scope (rv MINOR-2):
+  5/6 provider wires honor the ceiling — the ClaudeCode transport reads no request ceiling;
+  TaskTool/Workflow keep provider defaults (threading seam recorded); the flag is NOT
+  persisted across session resume.
+- **pg (E710, +23T):** `sugarcrush mcp import claude|opencode <path>` — PRINTS the translated
+  `.mcp.json` block, never writes; renames narrated on stderr, document on stdout, strict
+  stream separation pinned through the REAL binary; Subcommands/Help/completion rosters +
+  both census guards moved in-step.
+
+## Process findings (round 81)
+
+- **Harness law CORRECTED, loud:** full-suite serials run through the **plain bash-tool pipe,
+  NEVER tmux/PTY**: `tests/bootstrap.php:325` guards the fd-0 repair with `!stream_isatty(STDIN)`,
+  so any PTY stdin leaves `\STDIN` a resource and exactly 3 stdin-pin tests red
+  (HeadlessPermissionPromptStdinDefault:134, NonInteractiveStdinPin:212/:238). w2's first tmux
+  attempt died at precisely those three; w1's "tmux" STATE label was wrong — its green logs are
+  pipe-shaped. Also: `phpunit | tee` swallows the exit — redirect instead.
+- **Serial-only guards bit TWICE more (fourth+ fifth co-shard-class catches):** r81-w3 serial1
+  redset was 6, not the predicted 2 — pg buried the E678 doc-comment under its new method's
+  block (stacking census) and shipped an unaccounted `scandir($this->tempDir)` walk
+  (TreeWideGuardRoster, both arms); pf's new EngineBackendLengthStopTest moved only the
+  environment HOME (OneSidedHomeSandbox law: half a sandbox is not a sandbox). Each reproduced
+  at its own lane tip ALONE; all three fixed by their guards' own prescriptions in disclosed
+  drift-fix `086035f50`. Lane gate lists (five-guard/Config/targeted) do NOT cover whole-tree
+  doc/comment/roster censuses — the serial remains the only complete gate; K=8 does not help
+  either while new files lack durations rows (manifest silently drops them).
+- **Resume directive honored (2026-09-14, user):** blank OR identical-replayed agent reports do
+  NOT justify re-cutting — RESUME the same task_id up to 10x. The pe lane re-cut #2 during this
+  round showed the work was pristine anyway; resume-first would have recovered the context
+  without the duplicate-risk window.
+- pb's and pc's +DocFigure re-targets, pd's E702/AX re-cuts, pf's arm #83 and pg's 7-leaf-row
+  help re-shape all landed census-in-step; DocFigure walked 81→82→83T across the round with
+  every wave green.
+
 ## ROUND 80 (2026-09-14) — PHASE 2 (MCP) closes at the operator ruling: E699 WIRED behind a double opt-in by oc; ob closed the /tmp/crush-mcp-auth-* tempnam leak family; ACTIONABLE drops to ZERO — PHASE-2 COMPLETE
 
 **Closed 2026-09-14.** Two lanes, both reviewed BEFORE merge (r80-rv-ob APPROVE 0C/0M; r80-rv-oc

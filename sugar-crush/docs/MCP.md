@@ -442,7 +442,7 @@ takes over — if the server will not re-issue credentials, re-run
 reachable as a `type: git` entry in your own `.mcp.json`, i.e. SugarCrush
 serving git operations to itself. There is no `sugarcrush serve` subcommand.
 `sugarcrush --help` lists exactly five under its **Subcommands** heading —
-`doctor`, `models`, `session list|delete`, `mcp list`,
+`doctor`, `models`, `session list|delete`, `mcp list|import`,
 `completion bash|zsh|fish` — and those five are the ones that answer and exit
 without a provider, an API key or a terminal.
 

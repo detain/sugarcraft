@@ -4,7 +4,7 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-82 BELOW. It carries the ROUND-80-CLOSED banner — PHASE 2 (MCP) COMPLETE: ob closed the /tmp/crush-mcp-auth-* tempnam leak family (`ce41d8c9f`→pick `896c18205`; rv APPROVE 0C/0M); oc shipped E699 per the operator ruling "wire it" — `claude-mcp` double opt-in + `src/MCP/ClaudeCodeMcpServer.php` adapter (`db93dbe16`..`8b7989af1` → picks `ad8dfda12`..`4b9ab1258`; rv APPROVE-WITH-FIX 0C/1MAJOR+4MINOR healed in fix-round); drift-fix `b11a34ca3` (stacking census caught the fix-round's buried docblock — third tree-scan co-shard catch); weld `710544154` floor **11,870 / 170,786 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0** LINKED @cwd=sugar-crush; durations 518; NEVER pushed. ACTIONABLE = 0 BY ROW CENSUS — PHASE-2 COMPLETE; MINT PENDING for three operator-reported UX findings under investigation this session (multiline/paste input, possible reasoning truncation, MCP config-shape compat for opencode users) — round-81 lanes p* minted from probe verdicts. The trigger-watch roster, the K=8 sharded gate, the SwallowingCatch gate law (held clean r78–r80), and the definition of "done" are all below.**
+🔴 **START AT §0-NOW-83 BELOW. It carries the ROUND-81-CLOSED banner — PHASE 3 (operator UX) COMPLETE: all seven mints E704–E710 CLOSED by lanes pa–pg in three waves (+121T total; nine picks, ZERO conflicts; two fix-rounds at lane tip; merge companion `8dd48df9d` + drift-fix `086035f50` where serial1 caught THREE whole-tree guards past the lane gates — the serial remains the only complete gate). Weld `a5d0033d9` floor **11,991 / 172,259 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0** LINKED @cwd=sugar-crush, serial 10m1s; K=8 CONSERVATION +0/+0 EXACT; durations 529; config.json md5 stable; NEVER pushed. ACTIONABLE = 0 BY ROW CENSUS — the audit-derived campaign ledger is EMPTY; the queue sits at the §2(c) ORCHESTRATOR DECISION POINT (operator m0225: fresh audit sweep of the other 51 libs, probe-first scoping, then bank). HARNESS LAW: serials run PLAIN BASH PIPE — NEVER tmux/PTY (stdin-pin trio). The trigger-watch roster, the K=8 sharded gate, the SwallowingCatch gate law (held clean r78–r81), and the definition of "done" are all below.**
 **Every superseded-history `0-NOW-<n>` section and the frozen §1–§11 reference blocks were trimmed
 2026-09-12; the per-round history is recoverable via git ancestry of this file, and its surviving rules
 were lifted VERBATIM into the appendices below — STANDING ORDERS (rules 1–10, stop-and-ask, rules 59–62,
@@ -13,66 +13,47 @@ the vendor-restore block), ENVIRONMENT & PHILOSOPHY (legacy §§3–8), and the 
 Trimmed 2026-09-12 per resume-trim/PROPOSALS.md adjudication — full round history recoverable via git
 ancestry of this file. Rules are durable; figures are not.
 
-## 0-NOW-82. ROUND 80 CLOSED — PHASE-2 COMPLETE — ACTIONABLE = 0 — MINT PENDING FOR OPERATOR FINDINGS — CURRENT
+## 0-NOW-83. ROUND 81 CLOSED — PHASE-3 COMPLETE — ACTIONABLE = 0 — ORCHESTRATOR DECISION POINT (NEXT USER DIRECTIVE) — CURRENT
 
-**Written 2026-09-14 at the round-80 closeout, on top of code tip `710544154` (the re-pin weld; this
-closeout's docs commits add the records above it). §0-NOW-81 is DELETED — every live claim it carried is
+**Written 2026-09-14 at the round-81 closeout, on top of code tip `a5d0033d9` (the re-pin weld; this
+closeout's docs commits add the records above it). §0-NOW-82 is DELETED — every live claim it carried is
 re-stated here; its machinery survives in the APPENDICES below: operating rules 1–10 VERBATIM (APPENDIX I),
 addenda -66…-73 full texts (APPENDIX II — UNCHANGED this close), vendor & suite machinery (APPENDIX III),
 the K=8 standard gate (APPENDIX II §1b). APPENDICES I/II/III/IV/V are UNCHANGED at this close.**
 
-**The headline: ROUND 80 (phase-2 MCP FINAL wave, two lanes) CLOSED — PHASE-2 COMPLETE. E699 [CLOSED]:
-operator ruled "wire it" and oc shipped the gated door — double opt-in (repo `type: claude-mcp` entry,
-which cannot name binary/args/env, PLUS operator-tier `claudeMcpBinary` absolute path), the new
-`ClaudeCodeMcpServer` adapter riding the same bridge/dispatch/naming/narrowing law as its siblings,
-group-reap lifecycle, the dormancy guard converted to a bidirectional allowlist pin (documented
-glued-split ceiling). +33T exact over 3 new test files. ob closed the r79 tempnam trigger-watch (the
-tempnam+suffix family, exactly 3 sites, ~2,600 stale stubs on the host). Lane `ce41d8c9f` → pick
-`896c18205` (rv APPROVE 0C/0M); oc `db93dbe16`+`a489db1da`+`54cc5afac`+`2f87b4f8b`+fix `8b7989af1` →
-picks `ad8dfda12`+`e438c9dca`+`f0ef430fc`+`b57ed8fec`+`4b9ab1258` ALL CLEAN (rv APPROVE-WITH-FIX
-0C/1MAJOR+4MINOR — MAJOR-1 was an UNDISCLOSED §7.5/§7.6 test-plan omission, review caught what
-self-reporting missed, healed in the fix-round). Provenance fact: the design researcher lane died empty
-TWICE; the design survived only because an agent wrote it to disk first (design-oa). Merge drift-fix
-`b11a34ca3`: serial1 reddened
-RuntimeNoticeSinkDeliveryTest's stacking census (the fix-round buried the FIXTURE_SERVER forward-doc
-block under its new method doc) — third tree-scan co-shard class catch; guard's own prescription
-applied. Floor **11,870 / 170,786 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0** LINKED
-@cwd=sugar-crush at weld `710544154` (+33T exact vs r79 floor; serial2 green in ONE pass; K=8
-CONSERVATION +0/+0; durations 515→518, exactly +3). SwallowingCatch gate-law HELD CLEAN (r78–r80).**
+**The headline: ROUND 81 (PHASE 3 — the three operator UX findings, seven mints E704–E710, seven lanes
+pa–pg in three waves) CLOSED — PHASE-3 COMPLETE. Floor moved 11,870 → 11,991 (+121T across the round:
+pa +12, pb +16, pc +1, pd +3, pe +9, pf +57, pg +23). ALL NINE cherry-picks landed ZERO-conflict.
+Every lane reviewed BEFORE merge; the two fix-rounds (pb `1a7d67823`, pe `f42ef1794`) healed their
+reviews' findings at lane tip. Merge-side commits this wave: companion `8dd48df9d` (pf/pg rv MINORs —
+SETTINGS.md word-glue; BOTH pg fixture docblocks reworded 'structurally identical', the deviation
+measured on both pairs) and drift-fix `086035f50` — serial1's redset was SIX, not the predicted two:
+whole-tree guards again sat OUTSIDE every lane gate list (pg buried the E678 doc-comment under its new
+method — stacking census; pg shipped an unaccounted `scandir($this->tempDir)` — TreeWideGuardRoster both
+arms; pf's new test moved only the environment HOME — OneSidedHomeSandbox). Each reproduced at its own
+lane tip ALONE and is green at the base; every fix followed the guard's own written prescription.
+FOURTH+ co-shard-class demonstration: the full serial remains the only complete gate — lane filters AND
+K=8 (whose durations manifest silently drops new files) both miss whole-tree doc/roster censuses.**
 
-**Lane naming (in force):** two-letter ids, FIRST letter = round-group (r80=o* closed; r81=p*). Branch
-`lane/<id>`, sandbox `crush-lane-<id>`, artifacts `/home/sites/crush-r61-artifacts/<id>/`.
-
-**PHASE-3 MINTED 2026-09-14** — this paragraph SUPERSEDES the §2(c) "MINT PENDING" candidate list below.
-The three operator UX findings are probed (read-only investigators at `ce501c86a`; reports archived at
-`/home/sites/crush-r61-artifacts/phase3/` as `input-probe.md` (only-yellow-mink), `reasoning-probe.md`
-(bad-gold-ferret), `mcp-compat-probe.md` (injured-aquamarine-squirrel)) and the phase-3 kickoff mints
-**E704–E710** (7 rows; file:line citations in the backlog entries): E704 bracketed paste never enabled +
-PasteMsg dropped (HIGH), E705 Kitty keyboard protocol never negotiated — modified Enter indistinguishable
-(MED), E706 reasoning display hard-truncates at 120 chars — operator rule on record: WRAP, never truncate
-(HIGH), E707 provider length-stops silent — `$truncated` consumed nowhere (MED), E708 opencode MCP config
-shapes silently dropped — `environment`/`enabled` read nowhere (HIGH), E709 `/mcp` discovery UX — auth is
-the only visible verb (MED), E710 no foreign MCP importer (LOW). **Round-81 lanes** (file-disjointness
-binds): **wave-1 pa** (E704 — Chat.php input region) ∥ **pb** (E708 — src/MCP normalization) ∥ **pc**
-(E706 — src/Renderer reasoning paint); **wave-2 pd** (E709 — docs/MCP.md + DocFigure/AX re-cut AFTER pb
-touches the same arms) ∥ **pe** (E705 — Chat.php AFTER pa); **wave-3 pf** (E707 — Chat.php + Providers
-AFTER pe) ∥ **pg** (E710 — Subcommands AFTER pd). E706 vs E707 are two INDEPENDENT halves of the same
-reported symptom (render cap vs provider length-stop) — they can co-occur; the probe's ground-truth
-procedure distinguishes them (reasoning-probe.md). **Operator answer TODAY** for the four opencode
-servers (works at tip, project-root `.mcp.json`, plus one `trustedProjectMcp` grant in
-`~/.sugar-crush/config.json`): `{"mcpServers":{"searxng":{"type":"stdio","command":"npx","args":["-y","mcp-searxng"],"env":{"SEARXNG_URL":"http://skynet2.interserver.net:8080/"}},"context7":{"type":"http","url":"https://mcp.context7.com/mcp"},"exa":{"type":"http","url":"https://mcp.exa.ai/mcp"},"gh_grep":{"type":"http","url":"https://mcp.grep.app"}}}` (mcp-compat-probe §A). The §2(b) trigger-watch roster carries UNCHANGED. Census re-run at this mint returns exactly 7 survivors, all `OPEN` (E704–E710).
+**Harness law CORRECTED, loud: full-suite serials run through the PLAIN BASH-TOOL PIPE — NEVER tmux,
+NEVER any PTY-carrying harness (`-u LINES -u COLUMNS`, `> log 2>&1; echo EXIT=$?`, never `| tee`):
+`tests/bootstrap.php:325` guards the fd-0 repair with `!stream_isatty(STDIN)`, so PTY stdin leaves
+\STDIN a resource and exactly 3 stdin-pin tests red (HeadlessPermissionPromptStdinDefault:134,
+NonInteractiveStdinPin:212/:238) — the r81-w2 tmux attempt died at precisely those. (The older
+"tmux new-session with < /dev/null INSIDE" recipe from r75/r79 is SUPERSEDED by the pipe; w1's green
+logs were pipe-shaped all along and its "tmux" STATE label was wrong.)**
 
 ### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
 
 | figure | value | domain |
 |---|---|---|
-| **ROUND-80 FINAL / NEW ANCHOR** | **11,870 / 170,786 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial green, plain-pipe shape) | **LINKED, cwd = sugar-crush, at `710544154`**; the green serial IS the weld truth (r77 law); ±50 tree-scan wobble expected run-to-run |
-| chain | `492314c17` (r79 filemap) → `896c18205` (ob pick) → `ad8dfda12`+`e438c9dca`+`f0ef430fc`+`b57ed8fec`+`4b9ab1258` (oc picks, linear, ALL CLEAN) → `b11a34ca3` (merge drift-fix) → `710544154` (re-pin weld) → this closeout's docs (worklog+stamps+§0-NOW-82+pointer, then filemap regen) | NEVER pushed |
-| companions | K=8 CONSERVATION +0/+0 at weld (fresh `--out`, plain pipe); five-guard 123T/7176A; DocFigure alone **81T** (2604A); Config window 860T/19271A/1S; citation+roster+swallow+census4 combined 179T/14152A ZERO census flips; Glob pair green (corpus 131,765=365×361); `tools/check-child-lifetimes.php` rc0; `durations.tsv` **518 rows** (+3 oc test files, set-diff exact); runtime config.json md5 `05480c743aff302fd6c06c5a4a4c2210` stable (start==end) | linked-domain figures — published-mode differ |
+| **ROUND-81 FINAL / NEW ANCHOR** | **11,991 / 172,259 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial green, plain-pipe shape, 10m1s, 2026-09-14) | **LINKED, cwd = sugar-crush, at `a5d0033d9`**; the green serial IS the weld truth (r77 law); ±50 tree-scan wobble expected run-to-run |
+| chain | `710544154` (r80 weld) → `ce501c86a`+`9b6942f26`+`effdbdd82`+`492314c17`-era r80 docs/filemap → `8cd2c5f4a` (PHASE-3 MINTED docs) → W1 picks `2452947ba`+`4b767f85c`+`56a71d134`+`0bf64d08e` → `a39b34ee2` (W1 re-pin) → W2 picks `fea4b3b26`+`772ef1b03`+`2a33d175b` → `0908d39aa` (W2 re-pin) → W3 picks `ab21cfd48`+`0c347e995` → `8dd48df9d` (companion) → `086035f50` (drift-fix) → `a5d0033d9` (re-pin weld) → this closeout's docs | NEVER pushed |
+| companions | K=8 CONSERVATION +0/+0 with EXACT sums 11,991/172,259 (fresh `--out`, plain pipe); five-guard 125T/7333A; DocFigure alone **83T** (2684A); Config window 879T/19588A/1S; citation 13T/6057A; SwallowingCatch 9T/4173A; targeted r81 family 77T green; Glob corpus 131,765=365×361 intact; `durations.tsv` **522→529 rows** (set-diff exactly the seven new files — pf five, pg two — zero removals); runtime config.json md5 `05480c743aff302fd6c06c5a4a4c2210` stable (start==end) | linked-domain figures — published-mode differ |
 
-### 1b. THE STANDARD LOCAL GATE — unchanged (K=8 sharded, FAIL-CLOSED conservation, fresh `--out`, plain pipe; durations manifest must carry a row for every new test file BEFORE sharded conservation means anything; serial is the re-pin truth — and per r80's THIRD demonstration: the serial is also the ONLY gate that sees whole-tree doc/comment censuses; lane filter lists cannot). Canonical command + regeneration recipe: APPENDIX II §1b. Pass `--against-json sugar-crush/tests/Config/Support/suite-figure.json` for the script's own CONSERVATION verdict line.
+### 1b. THE STANDARD LOCAL GATE — unchanged (K=8 sharded, FAIL-CLOSED conservation, fresh `--out`, plain pipe; durations manifest must carry a row for every new test file BEFORE sharded conservation means anything — r81 re-proved the silent-drop; serial is the re-pin truth AND the only gate that sees whole-tree doc/comment/roster censuses). Canonical command + regeneration recipe: APPENDIX II §1b. Pass `--against-json sugar-crush/tests/Config/Support/suite-figure.json` for the script's own CONSERVATION verdict line.
 
-### 2. ACTIONABLE QUEUE — ZERO SURVIVORS: PHASE-2 COMPLETE, MINT PENDING
+### 2. ACTIONABLE QUEUE — ZERO SURVIVORS: PHASE-3 COMPLETE — THE QUEUE IS AT AN ORCHESTRATOR DECISION POINT
 
 **(a) Row census = 0 survivors.** Command run against `docs/plans/crush_code_backlog_triage.md` at this
 closeout (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status/evidence cells lead-scanned
@@ -86,80 +67,85 @@ $ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
 (no survivor lines)
 ```
 
-(EMPTY output = zero survivors — verified LIVE at this closeout after the E699 CLOSED-in-place flip.)
-**PHASE 2 (MCP, r77–r80) is COMPLETE: E695, E696(α+deny-notation), E697, E698, E699, E700, E701, E702,
-E703 all CLOSED.** The incoming phase-3 queue is MINTED SEPARATELY — see (c).
+(EMPTY output = zero survivors — verified LIVE at this closeout after the seven E704–E710 CLOSED-in-place
+flips.) **PHASE 3 (operator UX, r81) is COMPLETE: E704, E705, E706, E707, E708, E709, E710 all CLOSED.**
+With PHASE 2 (r77–r80) and the hardening plan's earlier phases also at zero, the entire audit-derived
+campaign ledger is EMPTY — the operator's called-for next step is (c).
 
 **(b) TRIGGER-WATCH ROSTER (watches are NOT rows — carry list):**
 
+- **NEW r81 — pa paste-while-modal behavioral pin** (rv 1MINOR declined in-lane): paste landing while a
+  modal pane is open should get a behavioral pin, not just the key-routing arm.
+- **NEW r81 — ReadPathCensus `\`-prefix blind spot**: the census quote-prefix walk does not see
+  backslash-prefixed calls (`\scandir(...)`); measured today: zero live offenders, note only.
+- **NEW r81 — pf maxOutputTokens threading seam**: TaskTool/Workflow keep provider defaults; the
+  ClaudeCode transport reads no request ceiling (5/6 wires honor it) — documented in backlog §E707.
 - **E696-deny-residual** — if a round ever mints a `denyPatterns` config producer, the deny half must ship
   ENFORCED in the same change (never again "config that lies").
-- **`updateRegistration()` redirect-churn seam** (design nd §2.2) — re-registering with a changed loopback
-  redirect_uri can be rejected by servers that pin registrations; revisit if a real-world server trips it.
+- **`updateRegistration()` redirect-churn seam** (design nd §2.2) — revisit if a real-world server trips it.
 - **E309** — DenialKind fourth-case-vs-qualifier product decision; watch only (r70 verdict).
 - **E611 tripwire** — reopen if a round ever ships out-of-ownership CODE edits UN-REPORTED.
-- **E694 step-3 / E25 re-severity** — agent memory tool DECLINED until a re-severity review + corpus
-  census justify it.
-- **E655** — "KeyboardHandlerPaletteTest" PHANTOM stays VOID — do NOT re-issue without a real target.
+- **E694 step-3 / E25 re-severity** — agent memory tool DECLINED until a re-severity review justifies it.
+- **E655** — "KeyboardHandlerPaletteTest" PHANTOM stays VOID.
 - **LspClientDispatchPumpTest** — ~10s load-flake under shard contention: ambient, never a lane.
 - **Chat.php:8266 `scheduleBackendCompletion()` → RuntimeNoticeSink::beginTurn() seam** (r69-fn, opt-in by
   design) — wire when notice-drain product work starts.
-- ~~tempnam hygiene~~ — **STRUCK r80: ob closed the whole family** (capture-base-clean-both idiom).
 
-**(c) MINT PENDING (phase-3 candidates, under investigation THIS session 2026-09-14 — three
-operator-reported UX findings; lanes to be minted round-81 as p* from probe verdicts, NOT yet rows):**
-
-1. **Multiline/paste input handling** — reported defect shape under probe.
-2. **Possible reasoning truncation** — reported symptom under probe (provider vs render half TBD).
-3. **MCP config-shape compat for opencode users** — foreign config shapes reported; compat vs documented
-   divergence under probe.
+**(c) NEXT-USER-DIRECTIVE (m0225) — THE DECISION POINT.** The audit-derived queue (phases of the 13-angle
+audit through the operator-UX phase) is at **zero actionable**. The standing candidate the operator asked
+to keep in view: a FRESH AUDIT SWEEP of the other 51 monorepo libs (sugar-crush itself is the exhausted
+subject), scoping PROBE-FIRST à la the phase-2/3 kickoffs (read-only investigators → minted E-rows →
+lane waves), THEN bank completion if the operator prefers to stop here. Do NOT mint lanes before the
+operator calls the sweep.
 
 **(d) Rules unchanged** — operating rules 1–10 + addenda -66…-73 in force, plus the r77 law carried
-forward: **every src-touching lane's brief gate list adds `SwallowingCatchCensusTest`** (held clean r78,
-r79, AND r80 — keep the gate, it is cheap) — and r80's reminder that whole-tree doc/comment censuses are
-serial-only, so the drift-fix policy (one disclosed commit) stays in the merge cadence.
-Evidence-to-files, land-verify-over-reports, resume-blank-forever, fresh-recut-on-replay,
-≤8 concurrent keep-filled, census-in-step, figures-cite-cwd+mode.
+forward: **every src-touching lane's brief gate list adds `SwallowingCatchCensusTest`** (held clean r78–
+r81) — and the r80/r81 law that whole-tree doc/comment/roster censuses are SERIAL-ONLY, so the drift-fix
+policy (one disclosed commit) stays in the merge cadence. Evidence-to-files, land-verify-over-reports,
+resume-blank-forever (≤10x, user directive 2026-09-14), ≤8 concurrent keep-filled, census-in-step,
+figures-cite-cwd+mode.
 
 ### RESTART INSTRUCTIONS — the new-session startup recipe
 
-**Tip chain:** `492314c17` (r79 filemap) → picks `896c18205`+`ad8dfda12`+`e438c9dca`+`f0ef430fc`+
-`b57ed8fec`+`4b9ab1258` → drift-fix `b11a34ca3` → weld `710544154` (floor anchor) → this closeout's docs.
+**Tip chain:** `a39b34ee2` (W1 re-pin) → picks `fea4b3b26`+`772ef1b03`+`2a33d175b` → `0908d39aa` (W2
+re-pin) → picks `ab21cfd48`+`0c347e995` → `8dd48df9d` → `086035f50` → `a5d0033d9` (floor anchor) → this
+closeout's docs.
 
-1. Read this §0-NOW-82, the worklog `## ROUND 80` section (`docs/plans/crush_code_worklog.md`), and
+1. Read this §0-NOW-83, the worklog `## ROUND 81` section (`docs/plans/crush_code_worklog.md`), and
    `docs/plans/crush_code_filemap.md`.
 2. Pre-flight: `php scripts/refresh-deps.php --status` → linked **18/18 + 7/7** — FULL including candy-pty
    (an INCOMPLETE link deterministically poisons 5 InteractivePromptContainmentTest env reds: verify BEFORE
    briefing lanes, r76 lesson); `git status` clean at the tip; if any figure is doubted, run the floor gate
    FIRST: `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv
-   --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8), ~90s at
-   11,870T, **through a PLAIN PIPE, not a PTY** (`-u LINES -u COLUMNS`) — a ctty-carrying harness
-   deterministically reddens the `TerminalSizeFallbackIsolationTest` pair + the stdin-pin arms; serial is
-   reserved for figure re-pins (long serials: `tmux new-session -d` with `< /dev/null` redirect INSIDE the
-   tmux command — r75/r79 proven; setsid and nohup both die, never a PTY harness). Fresh lane sandboxes have NO
-   root `vendor/` — run gates as `sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml`. Residue check:
-   the round-80 lane worktrees/branches (`crush-lane-ob`, `crush-lane-oc`, `lane/ob`, `lane/oc`) were removed
-   at this closeout (cherry all '-'); `sugarcraft-cc` is foreign, leave it alone.
-3. THE QUEUE CARRIES NO LANES. Mint round-81 p* lanes ONLY from adjudicated §2(c) operator-findings probes
-   (or a fresh audit sweep the operator calls for), off the closeout tip: `git -C /home/sites/sugarcraft
-   worktree add /home/sites/crush-lane-<id> -b lane/<id> <tip>` then `php scripts/refresh-deps.php
-   --mode=linked` inside — verified working IN-WORKTREE (r73 env fact).
+   --against-json sugar-crush/tests/Config/Support/suite-figure.json` — K defaults to min(nproc,8), ~120s at
+   11,991T. **EVERY long run — shards AND serials — goes through the PLAIN BASH-TOOL PIPE:
+   `env -u LINES -u COLUMNS … > log 2>&1; echo EXIT=$?` — NEVER tmux, NEVER createBackgroundProcess/PTY
+   (the stdin-pin trio + the TerminalSizeFallback keystone are ctty-sensitive: r81 proof, w2 attempt-1).**
+   Fresh lane sandboxes have NO root `vendor/` — run gates as `sugar-crush/vendor/bin/phpunit -c
+   sugar-crush/phpunit.xml`. Residue check: round-81 lane worktrees/branches (`crush-lane-pa`…`pg`,
+   `crush-r81-merge`, `lane/p*`, `r81/merge`) were removed at this closeout (cherry all '-');
+   `sugarcraft-cc` is foreign, leave it alone.
+3. THE QUEUE CARRIES NO LANES. Do NOT mint without the operator: §2(c) is the decision point (fresh
+   51-lib audit sweep with probe-first scoping, or bank). If swept: off the closeout tip
+   `git -C /home/sites/sugarcraft worktree add /home/sites/crush-lane-<id> -b lane/<id> <tip>` then
+   `php scripts/refresh-deps.php --mode=linked` inside — verified working IN-WORKTREE (r73 env fact;
+   r81-w3 reran the FULL 58-lib linked refresh in ~100s).
 4. Per-bundle loop unchanged: implement (task+coder) → **verify claimed SHAs + worktree (rule 4,
    four-case triage)** → review (task+coder, verdict-first, WITH the guard filters + SwallowingCatch) →
    fix round → merged-suite green (PIPE, not PTY) → commit (author `Joe Huss <[EMAIL]>`). Never push.
-   Blank report — builder OR reviewer → RESUME the same task_id (-70, -71); IDENTICAL replay → fresh
-   re-cut, SALVAGE-FIRST step 0 (-72); taking over a DEAD session → audit master for unreviewed picks
-   FIRST and review-after-merge (-73).
-5. Close any future round exactly as r80 did: worklog entry + triage/backlog stamps + a new `§0-NOW-83` +
+   Blank report — builder OR reviewer → RESUME the same task_id up to 10x (-70, -71, user directive
+   2026-09-14 reaffirmed: do NOT re-cut on blank/replay); SALVAGE-FIRST step 0 on any takeover (-72);
+   taking over a DEAD session → audit master for unreviewed picks FIRST (-73).
+5. Close any future round exactly as r81 did: worklog entry + triage/backlog stamps + a new `§0-NOW-84` +
    filemap regen + `crush_code.md` pointer flip + durations/README/suite-figure re-pin when the lane set
    moves tests (census sextet) — actionable derived from the ROW CENSUS (recount the four section tables, do
-   NOT chain; status prefixes must be exactly `**CLOSED`, `**CLOSED (FULL)`, `**CLOSED-VERDICT`, `**OPEN`,
+   NOT chain; status prefixes exactly `**CLOSED`, `**CLOSED (FULL)`, `**CLOSED-VERDICT`, `**OPEN`,
    `**PARTIAL`, `**STALE-CITATION`, `**UNCERTAIN`); re-pin cadence per r78 facts — hand-bump the json tests
-   field ONLY, green serial, refresher rewrites json+README pair in one weld commit. NEVER run unanchored
+   field ONLY, green serial, refresher rewrites json, README pair in one weld commit. NEVER run unanchored
    `re.S` substitutions against the backlog ledger — scope per-section via `re.split(r'(?m)^(?=### E)')`,
    assert exactly-1, verify with numstat + a far-away canary grep (r77 lc wiped 3,837 lines to a git restore).
 6. Honor rules 1–10 + the -66…-73 addenda throughout. STOP only at the four stop-and-ask items.
-   No live decisions ride at this close (the E699 gate was RULED and shipped in r80).
+   No live decisions ride at this close (the next phase is the operator's call — §2(c)).
 
 ---
 
