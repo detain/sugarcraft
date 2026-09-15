@@ -370,10 +370,11 @@ final class Ansi
      * WIRE SPELLING MATTERS: VT100 and xterm define DECALN as an intermediate
      * escape — `ESC`, intermediate `#` (0x23), final `8` (ansicode.txt:217) —
      * which is what this emits. The `CSI # 8` spelling that circulates in some
-     * notes (including candy-vt's own docblock) is not a complete sequence: a
-     * CSI final byte must be 0x40-0x7E, so on a standards-conformant receiver
-     * `ESC [ # 8` stays inside the CSI, where it consumes whatever the caller
-     * prints next as the final — eating output instead of testing alignment.
+     * notes is not a complete sequence: a CSI final byte must be 0x40-0x7E, so
+     * on a standards-conformant receiver `ESC [ # 8` stays inside the CSI, where
+     * it consumes whatever the caller prints next as the final — eating output
+     * instead of testing alignment. candy-vt documents that same gap accurately
+     * and exposes the pattern programmatically only.
      *
      * Neither spelling executes the pattern in candy-vt yet: this repo's parser
      * closes CsiIntermediate on a 0x30-0x3F byte by dropping to Ground without
