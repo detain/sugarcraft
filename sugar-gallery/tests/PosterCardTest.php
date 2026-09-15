@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery\Tests;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\PosterCard;
@@ -374,5 +375,89 @@ final class PosterCardTest extends TestCase
         self::assertSame(10, $filled + $empty, 'progress bar has exactly 10 cells');
         self::assertSame(3, $filled, 'progress 0.3 × width 10 = 3 filled cells');
         self::assertSame(7, $empty, '10 - 3 = 7 empty cells');
+    }
+
+    // ---- the styled-title trust boundary --------------------------------
+
+    public function testWithStyledTitleIsStillVerbatimByDefault(): void
+    {
+        // Backwards compatibility: the guard is opt-in, so an existing caller that
+        // passes raw bytes gets exactly what it always got — the payload is stored
+        // and echoed, NOT sanitised. This is the documented trust boundary.
+        $hostile = "\e[1mHi\e[0m there\e[2J";
+        $card = (new PosterCard('1', 'Hi there'))->withStyledTitle($hostile);
+
+        self::assertSame($hostile, $card->styledTitle, 'default path stores the bytes untouched');
+        self::assertStringContainsString("\e[2J", $card->render(false, 20, 1), 'and renders them untouched');
+    }
+
+    public function testAssertSafeOptionAcceptsStylingProducedByTheCaller(): void
+    {
+        $styled = "\e[1mHi\e[0mghlight";
+        $card = (new PosterCard('1', 'Highlight'))->withStyledTitle($styled, assertSafe: true);
+
+        self::assertSame($styled, $card->styledTitle);
+        self::assertSame(14, Width::of(explode("\n", $card->render(false, 14, 1))[1]));
+    }
+
+    public function testAssertSafeOptionRejectsAnythingThatIsNotStyling(): void
+    {
+        $card = new PosterCard('1', 'Highlight');
+
+        // A cursor move, an erase, an OSC hyperlink … all throw instead of being
+        // written into a cell the runtime will echo verbatim.
+        foreach (["\e[2Ahi", "hi\e[2J", "\e]8;;https://evil\x07click", "ring\x07", "a\nb"] as $hostile) {
+            $thrown = null;
+            try {
+                $card->withStyledTitle($hostile, assertSafe: true);
+            } catch (InvalidArgumentException $e) {
+                $thrown = $e;
+            }
+
+            self::assertNotNull($thrown, 'the guard must reject ' . json_encode($hostile));
+            self::assertNull($card->styledTitle, 'a rejected title leaves the receiver untouched (immutable builder)');
+        }
+    }
+
+    public function testWithSafeStyledTitleKeepsStyleAndDropsPayload(): void
+    {
+        $card = (new PosterCard('1', 'Blade Runner'))
+            ->withSafeStyledTitle("\e[1mBlade" . "\e[2J" . "\e[0m Runner");
+
+        self::assertSame("\e[1mBlade\e[0m Runner", $card->styledTitle, 'coerced, not refused: the styling survives');
+        self::assertStringNotContainsString("\e[2J", $card->render(false, 20, 1));
+        self::assertSame(20, Width::of(explode("\n", $card->render(false, 20, 1))[1]));
+    }
+
+    public function testWithSafeStyledTitleFallsBackToThePlainTitleWhenNothingSurvives(): void
+    {
+        $card = new PosterCard('1', 'Plain Title');
+
+        // Sanitising to empty would render a blank row and lose the title, so the
+        // builder declines the change (identity) and the plain — sanitised — path wins.
+        self::assertSame($card, $card->withSafeStyledTitle("\e[2J"));
+        self::assertNull($card->styledTitle);
+        self::assertStringContainsString('Plain Title', $card->render(false, 20, 1));
+    }
+
+    public function testAssertSafeAnsiIsTheCardLevelEntryWayIntoTheGuard(): void
+    {
+        self::assertSame("\e[31mX\e[0m", PosterCard::assertSafeAnsi("\e[31mX\e[0m"));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Unsafe escape sequence at offset \d+/');
+        PosterCard::assertSafeAnsi("\e[H\e[2J");
+    }
+
+    public function testGuardedStyledTitleThreadsThroughTheOtherBuilders(): void
+    {
+        $card = (new PosterCard('1', 'X', 'https://cdn/y.png'))
+            ->withStyledTitle("\e[1mX\e[0m", assertSafe: true)
+            ->withPoster('poster')
+            ->withProgress(0.5);
+
+        self::assertSame("\e[1mX\e[0m", $card->styledTitle, 'the guard option does not disturb the immutable chain');
+        self::assertSame('https://cdn/y.png', $card->posterUrl);
+        self::assertSame(0.5, $card->progress);
     }
 }

@@ -98,10 +98,60 @@ final readonly class PosterCard
      * a sanitised title), NEVER raw untrusted / DB-sourced bytes. When the
      * source is untrusted, leave this unset and rely on the plain
      * {@see $title} — that is the sanitised path.
+     *
+     * Two opt-ins make the contract enforceable instead of merely documented —
+     * both accept SGR styling only, everything else (cursor moves, erase, OSC /
+     * DCS payloads, bare controls) counts as unsafe, per {@see AnsiGuard}:
+     *
+     *  - `$assertSafe: true` fails fast on a byte the widget would have echoed
+     *    verbatim, for a call site that claims the bytes are self-produced and
+     *    wants the lie caught in development. It throws
+     *    {@see \InvalidArgumentException} with the offset + hex of the offender.
+     *  - {@see withSafeStyledTitle()} coerces instead of throwing, for a call
+     *    site holding bytes it cannot vouch for.
+     *
+     * Leaving `$assertSafe` false is the historical behaviour, unchanged.
      */
-    public function withStyledTitle(string $ansi): self
+    public function withStyledTitle(string $ansi, bool $assertSafe = false): self
     {
+        if ($assertSafe) {
+            self::assertSafeAnsi($ansi);
+        }
+
         return new self($this->id, $this->title, $this->posterUrl, $this->progress, $this->poster, $ansi, $this->posterImage, $this->imageId);
+    }
+
+    /**
+     * Attach a styled title after dropping everything that is not SGR styling
+     * ({@see AnsiGuard::sanitize()}) — the coercion half of the
+     * {@see withStyledTitle()} trust boundary, for a highlight built over text
+     * the caller does not control. Colour may be lost; a cursor move never will be.
+     *
+     * When sanitising leaves nothing but empty string the card keeps its plain
+     * {@see $title} (and the receiver is returned unchanged) rather than rendering
+     * a blank title row: the plain path is the sanitised one by design.
+     */
+    public function withSafeStyledTitle(string $ansi): self
+    {
+        $safe = AnsiGuard::sanitize($ansi);
+
+        return $safe === '' ? $this : $this->withStyledTitle($safe);
+    }
+
+    /**
+     * Guard for the {@see withStyledTitle()} trust boundary: return $ansi when it
+     * carries nothing but SGR styling and printable text, throw otherwise.
+     *
+     * A convenience delegate to {@see AnsiGuard::assertSafe()} so the widget's own
+     * entry point is one call away at the call site that assembles a highlight:
+     *
+     *     $card->withStyledTitle(PosterCard::assertSafeAnsi($highlight));
+     *
+     * @throws \InvalidArgumentException when $ansi carries a non-SGR escape or control byte
+     */
+    public static function assertSafeAnsi(string $ansi): string
+    {
+        return AnsiGuard::assertSafe($ansi);
     }
 
     public function hasPoster(): bool

@@ -302,6 +302,75 @@ final class PosterGrid
         return !($lastFetched[0] <= $start && $end <= $lastFetched[1]);
     }
 
+    /**
+     * The cards loaded inside the visible window — widened by $overscanRows, the
+     * same way you page — keyed by their ABSOLUTE index. This is the iteration an
+     * owner otherwise hand-rolls as
+     * `for ($i = $start; $i <= $end; $i++) { $grid->item($i) … }`: skeleton
+     * indices are simply absent from the result, and the map is ascending.
+     */
+    public function visibleCards(int $overscanRows = 0): array
+    {
+        [$start, $end] = $this->visibleRange($overscanRows);
+
+        $cards = [];
+        for ($i = max(0, $start); $i <= $end; $i++) {
+            $card = $this->items[$i] ?? null;
+            if ($card !== null) {
+                $cards[$i] = $card;
+            }
+        }
+
+        return $cards;
+    }
+
+    /**
+     * The absolute indices inside the visible window that still need a poster,
+     * so an owner queues exactly those async fills and nothing else:
+     *
+     *     foreach ($grid->indicesNeedingPoster(overscanRows: 1) as $index) {
+     *         // load the poster for $grid->item($index), splice back withItem()
+     *     }
+     *
+     * An index qualifies when a card is loaded there, that card has no poster
+     * yet (neither inline ANSI nor an overlay image — {@see PosterCard::hasPoster()}
+     * spans both fill modes), and $isFillable agrees a poster can be sourced for
+     * it. The default $isFillable is "the card names a poster URL"; pass your own
+     * predicate when the URL is discovered lazily (a detail fetch first) or when
+     * your transport policy rejects some URLs outright — a card the owner cannot
+     * fetch should keep its skeleton instead of being queued on every scroll.
+     *
+     * $isCached is an optional pre-flight probe, typically a disk-cache lookup
+     * keyed by url + width + height + render protocol. It changes nothing about
+     * WHAT the finished frame looks like; it lets the owner skip queueing an index
+     * whose bytes already sit in the cache (and would therefore resolve
+     * synchronously anyway), turning a per-cell promise round-trip into a no-op.
+     *
+     * Deliberately renderer-agnostic: no image protocol, URL scheme, host
+     * allow-list, SSRF rule or concurrency policy is encoded here. Those are the
+     * calling application's transport domain; this method only knows the grid's
+     * own geometry — which cells are on screen, and which of them are still empty.
+     *
+     * @param (callable(PosterCard): bool)|null $isFillable defaults to "has a non-empty posterUrl"
+     * @param (callable(PosterCard): bool)|null $isCached   defaults to "nothing is cached"
+     *
+     * @return list<int> absolute indices needing a poster, ascending
+     */
+    public function indicesNeedingPoster(int $overscanRows = 0, ?callable $isFillable = null, ?callable $isCached = null): array
+    {
+        $isFillable ??= static fn (PosterCard $card): bool => $card->posterUrl !== null && $card->posterUrl !== '';
+
+        $pending = [];
+        foreach ($this->visibleCards($overscanRows) as $index => $card) {
+            if ($card->hasPoster() || !$isFillable($card) || ($isCached !== null && $isCached($card))) {
+                continue;
+            }
+            $pending[] = $index;
+        }
+
+        return $pending;
+    }
+
     // ---- geometry / accessors ------------------------------------------
 
     public function columns(): int

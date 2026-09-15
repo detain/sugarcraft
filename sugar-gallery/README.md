@@ -13,6 +13,10 @@ in no image decoder.
 composer require sugarcraft/sugar-gallery
 ```
 
+The poster pipeline example and its integration tests render real images, so they
+pull [candy-mosaic](https://github.com/sugarcraft/candy-mosaic) in as a
+*development* dependency only — the library itself never depends on it.
+
 ## PosterGrid — virtualized, sparse, owner-paged
 
 The grid knows the **total** item count up front but holds only the cards that
@@ -58,6 +62,41 @@ if ($grid->needsFetch($lastFetched, overscanRows: 1)) {
 
 Async poster arrived for one cell? `->withItem($index, $card->withPoster($ansi))`.
 
+### Per-cell poster fill (the async-fill policy)
+
+A range fetch gives you *cards*; the artwork arrives later, one cell at a time.
+`visibleCards()` and `indicesNeedingPoster()` are the grid's half of that loop —
+which cells are on screen, and which of them are still empty:
+
+```php
+foreach ($grid->indicesNeedingPoster(overscanRows: 1) as $index) {
+    // queue exactly the cells that are visible, loaded, and still skeleton-shaped
+}
+
+// A card whose art you cannot source (no URL, a rejected host, a lazy detail
+// fetch) would otherwise be re-queued on every scroll. Your predicate replaces
+// the default "has a posterUrl" test wholesale:
+$pending = $grid->indicesNeedingPoster(
+    overscanRows: 1,
+    isFillable: static fn (PosterCard $c): bool => str_starts_with((string) $c->posterUrl, 'https://'),
+);
+
+// Skip cells whose rendered bytes are already in a disk cache, so you never
+// queue a load that would resolve synchronously anyway:
+$pending = $grid->indicesNeedingPoster(overscanRows: 1, isCached: $probeCache);
+```
+
+Both are **renderer-agnostic on purpose**: the grid knows geometry and sparseness,
+nothing about image protocols, URL schemes, host allow-lists, SSRF policy, or how
+many fetches may run at once. That is your application's transport domain, and it
+stays in your loader — see [`examples/poster-grid-mosaic.php`](examples/poster-grid-mosaic.php)
+for the whole pipeline against a real `DiskCache`.
+
+`visibleCards($overscanRows)` returns the same window as `index => PosterCard`
+(ascending, skeletons absent) — the iteration you would otherwise hand-roll with
+`item($i)` in a loop, e.g. to release overlay-image handles for the cells that
+just scrolled away.
+
 ### Render
 
 ```php
@@ -98,6 +137,45 @@ Every card row is exactly `width` cells wide and the grid normalizes each cell
 to `cardWidth × (posterHeight + 2)`, so columns and rows always line up whether
 or not a card carries a progress bar.
 
+### Feeding it from candy-mosaic
+
+The card holds *already-rendered* bytes, so the widget pulls in no decoder — but
+[candy-mosaic](https://github.com/sugarcraft/candy-mosaic) is the renderer this
+lib is built against, and the glue is three lines:
+
+```php
+use SugarCraft\Mosaic\{ImageSource, Mosaic, Scale};
+
+$image  = ImageSource::fromFile($path);                    // or fromGd()/fromUrl()
+$ansi   = Mosaic::halfBlock()->withScale(Scale::Fill)
+    ->render($image, $cardWidth, $posterHeight);          // cells, not pixels
+$grid   = $grid->withItem($index, $card->withPoster($ansi));
+```
+
+`Mosaic::render()` takes the *same* cell box the card reserves
+(`cardWidth × posterHeight`), so the poster drops into the grid with no resizing
+arithmetic on your side; anything too big or too small is boxed to the cell
+anyway.
+
+Pixel-graphics protocols (`sixel`, `kitty`, `iterm2`) are not cell text — a
+`Mosaic` reports `isInline() === false` for them. Those bytes go to candy-mosaic's
+`ImageLayer`, and the card carries only the marker the runtime paints over:
+
+```php
+$placed = $layer->placeTracked($bytes, $cardWidth, $posterHeight);   // ['sixel','kitty','iterm2']
+$grid   = $grid->withItem($index, $card->withImage($bytes, $placed->imageId));
+```
+
+Cache the *rendered* bytes, not the source image — a render is expensive, a decode
+less so, and the cache key must change when the terminal's protocol does:
+`DiskCache::key($url, $width, $height, $mosaic->protocol())`.
+
+Run the whole thing yourself (GD only, no network):
+
+```sh
+php examples/poster-grid-mosaic.php
+```
+
 ### Title trust boundary
 
 The plain `title` is treated as **untrusted** (it is typically DB-sourced):
@@ -112,6 +190,24 @@ sanitising it would destroy the very SGR escapes it exists to carry. That makes
 already-safe text, **never** raw untrusted / DB-sourced bytes. When the source
 is untrusted, leave the styled title unset and rely on the sanitised plain
 `title`.
+
+Two opt-ins turn that documented contract into an enforced one. Both admit **SGR
+styling only** (`ESC [ <params> m`) — every other escape form (cursor movement,
+erase, OSC / DCS / APC payloads, bare C0 controls, a truncated sequence) counts as
+unsafe, per `AnsiGuard`:
+
+```php
+// Fail fast: throws InvalidArgumentException (offset + hex of the offender)
+$card->withStyledTitle($highlight, assertSafe: true);
+PosterCard::assertSafeAnsi($highlight);           // same guard, standalone
+
+// Coerce instead: keep the colour, drop anything else
+$card = $card->withSafeStyledTitle($maybeHostile);
+```
+
+`AnsiGuard::isSafe()` / `::sanitize()` are public if you want to check or clean
+before you build the highlight. Nothing about the default path changed —
+`withStyledTitle($ansi)` is still verbatim, so existing callers are untouched.
 
 ## License
 
