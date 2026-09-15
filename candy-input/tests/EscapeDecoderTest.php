@@ -673,6 +673,16 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('ReleaseA', $events[0]->key);
     }
 
+    public function testKittyRepeatDecodesAsPress(): void
+    {
+        // Event type 2 (auto-repeat) is deliberately surfaced as an ordinary
+        // press — documented divergence; a repeat IS a keystroke downstream.
+        $events = $this->decoder->decode("\x1b[97;2:2u");
+        $this->assertCount(1, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+    }
+
     // ─── Pathological inputs ────────────────────────────────────────────────
 
     public function testLoneEscape(): void

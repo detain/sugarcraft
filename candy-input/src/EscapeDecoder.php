@@ -127,34 +127,55 @@ final class EscapeDecoder
         $stream = $this->remainder . $bytes;
         $this->remainder = '';
 
-        // Handle in-progress bracketed paste
-        if ($this->inPaste === true) {
-            return $this->handlePasteStream($stream);
+        $events = [];
+
+        // One coalesced read can carry several complete paste episodes (a
+        // terminal pasting text that itself contains "ESC [ 201 ~ ESC [ 200 ~")
+        // or a string terminator followed by more sequences. Re-enter the loop
+        // with the pass's tail instead of recursing into decode(), so stack
+        // depth stays independent of how many episodes one read carries —
+        // unbounded recursion segfaults the process on a hostile pipe.
+        while ($stream !== '') {
+            if ($this->inPaste === true) {
+                $pass = $this->handlePastePass($stream);
+            } elseif ($this->inString === true) {
+                // In-progress OSC/DCS/APC/PM string — every byte belongs to the
+                // payload until its terminator; never decoded as keys.
+                $pass = $this->consumeStringPayload($stream);
+            } else {
+                // Check for paste start anywhere in stream (only when paste
+                // parsing is enabled; otherwise the markers fall through as
+                // ordinary — and ignored — CSI sequences below).
+                $pasteStartPos = $this->options->enablePaste
+                    ? strpos($stream, self::PASTE_START)
+                    : false;
+                if ($pasteStartPos === false) {
+                    return array_merge($events, $this->decodeClean($stream));
+                }
+
+                // Decode any bytes before the paste start normally
+                $prefix = substr($stream, 0, $pasteStartPos);
+                if ($prefix !== '') {
+                    $events = array_merge($events, $this->decodeClean($prefix));
+                }
+
+                $this->pasteBuffer = '';
+                $this->inPaste = true;
+                $pass = $this->finishPastePass(substr($stream, $pasteStartPos + strlen(self::PASTE_START)));
+            }
+
+            // Append per-event (not array_merge) so a flood of tiny passes —
+            // thousands of paste pairs in one read — stays amortized O(1).
+            foreach ($pass['events'] as $event) {
+                $events[] = $event;
+            }
+            if ($pass['remaining'] === '') {
+                return $events;
+            }
+            $stream = $pass['remaining'];
         }
 
-        // Handle in-progress OSC/DCS/APC/PM string — every byte belongs to the
-        // payload until its terminator; never decoded as keys.
-        if ($this->inString === true) {
-            return $this->handleStringStream($stream);
-        }
-
-        // Check for paste start anywhere in stream (only when paste parsing is
-        // enabled; otherwise the markers fall through as ordinary — and ignored —
-        // CSI sequences below).
-        $pasteStartPos = $this->options->enablePaste ? strpos($stream, self::PASTE_START) : false;
-        if ($pasteStartPos !== false) {
-            // Decode any bytes before the paste start normally
-            $prefix = substr($stream, 0, $pasteStartPos);
-            $prefixEvents = $prefix !== '' ? $this->decodeClean($prefix) : [];
-
-            $afterStart = substr($stream, $pasteStartPos + strlen(self::PASTE_START));
-            $this->pasteBuffer = '';
-            $this->inPaste = true;
-
-            return $this->finishPaste($prefixEvents, $afterStart);
-        }
-
-        return $this->decodeClean($stream);
+        return $events;
     }
 
     /**
@@ -584,7 +605,10 @@ final class EscapeDecoder
      * Release is recognized both in the legacy encoding (modifiers OR 0x20) and
      * in the spec encoding (event-type sub-parameter 3; 1=press, 2=repeat).
      * Alternate key codes after the first colon in the code field are ignored —
-     * the primary code identifies the key.
+     * the primary code identifies the key. Event type 2 (auto-repeat) is
+     * deliberately surfaced as an ordinary press: a repeat IS a keystroke for
+     * every TUI consumer of this decoder, and inventing a "Repeat"-prefixed key
+     * name would widen the event vocabulary for no gain.
      *
      * @param string $seq  Complete CSI body ending in "u" (e.g. "97;5u", "97:65;2:3u")
      * @param string $rest Genuine suffix after the sequence
@@ -899,11 +923,13 @@ final class EscapeDecoder
     }
 
     /**
-     * Handle paste stream — check for paste end.
+     * One pass over a stream while a bracketed paste is in progress: check for
+     * the paste-end marker and report the tail after it back to decode()'s
+     * loop (never recursing — see the note there on stack depth).
      *
-     * @return list<Event>
+     * @return array{events: list<Event>, remaining: string}
      */
-    private function handlePasteStream(string $stream): array
+    private function handlePastePass(string $stream): array
     {
         $pasteEndPos = strpos($stream, self::PASTE_END);
         if ($pasteEndPos === false) {
@@ -929,37 +955,38 @@ final class EscapeDecoder
                 $event = PasteEvent::truncate($this->pasteBuffer);
                 $this->pasteBuffer = '';
                 $this->inPaste = false;
-                return [$event];
+
+                return ['events' => [$event], 'remaining' => ''];
             }
-            return [];
+
+            return ['events' => [], 'remaining' => ''];
         }
 
         $pasteContent = $this->pasteBuffer . substr($stream, 0, $pasteEndPos);
-        $afterEnd = substr($stream, $pasteEndPos + strlen(self::PASTE_END));
-
         $this->pasteBuffer = '';
         $this->inPaste = false;
 
-        // Decode the post-paste tail now instead of parking it in $remainder:
-        // a long tail (bytes that legitimately follow the end marker in the same
-        // read) stays bounded by the sequence cap applied to its incomplete suffix.
-        $events = [PasteEvent::truncate($pasteContent)];
-
-        return $afterEnd === '' ? $events : array_merge($events, $this->decode($afterEnd));
+        // Hand the post-paste tail back to decode()'s loop rather than parking
+        // it in $remainder: a long tail (bytes that legitimately follow the end
+        // marker in the same read) stays bounded by the sequence cap applied to
+        // its incomplete suffix.
+        return [
+            'events' => [PasteEvent::truncate($pasteContent)],
+            'remaining' => substr($stream, $pasteEndPos + strlen(self::PASTE_END)),
+        ];
     }
 
     /**
-     * Finish paste — check if the afterStart bytes contain the paste end.
+     * Finish paste — first pass after a paste-start marker: check if the bytes
+     * contain the paste end and report the tail back to decode()'s loop.
      *
-     * @param list<Event> $prefixEvents
-     * @param string $afterStart
-     * @return list<Event>
+     * @return array{events: list<Event>, remaining: string}
      */
-    private function finishPaste(array $prefixEvents, string $afterStart): array
+    private function finishPastePass(string $afterStart): array
     {
         $pasteEndPos = strpos($afterStart, self::PASTE_END);
         if ($pasteEndPos === false) {
-            // Same split-marker holdback as handlePasteStream().
+            // Same split-marker holdback as handlePastePass().
             $partial = $this->trailingPartialMarker($afterStart, self::PASTE_END);
             if ($partial > 0) {
                 $this->remainder = substr($afterStart, -$partial);
@@ -967,27 +994,26 @@ final class EscapeDecoder
             }
             $this->pasteBuffer .= $afterStart;
             if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
-                // Same oversized force-close as handlePasteStream(); a held-back
+                // Same oversized force-close as handlePastePass(); a held-back
                 // partial end marker in $remainder survives untouched.
                 $event = PasteEvent::truncate($this->pasteBuffer);
                 $this->pasteBuffer = '';
                 $this->inPaste = false;
 
-                return array_merge($prefixEvents, [$event]);
+                return ['events' => [$event], 'remaining' => ''];
             }
 
-            return $prefixEvents;
+            return ['events' => [], 'remaining' => ''];
         }
 
         $pasteContent = $this->pasteBuffer . substr($afterStart, 0, $pasteEndPos);
-        $afterEnd = substr($afterStart, $pasteEndPos + strlen(self::PASTE_END));
-
         $this->pasteBuffer = '';
         $this->inPaste = false;
-        $events = array_merge($prefixEvents, [PasteEvent::truncate($pasteContent)]);
 
-        // Same in-place tail decode as handlePasteStream() — keeps $remainder bounded.
-        return $afterEnd === '' ? $events : array_merge($events, $this->decode($afterEnd));
+        return [
+            'events' => [PasteEvent::truncate($pasteContent)],
+            'remaining' => substr($afterStart, $pasteEndPos + strlen(self::PASTE_END)),
+        ];
     }
 
     /**
@@ -1074,26 +1100,11 @@ final class EscapeDecoder
     }
 
     /**
-     * Continue a string sequence that was split across decode() calls. Bytes
-     * after the terminator re-enter the full decode path (the reply arrived
-     * mid-keystroke-stream, so trailing input must still be decoded).
-     *
-     * @return list<Event>
-     */
-    private function handleStringStream(string $stream): array
-    {
-        $result = $this->consumeStringPayload($stream);
-
-        if ($result['remaining'] === '') {
-            return $result['events'];
-        }
-
-        return array_merge($result['events'], $this->decode($result['remaining']));
-    }
-
-    /**
-     * Scan fresh payload bytes for a string terminator; keep buffering (capped)
-     * while the terminator has not arrived (see MAX_STRING_LENGTH).
+     * Scan payload bytes for a string terminator; keep buffering (capped) while
+     * the terminator has not arrived (see MAX_STRING_LENGTH). Bytes after the
+     * terminator are reported back as `remaining` for decode()'s loop — the
+     * reply may have arrived mid-keystroke-stream, so trailing input must
+     * still be decoded.
      *
      * @return array{events: list<Event>, remaining: string}
      */
@@ -1119,24 +1130,29 @@ final class EscapeDecoder
             if ($this->stringOverflow === true) {
                 // Past the cap already: payload is discarded, not accumulated —
                 // we are only waiting for the terminator (never resume key
-                // decoding mid-string).
-                $this->stringDiscarded += strlen($fresh);
-                if ($this->stringDiscarded > self::MAX_STRING_ABANDON) {
+                // decoding mid-string). One byte is still carried: a chunk that
+                // ends exactly on the ST's ESC must not lose the terminator, or
+                // every later keystroke would be swallowed until the next
+                // abandon boundary.
+                $carry = $haystack !== '' && $haystack[strlen($haystack) - 1] === "\x1b" ? 1 : 0;
+                if ($this->stringDiscarded + strlen($haystack) > self::MAX_STRING_ABANDON) {
                     // A stream that never terminates the string must not silence
                     // keystrokes forever — abandon and resync. Replay only the
                     // bytes past the boundary so chunk sizes cannot change the
                     // event stream.
+                    $replay = $this->stringDiscarded + strlen($haystack) - self::MAX_STRING_ABANDON;
                     $this->inString = false;
                     $this->stringOverflow = false;
                     $this->stringBuffer = '';
-                    $replay = $this->stringDiscarded - self::MAX_STRING_ABANDON;
                     $this->stringDiscarded = 0;
 
                     return [
                         'events' => [],
-                        'remaining' => substr($fresh, strlen($fresh) - $replay),
+                        'remaining' => substr($haystack, strlen($haystack) - $replay),
                     ];
                 }
+                $this->stringDiscarded += strlen($haystack) - $carry;
+                $this->stringBuffer = $carry === 1 ? "\x1b" : '';
 
                 return ['events' => [], 'remaining' => ''];
             }
@@ -1150,9 +1166,9 @@ final class EscapeDecoder
                 // later byte of a >1 KiB OSC/DCS reply leaked back as keys.
                 $overflowed = $this->stringBuffer;
                 $body = substr($overflowed, 0, self::MAX_STRING_LENGTH);
+                $tail = substr($overflowed, self::MAX_STRING_LENGTH);
                 $this->stringBuffer = '';
                 $this->stringOverflow = true;
-                $this->stringDiscarded = strlen($overflowed) - strlen($body);
                 $this->drainedReplyCount++;
                 $event = new TerminalReplyEvent(
                     TerminalReplyEvent::FAMILY_STRING,
@@ -1162,7 +1178,7 @@ final class EscapeDecoder
                     truncated: true,
                 );
 
-                if ($this->stringDiscarded > self::MAX_STRING_ABANDON) {
+                if (strlen($tail) > self::MAX_STRING_ABANDON) {
                     // A single chunk already blew past the abandon budget — give
                     // up exactly as the incremental path would, so the byte
                     // size of a read cannot change the event stream.
@@ -1175,6 +1191,12 @@ final class EscapeDecoder
                         'remaining' => substr($overflowed, self::MAX_STRING_LENGTH + self::MAX_STRING_ABANDON),
                     ];
                 }
+
+                // Same trailing-ESC carry as the incremental drain branch, so a
+                // terminator split right after the cap boundary still lands.
+                $carry = $tail !== '' && $tail[strlen($tail) - 1] === "\x1b" ? 1 : 0;
+                $this->stringDiscarded = strlen($tail) - $carry;
+                $this->stringBuffer = $carry === 1 ? "\x1b" : '';
 
                 return ['events' => [$event], 'remaining' => ''];
             }
@@ -1198,6 +1220,14 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => $remaining];
         }
 
+        // A single read that carries both a >1 KiB body and its terminator must
+        // drain the SAME bounded reply the incremental (chunked) path produces —
+        // clip the body and flag it, so read size cannot change the event.
+        if (strlen($body) > self::MAX_STRING_LENGTH) {
+            $truncated = true;
+            $body = substr($body, 0, self::MAX_STRING_LENGTH);
+        }
+
         $this->drainedReplyCount++;
 
         return [
@@ -1206,6 +1236,7 @@ final class EscapeDecoder
                 [],
                 $this->stringIntroducer . $body . $terminator,
                 $body,
+                truncated: $truncated,
             )],
             'remaining' => $remaining,
         ];
@@ -1348,10 +1379,18 @@ final class EscapeDecoder
      * no more input arrives within the escape-timeout window; if the buffered
      * tail is exactly one ESC byte, clear it and return that KeyEvent.
      *
+     * A bare ESC also sits in the buffer while a bracketed paste is open (it is
+     * the held-back prefix of a split end marker) — flushing there would invent
+     * an Escape and strand the paste forever, so the buffer is only trusted as a
+     * deferred keystroke between episodes.
+     *
      * @return list<Event> one Escape event, or empty when nothing is deferred
      */
     public function flushDeferredEscape(): array
     {
+        if ($this->inPaste === true || $this->inString === true) {
+            return [];
+        }
         if ($this->remainder !== "\x1b") {
             return [];
         }

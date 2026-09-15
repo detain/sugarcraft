@@ -546,6 +546,71 @@ final class TerminalReplyDrainTest extends TestCase
         $this->assertSame('', $chunked->remainder());
     }
 
+    public function testSplitStringTerminatorAfterOverflowIsNotLost(): void
+    {
+        // A >1 KiB DCS whose ST is split across the chunk boundary exactly
+        // between its ESC and the backslash: the overflow drain must still see
+        // the terminator — losing it silently swallows every later keystroke.
+        $body = str_repeat('q', 1500);
+        $events = $this->decoder->decode("\x1bP" . $body . "\x1b");
+        $this->assertCount(1, $events, 'truncated reply emitted at the cap');
+        $this->assertTrue($events[0]->truncated);
+        // Second read starts with the ST's second byte.
+        $events = $this->decoder->decode("\\\x1b[A");
+        $this->assertCount(1, $events, 'terminator consumed quietly; only the arrow decodes');
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame(1, $this->decoder->drainedReplyCount());
+        $this->assertSame(0, $this->decoder->droppedUnknownCount());
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testLongTerminatedStringBodyIsCappedEquallyInEveryChunking(): void
+    {
+        // One read carrying both a >1 KiB body and its terminator must drain the
+        // SAME bounded reply that incremental reads produce — read size cannot
+        // change the event stream.
+        $reply = "\x1b]4;" . str_repeat('k', 1500) . "\x1b\\xy";
+        $oneShot = new EscapeDecoder();
+        $chunked = new EscapeDecoder();
+        $chunkEvents = [];
+        for ($off = 0; $off < strlen($reply); $off += 7) {
+            $chunkEvents = array_merge($chunkEvents, $chunked->decode(substr($reply, $off, 7)));
+        }
+        $oneShotEvents = $oneShot->decode($reply);
+        $this->assertSame(self::signatures($oneShotEvents), self::signatures($chunkEvents));
+        $this->assertCount(3, $oneShotEvents, 'one capped reply plus the two trailing keys');
+        $this->assertTrue($oneShotEvents[0]->truncated, 'single-chunk body is capped like the chunked one');
+        $this->assertSame(1024, strlen($oneShotEvents[0]->body));
+        $this->assertSame($oneShot->drainedReplyCount(), $chunked->drainedReplyCount());
+    }
+
+    public function testCoalescedPastePairsDecodeWithoutRecursion(): void
+    {
+        // 20 000 paste pairs in ONE coalesced read used to recurse decode() per
+        // pair and segfault the process. Iterative tail handling keeps stack
+        // depth flat: every pair must surface as its own PasteEvent.
+        $pairs = str_repeat("\x1b[200~z\x1b[201~", 20000);
+        $events = $this->decoder->decode($pairs);
+        $this->assertCount(20000, $events);
+        $this->assertInstanceOf(PasteEvent::class, $events[0]);
+        $this->assertSame('z', $events[0]->content);
+        $this->assertInstanceOf(PasteEvent::class, $events[19999]);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testFlushDeferredEscapeIgnoresPasteHoldback(): void
+    {
+        // A paste body ending on ESC leaves exactly one "\x1b" in the buffer —
+        // held back as the prefix of a split end marker, NOT a deferred Escape.
+        // Flushing there would invent a keystroke and strand the paste open.
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(deferTrailingEscape: true));
+        $decoder->decode("\x1b[200~hi\x1b");
+        $this->assertSame([], $decoder->flushDeferredEscape());
+        $events = $decoder->decode('[201~X');
+        $this->assertSame('hi', $events[0]->content, 'paste still closes with its full body');
+        $this->assertSame('X', $events[1]->key);
+    }
+
     /**
      * Stable per-event signature for stream-equivalence assertions.
      *

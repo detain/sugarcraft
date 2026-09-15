@@ -8,7 +8,7 @@ Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboa
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
 - **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape
-- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param)
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press)
 - **SGR 1006 mouse** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
@@ -109,13 +109,19 @@ Hosts that ignore `TerminalReplyEvent` lose nothing — the bytes are consumed
 either way, so the input stream stays in sync. Hosts that do care (terminal
 probers, nested-TMUX diagnostics) get `params` and the exact `raw` bytes.
 
-`string` payloads are bounded: a reply longer than 1 KiB is surfaced once with
-`truncated` set and `body` clipped to 1 KiB, and the decoder then keeps
-swallowing the rest of that open OSC/DCS until its terminator rather than
-resuming key decoding mid-string (which would leak the tail as keystrokes). A
-stream that never terminates the string is abandoned after 64 KiB of swallowed
-payload so keystrokes resume; the abandon boundary is byte-exact, so chunk size
-cannot change the decoded event stream.
+`string` payloads are bounded: a reply longer than 1 KiB — whether it arrives
+in one read or across many — is surfaced exactly once with `truncated` set and
+`body` clipped to 1 KiB, and the decoder then keeps swallowing the rest of that
+open OSC/DCS until its terminator (even a terminator split across the chunk
+boundary) rather than resuming key decoding mid-string, which would leak the
+tail as keystrokes. A stream that never terminates the string is abandoned
+after 64 KiB of swallowed payload so keystrokes resume; that abandon boundary
+is byte-exact, so for never-terminated streams chunk size cannot change the
+decoded event stream. A pathological reply that terminates only *after*
+exceeding the abandon budget is the one documented divergence: bytes past the
+budget have already resumed decoding as keys when the real terminator arrives
+(the guarantee is "keystrokes always come back", not "oversized replies are
+wholly silent").
 
 ### Observability: drained reply vs dropped unknown
 
@@ -155,9 +161,12 @@ $events = $decoder->flushDeferredEscape(); // timeout → [Escape] if one is pen
 ```
 
 `flushDeferredEscape()` returns `[Escape]` and clears the buffer when the
-pending remainder is exactly one `ESC`, and `[]` otherwise — call it from an
-input-idle timer. Caveat: with the option on, a deferred `ESC` followed by a
-plain byte in the *next* chunk still merges into `Alt+char`; flush before
+pending remainder is exactly one `ESC` and no paste or string episode is open,
+and `[]` otherwise — call it from an input-idle timer. (A paste body that ends
+on a lone `ESC` leaves the same one-byte remainder as its held-back split end
+marker; flushing there would invent an Escape and strand the paste, so the
+guard is load-bearing.) Caveat: with the option on, a deferred `ESC` followed
+by a plain byte in the *next* chunk still merges into `Alt+char`; flush before
 resolving an Escape-only keystroke.
 
 ## Key constants (KeyModifier)
