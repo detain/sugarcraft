@@ -34,6 +34,22 @@ use SugarCraft\Input\Event;
  */
 final class SignalResizeDriver implements InputDriver
 {
+    /**
+     * Allowlist shape for terminfo capability names passed to tput.
+     *
+     * XSI Curses capability names are 1-5 alphanumeric characters beginning
+     * with a letter, and every name this driver may ever request ("cols",
+     * "lines", and its lowercase siblings) fits the stricter lowercase form
+     * below. Anything else is a malformed name — or an injection attempt
+     * riding a future caller — and never reaches a shell.
+     *
+     * E715: this gate, plus escapeshellarg() on the validated name, is
+     * defense-in-depth for the shell_exec() in getTput(). The gate parses;
+     * the quoting stays even though a passing name needs none, so a later
+     * regex relaxation cannot silently un-defend the shell-out.
+     */
+    private const CAPABILITY_PATTERN = '/^[a-z][a-z0-9]{0,4}$/';
+
     /** Flag set by SIGWINCH signal handler */
     private static bool $sigwinchReceived = false;
 
@@ -43,8 +59,21 @@ final class SignalResizeDriver implements InputDriver
     /** Last known terminal rows */
     private int $rows = 24;
 
-    public function __construct()
+    /**
+     * @var callable(string): (string|null|false) Executes one built command;
+     *      internal seam so tests can capture the command string without a
+     *      shell. Defaults to @shell_exec.
+     */
+    private $commandRunner;
+
+    /**
+     * @param (callable(string): (string|null|false))|null $commandRunner test seam, not public API
+     */
+    public function __construct(?callable $commandRunner = null)
     {
+        $this->commandRunner = $commandRunner
+            ?? static fn (string $command): string|false|null => @\shell_exec($command);
+
         if (!function_exists('pcntl_signal')) {
             return;
         }
@@ -101,14 +130,37 @@ final class SignalResizeDriver implements InputDriver
 
     /**
      * Run tput and return the numeric value, or 0 on failure.
+     *
+     * @throws \InvalidArgumentException when the capability is not a
+     *                   well-formed terminfo name — never shelled.
      */
     private function getTput(string $capability): int
     {
-        $output = @shell_exec('tput ' . $capability . ' 2>/dev/null');
+        $output = ($this->commandRunner)(self::tputCommand($capability));
         if ($output === null || $output === '') {
             return 0;
         }
         $value = (int) trim($output);
         return $value > 0 ? $value : 0;
+    }
+
+    /**
+     * Gate then build the exact tput command line for one capability.
+     *
+     * Fail-fast: an unparseable capability throws before any shell-out.
+     * The validated name is still escapeshellarg()'d (AGENTS.md: pass ALL
+     * external-CLI flags every invocation via escapeshellarg()).
+     */
+    private static function tputCommand(string $capability): string
+    {
+        if (\preg_match(self::CAPABILITY_PATTERN, $capability) !== 1) {
+            throw new \InvalidArgumentException(
+                "SignalResizeDriver capability name rejected: " .
+                var_export($capability, true) .
+                " does not match terminfo shape ^[a-z][a-z0-9]{0,4}$"
+            );
+        }
+
+        return 'tput ' . \escapeshellarg($capability) . ' 2>/dev/null';
     }
 }
