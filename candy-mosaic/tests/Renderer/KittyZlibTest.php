@@ -36,8 +36,8 @@ final class KittyZlibTest extends TestCase
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
         // Extract base64-encoded chunks from the Kitty graphics output.
-        // Chunks appear as: m=1,<base64> (more coming) or m=0,<base64> (final).
-        if (!preg_match_all('/m=[01],([A-Za-z0-9+\/=]+)/', $out, $matches)) {
+        // Chunks appear as: ESC _ G m=1;<base64> ESC backslash (more) or m=0;<base64> (final).
+        if (!preg_match_all('/\x1b_Gm=[01];([A-Za-z0-9+\/=]+)\x1b\\\\/', $out, $matches)) {
             $this->fail('No Kitty graphics chunks found in output');
         }
 
@@ -60,7 +60,7 @@ final class KittyZlibTest extends TestCase
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
         // Extract base64-encoded chunks
-        if (!preg_match_all('/m=[01],([A-Za-z0-9+\/=]+)/', $out, $matches)) {
+        if (!preg_match_all('/\x1b_Gm=[01];([A-Za-z0-9+\/=]+)\x1b\\\\/', $out, $matches)) {
             $this->fail('No Kitty graphics chunks found in output');
         }
 
@@ -108,7 +108,7 @@ final class KittyZlibTest extends TestCase
         $this->assertStringContainsString('f=1', $out);
 
         // Extract and verify the payload decodes and decompresses to source PNG bytes.
-        if (!preg_match_all('/m=[01],([A-Za-z0-9+\/=]+)/', $out, $matches)) {
+        if (!preg_match_all('/\x1b_Gm=[01];([A-Za-z0-9+\/=]+)\x1b\\\\/', $out, $matches)) {
             $this->fail('No Kitty graphics chunks found in output');
         }
 

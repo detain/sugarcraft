@@ -33,8 +33,11 @@ final class KittyRendererTest extends TestCase
         $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
         $out    = $this->renderer->render($source, 8);
 
-        // Begins with DCS q (Kitty graphics begin) + width/height params.
-        $this->assertStringStartsWith("\x1bPq", $out);
+        // Begins with APC G (Kitty graphics begin) + width/height params,
+        // and the begin frame opens the transaction with m=1 (ANSI audit:
+        // the old DCS `ESC P q` header was DECSIXEL and never activated
+        // Kitty graphics).
+        $this->assertStringStartsWith("\x1b_Gc=8,r=4,m=1;\x1b\\", $out);
         $this->assertStringContainsString('c=8', $out);    // cell columns
         $this->assertStringContainsString('r=4', $out);    // cell rows
     }
@@ -44,8 +47,26 @@ final class KittyRendererTest extends TestCase
         $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
         $out    = $this->renderer->render($source, 8);
 
-        // Terminates with ST (String Terminator).
+        // Every Kitty frame — begin, each chunk — is a self-contained APC
+        // sequence ending in ST (String Terminator).
         $this->assertStringEndsWith("\x1b\\", $out);
+        // The transaction is closed by the final data chunk's m=0, exactly
+        // once: no dangling open frame, no duplicate end frames.
+        $this->assertSame(1, substr_count($out, 'm=0;'));
+        // Frame-structural split: every `ESC _ G` segment up to ST carries
+        // only key=value/; characters — no raw payload leaked outside a frame.
+        $frames = explode("\x1b_G", $out);
+        $this->assertSame('', array_shift($frames), 'output must start with the APC G introducer');
+        foreach ($frames as $frame) {
+            $this->assertStringEndsWith("\x1b\\", $frame);
+            $body = substr($frame, 0, -2);
+            $sep = strpos($body, ';');
+            $this->assertIsInt($sep, "frame has no data separator: {$body}");
+            $attrs = substr($body, 0, $sep);
+            $data = substr($body, $sep + 1);
+            $this->assertMatchesRegularExpression('/^[a-z]=[0-9a-z]+(,[a-z]=[0-9a-z]+)*$/', $attrs);
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9+\/=]*$/', $data);
+        }
     }
 
     public function testPayloadIsBase64Png(): void
@@ -107,9 +128,11 @@ final class KittyRendererTest extends TestCase
         $source = ImageSource::fromFile(__DIR__ . '/fixtures/500x400_noise.png');
         $out    = $this->renderer->render($source, 50, 40);
 
-        // Intermediate chunk sets m=1 (more data follows).
-        $this->assertStringContainsString('m=1,', $out);
-        // Final chunk sets m=0 at the end (before ST).
-        $this->assertStringContainsString('m=0', $out);
+        // Intermediate chunk sets m=1 (more data follows), framed as its
+        // own APC sequence with the payload between ';' and ST.
+        $this->assertStringContainsString("\x1b_Gm=1;", $out);
+        // Final chunk sets m=0 (closes the transaction) — last frame's
+        // terminator is the very end of the output.
+        $this->assertStringContainsString("\x1b_Gm=0;", $out);
     }
 }

@@ -49,8 +49,10 @@ final class KittyRenderer implements Renderer
             $more = ($idx < $total - 1);
             $out .= Ansi::kittyGraphicsChunk($chunk, $more);
         }
-
-        $out .= Ansi::kittyGraphicsEnd();
+        if ($total === 0) {
+            // The final m=0 data chunk never ran — close the transaction.
+            $out .= Ansi::kittyGraphicsEnd();
+        }
 
         return $out;
     }
@@ -79,7 +81,9 @@ final class KittyRenderer implements Renderer
         $optsArr   = $opts->toArray();
 
         if ($opts->isPlace()) {
-            return $this->buildBegin([
+            // Place is a one-shot control frame — it must NOT open a
+            // chunked transmission (nothing would close it).
+            return Ansi::kittyGraphicsControl([
                 'a' => 'p',
                 'i' => $optsArr['i'],
                 'x' => $optsArr['x'],
@@ -121,7 +125,10 @@ final class KittyRenderer implements Renderer
         foreach ($chunks as $idx => $chunk) {
             $out .= Ansi::kittyGraphicsChunk($chunk, $idx < $total - 1);
         }
-        $out .= Ansi::kittyGraphicsEnd();
+        if ($total === 0) {
+            // The final m=0 data chunk never ran — close the transaction.
+            $out .= Ansi::kittyGraphicsEnd();
+        }
 
         return $out;
     }
