@@ -225,6 +225,26 @@ final class ByteFidelityTest extends TestCase
         $this->assertSame('Z', $segments[1]->raw());
     }
 
+    public function testTerminatorWindowClosesOnAnyOtherByte(): void
+    {
+        // An OSC already closed by BEL must not leave the window open for some
+        // later standalone `ESC \` — the old `oscInProgress` latch did exactly
+        // that and swallowed the terminator forever.
+        $afterBel = Inspector::parse("\x1b]0;T\x07\x1b\\B");
+        $this->assertCount(3, $afterBel);
+        $this->assertSame("\x1b]0;T\x07", $afterBel[0]->raw());
+        $this->assertSame("\x1b\\", $afterBel[1]->raw());
+        $this->assertSame('B', $afterBel[2]->raw());
+        $this->assertSame("\x1b]0;T\x07\x1b\\B", self::reemit($afterBel));
+
+        // Same for a DCS closed by the 8-bit ST (0x9C): the `ESC \` that
+        // follows is its own sequence, not the terminator of a finished string.
+        $afterC1 = Inspector::parse("\x1bP q A\x9c\x1b\\B");
+        $this->assertCount(3, $afterC1);
+        $this->assertSame("\x1b\\", $afterC1[1]->raw());
+        $this->assertSame('B', $afterC1[2]->raw());
+    }
+
     // --- SP-R1: an unterminated sequence is never silently dropped ---------
 
     public function testTruncatedCsiIsSurfacedAtEndOfStream(): void
@@ -498,5 +518,56 @@ final class ByteFidelityTest extends TestCase
 
         $this->assertSame("\x1b[31", self::reemit($handler->parse("\x1b[31")));
         $this->assertSame('clean', self::reemit($handler->parse('clean')));
+    }
+
+    // --- the public driving surface, used directly ------------------------
+
+    public function testHandlerFeedAndFinishCanBeDrivenWithoutAnInspector(): void
+    {
+        // `feed()`/`finish()` are public so a front-end is not obliged to go
+        // through StreamingInspector; they must hold text and report the tail
+        // exactly as the inspector-driven path does.
+        $handler = new AnsiHandler();
+        $handler->feed('red' . "\x1b[31");
+
+        $this->assertSame([], $handler->drainSegments(), 'text is held until a sequence or end of stream');
+
+        $handler->finish();
+        $segments = $handler->drainSegments();
+
+        $this->assertCount(2, $segments);
+        $this->assertSame('red', $segments[0]->raw());
+        $this->assertSame("\x1b[31", $segments[1]->raw());
+        $this->assertSame('red' . "\x1b[31", self::reemit($segments));
+    }
+
+    public function testFinishIsIdempotentOnAnEmptyTail(): void
+    {
+        $handler = new AnsiHandler();
+        $handler->feed("\x1b[31");
+        $handler->finish();
+
+        $this->assertCount(1, $handler->drainSegments());
+        // Nothing left in flight: a second finish() must invent no segment.
+        $handler->finish();
+        $this->assertSame([], $handler->drainSegments());
+    }
+
+    public function testDescribeTruncatedNamesTheFamilyFromTheIntroducer(): void
+    {
+        $cases = [
+            "\x1b[3" => 'truncated CSI (unterminated)',
+            "\x1bP1" => 'truncated DCS (unterminated)',
+            "\x1bO"  => 'truncated SS3 (unterminated)',
+            "\x1bX"  => 'truncated SOS (unterminated)',
+            "\x1b^"  => 'truncated PM (unterminated)',
+            "\x1b_"  => 'truncated APC (unterminated)',
+            "\x1b]"  => 'truncated OSC (unterminated)',
+            "\x1b/"  => 'truncated ESC (unterminated)',
+        ];
+
+        foreach ($cases as $bytes => $expected) {
+            $this->assertSame($expected, Inspector::describeTruncated($bytes), strtoupper(bin2hex($bytes)));
+        }
     }
 }

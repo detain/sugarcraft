@@ -97,6 +97,14 @@ final class AnsiHandler implements Handler
 
         for ($offset = 0; $offset < $length; $offset++) {
             $byte = $input[$offset];
+            // The terminator to swallow must be the *immediate* follower of the
+            // string dispatch: candy-ansi dispatches the sequence on the ESC of
+            // `ESC \` and delivers the backslash next. Any other byte (a BEL
+            // that ended an OSC, a C1 ST that ended a DCS, plain text) closes
+            // the window, so a later genuine `ESC \` is still reported.
+            if ($this->awaitingStringTerminator === true && $byte !== '\\') {
+                $this->awaitingStringTerminator = false;
+            }
             $this->inFlightBytes .= $byte;
             $parser->feed($byte);
         }
