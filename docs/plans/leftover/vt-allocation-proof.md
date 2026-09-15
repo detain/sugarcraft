@@ -49,8 +49,11 @@ tests measure the parser's own buffers, not a growing log) lives at
 
 ## Scenarios covered (15 tests)
 
+- `Buffer` 320x120 shape invariant: `copy()` exposes exactly `rows` arrays of
+  `cols` cells each, re-checked across 120 alternating 321x320 resize
+  round-trips — a widening grid or stray row fails even if the heap is flat.
 - `Buffer` 320x120 resize round-trip churn (321x121 <-> 320x120, x150 after
-  x40 warm): live census pinned, content preserved, no heap growth.
+  x40 warm): live census pinned, content preserved, settled + peak heap flat.
 - Pristine 320x120 `Buffer` shares exactly **one** `Cell` object across all
   38400 slots (`Cell::empty()` singleton) — guards the allocation model
   itself from regressing to per-slot empty cells.
@@ -132,9 +135,10 @@ tests measure the parser's own buffers, not a growing log) lives at
 - `candy-vt/vendor/.../candy-ansi` tests report "Class cannot be found in
   the configured test source" when `--filter` runs across symlinks —
   pre-existing, unrelated to this change.
-- phpstan baseline at 124 raw diagnostics for `src/`+`tests/` on HEAD
-  (verified identical with `AllocationTest.php` present and absent — the
-  new test adds zero).
+- phpstan baseline: 108 raw diagnostics on stdout for `src/`+`tests/` on HEAD
+  (124 with `2>&1` — the 16-line delta is PHPStan's stderr guidance footer,
+  not diagnostics). Verified identical with the new files present and absent
+  — they add zero.
 - php-cs-fixer is configured at the repo root (`.php-cs-fixer.dist.php`),
   not in `candy-vt/`; the check runs with `--config=../.php-cs-fixer.dist.
-  php --path-mode=intersection` — 0 of 1 files fixable for this test.
+  php --path-mode=intersection` over both new files — 0 of 2 fixable.

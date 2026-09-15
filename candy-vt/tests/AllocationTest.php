@@ -402,11 +402,7 @@ final class AllocationTest extends TestCase
             }
         }
 
-        $this->assertLessThan(
-            self::GROWTH_CEILING_BYTES,
-            $this->settledUsage() - (int) $settledWarm,
-            'diff churn must not grow the settled heap',
-        );
+        $this->assertNoGrowth((int) $settledWarm, $peakWarm);
     }
 
     public function testParserFeedResetCycleDoesNotGrowHeap(): void
@@ -438,11 +434,9 @@ final class AllocationTest extends TestCase
         // parser (state-machine regression) would keep the heap flat too.
         $this->assertGreaterThan(2000, $handler->dispatches, 'parser must keep dispatching across reset()');
         $this->assertSame(State::Ground, $parser->currentState(), 'reset() must return the parser to ground');
-        $this->assertLessThan(
-            self::GROWTH_CEILING_BYTES,
-            $this->settledUsage() - $settledWarm,
-            'feed/reset churn must not grow the parser footprint',
-        );
+        // The parser holds no grid, so both ceilings are comfortably clear by
+        // its 64 KiB-capped internal buffers; this asserts flatness on both.
+        $this->assertNoGrowth($settledWarm, $peakWarm);
     }
 
     public function testUnterminatedSequencesDoNotGrowParserAcrossResets(): void
@@ -474,11 +468,10 @@ final class AllocationTest extends TestCase
 
         $this->assertGreaterThan(5000, $handler->dispatches, 'hostile input must still drive dispatches');
         $this->assertSame(State::Ground, $parser->currentState());
-        $this->assertLessThan(
-            self::GROWTH_CEILING_BYTES,
-            $this->settledUsage() - (int) $settledWarm,
-            '5000 cycles of hostile truncated sequences must not grow the settled heap',
-        );
+        // 5000 cycles of hostile truncated sequences must not grow either the
+        // settled footprint or the peak working set (the 64 KiB string-buffer
+        // cap bounds the worst in-flight transient well under the peak ceiling).
+        $this->assertNoGrowth((int) $settledWarm, $peakWarm);
     }
 
     public function testRendererTerminalGridAndSnapshotChurnDoesNotGrowHeap(): void
