@@ -69,11 +69,12 @@ final class QueryReplyTest extends TestCase
     {
         $t = Terminal::new(10, 3);
         $t->feed("\x1b[c");
-        $this->assertSame(["\x1b[?62;1;6;22c"], $t->replies());
+        $replies = $t->replies();
+        $this->assertSame(["\x1b[?62;1;6;22c"], $replies);
 
-        // candy-mosaic Detect::parseDa1Reply sixel heuristic — our reply
-        // must NOT match any of its three sixel patterns.
-        $reply = "\x1b[?62;1;6;22c";
+        // candy-mosaic Detect::parseDa1Reply sixel heuristic — the ACTUAL
+        // produced reply must NOT match any of its three sixel patterns.
+        $reply = $replies[0];
         $this->assertFalse(str_contains($reply, ';4;'));
         $this->assertFalse(str_contains($reply, ';4c'));
         $this->assertFalse(str_contains($reply, '?4c'));
@@ -212,5 +213,34 @@ final class QueryReplyTest extends TestCase
 
         preg_match('/\x1b\[8;(\d+);(\d+)t/', $replies[1], $m18);
         $this->assertSame([43, 132], [(int) ($m18[1] ?? 0), (int) ($m18[2] ?? 0)], '18t = 8;rows;cols');
+    }
+
+    public function testBareWindowOpStaysSilent(): void
+    {
+        // xterm defaults a missing Ps for `CSI t` to 1 (de-iconify, no
+        // reply) — an unsolicited 4t could be mis-ingested mid-read.
+        $t = Terminal::new(10, 3);
+        $t->feed("\x1b[t");
+        $this->assertSame([], $t->replies());
+    }
+
+    public function testReplyQueueIsBoundedAgainstQueryStorms(): void
+    {
+        // Hostile program output spamming CSI 6n at a terminal nobody
+        // drains must not grow memory without bound (candy-pty renders
+        // exactly such untrusted streams). Drop-OLDEST at MAX_REPLIES:
+        // each query is issued from a rotating row so head and tail
+        // differ, pinning which end the ring sheds.
+        $t = Terminal::new(10, 3);
+        $storm = '';
+        for ($i = 0; $i < 1100; $i++) {
+            $storm .= "\x1b[" . ($i % 3 + 1) . ";1H\x1b[6n";
+        }
+        $t->feed($storm);
+        $replies = $t->replies();
+        $this->assertCount(1024, $replies, 'queue capped, not unbounded');
+        // Kept window is pushes 76..1099: head answers i=76 (row 76%3+1=2).
+        $this->assertSame("\x1b[2;1R", $replies[0], 'oldest replies were shed');
+        $this->assertSame("\x1b[" . (1099 % 3 + 1) . ";1R", $replies[1023], 'newest reply kept');
     }
 }

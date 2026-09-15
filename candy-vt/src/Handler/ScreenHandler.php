@@ -63,14 +63,19 @@ final class ScreenHandler implements Handler
      * Lives on the handler, not the Cursor, mirroring
      * `charmbracelet/x/vt Emulator.atPhantom` (emulator.go L72-74).
      * Cleared by CR, LF/IND, BS, every CSI cursor movement, DECRC, ECH,
-     * RIS/DECSTR and resize; DELIBERATELY preserved by RI/back-index,
+     * IL/DL, RIS/DECSTR and resize; DELIBERATELY preserved by RI/back-index,
      * tabs (HT/CHT/CBT), ED/EL and query reports — exactly the xterm
      * roster (see vt/cc.go "This does not reset the phantom state").
      * The flag itself is set by GEOMETRY after any print, not gated on
      * the mode, so DECAWM can be re-enabled mid-wrap and the deferred
      * advance resumes (xterm overwrite-then-wrap DECAWM semantics).
      *
-     * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.3 (DECAWM)
+     * IL/DL homing deliberately DROPS the phantom (charmbracelet's
+     * setCursorX(0,true) keeps it, but a phantom armed at the old right
+     * margin is meaningless at column 0 and keeping it shifts whole
+     * lines — see InsertDeleteLinesTest).
+     *
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECAWM)
      * @see xterm ctlseqs "DECAWM" wraparound paragraph
      */
     public bool $wrapPending = false;
@@ -84,6 +89,13 @@ final class ScreenHandler implements Handler
      * @var list<string>
      */
     public array $replies = [];
+
+    /**
+     * Backlog cap for {@see $replies}: hostile streams (candy-pty renders
+     * untrusted program output) can spam queries nobody drains, and a
+     * pull queue has no io.Pipe-style write blocking. Drop-oldest ring.
+     */
+    private const MAX_REPLIES = 1024;
 
     /**
      * SCS designation state: G0..G3 charset bytes ('B', '0', 'U', …).
@@ -417,13 +429,23 @@ final class ScreenHandler implements Handler
             // charmbracelet x/vt handlers.go RegisterEscHandler 'n'/'o').
             0x6E /* 'n' */ => $this->gl = 2,
             0x6F /* 'o' */ => $this->gl = 3,
-            // ESC F / ESC G = S7C1T / S8C1T (ECMA-48): switch the C1
-            // transmission form. This emulator receives BOTH (the parser
-            // dispatches 0x84/0x85/0x8D C1 bytes and their ESC-7bit
-            // equivalents alike), so acceptance is a documented no-op.
-            0x46 /* 'F' */, 0x47 /* 'G' */ => null,
+            // ESC F = S7C1T (ECMA-48): switch the C1 transmission form.
+            // This emulator receives BOTH (the parser dispatches
+            // 0x84/0x85/0x8D C1 bytes and their ESC-7bit equivalents
+            // alike), so acceptance is a documented no-op.
+            0x46 /* 'F' */ => null,
+            // ESC G = the legacy SCO idiom "DEC Special Graphics into
+            // GL" (deliverable 4): designate '0' on G0 and hang it in GL.
+            0x47 /* 'G' */ => $this->decSpecialGl(),
             default => null,
         };
+    }
+
+    /** ESC G — DEC Special Graphics designated straight into GL (SCO hardware idiom). */
+    private function decSpecialGl(): void
+    {
+        $this->designate(0x28 /* '(' */, ord('0'));
+        $this->gl = 0;
     }
 
     /** DECRC — ESC 8: position change, so the phantom cell is dropped. */
@@ -616,7 +638,10 @@ final class ScreenHandler implements Handler
     private function insertLines(array $params): void
     {
         $first = $params[0] ?? -1;
-        $count = $first === -1 ? 1 : max(1, $first);
+        if ($first === 0) {
+            return; // Explicit CSI 0 L is a no-op (charm InsertLine guard).
+        }
+        $count = $first < 0 ? 1 : $first;
         $row = $this->cursor->row;
         if ($row < $this->scrollRegionTop || $row > $this->scrollRegionBottom) {
             return;
@@ -628,7 +653,13 @@ final class ScreenHandler implements Handler
             $row,
             $count,
         );
+        // Column-home is a movement: the phantom (armed against the OLD
+        // right margin) must not survive it, or the next graphic would
+        // skip a line. Documented divergence from charm's keep-phantom
+        // setCursorX(0,true), which corrupts content under this port's
+        // geometry-only flag.
         $this->cursor = $this->cursor->withCol(0);
+        $this->wrapPending = false;
     }
 
     /**
@@ -647,7 +678,10 @@ final class ScreenHandler implements Handler
     private function deleteLines(array $params): void
     {
         $first = $params[0] ?? -1;
-        $count = $first === -1 ? 1 : max(1, $first);
+        if ($first === 0) {
+            return; // Explicit CSI 0 M is a no-op (charm DeleteLine guard).
+        }
+        $count = $first < 0 ? 1 : $first;
         $row = $this->cursor->row;
         if ($row < $this->scrollRegionTop || $row > $this->scrollRegionBottom) {
             return;
@@ -665,10 +699,20 @@ final class ScreenHandler implements Handler
             $row,
             $count,
         );
-        $this->cursor = $this->cursor->withCol(0);
+        $this->cursor = $this->cursor->withCol(0); // Phantom dropped — see insertLines().
+        $this->wrapPending = false;
     }
 
     // ─── Query → reply channel ───────────────────────────────────────────────
+
+    /** Queue one reply, dropping the oldest past {@see self::MAX_REPLIES}. */
+    private function reply(string $bytes): void
+    {
+        if (\count($this->replies) >= self::MAX_REPLIES) {
+            array_shift($this->replies);
+        }
+        $this->replies[] = $bytes;
+    }
 
     /**
      * DA / DA2 — Device Attributes request (xterm ctlseqs "Device Attributes").
@@ -683,7 +727,7 @@ final class ScreenHandler implements Handler
      * upstream. Requests with other first params (vendor DA variants)
      * are left unanswered, as upstream guards them.
      *
-     * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.35 (DECDA)
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (Device Attributes)
      * @see charmbracelet/x/vt handlers.go PrimaryDeviceAttributes/SecondaryDeviceAttributes
      *
      * @param array<int, int|string> $params CSI parameter list as dispatched by the parser
@@ -694,11 +738,11 @@ final class ScreenHandler implements Handler
             if (($params[0] ?? -1) > 0) {
                 return;
             }
-            $this->replies[] = "\x1b[>1;10;0c";
+            $this->reply("\x1b[>1;10;0c");
             return;
         }
         if ($prefix === 0 && ($params[0] ?? -1) <= 0) {
-            $this->replies[] = "\x1b[?62;1;6;22c";
+            $this->reply("\x1b[?62;1;6;22c");
         }
         // Other private prefixes (ESC [ = / < c) belong to vendor
         // trees we do not emulate — silent, like xterm unbound DA requests.
@@ -720,11 +764,11 @@ final class ScreenHandler implements Handler
     {
         $first = $params[0] ?? -1;
         if ($first === -1 || $first === 5) {
-            $this->replies[] = "\x1b[0n";
+            $this->reply("\x1b[0n");
             return;
         }
         if ($first === 6) {
-            $this->replies[] = "\x1b[" . ($this->cursor->row + 1) . ';' . ($this->cursor->col + 1) . 'R';
+            $this->reply("\x1b[" . ($this->cursor->row + 1) . ';' . ($this->cursor->col + 1) . 'R');
         }
         // 15/25/26/55 (printer/status) — not modelled, no reply (xterm
         // with printer off behaves the same).
@@ -752,10 +796,10 @@ final class ScreenHandler implements Handler
         $private = $prefix === ord('?');
         if ($private) {
             $state = $this->decModeStatus($mode);
-            $this->replies[] = "\x1b[?{$mode};{$state}\$y";
+            $this->reply("\x1b[?{$mode};{$state}\$y");
             return;
         }
-        $this->replies[] = "\x1b[{$mode};0\$y";
+        $this->reply("\x1b[{$mode};0\$y");
     }
 
     /** Map a DEC private mode number to DECRQM status (0/1/2). */
@@ -789,6 +833,8 @@ final class ScreenHandler implements Handler
      * metrics (8×16 px unless `cellWidthPx`/`cellHeightPx` were set) —
      * the exact field order candy-mosaic's `Detect::parseXtwinoReply()`
      * expects. 18t answers `ESC [ 8 ; rows ; cols t` from true geometry.
+     * A bare `CSI t` defaults to 1t in xterm (de-iconify, no reply), so
+     * a missing Ps stays silent rather than emitting an unsolicited 4t.
      *
      * @param list<int> $params
      *
@@ -796,14 +842,13 @@ final class ScreenHandler implements Handler
      */
     private function windowOps(array $params): void
     {
-        $first = $params[0] ?? -1;
         $rows = $this->buffer->rows;
         $cols = $this->buffer->cols;
-        match ($first === -1 ? 14 : $first) {
-            14 => $this->replies[] = "\x1b[4;" . ($rows * $this->cellHeightPx) . ';' . ($cols * $this->cellWidthPx) . 't',
-            16 => $this->replies[] = "\x1b[6;{$this->cellHeightPx};{$this->cellWidthPx}t",
-            18 => $this->replies[] = "\x1b[8;{$rows};{$cols}t",
-            default => null, // Resize/move requests (1-13, 15, 17, 19, 20+): not answered.
+        match ($params[0] ?? 0) {
+            14 => $this->reply("\x1b[4;" . ($rows * $this->cellHeightPx) . ';' . ($cols * $this->cellWidthPx) . 't'),
+            16 => $this->reply("\x1b[6;{$this->cellHeightPx};{$this->cellWidthPx}t"),
+            18 => $this->reply("\x1b[8;{$rows};{$cols}t"),
+            default => null, // Resize/move requests (0-13, 15, 17, 19, 20+): not answered.
         };
     }
 
@@ -825,7 +870,7 @@ final class ScreenHandler implements Handler
      * does not feed or flush the ring; window title; indexed palette;
      * recorded clipboard/focus event logs; the pending reply queue.
      *
-     * @see https://vt100.net/docs/vt500-rm/chapter4.html#S4.36 (RIS)
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (RIS)
      * @see charmbracelet/x/vt Emulator.fullReset
      */
     public function hardReset(): void
@@ -855,15 +900,20 @@ final class ScreenHandler implements Handler
     /**
      * DECSTR — CSI ! p, soft reset.
      *
-     * The xterm/VT500 contract: like RIS but "does not reset the
-     * scrolling region, tab stops, character-set designations, or
-     * anything else not explicitly mentioned" — and, per the brief's
-     * anchor, leaves the scrollback untouched. Resets: SGR pen, cursor
-     * home + visible, DECOM off, DECAWM back to its power-on ON, sync
-     * output off (flushing whatever the queue held), wrap flag dropped.
+     * The xterm contract: like RIS but "does not reset the scrolling
+     * region, tab stops, character-set designations, saved cursor, or
+     * scrollback". Resets: SGR pen, cursor home + visible, DECOM off,
+     * DECAWM back to its power-on ON, sync output off (flushing whatever
+     * the queue held), wrap flag dropped. SCOPED SUBSET: the DEC-private
+     * extension modes DECSTR does not name — mouse tracking, bracketed
+     * paste, focus reporting, alt screen, cursor shape — SURVIVE, exactly
+     * xterm's "anything else not explicitly mentioned" rule. (VT510
+     * Table 5-9 additionally resets DECSTBM and the designations on the
+     * DEC hardware; the brief anchors xterm semantics, so we follow
+     * xterm here.)
      *
-     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-The-format-of-more-correct-xterm-window-title-and-workspace-reports (DECSTR)
-     * @see VT500 §DECSTR
+     * @see https://vt100.net/docs/vt510-rm/DECSTR.html (DECSTR)
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR)
      */
     public function softReset(): void
     {
@@ -902,7 +952,7 @@ final class ScreenHandler implements Handler
      * wire-level DECALN requires a candy-ansi parser change outside this
      * lib (deferred; see PR notes).
      *
-     * @see https://vt100.net/docs/vt500-rm/chapter4.html#S4.2 (DECALN)
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECALN)
      */
     public function displayAlignmentTest(): void
     {

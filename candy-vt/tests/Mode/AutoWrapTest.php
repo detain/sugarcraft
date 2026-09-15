@@ -18,7 +18,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * parked there with the phantom flag set; the advance happens when the
  * next graphic print arrives. Mirrors charmbracelet/x/vt Emulator.atPhantom.
  *
- * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.3
+ * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECAWM)
  */
 final class AutoWrapTest extends TestCase
 {
@@ -88,6 +88,15 @@ final class AutoWrapTest extends TestCase
         $this->assertTrue($h->mode->autoWrap);
         (new Parser($h))->feed("\x1b[?7h");
         $this->assertTrue($h->mode->autoWrap);
+    }
+
+    public function testAutoWrapDisableIsIdempotent(): void
+    {
+        $h = $this->handler();
+        (new Parser($h))->feed("\x1b[?7l");
+        $this->assertFalse($h->mode->autoWrap);
+        (new Parser($h))->feed("\x1b[?7l");
+        $this->assertFalse($h->mode->autoWrap);
     }
 
     // ─── Print behaviour with auto-wrap OFF ─────────────────────────────────

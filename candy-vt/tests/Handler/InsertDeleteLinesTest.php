@@ -17,8 +17,8 @@ use SugarCraft\Ansi\Parser\Parser;
  * `Screen.InsertLine`/`Screen.DeleteLine` (no-op outside the region,
  * cursor homed to the left margin on success) and ECMA-48 §8.4.15/§8.4.10.
  *
- * @see https://vt100.net/docs/vt500-rm/IL.html
- * @see https://vt100.net/docs/vt500-rm/DL.html
+ * @see https://vt100.net/docs/vt510-rm/IL.html
+ * @see https://vt100.net/docs/vt510-rm/DL.html
  */
 final class InsertDeleteLinesTest extends TestCase
 {
@@ -192,5 +192,53 @@ final class InsertDeleteLinesTest extends TestCase
         // pushed 'eeee' out of the region and DL's shift-up pulled blanks
         // down behind it.
         $this->assertSame('    ', $this->row($h, 4));
+    }
+
+    // ─── Phantom cell + parameter edges (review round 1: M2, m6) ────────────
+
+    public function testIlDropsArmedPhantomSoNextGraphicStaysOnRow(): void
+    {
+        $h = new ScreenHandler(new Buffer(10, 4));
+        $p = new Parser($h);
+        $p->feed('0123456789'); // arms the phantom at (0,9)
+        $this->assertTrue($h->wrapPending, 'precondition: phantom armed');
+        $p->feed("\x1b[L");
+        $this->assertFalse($h->wrapPending, 'column-home is a movement: phantom must die');
+        $this->assertSame(0, $h->cursor->col);
+        $this->assertSame(0, $h->cursor->row);
+        $p->feed('Q');
+        $this->assertSame('Q', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame(
+            '0',
+            $h->buffer->cell(1, 0)->grapheme,
+            'row shifted down by IL itself, not by a phantom wrap',
+        );
+    }
+
+    public function testDlDropsArmedPhantom(): void
+    {
+        $h = new ScreenHandler(new Buffer(10, 4));
+        $p = new Parser($h);
+        $p->feed("\x1b[2;1H");
+        $p->feed('0123456789'); // arms the phantom at (1,9)
+        $p->feed("\x1b[M");
+        $this->assertFalse($h->wrapPending);
+        $this->assertSame(0, $h->cursor->col);
+        $this->assertSame(1, $h->cursor->row);
+        $p->feed('Q');
+        $this->assertSame('Q', $h->buffer->cell(1, 0)->grapheme, 'next graphic stays on the cursor row');
+    }
+
+    public function testIlAndDlExplicitZeroCountAreNoOps(): void
+    {
+        // Explicit Ps=0 is a no-op per the cited charm InsertLine/DeleteLine
+        // guards — content AND cursor (column included) must not move.
+        $h = $this->lettered();
+        (new Parser($h))->feed("\x1b[3;2H\x1b[0L\x1b[0M");
+        foreach (['aaaa', 'bbbb', 'cccc', 'dddd', 'eeee'] as $r => $text) {
+            $this->assertSame($text, $this->row($h, $r), "row {$r} untouched");
+        }
+        $this->assertSame(2, $h->cursor->row);
+        $this->assertSame(1, $h->cursor->col, 'no-op must not home the column either');
     }
 }

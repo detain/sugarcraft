@@ -150,4 +150,15 @@ final class CharsetsTest extends TestCase
         $this->assertTrue($h->wrapPending);
         $this->assertSame(0, $h->cursor->row);
     }
+
+    public function testEscGGivesDecSpecialGraphicsToGl(): void
+    {
+        // Legacy SCO idiom (deliverable 4): ESC G designates DEC Special
+        // Graphics straight into GL — no separate SO required. ECMA-48's
+        // own ESC G (S8C1T) stays unmodelled; see ScreenHandler docblock.
+        $h = $this->feed("\x1bG" . 'lqqk');
+        $this->assertSame('┌──┐', $this->line($h, 0));
+        $this->assertSame('0', $h->charsets[0]);
+        $this->assertSame(0, $h->gl);
+    }
 }

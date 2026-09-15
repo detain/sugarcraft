@@ -48,7 +48,7 @@ final readonly class Mode
          * region). When false, characters at the rightmost column
          * overwrite it without advancing.
          *
-         * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.3 (DECAWM)
+         * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECAWM)
          * @see xterm ctlseqs: "wraparound" deferred to the next printable
          */
         public bool $autoWrap = true,

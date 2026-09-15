@@ -19,7 +19,7 @@ use SugarCraft\Vt\Terminal\Terminal;
  * Resize, preserved by RI, tabs, ED/EL and reports) and xterm's
  * `_wrapnext` handling.
  *
- * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.3
+ * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECAWM)
  */
 final class DeferredWrapInteractionTest extends TestCase
 {
@@ -113,6 +113,11 @@ final class DeferredWrapInteractionTest extends TestCase
         $h = $this->phantom();
         (new Parser($h))->feed("\x09");
         $this->assertTrue($h->wrapPending);
+
+        // And the phantom is still ALIVE: the next graphic resolves the
+        // owed wrap from wherever the tab parked the cursor.
+        (new Parser($h))->feed('X');
+        $this->assertSame('X', $h->buffer->cell(1, 0)->grapheme);
     }
 
     // ─── Positioning ops consume it ────────────────────────────────────────

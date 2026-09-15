@@ -40,7 +40,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * DECSTR is the soft variant: margins, tabs, charsets, saved cursor and
  * the ring all survive, per xterm ctlseqs.
  *
- * @see https://vt100.net/docs/vt500-rm/chapter4.html#S4.36 (RIS)
+ * @see https://vt100.net/docs/vt510-rm/chapter4.html (RIS)
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR, DECALN)
  */
 final class ResetTest extends TestCase
@@ -60,7 +60,9 @@ final class ResetTest extends TestCase
         "\x1b[?25l" .         // cursor hidden
         "\x1b[2;4r" .         // DECSTBM 2..4
         "\x1b[10m" .          // SGR non-default
-        "\x1b[3;3H" ;         // cursor parked mid-region
+        "\x1b[3g" .           // TBC 3: wipe the default tab stops…
+        "\x1b[1;6H\x1bH" .    // …and set one custom stop at col 5 (ESC H = HTS)
+        "\x1b[3;3H";          // cursor parked mid-region
 
     // ─── RIS ────────────────────────────────────────────────────────────────
 
@@ -80,7 +82,6 @@ final class ResetTest extends TestCase
         // Feed enough to push a line into scrollback, then RIS.
         $h = $this->handler("FIRST\r\nSECOND\r\n\x1bc", rows: 2);
         $this->assertSame('     ', $this->cellRun($h, 0, 5));
-        $this->assertNotSame('FIRST', $this->cellRun($h, 0, 5));
         // The ring survives the hard reset (charmbracelet x/vt parity).
         $this->assertGreaterThan(0, $h->scrollback->count());
     }
@@ -90,9 +91,11 @@ final class ResetTest extends TestCase
         $h = $this->handler(self::DIRTY . "\x1bc", cols: 20);
         $this->assertSame(0, $h->scrollRegionTop);
         $this->assertSame(4, $h->scrollRegionBottom);
-        // Default tab stops every 8 columns.
+        // Default tab stops every 8 columns — meaningful because DIRTY
+        // cleared them all and left exactly one custom stop at col 5.
         $this->assertArrayHasKey(8, $h->tabStops);
         $this->assertArrayHasKey(16, $h->tabStops);
+        $this->assertArrayNotHasKey(5, $h->tabStops, 'custom stop replaced by defaults');
     }
 
     public function testRisResetsCharsetsAndGl(): void
@@ -149,10 +152,16 @@ final class ResetTest extends TestCase
 
     public function testDecstrKeepsScrollbackAndCharsetsAndTabs(): void
     {
-        $h = $this->handler("FIRST\r\nSECOND\r\n\x1b(0\x1b[;4H\x1b[1;40H\x1b[!p", cols: 40, rows: 2);
+        $h = $this->handler(
+            "FIRST\r\nSECOND\r\n\x1b(0\x1b[3g\x1b[1;6H\x1bH\x1b[1;40H\x1b[!p",
+            cols: 40,
+            rows: 2,
+        );
         $this->assertGreaterThan(0, $h->scrollback->count(), 'soft reset preserves scrollback');
         $this->assertSame('0', $h->charsets[0], 'charset designations survive DECSTR');
-        $this->assertArrayHasKey(8, $h->tabStops);
+        // Tab stops survive verbatim: custom stop kept, defaults NOT restored.
+        $this->assertArrayHasKey(5, $h->tabStops, 'custom stop survives DECSTR');
+        $this->assertArrayNotHasKey(8, $h->tabStops, 'cleared defaults stay cleared');
     }
 
     public function testDecstrKeepsSavedCursor(): void
@@ -185,7 +194,9 @@ final class ResetTest extends TestCase
         // candy-ansi VT500 parser ('8' is a param byte, not a final — the
         // sequence drops to Ground), so DECALN is exercised through its
         // programmatic entry point, like enableAltScreen().
-        $h = $this->handler(self::DIRTY, cols: 6, rows: 3);
+        // Designate non-default sets FIRST so the charsets assertion below
+        // proves DECALN reset them (it would be vacuously true otherwise).
+        $h = $this->handler(self::DIRTY . "\x1b(0\x1b)U", cols: 6, rows: 3);
         $h->displayAlignmentTest();
         for ($r = 0; $r < 3; $r++) {
             $this->assertSame('EEEEEE', $this->cellRun($h, $r, 6), "row {$r} filled");

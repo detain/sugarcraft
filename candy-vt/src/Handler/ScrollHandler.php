@@ -79,7 +79,7 @@ final class ScrollHandler
      * caller passes SGR when BCE matters, kept simple here).
      *
      * @see ECMA-48 §8.4.15 (IL)
-     * @see https://vt100.net/docs/vt500-rm/IL.html
+     * @see https://vt100.net/docs/vt510-rm/IL.html
      */
     public function insertLines(Buffer $buffer, int $scrollTop, int $scrollBottom, int $from, int $count): void
     {
@@ -107,7 +107,7 @@ final class ScrollHandler
      * Same region-guarding rules as {@see insertLines()}.
      *
      * @see ECMA-48 §8.4.10 (DL)
-     * @see https://vt100.net/docs/vt500-rm/DL.html
+     * @see https://vt100.net/docs/vt510-rm/DL.html
      */
     public function deleteLines(Buffer $buffer, int $scrollTop, int $scrollBottom, int $from, int $count): void
     {

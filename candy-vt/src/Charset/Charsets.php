@@ -22,7 +22,7 @@ namespace SugarCraft\Vt\Charset;
  * and charmbracelet/x/ansi SelectCharacterSet (charset.go).
  *
  * @see ECMA-48 §25 "Character set designation" (ESC (, ), *, +)
- * @see https://vt100.net/docs/vt500-ram/chapter4.html#S4-3
+ * @see https://vt100.net/docs/vt510-rm/chapter4.html (DEC Special Graphics)
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (SCS + DEC Special Graphics)
  */
 final class Charsets
@@ -78,6 +78,9 @@ final class Charsets
         'v' => '┴', // U+2534 box drawings light up and horizontal
         'w' => '┬', // U+252C box drawings light down and horizontal
         'x' => '│', // U+2502 box drawings light vertical
+        // y/z use the SLANTED forms deliberately: byte-for-byte parity
+        // with charmbracelet/x/vt charset.go SpecialDrawing, NOT the
+        // typographic U+2264/U+2265 some terminals substitute.
         'y' => '⩽', // U+2A7D slanted equal to or less-than
         'z' => '⩾', // U+2A7E slanted equal to or greater-than
         '{' => 'π', // U+03C0 greek small letter pi
@@ -110,6 +113,9 @@ final class Charsets
         return match ($charset) {
             self::DEC_SPECIAL => self::DEC_SPECIAL_MAP[$rune] ?? $rune,
             self::UK => self::UK_MAP[$rune] ?? $rune,
+            // Screen Alignment/nbcs set: the raw \xA0 arm only fires for
+            // single-byte feeds; under the UTF-8 path a real NBSP arrives
+            // as 2 bytes and passes through unchanged (identity) above.
             self::NO_BREAK_SPACE => $rune === "\xA0" ? ' ' : $rune,
             default => $rune,
         };
