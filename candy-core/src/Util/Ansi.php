@@ -379,15 +379,16 @@ final class Ansi
      * notes is not a complete sequence: a CSI final byte must be 0x40-0x7E, so
      * on a standards-conformant receiver `ESC [ # 8` stays inside the CSI, where
      * it consumes whatever the caller prints next as the final — eating output
-     * instead of testing alignment. candy-vt's
-     * `ScreenHandler::displayAlignmentTest()` still heads itself with that stale
-     * spelling, while its own wire-level note documents the gap accurately and
-     * exposes the pattern programmatically only.
+     * instead of testing alignment. In xterm the CSI-`#` substate is the
+     * palette stack (`csi_hash_table[]`, the `CSI # P/Q/R/S` XT*COLORS family),
+     * never DECALN; in candy-ansi's mirrored table the sequence drops in
+     * CsiIntermediate without dispatching. The misquote stays deliberately inert.
      *
-     * Neither spelling runs the pattern in candy-vt yet: the shared parser drops
-     * the CSI form in CsiIntermediate without dispatching, and reports `ESC # 8`
-     * as escDispatch(0x38, 0x23), which the emulator ignores as a
-     * non-designation. The bytes are pinned by an exact-byte test here and, in
+     * candy-vt executes this pattern from the wire: `ESC # 8` reaches
+     * `ScreenHandler::escDispatch()` as (0x38, 0x23), whose `#`-family arm
+     * routes it to `displayAlignmentTest()` — closing the emitter→emulator
+     * round trip (the emulator used to swallow it as a failed charset
+     * designation). The bytes are pinned by an exact-byte test here and, in
      * candy-vcr, by the dispatch the parser really reports.
      *
      * VT510 ch. 4 (DECALN); ansicode.txt:217 ("#8 * DECALN - Alignment
