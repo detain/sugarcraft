@@ -470,9 +470,13 @@ PHP;
     private function closeWorker(WorkerState $worker): void
     {
         // Only a live stderr pipe was ever registered; a synthetic WorkerState
-        // (spawn failed before any pipe existed) carries null, and the loop
-        // would cast it to fd 0 and silently unregister the APPLICATION's
-        // stdin watcher (E716).
+        // (spawn failed before any pipe existed) carries null. Stock React
+        // loops cast that null to key 0 and unset unconditionally — but their
+        // readStreams are keyed by PHP resource ID (≥1, never fd), so key 0
+        // cannot hold any registration and the pre-guard cast was a silent
+        // no-op. The guard is prophylaxis: it forecloses fd-keyed/custom
+        // LoopInterface implementations and closed-resource-ID-reuse shapes
+        // where the collision WOULD be live (E716).
         if ($worker->stderr !== null && is_resource($worker->stderr)) {
             $this->loop->removeReadStream($worker->stderr);
         }

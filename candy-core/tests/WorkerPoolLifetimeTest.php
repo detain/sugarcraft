@@ -16,9 +16,9 @@ use SugarCraft\Core\WorkerState;
  *
  * Pins the three shapes the sweep flagged: stop() must reject unsettled
  * jobs loudly (never leave a promise awaiting a dead pool), closing a
- * synthetic worker state must not unregister fd 0 from the shared loop,
- * and a worker wedged inside a task must die within the bounded
- * grace→TERM→KILL ladder.
+ * synthetic worker state must not unset the loop's fd-0 key (prophylaxis —
+ * see the guard's note in WorkerPool::closeWorker), and a worker wedged
+ * inside a task must die within the bounded grace→TERM→KILL ladder.
  */
 final class WorkerPoolLifetimeTest extends TestCase
 {
@@ -76,20 +76,25 @@ final class WorkerPoolLifetimeTest extends TestCase
         $this->loop->addReadStream(STDIN, static function (): void {
         });
 
-        // The regression is `removeReadStream((int) null)` → unset of key 0 —
-        // the slot a TUI app's STDIN watcher lives on. Some harnesses start
-        // PHP with fd 0 CLOSED (STDIN then reopens at a higher number), so
-        // seed the fd-0 slot explicitly to keep this pin deterministic
-        // everywhere. The loop is never run() again, so the stand-in value
-        // only needs to occupy the array key.
+        // The guarded cast is `removeReadStream((int) null)` → unset of key 0.
+        // On stock React loops key 0 is UNREACHABLE by any live registration
+        // (readStreams are keyed by PHP resource ID, which starts at 1 —
+        // (int) STDIN === 1 measured), so the pre-fix unset was a silent
+        // no-op, not a cut of the application's STDIN watcher. The pin keeps
+        // prophylaxis honest for fd-keyed/custom-loop shapes where key 0
+        // would be live. Some harnesses start PHP with fd 0 CLOSED (STDIN
+        // then reopens at a higher number), so seed the key-0 slot explicitly
+        // to keep this pin deterministic everywhere. The loop is never run()
+        // again, so the stand-in value only needs to occupy the array key.
         $readStreams = new ReflectionProperty(StreamSelectLoop::class, 'readStreams');
         $seeded = $readStreams->getValue($this->loop);
         $seeded[0] = $seeded[(int) STDIN];
         $readStreams->setValue($this->loop, $seeded);
 
         // The spawn-failure path hands closeWorker() a WorkerState whose
-        // stderr is null; the unguarded call would silently cut the
-        // application's fd-0 watcher out of the loop.
+        // stderr is null; the unguarded cast would unset key 0, an
+        // unreachable slot on this loop type — the guard exists for
+        // loop implementations where it is not.
         $closeWorker = new ReflectionMethod(WorkerPool::class, 'closeWorker');
         $closeWorker->invoke($pool, new WorkerState(id: 7, process: null, stdin: null, stdout: null, stderr: null));
 

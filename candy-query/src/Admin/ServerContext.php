@@ -29,7 +29,9 @@ use SugarCraft\Query\Db\Version;
  * AsyncCachingServerContext still forwards — statusVariablesTs(), wasReset(),
  * lastUptime() and the sync-side admin providers. To keep that backstop
  * actually cheap across admin-pane resets, the model hands out ONE shared
- * instance per live database handle via AdminQueryCache::serverContext():
+ * instance via AdminQueryCache::serverContext() — a single slot keyed to the
+ * database handle it wraps (a process alternating two handles re-mints on
+ * each switch: bounded, pinned by the displacement test):
  * dropping and rebuilding the page (AdminState::withPane()) reuses the same
  * warm cache instead of minting a cold context whose first read would block.
  *
@@ -38,7 +40,10 @@ use SugarCraft\Query\Db\Version;
  * entirely means every consumer moves onto the async cache; the status page's
  * sampling helpers are not there yet. The window bounds the blast radius —
  * repeated renders inside it execute the query exactly once — but do not
- * eliminate the call.
+ * eliminate the call, and the surviving call is DURATION-unbounded: it is a
+ * synchronous PDO read, so a hung server can stall that one render for its
+ * full connection timeout. E646 bans blanket timeouts on our side, so this
+ * is a disclosed property, not an oversight.
  *
  * @see Mirrors charmbracelet/lazysql ServerContext
  */
