@@ -127,6 +127,50 @@ final class LegacyModuleAdapterTest extends TestCase
         $this->assertStringContainsString('count=3', $view3);
     }
 
+    /**
+     * E726 pin (finding M-3, verdict documented-contract): legacy modules
+     * predate the Msg protocol — LegacyModule::update() takes only array
+     * state and receives no message at all — so the adapter DISCARDS $msg on
+     * purpose (see the limitation note on update()). Every message advances
+     * the wrapped module exactly once, regardless of its type; nothing is
+     * filtered, forwarded, or fake-bridged. If a future change starts routing
+     * or suppressing by Msg type, this pin reddens and forces the docblock
+     * limitation to be re-judged rather than silently violated.
+     */
+    public function testMsgIsDeliberatelyDiscardedEveryMessageAdvancesLegacyExactlyOnce(): void
+    {
+        $calls = 0;
+        $legacy = new class($calls) implements LegacyModule {
+            private int $calls;
+            public function __construct(int &$calls) { $this->calls =& $calls; }
+            public function name(): string { return 'any-msg'; }
+            public function init(): array { return ['name' => 'any-msg', 'interval' => 0]; }
+            public function update(array $state): array { $this->calls++; return $state; }
+            public function view(array $state, int $_width, int $_height): string { return ''; }
+            public function minSize(): array { return [10, 3]; }
+        };
+
+        $adapter = LegacyModuleAdapter::from(fn() => $legacy);
+
+        // Three structurally different message types — the adapter must not
+        // privilege one over another; the type is what gets thrown away.
+        $first = new class implements Msg {};
+        $second = new class implements Msg {};
+
+        [$next, $cmd] = $adapter->update($first);
+        $this->assertSame($adapter, $next, 'the adapter accumulates in place and returns itself');
+        $this->assertNull($cmd, 'legacy bridging never emits a Cmd — there is nothing to bridge to');
+
+        $adapter->update($second);
+        $adapter->update($first);
+
+        $this->assertSame(
+            3,
+            $calls,
+            'every message advances the legacy module exactly once, whatever its type',
+        );
+    }
+
     public function testMinSizeDelegatesToLegacy(): void
     {
         $legacy = new class implements LegacyModule {

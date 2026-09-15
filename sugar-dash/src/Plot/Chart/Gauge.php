@@ -25,15 +25,24 @@ final class Gauge implements \SugarCraft\Dash\Foundation\Sizer
     private ?int $width = null;
     private ?int $height = null;
 
+    /** Ratio in [0.0, 1.0] — enforced by the constructor, never re-checked downstream. */
+    private readonly float $ratio;
+
     public function __construct(
-        private readonly float $ratio,
+        float $ratio,
         private readonly ?int $widthConstraint = null,
         private readonly bool $showPercentage = true,
         private readonly ?Color $filledColor = null,
         private readonly ?Color $emptyColor = null,
         private readonly string $filledChar = '█',
         private readonly string $emptyChar = '░',
-    ) {}
+    ) {
+        // E726 (round 82) — the single clamp boundary. Every ratio enters the
+        // object through this constructor (new() factory, withRatio() wither,
+        // direct construction alike), so [0.0, 1.0] is parsed into trusted
+        // state exactly once here; render() and friends consume it raw.
+        $this->ratio = max(0.0, min(1.0, $ratio));
+    }
 
     /**
      * Create a new gauge with default styling.
@@ -42,8 +51,6 @@ final class Gauge implements \SugarCraft\Dash\Foundation\Sizer
      */
     public static function new(float $ratio): self
     {
-        // Clamp ratio to valid range
-        $ratio = max(0.0, min(1.0, $ratio));
         return new self(
             ratio: $ratio,
             widthConstraint: 40,
@@ -77,9 +84,9 @@ final class Gauge implements \SugarCraft\Dash\Foundation\Sizer
             return '';
         }
 
-        // Ratio is clamped at construction via new() factory and withRatio() withers.
-        // Guard against invalid ratios (e.g., direct construction bypasses factory clamping).
-        $ratio = max(0.0, min(1.0, $this->ratio));
+        // Ratio was parsed into trusted [0.0, 1.0] state by the constructor
+        // (the single clamp boundary) — render reads it raw.
+        $ratio = $this->ratio;
         $filledWidth = (int) floor($ratio * $width);
         $emptyWidth = max(0, $width - $filledWidth);
         $percentage = (int) round($ratio * 100);
@@ -231,8 +238,7 @@ final class Gauge implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withRatio(float $ratio): self
     {
-        // Clamp ratio to valid range
-        $ratio = max(0.0, min(1.0, $ratio));
+        // The constructor clamps — no re-clamp here (E726 single boundary).
         return new self(
             ratio: $ratio,
             widthConstraint: $this->widthConstraint,

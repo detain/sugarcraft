@@ -237,6 +237,36 @@ final class WeatherModuleTest extends TestCase
     }
 
     /**
+     * E726 pin (finding D-5, verdict documented-contract): the "missing mkdir
+     * guard" is not missing — it lives in the SHARED candy-core helper.
+     * AtomicJsonFile::write() creates the parent tree itself (recursive,
+     * race-safe re-check, 0700), which is exactly why WeatherModule must NOT
+     * carry its own mkdir: a copy at the call site would re-hand-roll the save
+     * pattern the AtomicJsonFile consolidation exists to retire. This pins the
+     * guarantee where the finding pointed: a cache write into a home whose
+     * entire .cache tree does not exist yet creates it and persists a snapshot
+     * loadCache() reads back.
+     */
+    public function testSaveCacheCreatesMissingDirectoryTreeViaSharedAtomicGuard(): void
+    {
+        $snapshot = new WeatherSnapshot(3.5, 'Snow', 'PinCity', new \DateTimeImmutable('2021-06-01T00:00:00+00:00'));
+
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        $this->assertDirectoryDoesNotExist($this->cacheDir, 'precondition: the whole temp home is absent');
+
+        $this->invokePrivate($module, 'saveCache', [$snapshot]);
+
+        $path = $this->cacheDir . '/.cache/sugar-dash/weather.json';
+        $this->assertFileExists($path, 'the atomic save must conjure the missing parent tree on its own');
+
+        $loaded = $this->invokePrivate($module, 'loadCache', []);
+        $this->assertInstanceOf(WeatherSnapshot::class, $loaded);
+        $this->assertSame(3.5, $loaded->tempC);
+    }
+
+    /**
      * @param array<int, mixed> $args
      */
     private function invokePrivate(WeatherModule $module, string $method, array $args): mixed

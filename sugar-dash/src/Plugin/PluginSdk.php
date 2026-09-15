@@ -73,6 +73,14 @@ abstract class PluginSdk
             }
 
             $line = trim($line);
+            // E726 (round 82) — PROTOCOL CONTRACT, judged against the host side
+            // of the pipe: the wire is line-delimited JSON, one toJson()."\n"
+            // per request (ExternalModule::sendRequest()); a blank line is
+            // never a delimiter, a flush signal, or a keepalive. So a blank or
+            // whitespace-only read is out-of-band noise: skip it without
+            // parsing and WITHOUT answering — emitting anything here would
+            // desync the host's strict one-request/one-response pairing in
+            // readResponse(). Pinned by PluginSdkBlankLineContractTest.
             if ($line === '') {
                 continue;
             }
