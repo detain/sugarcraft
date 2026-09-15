@@ -66,8 +66,11 @@ final class Iterm2Stream
     }
 
     /**
-     * Fail fast when a numeric argument is not an integer, so a corrupt
-     * `width=8x4` can never surface as a misleading `0`.
+     * Fail fast when a size argument is not a plain integer, so a corrupt
+     * `width=8x4` can never surface as a misleading cell count. This decoder
+     * models the integer character-cell subset candy-mosaic emits; the iTerm2
+     * protocol's `px`/`%`/`half`/`visible` size forms are intentionally out of
+     * scope and rejected rather than silently truncated by an `(int)` cast.
      *
      * @param array<string, string> $params
      */

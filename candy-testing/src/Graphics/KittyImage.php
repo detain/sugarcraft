@@ -18,8 +18,16 @@ use SugarCraft\Testing\Lang;
  */
 final class KittyImage
 {
-    /** Control keys whose transmitted value must be a non-negative integer. */
-    private const NUMERIC_KEYS = ['i', 'I', 'c', 'r', 's', 'v', 'x', 'y', 'z'];
+    /**
+     * Control keys that carry an integer value.
+     *
+     * `z` is separate because the kitty spec types it as a *signed* 32-bit integer
+     * (a negative z-index, or a negative animation frame gap for gapless frames),
+     * while every other key here is a non-negative count/offset/identifier.
+     */
+    private const NUMERIC_KEYS = ['i', 'I', 'c', 'r', 's', 'v', 'x', 'y'];
+
+    private const SIGNED_KEYS = ['z'];
 
     /**
      * @param array<string, string> $params raw control keys (a,i,c,r,s,v,x,y,z,f,q,…)
@@ -41,8 +49,8 @@ final class KittyImage
     }
 
     /**
-     * Fail fast at the boundary when a numeric control value is not an integer,
-     * so a corrupt `i=abc` can never reach callers as a misleading id of `0`.
+     * Fail fast at the boundary when an integer control value is malformed, so a
+     * corrupt `i=abc` can never reach callers as a misleading id of `0`.
      *
      * @param array<string, string> $params
      */
@@ -51,12 +59,27 @@ final class KittyImage
         foreach (self::NUMERIC_KEYS as $key) {
             $value = $params[$key] ?? null;
             if ($value !== null && !ctype_digit($value)) {
-                throw new MalformedGraphicsException(Lang::t('graphics.kitty.non_numeric_parameter', [
-                    'key' => $key,
-                    'value' => $value,
-                ]));
+                self::rejectNonNumeric($key, $value);
             }
         }
+
+        foreach (self::SIGNED_KEYS as $key) {
+            $value = $params[$key] ?? null;
+            if ($value !== null && preg_match('/^-?\d+$/', $value) !== 1) {
+                self::rejectNonNumeric($key, $value);
+            }
+        }
+    }
+
+    /**
+     * @throws MalformedGraphicsException
+     */
+    private static function rejectNonNumeric(string $key, string $value): never
+    {
+        throw new MalformedGraphicsException(Lang::t('graphics.kitty.non_numeric_parameter', [
+            'key' => $key,
+            'value' => $value,
+        ]));
     }
 
     public function action(): string

@@ -23,7 +23,7 @@ return [
     'graphics.payload_not_image' => 'The decoded payload is not a readable image',
     'graphics.grid.ragged_rows' => 'Pixel grid row {row} has {got} cells but the first row declared {expected}',
     'graphics.iterm2.non_numeric_parameter' => 'iTerm2 argument "{key}" must be a non-negative integer, got "{value}"',
-    'graphics.kitty.non_numeric_parameter' => 'Kitty control parameter "{key}" must be a non-negative integer, got "{value}"',
+    'graphics.kitty.non_numeric_parameter' => 'Kitty control parameter "{key}" must be an integer, got "{value}"',
 
     'graphics.sixel.missing_dcs_header' => 'Sixel stream is missing its DCS header (ESC P)',
     'graphics.sixel.unterminated' => 'Sixel stream is missing its ST terminator (ESC \\)',

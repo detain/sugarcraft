@@ -221,8 +221,17 @@ final class KittyStreamTest extends TestCase
         $stream = "\x1b_Gi=abc;" . base64_encode($png) . "\x1b\\";
 
         $this->expectException(MalformedGraphicsException::class);
-        $this->expectExceptionMessage('non-negative integer');
+        $this->expectExceptionMessage('must be an integer');
         KittyStream::decode($stream);
+    }
+
+    public function testNegativeZIndexIsAccepted(): void
+    {
+        // The kitty spec types `z` as a signed integer (negative z-index / gapless
+        // frame gap); it must not be rejected by the numeric-parameter gate.
+        $image = KittyImage::fromTransmit(['a' => 't', 'i' => '9', 'z' => '-2'], 'payload');
+
+        self::assertSame(-2, $image->zIndex());
     }
 
     public function testChunkedApcThrows(): void
