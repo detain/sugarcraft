@@ -53,7 +53,7 @@ import/export feature is broken for any multi-line value on the default install.
 **Conditions for success:**
 
 - Failing-first tests in `YamlFallbackTest`: round-trip for `\n`, `\r\n`, and tab-bearing values; plus a mixed table.
-- No regression in the 13 existing `testYamlRoundTrip*` cases.
+- No regression in the 9 existing `testYamlRoundTrip*` cases.
 
 **Related code locations:**
 
@@ -91,7 +91,10 @@ match `examples/multidb.php` usage; grep finds no other 3-arg `set(` doc occurre
 
 **Why:** CI 8.4 leg deprecation-noises every `Store::list()` call.
 
-**Severity:** P1 (compat), zero-risk edit.
+**Severity:** P3 (compat hygiene), zero-risk edit — `findings/sugar-skate.md`
+§4.1 classifies it under CONVENTION & HYGIENE, and the deprecation is noise on
+the 8.4 CI leg, not a correctness defect. Sequenced into Phase 1 purely because
+it is a one-line zero-risk edit that rides the first remediation PR.
 
 **Conditions for success:** sugar-skate green on both 8.3 and 8.4 CI legs.
 

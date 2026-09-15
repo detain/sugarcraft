@@ -336,6 +336,11 @@ child process. This means:
 - Return values and in-memory mutations are **not** visible to the parent.
 - If the action throws, `run()` throws a `\RuntimeException` (the original
   exception type/message cannot cross the fork boundary).
+- The child is bounded by a wall-clock ceiling (default 600s; tune with
+  `withMaxRuntimeSeconds()`). On expiry the reaper escalates TERM→KILL and
+  `run()` throws a `\RuntimeException` with one of two outcomes: the action
+  "was terminated" (child reaped), or it "could not be terminated" and the
+  child is abandoned with its pid named (escalation ladder exhausted).
 - Communicate results via tempfile, pipe, database, or other out-of-band
   mechanism.
 

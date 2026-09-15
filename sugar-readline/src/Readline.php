@@ -158,6 +158,10 @@ final class Readline
      * flag off $this, so hold on to the object passed to run(), not to a
      * pre-onKey() clone (the registration methods clone; the flag lives on
      * whichever instance is running).
+     *
+     * The flag LATCHES: stop() is one-shot per instance — a stopped
+     * instance never polls again, and there is no resume. Construct a
+     * fresh Readline to restart prompting.
      */
     public function stop(): void
     {

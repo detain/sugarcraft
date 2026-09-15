@@ -37,11 +37,11 @@ final class SignalResizeDriver implements InputDriver
     /**
      * Allowlist shape for terminfo capability names passed to tput.
      *
-     * XSI Curses capability names are 1-5 alphanumeric characters beginning
-     * with a letter, and every name this driver may ever request ("cols",
-     * "lines", and its lowercase siblings) fits the stricter lowercase form
-     * below. Anything else is a malformed name — or an injection attempt
-     * riding a future caller — and never reaches a shell.
+     * POSIX/terminfo-style short lowercase capability names — the two
+     * callers of this driver request "cols" and "lines", and every name
+     * this driver may ever ask for fits the lowercase form below. Anything
+     * else is a malformed name — or an injection attempt riding a future
+     * caller — and never reaches a shell.
      *
      * E715: this gate, plus escapeshellarg() on the validated name, is
      * defense-in-depth for the shell_exec() in getTput(). The gate parses;
