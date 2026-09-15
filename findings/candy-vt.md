@@ -58,7 +58,7 @@ However, `ScreenHandler::enterAltScreen()` and `ScreenHandler::leaveAltScreen()`
 
 ---
 
-### 3. `Transitions::$table` static cache is not thread-safe 🔀 r82: moved — parser de-forked onto candy-ansi (9952e3f5c); lazy ??= table now candy-ansi/src/Parser/Transitions.php:37
+### 3. `Transitions::$table` static cache is not thread-safe 🔀 r82: moved — parser de-forked onto candy-ansi (9952e3f5c); lazy ??= table now candy-ansi/src/Parser/Transitions.php:37; r82 q18: ⏭️ obsolete in candy-ansi (no shared-memory userland threads; build() pure) — see candy-ansi.md §10
 
 **File:** `src/Parser/Transitions.php:27`
 
@@ -124,7 +124,7 @@ The root `SugarCraft\Vt\Terminal` (vcr renderer path) has no alt-screen entry po
 
 ## Medium Severity Issues
 
-### 7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing 🔀 r82: moved — now candy-ansi/src/Parser/Parser.php:138 (re-verify in candy-ansi)
+### 7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing 🔀 r82: moved — now candy-ansi/src/Parser/Parser.php:138 (re-verify in candy-ansi); r82 q18: ✅ fixed in candy-ansi — reset()=flush()+clear(), flush dispatches OSC/DCS payloads (Parser.php:117-146)
 
 **File:** `src/Parser/Parser.php:82-86`
 
@@ -156,7 +156,7 @@ The `$params` passed from `ScreenHandler::csiDispatch()` already contains the pa
 
 ---
 
-### 9. `Transitions::build()` has an unused `$g` variable with static analysis noise 🔀 r82: moved — Transitions now in candy-ansi (9952e3f5c)
+### 9. `Transitions::build()` has an unused `$g` variable with static analysis noise 🔀 r82: moved — Transitions now in candy-ansi (9952e3f5c); r82 q18: ⏭️ obsolete — $g used at definition line (Transitions.php:52-53) and no phpstan in lib
 
 **File:** `src/Parser/Transitions.php:52-53`
 
@@ -211,7 +211,7 @@ This iterates up to the larger screen's dimensions. For a 100×30 screen diffed 
 
 ---
 
-### 12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) 🔀 r82: moved — HandlerAdapter now candy-ansi/src/Parser/HandlerAdapter.php (re-verify OSC scope there)
+### 12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) 🔀 r82: moved — HandlerAdapter now candy-ansi/src/Parser/HandlerAdapter.php (re-verify OSC scope there); r82 q18: ✅ fixed for recorded scope — OSC 8 now dispatched w/ id parsing (HandlerAdapter.php:93-102); OSC 4/52 remain by-design (§2.3)
 
 **File:** `src/Parser/HandlerAdapter.php:79-84`
 
@@ -296,7 +296,7 @@ Unknown SGR parameters are skipped silently. This matches VT spec behavior (igno
 
 ---
 
-### 16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 🔀 r82: moved — printChar now candy-ansi HandlerAdapter
+### 16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 🔀 r82: moved — printChar now candy-ansi HandlerAdapter; r82 q18: ✅ fixed — pass-through rationale now documented (HandlerAdapter.php:26-27)
 
 **File:** `src/Parser/HandlerAdapter.php:23-30`
 
@@ -541,7 +541,7 @@ public function __construct(
 
 ---
 
-### 31. `Transitions::build()` is eager but could be deferred or pre-computed 🔀 r82: moved — Transitions now candy-ansi; lazy first-use build still at Transitions.php:37 there
+### 31. `Transitions::build()` is eager but could be deferred or pre-computed 🔀 r82: moved — Transitions now candy-ansi; lazy first-use build still at Transitions.php:37 there; r82 q18: ⏭️ feature-idea (as recorded); lazy build retained, cost assessed low in candy-ansi.md §6.1
 
 **File:** `src/Parser/Transitions.php:50-238`
 

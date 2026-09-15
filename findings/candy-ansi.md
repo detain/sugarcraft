@@ -437,4 +437,36 @@ The codebase is well-structured:
 
 ---
 
+## 10. INHERITED vt PARSER FINDINGS (r82, E728 — moved in with the de-fork 9952e3f5c)
+
+Six findings were recorded in `findings/candy-vt.md` against vt's forked copy of the parser and moved here when candy-vt de-forked onto candy-ansi. Each is re-verified below against current candy-ansi `src/` (lane q18, 2026-09-15); marks follow the house convention (✅ fixed / ❗ still-live / ⏭️ obsolete-or-feature-idea). The vt-side entries keep their history in place with appended dispositions.
+
+### vt#3. `Transitions::$table` static cache is not thread-safe ⏭️ r82: obsolete in candy-ansi — PHP execution model has no shared-memory userland threads (ZTS/parallel isolate statics per context; ReactPHP is single-loop); the lazy `??=` at src/Parser/Transitions.php:37 was the identical shape vt recorded, and the finding itself conceded `build()` is pure so a hypothetical double-build is byte-identical
+
+**Evidence:** src/Parser/Transitions.php:27,37 unchanged shape; no concurrency surface in the lib's supported SAPIs; the real residual (no cache-reset for testing) is already tracked here as §2.4.
+
+### vt#7. `Parser::reset()` does not flush in-flight OSC/DCS strings before clearing ✅ r82: fixed in candy-ansi — `reset()` (src/Parser/Parser.php:138) calls `flush()` (src/Parser/Parser.php:117) which dispatches buffered OscString/DcsString/SosString/PmString/ApcString payloads (Parser.php:121-124) before `clear()`, so mid-sequence data is delivered, not discarded
+
+**Evidence:** `parseComplete()` docblock (Parser.php:100-105) states the end-of-stream flush guarantee; reset = flush + clear.
+
+### vt#9. `Transitions::build()` has an unused `$g` variable with static analysis noise ⏭️ r82: obsolete — `$g` is consumed on its very definition line (src/Parser/Transitions.php:52-53 `str_repeat(self::pack(..., $g), ...)`) and again at Transitions.php:75-78; candy-ansi carries no phpstan config (lib gates on php-cs-fixer), so the predicted "used before assignment" noise has no tool to emit it
+
+**Evidence:** grep `$g` → uses at :53,:75,:76,:77,:78; no phpstan.neon in candy-ansi/.
+
+### vt#12. `HandlerAdapter::oscDispatch()` only handles title (OSC 0/1/2) ✅ r82: fixed for the recorded scope — oscDispatch now routes OSC 8 hyperlinks with `id=` param parsing (src/Parser/HandlerAdapter.php:93-102, landed c69d0aff4) and OSC 0/1/2 titles with empty-payload tolerance (:105-108); the vcr sink is live too — `OscHandlerImpl::hyperlink()` now stores uri+id (src/Parser/OscHandlerImpl.php:27-31), retiring §2.1 of this audit
+
+**Evidence:** remaining OSC 4/52 silence is the deliberate vcr-path scope already tracked as §2.3 (house §8 "Could Fix #8"), not a regression of vt#12.
+
+### vt#16. `HandlerAdapter::printChar()` rejects printable bytes below 0x20 ✅ r82: fixed — the finding was explicitly "no functional issue, just a comment/documentation gap"; the gap is filled: src/Parser/HandlerAdapter.php:26-27 now documents the pass-through rule (printable ASCII OR valid UTF-8 lead byte ≥ 0xC2 forwarded; C0 < 0x20 and continuation-range drops), which is the Latin-1/UTF-8 rationale the vt entry asked for
+
+**Evidence:** printChar gate unchanged (correct, per vt) at HandlerAdapter.php:23-29; explanatory comment present.
+
+### vt#31. `Transitions::build()` is eager but could be deferred or pre-computed ⏭️ r82: feature-idea — recorded upstream as "Potential improvement" (pre-computed table file at autoload time), not a defect; candy-ansi keeps the lazy first-use build (src/Parser/Transitions.php:37) with per-process static cache, and §6.1 of this audit already assessed the startup cost as low priority ("runs once per PHP process lifetime")
+
+**Evidence:** no pre-computed-table artifact exists; adopting one is a design change outside any finding's scope.
+
+**Counts:** ✅ 3 (vt#7, vt#12, vt#16) · ❗ 0 · ⏭️ 3 (vt#3, vt#9, vt#31).
+
+---
+
 *End of review*
