@@ -41,3 +41,8 @@
 .sugar-crush-build/
 /.sugar-crush-prompt/
 codacy-coverage-reporter
+# E737 housekeeping: the operator's repo-root MCP config is untracked local state that must never
+# enter a commit; discovery reads exactly one `$root/.mcp.json`, so the ignore is ROOT-ANCHORED —
+# sub-directory project `.mcp.json` files stay committable per-project config (the hazard is the
+# operator file sitting at the monorepo root, not the filename).
+/.mcp.json
