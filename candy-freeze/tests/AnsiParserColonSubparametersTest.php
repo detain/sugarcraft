@@ -185,7 +185,7 @@ final class AnsiParserColonSubparametersTest extends TestCase
      *
      * @return array<string, string> label => CSI sequence
      */
-    public static function colourShapeCorpus(): array
+    private static function colourShapeCorpus(): array
     {
         $tails = [
             'none' => [],
