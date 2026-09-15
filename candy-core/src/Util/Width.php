@@ -507,6 +507,13 @@ final class Width
      * never split; visible graphemes accumulate width and the loop stops
      * once the budget is consumed. Trailing ANSI sequences after the cut
      * point are still appended so dangling SGR resets aren't lost.
+     *
+     * This scanner recognises only CSI and OSC, unlike {@see Ansi::strip()}
+     * (which since the ANSI audit also treats DCS/SOS/PM/APC payloads and
+     * the 8-bit C1 forms as zero-width). A row carrying those richer
+     * sequences therefore measures narrower under {@see self::of()} than it
+     * truncates here — the divergence `PaneWidthInvariantTest` pins, and
+     * why the fitter keeps its byte-identical fast-path branch.
      */
     public static function truncateAnsi(string $s, int $max): string
     {

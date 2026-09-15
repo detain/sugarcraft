@@ -45,7 +45,6 @@ return [
     'graphics.kitty.unterminated_begin' => 'Kitty transmit header is not closed by ST (ESC \\)',
     'graphics.kitty.missing_end' => 'Kitty transmit is missing its m=0 end marker',
     'graphics.kitty.bad_chunk' => 'Kitty data chunk is malformed (expected m=<0|1>,<base64>)',
-    'graphics.kitty.chunked_apc_unsupported' => 'Chunked Kitty APC transmit (m=1) is not supported; only the DCS-`q` framing stitches continuation chunks',
     'graphics.kitty.invalid_base64' => 'Kitty payload is not valid base64',
     'graphics.kitty.decompress_failed' => 'Kitty zlib payload failed to inflate',
     'graphics.kitty.no_payload' => 'Kitty image {id} carries no payload data',

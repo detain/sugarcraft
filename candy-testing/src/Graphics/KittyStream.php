@@ -11,9 +11,12 @@ use SugarCraft\Testing\Lang;
  *
  * Understands two framings and both are treated as first-class input:
  *
- *  - the DCS-`q` form emitted by sugarcraft/candy-mosaic
- *    (`\x1bPq k=v,k=v \x1b\\ m=<more>,<b64>…  m=0 \x1b\\`), and
- *  - the standard APC form (`\x1b_G k=v,k=v;<b64> \x1b\\`).
+ *  - the standard APC form emitted by sugarcraft/candy-mosaic
+ *    (`\x1b_G k=v,…,m=1; <b64> \x1b\\` per frame; begin + chunk frames
+ *    stitched until the first `m=0;` closer), and
+ *  - the legacy DCS-`q` form (`\x1bPq k=v,k=v \x1b\\ m=<more>,<b64>…  m=0
+ *    \x1b\\`) — retained for decoding captures made before the ANSI audit
+ *    fix moved the producer onto APC frames.
  *
  * Payload base64 is reassembled across `m=1` continuation chunks and — for a
  * `f=1` transmit — zlib-inflated back into a PNG. Multi-image streams yield one
@@ -33,6 +36,18 @@ final class KittyStream
 
     /** @var list<KittyImage> */
     private array $images = [];
+
+    /**
+     * Attributes accumulated from `m=1` APC frames of the open transmission
+     * (later frames override shared keys, so a per-chunk `z`/`f` is honored;
+     * new keys are additive). Null when no chunked APC transaction is open.
+     *
+     * @var array<string, string>|null
+     */
+    private ?array $txParams = null;
+
+    /** Base64 payload accumulated for the open APC transmission. */
+    private string $txPayload = '';
 
     private function __construct()
     {
@@ -58,6 +73,11 @@ final class KittyStream
             $offset = $isApc
                 ? $decoder->consumeApc($stream, $at)
                 : $decoder->consumeDcs($stream, $at);
+        }
+
+        if ($decoder->txParams !== null) {
+            // Stream ended inside a chunked APC transmission — no m=0 closer.
+            throw new MalformedGraphicsException(Lang::t('graphics.kitty.missing_end'));
         }
 
         if ($decoder->images === []) {
@@ -180,7 +200,15 @@ final class KittyStream
     }
 
     /**
-     * Parse one standard APC transmit and return the offset just past it.
+     * Parse one standard APC frame and return the offset just past it.
+     *
+     * Frames with `m=1` open (or continue) a chunked transmission: the
+     * attribute set merges from all frames (later frames may override shared
+     * keys); payloads concatenate in
+     * order, and the first `m=0` frame closes the transaction and yields the
+     * image — the exact mirror of `Ansi::kittyGraphicsBegin()` +
+     * `Ansi::kittyGraphicsChunk()` as candy-mosaic emits them (one self-
+     * framed APC sequence per chunk since the ANSI audit fix).
      */
     private function consumeApc(string $stream, int $at): int
     {
@@ -197,14 +225,24 @@ final class KittyStream
 
         $params = self::parseParams($paramsString);
 
-        // Continuation chunks (`m=1`) are stitched only in the DCS-`q` framing this
-        // decoder is built for; a chunked standard-APC stream would otherwise be
-        // silently mis-decoded as several truncated images, so reject it loudly.
         if (($params['m'] ?? '0') === '1') {
-            throw new MalformedGraphicsException(Lang::t('graphics.kitty.chunked_apc_unsupported'));
+            // More chunks follow — accumulate; later frames may override shared
+            // keys (per-chunk z/f are legal in the protocol).
+            $this->txParams = array_merge($this->txParams ?? [], $params);
+            $this->txPayload .= $payloadBase64;
+
+            return $after;
         }
 
-        $payload = self::decodeBase64($payloadBase64);
+        // m=0 (or absent): close any open transaction, or decode this frame
+        // as a standalone single-frame transmit. The closer's own attributes
+        // win (it is the last chunk), and the `m` chunking flag is framing
+        // state — it never belongs to the decoded image's metadata.
+        $params = array_merge($this->txParams ?? [], $params);
+        unset($params['m']);
+        $payload = self::decodeBase64($this->txPayload . $payloadBase64);
+        $this->txParams = null;
+        $this->txPayload = '';
 
         $this->images[] = $this->buildImage($params, $payload);
 

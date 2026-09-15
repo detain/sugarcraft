@@ -43,14 +43,21 @@ final class KittyRenderer implements Renderer
         $out = Ansi::kittyGraphicsBegin([
             'c' => $width,
             'r' => $effectiveHeight,
+            // f=100 declares the payload as PNG. An absent `f` means raw
+            // RGBA pixels in the Kitty protocol — harmless while this
+            // renderer emitted sixel-shaped DCS garbage, mandatory now
+            // that the APC frames actually activate the graphics path.
+            'f' => 100,
         ]);
 
         foreach ($chunks as $idx => $chunk) {
             $more = ($idx < $total - 1);
             $out .= Ansi::kittyGraphicsChunk($chunk, $more);
         }
-
-        $out .= Ansi::kittyGraphicsEnd();
+        if ($total === 0) {
+            // The final m=0 data chunk never ran — close the transaction.
+            $out .= Ansi::kittyGraphicsEnd();
+        }
 
         return $out;
     }
@@ -79,7 +86,9 @@ final class KittyRenderer implements Renderer
         $optsArr   = $opts->toArray();
 
         if ($opts->isPlace()) {
-            return $this->buildBegin([
+            // Place is a one-shot control frame — it must NOT open a
+            // chunked transmission (nothing would close it).
+            return Ansi::kittyGraphicsControl([
                 'a' => 'p',
                 'i' => $optsArr['i'],
                 'x' => $optsArr['x'],
@@ -121,7 +130,10 @@ final class KittyRenderer implements Renderer
         foreach ($chunks as $idx => $chunk) {
             $out .= Ansi::kittyGraphicsChunk($chunk, $idx < $total - 1);
         }
-        $out .= Ansi::kittyGraphicsEnd();
+        if ($total === 0) {
+            // The final m=0 data chunk never ran — close the transaction.
+            $out .= Ansi::kittyGraphicsEnd();
+        }
 
         return $out;
     }

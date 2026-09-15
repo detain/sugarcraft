@@ -234,13 +234,37 @@ final class KittyStreamTest extends TestCase
         self::assertSame(-2, $image->zIndex());
     }
 
-    public function testChunkedApcThrows(): void
+    public function testChunkedApcStitchesIntoOneImage(): void
     {
-        // Standard-APC continuation (`m=1`) is unsupported framing; reject rather
-        // than silently emit a stream of truncated partial images.
+        // The shape candy-mosaic emits since the ANSI audit fix: a begin
+        // frame ending in `,m=1;` (empty first data chunk), self-framed
+        // `m=1;` payload chunks, and a final `m=0;` closer. All three must
+        // reassemble into ONE image with the begin frame's attributes.
+        $png = Iterm2Stream::decode(Fixture::bytes('iterm2_red.iterm2'))->png();
+        $b64 = base64_encode($png);
+        $cut = intdiv(strlen($b64), 2);
+
+        $stream =
+            "\x1b_Ga=T,c=8,r=4,f=100,m=1;\x1b\\"
+            . "\x1b_Gm=1;" . substr($b64, 0, $cut) . "\x1b\\"
+            . "\x1b_Gm=0;" . substr($b64, $cut) . "\x1b\\";
+
+        $kitty = KittyStream::decode($stream);
+
+        self::assertSame(1, $kitty->count(), 'a chunked transaction is ONE image');
+        self::assertSame(8, $kitty->image()->cols(), 'attributes come from the begin frame');
+        self::assertSame(4, $kitty->image()->rows());
+        self::assertArrayNotHasKey('m', $kitty->image()->params(), 'the chunking flag is framing state, not image metadata');
+        self::assertSame($png, $kitty->image()->png());
+    }
+
+    public function testUnterminatedChunkedApcThrows(): void
+    {
+        // A transaction opened with `m=1` but never closed by `m=0` is a
+        // truncated transmission — fail loud rather than emit a partial image.
         $this->expectException(MalformedGraphicsException::class);
-        $this->expectExceptionMessage('not supported');
-        KittyStream::decode("\x1b_Gm=1;aGVsbG8=\x1b\\");
+        $this->expectExceptionMessage('missing its m=0 end marker');
+        KittyStream::decode("\x1b_Ga=T,c=8,r=4,m=1;\x1b\\" . "\x1b_Gm=1;aGVsbG8=\x1b\\");
     }
 
     /**

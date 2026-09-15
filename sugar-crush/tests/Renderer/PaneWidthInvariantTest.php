@@ -1247,9 +1247,10 @@ final class PaneWidthInvariantTest extends TestCase
      * What survives is the disagreement the sibling test's docblock names, and
      * it is not about clusters: `Ansi::strip()` — which `of()` measures through
      * — eats a two-byte escape whose second byte is an ECMA-48 Fe final
-     * (0x40-0x5f: `ESC \`, `ESC P`, `ESC M`), while `truncateAnsi()`'s scanner
+     * (0x40-0x5f: `ESC \`, `ESC M`), while `truncateAnsi()`'s scanner
      * passes through `ESC [` and `ESC ]` only and reads that byte as a visible
-     * cell. On its own that makes `truncateAnsi()` stop EARLY, which is a
+     * cell. (`ESC P` used to belong to that list; since the ANSI audit fix it
+     * opens a DCS string instead, so an unterminated one runs to end of row.) On its own that makes `truncateAnsi()` stop EARLY, which is a
      * short row, not an over-wide one. Combined with a following grapheme
      * Extend it goes the other way: measured over 400,000 calls on escape- and
      * cluster-bearing strings at budgets 1-10, the bound still broke 548 times,
@@ -1305,10 +1306,12 @@ final class PaneWidthInvariantTest extends TestCase
      * PHP version, because it is not about clusters at all.
      *
      * `Width::of()` measures `Ansi::strip($row)`, and `strip()` consumes a
-     * TWO-BYTE escape whose second byte is an ECMA-48 Fe final (0x40-0x5f —
-     * ESC-backslash, `ESC P`, `ESC M`) as zero cells. `truncateAnsi()`'s scanner
-     * passes through `ESC [` and `ESC ]` only, so it reads that second byte as
-     * one VISIBLE cell. Measured on `a` + ESC-backslash repeated ten times:
+     * TWO-BYTE escape whose second byte is an ECMA-48 Fe final that is not a
+     * string introducer (ESC-backslash, `ESC M`) — and, since the ANSI audit
+     * fix, a *terminated* DCS/OSC/APC string frame — as zero cells.
+     * `truncateAnsi()`'s scanner passes through `ESC [` and `ESC ]` only, so
+     * it reads those bytes as VISIBLE cells. Measured on `a` + ESC-backslash
+     * repeated ten times:
      *
      *     Width::of($row)            = 10  → the fast path accepts the row
      *     Width::truncateAnsi($row, 10) → 5 cells, 15 of the 30 bytes
@@ -1332,10 +1335,21 @@ final class PaneWidthInvariantTest extends TestCase
     {
         $fit = new \ReflectionMethod(Renderer::class, 'fitToPane');
 
-        foreach (["a\x1b\\", "a\x1bP", "a\x1bM"] as $unit) {
+        // Units are [fixture, label]. The bare `ESC P` unit that lived here
+        // until the ANSI audit fix (candy-core strip, defect #9) is GONE on
+        // purpose: `ESC P` is a DCS STRING OPENER, and an unterminated one
+        // now swallows the rest of the row instead of reading as a
+        // zero-width two-byte escape. The terminated DCS frame below keeps
+        // this test's actual subject — a zero-width-for-strip,
+        // visible-to-truncateAnsi escape — honest under the fixed strip.
+        $units = [
+            ["a\x1b\\", 'ESC \\'],
+            ["a\x1bP\x1b\\", 'ESC P … ST (terminated DCS)'],
+            ["a\x1bM", 'ESC M'],
+        ];
+        foreach ($units as [$unit, $escape]) {
             $row = str_repeat($unit, 10);
             $width = Width::of($row);
-            $escape = 'ESC ' . substr($unit, -1);
 
             self::assertSame(
                 10,

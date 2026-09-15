@@ -49,7 +49,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:mosaic-kitty-static-factory]** Superseded (candy-mosaic upstream track, ai/mosaic-graphics-upstream): `Mosaic::kitty()` now EXISTS as a force factory mirroring `Mosaic::iterm2()` — use it for kitty mode instead of hand-minting `new Mosaic(new KittyRenderer(), Capability::universal(), null, null, null)`. Raw-GD pixels likewise enter via `ImageSource::fromRgb($bytes, $w, $h)` without a PNG round-trip (see `Render/GraphicsRenderer.php`). Always check the actual candy-mosaic API rather than assuming naming symmetry.
 
-- **[pattern:kitty-uses-dcs-apc-not-osc]** The kitty graphics protocol uses DCS `\x1b_Ga=...` (not the OSC `\x1b]1337;` that iTerm2 uses). These are distinct protocols — kitty uses DCS APC sequences while iTerm2 uses OSC 1337.
+- **[pattern:kitty-uses-apc-not-dcs-not-osc]** The kitty graphics protocol uses APC (`\x1b_Ga=...`, xterm `ESC _`) — NOT DCS `\x1bP` (that introducer is sixel/DECSIXEL and other vendor strings) and NOT the OSC `\x1b]1337;` that iTerm2 uses. These are distinct protocols — kitty uses APC `G` frames while iTerm2 uses OSC 1337. (SugarCraft emitted the DCS form behind the wrong `kittyGraphicsBegin()` introducer until the ANSI audit fix #10 moved it onto real APC frames; candy-testing's `KittyStream` still decodes legacy DCS captures.)
 
 - **[pattern:graphics-renderer-cell-dimensions-always-1x1]** The graphics protocols fill the terminal with the image; they don't use a cell grid. cellDimensions returns [1,1] meaning "one virtual cell = the whole image".
 

@@ -70,7 +70,7 @@ candy-mosaic/src/
 
 - Each chunk emitted via `Ansi::kittyGraphicsChunk($chunk, $more)` where `$more=true` sets `m=1` (more data follows); final chunk sets `m=0`
 
-- Transmission: `Ansi::kittyGraphicsBegin(['c' => $width, 'r' => $effectiveHeight])` → chunk stream → `Ansi::kittyGraphicsEnd()`
+- Transmission: `Ansi::kittyGraphicsBegin(['c' => $width, 'r' => $effectiveHeight, 'f' => 100])` (opens the APC `G` transaction with `m=1`; `f=100` declares the PNG payload — an absent `f` would mean raw RGBA per the Kitty spec) → chunk stream, the last carrying `m=0` which closes it (`kittyGraphicsEnd()` emits an explicit empty `m=0;` closer frame)
 
 - Supports **alpha/transparency** (full RGBA PNG passed through)
 
