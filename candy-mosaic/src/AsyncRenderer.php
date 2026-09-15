@@ -16,8 +16,9 @@ use React\Promise\PromiseInterface;
  * E722 audit note about a "64 MiB stderr cap" has no referent here at all
  * (erratum: no such cap exists anywhere in candy-mosaic or its history —
  * the only external children in the lib are {@see \SugarCraft\Mosaic\Renderer\ChafaRenderer}'s
- * probe and render, and neither holds a stderr PIPE; the child's stderr is
- * inherited, so nothing is buffered and nothing needs capping).
+ * probe and render: render() spawns with fd 2 inherited; the probe's
+ * transient fd-2 pipe is closed before reaping — nothing buffers at either
+ * site, so no cap is warranted).
  *
  * Implement this to provide alternate async backends (e.g. a worker pool
  * or pcntl-fork-based process per render) — and inherit the tree's
