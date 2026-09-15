@@ -113,7 +113,10 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   UTF-8 byte, and the `?? $s` fallback then returns it **completely unstripped** —
   the classic fail-open, here reached by any mojibake title. Filter control bytes
   byte-wise (they are, by definition, below 0x80), and let the scanner, not a
-  regex, own what a control is.
+  regex, own what a control is. The same trap hides in a *pre-filter* written as
+  `preg_match('/[\x00-\x1f\x7f-\x9f]/', $s) === 1`: PCRE's `false` (any internal
+  failure) is not `1`, so the scanner is skipped and the input passes as safe.
+  `AnsiGuard` looks its bytes up with `strpbrk()` over a `ESCAPABLE_BYTES` set.
 - **`withSafeStyledTitle()` returns `$this` when sanitising leaves an empty
   string**, rather than setting a styled title that would render a blank row: the
   plain title is the sanitised path, so falling back to it is strictly better than

@@ -436,6 +436,9 @@ final class PosterGridTest extends TestCase
     {
         $g = $this->grid(50)->withItems([
             0 => new PosterCard('0', 'No url'),
+            // A card that names an empty url is not fetchable either — the default
+            // predicate's other branch.
+            9 => PosterCard::new('9', 'Blank url', ''),
             1 => PosterCard::new('1', 'Url, no art', 'https://cdn/1.png'),
             2 => PosterCard::new('2', 'Art already inlined', 'https://cdn/2.png')->withPoster('ansi'),
             3 => PosterCard::new('3', 'Art as an overlay', 'https://cdn/3.png')->withImage('bytes', 7),

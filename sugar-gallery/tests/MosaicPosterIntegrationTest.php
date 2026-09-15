@@ -58,8 +58,11 @@ final class MosaicPosterIntegrationTest extends TestCase
     private const COLUMNS = 3;
     private const CELL_PITCH = self::CARD_WIDTH + self::H_SPACING;
 
-    /** Rows one cell occupies vertically: poster + title row + the gap below. */
+    /** Rows one cell occupies: poster + title row + the blank row the frame pads to. */
     private const CELL_HEIGHT = self::POSTER_HEIGHT + 2;
+
+    /** Vertical pitch between the top of one cell row and the next (cell + gap). */
+    private const ROW_PITCH = self::CELL_HEIGHT + self::V_SPACING;
 
     /** Distinct fills per poster, so content-keyed caches can never dedup two cells. */
     private const PALETTE = [
@@ -103,13 +106,18 @@ final class MosaicPosterIntegrationTest extends TestCase
 
         // Alignment and skeleton counts are bookkeeping: a render of nine blank
         // rows would satisfy every assertion above. The half-block renderer paints
-        // the top half of each cell, so its own glyph must be in each reserved box.
+        // the top half of every cell it is given, so its own glyph must appear in
+        // every reserved row — which also pins vertical position, not merely
+        // "somewhere in the box" (the real pitch is cell height + vSpacing; a band
+        // computed one row low would read the blank gap row and fail here).
         foreach ([0, 1, 2, 3, 4, 5] as $index) {
-            self::assertStringContainsString(
-                "\u{2580}",
-                $this->posterBand($frame, $index),
-                'cell ' . $index . ' must carry the half-block the renderer produced',
-            );
+            foreach ($this->posterBand($frame, $index) as $row => $line) {
+                self::assertStringContainsString(
+                    "\u{2580}",
+                    $line,
+                    'cell ' . $index . ' poster row ' . $row . ' must carry the half-block the renderer produced',
+                );
+            }
         }
     }
 
@@ -131,8 +139,8 @@ final class MosaicPosterIntegrationTest extends TestCase
         // Both renderers filled the same box, but with their own pixels: quarter
         // block paints whole cells, so it must show its glyph and not half's.
         $band = $this->posterBand($quarter, 4);
-        self::assertStringContainsString("\u{2588}", $band, 'the quarter-block render must reach the frame, not blank space');
-        self::assertStringNotContainsString("\u{2580}", $band, 'quarter block is not half block wearing a hat');
+        self::assertStringContainsString("\u{2588}", $band[0], 'the quarter-block render must reach the frame, not blank space');
+        self::assertStringNotContainsString("\u{2580}", implode('', $band), 'quarter block is not half block wearing a hat');
     }
 
     public function testOversizedRenderIsClippedToTheReservedCell(): void
@@ -185,9 +193,9 @@ final class MosaicPosterIntegrationTest extends TestCase
 
         // The delta says one cell stopped being a skeleton; the bands say it was
         // THIS one — an off-by-one splice would satisfy the count and the title.
-        self::assertStringContainsString("\u{2580}", $this->posterBand($afterFrame, 0), 'index 0 now holds the poster');
-        self::assertStringNotContainsString("\u{2580}", $this->posterBand($afterFrame, 1), 'index 1 is untouched');
-        self::assertStringContainsString('░', $this->posterBand($afterFrame, 1), 'index 1 is still a skeleton');
+        self::assertStringContainsString("\u{2580}", $this->posterBand($afterFrame, 0)[0], 'index 0 now holds the poster, starting at the top row of its box');
+        self::assertStringNotContainsString("\u{2580}", implode('', $this->posterBand($afterFrame, 1)), 'index 1 is untouched');
+        self::assertStringContainsString('░', $this->posterRow($afterFrame, 1, 0), 'index 1 is still a skeleton');
         self::assertStringStartsWith(
             '▸ First',
             Width::takeAnsi(explode("\n", $afterFrame)[self::POSTER_HEIGHT], self::CELL_PITCH),
@@ -222,7 +230,10 @@ final class MosaicPosterIntegrationTest extends TestCase
                 $bytes = $mosaic->render($this->source($index), self::CARD_WIDTH, self::POSTER_HEIGHT);
                 self::assertStringContainsString($magic, $bytes, $protocol . ' must really produce pixel bytes to leak');
                 $placed = $layer->placeTracked($bytes, self::CARD_WIDTH, self::POSTER_HEIGHT);
-                self::assertNotNull($placed->imageId, $protocol . ' must report the id it assigned');
+                // The marker assertions below address marker($index): pin the id
+                // scheme here so an upstream change surfaces as this failure rather
+                // than as a confusing "wrong marker in cell" message.
+                self::assertSame($index, $placed->imageId, $protocol . ' must assign ids in placement order from 0');
 
                 $cards[$index] = PosterCard::new((string) $index, 'Item ' . $index)->withImage($bytes, $placed->imageId);
                 self::assertTrue($cards[$index]->hasPoster(), 'an overlay fill counts as loaded');
@@ -237,7 +248,7 @@ final class MosaicPosterIntegrationTest extends TestCase
             // would paint the wrong poster over the right cell once the runtime
             // resolves it, and no amount of frame-width checking catches that.
             foreach ([0, 1, 2] as $index) {
-                $band = $this->posterBand($frame, $index);
+                $band = implode('', $this->posterBand($frame, $index));
                 self::assertStringContainsString(ImageOverlay::marker($index), $band, $protocol . ' marker ' . $index . ' in its own cell');
                 self::assertStringNotContainsString(ImageOverlay::marker(($index + 1) % 3), $band, 'no neighbour marker may land in this cell');
             }
@@ -422,31 +433,45 @@ final class MosaicPosterIntegrationTest extends TestCase
     }
 
     /**
-     * The grid's alignment contract: every line of a frame is the same visual
-     * width, so an over- or under-sized poster can never shift a column.
+     * One visual row of the poster box of the cell at $index — row 0 is the row the
+     * poster really starts on, so a caller can pin vertical position and not just
+     * "somewhere in the box".
      */
+    private function posterRow(string $frame, int $index, int $row): string
+    {
+        $lines = explode("\n", $frame);
+        $left = ($index % self::COLUMNS) * self::CELL_PITCH;
+        $top = intdiv($index, self::COLUMNS) * self::ROW_PITCH;
+
+        return Width::dropAnsi(Width::takeAnsi($lines[$top + $row] ?? '', $left + self::CARD_WIDTH), $left);
+    }
+
     /**
      * The text of the cell at $index's poster box only, with the neighbouring
      * columns cut away, so an assertion about a cell cannot be satisfied by
      * content that merely appears somewhere in the same row.
      *
      * Slices by visual width (`Width`, not `substr`) because the frame is full of
-     * double-width glyphs and SGR runs.
+     * double-width glyphs and SGR runs. Rows are kept separate so a test can say
+     * *which* row of the box it means: a band flattened to one string tolerates the
+     * whole box drifting a row up or down.
+     *
+     * @return list<string> one entry per poster row, top first
      */
-    private function posterBand(string $frame, int $index): string
+    private function posterBand(string $frame, int $index): array
     {
-        $lines = explode("\n", $frame);
-        $left = ($index % self::COLUMNS) * self::CELL_PITCH;
-        $top = intdiv($index, self::COLUMNS) * self::CELL_HEIGHT;
-
-        $band = '';
-        for ($row = $top; $row < $top + self::POSTER_HEIGHT; $row++) {
-            $band .= Width::dropAnsi(Width::takeAnsi($lines[$row] ?? '', $left + self::CARD_WIDTH), $left);
+        $band = [];
+        for ($row = 0; $row < self::POSTER_HEIGHT; $row++) {
+            $band[] = $this->posterRow($frame, $index, $row);
         }
 
         return $band;
     }
 
+    /**
+     * The grid's alignment contract: every line of a frame is the same visual
+     * width, so an over- or under-sized poster can never shift a column.
+     */
     private function assertFrameIsAligned(string $frame): void
     {
         self::assertNotSame('', $frame);

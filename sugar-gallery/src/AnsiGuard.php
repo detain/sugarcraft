@@ -27,7 +27,6 @@ use InvalidArgumentException;
  * (`C2 9B` = U+009B), which mainstream terminals act on as if the `ESC` had been
  * spelled out.
  *
-
  * Two shapes of use, for the two kinds of call site:
  *
  *  - {@see assertSafe()} — fail fast, for a caller that *claims* the bytes are
@@ -49,6 +48,17 @@ final class AnsiGuard
 
     /** Byte that introduces every escape sequence. */
     private const ESC = "\x1b";
+
+    /**
+     * Every byte that can begin something a terminal acts on: C0, DEL, and the whole
+     * C1 band. The band does double duty, holding both the raw 8-bit controls and the
+     * second byte of each one re-encoded in UTF-8, which is what makes it a complete
+     * pre-filter: a string with none of these bytes cannot hide an escape sequence.
+     */
+    private const ESCAPABLE_BYTES = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+        . "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+        . "\x7f\x80\x81\x82\x83\x84\x85\x86\x87\x88\x89\x8a\x8b\x8c\x8d\x8e\x8f"
+        . "\x90\x91\x92\x93\x94\x95\x96\x97\x98\x99\x9a\x9b\x9c\x9d\x9e\x9f";
 
     private function __construct()
     {
@@ -170,10 +180,15 @@ final class AnsiGuard
      * CJK text does contain continuation bytes in that band (果 is `E6 9E 9C`), so
      * this filter only decides whether to run the scanner — {@see textRunEnd()}
      * is what keeps such sequences in the text run.
+     *
+     * A byte-set lookup rather than `preg_match()` on purpose: PCRE answers `false`
+     * on an internal failure, and against a `=== 1` test that reads as "nothing here
+     * needs escaping" — waving the input through unchecked. Same fail-open shape the
+     * lib's learnings warn about, bought for no benefit.
      */
     private static function carriesAnythingEscapable(string $ansi): bool
     {
-        return preg_match('/[\x00-\x1f\x7f-\x9f]/', $ansi) === 1;
+        return strpbrk($ansi, self::ESCAPABLE_BYTES) !== false;
     }
 
     /**
@@ -316,8 +331,11 @@ final class AnsiGuard
     }
 
     /**
-     * Length of the well-formed UTF-8 sequence starting at $start (1 for ASCII),
-     * or 0 when the bytes there are not one. The first continuation byte is checked
+     * Length of the well-formed multi-byte UTF-8 sequence starting at $start
+     * (2, 3 or 4), or 0 when the byte there is not such a lead. ASCII reports 0 as
+     * well and the caller advances it a single byte; do not "fix" this to return 1
+     * for ASCII — the RFC 3629 range check below only has meaning for a lead of two
+     * bytes or more, and would otherwise judge the byte following a plain letter. The first continuation byte is checked
      * against the RFC 3629 ranges, not merely `80–BF`, because that is what excludes
      * the over-long and surrogate forms: `E0 81 9B` is a lenient decoder's `ESC`, and
      * accepting it as a text sequence would hand an injection straight back to

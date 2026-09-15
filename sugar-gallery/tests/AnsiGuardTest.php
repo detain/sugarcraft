@@ -251,6 +251,12 @@ final class AnsiGuardTest extends TestCase
             'bell' => "\x07",
             'nul' => "\x00",
             'del' => "\x7f",
+            // Terminated spellings whose "tail survives" guarantee nothing else pins:
+            'raw dcs terminated' => "\x90secret\x9c",
+            'encoded osc terminated' => "\xc2\x9d8;;x\xc2\x9c",
+            'reverse index (Fe)' => "\eM",
+            '8-bit SCI single shot' => "\x9a",
+            'malformed csi prefix' => "\e[\e[32m",
         ];
 
         foreach ($hostile as $what => $payload) {
@@ -262,6 +268,26 @@ final class AnsiGuardTest extends TestCase
                 self::assertStringContainsString('after', $clean, $entry . ' ate the text after ' . $what);
             }
         }
+    }
+
+    /**
+     * An invalid 4-byte lead is opaque text and stays; what eats the tail behind it
+     * is the stray 0x90 that follows, exactly as a raw DCS control would anywhere
+     * else. Pinning the mechanism, so nobody "fixes" the lead handling by making a
+     * rejected sequence consume its own continuation bytes — that would turn inert
+     * mojibake into a payload eater.
+     */
+    public function testAnInvalidLongLeadStaysButAControlByteBehindItStillEatsItsPayload(): void
+    {
+        $dirty = "before\xf4\x90secret\x9cafter";
+
+        self::assertFalse(AnsiGuard::isSafe($dirty));
+        self::assertSame("before\xf4after", AnsiGuard::sanitize($dirty), 'the lead survives, the DCS payload does not');
+
+        // A well-formed sequence of the same length — and a lead that is not a lead
+        // at all — lose nothing that is not itself a control.
+        self::assertSame("before\xf4\x80\x80\x80after", AnsiGuard::sanitize("before\xf4\x80\x80\x80after"), 'a valid 4-byte sequence is text');
+        self::assertSame("before\xf5after", AnsiGuard::sanitize("before\xf5\x80\x80\x80after"), 'F5 is no lead; each 0x80 is a stray PAD and only removes itself');
     }
 
     public function testStripControlsRemovesStylingTooBecauseAPlainTitleCarriesNone(): void

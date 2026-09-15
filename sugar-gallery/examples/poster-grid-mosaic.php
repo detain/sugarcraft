@@ -125,7 +125,7 @@ heading('  1 · after the range fetch — nothing rendered yet');
 echo $grid->render() . "\n";
 
 // ---------------------------------------------------------------------------
-// 2. The promoted fetch policy: which cells does the owner actually queue?
+// 2.–3. The promoted fetch policy (which cells to queue), then the same grid painted.
 // ---------------------------------------------------------------------------
 
 // The DiskCache probe is a plain callable over the card — the grid knows nothing
@@ -155,7 +155,7 @@ echo $grid->render() . "\n";
 dim('  pending now: [' . implode(', ', $grid->indicesNeedingPoster(overscanRows: 1, isCached: $isCached)) . ']');
 
 // ---------------------------------------------------------------------------
-// 3. Scrolling away prunes the sparse map; the cells fall back to skeletons.
+// 4. Scrolling away prunes the sparse map; the cells fall back to skeletons.
 // ---------------------------------------------------------------------------
 
 // Grow the result set and let a second page land at the far end — the state of a
@@ -179,7 +179,7 @@ dim('  back at the top, page one is skeletons again — cheap to re-fetch, and t
 echo $pruned->home()->render() . "\n";
 
 // ---------------------------------------------------------------------------
-// 4. Pixel renderers: the bytes never enter the text frame, a marker does.
+// 5. Pixel renderers: the bytes never enter the text frame, a marker does.
 // ---------------------------------------------------------------------------
 
 $sixel = Mosaic::sixel();
@@ -214,7 +214,7 @@ if (!$sixel->isInline()) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. The styled-title trust boundary, both directions.
+// 6. The styled-title trust boundary, both directions.
 // ---------------------------------------------------------------------------
 
 heading('  6 · styled titles: guard or sanitize');
