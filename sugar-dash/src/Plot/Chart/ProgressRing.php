@@ -22,13 +22,22 @@ final class ProgressRing implements \SugarCraft\Dash\Foundation\Sizer
     private ?int $width = null;
     private ?int $sizerHeight = null;
 
+    /** Ratio in [0.0, 1.0] — enforced by the constructor, never re-checked downstream. */
+    private readonly float $ratio;
+
     public function __construct(
-        private readonly float $ratio,
+        float $ratio,
         private readonly int $radius = 4,
         private readonly bool $showPercentage = true,
         private readonly ?Color $filledColor = null,
         private readonly ?Color $emptyColor = null,
-    ) {}
+    ) {
+        // E733 (round 83) — the single clamp boundary. Every ratio enters the
+        // object through this constructor (new() factory, withRatio() wither,
+        // direct construction alike), so [0.0, 1.0] is parsed into trusted
+        // state exactly once here; render() and friends consume it raw.
+        $this->ratio = max(0.0, min(1.0, $ratio));
+    }
 
     /**
      * Create a new progress ring with default styling.
@@ -38,7 +47,7 @@ final class ProgressRing implements \SugarCraft\Dash\Foundation\Sizer
     public static function new(float $ratio): self
     {
         return new self(
-            ratio: max(0.0, min(1.0, $ratio)),
+            ratio: $ratio,
             radius: 4,
             showPercentage: true,
             filledColor: Color::hex('#874BFD'),
@@ -65,7 +74,9 @@ final class ProgressRing implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function render(): string
     {
-        $ratio = max(0.0, min(1.0, $this->ratio));
+        // Ratio was parsed into trusted [0.0, 1.0] state by the constructor
+        // (the single clamp boundary) — render reads it raw.
+        $ratio = $this->ratio;
         $diameter = $this->radius * 2;
         $centerX = $this->radius;
         $centerY = $this->radius;
@@ -178,8 +189,9 @@ final class ProgressRing implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withRatio(float $ratio): self
     {
+        // The constructor clamps — no re-clamp here (E733 single boundary).
         return new self(
-            ratio: max(0.0, min(1.0, $ratio)),
+            ratio: $ratio,
             radius: $this->radius,
             showPercentage: $this->showPercentage,
             filledColor: $this->filledColor,

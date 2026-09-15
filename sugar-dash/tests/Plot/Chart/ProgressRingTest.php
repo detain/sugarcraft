@@ -116,6 +116,59 @@ final class ProgressRingTest extends TestCase
         $this->assertSame(0, $emptyCount);
     }
 
+    /**
+     * E733 (round 83) edge pin: the new() factory used to carry its own clamp
+     * on top of the constructor's. With the single boundary shipped, a ratio
+     * outside [0.0, 1.0] reaching new() must STILL land clamped — same visible
+     * labels " 0% " / " 100% " (the padded forms dodge the substring trap that
+     * " 100% " itself contains "0%").
+     */
+    public function testNewFactoryClampsThroughConstructorBoundary(): void
+    {
+        $this->assertStringContainsString(' 0% ', ProgressRing::new(-2.0)->render());
+        $this->assertStringNotContainsString('●', ProgressRing::new(-2.0)->render());
+        $this->assertStringContainsString(' 100% ', ProgressRing::new(9.0)->render());
+        $this->assertStringNotContainsString('○', ProgressRing::new(9.0)->render());
+    }
+
+    /**
+     * E733 edge pin: withRatio() likewise dropped its private clamp — the
+     * constructor boundary owns it for every entry path, withers included.
+     */
+    public function testWithRatioClampsThroughConstructorBoundary(): void
+    {
+        $base = ProgressRing::new(0.5);
+
+        $below = $base->withRatio(-0.25);
+        $this->assertStringContainsString(' 0% ', $below->render());
+        $this->assertStringNotContainsString('●', $below->render());
+
+        $above = $base->withRatio(4.0);
+        $this->assertStringContainsString(' 100% ', $above->render());
+        $this->assertStringNotContainsString('○', $above->render());
+
+        // The wither still leaves its source untouched (immutability survives the fold).
+        $this->assertStringContainsString(' 50% ', $base->render());
+    }
+
+    /**
+     * E733 structural pin: "single clamp" is the deliverable, not a transient
+     * diff. Exactly one ratio clamp may exist in ProgressRing.php — re-spreading
+     * it into the factory, a wither, or render() reddens this census and points
+     * back at the constructor as the sole boundary.
+     */
+    public function testRatioClampExistsExactlyOnceInPlotChartProgressRingSource(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__, 3) . '/src/Plot/Chart/ProgressRing.php');
+        $this->assertNotSame('', $source, 'the census must actually read ProgressRing.php');
+
+        $this->assertSame(
+            1,
+            \substr_count($source, 'min(1.0,'),
+            'ProgressRing must clamp the ratio at exactly one boundary; every other site must trust parsed state',
+        );
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Percentage display
     // ═══════════════════════════════════════════════════════════════
