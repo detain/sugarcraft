@@ -112,6 +112,59 @@ final class GaugeCircleTest extends TestCase
         $this->assertNotSame('', $rendered);
     }
 
+    /**
+     * E733 (round 83) edge pin: the new() factory carried its own clamp on top
+     * of the constructor's; with the single boundary shipped, an out-of-range
+     * ratio reaching new() must STILL land clamped. The padded percentage
+     * labels " 0% " / " 100% " are the clamp-visible surface — their padding
+     * dodges the substring trap (" 100% " does not contain " 0% ").
+     */
+    public function testFactoryRatioIsClampedAtTheSoleBoundaryCircle(): void
+    {
+        $below = GaugeCircle::new(-2.0)->render();
+        $this->assertStringContainsString(' 0% ', $below);
+        $this->assertStringNotContainsString(' 100% ', $below);
+
+        $above = GaugeCircle::new(9.0)->render();
+        $this->assertStringContainsString(' 100% ', $above);
+        $this->assertStringNotContainsString(' 0% ', $above);
+    }
+
+    /**
+     * E733 edge pin: withRatio() likewise dropped its private clamp — the
+     * constructor boundary owns [0.0, 1.0] for every entry path, withers
+     * included (and preserveAllocation still re-applies the setSize).
+     */
+    public function testWithRatioCoercesThroughConstructorBoundaryCircle(): void
+    {
+        $base = GaugeCircle::new(0.5);
+
+        $this->assertStringContainsString(' 0% ', $base->withRatio(-0.25)->render());
+        $this->assertStringContainsString(' 100% ', $base->withRatio(4.0)->render());
+
+        // Immutability survives the fold.
+        $this->assertStringContainsString(' 50% ', $base->render());
+    }
+
+    /**
+     * E733 structural pin: exactly one ratio clamp may exist in
+     * GaugeCircle.php. The effectiveRadius allocation floor is max(3,
+     * intdiv(...)) — it carries no min(1.0, fingerprint — so the single
+     * min(1.0, is the constructor and nothing else. Re-spreading the ratio
+     * clamp into factory / wither / render reddens this census.
+     */
+    public function testRatioClampCountIsExactlyOneCircle(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__, 3) . '/src/Plot/Chart/GaugeCircle.php');
+        $this->assertNotSame('', $source, 'the census must actually read GaugeCircle.php');
+
+        $this->assertSame(
+            1,
+            \substr_count($source, 'min(1.0,'),
+            'GaugeCircle must clamp the ratio at exactly one boundary; every other site must trust parsed state',
+        );
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Label display
     // ═══════════════════════════════════════════════════════════════

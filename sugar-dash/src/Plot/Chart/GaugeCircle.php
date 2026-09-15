@@ -78,8 +78,11 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
         15 => '█',
     ];
 
+    /** Ratio in [0.0, 1.0] — enforced by the constructor, never re-checked downstream. */
+    private readonly float $ratio;
+
     public function __construct(
-        private readonly float $ratio,
+        float $ratio,
         private readonly int $radius = 6,
         private readonly bool $showNeedle = true,
         private readonly bool $showTicks = true,
@@ -92,7 +95,15 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
         // insertion a TypeError cascade (chart_v5_plan.md D2/D3 constraint).
         private readonly ?float $aspect = null,
         private readonly bool $smoothRim = false,
-    ) {}
+    ) {
+        // E733 (round 83) — the single clamp boundary, mirroring Gauge's E726
+        // fold. Every ratio enters through this constructor (new() factory,
+        // withRatio() wither, direct construction alike), so [0.0, 1.0] is
+        // parsed into trusted state exactly once here; render() and the
+        // smooth-rim sampler consume it raw. De-promotion keeps the parameter
+        // `float $ratio` in slot 1 — the positional call-sites above ride it.
+        $this->ratio = max(0.0, min(1.0, $ratio));
+    }
 
     /**
      * Create a new circular gauge with default styling.
@@ -102,7 +113,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
     public static function new(float $ratio): self
     {
         return new self(
-            ratio: max(0.0, min(1.0, $ratio)),
+            ratio: $ratio,
             radius: 6,
             showNeedle: true,
             showTicks: true,
@@ -167,7 +178,9 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function render(): string
     {
-        $ratio = max(0.0, min(1.0, $this->ratio));
+        // Ratio was parsed into trusted [0.0, 1.0] state by the constructor
+        // (the single clamp boundary) — render reads it raw.
+        $ratio = $this->ratio;
         $radius = $this->effectiveRadius();
         $diameter = ($radius * 2) + 1;
         $centerX = $radius;
@@ -520,8 +533,9 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withRatio(float $ratio): self
     {
+        // The constructor clamps — no re-clamp here (E733 single boundary).
         $clone = new self(
-            ratio: max(0.0, min(1.0, $ratio)),
+            ratio: $ratio,
             radius: $this->radius,
             showNeedle: $this->showNeedle,
             showTicks: $this->showTicks,

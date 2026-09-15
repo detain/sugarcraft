@@ -38,8 +38,11 @@ final class Meter implements \SugarCraft\Dash\Foundation\Sizer
      */
     private const NEEDLE = '❮';
 
+    /** Ratio in [0.0, 1.0] — enforced by the constructor, never re-checked downstream. */
+    private readonly float $ratio;
+
     public function __construct(
-        private readonly float $ratio,
+        float $ratio,
         private readonly int $meterHeight = 12,
         private readonly int $meterWidth = 5,
         private readonly bool $showNeedle = true,
@@ -48,7 +51,16 @@ final class Meter implements \SugarCraft\Dash\Foundation\Sizer
         private readonly ?Color $meterColor = null,
         private readonly ?Color $needleColor = null,
         private readonly ?Color $scaleColor = null,
-    ) {}
+    ) {
+        // E733 (round 83) — the single clamp boundary, mirroring Gauge's E726
+        // fold. Every ratio enters through this constructor (new() factory,
+        // withRatio() wither, direct construction alike), so [0.0, 1.0] is
+        // parsed into trusted state exactly once here; render() consumes it raw.
+        // The parameter stays `float $ratio` in slot 1: the 9-positional
+        // `new Meter(...)` test call-sites (MeterTest :100/:109) and any
+        // named-argument callers remain byte-compatible through de-promotion.
+        $this->ratio = max(0.0, min(1.0, $ratio));
+    }
 
     /**
      * Create a new analog meter with default styling.
@@ -58,7 +70,7 @@ final class Meter implements \SugarCraft\Dash\Foundation\Sizer
     public static function new(float $ratio): self
     {
         return new self(
-            ratio: max(0.0, min(1.0, $ratio)),
+            ratio: $ratio,
             meterHeight: 12,
             meterWidth: 5,
             showNeedle: true,
@@ -86,7 +98,9 @@ final class Meter implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function render(): string
     {
-        $ratio = max(0.0, min(1.0, $this->ratio));
+        // Ratio was parsed into trusted [0.0, 1.0] state by the constructor
+        // (the single clamp boundary) — render reads it raw.
+        $ratio = $this->ratio;
         $meterHeight = $this->meterHeight;
         $meterWidth = $this->meterWidth;
 
@@ -289,8 +303,9 @@ final class Meter implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withRatio(float $ratio): self
     {
+        // The constructor clamps — no re-clamp here (E733 single boundary).
         return new self(
-            ratio: max(0.0, min(1.0, $ratio)),
+            ratio: $ratio,
             meterHeight: $this->meterHeight,
             meterWidth: $this->meterWidth,
             showNeedle: $this->showNeedle,
