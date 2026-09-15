@@ -97,6 +97,29 @@ Same issue in `PngRenderer::buildWindowsTerminalWindow()` at line 299 — `$butt
 
 ---
 
+#### 26. ✅ `AnsiParser::applySgr()` corrupts an extended colour written with colon sub-parameters
+
+**File:** `src/AnsiParser.php` (`SgrStateHandler::applySgr()`)
+
+xterm carries a direct-colour SGR in two spellings: the flat `38;2;R;G;B` and
+the ECMA-48 §14.1.1 grouped `38:2:CS:R:G:B`, where `CS` is a colour-space id that
+emitters habitually leave empty. candy-ansi flattens both into one
+`list<int>` (an empty slot becomes the `-1` default marker), and `applySgr()`
+read that flattened list positionally — so `38:2::80:160:240` was decoded as
+`R=-1, G=80, B=160`, and `sprintf('%02x', -1)` produced sixteen hex digits:
+`#ffffffffffffffff50a0`. Every renderer downstream inherited the malformed
+value (`SvgRenderer:::37` writes `fill="{fg}"` verbatim).
+
+**FIXED (2026-09, wave-4 parsers):** `applySgr()` now consults
+`Parser::subparams()` and resolves a `38`/`48` parameter group on its own terms —
+mode, colour-space id, then the three components — falling back to the historic
+flat reading only when the group cannot yield a colour. Components and palette
+indices are coerced to 8 bits, so a `#rrggbb` is always exactly seven characters.
+Covered by `tests/AnsiParserColonSubparametersTest.php`, including the
+`fill="#50a0f0"` bytes the renderer emits.
+
+---
+
 ### Performance Issues
 
 #### 4. `AnsiParser::parse()` recreates the anonymous Handler class on every call

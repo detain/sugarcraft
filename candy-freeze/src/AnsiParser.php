@@ -17,6 +17,11 @@ use SugarCraft\Ansi\Parser\Parser;
  * underline). Background colours are passed through to segments for
  * per-segment rendering.
  *
+ * Both separator spellings are understood for the extended colours — the
+ * flat `38;2;R;G;B` and the ECMA-48 §14.1.1 grouped `38:2::R:G:B` form xterm
+ * documents — because the colour-space id slot in the grouped form is not a
+ * colour component.
+ *
  * Other ANSI sequences (CSI cursor moves, OSC, etc.) pass through
  * silently — they have no visible effect in a static SVG.
  *
@@ -60,6 +65,12 @@ final class AnsiParser
         $handler = new SgrStateHandler($state, $textBuf, $flush, $segments);
 
         $parser = new Parser($handler);
+        // The flattened `list<int>` a handler receives cannot distinguish
+        // `38:2::80:160:240` (one parameter group) from `38;2;80;160;240`, so
+        // the handler reads the parser's ECMA-48 sub-parameter flags to tell
+        // them apart. Binding after construction: the parser needs the handler,
+        // the handler needs the parser — neither can own the other's creation.
+        $handler->bindParser($parser);
         $parser->feed($line);
         $parser->flush();
         $flush();
@@ -104,12 +115,28 @@ final class SgrStateHandler implements Handler
     /** @var list<Segment> */
     private array $segments;
 
+    /**
+     * Parser whose sub-parameter flags accompany the current dispatch, or null
+     * when this handler is driven by something that reports no flags — in which
+     * case every sequence is read in its flat `;` spelling.
+     */
+    private ?Parser $parser = null;
+
     public function __construct(SgrState &$state, string &$textBuf, callable $flush, array &$segments)
     {
         $this->state = &$state;
         $this->textBuf = &$textBuf;
         $this->flush = $flush;
         $this->segments = &$segments;
+    }
+
+    /**
+     * Let this handler read {@see Parser::subparams()} while a CSI is in
+     * flight, so colon sub-parameters keep their grouping.
+     */
+    public function bindParser(Parser $parser): void
+    {
+        $this->parser = $parser;
     }
 
     public function printChar(string $rune): void
@@ -129,7 +156,7 @@ final class SgrStateHandler implements Handler
         }
 
         ($this->flush)();
-        $this->state = $this->applySgr($params, $this->state);
+        $this->state = $this->applySgr($params, $this->state, $this->parser?->subparams() ?? []);
     }
 
     public function escDispatch(int $_final, int $_intermediate): void
@@ -150,7 +177,11 @@ final class SgrStateHandler implements Handler
         // Interface required; SOS/PM/APC sequences not needed for SGR-only handler.
     }
 
-    private function applySgr(array $params, SgrState $cur): SgrState
+    /**
+     * @param list<int>  $params     Flattened SGR parameters; -1 marks an omitted one.
+     * @param list<bool> $subparams  Continuation flags from {@see Parser::subparams()}.
+     */
+    private function applySgr(array $params, SgrState $cur, array $subparams = []): SgrState
     {
         $fg = $cur->fg;
         $bg = $cur->bg;
@@ -196,34 +227,174 @@ final class SgrStateHandler implements Handler
                 $bg = AnsiParser::ANSI16[$p - 100 + 8] ?? null;
                 continue;
             }
-            if ($p === 38 && isset($params[$i + 1])) {
-                $mode = $params[$i + 1];
-                if ($mode === 5 && isset($params[$i + 2])) {
-                    $fg = AnsiParser::xterm256ToHex($params[$i + 2]);
-                    $i += 2;
-                    continue;
+            if (($p === 38 || $p === 48) && isset($params[$i + 1])) {
+                [$colour, $reached] = $this->extendedColour($params, $subparams, $i);
+                if ($colour !== null) {
+                    if ($p === 38) {
+                        $fg = $colour;
+                    } else {
+                        $bg = $colour;
+                    }
                 }
-                if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                    $fg = sprintf('#%02x%02x%02x', $params[$i + 2], $params[$i + 3], $params[$i + 4]);
-                    $i += 4;
-                    continue;
-                }
-            }
-            if ($p === 48 && isset($params[$i + 1])) {
-                $mode = $params[$i + 1];
-                if ($mode === 5 && isset($params[$i + 2])) {
-                    $bg = AnsiParser::xterm256ToHex($params[$i + 2]);
-                    $i += 2;
-                    continue;
-                }
-                if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
-                    $bg = sprintf('#%02x%02x%02x', $params[$i + 2], $params[$i + 3], $params[$i + 4]);
-                    $i += 4;
-                    continue;
-                }
+                $i = $reached;
+                continue;
             }
         }
         return new SgrState($fg, $bg, $bold, $italic, $underline);
+    }
+
+    /**
+     * Resolve an extended-colour parameter (38 foreground / 48 background) and
+     * report how far into the parameter list it reached.
+     *
+     * xterm ctlseqs defines both SGR spellings, and ECMA-48 §14.1.1 makes the
+     * second one legal:
+     *
+     *   `38;2;R;G;B`     flat — one component per parameter
+     *   `38:2:CS:R:G:B`  grouped — CS is a colour-space id, usually left empty
+     *   `38:5:N`         grouped 256-colour index
+     *
+     * Reading that colour-space id as the red component is exactly what turned
+     * `38:2::80:160:240` into a garbage 18-hex value, so a grouped parameter is
+     * parsed on its own terms and only falls back to the flat reading when the
+     * group cannot yield a colour of its own.
+     *
+     * @param list<int>  $params
+     * @param list<bool> $subparams
+     * @return array{0:?string,1:int} `#rrggbb` (null when unresolved) and the index the scan reached
+     */
+    private function extendedColour(array $params, array $subparams, int $start): array
+    {
+        $group = $this->parameterGroup($params, $subparams, $start);
+
+        if (count($group) > 1) {
+            $colour = self::colourFromGroup($group);
+            if ($colour !== null) {
+                return [$colour, $start + count($group) - 1];
+            }
+        }
+
+        return self::colourFromFlatParams($params, $start);
+    }
+
+    /**
+     * The parameter starting at `$start` plus every value its own `:` separator
+     * pulled along — i.e. one ECMA-48 §14.1.1 parameter group.
+     *
+     * @param list<int>  $params
+     * @param list<bool> $subparams
+     * @return list<int>
+     */
+    private function parameterGroup(array $params, array $subparams, int $start): array
+    {
+        $group = [$params[$start]];
+        for ($index = $start; ($subparams[$index] ?? false) === true; $index++) {
+            $group[] = $params[$index + 1] ?? -1;
+        }
+
+        return $group;
+    }
+
+    /**
+     * Colour carried by a single colon-separated parameter group.
+     *
+     * @param list<int> $group `38` (or `48`) followed by its sub-parameters
+     */
+    private static function colourFromGroup(array $group): ?string
+    {
+        $mode = $group[1];
+        $tail = array_slice($group, 2);
+
+        if ($mode === 5) {
+            foreach ($tail as $value) {
+                if ($value >= 0) {
+                    return self::paletteColour($value);
+                }
+            }
+            return null;
+        }
+
+        if ($mode !== 2) {
+            return null;
+        }
+
+        // Skip the colour-space id slot first; senders that leave it out
+        // entirely still resolve, because the fallback reads the same tail.
+        return self::rgbFrom(array_slice($tail, 1)) ?? self::rgbFrom($tail);
+    }
+
+    /**
+     * First three supplied components of a direct-colour group.
+     *
+     * @param list<int> $values
+     */
+    private static function rgbFrom(array $values): ?string
+    {
+        $components = [];
+        foreach ($values as $value) {
+            if ($value < 0) {
+                continue;
+            }
+            $components[] = $value;
+            if (count($components) === 3) {
+                return self::hex($components[0], $components[1], $components[2]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The flat `38;5;N` / `38;2;R;G;B` spelling, as it has always been read.
+     *
+     * @param list<int> $params
+     * @return array{0:?string,1:int}
+     */
+    private static function colourFromFlatParams(array $params, int $start): array
+    {
+        $mode = $params[$start + 1] ?? null;
+
+        if ($mode === 5 && isset($params[$start + 2])) {
+            return [self::paletteColour($params[$start + 2]), $start + 2];
+        }
+
+        if ($mode === 2 && isset($params[$start + 2], $params[$start + 3], $params[$start + 4])) {
+            return [
+                self::hex($params[$start + 2], $params[$start + 3], $params[$start + 4]),
+                $start + 4,
+            ];
+        }
+
+        return [null, $start];
+    }
+
+    /** An xterm-256 index, clamped into the table the renderer owns. */
+    private static function paletteColour(int $index): string
+    {
+        return AnsiParser::xterm256ToHex(self::component($index));
+    }
+
+    /**
+     * Assemble an `#rrggbb` triple, coercing each component to 8 bits.
+     *
+     * The parser caps a parameter at 65535 and `sprintf('%02x', …)` happily
+     * emits three digits, so one oversized (or omitted, hence -1) component was
+     * enough to produce an 18-character "colour" that no CSS engine accepts.
+     */
+    private static function hex(int $red, int $green, int $blue): string
+    {
+        return sprintf(
+            '#%02x%02x%02x',
+            self::component($red),
+            self::component($green),
+            self::component($blue),
+        );
+    }
+
+    /** A colour component is 8 bits; an omitted parameter defaults to 0. */
+    private static function component(int $value): int
+    {
+        return max(0, min(255, $value));
     }
 }
 
