@@ -22,6 +22,7 @@ PHP port of [charmbracelet/colorprofile](https://github.com/charmbracelet/colorp
 - **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
 - **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
 - **ColorProfile enum**: SSOT env-detection enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor) for libs that need raw profile values without constructing a Palette instance
+- **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoised for hot loops
 
 ## Install
 
@@ -80,6 +81,39 @@ $converted = Palette::convert($color, Palette::detect());
 $ansi256 = Palette::convert($color, Profile::ANSI256);
 $ansi    = Palette::convert($color, Profile::ANSI);
 ```
+
+## Perceptual Color Distance (opt-in)
+
+Default nearest-color matching stays Euclidean (RGB) for byte-for-byte back-compat.
+For perceptual matching — where blues, greens and near-greys rank correctly — opt in:
+
+```php
+use SugarCraft\Palette\Color;
+use SugarCraft\Palette\ColorMath;
+use SugarCraft\Palette\ColorDistance;
+use SugarCraft\Palette\DeltaE;
+use SugarCraft\Palette\NearestColor;
+
+// sRGB -> linear -> XYZ (D65) -> CIELAB
+$lab = ColorMath::toLab(64, 96, 128);            // ['l' => …, 'a' => …, 'b' => …]
+$lab = (new Color(64, 96, 128))->toLab();        // same thing, from a Color
+
+// ΔE metrics (CIE 15:2004; CIEDE2000 per Sharma/Wu/Dalal 2005)
+$d76  = DeltaE::cie76($lab, $other);
+$d94  = DeltaE::cie94($lab, $other);             // graphic-arts kL = 1
+$d00  = DeltaE::cie2000($lab, $other);
+
+// Nearest palette entry under a chosen strategy (default: EUCLIDEAN)
+$matcher = new NearestColor(ColorDistance::Cie2000);
+$index   = $matcher->ansi256(new Color(30, 120, 30));
+
+// Arbitrary palette (list or map), returns the key of the winner
+$key = $matcher->closest(new Color(12, 34, 56), $myColors);
+```
+
+The 256-entry and 16-entry palette Lab tables are memoised statically, so a warm
+CIEDE2000 search costs ~1 ms on a stock laptop — un-memoised, each search would
+recompute 256 sRGB→Lab conversions (≈40 % overhead; see `NearestColorTest`).
 
 ## Probe — Static Environment Detection
 
