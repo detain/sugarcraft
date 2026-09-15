@@ -23,6 +23,12 @@ final class Ansi
     public const PM  = "\x1b^";
     public const ST  = "\x1b\\";
     public const BEL = "\x07";
+    // C0 locking shifts (ansicode.txt:133-134 — "SO Shift Out, switch to G1"
+    // / "SI Shift In, switch to G0"): SO swaps G1 into GL, SI swaps G0 back.
+    // Needed to *use* a G1 SCS designation — designating without
+    // invoking renders nothing different.
+    public const SO  = "\x0e";
+    public const SI  = "\x0f";
 
     public const RESET     = 0;
     public const BOLD      = 1;
@@ -46,6 +52,15 @@ final class Ansi
     public const ALT_SCREEN_BUFFER   = 1049; // Alternate screen buffer
     public const BRACKETED_PASTE    = 2004; // Bracketed paste mode
     public const SYNCHRONIZED_OUTPUT = 2026; // Synchronized output
+
+    // SCS designator finals (ECMA-48 §25) — the four sets candy-vt's
+    // `Charset\Charsets` translates. Named here so an emitter call site can
+    // only spell a designator the receiver actually models; the pair of
+    // rosters is pinned equal by candy-vcr/tests/CoreEmitterRoundTripTest.php.
+    public const CHARSET_ASCII        = 'B'; // US ASCII (the default)
+    public const CHARSET_DEC_SPECIAL  = '0'; // DEC Special Graphics / line drawing
+    public const CHARSET_UK           = 'A'; // UK Latin-1 (0x23 = £)
+    public const CHARSET_NO_BREAK_SPACE = 'U'; // ISO Latin-1, 0xA0 renders as space
 
     public static function sgr(int ...$codes): string
     {
@@ -325,6 +340,150 @@ final class Ansi
     public static function scoRestore(): string
     {
         return self::CSI . 'u';
+    }
+
+    /**
+     * RIS — Reset to Initial State (`ESC c`).
+     *
+     * The full power-on reset. Distinct from {@see reset()}, which is only
+     * `SGR 0` (the pen): RIS also restores modes, margins, tab stops, the SCS
+     * designations and — on a physical terminal — the screen contents, which is
+     * why it is the right teardown for a crashed or replayed session. candy-vt
+     * models it as `ScreenHandler::hardReset()`, which like the hardware
+     * PRESERVES scrollback, the window title and the OSC 4 palette — matching
+     * charmbracelet/x/vt `Emulator.fullReset()`.
+     *
+     * ECMA-48 Fe escape (no parameters); VT510 ch. 4;
+     * ansicode.txt:307 ("RIS - Reset to Initial State (VT100 does a power-on
+     * reset)"); xterm ctlseqs "ESC c".
+     */
+    public static function ris(): string
+    {
+        return self::ESC . 'c';
+    }
+
+    /**
+     * DECALN — screen alignment test pattern (`ESC # 8`), filling the screen
+     * with 'E' so an operator can adjust focus/geometry.
+     *
+     * WIRE SPELLING MATTERS: VT100 and xterm define DECALN as an intermediate
+     * escape — `ESC`, intermediate `#` (0x23), final `8` (ansicode.txt:217) —
+     * which is what this emits. The `CSI # 8` spelling that circulates in some
+     * notes (including candy-vt's own docblock) is not a complete sequence: a
+     * CSI final byte must be 0x40-0x7E, so `ESC [ # 8` leaves the receiver
+     * still inside the CSI, where it consumes whatever the caller prints next
+     * as the final — eating output instead of testing alignment.
+     *
+     * Neither spelling executes the pattern in candy-vt yet: this repo's parser
+     * closes CsiIntermediate on 0x30-0x3F by dropping to Ground without a
+     * dispatch (candy-ansi Transitions.php:215), and EscapeIntermediate reports
+     * `ESC # 8` as escDispatch(0x38, 0x23), which the emulator treats as a
+     * non-designation and ignores. So the sequence is pinned by an exact-byte
+     * test here, and in the round-trip suite by the dispatch the shared parser
+     * actually reports for it.
+     *
+     * VT510 ch. 4 (DECALN); ansicode.txt:217 ("#8 * DECALN - Alignment
+     * display, fill screen with \"E\" to adjust focus").
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECALN)
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECALN)
+     */
+    public static function decaln(): string
+    {
+        return self::ESC . '#8';
+    }
+
+    /**
+     * SCS slot index (0-3, i.e. G0-G3) to its intermediate byte — the four
+     * `(`/`)`/`*`/`+` positions of ansicode.txt:222-246. Indexed access makes
+     * an out-of-range slot a plain null lookup rather than a silent default.
+     *
+     * @var array<int, string>
+     */
+    private const SCS_SLOTS = [0 => '(', 1 => ')', 2 => '*', 3 => '+'];
+
+    /**
+     * SCS — select a character set into one of the G0-G3 slots.
+     *
+     * The designation itself is state, not output: it changes how *later*
+     * graphics are translated. G0 is invoked by default; G1 needs
+     * {@see shiftOut()}, G2/G3 need a single shift. Recognised designators
+     * in candy-vt are `B` (US ASCII), `0` (DEC Special Graphics), `A` (UK),
+     * `U` (ISO Latin-1 no-break space); see {@see decSpecialGraphics()}.
+     *
+     * Fails fast on an unknown slot or a designator outside the Fp final range
+     * (see {@see isScsDesignator()}): such a string would desynchronise the
+     * receiver's parser, which is precisely the class of bug this emitter
+     * exists to prevent.
+     *
+     * ECMA-48 §25 (character set designation); ansicode.txt:222-249
+     * ("SCS - Select G0/G1/G2/G3 character set").
+     *
+     * @see https://vt100.net/docs/vt510-rm/chapter4.html (SCS)
+     */
+    public static function scs(int $slot, string $designator): string
+    {
+        $intermediate = self::SCS_SLOTS[$slot] ?? null;
+        if ($intermediate === null) {
+            throw new \InvalidArgumentException(Lang::t('ansi.invalid_scs_slot', ['slot' => $slot]));
+        }
+        if (strlen($designator) !== 1 || !self::isScsDesignator(\ord($designator))) {
+            throw new \InvalidArgumentException(Lang::t('ansi.invalid_scs_designator', [
+                'designator' => bin2hex($designator),
+            ]));
+        }
+
+        return self::ESC . $intermediate . $designator;
+    }
+
+    /** Designate into G0 — `ESC ( F`, the slot GL reads from by default. */
+    public static function scsG0(string $designator): string
+    {
+        return self::scs(0, $designator);
+    }
+
+    /** Designate into G1 — `ESC ) F`; invoke with {@see shiftOut()}. */
+    public static function scsG1(string $designator): string
+    {
+        return self::scs(1, $designator);
+    }
+
+    /** Designate into G2 — `ESC * F`; a VT220+ slot, invoked by SS2/LS2. */
+    public static function scsG2(string $designator): string
+    {
+        return self::scs(2, $designator);
+    }
+
+    /** Designate into G3 — `ESC + F`; a VT220+ slot, invoked by SS3/LS3. */
+    public static function scsG3(string $designator): string
+    {
+        return self::scs(3, $designator);
+    }
+
+    /**
+     * The classic VT100 line-drawing idiom: DEC Special Graphics into G0
+     * (`ESC ( 0`), after which `lqqqqk` paints `┌────┐` (ansicode.txt:223).
+     */
+    public static function decSpecialGraphics(): string
+    {
+        return self::scs(0, self::CHARSET_DEC_SPECIAL);
+    }
+
+    /** US ASCII into G0 (`ESC ( B`) — restores plain text after line drawing. */
+    public static function asciiCharset(): string
+    {
+        return self::scs(0, self::CHARSET_ASCII);
+    }
+
+    /** LS1 — Shift Out (`SO`, 0x0E): swap the G1 designation into GL. */
+    public static function shiftOut(): string
+    {
+        return self::SO;
+    }
+
+    /** LS0 — Shift In (`SI`, 0x0F): swap the G0 designation back into GL. */
+    public static function shiftIn(): string
+    {
+        return self::SI;
     }
 
     /** Set a horizontal tab stop at the current column (HTS). */
@@ -858,6 +1017,20 @@ final class Ansi
         if ($v < 0 || $v > 255) {
             throw new \InvalidArgumentException(Lang::t('ansi.component_out_of_range', ['label' => $label, 'value' => $v]));
         }
+    }
+
+    /**
+     * Is `$byte` a legal SCS designator? Character-set "Fp" finals occupy
+     * 0x30-0x7E (ansicode.txt:222-249) — wider than the 0x40-0x7E range of
+     * ordinary escape finals, because DEC's own sets live in the digits:
+     * `(0` line drawing, `(1`/`(2` alternate ROM, `(<` supplemental graphics.
+     * A byte below 0x30 is C0, which ABORTS the escape sequence rather than
+     * terminating it, so accepting one here would emit a string that leaves
+     * the receiver mid-sequence.
+     */
+    private static function isScsDesignator(int $byte): bool
+    {
+        return $byte >= 0x30 && $byte <= 0x7e;
     }
 
     /**

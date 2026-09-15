@@ -38,7 +38,12 @@
 
 ### Unimplemented extensions (not bugs — safely ignored, listed for completeness)
 
-DECCKM/DECCOLM/DECSCNM/DECARM/LNM/SRM modes · IRM insert mode · DECOM re-anchor on toggle · DECSCA/DECPRO protected cells · DECRQM/DECRPM + **any reply channel in candy-vt** (CPR/DA/DSR/XTWINOPS/kitty `?u` go unanswered — `feed(): void`) · XTSETALT/ICON (OSC 1) + `CSI 21 t` emitters · OSC 4/10/11/12 **query-side consumption**, OSC 21/22/52-consume/1337 · Sixel/DECDMA (framing-only discard is safe) · DECSLPP/DECSHORP/DECREQTPARM/DECTTC/DECPRO/DECID/DECHTS/DECCAHT/DECSHTS (`u` is currently *mis-captured* as SCORC → bug) · CTC/vertical tabs · urxvt-1015/pixel-1016/modifyOtherKeys/kitty-flag negotiation in candy-input · **all terminal probing in candy-palette** (`checkEscapeQueries()` is comments-only; `TerminalProbe.php:241-283`) incl. sixel `infocmp` regex that never matches real output (`:227`) · `ESC c`/DECCOLM/SCS/DECALN emitters in candy-core.
+DECCKM/DECCOLM/DECSCNM/DECARM/LNM/SRM modes · IRM insert mode · DECOM re-anchor on toggle · DECSCA/DECPRO protected cells · DECRQM/DECRPM + **any reply channel in candy-vt** (CPR/DA/DSR/XTWINOPS/kitty `?u` go unanswered — `feed(): void`) · XTSETALT/ICON (OSC 1) + `CSI 21 t` emitters · OSC 4/10/11/12 **query-side consumption**, OSC 21/22/52-consume/1337 · Sixel/DECDMA (framing-only discard is safe) · DECSLPP/DECSHORP/DECREQTPARM/DECTTC/DECPRO/DECID/DECHTS/DECCAHT/DECSHTS (`u` is currently *mis-captured* as SCORC → bug) · CTC/vertical tabs · urxvt-1015/pixel-1016/modifyOtherKeys/kitty-flag negotiation in candy-input · **all terminal probing in candy-palette** (`checkEscapeQueries()` is comments-only; `TerminalProbe.php:241-283`) incl. sixel `infocmp` regex that never matches real output (`:227`) · ✅ `ESC c` (RIS), SCS (`ESC ( ) * + F`, G0-G3) and DECALN emitters **added in candy-core**
+(`Ansi::ris()` / `scs()`+`scsG0()`-`scsG3()` / `decSpecialGraphics()` / `asciiCharset()` / `decaln()`, plus
+`shiftOut()`/`shiftIn()`), round-trip-guarded by `candy-vcr/tests/CoreEmitterRoundTripTest.php`. Note the emitter
+spells DECALN as `ESC # 8` (VT510/xterm) rather than the `CSI # 8` of this audit's notes — the CSI form never
+terminates. Still missing there: DECCOLM (`?3`) and DECKPAM/DECKPNM emitters (no consumer models them: candy-vt
+has no DECCOLM mode field and candy-input still decodes `ESC =`/`ESC >` as Alt+=/Alt+>), and an OSC 4 query emitter.
 
 ### Deferred / out of scope
 
