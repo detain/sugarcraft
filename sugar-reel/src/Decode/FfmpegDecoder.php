@@ -32,6 +32,26 @@ use SugarCraft\Reel\Support\BoundedReaper;
  * kernel buffer on noisy input — which then wedges our blocking fread(stdout) —
  * so we never hold an unread stderr pipe.
  *
+ * READS BLOCK — PUMP CONTRACT (E722, round 82). {@see next()} and
+ * {@see nextPng()} are plain blocking reads on the ffmpeg stdout pipe: they
+ * park the calling thread until one complete frame arrives or the pipe
+ * reaches EOF, with NO internal deadline. That is deliberate — an
+ * interactive decode tick has no request-timeout analogue to cap against
+ * (E646), and a null return is reserved by the {@see Decoder} contract for
+ * end-of-stream, so "not yet" cannot be represented without widening the
+ * interface. THE CALLER MUST BOUND (the r69 pump law, same shape as
+ * candy-pty's PosixPump): whoever drives next() owns the latency budget,
+ * because while fread parks, no timer, signal handler escape, or teardown
+ * door in this process runs. The one thing this class guarantees is that
+ * the child cannot pin a read forever once the caller reaches close():
+ * stderr goes to a file sink (a wedged writer cannot stall ffmpeg on a
+ * full stderr pipe) and close() walks the bounded {@see BoundedReaper}
+ * ladder — at most GRACE+TERM+KILL = 3.5s from entry to a dead child —
+ * after which every outstanding read sees EOF. A live-but-silent ffmpeg
+ * (network stream stalled mid-reconnect, input wedged on an unopened
+ * source) DOES park next() for as long as it lives; that is the caller's
+ * bound to enforce, not a defect to time around here.
+ *
  * The source may be a local path OR an http(s) URL — ffmpeg decodes a network
  * stream natively (so the console client can direct-play the server's signed
  * stream URL, bypassing any transcode). For URL sources the http/https protocol
@@ -267,6 +287,10 @@ final class FfmpegDecoder implements Decoder
 
     /**
      * @inheritDoc
+     *
+     * E722: blocks until one full rawvideo frame or EOF — see the class
+     * pump-contract paragraph. Null here means the stream ended (or the
+     * tail was a partial frame, discarded); it never means "not yet".
      */
     public function next(): ?RgbFrame
     {
@@ -316,6 +340,12 @@ final class FfmpegDecoder implements Decoder
      * slice off the one frame (keeping any trailing bytes of the next frame in
      * {@see $pngBuffer}), and return it as a PNG-payload RgbFrame. On EOF without a
      * complete frame the partial tail is discarded (matching the rawvideo path).
+     *
+     * E722: like the rawvideo path the read blocks — a live-but-silent ffmpeg
+     * parks this loop until close() takes the child down (class pump
+     * contract). The {@see MAX_PNG_BUFFER} ceiling bounds MEMORY against a
+     * malicious/huge-frame stream, not latency; tripping it is a fail-closed
+     * stream end, not a timeout.
      */
     private function nextPng(): ?RgbFrame
     {

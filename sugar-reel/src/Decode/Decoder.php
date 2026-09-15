@@ -38,6 +38,11 @@ interface Decoder
 
     /**
      * Return the next RgbFrame, or null if no more frames are available.
+     *
+     * E722: null means END OF STREAM, never "not yet". Implementations that
+     * sit behind a pipe (FfmpegDecoder) BLOCK here until a frame is whole or
+     * the child's output ends — the caller owns any latency bound (pump
+     * contract, {@see FfmpegDecoder} class docblock).
      */
     public function next(): ?RgbFrame;
 
