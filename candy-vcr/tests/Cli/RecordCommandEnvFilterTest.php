@@ -163,11 +163,25 @@ final class RecordCommandEnvFilterTest extends TestCase
     }
 
     /**
+     * E712 (round 82): an INVALID PCRE must fail loud. Before the fix every
+     * per-key preg_match() returned false, `=== 1` never fired, and a
+     * mistyped pattern silently disabled secret stripping — the exact
+     * leak this function exists to close. The CLI validates --env-regex at
+     * parse time; this public static is the API door and guards itself.
+     */
+    public function testFilteredHostEnvWithInvalidRegexFailsLoud(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('not a valid PCRE pattern');
+
+        RecordCommand::filteredHostEnv('(unclosed');
+    }
+
+    /**
      * The explicit $captureAll opt-in (behind --env-all) is the ONLY way to
      * capture the full env including secrets.
      */
-    public function testCaptureAllOptInCapturesSecrets(): void
-    {
+    public function testCaptureAllOptInCapturesSecrets(): void    {
         $fixtures = [
             'VCR_FIXTURE_SECRET_TOKEN' => 'now-kept',
             'VCR_FIXTURE_DB_PASSWORD'    => 'now-kept',

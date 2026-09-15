@@ -257,6 +257,8 @@ final class TapeToGif
                 throw new \RuntimeException("Failed to move rendered GIF into place: {$output}");
             }
         } catch (\Throwable $e) {
+            // E712 keep: failure-path tmp unlink must not mask $e (and the
+            // exclusive-create reservation means a vanished tmp is benign).
             @unlink($tmp);
             throw $e;
         }
@@ -444,6 +446,9 @@ final class TapeToGif
 
     private function cleanupDir(string $dir): void
     {
+        // E712 keep: glob()->unlink() TOCTOU races the encoder child's own
+        // teardown; a file already gone is the success case, and rmdir only
+        // fails when a straggler lingers — neither is actionable.
         $files = glob($dir . '/*') ?: [];
         foreach ($files as $file) {
             @unlink($file);

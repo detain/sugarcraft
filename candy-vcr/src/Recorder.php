@@ -235,6 +235,10 @@ final class Recorder implements RecorderInterface
         }
         $this->closed = true;
         if (is_resource($this->fh)) {
+            // E712 keep: close() is teardown and runs from finally on EVERY
+            // failure path; a double-close/EBADF warning raised here would
+            // mask the exception actually unwinding. The is_resource guard
+            // above already handles the meaningful case.
             @fclose($this->fh);
         }
         $this->fh = null;
@@ -303,6 +307,9 @@ final class Recorder implements RecorderInterface
             throw new \LogicException('candy-vcr: recorder stream is not open');
         }
         fwrite($this->fh, $json . "\n");
+        // E712 keep: per-event flush is best-effort — fclose() in close()
+        // (and the OS) backstops the buffer; refusing the flush mid
+        // recording must not abort the session.
         @fflush($this->fh);
     }
 }

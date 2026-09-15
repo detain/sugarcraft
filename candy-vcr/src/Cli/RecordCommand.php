@@ -404,6 +404,11 @@ final class RecordCommand implements Command
             // every other path. Swallow any late-restore failure.
         }
         if (self::$rescueMarkerPath !== '' && \file_exists(self::$rescueMarkerPath)) {
+            // E712 keep: the file_exists guard is advisory only — handler,
+            // shutdown-function and in-band finally race each other on this
+            // marker, so a vanished-but-for-this-path unlink is a normal
+            // outcome; a raw warning would print into a just-restored
+            // terminal.
             @\unlink(self::$rescueMarkerPath);
         }
         self::$rescueMarkerPath = '';
@@ -421,12 +426,24 @@ final class RecordCommand implements Command
         self::rescueRestore();
         if (\function_exists('pcntl_signal') && \function_exists('posix_kill') && \function_exists('posix_getpid')) {
             \pcntl_signal($signo, \SIG_DFL);
+            // E712 keep: self-kill while mid signal-dispatch; the return
+            // value is meaningless (the death IS the success path) and an
+            // EPERM/ESRCH warning here would smear onto the raw-mode host
+            // terminal this handler just cleaned up.
             @\posix_kill(\posix_getpid(), $signo);
             return;
         }
-        // Fallback if pcntl/posix are unavailable — exit with the
-        // conventional 128 + signal status so callers can still see
-        // what killed us.
+        // E712 justified exit-in-src (the ONLY one — census-pinned by
+        // tests/Cli/SrcExitCensusTest.php): async pcntl fallback for
+        // pcntl-present / ext-posix-absent hosts. The process must die NOW
+        // with the conventional 128 + signo status. This frame is not on
+        // the bin-side return-int channel: a throw would unwind into
+        // PosixPump::run()'s caller — RecordCommand::run()'s
+        // catch(\Throwable) turns it into exit 1 (losing the signum), and
+        // a signal landing after run() returned would go uncaught (exit
+        // 255). exit() is the only exit channel out of a signal handler;
+        // the sibling normal path above expresses the same death without
+        // exit() only because SIG_DFL re-raise lets the kernel do it.
         exit(128 + $signo);
     }
 
@@ -442,6 +459,11 @@ final class RecordCommand implements Command
     {
         self::$rescueSnapshot = null;
         if (self::$rescueMarkerPath !== '' && \file_exists(self::$rescueMarkerPath)) {
+            // E712 keep: the file_exists guard is advisory only — handler,
+            // shutdown-function and in-band finally race each other on this
+            // marker, so a vanished-but-for-this-path unlink is a normal
+            // outcome; a raw warning would print into a just-restored
+            // terminal.
             @\unlink(self::$rescueMarkerPath);
         }
         self::$rescueMarkerPath = '';
@@ -491,6 +513,7 @@ final class RecordCommand implements Command
      * @param bool $captureAll    When true, skip ALL filtering and capture the
      *                            full host environment (secrets included).
      * @return array<string, string>
+     * @throws \InvalidArgumentException when $regex is a non-empty invalid PCRE.
      */
     public static function filteredHostEnv(?string $regex = null, bool $captureAll = false): array
     {
@@ -511,11 +534,27 @@ final class RecordCommand implements Command
         // caller can never accidentally slurp secrets by passing ''.
         $effectiveRegex = ($regex === null || $regex === '') ? self::SECRET_KEY_REGEX : $regex;
 
+        // E712 fix (was a masked suppression): an invalid PCRE made every
+        // per-key preg_match() return false, `=== 1` never fired, and a
+        // mistyped pattern SILENTLY DISABLED secret stripping — the exact
+        // footgun this function exists to close. The CLI validates
+        // --env-regex at parse time; this public static is the API door,
+        // so the pattern probe lands here too and fails loud.
+        if (@\preg_match($effectiveRegex, '') === false) {
+            throw new \InvalidArgumentException(
+                "candy-vcr: env-filter pattern is not a valid PCRE pattern: {$effectiveRegex}",
+            );
+        }
+
         $kept = [];
         foreach ($env as $k => $v) {
             if (!\is_string($k) || $k === '' || !\is_string($v)) {
                 continue;
             }
+            // @ kept: the pattern is validated above, so a false here would
+            // be a PCRE runtime-limit event on a key name — degrading to
+            // "not a secret" (keep the var) beats aborting the whole
+            // capture; the probe suppression only silences that noise.
             if (!$captureAll && @\preg_match($effectiveRegex, $k) === 1) {
                 continue;
             }

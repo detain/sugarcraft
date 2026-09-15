@@ -140,6 +140,8 @@ final class Player
 
             return new JsonlFormat();
         } finally {
+            // E712 keep: finally-close must never throw/moan over a body
+            // exception already unwinding; the fopen above proved readable.
             @fclose($fh);
         }
     }
@@ -286,6 +288,9 @@ final class Player
 
         $verdict = $assertion->compare($expectedOutput, $actualOutput);
 
+        // E712 keep: ephemeral pipe teardown after their contents were
+        // fully drained into $actualOutput — a close failure here cannot
+        // change the verdict, and a warning would corrupt CLI stderr.
         @fclose($inputRead);
         @fclose($inputWrite);
         @fclose($output);
