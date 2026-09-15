@@ -1600,4 +1600,345 @@ final class EscapeDecoderTest extends TestCase
         // This doesn't match the modified arrow pattern (needs exactly 1 or 2 params)
         $this->assertCount(0, $events);
     }
+
+    // ─── Mouse 1015 (urxvt) / 1016 (SGR pixels) ──────────────────────────────
+    //
+    // The wave-4 audit claimed these were "collapsed or not distinguished" with
+    // the 1006 SGR path. Re-deriving from the current decoder proved the truth:
+    // 1006 (`ESC [ < …`) was already correct; the urxvt 1015 form (no '<') was
+    // silently dropped, and 1016 is byte-identical to 1006 (a stateless decoder
+    // cannot know the coordinates are pixels). These lock in each verdict.
+
+    public function testUrxvtMouse1015Press(): void
+    {
+        // urxvt bias: left press sends the X10 code 0 + 32 = 32, final byte 'M'.
+        $events = $this->decoder->decode("\x1b[32;100;200M");
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(MouseEvent::class, $events[0]);
+        $m = $events[0];
+        $this->assertSame(100, $m->x);
+        $this->assertSame(200, $m->y);
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $m->button);
+        $this->assertSame(MouseEvent::ACTION_PRESS, $m->action);
+    }
+
+    public function testUrxvtMouse1015Release(): void
+    {
+        // 1015 has no lowercase 'm' — release is the X10 low bits == 3 (3+32=35).
+        $events = $this->decoder->decode("\x1b[35;7;9M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(MouseEvent::ACTION_RELEASE, $m->action);
+        $this->assertSame(7, $m->x);
+        $this->assertSame(9, $m->y);
+    }
+
+    public function testUrxvtMouse1015UnbiasedButton(): void
+    {
+        // The audit brief's illustrative form carries the raw (unbiased) code 3.
+        // Normalisation must still classify it as a release, not a wheel/garbage.
+        $events = $this->decoder->decode("\x1b[3;100;200M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertInstanceOf(MouseEvent::class, $m);
+        $this->assertSame(MouseEvent::ACTION_RELEASE, $m->action);
+        $this->assertSame(100, $m->x);
+        $this->assertSame(200, $m->y);
+    }
+
+    public function testUrxvtMouse1015Scroll(): void
+    {
+        // Wheel-up = X10 code 64 (+32 = 96) → must be a scroll, never a left click.
+        $events = $this->decoder->decode("\x1b[96;10;5M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertTrue($m->isScroll());
+    }
+
+    public function testUrxvtMouse1015DoesNotCollideWithSgr1006(): void
+    {
+        // Feed the 1015 form and the 1006 form back-to-back: each must decode via
+        // its own branch (absence vs presence of '<') to independent coordinates.
+        $events = $this->decoder->decode("\x1b[32;100;200M\x1b[<1;10;20M");
+        $this->assertCount(2, $events);
+        [$a, $b] = $events;
+        $this->assertInstanceOf(MouseEvent::class, $a);
+        $this->assertInstanceOf(MouseEvent::class, $b);
+        $this->assertSame(100, $a->x);
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $a->button);
+        $this->assertSame(10, $b->x);
+        $this->assertSame(20, $b->y);
+        $this->assertSame(MouseEvent::BUTTON_MIDDLE, $b->button);
+        $this->assertSame(MouseEvent::ACTION_PRESS, $b->action);
+    }
+
+    public function testUrxvtMouse1015DisabledConsumesSilently(): void
+    {
+        // Mouse disabled → structurally consumed (byte-sync kept), no event, no
+        // remainder, the surrounding key survives, and the sequence is tallied as a
+        // silent drop (not a drained reply) via the exposed counter.
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableMouse: false));
+        $events = $decoder->decode("\x1b[32;10;5Mz");
+        $this->assertCount(1, $events);
+        $this->assertSame('z', $events[0]->key);
+        $this->assertSame('', $decoder->remainder());
+        $this->assertSame(1, $decoder->droppedUnknownCount());
+        $this->assertSame(0, $decoder->drainedReplyCount());
+    }
+
+    public function testUrxvtMouse1015Drag(): void
+    {
+        // Drag: X10 motion code 32 (+32 = 64). The +32 de-bias lands exactly on the
+        // motion bit, so getting 1015 wrong silently swaps every press for a drag —
+        // this is the single most fragile normalization outcome and is pinned here.
+        $events = $this->decoder->decode("\x1b[64;7;8M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $m->button);
+        $this->assertSame(MouseEvent::ACTION_DRAG, $m->action);
+        $this->assertSame(7, $m->x);
+        $this->assertSame(8, $m->y);
+    }
+
+    public function testUrxvtMouse1015ReleaseWithShiftModifier(): void
+    {
+        // Release + Shift: X10 code 3 | 4 = 7, biased +32 = 39. Verifies the
+        // modifier bits (bit2 shift) survive de-biasing and are not lost.
+        $events = $this->decoder->decode("\x1b[39;11;12M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(MouseEvent::ACTION_RELEASE, $m->action);
+        $this->assertTrue($m->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertSame(11, $m->x);
+        $this->assertSame(12, $m->y);
+    }
+
+    public function testUrxvtMouse1015SplitAcrossChunks(): void
+    {
+        // A 1015 report may straddle read boundaries — the partial must buffer, not
+        // leak as keys, then complete once the tail arrives (CALIBER_LEARNINGS:10).
+        $this->assertCount(0, $this->decoder->decode("\x1b[3"));
+        $this->assertCount(0, $this->decoder->decode('2;10'));
+        $this->assertNotSame('', $this->decoder->remainder());
+        $events = $this->decoder->decode("0;200M");
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(MouseEvent::class, $events[0]);
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $events[0]->button);
+        $this->assertSame(100, $events[0]->x);
+    }
+
+    public function testSgrPixels1016IsByteIdenticalToSgr1006(): void
+    {
+        // Mode 1016 reuses the exact 1006 wire ("same response format … in pixels").
+        // With no DECSET state the two are indistinguishable: feeding the identical
+        // bytes as a "1006 host" frame and a "1016 host" frame MUST yield field-for-
+        // field equal MouseEvents, with the coordinate field reported verbatim (a
+        // pixel value passes through unscaled). That equivalence is the actual claim
+        // under test — not merely that one decode happens to succeed.
+        $asSgr1006 = $this->decoder->decode("\x1b[<1;640;480M")[0];
+        $this->decoder->reset();
+        $asSgrPixels1016 = $this->decoder->decode("\x1b[<1;640;480M")[0];
+
+        $this->assertInstanceOf(MouseEvent::class, $asSgr1006);
+        $this->assertInstanceOf(MouseEvent::class, $asSgrPixels1016);
+        $this->assertSame($asSgr1006->x, $asSgrPixels1016->x);
+        $this->assertSame($asSgr1006->y, $asSgrPixels1016->y);
+        $this->assertSame($asSgr1006->button, $asSgrPixels1016->button);
+        $this->assertSame($asSgr1006->action, $asSgrPixels1016->action);
+        $this->assertSame($asSgr1006->modifiers->value(), $asSgrPixels1016->modifiers->value());
+        // Coordinate field is reported verbatim (pixels not scaled to cells).
+        $this->assertSame(640, $asSgrPixels1016->x);
+        $this->assertSame(480, $asSgrPixels1016->y);
+        $this->assertSame(MouseEvent::BUTTON_MIDDLE, $asSgrPixels1016->button);
+    }
+
+    // ─── modifyOtherKeys (xterm extended keys) ───────────────────────────────
+
+    public function testModifyOtherKeysCtrlLetter(): void
+    {
+        // Ctrl+'a': the 27; prefix + mods=5 (1+CTRL) + keysym 97 ('a').
+        $events = $this->decoder->decode("\x1b[27;5;97~");
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(KeyEvent::class, $events[0]);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+        $this->assertSame("\x1b[27;5;97~", $events[0]->raw);
+    }
+
+    public function testModifyOtherKeysShiftTab(): void
+    {
+        // Shift+Tab reported as modifyOtherKeys keysym 9 (Tab) with mods=2 (1+SHIFT).
+        $events = $this->decoder->decode("\x1b[27;2;9~");
+        $this->assertCount(1, $events);
+        $this->assertSame('Tab', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+    }
+
+    public function testModifyOtherKeysPunctuationNotMisNamedAsFunctionKey(): void
+    {
+        // Regression for the keysym-vs-kitty-codepoint conflation: X11 keysym 33 is
+        // ASCII '!' and 34 is '"'. The kitty legacy 11..34 F-key table used to shadow
+        // these into 'F19'/'F20'. Printable keysyms must report the literal glyph.
+        $bang = $this->decoder->decode("\x1b[27;1;33~")[0];
+        $this->assertSame('!', $bang->key);
+        $this->assertSame(0, $bang->modifiers->value());
+
+        $quote = $this->decoder->decode("\x1b[27;1;34~")[0];
+        $this->assertSame('"', $quote->key);
+
+        // Ctrl+'!' — the glyph survives, the modifier is orthogonal to it.
+        $ctrlBang = $this->decoder->decode("\x1b[27;5;33~")[0];
+        $this->assertSame('!', $ctrlBang->key);
+        $this->assertTrue($ctrlBang->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testModifyOtherKeysSpaceIsLiteralSpace(): void
+    {
+        // keysym 32 must match the plain-key path (a bare ' ' char), not 'Space'.
+        $events = $this->decoder->decode("\x1b[27;1;32~")[0];
+        $this->assertSame(' ', $events->key);
+        $plain = $this->decoder->decode(' ')[0];
+        $this->assertSame($plain->key, $events->key);
+    }
+
+    public function testModifyOtherKeysPreservesLetterCase(): void
+    {
+        // The keysym field carries the exact character; case must not be forced to
+        // lower (kitty's table maps both 65 and 97 to 'a'). keysym 65 -> 'A'.
+        $shiftA = $this->decoder->decode("\x1b[27;2;65~")[0];
+        $this->assertSame('A', $shiftA->key);
+        $this->assertTrue($shiftA->modifiers->includes(KeyModifier::SHIFT));
+
+        $plainA = $this->decoder->decode("\x1b[27;1;97~")[0];
+        $this->assertSame('a', $plainA->key);
+    }
+
+    public function testModifyOtherKeysZeroModsIsMalformed(): void
+    {
+        // The wire modifier field is 1 + bitmask; 0 would make fromXtermParam(0)
+        // compute (0-1) = -1 and fabricate every modifier. It must be dropped, not
+        // emitted with phantom SHIFT|ALT|CTRL|META, and the next key must survive.
+        $events = $this->decoder->decode("\x1b[27;0;97~k");
+        $this->assertCount(1, $events);
+        $this->assertSame('k', $events[0]->key);
+    }
+
+    public function testModifyOtherKeysAltDigit(): void
+    {
+        // Alt+'6': printable keysym outside the named table must decode to the
+        // character, not be dropped — mods=3 (1+ALT), keysym 54 ('6').
+        $events = $this->decoder->decode("\x1b[27;3;54~");
+        $this->assertCount(1, $events);
+        $this->assertSame('6', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+    }
+
+    public function testModifyOtherKeysPlainUnderLevelTwo(): void
+    {
+        // modifyOtherKeys=2 also wraps UNmodified keys (mods=1 => no modifier);
+        // it must reproduce the plain keystroke so typing does not break.
+        $events = $this->decoder->decode("\x1b[27;1;97~");
+        $this->assertCount(1, $events);
+        $this->assertSame('a', $events[0]->key);
+        $this->assertSame(0, $events[0]->modifiers->value());
+    }
+
+    public function testModifyOtherKeysDistinguishedFromPlainKey(): void
+    {
+        // The point of modifyOtherKeys: Ctrl+'a' (this frame) must be told apart
+        // from a bare 'a' keypress — a phantom collision is the bug being locked.
+        $ctrlA = $this->decoder->decode("\x1b[27;5;97~")[0];
+        $plainA = $this->decoder->decode('a')[0];
+        $this->assertSame($ctrlA->key, $plainA->key);
+        $this->assertTrue($ctrlA->modifiers->includes(KeyModifier::CTRL));
+        $this->assertFalse($plainA->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testModifyOtherKeysUnknownKeysymConsumed(): void
+    {
+        // A 27;-framed keysym we neither name nor print (e.g. 0xFFFF) is drained,
+        // never leaked, and the following key still decodes.
+        $events = $this->decoder->decode("\x1b[27;1;65535~k");
+        $this->assertCount(1, $events);
+        $this->assertSame('k', $events[0]->key);
+    }
+
+    // ─── Application keypad (DECKPAM SS3 table) ──────────────────────────────
+
+    public function testKeypadApplicationDigits(): void
+    {
+        // ansicode.txt:744-753 — Op..Oy are keypad 0..9 in application mode.
+        $expect = [
+            'p' => 'KP0', 'q' => 'KP1', 'r' => 'KP2', 's' => 'KP3', 't' => 'KP4',
+            'u' => 'KP5', 'v' => 'KP6', 'w' => 'KP7', 'x' => 'KP8', 'y' => 'KP9',
+        ];
+        foreach ($expect as $final => $name) {
+            $events = $this->decoder->decode("\x1bO" . $final);
+            $this->assertCount(1, $events, "SS3 O{$final} should yield one event");
+            $this->assertSame($name, $events[0]->key);
+            $this->assertSame(0, $events[0]->modifiers->value());
+        }
+    }
+
+    public function testKeypadDecimalAndMinus(): void
+    {
+        // ansicode.txt:742-743 — Ol is the decimal point, Om is minus.
+        $dec = $this->decoder->decode("\x1bOl");
+        $this->assertSame('KPDecimal', $dec[0]->key);
+        $minus = $this->decoder->decode("\x1bOm");
+        $this->assertSame('KPSubtract', $minus[0]->key);
+    }
+
+    public function testKeypadEnterStillPlainEnter(): void
+    {
+        // ESC O M already decoded to 'Enter' before this wave — locking it so the
+        // keypad additions cannot change that established name.
+        $events = $this->decoder->decode("\x1bOM");
+        $this->assertSame('Enter', $events[0]->key);
+    }
+
+    // ─── Already-handled items from the stale wave-4 list (lock-in) ───────────
+
+    public function testBacktabLockedIn(): void
+    {
+        // ESC [ Z was reported missing but is already handled (EscapeDecoder CSI Z
+        // branch) — this regression test locks it in.
+        $events = $this->decoder->decode("\x1b[Z");
+        $this->assertCount(1, $events);
+        $this->assertSame('Backtab', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertSame("\x1b[Z", $events[0]->raw);
+    }
+
+    public function testBacktabFollowedByBytesLockedIn(): void
+    {
+        // Backtab then ordinary keys in one chunk must partition at the final byte.
+        $events = $this->decoder->decode("\x1b[Zxy");
+        $this->assertCount(3, $events);
+        $this->assertSame('Backtab', $events[0]->key);
+        $this->assertSame('x', $events[1]->key);
+        $this->assertSame('y', $events[2]->key);
+    }
+
+    public function testX10MouseLockedIn(): void
+    {
+        // X10 (mode 1000) `ESC [ M <b> <x> <y>` was reported leaking as printable
+        // keys but is already handled — locking the 3-byte payload decode.
+        $events = $this->decoder->decode("\x1b[M" . chr(32) . chr(35) . chr(37));
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertInstanceOf(MouseEvent::class, $m);
+        $this->assertSame(MouseEvent::BUTTON_LEFT, $m->button);
+        $this->assertSame(MouseEvent::ACTION_PRESS, $m->action);
+        $this->assertSame(3, $m->x);
+        $this->assertSame(5, $m->y);
+    }
+
+    public function testX10MouseReleaseLockedIn(): void
+    {
+        // X10 release: button low bits == 3 (code 35 = 3 + 32 bias).
+        $events = $this->decoder->decode("\x1b[M" . chr(35) . chr(43) . chr(44));
+        $this->assertCount(1, $events);
+        $this->assertSame(MouseEvent::ACTION_RELEASE, $events[0]->action);
+    }
 }
