@@ -114,6 +114,16 @@ final class SessionTitleSanitizeTest extends TestCase
         self::assertStringNotContainsString('tmux', $out);
         self::assertStringNotContainsString('pwned', $out);
         $this->assertNoExecutableControl($out, 'truncated DCS');
+
+        // The 8-bit DCS introducer (`\x90`) is the exact one the old `\x1b`-only
+        // regex never matched; the unescaped payload must be discarded just as
+        // fail-closed.
+        $out8 = self::sanitizeTitle("Status \x90tmux;echo pwned");
+
+        self::assertStringContainsString('Status', $out8);
+        self::assertStringNotContainsString('tmux', $out8);
+        self::assertStringNotContainsString('pwned', $out8);
+        $this->assertNoExecutableControl($out8, 'truncated 8-bit DCS');
     }
 
     public function testTruncatedApcPayloadDoesNotLeak(): void
@@ -125,6 +135,14 @@ final class SessionTitleSanitizeTest extends TestCase
         self::assertStringContainsString('Label', $out);
         self::assertStringNotContainsString('sixel', $out);
         $this->assertNoExecutableControl($out, 'truncated APC');
+
+        // 8-bit APC introducer (`\x9f`) — the Kitty/sixel family smuggled
+        // without a single `\x1b`.
+        $out8 = self::sanitizeTitle("Label \x9fGi;sixelpayload");
+
+        self::assertStringContainsString('Label', $out8);
+        self::assertStringNotContainsString('sixel', $out8);
+        $this->assertNoExecutableControl($out8, 'truncated 8-bit APC');
     }
 
     public function testBenignTitleSurvivesUnchanged(): void
@@ -133,6 +151,22 @@ final class SessionTitleSanitizeTest extends TestCase
         $out = self::sanitizeTitle('Session: fix the login redirect bug');
 
         self::assertSame('Session: fix the login redirect bug', $out);
+
+        // Multi-byte UTF-8 (東京) is legitimate model output and MUST survive
+        // whole. `Ansi::strip()` treats a 0x80-0x9F byte as a lone C1 control
+        // only when it does not continue a well-formed sequence, so the 0x9D
+        // inside 東 (e6 9d b1) is kept. Asserted at byte level because the
+        // class-wide `assertNoExecutableControl` check intentionally flags any
+        // bare 0x80-0x9F — including a valid CJK continuation byte — so it
+        // cannot be reused here; we forbid only ESC, stray C0 and DEL.
+        $cjk = self::sanitizeTitle('Fix 東京 login');
+
+        self::assertSame('Fix 東京 login', $cjk);
+        self::assertSame(
+            0,
+            preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\x1b/', $cjk),
+            'CJK title leaked an ASCII control byte: ' . bin2hex($cjk)
+        );
     }
 
     public function testSevenBitSgrIsStrippedAndTextKept(): void

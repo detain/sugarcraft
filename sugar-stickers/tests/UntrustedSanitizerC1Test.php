@@ -65,12 +65,18 @@ final class UntrustedSanitizerC1Test extends TestCase
     private static function c1Vectors(): array
     {
         return [
-            '8-bit CSI cursor-move' => ["A\x9bH\x9b2Jdone", 'done'],
-            '8-bit CSI truecolor'   => ["\x9b38;2;255;0;0mRED", 'RED'],
-            '8-bit OSC title-set'   => ["A\x9d0;pwn\x07B", 'AB'],
-            'nested OSC-in-CSI'     => ["A\x1b]0;\x1b[31mB", 'AB'],
-            'truncated DCS'         => ["A\x1bPtmux;echo pwned", 'A'],
-            'truncated APC'         => ["A\x1b_Gkitty;sixelpayload", 'A'],
+            '8-bit CSI cursor-move'    => ["A\x9bH\x9b2Jdone", 'done'],
+            '8-bit CSI truecolor'      => ["\x9b38;2;255;0;0mRED", 'RED'],
+            '8-bit OSC title-set'      => ["A\x9d0;pwn\x07B", 'AB'],
+            'nested OSC-in-CSI'        => ["A\x1b]0;\x1b[31mB", 'AB'],
+            'nested 8-bit-wrapped OSC' => ["A\x9b\x1b]0;evil\x07B", 'AB'],
+            'truncated DCS'            => ["A\x1bPtmux;echo pwned", 'A'],
+            'truncated APC'            => ["A\x1b_Gkitty;sixelpayload", 'A'],
+            'truncated 8-bit DCS'      => ["A\x90tmux;evil", 'A'],
+            'truncated 8-bit APC'      => ["A\x9fGkitty;evil", 'A'],
+            'truncated 8-bit SOS'      => ["A\x98evilbody", 'A'],
+            'lone 8-bit ST'            => ["A\x9cB", 'AB'],
+            'truncated 8-bit CSI'      => ["A\x9b31", 'A'],
         ];
     }
 
