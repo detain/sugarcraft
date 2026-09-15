@@ -171,6 +171,54 @@ final class ScreenHandler implements Handler
     private ?bool $savedWrapPending = null;
 
     /**
+     * AUX alt-screen slot companions (DEC 1049): the SCS designations, GL
+     * invocation and DECOM state riding alongside the saved cursor/pen, so
+     * leaving the alt screen restores the FULL rendition context the VT500
+     * DECSC-style save implies, not just position + colour.
+     *
+     * @var array{0: string, 1: string, 2: string, 3: string}|null
+     */
+    private ?array $savedCharsets = null;
+    private ?int $savedGl = null;
+    private ?bool $savedOriginMode = null;
+
+    /**
+     * GENERAL save slot (VT500 §DECSC/§DECRC): the ESC 7/ESC 8 and CSI s/CSI u
+     * pair — ONE slot, deliberately shared, exactly as xterm merges DECSC and
+     * the SCO extended-cursor save. The position half lives on the Cursor
+     * itself (`savedRow`/`savedCol` via {@see Cursor::save()}); these fields
+     * complete the VT500 snapshot with the active SGR rendition, the GL/GR
+     * charset designations and the origin mode. `null` in {@see $generalSavedSgr}
+     * means "never saved" — DECRC then degrades to the historical position-only
+     * no-op instead of conjuring defaults.
+     *
+     * Independent of the AUX alt-screen slot above: the 1049 swap never
+     * restores or consumes these as ITS state — it only parks/unparks them
+     * alongside the Cursor's position half so each screen owns its own
+     * DECSC slot, exactly as xterm's per-screen `saved_cursor` does.
+     */
+    private ?Sgr $generalSavedSgr = null;
+    /** @var array{0: string, 1: string, 2: string, 3: string}|null */
+    private ?array $generalSavedCharsets = null;
+    private ?int $generalSavedGl = null;
+    private ?bool $generalSavedOriginMode = null;
+
+    /**
+     * The GENERAL slot's rendition companions parked while an alt screen is
+     * active. The DECSC save is PER SCREEN (xterm indexes its saved cursor
+     * by screen buffer): entering the alt screen hands DECRC a slot
+     * belonging to that screen — the fresh Cursor's, position half starting
+     * empty — not the main screen's. These fields mirror that by stashing
+     * the main screen's companions for the duration; the position half
+     * already lives on the Cursor objects being swapped. Unlike xterm (whose
+     * alt-slot save lingers after exit), the in-alt save is discarded when
+     * the alt screen dies — same hygiene as the alt buffer itself.
+     *
+     * @var null|array{0: ?Sgr, 1: ?array, 2: ?int, 3: ?bool}
+     */
+    private ?array $parkedGeneral = null;
+
+    /**
      * Synchronized-output (DEC 2026) mutation queue.
      * When $mode->syncUpdate is true, all buffer mutations are held here
      * and flushed atomically when the mode is disabled.
@@ -327,7 +375,7 @@ final class ScreenHandler implements Handler
                 $this->sgr = $this->sgrHandler->apply($params, $this->sgr, $this->currentSubparams());
                 return;
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
-            case 'H': case 'd': case 'f': case 's': case 'u':
+            case 'H': case 'd': case 'f':
                 $this->cursor = $this->cursorHandler->apply(
                     $final,
                     $params,
@@ -338,16 +386,50 @@ final class ScreenHandler implements Handler
                     $this->mode->originMode,
                 );
                 // A graphic-position change disarms the deferred wrap
-                // (xterm reset_wrapnext). DECSC ('s') only snapshots the
-                // position — the phantom cell survives it, and DECRC ('u')
-                // clears on the way back.
-                if ($finalChar !== 's') {
-                    $this->wrapPending = false;
-                }
+                // (xterm reset_wrapnext).
+                $this->wrapPending = false;
+                return;
+            case 's':
+                // CSI s — SCO save-cursor alias of DECSC: same GENERAL slot
+                // as ESC 7, and the phantom cell survives the snapshot (it
+                // is DECRC that clears on the way back).
+                $this->saveCursor();
+                return;
+            case 'u':
+                // CSI u — SCO restore-cursor alias of DECRC.
+                $this->restoreCursor();
                 return;
             case 'K': case 'J': case 'X': case 'P': case '@':
-                $pending = $this->mode->syncUpdate ? $this->pendingMutations : null;
-                $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $pending);
+                if ($finalChar === 'J' && ($params[0] ?? -1) === 3 && $intermediate === 0
+                    && ($prefix === 0 || $prefix === 0x3F /* '?' — xterm routes ED by Ps, private marker immaterial */)) {
+                    // ED 3 — "clear scrollback": the ring drains, the
+                    // visible screen and cursor are untouched. Extra params
+                    // (`CSI 3 ; Ps J`) are ignored — xterm has no defined
+                    // second param for ED 3. Xterm-side nuance NOT modelled:
+                    // xterm gates this branch on its `eraseSavedLines`
+                    // resource (default true; when false the sequence is a
+                    // total no-op) — this emulator has no scrollback-retention
+                    // setting, so the ring alone is the whole of the
+                    // scrollback feature and the clear always applies.
+                    // (candy-vcr VtParityTest: renderer has no ring at all.)
+                    // The drain is immediate even inside a DEC 2026 window —
+                    // the ring is history, not screen state, and has no
+                    // queue slot.
+                    $this->scrollback->clear();
+                    return;
+                }
+                // Synchronized output (DEC 2026): erases must join the REAL
+                // pending queue BY REFERENCE. Passing the array by value —
+                // the historical bug — made EraseHandler append into a
+                // throw-away copy, so every ED/EL/ECH/DCH/ICH issued inside
+                // a `CSI ?2026h … CSI ?2026l` window silently vanished on
+                // flush. Queue-ordering is preserved relative to queued
+                // putCell/attachCombiningChar mutations.
+                if ($this->mode->syncUpdate) {
+                    $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $this->pendingMutations);
+                } else {
+                    $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr);
+                }
                 // ECH erases from the phantom cell forward → disarm; EL/ED
                 // never touch the wrap flag (xterm leaves _wrapnext alone).
                 if ($finalChar === 'X') {
@@ -457,7 +539,7 @@ final class ScreenHandler implements Handler
         }
 
         match ($final) {
-            0x37 /* '7' */ => $this->cursor = $this->cursor->save(),
+            0x37 /* '7' */ => $this->saveCursor(),
             0x38 /* '8' */ => $this->restoreCursor(),
             0x44 /* 'D' */ => $this->index(),
             0x45 /* 'E' */ => $this->nextLine(),
@@ -487,11 +569,77 @@ final class ScreenHandler implements Handler
         $this->gl = 0;
     }
 
-    /** DECRC — ESC 8: position change, so the phantom cell is dropped. */
+    /**
+     * DECSC — ESC 7 / CSI s: snapshot the GENERAL save slot.
+     *
+     * VT500 §DECSC saves cursor position, active SGR rendition, the
+     * G0..G3 charset designations (SCS state) and DECOM. The position
+     * half rides on the Cursor value object (`savedRow`/`savedCol`), so
+     * the slot survives DECSTR/DECALN exactly as before; the remaining
+     * three halves land in the `generalSaved*` fields. The AUX alt-screen
+     * slot is untouched — the two saves are independent.
+     */
+    private function saveCursor(): void
+    {
+        $this->cursor = $this->cursor->save();
+        $this->generalSavedSgr = $this->sgr;
+        $this->generalSavedCharsets = $this->charsets;
+        $this->generalSavedGl = $this->gl;
+        $this->generalSavedOriginMode = $this->mode->originMode;
+    }
+
+    /**
+     * Stash the GENERAL slot's rendition companions at an alt-screen entry
+     * and start the alt screen with an EMPTY slot — matching the fresh
+     * Cursor the swap installs on the position half (xterm's saved cursor is
+     * per-screen). Counterpart of {@see unparkGeneralCompanions()}.
+     */
+    private function parkGeneralCompanions(): void
+    {
+        $this->parkedGeneral = [
+            $this->generalSavedSgr,
+            $this->generalSavedCharsets,
+            $this->generalSavedGl,
+            $this->generalSavedOriginMode,
+        ];
+        $this->generalSavedSgr = null;
+        $this->generalSavedCharsets = null;
+        $this->generalSavedGl = null;
+        $this->generalSavedOriginMode = null;
+    }
+
+    /** Hand the main screen's parked GENERAL companions back at alt-screen exit. */
+    private function unparkGeneralCompanions(): void
+    {
+        if ($this->parkedGeneral === null) {
+            return;
+        }
+        [$this->generalSavedSgr, $this->generalSavedCharsets, $this->generalSavedGl, $this->generalSavedOriginMode] = $this->parkedGeneral;
+        $this->parkedGeneral = null;
+    }
+
+    /**
+     * DECRC — ESC 8 / CSI u: restore the GENERAL save slot.
+     *
+     * A position change, so the phantom cell is dropped (VT500 also
+     * restores the DECARM wrap flag with it; this port keeps its
+     * established clear-on-move geometry). With no save on record the
+     * restore degrades to the historical position-only no-op — the
+     * pen, designations and origin mode stay as they are.
+     */
     private function restoreCursor(): void
     {
         $this->cursor = $this->cursor->restore();
         $this->wrapPending = false;
+        if ($this->generalSavedSgr === null) {
+            return;
+        }
+        $this->sgr = $this->generalSavedSgr;
+        /** @var array{0: string, 1: string, 2: string, 3: string} $sets */
+        $sets = $this->generalSavedCharsets;
+        $this->charsets = $sets;
+        $this->gl = $this->generalSavedGl ?? 0;
+        $this->mode = $this->mode->withOriginMode($this->generalSavedOriginMode ?? false);
     }
 
     /**
@@ -658,6 +806,18 @@ final class ScreenHandler implements Handler
 
         $this->scrollRegionTop = $top - 1;       // Convert to 0-indexed.
         $this->scrollRegionBottom = $bottom - 1;  // Convert to 0-indexed.
+
+        // VT510 §DECSTBM: "moves the cursor to column 1, line 1 of the
+        // page" — the margins set homes the cursor; xterm's CursorSet honours
+        // a live DECOM, so under origin mode the home lands on the region
+        // top instead (DECOM survives DECSTBM in both — it resets only on
+        // RIS/DECSTR). An invalid region took the early return above and
+        // homes nothing.
+        $this->cursor = $this->cursor
+            ->withRow($this->mode->originMode ? $this->scrollRegionTop : 0)
+            ->withCol(0);
+        // Column-home + row move: the phantom flag cannot survive it.
+        $this->wrapPending = false;
     }
 
     // ─── IL / DL (ECMA-48 insert/delete lines) ──────────────────────────────
@@ -707,10 +867,11 @@ final class ScreenHandler implements Handler
      *
      * Same region-clipping + column-home rules as {@see insertLines()}.
      * When the deletion starts exactly at the region top and the region
-     * spans the full width, the deleted rows fall into scrollback first
+     * covers the WHOLE screen, the deleted rows fall into scrollback first
      * — mirroring charmbracelet/x/vt `Screen.DeleteLine`'s
      * `scrollback.PushN` guard, so `less`-style scrolling up through
-     * deleted context keeps working.
+     * deleted context keeps working. A sub-region DL leaves the ring
+     * untouched: nothing crossed the screen edge (see {@see scrollUp()}).
      *
      * @param list<int> $params
      */
@@ -725,7 +886,7 @@ final class ScreenHandler implements Handler
         if ($row < $this->scrollRegionTop || $row > $this->scrollRegionBottom) {
             return;
         }
-        if ($row === $this->scrollRegionTop && $this->scrollRegionBottom === $this->buffer->rows - 1) {
+        if ($row === $this->scrollRegionTop && $this->regionIsFullScreen()) {
             $lines = min($count, $this->scrollRegionBottom - $row + 1);
             for ($i = 0; $i < $lines; $i++) {
                 $this->scrollback->push($this->rowAt($row + $i));
@@ -933,6 +1094,14 @@ final class ScreenHandler implements Handler
         $this->savedCursor = null;
         $this->savedSgr = null;
         $this->savedWrapPending = null;
+        $this->savedCharsets = null;
+        $this->savedGl = null;
+        $this->savedOriginMode = null;
+        $this->generalSavedSgr = null;
+        $this->generalSavedCharsets = null;
+        $this->generalSavedGl = null;
+        $this->generalSavedOriginMode = null;
+        $this->parkedGeneral = null;
         $this->pendingMutations = [];
     }
 
@@ -1041,8 +1210,19 @@ final class ScreenHandler implements Handler
             return;
         }
 
-        for ($i = 0; $i < $count; $i++) {
-            $this->scrollback->push($this->rowAt($this->scrollRegionTop + $i));
+        // Scrollback is the history of what ran off the TOP OF THE SCREEN.
+        // A scroll inside a strict DECSTBM sub-region (top > 0, or bottom
+        // short of the last row) shifts nothing off the screen edge, so it
+        // must not feed the ring — the old unconditional push let
+        // htop/tmux-style region redraws bury real history in placeholder
+        // rows (VT500 §scroll region hygiene; port spec pins the full-screen
+        // gate. xterm is slightly looser — a top-anchored region still
+        // feeds history — documented divergence, `top===0 &&
+        // bottom===rows-1` is the stricter, predictable half).
+        if ($this->regionIsFullScreen()) {
+            for ($i = 0; $i < $count; $i++) {
+                $this->scrollback->push($this->rowAt($this->scrollRegionTop + $i));
+            }
         }
 
         $this->scrollHandler->scrollUp(
@@ -1065,8 +1245,13 @@ final class ScreenHandler implements Handler
             return;
         }
 
-        for ($i = 0; $i < $count; $i++) {
-            $this->scrollback->push($this->rowAt($this->scrollRegionBottom - $i));
+        // Full-screen gate — see scrollUp(). RI at a sub-region top
+        // reverse-scrolls inside the region without touching the screen
+        // edge, so nothing enters (and nothing should) the ring.
+        if ($this->regionIsFullScreen()) {
+            for ($i = 0; $i < $count; $i++) {
+                $this->scrollback->push($this->rowAt($this->scrollRegionBottom - $i));
+            }
         }
 
         $this->scrollHandler->scrollDown(
@@ -1075,6 +1260,13 @@ final class ScreenHandler implements Handler
             $this->scrollRegionBottom,
             $count,
         );
+    }
+
+    /** True when the DECSTBM region spans the entire screen — the only geometry whose scroll feeds scrollback. */
+    private function regionIsFullScreen(): bool
+    {
+        return $this->scrollRegionTop === 0
+            && $this->scrollRegionBottom === $this->buffer->rows - 1;
     }
 
     /**
@@ -1093,7 +1285,13 @@ final class ScreenHandler implements Handler
 
     /**
      * Enter the alt screen (DEC 1049 set). Saves the current Buffer +
-     * Cursor + Sgr and swaps in a fresh blank Buffer of the same size.
+     * Cursor + Sgr + SCS designations + origin mode and swaps in a fresh
+     * blank Buffer of the same size. This is the AUX save slot — the
+     * DECSC/CSI s GENERAL slot is never consumed by it (xterm keeps the two
+     * independent; `less` saving with ESC 7 before entering alt must still
+     * find its rendition on the way back). The companions only PARK for the
+     * duration so the alt screen starts with its own empty slot, matching
+     * xterm's per-screen saved cursor.
      * Idempotent — re-entering while already in alt mode is a no-op.
      */
     public function enterAltScreen(): void
@@ -1101,10 +1299,14 @@ final class ScreenHandler implements Handler
         if ($this->mode->isAltScreen()) {
             return;
         }
+        $this->parkGeneralCompanions();
         $this->savedBuffer = $this->buffer;
         $this->savedCursor = $this->cursor;
         $this->savedSgr = $this->sgr;
         $this->savedWrapPending = $this->wrapPending;
+        $this->savedCharsets = $this->charsets;
+        $this->savedGl = $this->gl;
+        $this->savedOriginMode = $this->mode->originMode;
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
         $this->cursor = new Cursor(visible: $this->cursor->visible);
         $this->wrapPending = false;
@@ -1114,21 +1316,28 @@ final class ScreenHandler implements Handler
 
     /**
      * Leave the alt screen (DEC 1049 reset). Restores the saved Buffer
-     * + Cursor + Sgr. No-op if not currently in alt mode.
+     * + Cursor + Sgr + SCS + origin mode. No-op if not currently in alt mode.
      */
     public function leaveAltScreen(): void
     {
         if ($this->mode->altScreenVariant !== Mode::ALT_FULL || $this->savedBuffer === null) {
             return;
         }
+        $this->unparkGeneralCompanions();
         $this->buffer = $this->savedBuffer;
         $this->cursor = $this->savedCursor ?? $this->cursor;
         $this->sgr = $this->savedSgr ?? Sgr::empty();
         $this->wrapPending = $this->savedWrapPending ?? false;
+        $this->charsets = $this->savedCharsets ?? $this->charsets;
+        $this->gl = $this->savedGl ?? $this->gl;
+        $this->mode = $this->mode->withOriginMode($this->savedOriginMode ?? $this->mode->originMode);
         $this->savedBuffer = null;
         $this->savedCursor = null;
         $this->savedSgr = null;
         $this->savedWrapPending = null;
+        $this->savedCharsets = null;
+        $this->savedGl = null;
+        $this->savedOriginMode = null;
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
     }
 
@@ -1174,6 +1383,9 @@ final class ScreenHandler implements Handler
         if ($this->mode->altScreenVariant === Mode::ALT_CURSOR_ONLY) {
             return;
         }
+        if (!$this->mode->isAltScreen()) {
+            $this->parkGeneralCompanions();
+        }
         $this->savedCursor = $this->cursor;
         $this->savedWrapPending = $this->wrapPending;
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
@@ -1191,6 +1403,7 @@ final class ScreenHandler implements Handler
         if ($this->mode->altScreenVariant !== Mode::ALT_CURSOR_ONLY || $this->savedCursor === null) {
             return;
         }
+        $this->unparkGeneralCompanions();
         $this->cursor = $this->savedCursor;
         $this->wrapPending = $this->savedWrapPending ?? false;
         $this->savedCursor = null;
@@ -1259,5 +1472,28 @@ final class ScreenHandler implements Handler
             $this->buffer->put($mutation['row'], $mutation['col'], $mutation['cell']);
         }
         $this->pendingMutations = [];
+    }
+
+    /**
+     * Deep-copy on clone: PHP's default semantics would leave the clone
+     * writing THROUGH into the original's grid and scrollback ring, so
+     * `clone $terminal` (the snapshot/rewind idiom every consumer reaches
+     * for) silently corrupted the state it was meant to preserve.
+     *
+     * Only the two mutable aggregates matter — {@see Buffer}'s grid and
+     * the alt-screen {@see Scrollback} ring (plus the parked main-screen
+     * buffer while in alt). Cursor, Sgr, Mode, Cell, Color and Hyperlink
+     * are immutable value objects: every mutation replaces rather than
+     * edits, so sharing them across clones is safe. Arrays
+     * (charsets/replies/tabStops/palette/pendingMutations) copy by value,
+     * and the objects inside them are immutable for the same reason.
+     */
+    public function __clone(): void
+    {
+        $this->buffer = clone $this->buffer;
+        $this->scrollback = clone $this->scrollback;
+        if ($this->savedBuffer !== null) {
+            $this->savedBuffer = clone $this->savedBuffer;
+        }
     }
 }

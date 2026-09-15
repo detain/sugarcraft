@@ -345,6 +345,8 @@ After cloning, the new `Terminal` has a fresh `Parser` in Ground state. Any in-f
 
 **Impact:** Expected behavior for immutable-with*() builders, but not documented. Could surprise callers who clone a terminal mid-stream.
 
+✅ **Fixed (w4-vt):** parse-state reset now documented on `Terminal::__clone()`; the REAL hazard under this heading is also gone — `clone $handler` was shallow, so the clone wrote THROUGH into the original's `Buffer` grid, `Scrollback` ring and parked alt-screen buffer. `ScreenHandler::__clone()` deep-copies the mutable aggregates (immutable value objects stay shared); pinned by `tests/CloneIsolationTest.php`.
+
 ---
 
 ## Missing Features
@@ -366,6 +368,8 @@ The full `Terminal\Terminal` class has no `focusEvents()` method. Consumers who 
 `Scrollback` has no `clear()` method. The only way to clear scrollback is via `Terminal::withScrollbackSize()` (which creates a new empty Scrollback) or via the `CSI 3 J` erase sequence routed through `EraseHandler`. There's no direct public API to clear the scrollback on the current terminal instance.
 
 **Impact:** Consumers who want to programmatically clear scrollback without a CSI sequence have no clean API.
+
+✅ **Fixed (w4-vt):** `Scrollback::clear(): void` added (ring rewinds to pristine, capacity kept), and `CSI 3 J` is now actually implemented at the `ScreenHandler` level — it drains the ring and leaves the visible screen + cursor untouched (the `EraseHandler` grid path was a dead no-op branch before). xterm's `eraseSavedLines` resource gate documented inline; not modelled (no scrollback-retention setting exists here). Pinned by `tests/Handler/ScrollbackHygieneTest.php`.
 
 ---
 
@@ -574,9 +578,9 @@ The static `$table` is cached, so subsequent `Terminal` instances in the same pr
 | 15 | Low | Debug | `SgrHandler::step()` | Silent unknown SGR | Optional debug-mode warning |
 | 16 | Low | Documentation | `HandlerAdapter::printChar()` | Incomplete comment | Clarify Latin-1 pass-through rationale |
 | 17 | Low | API Inconsistency | Factory methods | `new()` vs `create()` naming | Standardize on `new()` across all entry-points |
-| 18 | Low | Correctness | `Terminal::__clone()` | Parse state lost on clone | Document that clone resets parse state |
+| 18 | Low | Correctness | `Terminal::__clone()` | Parse state lost on clone | ✅ Documented; clone now deep-copies Buffer/Scrollback (w4-vt) |
 | 19 | Missing | API | `Terminal::focusEvents()` | No public accessor | Add `focusEvents(): array` accessor |
-| 20 | Missing | API | `Scrollback` | No `clear()` method | Add `clear(): void` |
+| 20 | Missing | API | `Scrollback` | No `clear()` method | ✅ `clear(): void` + wired `CSI 3 J` (w4-vt) |
 | 21 | Missing | API | Root `Terminal` | No `flush()` method | Add `flush(): void` |
 | 22 | Missing | Immutability | `CellGrid::set()` | Not actually immutable | See issue #1 |
 | 23 | Missing | Scope | DCS dispatch | Not implemented | Document as deferred to v2 |
