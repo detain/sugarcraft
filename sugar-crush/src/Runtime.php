@@ -632,6 +632,14 @@ final class Runtime
      *                                / the `parallelToolDeadlineSeconds`
      *                                config key, validated in
      *                                {@see \SugarCraft\Crush\Backend\EngineBackend::parallelToolDeadlineSeconds()}
+     * @param ?int $maxOutputTokens E707 (round 81): the operator's per-request
+     *                                OUTPUT ceiling, threaded onto every
+     *                                CompleteRequest as $maxTokens. Null -
+     *                                the default - sends nothing extra and
+     *                                each provider keeps its own built-in
+     *                                default exactly as before: the key is
+     *                                opt-in precisely because raising a paid
+     *                                ceiling is the operator's call.
      */
     public function __construct(
         private ProviderInterface $provider,
@@ -639,6 +647,7 @@ final class Runtime
         private ?EnvironmentBlock $environmentBlock = null,
         private bool $parallelToolCalls = true,
         private int $parallelToolDeadlineSeconds = self::PARALLEL_TOOL_DEADLINE_SECONDS,
+        private ?int $maxOutputTokens = null,
     ) {}
 
     /**
@@ -1188,6 +1197,11 @@ final class Runtime
             tools: $app->tools ?: null,
             systemPrompt: $systemPrompt,
             systemBlocks: $systemBlocks,
+            // E707 (round 81): null until the operator sets `maxOutputTokens`,
+            // and null means "ask nothing" - each provider's existing
+            // `$request->maxTokens ?? DEFAULT` line then answers exactly as
+            // it did before this argument existed.
+            maxTokens: $this->maxOutputTokens,
             // Parsed at the boundary: the DTO's field is a ?\Closure because the
             // provider wrapper type-checks it, and `?\callable` would let an
             // array-callable through the signature only to fatal at the assign.
@@ -1316,6 +1330,12 @@ final class Runtime
             $reasoning = null;
             $usages = [];
 
+            // E707 (round 81): same per-attempt discipline as the four above -
+            // a length stop seen by a FAILED attempt must not stain the
+            // retried one that completed cleanly. ORed across the attempt's
+            // chunks because the stop arrives on one frame of many.
+            $lengthStopped = false;
+
             // True once a byte has been handed to $onToken. NOT "the only
             // channel out of this loop" - $onProgress is a second one since
             // E456 - but the only one carrying output a retry cannot undo. The
@@ -1385,6 +1405,10 @@ final class Runtime
                     }
                     $usages[] = self::foldUsage($response);
 
+                    // Folded alongside the usage above: whatever frame carried
+                    // the ceiling verdict, the turn is marked (E707, round 81).
+                    $lengthStopped = $lengthStopped || $response->truncated;
+
                     // Folded in above BEFORE being noted as a failure, so that
                     // when it is not retried the accumulated result is
                     // byte-identical to what this loop produced before the
@@ -1429,7 +1453,7 @@ final class Runtime
         // the two Vertex arms also carry their side's buckets on the carrier
         // (each priced to its own projection, never the whole document twice),
         // so sum() merges the split across the pair as well as the totals.
-        yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages));
+        yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
 
         if ($toolCalls !== []) {
             foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest) as $msg) {
@@ -1534,6 +1558,9 @@ final class Runtime
             // them; {@see foldUsage()} keeps the projection shape for every
             // provider that still reports only totals.
             self::foldUsage($response),
+            // E707 (round 81): the batch answer states its own ending on the
+            // same carrier the content arrived on - forward it verbatim.
+            $response->truncated,
         );
 
         if ($response->toolCalls !== null && $response->toolCalls !== []) {

@@ -80,6 +80,22 @@ final class Message
          * {@see Usage}.
          */
         public readonly ?Usage $usage = null,
+        /**
+         * Whether the provider stopped this assistant turn at its OUTPUT
+         * ceiling rather than letting the reply finish - E707 (round 81).
+         * Carried across the {@see
+         * \SugarCraft\Crush\Backend\EngineBackend} conversion boundary like
+         * $reasoning, $imageBytes and $usage before it: the verdict exists on
+         * {@see \SugarCraft\Crush\Providers\CompleteResponse::$truncated} and
+         * this DTO is where Chat learns it, so the settle arm can append one
+         * transcript notice instead of letting a cut-off reply look complete.
+         *
+         * False means a clean end OR a provider whose wire could not report
+         * the stop - it is not a proof of cleanliness (same contract as the
+         * carrier field it comes from). EngineBackend ORs it across the steps
+         * of one agentic turn: any step that hit the ceiling marks the turn.
+         */
+        public readonly bool $lengthStopped = false,
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -205,6 +221,7 @@ final class Message
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
         );
     }
 
@@ -222,6 +239,7 @@ final class Message
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
         );
     }
 
@@ -244,6 +262,7 @@ final class Message
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
         );
     }
 
@@ -269,6 +288,7 @@ final class Message
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
         );
     }
 
@@ -294,6 +314,7 @@ final class Message
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
         );
     }
 
@@ -318,6 +339,7 @@ final class Message
             imageBytes: $imageBytes,
             imageProtocol: $imageProtocol,
             usage: $this->usage,
+            lengthStopped: $this->lengthStopped,
         );
     }
 
@@ -343,6 +365,32 @@ final class Message
             imageBytes: $this->imageBytes,
             imageProtocol: $this->imageProtocol,
             usage: $usage,
+            lengthStopped: $this->lengthStopped,
+        );
+    }
+
+    /**
+     * Attach (or clear, via false) the provider's "stopped at the output
+     * ceiling" verdict - see $lengthStopped's docblock. Used at the {@see
+     * \SugarCraft\Crush\Backend\EngineBackend} conversion seam alongside
+     * {@see withUsage()}'s, so the turn the fold judged is the turn the
+     * transcript labels.
+     */
+    public function withLengthStopped(bool $lengthStopped): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: $this->attachments,
+            toolCalls: $this->toolCalls,
+            toolResults: $this->toolResults,
+            pendingToolCallId: $this->pendingToolCallId,
+            reasoning: $this->reasoning,
+            imageBytes: $this->imageBytes,
+            imageProtocol: $this->imageProtocol,
+            usage: $this->usage,
+            lengthStopped: $lengthStopped,
         );
     }
 

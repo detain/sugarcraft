@@ -29,6 +29,19 @@ final readonly class CustomProvider implements ProviderInterface
 
     use SessionAffinity;
 
+    /**
+     * E707 (round 81): the `finish_reason` strings on this OpenAI-compatible
+     * wire that mark a capacity cut rather than a clean end. `length` is the
+     * protocol's own; `abort` is what the vLLM/SGLang-family servers this
+     * generic provider is routinely pointed at emit for the same event, the
+     * same pair the sglang port pins for its deployment. `tool_calls` and
+     * `stop` stay silent; `content_filter` is a safety end mislabeled by any
+     * "raise the ceiling" advice, so it is excluded deliberately.
+     *
+     * @var list<string>
+     */
+    private const TRUNCATED_FINISH_REASONS = ['length', 'abort'];
+
     public function __construct(
         private string $name,
         private string $baseUrl,
@@ -268,11 +281,23 @@ final readonly class CustomProvider implements ProviderInterface
                             // JSON parse failed, skip
                             continue;
                         }
-                        if (isset($data['choices'][0]['delta'])) {
+                        // E707 (round 81): read the stop value BEFORE the
+                        // delta gate - the Sglang law that a truncating end
+                        // can arrive on a frame carrying no content of its
+                        // own. When it does, a flag-only frame tells the fold
+                        // the reply was cut; when the closing frame also
+                        // carries a delta, parseChunk() rides the flag on it.
+                        $finishReason = $data['choices'][0]['finish_reason'] ?? null;
+                        $hasDelta = isset($data['choices'][0]['delta']);
+                        if ($hasDelta) {
                             yield $this->parseChunk($data, $toolCallBuffer);
                         }
-                        if (isset($data['choices'][0]['finish_reason'])) {
+                        if ($finishReason !== null) {
                             // Stream ended
+                            if (!$hasDelta && in_array($finishReason, self::TRUNCATED_FINISH_REASONS, true)) {
+                                yield new CompleteResponse(content: '', truncated: true);
+                            }
+
                             return;
                         }
                     }
@@ -399,6 +424,9 @@ final readonly class CustomProvider implements ProviderInterface
         // parse instead of collapsing into the two projections below.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
 
+        // E707 (round 81): a `finish_reason` naming the output ceiling means
+        // the text stopped mid-thought at the server's budget; arm the
+        // carrier so the fold above the provider can surface it once.
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
@@ -406,6 +434,7 @@ final readonly class CustomProvider implements ProviderInterface
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
             usage: $usage,
+            truncated: in_array($choice['finish_reason'] ?? null, self::TRUNCATED_FINISH_REASONS, true),
         );
     }
 
@@ -504,12 +533,17 @@ final readonly class CustomProvider implements ProviderInterface
         // identically here.
         [$reasoning, $content] = $this->extractReasoning($delta);
 
+        // E707 (round 81): this provider already decodes `finish_reason` for
+        // tool-call assembly; the same local arms the carrier when the end
+        // names the output ceiling, so the closing delta chunk carries the
+        // truth and no extra frame is needed on that shape.
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
             toolCalls: $toolCalls,
             tokensUsed: 0,
             costUsd: 0.0,
+            truncated: in_array($finishReason, self::TRUNCATED_FINISH_REASONS, true),
         );
     }
 

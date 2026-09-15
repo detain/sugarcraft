@@ -22,6 +22,20 @@ final readonly class OpenAIProvider implements ProviderInterface
 
     use ReasoningExtractor;
 
+    /**
+     * E707 (round 81): the chat-completions `finish_reason` values that mean
+     * the reply hit the OUTPUT ceiling rather than ending on its own. OpenAI's
+     * documented terminating set is `stop` / `length` / `tool_calls` /
+     * `content_filter`, of which only `length` is a capacity stop;
+     * `content_filter` is a safety stop and stays silent here on purpose -
+     * surfacing it under the same notice would mislabel a moderation event as
+     * a tunable limit. The Sglang port pins the same-shaped guard over its own
+     * `length`/`abort` vocabulary.
+     *
+     * @var list<string>
+     */
+    private const TRUNCATED_FINISH_REASONS = ['length'];
+
     public function __construct(
         private ClientContract $client,
         private string $defaultModel = 'gpt-4o',
@@ -242,6 +256,10 @@ final readonly class OpenAIProvider implements ProviderInterface
         // at this method.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
 
+        // E707 (round 81): `finish_reason: length` is the wire saying the reply
+        // ran into max_tokens mid-sentence. The flag rides out on the carrier;
+        // Runtime folds it into the assistant message and Chat surfaces one
+        // transcript notice.
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
@@ -249,6 +267,7 @@ final readonly class OpenAIProvider implements ProviderInterface
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
             usage: $usage,
+            truncated: in_array($choices['finish_reason'] ?? null, self::TRUNCATED_FINISH_REASONS, true),
         );
     }
 
@@ -350,16 +369,23 @@ final readonly class OpenAIProvider implements ProviderInterface
      */
     private function parseChunk(mixed $chunk): CompleteResponse
     {
-        $delta = $chunk->toArray()['choices'][0]['delta'] ?? [];
+        $choice = $chunk->toArray()['choices'][0] ?? [];
+        $delta = $choice['delta'] ?? [];
 
         [$reasoning, $content] = $this->extractReasoning($delta);
 
+        // E707 (round 81): the chunk that closes a choice carries its
+        // `finish_reason` beside the delta - `length` on this wire means the
+        // server ran out of output budget mid-reply. The flag rides that same
+        // chunk; no extra frame is needed because the stop arrives WITH data
+        // the fold above already consumes.
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
             toolCalls: null,
             tokensUsed: 0,
             costUsd: 0.0,
+            truncated: in_array($choice['finish_reason'] ?? null, self::TRUNCATED_FINISH_REASONS, true),
         );
     }
 

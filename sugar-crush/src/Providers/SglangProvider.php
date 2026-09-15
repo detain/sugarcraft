@@ -890,6 +890,17 @@ final readonly class SglangProvider implements ProviderInterface
                     costUsd: 0.0,
                     truncated: true,
                 );
+            } elseif (in_array($streamFinishReason, self::TRUNCATED_FINISH_REASONS, true)) {
+                // E707 (round 81): the other half of the same truth. A
+                // `length`/`abort` end with NOTHING left to flush used to
+                // lose the stop signal entirely - the text chunks that
+                // streamed were indistinguishable from a clean turn by the
+                // time they reached the fold. One flag-only frame (empty
+                // content, zero billing, same inertness argument as the flush
+                // above) states it. A hard cut with NO finish frame is NOT
+                // included: the transport dying is not the ceiling biting,
+                // and the flag's contract is what the wire said.
+                yield new CompleteResponse(content: '', truncated: true);
             }
 
             if ($streamUsage !== null) {

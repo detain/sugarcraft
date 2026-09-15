@@ -109,6 +109,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     private const PARALLEL_TOOL_DEADLINE_CONFIG_KEY = 'parallelToolDeadlineSeconds';
 
     /**
+     * E707 (round 81): the `maxOutputTokens` config key - the operator's
+     * per-request OUTPUT ceiling. Config-only, deliberately: the parallel
+     * tool knobs above have environment escape hatches because they tune
+     * dispatch mechanics an operator might want per-shell; the money-side
+     * ceiling belongs in the persisted settings file where the tiering rules
+     * (user-tier, never project-tier - see
+     * {@see \SugarCraft\Crush\Config\LayeredSettings}) can hold it, not in a
+     * child process's environment.
+     */
+    private const MAX_OUTPUT_TOKENS_CONFIG_KEY = 'maxOutputTokens';
+
+    /**
      * Upper bound on a single length-prefixed frame from the child. A frame
      * legitimately carries raw image bytes, so it has to be generous - but a
      * corrupt/truncated header must never make the parent try to buffer an
@@ -690,6 +702,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             $this->resolveHookManager(),
             parallelToolCalls: self::parallelToolCallsEnabled($userConfig),
             parallelToolDeadlineSeconds: self::parallelToolDeadlineSeconds($userConfig),
+            maxOutputTokens: self::maxOutputTokens($userConfig),
         );
 
         $app = App::new($this->provider, $this->model)
@@ -717,6 +730,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // that answered without tools (crush_code.md Phase 5 item 7).
         /** @var list<?Usage> $stepUsages */
         $stepUsages = [];
+
+        // E707 (round 81): ORed across the turn's steps the way $stepUsages
+        // sums across them - one step stopping at the output ceiling marks
+        // the whole turn, because the reply the operator reads is the whole
+        // turn's answer, not its last step's.
+        $lengthStopped = false;
 
         // Whether the runtime managed to emit anything incrementally, so the
         // end-of-turn fallback below stays a FALLBACK rather than a duplicate:
@@ -769,6 +788,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             if ($assistant !== null) {
                 $lastAssistant = $assistant;
                 $stepUsages[] = $assistant->usage();
+                $lengthStopped = $lengthStopped || $assistant->lengthStopped();
             }
 
             if ($toolResults === []) {
@@ -888,7 +908,8 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // image-bearing tool result (W1.G2 reachability fix).
         return Message::assistant($content, reasoning: $lastAssistant?->reasoning())
             ->withImage($lastImageBytes, $lastImageProtocol)
-            ->withUsage(Usage::sum($stepUsages));
+            ->withUsage(Usage::sum($stepUsages))
+            ->withLengthStopped($lengthStopped);
     }
 
     /**
@@ -1022,6 +1043,51 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         // Compared before the cast, so an out-of-range float is rejected on its
         // own value rather than on whatever an overflowing (int) produced.
         if ($raw < 1 || $raw >= self::COMPLETE_TIMEOUT_SECONDS) {
+            return null;
+        }
+
+        return (int) $raw;
+    }
+
+    /**
+     * The operator's per-request OUTPUT ceiling in tokens, or null when no
+     * usable one was configured - E707 (round 81).
+     *
+     * NULL IS A REAL ANSWER, NOT A FALLBACK: it reaches
+     * {@see CompleteRequest::$maxTokens} unset, every provider's existing
+     * `?? default` line then applies, and an operator who never set the key
+     * gets byte-identical requests forever. This resolver must never grow a
+     * default of its own; the defaults live with the providers that
+     * documented them.
+     *
+     * Nonsense answers null rather than clamping, the same doctrine
+     * {@see parallelToolDeadlineSeconds()} records for impossible values -
+     * but note the different fallback: an impossible deadline still needs A
+     * number, while an impossible ceiling needs no number at all. Accepted:
+     * any finite positive numeric (a JSON int, or a numeric string from a
+     * hand-edited file), truncated toward zero like the deadline parser,
+     * because a sub-token fraction is not a request parameter. There is no
+     * upper bound here: the maximum is model- and provider-specific, and the
+     * server's own rejection is the honest authority on it — clamping
+     * silently here would guess a ceiling this class cannot know.
+     *
+     * @param ?array<string, mixed> $config the already-read user config;
+     *                                      null reads it
+     */
+    private static function maxOutputTokens(?array $config = null): ?int
+    {
+        $config ??= self::userConfig();
+        $raw = $config[self::MAX_OUTPUT_TOKENS_CONFIG_KEY] ?? null;
+
+        if (is_string($raw)) {
+            $raw = is_numeric($raw) ? $raw + 0 : null;
+        }
+
+        if (!is_int($raw) && !(is_float($raw) && is_finite($raw))) {
+            return null;
+        }
+
+        if ($raw < 1) {
             return null;
         }
 
@@ -1469,6 +1535,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // object here would arrive as __PHP_Incomplete_Class and the
                 // turn would lose its accounting silently.
                 'usage' => $message->usage?->toArray(),
+                // E707 (round 81): a plain bool rides the same rule - no
+                // object, and a frame without the key settles false, the
+                // same "old child, new parent" tolerance $usage's ?? shows.
+                'lengthStopped' => $message->lengthStopped,
             ];
         } catch (\Throwable $e) {
             $payload = ['kind' => 'result', 'ok' => false, 'error' => $e->getMessage()];
@@ -1600,6 +1670,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 // toArray() wrote, so a corrupt frame costs the turn its
                 // accounting rather than resolving with a fabricated bill.
                 ->withUsage(Usage::fromArray($data['usage'] ?? null))
+                // E707 (round 81): strict `=== true` — a frame that predates
+                // the key, or carries garbage in it, settles "the child did
+                // not say the ceiling bit", which is the flag's honest false.
+                ->withLengthStopped(($data['lengthStopped'] ?? false) === true)
         );
     }
 

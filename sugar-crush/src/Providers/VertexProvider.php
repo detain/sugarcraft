@@ -129,6 +129,22 @@ final readonly class VertexProvider implements ProviderInterface
     private const DEFAULT_TEMPERATURE = 0.7;
 
     /**
+     * E707 (round 81): the two vocabularies this class routes between for the
+     * one event each - a reply stopped by the OUTPUT ceiling. Anthropic
+     * publishers say `max_tokens` in `stop_reason`; Gemini publishers say
+     * `MAX_TOKENS` in a candidate's `finishReason`. Both strings sit in one
+     * set because the membership test is exact-case and they cannot collide.
+     * Deliberately absent: `refusal`/`SAFETY`/`RECITATION` ends (a filter cut
+     * is not a ceiling to raise) and `stop_sequence` (the model chose to
+     * stop). The legacy PaLM `predict` route is absent for a different reason
+     * - its documented answer carries no stop field to read; see
+     * parseResponse()'s note.
+     *
+     * @var list<string>
+     */
+    private const TRUNCATED_STOP_REASONS = ['max_tokens', 'MAX_TOKENS'];
+
+    /**
      * The "predictor" is the unary network seam. It receives the fully
      * templated publisher endpoint, the Vertex METHOD to invoke
      * (`rawPredict` for Anthropic publisher models, `predict` for Google's)
@@ -920,6 +936,7 @@ final readonly class VertexProvider implements ProviderInterface
             $model,
         );
 
+        // E707 (round 81): the unary Anthropic answer states its own ending.
         return new CompleteResponse(
             content: $text,
             reasoning: $reasoning !== '' ? $reasoning : null,
@@ -927,6 +944,7 @@ final readonly class VertexProvider implements ProviderInterface
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
             usage: $usage,
+            truncated: in_array($data['stop_reason'] ?? null, self::TRUNCATED_STOP_REASONS, true),
         );
     }
 
@@ -1212,13 +1230,24 @@ final readonly class VertexProvider implements ProviderInterface
         }
 
         if ($type === 'message_delta') {
+            // E707 (round 81): on this wire the terminal `message_delta` is
+            // where `delta.stop_reason` lands, so the stream's capacity stop
+            // IS observable - unlike a hard transport cut. The flag rides the
+            // same frame the usage lands on; a ceiling stop that somehow
+            // arrives with no billable output still yields a flag-only frame
+            // rather than the null that would swallow it.
+            $stopReason = is_array($event['delta'] ?? null)
+                ? ($event['delta']['stop_reason'] ?? null)
+                : null;
+            $truncated = in_array($stopReason, self::TRUNCATED_STOP_REASONS, true);
+
             $usage = $this->parseAnthropicUsage(
                 is_array($event['usage'] ?? null) ? $event['usage'] : [],
                 $model,
             );
 
             if ($usage->outputTokens === null || $usage->outputTokens === 0) {
-                return null;
+                return $truncated ? new CompleteResponse(content: '', truncated: true) : null;
             }
 
             $deltaCost = $this->cost($model, 0, $usage->outputTokens);
@@ -1228,6 +1257,7 @@ final readonly class VertexProvider implements ProviderInterface
                 tokensUsed: $usage->outputTokens,
                 costUsd: $deltaCost,
                 usage: Usage::new($usage->outputTokens, $deltaCost, null, $usage->outputTokens),
+                truncated: $truncated,
             );
         }
 
@@ -1317,16 +1347,30 @@ final readonly class VertexProvider implements ProviderInterface
 
             $pendingUsage = null;
 
+            // E707 (round 81): parked by parseGeminiChunk() when a candidate
+            // closes with the ceiling finishReason; a hard transport cut
+            // never sets it, which is the honest "did not see" answer.
+            $lengthStopped = false;
+
             foreach (($this->streamer)($endpoint, self::METHOD_STREAM_GENERATE_CONTENT, $body) as $event) {
                 $chunk = $this->parseGeminiChunk(
                     is_array($event) ? $event : [],
                     $model,
                     $pendingUsage,
+                    $lengthStopped,
                 );
 
                 if ($chunk !== null) {
                     yield $chunk;
                 }
+            }
+
+            // E707: the flag-only frame rides BEFORE the terminal usage emit -
+            // the fold above the provider consumes every frame, so the stop
+            // verdict reaches the turn even when the closing candidate
+            // carried no text of its own.
+            if ($lengthStopped) {
+                yield new CompleteResponse(content: '', truncated: true);
             }
 
             // Usage is emitted ONCE, after the stream ends, from the last
@@ -1550,13 +1594,19 @@ final readonly class VertexProvider implements ProviderInterface
             $model,
         );
 
+        // E707 (round 81): a truncated unary answer is the one the ceiling
+        // stopped, not the model - the candidate's finishReason says which.
+        $firstCandidate = $candidates[0] ?? null;
+
         return new CompleteResponse(
-            content: $this->geminiText($candidates[0] ?? null),
+            content: $this->geminiText($firstCandidate),
             reasoning: null,
             toolCalls: null,
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
             usage: $usage,
+            truncated: is_array($firstCandidate)
+                && in_array($firstCandidate['finishReason'] ?? null, self::TRUNCATED_STOP_REASONS, true),
         );
     }
 
@@ -1578,6 +1628,7 @@ final readonly class VertexProvider implements ProviderInterface
         array $event,
         string $model,
         ?CompleteResponse &$pendingUsage,
+        bool &$lengthStopped,
     ): ?CompleteResponse {
         $blockReason = $event['promptFeedback']['blockReason'] ?? null;
 
@@ -1625,6 +1676,17 @@ final readonly class VertexProvider implements ProviderInterface
         }
 
         $candidates = is_array($event['candidates'] ?? null) ? $event['candidates'] : [];
+
+        // E707 (round 81): the finishReason lands on the LAST candidate
+        // chunk, which routinely carries no text at all - so the verdict is
+        // parked in the by-ref flag the generator owns rather than attached
+        // to whichever frame happens to exist. streamGemini() turns a parked
+        // ceiling stop into its own frame after the loop.
+        $finishReason = is_array($candidates[0] ?? null) ? ($candidates[0]['finishReason'] ?? null) : null;
+        if (in_array($finishReason, self::TRUNCATED_STOP_REASONS, true)) {
+            $lengthStopped = true;
+        }
+
         $text = $this->geminiText($candidates[0] ?? null);
 
         return $text === '' ? null : new CompleteResponse(content: $text);
@@ -1992,6 +2054,11 @@ final readonly class VertexProvider implements ProviderInterface
             $data = $data['predictions'][0];
         }
 
+        // E707, deliberately NOT widened: the legacy PaLM envelope documents
+        // no stop/finish field this parser could read, so a ceiling stop here
+        // stays unobservable rather than guessed from token counts. This
+        // answer keeps truncated=false - the field's contract is "the wire
+        // said so", never "the wire might have meant it".
         return new CompleteResponse(
             content: $data['content'] ?? $data['text'] ?? '',
             reasoning: $data['reasoning'] ?? null,

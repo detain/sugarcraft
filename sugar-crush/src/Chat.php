@@ -1452,8 +1452,20 @@ final class Chat implements Model
             //
             // The null Cmd this used to return is where the drained turn's Cmd
             // goes.
+            //
+            // E707 (round 81): a reply the provider stopped at its OUTPUT
+            // ceiling is otherwise indistinguishable from one the model chose
+            // to end - the text simply stops. One Role::System notice rides
+            // immediately after the turn it describes (the same shape every
+            // other post-prompt notice on this route takes), appended INSIDE
+            // the settle so it lands in persisted history exactly once per
+            // stopped turn and survives re-render.
             return self::releaseQueuedPrompts([$settled->mutate([
-                'history' => [...$this->history, $message],
+                'history' => [
+                    ...$this->history,
+                    $message,
+                    ...($message->lengthStopped ? [$this->outputLengthStoppedNotice()] : []),
+                ],
                 'inFlight' => false,
                 'inFlightCancellation' => null,
             ]), null]);
@@ -14522,6 +14534,7 @@ final class Chat implements Model
             imageBytes: $message->imageBytes,
             imageProtocol: $message->imageProtocol,
             usage: $message->usage,
+            lengthStopped: $message->lengthStopped,
         );
     }
 
@@ -14580,6 +14593,30 @@ final class Chat implements Model
             . "truncated to fit the context window rather than the turn being refused: "
             . "~{$tokenCount} estimated tokens now, against a {$tokenLimit}-token context "
             . "window. The dropped text is marked inline in {$where}."
+        );
+    }
+
+    /**
+     * The notice the settle arm writes when a reply stopped at the provider's
+     * OUTPUT ceiling - E707 (round 81), the sibling of
+     * {@see contextTruncatedMessage()} one side of the request further out:
+     * that one reports text dropped going IN, this one reports a reply cut
+     * short coming OUT.
+     *
+     * It names the knob and where it lives, because the actionable difference
+     * between the two failures is that this one has a setting an operator can
+     * raise (see `maxOutputTokens` in docs/SETTINGS.md) while a context
+     * overflow does not. It states the uncertainty plainly - the reply may or
+     * may not have finished its thought - rather than dressing a silent
+     * truncation up as a completed turn, which is the exact defect this notice
+     * exists to close.
+     */
+    private function outputLengthStoppedNotice(): Message
+    {
+        return Message::system(
+            'The provider stopped this reply at its output limit, so the text above may end mid-thought. '
+            . 'Raise "maxOutputTokens" in ~/.sugar-crush/config.json for a longer single reply, '
+            . 'or ask for the remainder in your next message.'
         );
     }
 

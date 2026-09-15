@@ -52,7 +52,7 @@ final class LayeredSettingsTest extends TestCase
     public function testTheUserTierOnlyKeysAreExactlyTheLayeredKeysNoProjectMaySet(): void
     {
         self::assertSame(
-            ['provider', 'instructions', 'disabledRules', 'allowedTools', 'statusLine'],
+            ['provider', 'instructions', 'disabledRules', 'maxOutputTokens', 'allowedTools', 'statusLine'],
             LayeredSettings::userTierOnlyKeys(),
         );
 

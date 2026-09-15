@@ -391,12 +391,17 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
         // carry five unreported buckets beside the same total, and Runtime's
         // fold would project it back to precisely the object the fallback
         // already makes. The projections below stay the whole truth.
+        //
+        // E707: `stop_reason` rides this envelope only on CLI builds that
+        // surface it; when the key is absent the flag stays false - the
+        // honest "the wire did not say", never a count-derived guess.
         return new CompleteResponse(
             content: $data['result'] ?? $data['content'] ?? '',
             reasoning: $data['reasoning'] ?? null,
             toolCalls: $this->parseToolCalls($data['tool_calls'] ?? []),
             tokensUsed: $data['usage']['total_tokens'] ?? 0,
             costUsd: $data['total_cost_usd'] ?? 0.0,
+            truncated: ($data['stop_reason'] ?? null) === 'max_tokens',
         );
     }
 
@@ -415,12 +420,16 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
             );
         }
 
+        // E707 (round 81): the stream relays the Anthropic event frame, and
+        // the terminal `message_delta` carries `delta.stop_reason` - a
+        // ceiling end rides the (otherwise inert) empty frame for this event.
         return new CompleteResponse(
             content: '',
             reasoning: null,
             toolCalls: null,
             tokensUsed: 0,
             costUsd: 0.0,
+            truncated: ($data['event']['delta']['stop_reason'] ?? null) === 'max_tokens',
         );
     }
 

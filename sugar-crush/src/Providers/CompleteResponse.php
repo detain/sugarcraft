@@ -59,22 +59,31 @@ final readonly class CompleteResponse
          * Whether the server said this response was CUT OFF (§Q7 of the qwen
          * lane, evidence E-32: `finish_reason` `length`/`abort`).
          *
-         * Batch: {@see SglangProvider::parseResponse()} sets it from the
-         * choice's `finish_reason` — capture only, no field beside it
-         * changes. Stream: the §Q7 flush frame (the last
-         * {@see SglangProvider::completeStream()} tool-call chunk, emitted
-         * when truncated completion left fragments in the reassembly buffer)
-         * carries it; every other streamed chunk keeps the default false.
+         * Batch: every chat provider's parse seam now reads its own wire
+         * stop field and sets it — Sglang from the choice's `finish_reason`,
+         * and E707 (round 81) widened that to OpenAI, Custom, Vertex
+         * (Anthropic `stop_reason` and Gemini `finishReason` routes), Bedrock
+         * and the ClaudeCode envelope. Stream: the flag rides whichever frame
+         * carries the stop signal on each wire (Sglang's §Q7 flush frame, the
+         * OpenAI chunk whose choice reports `finish_reason`, the closing
+         * Anthropic-family `message_delta`, the Bedrock `messageStop` event,
+         * the Gemini parked end-of-stream frame); every other streamed chunk
+         * keeps the default false.
          *
-         * FALSE IS NOT A PROOF OF CLEANLINESS. `stop`/`tool_calls` ends
-         * never set it, and a provider that does not parse finish_reason at
-         * all cannot report what it did not read — the field is sglang's
-         * honest statement, not a cross-provider guarantee. Nothing in src/
-         * consumes it yet: Runtime folds chunks today without consulting
-         * it, and whether a truncated BATCH should re-enter the E-56 retry
-         * classification is deliberately a caller-layer decision for the
-         * orchestrator, not a silent behaviour change smuggled in on a
-         * flag.
+         * FALSE IS NOT A PROOF OF CLEANLINESS. A clean end (`stop`,
+         * `tool_calls`, `end_turn`) never sets it, and a stream cut before
+         * its stop frame — or the Vertex legacy PaLM route, whose wire
+         * documents no stop field — cannot report what it never saw. The
+         * field is each provider's honest statement about the frames it read,
+         * not an across-the-board guarantee.
+         *
+         * CONSUMED since E707 (round 81): Runtime ORs the flag across a
+         * turn's chunks into the assistant message, the engine carries it to
+         * Chat, and the settle arm appends one transcript notice when a reply
+         * stopped at the output ceiling. Whether a truncated batch should
+         * also re-enter the E-56 retry classification remains a deliberate
+         * non-goal: a length stop is a SUCCESS the ceiling cut short, not a
+         * failure to retry.
          */
         public bool $truncated = false,
         /**

@@ -154,14 +154,26 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
 | `parallelToolCalls` | `EngineBackend::complete()` | yes |
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
+| `maxOutputTokens` | `EngineBackend::complete()` | **no** |
 | `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these twelve, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these thirteen, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
 a missing one, because it looks configurable.
+
+`maxOutputTokens` is the exception that has no exception: it is E707's opt-in
+output ceiling, and **unset is not zero** — an absent key sends no `max_tokens`
+override, and every provider keeps the documented default it already ships
+(4096 on the Anthropic-shaped wires). Setting it raises the per-request paid
+ceiling on the operator's own credential, which is why the tier column says
+**no**: no key whose meaningful direction is UP belongs to a checked-out
+repository (the full argument lives on `LayeredSettings::LAYERED_KEYS`). When a
+reply actually hits whatever ceiling is in force, the provider's stop verdict
+now reaches the transcript as a system notice instead of a silently truncated
+turn.
 
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
@@ -172,8 +184,7 @@ through it, and for the other two the second name lives in another class —
 `StatusLineCommand::fromSettings()`, public because the runner is testable
 without a launch, and `RulesState::new()`, which *consumes* the value that
 `chat()` reads and filters through the private
-`Bootstrap::rulePacksToDisable()` on the way in. The previous revision
-of this row named `StatusLineCommand::fromSettings()` first and
+`Bootstrap::rulePacksToDisable()` on the way in. The previous revisionof this row named `StatusLineCommand::fromSettings()` first and
 `Renderer::renderStatusBar()` second, and neither half fitted the convention:
 nothing calls `fromSettings()` on a launch except `Bootstrap::chat()`, and
 `renderStatusBar()` does not read the settings key at all — it reads the
@@ -636,9 +647,10 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only five of the twelve layered keys have an
+  this stack. They do not cover it: only five of the thirteen layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`). `theme`, `instructions`, `disabledSkills`,
-  `disabledRules`, `allowedTools`, `disabledTools` and `statusLine` have none.
+  `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens` and
+  `statusLine` have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)

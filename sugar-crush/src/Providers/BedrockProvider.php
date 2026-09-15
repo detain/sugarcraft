@@ -57,6 +57,21 @@ final readonly class BedrockProvider implements ProviderInterface
 
     private const DEFAULT_TEMPERATURE = 0.7;
 
+    /**
+     * E707 (round 81): of the Converse `StopReason` enum this repo vendors
+     * (bedrock-runtime 2023-09-30: end_turn, tool_use, max_tokens,
+     * stop_sequence, guardrail_intervened, content_filtered,
+     * malformed_model_output, malformed_tool_use,
+     * model_context_window_exceeded), `max_tokens` alone names the OUTPUT
+     * ceiling the operator can raise. `model_context_window_exceeded` is
+     * deliberately NOT here: that is the INPUT window, and a notice advising
+     * a bigger output budget for it would send the operator to the wrong
+     * knob.
+     *
+     * @var list<string>
+     */
+    private const TRUNCATED_STOP_REASONS = ['max_tokens'];
+
     public function __construct(
         private BedrockRuntimeClient $client,
         private string $region = self::REGION_US,
@@ -400,6 +415,8 @@ final readonly class BedrockProvider implements ProviderInterface
         // buckets survive past this boundary instead of dying at the projection.
         $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : [], $model);
 
+        // E707 (round 81): Converse states its ending in the top-level
+        // `stopReason` beside `output`; the ceiling end arms the carrier.
         return new CompleteResponse(
             content: $text,
             reasoning: $reasoning !== '' ? $reasoning : null,
@@ -407,6 +424,7 @@ final readonly class BedrockProvider implements ProviderInterface
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
             usage: $usage,
+            truncated: in_array($data['stopReason'] ?? null, self::TRUNCATED_STOP_REASONS, true),
         );
     }
 
@@ -518,6 +536,16 @@ final readonly class BedrockProvider implements ProviderInterface
             $model,
         );
 
+        // E707 (round 81): ConverseStream closes with a `messageStop` event
+        // whose payload carries the same `stopReason` enum the unary answer
+        // states - every event already flows through this method, so the
+        // verdict attaches to the frame the stop arrives on (empty text, no
+        // usage yet if metadata lands separately; the fold consumes all of
+        // them together).
+        $stopReason = is_array($data['messageStop'] ?? null)
+            ? ($data['messageStop']['stopReason'] ?? null)
+            : null;
+
         return new CompleteResponse(
             content: $text,
             reasoning: is_string($thought) && $thought !== '' ? $thought : null,
@@ -525,6 +553,7 @@ final readonly class BedrockProvider implements ProviderInterface
             tokensUsed: $usage->totalTokens,
             costUsd: $usage->costUsd,
             usage: $usage,
+            truncated: in_array($stopReason, self::TRUNCATED_STOP_REASONS, true),
         );
     }
 

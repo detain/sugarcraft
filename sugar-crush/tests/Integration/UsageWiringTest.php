@@ -355,6 +355,9 @@ final class UsageWiringTest extends TestCase
             'withToolResults' => $base->withToolResults([new \SugarCraft\Crush\ToolResult('i', 'r')]),
             'withReasoning' => $base->withReasoning('because'),
             'withImage' => $base->withImage('bytes', 'kitty'),
+            // E707 (round 81): the seventh self-returning copy — the ceiling
+            // verdict and the bill travel together or both vanish.
+            'withLengthStopped' => $base->withLengthStopped(true),
         ];
 
         $reflected = [];

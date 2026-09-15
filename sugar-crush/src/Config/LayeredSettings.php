@@ -208,6 +208,12 @@ final class LayeredSettings
      *  - `parallelToolCalls` / `parallelToolDeadlineSeconds`
      *                 {@see \SugarCraft\Crush\Backend\EngineBackend}'s per-turn
      *                 dispatch settings, which read through `readUserConfig()`.
+     *  - `maxOutputTokens`
+     *                 {@see \SugarCraft\Crush\Backend\EngineBackend}'s per-request
+     *                 OUTPUT ceiling, read on the same per-turn path and threaded
+     *                 onto {@see \SugarCraft\Crush\Providers\CompleteRequest::$maxTokens}
+     *                 (E707); unset means the key is absent from the request and
+     *                 each provider's own default applies.
      *  - `allowedTools` / `disabledTools`
      *                 {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, which
      *                 filters the model-facing tool set before any of its three
@@ -266,6 +272,23 @@ final class LayeredSettings
      * own working style, under a trust grant whose stated meaning is "start my
      * servers and pick my theme".
      *
+     * `maxOutputTokens` IS USER-TIER ONLY (not listed on {@see PROJECT_TIER_KEYS}),
+     * and the reason is the shape of the value rather than what it names: it is
+     * the ONLY layered key whose meaningful direction is UP. Every other
+     * project-adjacent key either REMOVES capability (`disabledSkills`,
+     * `disabledTools` — they shrink a set the harness already bounded), NAMES a
+     * model WITHIN the provider the operator chose (`titleModel`,
+     * `summaryModel` — cost is bounded by that choice), or BOUNDS throughput
+     * (`parallelToolDeadlineSeconds` — a smaller number is the failure mode a
+     * repository could pick, and it costs time, not money). A larger output
+     * ceiling is a bigger paid request on the user's credential, repeated every
+     * step of the agentic loop; a checkout that could raise it is a checkout
+     * choosing how much of the operator's bill to run up per turn. That is the
+     * `provider` argument restated on the spend axis — the money decision stays
+     * with whoever pays it — and it is why the key lands beside the two
+     * dispatch settings it shares a reader with, NOT inside the project tier
+     * they were admitted to. (E707, round 81.)
+     *
      * NO PERMISSION KEY HERE, and this is the one omission a reader of Phase 6
      * item 4 will come looking for. `permissionMode` and `permissionRules` ARE
      * readable from `~/.sugar-crush/settings.json` as of that item — but NOT
@@ -305,6 +328,7 @@ final class LayeredSettings
         'disabledRules',
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',
+        'maxOutputTokens',
         'allowedTools',
         'disabledTools',
         'statusLine',
@@ -526,8 +550,9 @@ final class LayeredSettings
      *
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
-     * `instructions`, `disabledRules`, `allowedTools` and `statusLine`, in
-     * {@see LAYERED_KEYS} order — named rather than numbered here, because the
+     * `instructions`, `disabledRules`, `maxOutputTokens`, `allowedTools` and
+     * `statusLine`, in {@see LAYERED_KEYS} order — named rather than numbered
+     * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
      * joined the list. `allowedTools`'s argument is on {@see PROJECT_TIER_KEYS},
      * next to the sibling key that IS allowed, since that is where the two have

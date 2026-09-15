@@ -5756,6 +5756,66 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('trustedProjectMcp', $slice, 'the recipe lost the one trust line an operator needs before relaunch');
     }
 
+    /**
+     * E707 (round 81): the two spelled counts on the SETTINGS.md layered-keys
+     * pages. The table itself is policed name-for-name by
+     * TrustKeyDocumentationDriftTest; what that guard cannot see is the two
+     * PROSE sentences counting it - "is exactly these thirteen" under the
+     * table, and the See-also paragraph splitting the stack into the keys
+     * that have an env override and the ones that have none. Both sentences
+     * were edited by hand when `maxOutputTokens` joined (twelve to thirteen,
+     * five of thirteen, and a name added to the no-env list) - which is
+     * exactly the moment this arm stops the next one from half-landing.
+     */
+    public function testTheSettingsProseCountsAndEnvSplitDivideTheLiveLayeredKeys(): void
+    {
+        $settings = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md');
+        $keys = (new \ReflectionClassConstant(\SugarCraft\Crush\Config\LayeredSettings::class, 'LAYERED_KEYS'))->getValue();
+
+        $wordNumbers = [
+            'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7,
+            'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12,
+            'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16,
+        ];
+
+        self::assertSame(1, preg_match('/`LayeredSettings::LAYERED_KEYS` is exactly these ([a-z]+)/', $settings, $tableCount), 'the "exactly these (word)" sentence under the layered table is gone');
+        self::assertSame(
+            count($keys),
+            $wordNumbers[$tableCount[1]] ?? -1,
+            'the "exactly these (word)" sentence under the layered table no longer counts LAYERED_KEYS — flip both together (census-trio lesson)',
+        );
+
+        self::assertSame(
+            1,
+            preg_match('/only ([a-z]+) of the ([a-z]+) layered keys have an\s+env override \((.*?)\)\.\s*(.*?)\s+have none\./s', $settings, $envSplit),
+            'the See-also env-split sentence in docs/SETTINGS.md was reworded out from under this arm',
+        );
+
+        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $envSplit[3], $withEnv);
+        preg_match_all('/`([a-z][A-Za-z0-9]*)`/', $envSplit[4], $withoutEnv);
+
+        self::assertSame($wordNumbers[$envSplit[1]] ?? -1, count($withEnv[1]), 'the first spelled count no longer matches the env-override list it introduces');
+        self::assertSame(count($keys), $wordNumbers[$envSplit[2]] ?? -1, 'the second spelled count no longer matches LAYERED_KEYS');
+        self::assertSame(
+            $withEnv[1],
+            array_values(array_unique($withEnv[1])),
+            'a key is named twice in the env-override list',
+        );
+        self::assertSame(
+            [],
+            array_values(array_intersect($withEnv[1], $withoutEnv[1])),
+            'the two halves of the split overlap — a key cannot both have and lack an override',
+        );
+
+        $roster = [...$withEnv[1], ...$withoutEnv[1]];
+        sort($roster);
+        $live = $keys;
+        sort($live);
+        self::assertSame($live, $roster, 'the See-also sentence no longer names every layered key exactly once — a key joining or leaving LAYERED_KEYS must edit this split in the same commit');
+
+        self::assertContains('maxOutputTokens', $withoutEnv[1], 'the E707 ceiling is config-only on purpose (no env hatch) — if that ever changes, move the name AND re-read the tier argument on LayeredSettings::LAYERED_KEYS');
+    }
+
     private static function sourceOf(string $relative): string
     {
         $text = file_get_contents(\dirname(__DIR__, 2) . '/src/' . $relative);

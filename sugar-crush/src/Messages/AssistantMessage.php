@@ -26,7 +26,29 @@ final readonly class AssistantMessage implements Message
          * runs up to `$maxSteps` of these and is where they are summed.
          */
         private ?Usage $usage = null,
+        /**
+         * Whether the provider ended this call at the OUTPUT ceiling -
+         * E707 (round 81), folded from {@see
+         * \SugarCraft\Crush\Providers\CompleteResponse::$truncated} across a
+         * turn's chunks. True means the wire said the reply was cut short;
+         * false means either a clean end or that this provider's wire could
+         * not report it. Deliberately NOT part of {@see toArray()}: the stop
+         * verdict is accounting, not conversation content, exactly like
+         * $usage above - replaying it into the next request would tell the
+         * model about a limit it did not hit.
+         */
+        private bool $lengthStopped = false,
     ) {}
+
+    /**
+     * True when the provider stopped this call at its output limit - see the
+     * constructor's $lengthStopped docblock for what false does and does not
+     * prove.
+     */
+    public function lengthStopped(): bool
+    {
+        return $this->lengthStopped;
+    }
 
     /**
      * This call's provider-counted usage, or null when none was reported - see
