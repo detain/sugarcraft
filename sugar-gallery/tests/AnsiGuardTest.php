@@ -69,7 +69,58 @@ final class AnsiGuardTest extends TestCase
             'lone trailing escape' => ["tail\e", 'an unterminated sequence'],
             'truncated csi' => ["\e[3", 'a CSI with no final byte'],
             'escape before sgr' => ["\e[\e[32mok", 'a malformed prefix smuggling a valid SGR'],
+            'C1 CSI (raw 0x9B)' => ["\x9b2J", '8-bit CSI — a terminal acts on this without any ESC'],
+            'C1 OSC (raw 0x9D)' => ["\x9d8;;https://evil\x9c", '8-bit OSC string'],
+            'C1 DCS (raw 0x90)' => ["\x90q#0;2;0;0;0\x9c", '8-bit DCS — a sixel payload with no ESC'],
+            'C1 ST (raw 0x9C)' => ["text\x9c", '8-bit string terminator on its own'],
+            'C1 CSI (UTF-8 C2 9B)' => ["\xc2\x9b2J", 'U+009B re-encoded — decodes to 8-bit CSI'],
+            'C1 OSC (UTF-8 C2 9D)' => ["\xc2\x9d8;;https://evil\xc2\x9c", 'the OSC-8 hyperlink in UTF-8 form'],
+            'C1 APC (UTF-8 C2 9F)' => ["\xc2\x9fsecret", 'U+009F, the last C1 codepoint'],
         ];
+    }
+
+    /**
+     * Text that must NEVER be mistaken for a control byte, whatever the scanner
+     * does to the C1 range: every one of these contains bytes in 0x80–0x9F as
+     * ordinary UTF-8 continuation bytes.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function wideTextProvider(): array
+    {
+        return [
+            'CJK' => ['因果の物語'],
+            'accented' => ['Björk Ω≈ç «quota»'],
+            'emoji' => ['🎬 Dune: Part Two'],
+            'cyrillic' => ['Солярис'],
+            'no-break space' => ["Blade\xc2\xa0Runner"],
+            'hebrew' => ['מטריקס'],
+        ];
+    }
+
+    /**
+     * @dataProvider wideTextProvider
+     */
+    public function testWideUtf8IsNotMistakenForC1Controls(string $text): void
+    {
+        // The C1 range overlaps UTF-8 continuation bytes (果 is E6 9E 9C), so a
+        // guard that flags raw 0x80–0x9F without parsing sequences would reject
+        // half the world's film titles. Whole sequences must be consumed atomically.
+        self::assertTrue(AnsiGuard::isSafe($text), json_encode($text) . ' is plain text');
+        self::assertSame($text, AnsiGuard::assertSafe($text));
+        self::assertSame($text, AnsiGuard::sanitize($text), 'byte-preserving, even where the bytes look like C1');
+        self::assertSame($text, AnsiGuard::stripControls($text));
+    }
+
+    /**
+     * @dataProvider wideTextProvider
+     */
+    public function testWideUtf8SurvivesBeingStyled(string $text): void
+    {
+        $styled = "\e[1m" . $text . "\e[0m";
+
+        self::assertTrue(AnsiGuard::isSafe($styled));
+        self::assertSame($styled, AnsiGuard::sanitize($styled));
     }
 
     /**
@@ -123,12 +174,19 @@ final class AnsiGuardTest extends TestCase
         self::assertSame("\e[1mBlade\e[0m Runner", AnsiGuard::sanitize($dirty));
     }
 
-    public function testSanitizeRemovesAnUnterminatedOscEntirely(): void
+    public function testAnUnterminatedOscLosesItsPayloadButNotTheRestOfTheTitle(): void
     {
-        // Nothing after a truncated string sequence may be reinterpreted as text
-        // the terminal will act on: the whole payload goes, and so does the tail
-        // the terminal would have consumed as part of it.
+        // A terminal really does consume up to the next ST/BEL, but the guard's job
+        // is to remove the bytes that *act on* the terminal, not to emulate one:
+        // the payload is dropped where it provably ends, and the tail is judged on
+        // its own bytes instead of disappearing with it.
         self::assertSame('', AnsiGuard::sanitize("\e]8;;https://evil"));
+        self::assertSame("\e[32mBlade Runner", AnsiGuard::sanitize("\e]0;evil\e[32mBlade Runner"));
+        self::assertSame(
+            'host=x',
+            AnsiGuard::sanitize("\e]0;evil\e]2;other\x07host=x"),
+            'two unterminated payloads in a row, neither leaking its text'
+        );
     }
 
     public function testOffsetReportedPointsAtTheOffendingSequence(): void
@@ -161,5 +219,41 @@ final class AnsiGuardTest extends TestCase
             self::assertTrue(AnsiGuard::isSafe($styled), 'sprinkles output #' . $i . ' must pass: ' . json_encode($styled));
             self::assertSame($styled, AnsiGuard::sanitize($styled));
         }
+    }
+
+    public function testStripControlsRemovesStylingTooBecauseAPlainTitleCarriesNone(): void
+    {
+        // sanitize() keeps colour for a styled title; stripControls() is the other
+        // boundary — the plain title that promises no escape bytes at all.
+        self::assertSame('Blade Runner', AnsiGuard::stripControls("\e[1mBlade Runner\e[0m"));
+        self::assertSame('danger', AnsiGuard::stripControls("\x1b[2Jdanger"));
+        self::assertSame('Blade', AnsiGuard::stripControls("Blade\xc2\x9b2J"), 'the UTF-8-encoded C1 form');
+        self::assertSame('Blade', AnsiGuard::stripControls("Blade\x9b2J"), 'the raw 8-bit C1 form');
+        self::assertSame('twowords', AnsiGuard::stripControls("two\twor\x01ds\n"), 'TAB/CR/LF would break the fixed-height cell');
+    }
+
+    public function testStripControlsDoesNotFailOpenOnInvalidUtf8(): void
+    {
+        // The regex this replaced used /u, so a single non-UTF-8 byte made the
+        // whole strip no-op and the escape reached the terminal. An opaque byte is
+        // not a control: keep it, remove what is.
+        $stripped = AnsiGuard::stripControls("\xff\x1b[2J\x07ok");
+
+        self::assertStringNotContainsString("\x1b", $stripped);
+        self::assertStringNotContainsString("\x07", $stripped);
+        self::assertStringContainsString('ok', $stripped);
+        self::assertStringContainsString("\xff", $stripped, 'the unknown byte is mojibake, not a control');
+    }
+
+    /**
+     * @dataProvider unsafeProvider
+     */
+    public function testStripControlsAlwaysProducesSomethingTheGuardAccepts(string $ansi, string $why): void
+    {
+        $plain = AnsiGuard::stripControls($ansi);
+
+        self::assertTrue(AnsiGuard::isSafe($plain), $why . ' left ' . json_encode($plain));
+        self::assertSame($plain, AnsiGuard::stripControls($plain), 'idempotent');
+        self::assertLessThanOrEqual(strlen($ansi), strlen($plain), 'a sanitizer that grows its input is inventing bytes');
     }
 }

@@ -89,7 +89,8 @@ final readonly class PosterCard
      * plain {@see $title} is kept for identity/sort.
      *
      * TRUST BOUNDARY — the styled title is NOT sanitised. Where the plain
-     * {@see $title} is run through {@see stripC0()} in {@see render()} to
+     * {@see $title} is run through {@see AnsiGuard::stripControls()} in
+     * {@see render()} to
      * neutralise cursor-move / clear-screen / ESC bytes from untrusted DB text,
      * a styled title is emitted verbatim (only ANSI-aware *truncated*, never
      * stripped) — stripping C0 would destroy the very SGR escapes it exists to
@@ -176,12 +177,13 @@ final readonly class PosterCard
         $lines = $this->bodyRows($width, $posterHeight);
 
         $marker = $focused ? '▸' : ' ';
-        // Plain titles are DB-sourced; strip C0 controls to prevent terminal
-        // corruption. styledTitle is pre-styled ANSI and goes through the
-        // ANSI-aware truncate path unchanged.
+        // Plain titles are DB-sourced, so they go through the same scanner the
+        // styled-title guard uses: every C0/C1 control and any stray escape
+        // sequence (SGR included) is removed before the row is drawn. A styled
+        // title is the caller's own bytes and takes the ANSI-preserving path.
         $title = $this->styledTitle !== null
             ? Width::truncateAnsi($this->styledTitle, $width - 2)
-            : self::truncate(self::stripC0($this->title), $width - 2);
+            : self::truncate(AnsiGuard::stripControls($this->title), $width - 2);
         $lines[] = Width::padRight($marker . ' ' . $title, $width);
 
         if ($this->progress !== null) {
@@ -365,19 +367,5 @@ final readonly class PosterCard
         $filled = (int) round($progress * $width);
 
         return str_repeat('▓', $filled) . str_repeat('░', max(0, $width - $filled));
-    }
-
-    /**
-     * Strip C0 control bytes from a plain (non-ANSI) title before rendering.
-     * No C0 byte is needed in a title — this prevents cursor-move/clear/ESC
-     * sequences from untrusted DB titles reaching the terminal. The styledTitle
-     * path intentionally skips this (escapes are preserved there per contract).
-     */
-    private static function stripC0(string $text): string
-    {
-        // Remove C0 controls except CR/LF (which preg_replace handles separately).
-        // ESC (\x1B) and Bell (\x07) are also removed as they could corrupt the
-        // render even from a "plain" title that accidentally contains ANSI bytes.
-        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? $text;
     }
 }

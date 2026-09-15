@@ -76,11 +76,31 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
 - **A styled title is echoed verbatim, so `AnsiGuard` is what makes that safe.**
   SGR (`ESC [ <digits ; : > m`) passes; every other ECMA-48 escape form (CSI with
   any other final byte, OSC, DCS/SOS/PM/APC, charset designators, Fe/Fs pairs),
-  every C0 control (including TAB/CR/LF — a title is one row) and DEL do not.
+  every C0 control (including TAB/CR/LF — a title is one row), DEL and any 8-bit
+  C1 control do not.
   `withStyledTitle($ansi)` is unchanged for BC; `assertSafe: true` throws,
   `withSafeStyledTitle()` coerces. One scanner (`AnsiGuard::runs()`) backs
-  `isSafe`/`assertSafe`/`sanitize`, so the three can never disagree, and
-  `sanitize()` is byte-preserving on safe input + idempotent — both pinned by tests.
+  `isSafe`/`assertSafe`/`sanitize`/`stripControls`, so the four can never disagree,
+  and `sanitize()` is byte-preserving on safe input + idempotent — both pinned by tests.
+- **Guarding only `ESC` is not a boundary: C1 controls need no `ESC` to act.** The
+  8-bit forms (0x9B CSI, 0x9D OSC, 0x90 DCS, 0x9C ST…) and their UTF-8
+  re-encodings (`C2 9B` = U+009B) are honoured by xterm/VTE/Konsole/iTerm2 exactly
+  like the 7-bit ones, so a scanner that classifies `ord >= 0x80` as text admits a
+  complete OSC-8 injection. Two traps when fixing it: (a) `C2 [80-9F]` is
+  *exclusively* C1 (Latin-1 punctuation starts at `C2 A0`) and is safe to reject
+  outright, but a **raw** byte in `0x80–0x9F` is also an ordinary UTF-8
+  continuation byte — 果 is `E6 9E 9C` — so text runs must consume whole
+  well-formed sequences (`utf8SequenceLength()`) and only a *stray* byte in that
+  band is a control; (b) once a C1 is recognised it must consume what it
+  introduces, else `C2 9B 32 4A` sheds its CSI and leaves `2J` behind as "text".
+  ST likewise has three spellings (`ESC \`, `9C`, `C2 9C`) and a string-sequence
+  scanner that knows only the first over-deletes the tail of every title.
+- **Never write a security filter as `preg_replace('/[\x00-\x1f]/u', …, $s) ?? $s`.**
+  The `/u` makes the call return `null` when the *subject* holds a single invalid
+  UTF-8 byte, and the `?? $s` fallback then returns it **completely unstripped** —
+  the classic fail-open, here reached by any mojibake title. Filter control bytes
+  byte-wise (they are, by definition, below 0x80), and let the scanner, not a
+  regex, own what a control is.
 - **`withSafeStyledTitle()` returns `$this` when sanitising leaves an empty
   string**, rather than setting a styled title that would render a blank row: the
   plain title is the sanitised path, so falling back to it is strictly better than

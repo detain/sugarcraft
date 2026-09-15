@@ -460,4 +460,43 @@ final class PosterCardTest extends TestCase
         self::assertSame('https://cdn/y.png', $card->posterUrl);
         self::assertSame(0.5, $card->progress);
     }
+
+    public function testPlainTitleWithInvalidUtf8StillLosesItsControlBytes(): void
+    {
+        // The plain path is the documented safe fallback, so it must not fail open:
+        // the old /u-based strip turned into a no-op the moment any byte was not
+        // valid UTF-8, and the escape reached the frame with the rest of the title.
+        $frame = (new PosterCard('1', "\xff\x1b[2J\x07Blade"))->render(false, 40, 3);
+
+        self::assertStringNotContainsString("\x1b[2J", $frame, 'erase sequence must not survive an opaque byte');
+        self::assertStringNotContainsString("\x07", $frame);
+        self::assertStringContainsString('Blade', $frame, 'the text the user came for still renders');
+    }
+
+    public function testPlainTitleLosesC1ControlsInEitherWireForm(): void
+    {
+        // 8-bit C1 needs no ESC to act on a terminal, and a UTF-8 re-encoding
+        // (U+009B) decodes to the same control — neither may reach the frame.
+        foreach (["\x9b2J", "\xc2\x9b2J", "\xc2\x9d8;;https://evil\xc2\x9c"] as $i => $hostile) {
+            $frame = (new PosterCard('1', 'Blade' . $hostile . ' Runner'))->render(false, 40, 3);
+
+            self::assertStringNotContainsString("\x9b", $frame, 'case ' . $i . ' raw C1 byte');
+            self::assertStringNotContainsString("\xc2\x9b", $frame, 'case ' . $i . ' encoded C1');
+            self::assertStringNotContainsString("\xc2\x9d", $frame, 'case ' . $i . ' encoded OSC');
+            self::assertStringContainsString('Blade', $frame);
+            self::assertStringContainsString('Runner', $frame);
+        }
+    }
+
+    public function testPlainTitleKeepsWideUtf8AndDropsStrayStyling(): void
+    {
+        // Stripping the C1 band must not cost the world its non-Latin titles: the
+        // bytes in 0x80–0x9F are ordinary continuation bytes inside a real
+        // sequence, which the scanner consumes whole.
+        $frame = (new PosterCard('1', "\e[1m因果の物語 🎬 Süß"))->render(false, 40, 3);
+
+        self::assertStringContainsString('因果の物語', $frame);
+        self::assertStringContainsString('Süß', $frame);
+        self::assertStringNotContainsString("\x1b", $frame, 'a plain title carries no styling');
+    }
 }

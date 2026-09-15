@@ -218,4 +218,13 @@ $safe = (new PosterCard('t', 'Matrix'))->withSafeStyledTitle($fromTheDb);
 echo '  withSafeStyledTitle ... ' . $safe->render(false, CARD_W, 1) . "\n";
 dim('  (the erase + hyperlink are gone, the colour survived)');
 
+// The 8-bit C1 forms need no ESC byte at all, and a terminal acts on them the same
+// way — including the UTF-8 re-encoding, which is what a JSON payload gives you.
+$eightBit = "Ma\xc2\x9b2Jtrix";
+dim('  c1 (no ESC) is safe ... ' . (AnsiGuard::isSafe($eightBit) ? 'yes' : 'no') . ', sanitized to ' . json_encode(AnsiGuard::sanitize($eightBit)));
+
+// A plain title needs no guard flag: render() already refuses every control.
+$plain = (new PosterCard('t', "\e[1mMatrix\x07"))->render(false, CARD_W, 1);
+dim('  plain title is safe ... ' . (str_contains($plain, "\x1b") || str_contains($plain, "\x07") ? 'NO — leaked' : 'yes, escapes stripped'));
+
 echo "\n";

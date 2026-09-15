@@ -335,10 +335,12 @@ final class PosterGrid
      * An index qualifies when a card is loaded there, that card has no poster
      * yet (neither inline ANSI nor an overlay image — {@see PosterCard::hasPoster()}
      * spans both fill modes), and $isFillable agrees a poster can be sourced for
-     * it. The default $isFillable is "the card names a poster URL"; pass your own
-     * predicate when the URL is discovered lazily (a detail fetch first) or when
-     * your transport policy rejects some URLs outright — a card the owner cannot
-     * fetch should keep its skeleton instead of being queued on every scroll.
+     * it. The default $isFillable is "the card names a poster URL"; a supplied
+     * predicate REPLACES that default rather than adding to it, so pass your own
+     * rule when the URL is discovered lazily (a detail fetch first — then return
+     * true for every card) or when your transport policy rejects some URLs
+     * outright (a card the owner cannot fetch should keep its skeleton instead of
+     * being queued on every scroll).
      *
      * $isCached is an optional pre-flight probe, typically a disk-cache lookup
      * keyed by url + width + height + render protocol. It changes nothing about

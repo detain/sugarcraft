@@ -179,8 +179,12 @@ php examples/poster-grid-mosaic.php
 ### Title trust boundary
 
 The plain `title` is treated as **untrusted** (it is typically DB-sourced):
-`render()` strips C0 control bytes — cursor-move, clear-screen, `ESC`, `BEL` —
-before drawing it, so a hostile title can't corrupt the terminal.
+`render()` runs it through `AnsiGuard::stripControls()` before drawing it, which
+removes every control byte and every escape sequence — C0 (including `BEL`, `TAB`,
+CR/LF, and the `ESC` that introduces a cursor-move or clear-screen), DEL, the 8-bit
+C1 controls in both wire forms, and any SGR styling a plain title has no business
+carrying. Opaque bytes that are simply not valid UTF-8 stay put: they are mojibake,
+not controls, and one of them must never be able to disable the strip.
 
 `withStyledTitle($ansi)` is the **escape hatch** for a *pre-styled* title (e.g. a
 [candy-fuzzy](https://github.com/sugarcraft/candy-fuzzy) match highlight). It is
@@ -193,8 +197,9 @@ is untrusted, leave the styled title unset and rely on the sanitised plain
 
 Two opt-ins turn that documented contract into an enforced one. Both admit **SGR
 styling only** (`ESC [ <params> m`) — every other escape form (cursor movement,
-erase, OSC / DCS / APC payloads, bare C0 controls, a truncated sequence) counts as
-unsafe, per `AnsiGuard`:
+erase, OSC / DCS / APC payloads, bare C0 controls, an 8-bit C1 control written
+either as the raw byte or as the UTF-8 encoding of U+0080–U+009F, a truncated
+sequence) counts as unsafe, per `AnsiGuard`:
 
 ```php
 // Fail fast: throws InvalidArgumentException (offset + hex of the offender)

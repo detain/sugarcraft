@@ -13,16 +13,21 @@ use InvalidArgumentException;
  * *already-rendered* bytes handed in by the caller and stitched straight into
  * the frame. That is a trust boundary — bytes from an untrusted source can move
  * the cursor, erase the screen, or smuggle an OSC 8 hyperlink into a title a
- * server returned. The plain-title path neutralises that by stripping C0 in
- * {@see PosterCard::render()}; a styled title cannot, because stripping C0 would
- * destroy the very SGR escapes it exists to carry. This class is the other half
- * of that contract: it admits *styling* and nothing else.
+ * server returned. The plain-title path neutralises that by running the same
+ * scanner over the title ({@see stripControls()}, from
+ * {@see PosterCard::render()}); a styled title cannot do that, because removing
+ * escapes would destroy the very SGR sequences it exists to carry. This class is
+ * the other half of that contract: it admits *styling* and nothing else.
  *
- * What passes: SGR sequences (`ESC [ <digits ; : > m` — exactly what
+ * What passes: SGR sequences (`ESC [ <digits ; : > m`, the styling sequences
  * candy-sprinkles emits) and printable text. What does not: every other escape
- * form (CSI cursor/erase/mode, OSC, DCS/SOS/PM/APC, charset designators, Fe/Fs
- * pairs), a malformed or truncated sequence, a bare C0 control, DEL.
+ * form (CSI cursor/erase/mode, OSC/DCS/APC payloads, charset designators, Fe/Fs
+ * pairs), a malformed or truncated sequence, a bare C0 control, DEL, and an 8-bit
+ * C1 control in EITHER wire form — the raw byte (`0x9B`) or its UTF-8 re-encoding
+ * (`C2 9B` = U+009B), which mainstream terminals act on as if the `ESC` had been
+ * spelled out.
  *
+
  * Two shapes of use, for the two kinds of call site:
  *
  *  - {@see assertSafe()} — fail fast, for a caller that *claims* the bytes are
@@ -123,18 +128,52 @@ final class AnsiGuard
         return $kept;
     }
 
+    /**
+     * Reduce $text to what a *plain* (unstyled) title may contain: keep the text
+     * runs and drop every escape the scanner sees, SGR included.
+     *
+     * This is {@see PosterCard::render()}'s sanitising path, and it is the same
+     * scanner as {@see sanitize()} so the two boundaries cannot drift about what a
+     * control byte is. Unlike {@see sanitize()} there is nothing to preserve: a
+     * plain title carries no styling by contract, so a title that arrives with
+     * escapes in it is either hostile or double-encoded, and in both cases the
+     * escapes are what should go. That includes TAB / CR / LF, which would
+     * otherwise break the fixed-height cell the grid reserved for the card.
+     */
+    public static function stripControls(string $text): string
+    {
+        if (!self::carriesAnythingEscapable($text)) {
+            return $text;
+        }
+
+        $plain = '';
+        foreach (self::runs($text) as [$kind, $bytes]) {
+            if ($kind === self::TEXT) {
+                $plain .= $bytes;
+            }
+        }
+
+        return $plain;
+    }
+
     // ---- internals -----------------------------------------------------
 
     /**
      * Cheap pre-filter: does $ansi contain any byte the scanner could flag?
      *
-     * Plain text and multi-byte UTF-8 titles are the common case and neither can
-     * reach the scanner's unsafe branches: every unsafe run starts with ESC or a
-     * C0/DEL control byte, so a string without one is safe by construction.
+     * Plain ASCII and well-formed multi-byte text outside the C1 range — the
+     * overwhelming majority of titles — cannot reach an unsafe branch at all:
+     * every unsafe run starts with ESC, a C0/DEL byte, or a byte in 0x80–0x9F.
+     * That last range is deliberately in the test because it covers BOTH forms an
+     * 8-bit control takes on the wire: the raw C1 byte itself, and the second
+     * byte of its UTF-8 re-encoding (`C2 9B` = U+009B = 8-bit CSI). Well-formed
+     * CJK text does contain continuation bytes in that band (果 is `E6 9E 9C`), so
+     * this filter only decides whether to run the scanner — {@see textRunEnd()}
+     * is what keeps such sequences in the text run.
      */
     private static function carriesAnythingEscapable(string $ansi): bool
     {
-        return preg_match('/[\x00-\x1f\x7f]/', $ansi) === 1;
+        return preg_match('/[\x00-\x1f\x7f-\x9f]/', $ansi) === 1;
     }
 
     /**
@@ -173,15 +212,138 @@ final class AnsiGuard
                 continue;
             }
 
-            $end = $i;
-            while ($end < $length && $ansi[$end] !== self::ESC && !self::isControl($ansi[$end])) {
-                $end++;
+            $end = self::textRunEnd($ansi, $i, $length);
+            if ($end === $i) {
+                // An 8-bit C1 control: either the raw byte (0x9B = 8-bit CSI) or a
+                // codepoint that decodes to one (U+009B = `C2 9B`). Both are
+                // introducers a terminal acts on exactly as if `ESC` had been
+                // spelled out, so the parameters that belong to them go too —
+                // otherwise `C2 9B 32 4A` would shed its CSI and keep "2J" as text.
+                $size = self::encodedC1Length($ansi, $i, $length);
+                $end = self::c1SequenceEnd($ansi, $i + $size, self::c1CodeAt($ansi, $i));
+                $runs[] = [self::UNSAFE, substr($ansi, $i, $end - $i)];
+                $i = $end;
+                continue;
             }
+
             $runs[] = [self::TEXT, substr($ansi, $i, $end - $i)];
             $i = $end;
         }
 
         return $runs;
+    }
+
+    /**
+     * End of the text run at $start: every byte up to the next ESC, C0/DEL or C1
+     * control — where a well-formed UTF-8 sequence counts as one indivisible
+     * unit. Consuming sequences whole is what stops the continuation bytes of
+     * legitimate CJK text (果 = `E6 9E 9C`) from being mistaken for an 8-bit C1
+     * control, while a *stray* byte in that band still ends the run.
+     *
+     * Returns $start itself when the byte there is a C1 control, so the caller
+     * classifies it as an unsafe run.
+     */
+    private static function textRunEnd(string $ansi, int $start, int $length): int
+    {
+        $i = $start;
+
+        while ($i < $length) {
+            $byte = ord($ansi[$i]);
+
+            if ($byte === 0x1b || self::isControl(chr($byte)) || self::isC1At($ansi, $i, $length)) {
+                break;
+            }
+
+            $i += max(1, self::utf8SequenceLength($ansi, $i, $length));
+        }
+
+        return $i;
+    }
+
+    /**
+     * Whether the (sub-)sequence at $start is an 8-bit control character: a raw
+     * byte in 0x80–0x9F that no well-formed sequence claimed, or its UTF-8
+     * re-encoding `C2 80`–`C2 9F` (= U+0080–U+009F). Real glyphs in that block
+     * start at U+00A0 (`C2 A0`), so the encoded form has no false positives.
+     */
+    private static function isC1At(string $ansi, int $start, int $length): bool
+    {
+        $byte = ord($ansi[$start]);
+
+        if ($byte === 0xc2) {
+            $next = $start + 1 < $length ? ord($ansi[$start + 1]) : -1;
+
+            return $next >= 0x80 && $next <= 0x9f;
+        }
+
+        return $byte >= 0x80 && $byte <= 0x9f;
+    }
+
+    /** Byte length of the C1 control at $start — 2 when UTF-8-encoded, else 1. */
+    private static function encodedC1Length(string $ansi, int $start, int $length): int
+    {
+        return self::isC1At($ansi, $start, $length) && ord($ansi[$start]) === 0xc2 ? 2 : 1;
+    }
+
+    /**
+     * The C1 codepoint at $start as its control number (0x80–0x9F), whether it was
+     * written as one raw byte or re-encoded in UTF-8.
+     */
+    private static function c1CodeAt(string $ansi, int $start): int
+    {
+        return ord($ansi[$start]) === 0xc2 ? ord($ansi[$start + 1]) : ord($ansi[$start]);
+    }
+
+    /**
+     * Exclusive end of an unsafe sequence introduced by the 8-bit C1 control of
+     * code $code at $after — the same forms {@see escapeSequenceEnd()} knows, with
+     * the one-byte introducer already consumed: 0x9B is CSI, 0x9D an OSC string,
+     * and 0x90/0x98/0x99/0x9A the DCS/SOS/PM/APC strings. Every other C1 (the Fe
+     * controls, a stray ST) is a single byte — the guard removes it but does not
+     * let it swallow the text behind it. Nothing here admits 8-bit *styling*:
+     * `9B … m` is rejected even though a terminal would honour it, because every
+     * renderer in this ecosystem emits the 7-bit form.
+     */
+    private static function c1SequenceEnd(string $ansi, int $after, int $code): int
+    {
+        return match ($code) {
+            0x9b => self::csiSequenceEnd($ansi, $after),
+            0x9d => self::stringSequenceEnd($ansi, $after, true),
+            0x90, 0x98, 0x99, 0x9a => self::stringSequenceEnd($ansi, $after, false),
+            default => $after,
+        };
+    }
+
+    /**
+     * Length of the well-formed UTF-8 sequence starting at $start (1 for ASCII),
+     * or 0 when the bytes there are not one — a lone lead byte, a truncated tail,
+     * or an over-long/surrogate form all report 0 and are treated as one byte of
+     * opaque text rather than rejected: mojibake is not a control sequence.
+     */
+    private static function utf8SequenceLength(string $ansi, int $start, int $length): int
+    {
+        $lead = ord($ansi[$start]);
+
+        $expected = match (true) {
+            $lead < 0x80 => 1,
+            $lead >= 0xc2 && $lead <= 0xdf => 2,
+            $lead >= 0xe0 && $lead <= 0xef => 3,
+            $lead >= 0xf0 && $lead <= 0xf4 => 4,
+            default => 0,
+        };
+
+        if ($expected < 2 || $start + $expected > $length) {
+            return 0;
+        }
+
+        for ($i = $start + 1; $i < $start + $expected; $i++) {
+            $continuation = ord($ansi[$i]);
+            if ($continuation < 0x80 || $continuation > 0xbf) {
+                return 0;
+            }
+        }
+
+        return $expected;
     }
 
     /**
@@ -205,6 +367,28 @@ final class AnsiGuard
     }
 
     /**
+     * Exclusive end of a CSI sequence whose introducer consumed up to $after:
+     * parameter bytes (0x30–0x3F), one optional intermediate (0x20–0x2F), then a
+     * single final byte (0x40–0x7E). A truncated CSI ends at the byte that proves
+     * it stopped being one instead of eating the rest of the string, so a
+     * following well-formed sequence is still classified on its own terms.
+     */
+    private static function csiSequenceEnd(string $ansi, int $after): int
+    {
+        $length = strlen($ansi);
+        $i = $after;
+
+        while ($i < $length && ord($ansi[$i]) >= 0x20 && ord($ansi[$i]) <= 0x3f) {
+            $i++;
+        }
+        if ($i < $length && ord($ansi[$i]) >= 0x40 && ord($ansi[$i]) <= 0x7e) {
+            return $i + 1;
+        }
+
+        return min($i, $length);
+    }
+
+    /**
      * Exclusive end of the (unsafe) escape sequence at $start, scanned by
      * ECMA-48 form so no hostile byte can hide past our reading:
      *
@@ -216,6 +400,9 @@ final class AnsiGuard
      *  - DCS / SOS / PM / APC (`ESC P X ^ _`) up to ST (`ESC \`).
      *  - Charset designators (`ESC ( B`): three bytes.
      *  - Anything else: two bytes.
+     *
+     * A truncated sequence ends where it provably stops being one (the next ESC,
+     * or the end of the input) — never by swallowing the rest of the string.
      *
      * Always returns a value greater than $start, so {@see runs()} cannot stall.
      */
@@ -230,15 +417,7 @@ final class AnsiGuard
         $lead = $ansi[$i];
 
         if ($lead === '[') {
-            $i++;
-            while ($i < $length && ord($ansi[$i]) >= 0x20 && ord($ansi[$i]) <= 0x3f) {
-                $i++;
-            }
-            if ($i < $length && ord($ansi[$i]) >= 0x40 && ord($ansi[$i]) <= 0x7e) {
-                return $i + 1;
-            }
-
-            return $i;
+            return self::csiSequenceEnd($ansi, $i + 1);
         }
 
         if ($lead === ']') {
@@ -259,8 +438,15 @@ final class AnsiGuard
     /**
      * End of a string parameter sequence (OSC / DCS / SOS / PM / APC) started at
      * $from: terminated by ST (`ESC \`), and by BEL too when $belTerminates.
-     * Unterminated payloads run to the end of the input — the whole smuggled
-     * payload is dropped, never emitted.
+     *
+     * ST arrives in three forms and all three terminate it — `ESC \`, the raw byte
+     * 0x9C, and its UTF-8 re-encoding `C2 9C` — because a terminal in UTF-8 mode
+     * decodes the last two to the same control.
+     *
+     * Any other ESC ends the run rather than being swallowed by it: an
+     * unterminated payload is dropped, but the next sequence is still classified
+     * on its own terms, so one truncated OSC cannot quietly delete the rest of a
+     * title. Only a payload that runs to the end of the input consumes everything.
      */
     private static function stringSequenceEnd(string $ansi, int $from, bool $belTerminates): int
     {
@@ -269,7 +455,16 @@ final class AnsiGuard
             if ($belTerminates && $ansi[$i] === "\x07") {
                 return $i + 1;
             }
-            if ($ansi[$i] === self::ESC && ($ansi[$i + 1] ?? '') === '\\') {
+
+            if ($ansi[$i] === self::ESC) {
+                return ($ansi[$i + 1] ?? '') === '\\' ? $i + 2 : $i;
+            }
+
+            if ($ansi[$i] === "\x9c") {
+                return $i + 1;
+            }
+
+            if ($ansi[$i] === "\xc2" && ($ansi[$i + 1] ?? '') === "\x9c") {
                 return $i + 2;
             }
         }
