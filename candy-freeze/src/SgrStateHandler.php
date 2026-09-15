@@ -221,11 +221,12 @@ final class SgrStateHandler implements Handler
      * <p>`SugarCraft\Spark\Inspector` labels an SGR with the same count rule on
      * the same bytes — measured to agree on every colour-resolving shape both
      * suites pin — so a well-formed spec means one colour and one label. A
-     * group that cannot resolve is the honest exception: this lib falls back to
-     * the flat parameter read (`38:2::;1;2;3` paints `#000001`), the inspector
-     * labels the truncated group and never guesses a colour. That divergence is
-     * pinned by each suite's known-limitation test; a change to the count rule
-     * here must be mirrored there.
+      * group that cannot resolve is the honest exception: this lib falls back to
+      * the flat parameter read (`38:2::;1;2;3` paints `#000001`), the inspector
+      * labels the truncated group and never guesses a colour. Both sides pin
+      * that divergence literally — `testUnresolvableColonGroupFallsBackAcrossParameterBoundaries`
+      * here, `ByteFidelityTest::testColonTruncatedExtendedColoursAreReportedAsTruncated`
+      * in sugar-spark. A change to the count rule here must be mirrored there.
      *
      * @param list<int> $group `38` (or `48`) followed by its sub-parameters
      */
