@@ -26,7 +26,10 @@ use SugarCraft\Pty\Posix\PosixChild;
  * `bin/pty-shim.php` which runs `setsid()` + `ioctl(0, TIOCSCTTY, 0)`
  * + `pcntl_exec()` so the child claims the slave PTY as its
  * controlling terminal — required for Ctrl+C → SIGINT delivery and
- * other tty-driven job-control signals.
+ * other tty-driven job-control signals. The wrap carries this process's
+ * own autoloader to the shim as `--autoload=` (see {@see self::wrapInShim()})
+ * so the shim still resolves `SugarCraft\Pty\*` when it is reached
+ * through a symlinked vendor directory.
  *
  * Mirrors charmbracelet/x/xpty.UnixPty.Start's spawn algorithm.
  */
@@ -120,9 +123,21 @@ final class Spawn
     }
 
     /**
-     * Prepend `[PHP_BINARY, /path/to/pty-shim.php]` to the cmd so the
-     * actual command runs inside a session where the slave PTY is the
-     * controlling terminal.
+     * Prepend `[PHP_BINARY, /path/to/pty-shim.php, --autoload=<path>?, ...]`
+     * to the cmd so the actual command runs inside a session where the
+     * slave PTY is the controlling terminal.
+     *
+     * The `--autoload=` token hands the shim the autoloader THIS process
+     * is running under. WHY: PHP resolves `__FILE__`/`__DIR__` through
+     * symlinks, so when this package is installed as a Composer path-repo
+     * sibling — the monorepo's linked shape, and any consumer whose
+     * `vendor/sugarcraft/candy-pty` symlinks a checkout with no `vendor/`
+     * of its own — the shim cannot find an autoloader from its own
+     * location. This process, by contrast, loaded these very classes
+     * through the consumer's autoloader; naming that file outright turns
+     * the shim's path guessing into a fact. When no autoload.php can be
+     * identified here, the token is omitted and the shim's own resolution
+     * ladder (see bin/pty-shim.php) takes over.
      *
      * @param list<string> $cmd
      * @return list<string>
@@ -133,12 +148,48 @@ final class Spawn
             throw new PtyException(Lang::t('spawn.shim_pcntl_required'));
         }
 
-        $shim = __DIR__ . self::SHIM_RELATIVE;
-        if (!\is_file($shim) || !\is_readable($shim)) {
-            throw new PtyException(Lang::t('spawn.shim_not_found', ['path' => $shim]));
+        // realpath() so the child's argv[0] names the canonical location:
+        // `__DIR__ . '/../bin/…'` would otherwise hand the shim an
+        // unresolved path, and every path the shim reasons about (its own
+        // probes, the lexical vendor-root read) deserves to start clean.
+        $shim = \realpath(__DIR__ . self::SHIM_RELATIVE);
+        if ($shim === false || !\is_readable($shim)) {
+            throw new PtyException(Lang::t('spawn.shim_not_found', ['path' => __DIR__ . self::SHIM_RELATIVE]));
         }
 
-        return [PHP_BINARY, $shim, ...$cmd];
+        $argv = [PHP_BINARY, $shim];
+        $autoload = self::callerAutoloader();
+        if ($autoload !== null) {
+            $argv[] = '--autoload=' . $autoload;
+        }
+
+        return [...$argv, ...$cmd];
+    }
+
+    /**
+     * Absolute path of the `vendor/autoload.php` this process actually
+     * included, or null when none can be identified.
+     *
+     * Scanning the include set rather than probing from `__DIR__` is the
+     * whole point: `__DIR__` sits in the REAL package checkout (symlinks
+     * resolved), which in a path-repo install is precisely the directory
+     * that carries no vendor — while the entrypoint every Composer
+     * bootstrap ran (`$loader = require .../vendor/autoload.php`) is the
+     * consumer's own, and it is in every phpunit/CLI process by
+     * construction. The first match wins: it is the earliest-included,
+     * i.e. the loader that started this process.
+     *
+     * @return string|null
+     */
+    private static function callerAutoloader(): ?string
+    {
+        foreach (\get_included_files() as $file) {
+            if (\preg_match('#/vendor/autoload\.php$#', $file) === 1 && \is_readable($file)) {
+                return $file;
+            }
+        }
+
+        return null;
     }
 
     private function __construct() {}
