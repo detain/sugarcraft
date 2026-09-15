@@ -1161,4 +1161,65 @@ final class ChartTest extends TestCase
         $this->assertSame(130, $widthFor(60, 40), 'n>cw: per-bar floor keeps 1-cell bars, E=120');
         $this->assertGreaterThanOrEqual(50, $widthFor(2, 40), 'invariant: diffWidth >= chartWidth + 10');
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // E731 literal-twin pins: generateGridLines/formatYLabel moved to
+    // the shared ChartGridGeometry trait (Area carried the same code
+    // verbatim under the name formatValue). These pins freeze the
+    // rendered Y-axis gutter — str_pad(label, 8) + ' ', right-padded —
+    // at top / mid / bottom chart rows so a change to the shared math
+    // reddens BOTH consumers. Default chart: heightConstraint 10, so
+    // line 0 is gridLines[9] (max), line 4 is gridLines[5], line 9 is
+    // gridLines[0] (min anchor).
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testChartGridLineValuesAreExactThroughTheSharedTrait(): void
+    {
+        $lines = explode("\n", Chart::new([
+            new ChartDataPoint('a', 0.0),
+            new ChartDataPoint('b', 20.0),
+        ])->render());
+
+        $this->assertSame('20       ', substr($lines[0], 0, 9), 'top row = max');
+        $this->assertSame('11.1     ', substr($lines[4], 0, 9), 'step = (max-min)/(height-1) = 20/9');
+        $this->assertSame('0        ', substr($lines[9], 0, 9), 'bottom row = min anchor');
+    }
+
+    public function testChartYLabelFormatBranchesAreExactThroughTheSharedTrait(): void
+    {
+        // K branch + %.1f decimal + %.0f whole-number fallback
+        $thousands = explode("\n", Chart::new([
+            new ChartDataPoint('a', 0.0),
+            new ChartDataPoint('b', 1500.0),
+        ])->render());
+        $this->assertSame('1.5K     ', substr($thousands[0], 0, 9));
+        $this->assertSame('833.3    ', substr($thousands[4], 0, 9));
+        $this->assertSame('0        ', substr($thousands[9], 0, 9));
+
+        // M branch
+        $millions = explode("\n", Chart::new([
+            new ChartDataPoint('a', 0.0),
+            new ChartDataPoint('b', 2500000.0),
+        ])->render());
+        $this->assertSame('2.5M     ', substr($millions[0], 0, 9));
+        $this->assertSame('1.4M     ', substr($millions[4], 0, 9));
+        $this->assertSame('0        ', substr($millions[9], 0, 9));
+
+        // Decimal branch (%.1f on non-whole steps)
+        $tiny = explode("\n", Chart::new([
+            new ChartDataPoint('a', 0.0),
+            new ChartDataPoint('b', 0.5),
+        ])->render());
+        $this->assertSame('0.4      ', substr($tiny[2], 0, 9), 'gridLines[7] = 0.5·7/9 = 0.388…');
+        $this->assertSame('0        ', substr($tiny[9], 0, 9));
+
+        // Negative min: Chart anchors min at min(0, min(values)) — the
+        // bottom label is the exact negative floor, the top the exact max.
+        $signed = explode("\n", Chart::new([
+            new ChartDataPoint('a', -10.0),
+            new ChartDataPoint('b', 10.0),
+        ])->render());
+        $this->assertSame('10       ', substr($signed[0], 0, 9));
+        $this->assertSame('-10      ', substr($signed[9], 0, 9));
+    }
 }

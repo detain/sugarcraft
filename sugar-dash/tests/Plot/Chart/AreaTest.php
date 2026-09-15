@@ -466,4 +466,62 @@ final class AreaTest extends TestCase
 
         $this->assertNotSame('', $rendered);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // E731 literal-twin pins: the generateGridLines/formatValue pair
+    // this class carried verbatim now lives in ChartGridGeometry and
+    // is shared with Chart. These pins freeze the rendered Y-axis
+    // gutter (label right-padded to 7 + space) at top / mid / bottom
+    // rows so a change to the shared math reddens BOTH consumers.
+    // Line 0 is the topmost chart row (gridLines[height-1] = max);
+    // heightConstraint is 12, so gridLines[6] lands on line 5 and the
+    // min anchor on line 11.
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testAreaGridLineValuesAreExactThroughTheSharedTrait(): void
+    {
+        $lines = explode("\n", $this->plainArea([
+            new AreaPoint('a', 0.0),
+            new AreaPoint('b', 1500.0),
+        ])->render());
+
+        $this->assertSame('1.5K    ', substr($lines[0], 0, 8));
+        $this->assertSame('1.4K    ', substr($lines[1], 0, 8));
+        $this->assertSame('818.2   ', substr($lines[5], 0, 8));
+        $this->assertSame('0       ', substr($lines[11], 0, 8));
+    }
+
+    public function testAreaYLabelFormatBranchesAreExactThroughTheSharedTrait(): void
+    {
+        // M branch (%.1fM) and the whole-number fallback
+        $millions = explode("\n", $this->plainArea([
+            new AreaPoint('a', 2500000.0),
+        ])->render());
+        $this->assertSame('2.5M    ', substr($millions[0], 0, 8));
+        $this->assertSame('1.4M    ', substr($millions[5], 0, 8));
+        $this->assertSame('0       ', substr($millions[11], 0, 8));
+
+        // Decimal branch (%.1f)
+        $tiny = explode("\n", $this->plainArea([
+            new AreaPoint('a', 0.0),
+            new AreaPoint('b', 0.5),
+        ])->render());
+        $this->assertSame('0.5     ', substr($tiny[0], 0, 8));
+        $this->assertSame('0.3     ', substr($tiny[5], 0, 8));
+
+        // Area anchors its grid at min = 0 (render(), not the trait): a
+        // negative point shifts only the scale, never the bottom label.
+        $signed = explode("\n", $this->plainArea([
+            new AreaPoint('a', -50.0),
+            new AreaPoint('b', 50.0),
+        ])->render());
+        $this->assertSame('27.3    ', substr($signed[5], 0, 8));
+        $this->assertSame('0       ', substr($signed[11], 0, 8));
+    }
+
+    /** Colorless Area with explicit points — deterministic (Area::new fixes defaults, sample() is random). */
+    private function plainArea(array $points): Area
+    {
+        return (new Area())->withDataPoints($points);
+    }
 }

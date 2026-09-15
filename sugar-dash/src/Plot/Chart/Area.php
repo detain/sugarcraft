@@ -25,6 +25,8 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Area implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use ChartGridGeometry;
+
     private ?int $width = null;
     private ?int $sizerHeight = null;
 
@@ -234,7 +236,7 @@ final class Area implements \SugarCraft\Dash\Foundation\Sizer
 
             // Y-axis label
             if ($this->showGrid) {
-                $yLabel = $this->formatValue($yValue);
+                $yLabel = $this->formatYLabel($yValue);
                 $line .= str_pad($yLabel, 7) . ' ';
             }
 
@@ -327,23 +329,6 @@ final class Area implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Generate grid line values.
-     *
-     * @return list<float>
-     */
-    private function generateGridLines(float $min, float $max, int $height): array
-    {
-        $lines = [];
-        $step = ($max - $min) / max(1, $height - 1);
-
-        for ($i = 0; $i < $height; $i++) {
-            $lines[] = $min + ($step * $i);
-        }
-
-        return $lines;
-    }
-
-    /**
      * Get the chart width.
      */
     private function getChartWidth(): int
@@ -360,23 +345,6 @@ final class Area implements \SugarCraft\Dash\Foundation\Sizer
     private function getChartHeight(): int
     {
         return $this->sizerHeight ?? $this->heightConstraint;
-    }
-
-    /**
-     * Format a Y-axis label.
-     */
-    private function formatValue(float $value): string
-    {
-        if (abs($value) >= 1000000) {
-            return sprintf('%.1fM', $value / 1000000);
-        }
-        if (abs($value) >= 1000) {
-            return sprintf('%.1fK', $value / 1000);
-        }
-        if ($value === floor($value)) {
-            return sprintf('%.0f', $value);
-        }
-        return sprintf('%.1f', $value);
     }
 
     /**

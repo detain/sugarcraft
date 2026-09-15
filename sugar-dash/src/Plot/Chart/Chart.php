@@ -80,6 +80,8 @@ final class ChartRenderContext
  */
 final class Chart implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use ChartGridGeometry;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -443,40 +445,6 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return trim($output);
-    }
-
-    /**
-     * Generate grid line values.
-     *
-     * @return list<float>
-     */
-    private function generateGridLines(float $min, float $max, int $height): array
-    {
-        $lines = [];
-        $step = ($max - $min) / max(1, $height - 1);
-
-        for ($i = 0; $i < $height; $i++) {
-            $lines[] = $min + ($step * $i);
-        }
-
-        return $lines;
-    }
-
-    /**
-     * Format a Y-axis label.
-     */
-    private function formatYLabel(float $value): string
-    {
-        if (abs($value) >= 1000000) {
-            return sprintf('%.1fM', $value / 1000000);
-        }
-        if (abs($value) >= 1000) {
-            return sprintf('%.1fK', $value / 1000);
-        }
-        if ($value === floor($value)) {
-            return sprintf('%.0f', $value);
-        }
-        return sprintf('%.1f', $value);
     }
 
     /**
