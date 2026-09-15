@@ -73,7 +73,7 @@ companion fold `5c3bb3d1c`) − 4 wave-2 closures (**E716, E718, E720 as CLOSED-
 CLOSED-in-place** — lanes q7/q8/q9/q5, picks `364c43b16`/`57a270cb1`/`2dfeaf3b4`+`87c3f5ab4`/
 `3d053be7b` + corruption repair `d51bb2a6f` + companion fold `269101e30`) − 3 wave-3 closures
 (**E717, E721, E722 CLOSED-in-place** at this weld — lanes q10/q11/q12, picks `38a284716`/`4436e7ebc`/
-`4f6637d1c`+`bd07426d2` + mosaic docblock-precision reword `9b9cb0b05`; E721 carries the rv MINOR-1
+`4f6637d1c`+`bd07426d2` + mosaic docblock-precision reword `61d7d7deb`; E721 carries the rv MINOR-1
 commit-message erratum restatement, E722 carries both mosaic mint-premises-FALSE errata + the four
 interface obligations). Survivor by queue home: E714 (LOW — UNASSIGNED, first r83 candidate). E720's
 20 RESIDUAL candidates flow to the ROUND-82 CLOSEOUT mint decision (top rows in
