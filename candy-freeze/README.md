@@ -60,6 +60,10 @@ file_put_contents('out.svg', $svg);
 ANSI input is honoured — SGR foreground colours (16 / 256 / 24-bit truecolor)
 plus bold / italic / underline become `<tspan>` segments in the output.
 Background colours are rendered as per-segment `<rect>` fills behind the text.
+Extended colours are read in both spellings xterm allows — the flat
+`38;2;R;G;B` and the grouped `38:2::R:G:B` (ECMA-48 sub-parameters, where the
+slot after the mode is a colour-space id and not the red component) — and both
+resolve to the same `#rrggbb`.
 
 ```php
 $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");

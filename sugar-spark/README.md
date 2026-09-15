@@ -78,8 +78,60 @@ echo Inspector::report($capturedTerminalOutput);
 - **2-byte ESC** — DECSC / DECRC / keypad mode / index / reverse-index /
   reset.
 
-Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor —
-nothing is silently swallowed.
+Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor — an
+unrecognised sequence is never silently swallowed.
+
+Reported bytes are the bytes that were sent: parameters keep the separator the
+sender used (`ESC[4;3m` never comes back as `ESC[4:3m`, and an omitted
+parameter keeps its empty slot) — in a CSI **and** in a DCS prelude, which travel
+through the same parameter arrays; a string's `ESC \` terminator is reported once,
+inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
+alone; and a sequence the stream cut short still arrives, as a `truncated …`
+segment carrying its raw bytes.
+
+Eight deviations from exact byte equality are known, and each is pinned by a
+named test rather than hidden — anything *else* that loses a byte is a bug:
+
+1. An OSC is re-emitted with a BEL terminator (`ESC ] … BEL`) even when the input
+   closed it with `ESC \`, because that is the spelling terminals accept
+   everywhere. (`testOscTerminatedByStIsNormalizedToBelWithoutGhost`)
+2. A re-emitted DCS prelude is lossy: its final byte is dropped and an
+   intermediate byte comes back ahead of the parameters, so `ESC P 1 $ r ST`
+   arrives as `ESC P $ 1 ST`. The parameters themselves keep their own
+   separators. (`testDcsParametersKeepTheirOwnSeparators`,
+   `testDcsPreludeRebuildHoistsTheIntermediateAheadOfTheParameters`)
+3. A sequence is capped at 32 parameters; past that the separator is dropped and
+   digits keep accumulating into the last slot, so `ESC[1;…;32;33m` arrives as the
+   single parameter `3233`. (`testParameterCapIsReportedAsTheParserSawIt`)
+4. A parameter value accumulates only up to 65535, so an oversized value arrives
+   clamped rather than truncated mid-digit: `ESC[99999m` is `ESC[65535m`.
+5. A string payload stops at 64 KiB, so a longer OSC arrives cut at exactly that
+   length with its terminator still attached.
+6. Inside an **OSC** payload only, the C0 bytes candy-ansi maps to `None`
+   (`0x00`–`0x06`, `0x08`–`0x17`, `0x19`, `0x1C`–`0x1F`) never reach the buffer:
+   `ESC]0;a<EOT>b BEL` re-emits as `ESC]0;ab BEL`. The same byte does survive in a
+   DCS, SOS, PM or APC payload. (4–6:
+   `testIgnoredControlBytesAndParserCapsArriveAsTheParserRewroteThem`)
+7. An illegal parameter byte (`-`, CAN, SUB) cancels the sequence and discards the
+   bytes collected so far: `ESC[31;-2mX` reaches the segmenter as only `mX` — no
+   segment is invented for a sequence that never dispatched. The one exception is a
+   cancelled prelude followed by a truncated tail: the tail reports the raw bytes
+   still in flight, so it replays the cancelled prelude too (`ESC[31;-2m` +
+   `ESC[3` arrives as one 11-byte `truncated CSI`). That over-reports rather than
+   under-reports, and CAN does not leak because its `execute` callback flushes the
+   byte window while an illegal byte leaves no callback at all.
+   (`testCancelledSequenceIsLostExactlyAsTheParserLosesIt`)
+8. A truncated UTF-8 rune at end of stream is dropped, because that is not an
+   escape-sequence state for `Parser::flush()` to report.
+   (`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`)
+
+The first two are this inspector's own re-emission choices. Items 3–8 are
+candy-ansi rewriting the bytes before this lib ever sees a dispatch — recorded in
+`CALIBER_LEARNINGS.md`, and each transformation is byte-identical to the behaviour
+before this contract was written, so they are fidelity items for candy-ansi, not
+for this inspector. What *is* new here is what the inspector reports afterwards:
+before this branch a truncated tail simply vanished, which is why item 7's
+cancelled prelude can now reappear inside one.
 
 ## Test
 

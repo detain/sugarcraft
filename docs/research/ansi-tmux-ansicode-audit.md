@@ -35,6 +35,20 @@
 - **SGR 58/59 + colon `38:2::` mis-consumed**: `ESC[58;5;9m` → blink+strikethrough with underline OFF (observed cell sgr) while candy-core *emits* 58 (`Color.php:523`); colon form → `foreground:null`. **Major** (candy-vt `Handler/SgrHandler.php:69,72,135-150`; root cause candy-ansi `Parser.php:280-308` colon-flattening)
 - **candy-input misc decoders**: SGR wheel `ESC[<64;10;5M` → phantom left-click (observed); `ESC[Z` Backtab swallowed; focus `\x1b[I` only when chunk-final; `ESC O M`/keypad absent; OSC/DCS replies leak as Alt-key spam (all observed). **Major** (candy-input `EscapeDecoder.php:417-431,357-362,547,309-326`)
 - **candy-freeze/sugar-spark re-copy bugs**: colon SGR → corrupt 18-hex `#ffffffffffffffff50a0` (observed); `38;5;m` → white; frame width from `Ansi::strip` ≠ drawn text (phantom cols); sugar-spark rewrites input bytes (`ESC[4;3m` reported as `ESC[4:3m` "underline curly"), emits ghost `ESC\` after DCS, loses truncated CSIs (`parse("\x1b[31")` → 0 segments), and an aborted `ESC O` **steals the next printable** (`ESCOX` "SS3 X", observed). **Major** (candy-freeze `AnsiParser.php:201-223`, sugar-spark `AnsiHandler.php:156-286`)
+  > **Update — six of the seven above are fixed** (wave-4 parsers track, sugar-spark + candy-freeze).
+  > Colon sub-parameters now resolve through `Parser::subparams()` in candy-freeze
+  > `SgrStateHandler::extendedColour()` (`:181`) and every spelling is pinned six-hex by
+  > `AnsiParserColonSubparametersTest`; `38;5;m` falls back to palette 0 per ECMA-48 §5.4.1
+  > (`testOmittedTwentyFiveColourIndexFallsBackToBlack`). In sugar-spark `AnsiHandler`
+  > re-emits the input's own separators (`joinParams()` `:325`), consumes a DCS/OSC string
+  > terminator instead of re-emitting a ghost `ESC \` (and the window is one byte wide, so a
+  > later standalone `ESC \` is still reported), reports an unterminated tail at `finish()`
+  > instead of dropping it (`parse("\x1b[31")` → one `truncated CSI` segment), and consumes
+  > exactly one SS3 final byte `0x40–0x7E`, re-processing anything else as text
+  > (`printChar()` `:237`). All pinned by `sugar-spark/tests/ByteFidelityTest.php`.
+  > Still open here: frame width from `Ansi::strip` ≠ drawn text (phantom cols) — different
+  > subsystem, untouched by that track. The `file:line` refs above are the audit's own
+  > snapshot and predate that change.
 
 ### Unimplemented extensions (not bugs — safely ignored, listed for completeness)
 

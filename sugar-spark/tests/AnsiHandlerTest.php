@@ -127,28 +127,41 @@ final class AnsiHandlerTest extends TestCase
         // DCS with xterm XTVERSION payload
         $segments = $handler->parse("\x1bP>|xterm(367)\x1b\\");
 
-        $this->assertGreaterThanOrEqual(1, count($segments));
+        $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);
+        // The `|` is the DCS prelude's final byte and the re-emission drops it
+        // (documented normalisation); the terminator belongs to this segment,
+        // so nothing may follow it.
+        $this->assertSame("\x1bP>xterm(367)\x1b\\", $segments[0]->raw());
         $this->assertStringContainsString('terminal version', $segments[0]->describe());
     }
 
     public function testParseApcSequence(): void
     {
         $handler = new AnsiHandler();
-        $segments = $handler->parse("\x1b_candyzone:S:btn\x1b\\");
+        $input = "\x1b_candyzone:S:btn\x1b\\";
+        $segments = $handler->parse($input);
 
-        $this->assertCount(2, $segments);
+        // The APC segment already carries its ST terminator, so the parser's
+        // follow-up `ESC \` dispatch must not surface as a second, ghost
+        // segment. Regression (SP-R2): 2 segments — APC + bare ESC \.
+        $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);
+        $this->assertSame($input, $segments[0]->raw());
         $this->assertStringContainsString('CandyZone marker', $segments[0]->describe());
     }
 
     public function testParseSosPmSequence(): void
     {
         $handler = new AnsiHandler();
-        $segments = $handler->parse("\x1bXtest\x1b\\");
+        $input = "\x1bXtest\x1b\\";
+        $segments = $handler->parse($input);
 
-        $this->assertCount(2, $segments);
+        // Same ghost-terminator contract as the APC case above: the ST is part
+        // of the SOS segment, never a bare `ESC \` of its own.
+        $this->assertCount(1, $segments);
         $this->assertInstanceOf(SequenceSegment::class, $segments[0]);
+        $this->assertSame($input, $segments[0]->raw());
         $this->assertStringContainsString('SOS', $segments[0]->describe());
     }
 
