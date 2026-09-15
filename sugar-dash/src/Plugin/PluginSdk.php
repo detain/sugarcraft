@@ -40,7 +40,25 @@ abstract class PluginSdk
     private int $interval = 0;
 
     /**
-     * Run the plugin SDK.
+     * Run the plugin as the main loop of its own process.
+     *
+     * E723 (round 82) — exit posture on the record. This is a plugin-process
+     * entrypoint, not a composable library routine: the example at the top of
+     * this class is the ENTIRE body of the plugin author's launch script, and
+     * the loop consumes the process's STDIN for its whole life — an in-host
+     * caller would already have lost its stdin long before the exit matters.
+     * `exit(0)` at the tail is the DESIGNED terminus on stdin EOF, and it is
+     * the cooperative half of {@see ExternalModule}'s E366 teardown ladder:
+     * the host closes the pipes, the SDK sees EOF, exits on its own inside
+     * the grace rung, and the host never escalates to a signal.
+     *
+     * The `never` is load-bearing, not decoration: normal completion of a
+     * never-typed function raises a TypeError, so deleting the exit would
+     * turn the child's observable status from 0 into 255 — an uncaught
+     * throw at the top of the plugin's script. The terminus therefore stays
+     * `exit(0)`, fail-closed policed by tests/Plugin/SrcExitCensusTest.php:
+     * exactly one justified T_EXIT in src/, inside THIS body, and a real
+     * child proving EOF ⇒ status 0 with clean stderr.
      *
      * @param callable(Request): Response $handler Request handler
      */

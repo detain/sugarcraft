@@ -92,6 +92,76 @@ final class ExternalModuleTeardownTest extends TestCase
         }
     }
 
+    public function testDestructStopsAtTheSigtermRungForAChildThatIgnoresEofButHeedsTerm(): void
+    {
+        // E723 re-verify of the E366 ladder: the stubborn-child test above
+        // proves the child ends up dead inside the total bound, and the cat
+        // test below proves the grace rung answers early — but NOTHING yet
+        // pinned the MIDDLE rung, because with the TERM line deleted the
+        // stubborn test still passes (KILL alone satisfies its < 6.0 bound).
+        // This child closes neither door: it ignores stdin EOF (never reads
+        // fd 0) yet heeds SIGTERM. The discriminator is HOW it dies: a
+        // catchable TERM lets the shell announce itself in the death file;
+        // signal 9 is uncatchable and would leave the file absent while
+        // landing inside the same time window.
+        $death = \sys_get_temp_dir() . '/q9-dash-termed-' . \getmypid() . '.dead';
+        $ready = \sys_get_temp_dir() . '/q9-dash-ready-' . \getmypid() . '.ready';
+        @\unlink($death);
+        @\unlink($ready);
+
+        // sh installs the trap FIRST, then touches ready — so a TERM that
+        // arrives after the handshake was necessarily armed, never absorbed
+        // by the default disposition in the exec gap. MARKER in argv arms
+        // the pkill leash below.
+        $script = 'trap "printf TERMED > ' . $death . '; exit 0" TERM; touch ' . $ready . '; #' . self::MARKER . "\n"
+            . 'while :; do sleep 0.1; done';
+        $module = new ExternalModule('teardown-test', '/bin/sh', ['-c', $script]);
+        (new \ReflectionMethod($module, 'startProcess'))->invoke($module);
+        $this->armWatchdog();
+
+        try {
+            $deadline = \microtime(true) + 5.0;
+            while (!\file_exists($ready) && \microtime(true) < $deadline) {
+                \usleep(10_000);
+            }
+            $this->assertFileExists($ready, 'the TERM-heeding fixture never reached its ready touch');
+            $pid = $this->childPid($module);
+            $this->assertTrue($this->childRunning($module), 'the child must be alive before the destructor runs');
+
+            $start = \microtime(true);
+            unset($module);
+            $elapsed = \microtime(true) - $start;
+
+            // Grace rung burned in full (the child ignores EOF, so nothing
+            // shorter is legitimate)...
+            $this->assertGreaterThanOrEqual(
+                1.8,
+                $elapsed,
+                'a child that ignores EOF must sit out the grace rung before any signal',
+            );
+            // ...then TERM lands and the ladder STOPS — no KILL rung, whose
+            // extra poll budget would push the total past this ceiling.
+            $this->assertLessThan(
+                2.8,
+                $elapsed,
+                'a child that heeds SIGTERM must die on the TERM rung, not the escalation',
+            );
+            $this->assertFileExists(
+                $death,
+                'the death file can only be written by a caught SIGTERM — its absence means the ladder skipped TERM and killed',
+            );
+            $this->assertSame('TERMED', \file_get_contents($death));
+            $this->assertFalse(
+                \posix_kill($pid, 0),
+                'the TERM-killed child must be reaped, not left for init',
+            );
+        } finally {
+            @\unlink($death);
+            @\unlink($ready);
+            $this->cancelWatchdog();
+        }
+    }
+
     public function testDestructExitsFastForAChildThatClosesOnStdinEof(): void
     {
         // `cat` reads until EOF and exits — the polite plugin shape the
