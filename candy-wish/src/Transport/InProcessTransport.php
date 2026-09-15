@@ -18,7 +18,6 @@ use SugarCraft\Wish\Channel\DefaultChannelHandler;
 use SugarCraft\Wish\Channel\Msg\WindowChangeMsg;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
-use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport;
 
@@ -39,6 +38,8 @@ use SugarCraft\Wish\Transport;
  */
 final class InProcessTransport implements Transport, ChildSpawner
 {
+    use DispatchesMiddlewareStack;
+
     /**
      * PTY backend used by `runChild()`. Injected for testability — a
      * stub can satisfy `PtySystem` without touching libc / FFI.
@@ -398,26 +399,6 @@ final class InProcessTransport implements Transport, ChildSpawner
             return ['cols' => $cols, 'rows' => $rows];
         } catch (\Throwable) {
             return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
-        }
-    }
-
-    /**
-     * @param list<Middleware> $stack
-     */
-    private function dispatch(Context $ctx, Session $session, array $stack, int $idx): void
-    {
-        if ($idx >= \count($stack)) {
-            return;
-        }
-        if ($ctx->done()) {
-            return;
-        }
-        $next = function (Context $c, Session $s) use ($stack, $idx): void {
-            $this->dispatch($c, $s, $stack, $idx + 1);
-        };
-        $result = $stack[$idx]->handle($ctx, $session, $next);
-        if ($result instanceof \React\Promise\PromiseInterface) {
-            PromiseAwait::settle($result);
         }
     }
 

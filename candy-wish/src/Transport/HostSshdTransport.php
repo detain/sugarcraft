@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Transport;
 
 use SugarCraft\Wish\Context;
-use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport;
 
@@ -25,28 +24,10 @@ use SugarCraft\Wish\Transport;
  */
 final class HostSshdTransport implements Transport
 {
+    use DispatchesMiddlewareStack;
+
     public function run(Context $ctx, Session $session, array $stack): void
     {
         $this->dispatch($ctx, $session, $stack, 0);
-    }
-
-    /**
-     * @param list<Middleware> $stack
-     */
-    private function dispatch(Context $ctx, Session $session, array $stack, int $idx): void
-    {
-        if ($idx >= \count($stack)) {
-            return;
-        }
-        if ($ctx->done()) {
-            return;
-        }
-        $next = function (Context $c, Session $s) use ($stack, $idx): void {
-            $this->dispatch($c, $s, $stack, $idx + 1);
-        };
-        $result = $stack[$idx]->handle($ctx, $session, $next);
-        if ($result instanceof \React\Promise\PromiseInterface) {
-            PromiseAwait::settle($result);
-        }
     }
 }

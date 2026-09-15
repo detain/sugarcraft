@@ -9,7 +9,6 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware as MiddlewareContract;
 use SugarCraft\Wish\Session;
-use SugarCraft\Wish\Transport\PromiseAwait;
 
 /**
  * Abstract base for middleware that needs to perform async I/O before
@@ -20,6 +19,13 @@ use SugarCraft\Wish\Transport\PromiseAwait;
  * return a Promise. When the Promise resolves the chain continues
  * to `$next`. If the Promise rejects, the rejection propagates up
  * and the chain short-circuits.
+ *
+ * E730 (round 83): this class is a PURE async adapter — `handle()`
+ * hands the promise back untouched and never awaits it. The single
+ * settle point lives in the transport stack walk
+ * ({@see \SugarCraft\Wish\Transport\DispatchesMiddlewareStack}), which
+ * drives the promise to settlement before continuing the chain, so
+ * rejections still surface synchronously at dispatch for sync callers.
  *
  * Usage:
  *
@@ -44,16 +50,7 @@ abstract class AsyncMiddleware implements MiddlewareContract
             $next($c, $s);
         };
 
-        $result = $this->handleAsync($ctx, $session, $wrappedNext);
-        if (!$result instanceof PromiseInterface) {
-            return \React\Promise\resolve(null);
-        }
-        // Synchronously wait for the promise to settle so that rejections
-        // propagate as exceptions immediately. This enables synchronous
-        // calling conventions while still returning a promise for callers
-        // that prefer async handling.
-        PromiseAwait::settle($result);
-        return $result;
+        return $this->handleAsync($ctx, $session, $wrappedNext);
     }
 
     /**

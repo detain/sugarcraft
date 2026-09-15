@@ -231,8 +231,10 @@ final class LdapAuth extends AsyncMiddleware
 
 The promise returned by `handleAsync()` resolves when async work is
 done and the chain should proceed to `$next`; rejects to short-circuit
-the chain. The 30-second timeout is enforced by
-`AsyncMiddleware::await()`.
+the chain. The transport's single settle point
+(`Transport\DispatchesMiddlewareStack::dispatch()` →
+`PromiseAwait::settle()`) drives the promise with the pre-existing
+30-second timeout ceiling.
 
 ## Session metadata
 

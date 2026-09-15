@@ -8,7 +8,7 @@ The codebase has several architectural concerns that undermine its async foundat
 
 ## Critical Issues (file:line format)
 
-### 1. AsyncMiddleware blocks the event loop instead of delegating to transport ❗ r82: STILL LIVE — src/Middleware/AsyncMiddleware.php:55 still calls PromiseAwait::settle() synchronously inside handle()
+### 1. AsyncMiddleware blocks the event loop instead of delegating to transport ✅ r83: FIXED — E730 (lane r6): exactly the prescribed shape — handle() returns the promise directly; the uniform await now lives once in Transport/DispatchesMiddlewareStack (shared by both transports), with Context consulted at the await entry
 
 **File:** `src/Middleware/AsyncMiddleware.php`
 **Lines:** 41-52
@@ -352,7 +352,7 @@ The `sanitize()` method is good but only used in Auth. Other rejection paths (Ra
 
 ---
 
-### 43. PromiseAwait::settle() and AsyncMiddleware::handle() both await promises ❗ r82: STILL LIVE — src/Middleware/AsyncMiddleware.php:55 still calls PromiseAwait::settle() synchronously inside handle() (await logic still in both layers)
+### 43. PromiseAwait::settle() and AsyncMiddleware::handle() both await promises ✅ r83: FIXED — E730 (lane r6): AsyncMiddleware is a pure async adapter (no settle in handle()); the sole await lives in the new Transport/DispatchesMiddlewareStack trait, pinned at exactly-one call site by PromiseDispatchTest's token census
 
 **File:** `src/Transport/PromiseAwait.php:35-75`, `src/Middleware/AsyncMiddleware.php:41-52`
 
@@ -397,7 +397,7 @@ Doesn't work when PHP is not running as an SSH ForceCommand (e.g., CGI, some Fas
 
 ## Async Pattern Improvements
 
-### 48. AsyncMiddleware should NOT call PromiseAwait::settle() ❗ r82: STILL LIVE — src/Middleware/AsyncMiddleware.php:55 still calls PromiseAwait::settle() synchronously inside handle()
+### 48. AsyncMiddleware should NOT call PromiseAwait::settle() ✅ r83: FIXED — E730 (lane r6): handle() now returns the promise untouched; transports drive it via the shared DispatchesMiddlewareStack walk, which also consults Context cooperatively at the await entry
 
 **File:** `src/Middleware/AsyncMiddleware.php`
 **Lines:** 48-50
