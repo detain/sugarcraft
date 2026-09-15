@@ -739,6 +739,67 @@ final class ByteFidelityTest extends TestCase
         $this->assertSame($within, Inspector::parse($within)[0]->raw());
     }
 
+    public function testCancelledSequenceIsLostExactlyAsTheParserLosesIt(): void
+    {
+        // Candy-ansi cancels a CSI on an illegal parameter byte or on CAN/SUB and
+        // discards the bytes collected so far, per the ECMA-48 general form. That
+        // is the one place the inspector's byte account is not total, so the exact
+        // shape of the loss is pinned: the handler must neither leak the discarded
+        // bytes into a later segment nor invent a segment for a sequence that
+        // never dispatched. Byte-identical to `master` — a deliberate guard on the
+        // `inFlightBytes` bookkeeping, not a fix claimed here.
+        $cases = [
+            // Cancelled mid-CSI; the final byte falls through to Ground as text.
+            "\x1b[31;-2mX" => ['mX'],
+            "\x1b[-1m" => ['m'],
+            "\x1b[38:2::-1:2:3m" => [':2:3m'],
+            // CAN/SUB is executable, so it survives as its own C0 segment.
+            "\x1b[31\x18mX" => ["\x18", 'mX'],
+            "\x1b[31\x1amX" => ["\x1a", 'mX'],
+            // The case that actually guards the byte account: after a cancellation
+            // the next sequence must still report cleanly, with none of the
+            // discarded bytes leaking into it.
+            "\x1b[31;-2m\x1b[32mY" => ['m', "\x1b[32m", 'Y'],
+        ];
+
+        foreach ($cases as $input => $expected) {
+            $segments = Inspector::parse($input);
+
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), $segments),
+                bin2hex($input),
+            );
+        }
+    }
+
+    public function testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt(): void
+    {
+        // The one byte loss left in the contract, pinned so that a future fix is a
+        // deliberate change rather than a surprise. Candy-ansi holds an incomplete
+        // UTF-8 rune in its own buffer and `Parser::flush()` never dispatches it,
+        // because that is not an escape-sequence state - so a stream that ends
+        // mid-rune loses those bytes, with or without a sequence in front of them.
+        // Byte-identical to `master`; the fix belongs in candy-ansi (README.md).
+        $cases = [
+            "\x1b[31m\x1b[0m\xfe" => ["\x1b[31m", "\x1b[0m"],
+            "\x1b[31m\x1b[0m\xfeZ" => ["\x1b[31m", "\x1b[0m", 'Z'],
+            "caf\xc3\xa9 \xe2" => ["café "],
+            "x\xc3" => ['x'],
+            "\x1b[31m\xc3" => ["\x1b[31m"],
+        ];
+
+        foreach ($cases as $input => $expected) {
+            $segments = Inspector::parse($input);
+
+            $this->assertSame(
+                $expected,
+                array_map(static fn($segment): string => $segment->raw(), $segments),
+                bin2hex($input),
+            );
+        }
+    }
+
     // --- ambiguous truecolour spellings: the count rule both libs share -----
 
     public function testAmbiguousColonTruecolourUsesTheCountRule(): void

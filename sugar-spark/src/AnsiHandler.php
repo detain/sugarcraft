@@ -19,12 +19,15 @@ use SugarCraft\Ansi\Parser\State;
  * parameter separators keep their own `;`/`:` spelling, an unterminated
  * tail survives end-of-stream, and a string terminator is accounted for
  * exactly once. That fidelity is what makes the inspector trustworthy as a
- * byte-level debugging tool — reported bytes equal input bytes, minus the
- * normalisations `README.md` names and each suite pins: an OSC re-emitted
- * with a BEL terminator, a re-emitted DCS prelude that drops its final byte
- * and hoists an intermediate, candy-ansi's 32-parameter cap, and the two
- * cancellations inside the shared parser (an illegal parameter byte, and
- * CAN/SUB) that discard a sequence before it ever reaches this handler.
+ * byte-level debugging tool. Reported bytes equal input bytes minus five
+ * normalisations, each pinned by `ByteFidelityTest`: an OSC re-emitted with a
+ * BEL terminator; a re-emitted DCS prelude that drops its final byte and hoists
+ * an intermediate; candy-ansi's 32-parameter cap; and the two cancellations
+ * inside the shared parser — an illegal parameter byte, and CAN/SUB — that
+ * discard a sequence before it ever reaches this handler. A sixth loss is
+ * pinned but deliberately not fixed: a truncated UTF-8 rune at end of stream
+ * vanishes with it, because that is not an escape-sequence state for
+ * `Parser::flush()` to report. `README.md` carries the same list.
  *
  * Mirrors charmbracelet/x/ansi Handler — accumulates segments rather than
  * rendering to a terminal.

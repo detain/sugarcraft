@@ -103,7 +103,10 @@ in this inspector, and are recorded in `CALIBER_LEARNINGS.md`: an illegal
 parameter byte (`-`, CAN, SUB) cancels the sequence and discards the bytes
 collected so far, and a truncated UTF-8 rune at end of stream is dropped because
 it is not an escape-sequence state. Both are byte-identical to the behaviour
-before this contract was written, and both are fidelity items for candy-ansi.
+before this contract was written and each is pinned by its own test
+(`testCancelledSequenceIsLostExactlyAsTheParserLosesIt`,
+`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`) — both are fidelity
+items for candy-ansi, not for this inspector.
 
 ## Test
 
