@@ -215,6 +215,18 @@ final class Color
     }
 
     /**
+     * CIE L*a*b* (D65) coordinates of this color.
+     *
+     * @see ColorMath::toLab() — the underlying sRGB -> linear -> XYZ -> Lab chain
+     *
+     * @return array{l: float, a: float, b: float}
+     */
+    public function toLab(): array
+    {
+        return ColorMath::toLab($this->r, $this->g, $this->b);
+    }
+
+    /**
      * Return "#rrggbb" hex string.
      */
     public function toHex(): string
