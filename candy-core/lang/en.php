@@ -33,6 +33,18 @@ return [
     // Program.php
     'program.proc_open_failed'    => 'proc_open failed for: {cmd}',
 
+    // Util/Semaphore.php
+    'semaphore.limit_invalid'     => 'semaphore limit must be at least 1, got {limit}',
+    'semaphore.limit_busy'        => 'semaphore is busy: {held} running, {waiting} waiting',
+    'semaphore.shutdown'          => 'semaphore closed before a permit could be granted',
+    'semaphore.closed'            => 'semaphore is closed and cannot grant another permit',
+    'semaphore.derive_closed'     => 'cannot derive a new pool from a closed semaphore',
+
+    // Util/LruMap.php
+    'lru_map.capacity_invalid'    => 'LRU capacity must be at least 1, got {capacity}',
+    'lru_map.capacity_too_large'  => 'LRU capacity {capacity} exceeds growth guard {max}',
+    'lru_map.evict_from_empty'    => 'cannot evict from an empty LRU map',
+
     // Util/Validation.php
     'errors.negative_not_allowed'  => 'negative not allowed for {name}',
     'errors.value_must_be_positive' => '{name} must be positive, got {value}',
