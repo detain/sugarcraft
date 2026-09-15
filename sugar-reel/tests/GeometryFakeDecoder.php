@@ -14,8 +14,8 @@ use SugarCraft\Reel\Render\Mode;
  *
  * Used to prove the Player rebuilds the decoder on a mode switch — re-opening
  * at a new mode produces frames at the new pixel height (HalfBlock 2×, the
- * 1-row modes 1×). Extends FakeDecoder to be caught by the instanceof check
- * in rebuildDecoderAt() while overriding open() for geometry-aware frames.
+ * 1-row modes 1×). Extends FakeDecoder to inherit its reopensInPlace() === true
+ * capability while overriding open() for geometry-aware frames.
  *
  * @extends FakeDecoder
  */
@@ -36,7 +36,7 @@ final class GeometryFakeDecoder extends FakeDecoder
      * Regenerates frames at the new geometry. Deterministic non-empty
      * bytes of the exact w*h*3 length the renderer expects.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         $this->w = $cellsW;
         $this->frameH = $cellsH * ($mode?->rowsPerCell() ?? 2);
@@ -48,7 +48,7 @@ final class GeometryFakeDecoder extends FakeDecoder
             $this->frames[] = new RgbFrame($bytes, $this->w, $this->frameH);
         }
 
-        parent::open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+        parent::open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
     }
 
     /**
@@ -56,9 +56,9 @@ final class GeometryFakeDecoder extends FakeDecoder
      *
      * Re-opens with geometry-aware frame regeneration.
      */
-    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         // Regenerate frames at the new geometry, then reset index.
-        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Source;
 
+use SugarCraft\Reel\Support\BoundedReaper;
+
 /**
  * Immutable value object describing a video source probed from ffprobe JSON output.
  *
@@ -18,10 +20,27 @@ namespace SugarCraft\Reel\Source;
  * and all numeric fields at 0.0 / false — playback will degrade gracefully
  * (GIF fallback will be used if available, or a clear error message shown).
  *
+ * A hung ffprobe (a stalled remote URL, a pathological file) yields the same
+ * zeroed default after {@see self::PROBE_TIMEOUT_SECONDS} rather than blocking forever.
+ *
  * Mirrors the metadata shape used by maxcurzi/tplay and joelibaceta/video-to-ascii.
  */
 final class VideoSource
 {
+    /**
+     * Wall-clock ceiling for a single `ffprobe` invocation before the probe is
+     * abandoned (child killed, empty default returned). Comfortably longer than
+     * any healthy local probe, short enough that the UI never appears wedged.
+     */
+    private const PROBE_TIMEOUT_SECONDS = 10.0;
+
+    /**
+     * How long a drained-but-still-running ffprobe gets to exit on its own
+     * before the reaper escalates — bounds proc_close() the way
+     * {@see self::PROBE_TIMEOUT_SECONDS} bounds the stdout read.
+     */
+    private const PROBE_EXIT_GRACE_SECONDS = 1.0;
+
     /**
      * @param string $path    Resolved file path (never empty after probe)
      * @param int    $width   Frame width in pixels
@@ -130,15 +149,102 @@ final class VideoSource
 
         // Only descriptor 1 (stdout) is a pipe; descriptors 0 and 2 are
         // file-backed (/dev/null) and are NOT present in $pipes.
-        $stdout = stream_get_contents($pipes[1]);
+        //
+        // FINDINGS #46 (fail-closed probe): stream_get_contents() would block
+        // until ffprobe closes stdout. On a stalled remote URL, a corrupt file
+        // that keeps ffprobe probing, or a hung network mount, that never
+        // happens — and Player::open() calls probe() synchronously, so the whole
+        // UI freezes before the first frame ever renders. We drain stdout under
+        // a monotonic (hrtime) deadline instead: on overrun the child is killed and the
+        // probe returns the empty default (the same "unknown source" shape an
+        // absent ffprobe already yields), so playback degrades instead of hanging.
+        $stdout = self::drainWithTimeout($pipes[1], self::PROBE_TIMEOUT_SECONDS);
         fclose($pipes[1]);
 
+        if ($stdout === null) {
+            // Timed out: escalate-kill the wedged ffprobe before the shared
+            // reap below, so no orphan survives the failed probe.
+            BoundedReaper::terminateNow($process);
+        } else {
+            // EOF on stdout is not proof the child is gone: an ffprobe that
+            // printed its JSON then wedged before exiting would block the
+            // proc_close() below unboundedly — the very freeze the drain just
+            // removed from the read side. Give it a short grace to exit
+            // naturally, then escalate; a killed child returns non-zero and
+            // fails closed even though bytes arrived.
+            $exitDeadline = hrtime(true) / 1e9 + self::PROBE_EXIT_GRACE_SECONDS;
+            while (
+                (proc_get_status($process)['running'] ?? false)
+                && hrtime(true) / 1e9 < $exitDeadline
+            ) {
+                usleep(10_000);
+            }
+            if (proc_get_status($process)['running'] ?? false) {
+                BoundedReaper::terminateNow($process);
+            }
+        }
+
+        // Single unconditional reap — deliberately at function-body level so
+        // tools/check-child-lifetimes.php can PROVE it covers every path out
+        // of probe() (the scanner reads a close inside a branch as unproven).
         $exitCode = proc_close($process);
-        if ($exitCode !== 0 || $stdout === false || $stdout === '') {
+
+        if ($stdout === null || $exitCode !== 0 || $stdout === '') {
             return new self($path, 0, 0, 0.0, 0.0, false);
         }
 
         return self::fromFfprobeJson($path, $stdout);
+    }
+
+    /**
+     * Read a child's stdout in full, but never block longer than $timeoutSeconds.
+     *
+     * Returns the collected output on a clean EOF, or null when the deadline
+     * passed first (the child is still producing nothing). Non-blocking reads +
+     * stream_select keep this compatible with a pipe that drains in pieces.
+     * The deadline runs on hrtime(), not the wall clock: an NTP step must never
+     * truncate the bound and kill a healthy ffprobe mid-drain.
+     *
+     * @param resource $pipe
+     */
+    private static function drainWithTimeout($pipe, float $timeoutSeconds): ?string
+    {
+        stream_set_blocking($pipe, false);
+        $deadline = hrtime(true) / 1e9 + $timeoutSeconds;
+        $buffer = '';
+
+        while (true) {
+            $chunk = fread($pipe, 65536);
+            if ($chunk !== false && $chunk !== '') {
+                $buffer .= $chunk;
+                continue;
+            }
+
+            $meta = stream_get_meta_data($pipe);
+            if ($meta['eof'] ?? false) {
+                return $buffer;
+            }
+
+            $remaining = $deadline - hrtime(true) / 1e9;
+            if ($remaining <= 0.0) {
+                return null;
+            }
+
+            // Nothing readable right now: wait a bounded slice, then re-check.
+            // stream_select returning 0 is a slice timeout (loop); false is an
+            // error; a child that died without more output reaches EOF next pass.
+            $read = [$pipe];
+            $write = null;
+            $except = null;
+            $seconds = (int) floor($remaining);
+            // round() can land on exactly 1_000_000, which stream_select
+            // rejects (tv_usec ≤ 999_999) and reports as an error — that would
+            // abort the whole bounded drain early (fail-closed); clamp instead.
+            $micros = (int) min(999_999, round(($remaining - $seconds) * 1_000_000));
+            if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
+                return null;
+            }
+        }
     }
 
     /**

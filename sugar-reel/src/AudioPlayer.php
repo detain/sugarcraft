@@ -32,11 +32,22 @@ class AudioPlayer
      *                            ffplay/mpv both stream a network source natively,
      *                            so a media client can play a signed stream URL.
      * @param int|null $startMs  Optional start offset in milliseconds (for seek)
+     * @param (\Closure():float)|null $clock Monotonic seconds source for position
+     *                            tracking; injectable so the pause/resume elapsed
+     *                            arithmetic is testable without sleeping. Defaults
+     *                            to hrtime() — a true monotonic clock, immune to
+     *                            NTP steps that would corrupt the banked position
+     *                            (a negative elapsed on wall clock would silently
+     *                            drop `-ss` and respawn from 0). Accepted as a
+     *                            Closure because PHP forbids the `callable`
+     *                            keyword as a property type.
      */
     public function __construct(
         private readonly string $videoPath,
         private readonly ?int $startMs = null,
+        private readonly ?\Closure $clock = null,
     ) {
+        $this->seekMs = $startMs ?? 0;
     }
 
     /**
@@ -85,6 +96,11 @@ class AudioPlayer
 
             return;
         }
+        // Stamp the monotonic time this (re)start so pause() can advance the
+        // tracked position by however long the subprocess actually played.
+        // Set only on a real spawn: with no binary there is no playback to
+        // account for.
+        $this->runningSince = ($this->clock ?? self::monotonic())();
         // No pipe cleanup needed — file sinks open no parent-side pipes.
     }
 
@@ -106,6 +122,7 @@ class AudioPlayer
             return;
         }
 
+        $this->bankElapsed();
         BoundedReaper::terminateNow($this->processHandle);
         proc_close($this->processHandle);
         $this->processHandle = null;
@@ -124,9 +141,13 @@ class AudioPlayer
     /**
      * Suspend audio playback by terminating the subprocess.
      *
-     * SIGSTOP is ineffective under PTY (child runs in different process group),
-     * so we SIGTERM the subprocess and store the exit code. resume() restarts
-     * from the stored startMs position.
+     * SIGSTOP is ineffective under PTY (the child runs in a different process
+     * group), and its exit status is never checked, so a silent failure would
+     * leave audio playing against a paused video. Instead we TERM→KILL the
+     * subprocess in bounded time and record how long it actually played, so
+     * resume() restarts from the advanced position rather than the original
+     * seek — the A/V-sync gap the old SIGSTOP path opened when the signal was
+     * dropped.
      *
      * Safe no-op when no process is running.
      */
@@ -135,6 +156,9 @@ class AudioPlayer
         if (!is_resource($this->processHandle)) {
             return;
         }
+        // Bank the elapsed play time into the tracked seek position BEFORE killing,
+        // so resume() picks up where the viewer paused, not where playback started.
+        $this->bankElapsed();
         BoundedReaper::terminateNow($this->processHandle);
         $exitCode = proc_close($this->processHandle);
         $this->processHandle = null;
@@ -142,24 +166,70 @@ class AudioPlayer
     }
 
     /**
-     * Resume audio playback.
+     * Bank the play time since the last real spawn into the tracked position.
+     * Every teardown of a running subprocess (pause, resume's terminate-and-
+     * restart, stop) calls this first, so position survives regardless of which
+     * path ended the child. No-op when nothing is running (runningSince null).
+     */
+    private function bankElapsed(): void
+    {
+        if ($this->runningSince === null) {
+            return;
+        }
+
+        $now = ($this->clock ?? self::monotonic())();
+        $this->seekMs += (int) round(($now - $this->runningSince) * 1000);
+        $this->runningSince = null;
+    }
+
+    /**
+     * The default position clock: hrtime() nanoseconds as float seconds.
+     * Monotonic by contract — a wall-clock default could step backwards via
+     * NTP and bank a negative elapsed, silently rewinding (and, being > 0
+     * guarded, then dropping) the respawn `-ss`.
      *
-     * If the process was killed by pause() (processHandle is null), restart
-     * from the stored startMs position. Otherwise, terminate the existing
-     * process and restart to avoid SIGCONT PTY issues (SIGCONT has the same
-     * PTY problems as SIGSTOP).
+     * @return \Closure():float
+     */
+    private static function monotonic(): \Closure
+    {
+        return static fn (): float => hrtime(true) / 1_000_000_000;
+    }
+
+    /**
+     * Resume audio playback from the tracked position.
      *
-     * Safe no-op when no process has ever been started.
+     * If the process was killed by pause() (processHandle is null), restart from
+     * the position pause() advanced to. Otherwise, bank the time played so far,
+     * terminate the existing process and restart — SIGCONT has the same PTY
+     * problems as SIGSTOP, so resume is always a respawn, and an already-running
+     * resume() must not discard its unbanked segment.
+     *
+     * With no prior start() this spawns fresh from the original seek — which is
+     * how Player::play() begins audio on a never-yet-started companion; it is not
+     * a literal no-op.
      */
     public function resume(): void
     {
         if (is_resource($this->processHandle)) {
-            // SIGCONT has PTY issues like SIGSTOP; terminate and restart.
+            // SIGCONT has PTY issues like SIGSTOP; terminate and restart —
+            // banking first so this segment's play time is not lost.
+            $this->bankElapsed();
             BoundedReaper::terminateNow($this->processHandle);
             proc_close($this->processHandle);
             $this->processHandle = null;
         }
-        $this->start(); // start() respects startMs
+        $this->start(); // start() honours the advanced $seekMs via buildCommand()
+    }
+
+    /**
+     * The audio position, in milliseconds, that a (re)spawn would start from —
+     * the original seek advanced by every pause's elapsed play time. Bare accessor
+     * per the library's no-`get` rule; exposed so pause/resume position tracking is
+     * observable and testable without a real audio device.
+     */
+    public function position(): int
+    {
+        return $this->seekMs;
     }
 
     /**
@@ -212,9 +282,9 @@ class AudioPlayer
         $ffplayPath = Probe::ffplay();
         if ($ffplayPath !== null) {
             $cmd = [$ffplayPath, '-nodisp', '-autoexit'];
-            if ($this->startMs !== null) {
+            if ($this->seekMs > 0) {
                 $cmd[] = '-ss';
-                $cmd[] = (string)($this->startMs / 1000.0);
+                $cmd[] = self::secondsArg($this->seekMs);
             }
             $cmd[] = $this->videoPath;
             return $cmd;
@@ -225,9 +295,8 @@ class AudioPlayer
         $mpvPath = Probe::mpv();
         if ($mpvPath !== null) {
             $cmd = [$mpvPath, '--no-video', '--really-quiet'];
-            if ($this->startMs !== null) {
-                // Numeric string from division — safe, no shell-special chars.
-                $cmd[] = '--start=' . (string)($this->startMs / 1000.0) . 's';
+            if ($this->seekMs > 0) {
+                $cmd[] = '--start=' . self::secondsArg($this->seekMs) . 's';
             }
             $cmd[] = $this->videoPath;
             return $cmd;
@@ -236,11 +305,33 @@ class AudioPlayer
         return null;
     }
 
+    /**
+     * Milliseconds as a fixed `S.mmm` seconds string built from integer math.
+     * Deliberately not a float cast/sprintf %f: the explicit split is immune to
+     * float→string precision ini changes and would stay correct even in a
+     * hypothetical locale-comma formatter, and ffmpeg/mpv accept it verbatim.
+     */
+    private static function secondsArg(int $ms): string
+    {
+        return sprintf('%d.%03d', intdiv($ms, 1000), $ms % 1000);
+    }
+
     /** @var resource|null */
     private $processHandle = null;
 
     /** True once start() has been invoked. */
     private bool $started = false;
+
+    /**
+     * Current play position in milliseconds — the constructor seek offset advanced
+     * by every banked play segment (pause/resume/stop each add elapsed monotonic
+     * time). start()/buildCommand() spawn from here so a resume continues instead
+     * of replaying from the original seek.
+     */
+    private int $seekMs;
+
+    /** Monotonic time the running subprocess started, or null when not playing. */
+    private ?float $runningSince = null;
 
     /** Exit code from the last process termination, or null if still running. */
     private ?int $exitCode = null;

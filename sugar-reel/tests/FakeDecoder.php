@@ -21,6 +21,12 @@ class FakeDecoder implements Decoder
 
     private int $index = 0;
 
+    /** How many times reopen() was called — observable proof a seek used it. */
+    private int $reopenCount = 0;
+
+    /** $startSec of the most recent reopen() — lets tests verify seek targets. */
+    private ?float $lastReopenStartSec = null;
+
     private bool $opened = false;
 
     private bool $everOpened = false;
@@ -40,11 +46,23 @@ class FakeDecoder implements Decoder
      * but ignored — FakeDecoder always replays its predetermined frame sequence
      * from the start.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         $this->opened = true;
         $this->everOpened = true;
         $this->index = 0;
+    }
+
+    /**
+     * This decoder holds its frames in memory and can reset its index without a
+     * rebuild — the exact capability Player::rebuildDecoderAt() consults so an
+     * injected decoder survives seek/resize/mode-change instead of being
+     * silently re-created through DecoderFactory (which would try to open the
+     * fake path as a real file). Real ffmpeg/GIF decoders answer false.
+     */
+    public function reopensInPlace(): bool
+    {
+        return true;
     }
 
     public function next(): ?RgbFrame
@@ -83,11 +101,31 @@ class FakeDecoder implements Decoder
      * Mirrors open() but preserves the existing frame sequence rather
      * than re-allocating.
      */
-    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         $this->index = 0;
         $this->opened = true;
         $this->everOpened = true;
+        $this->reopenCount++;
+        $this->lastReopenStartSec = $startSec;
+    }
+
+    /**
+     * Number of reopen() calls since construction. Lets a test observe that a
+     * seek/thumbnail path went THROUGH the in-place reopen (frameAt(), rebuild)
+     * rather than silently serving a stale frame from the current position.
+     */
+    public function reopenCount(): int
+    {
+        return $this->reopenCount;
+    }
+
+    /**
+     * $startSec passed to the most recent reopen() (null before any reopen).
+     */
+    public function lastReopenStartSec(): ?float
+    {
+        return $this->lastReopenStartSec;
     }
 
     /**

@@ -33,7 +33,7 @@ final class SpyDecoder implements Decoder
         $this->frames = $frames;
     }
 
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         $this->index = 0;
     }
@@ -60,8 +60,19 @@ final class SpyDecoder implements Decoder
      *
      * Resets the index (same as open()).
      */
-    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
-        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+    }
+
+    /**
+     * Reports false so the F21 backward-seek test drives Player's REAL rebuild
+     * branch (close the old decoder, then build a fresh one from a genuine .gif
+     * path through DecoderFactory). That branch is what proves the old decoder
+     * gets closed; a reopensInPlace() decoder would skip it.
+     */
+    public function reopensInPlace(): bool
+    {
+        return false;
     }
 }
