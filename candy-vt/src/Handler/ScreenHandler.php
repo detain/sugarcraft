@@ -235,6 +235,21 @@ final class ScreenHandler implements Handler
     private OscHandler $oscHandler;
     private TabHandler $tabHandler;
 
+    /**
+     * @param ?Cursor $cursor Injected cursor state, or a fresh homed one.
+     * @param ?Mode $mode Injected mode state, or a fresh power-on one.
+     *
+     * `Cursor::$shape` and `Mode::$cursorShape` are a PAIR — the DECSCUSR
+     * handler writes both from one escape (see {@see self::csiDispatch()},
+     * case 'q') and every rebuild in this class keeps them equal. Because
+     * the two are independent optional parameters, nothing about their types
+     * enforces that, so a caller could inject `cursor: new Cursor(shape: 5)`
+     * with no `$mode` and start life diverged (5 vs 0). The half that was NOT
+     * injected therefore follows the half that was, and the invariant holds
+     * from construction onward. When BOTH are supplied they are taken
+     * verbatim — an explicit pair is the caller's own statement of intent,
+     * and the next `CSI Ps SP q` resyncs it anyway.
+     */
     public function __construct(
         Buffer $buffer,
         ?Cursor $cursor = null,
@@ -246,6 +261,11 @@ final class ScreenHandler implements Handler
         $this->cursor = $cursor ?? new Cursor();
         $this->sgr = $sgr ?? Sgr::empty();
         $this->mode = $mode ?? new Mode();
+        if ($cursor !== null && $mode === null) {
+            $this->mode = $this->mode->withCursorShape($cursor->shape);
+        } elseif ($mode !== null && $cursor === null) {
+            $this->cursor = $this->cursor->withShape($mode->cursorShape);
+        }
         $this->scrollback = $scrollback ?? new Scrollback();
         $this->sgrHandler = new SgrHandler();
         $this->cursorHandler = new CursorHandler();
@@ -1174,7 +1194,10 @@ final class ScreenHandler implements Handler
      * CSI Ps SP q handler sets them together (see {@see self::csiDispatch()}):
      * an earlier revision zeroed `cursor->shape` while leaving
      * `mode->cursorShape` at its DECSCUSR value, so `CSI 4 SP q` then
-     * `CSI ! p` left the renderer and the mode reporting different shapes.
+     * `CSI ! p` left the two fields holding different shapes. Nothing in-tree
+     * renders or reports either one yet (`Mode::$cursorShape` has no reader
+     * outside {@see Mode::equals()}, and no rasterizer consumes this Cursor
+     * class), so this is state-integrity work, not a visible-drawing fix.
      *
      * DIVERGENCE (our choice, not xterm's): xterm also resets the scrolling
      * region (`resetMarginMode(xw)`, `charproc.c:14398`, likewise above the
@@ -1200,8 +1223,12 @@ final class ScreenHandler implements Handler
             $this->flushPendingMutations();
         }
         $this->sgr = Sgr::empty();
-        // shape: 0 is an xterm-mandated reset, not an oversight — see the
-        // CURSOR SHAPE paragraph above.
+        // `shape: 0` here equals Cursor's own default, so deleting it would
+        // change nothing today — it is written explicitly so the reset is
+        // legible at the call site and survives a future change to that
+        // default. The behavioural half of this reset is the
+        // ->withCursorShape(0) on the mode below. See the CURSOR SHAPE
+        // paragraph above for why xterm mandates a reset at all.
         $this->cursor = new Cursor(
             visible: true,
             shape: 0,

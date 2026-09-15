@@ -363,9 +363,33 @@ DECSCUSR (`CSI Ps SP q`) sets the cursor shape. Implemented as:
   per VT spec; unknown values fall back to `BlinkingBlock`
 - `CursorShape::toInt()` — returns `$this->value`
 
-`ModeHandler` handles CSI Ps SP q dispatch by calling
-`withCursorShape($ps)` where Ps is the raw parameter. The shape is stored
-in `Mode`; consumers that need the `CursorShape` enum call
+`CSI Ps SP q` is dispatched by `ScreenHandler::csiDispatch()` in the `case 'q':`
+arm (guarded on `$intermediate === 0x20 && $prefix === 0`), NOT by
+`ModeHandler` — `ModeHandler` has no `'q'` case at all. The handler writes
+`$this->cursor = $this->cursor->withShape($shape)` and
+`$this->mode = $this->mode->withCursorShape($shape)` — i.e. **the shape lives in
+TWO fields, and they are written together.**
+
+**Gotcha: keep `Cursor::$shape` and `Mode::$cursorShape` equal.** Believing the
+shape "is stored in `Mode`" is the mental model that produced three separate
+divergence bugs: any site that rebuilds the cursor with `new Cursor(...)` and
+omits the `shape:` named argument silently drops the renderer's copy to its 0
+default while the mode keeps the DECSCUSR value. Audit every `new Cursor(` when
+touching reset or screen-swap code. Current policy, each backed by xterm-411
+line citations at the site: `softReset()`/DECSTR and `hardReset()`/RIS reset
+BOTH to 0 (xterm's `ReallyReset()` cursor block at `charproc.c:14377-14387` sits
+above the RIS-only `if (full)` gate at `charproc.c:14432`, and `InitCursorShape`
+recomputes from the `cursorUnderLine`/`cursorBar` *resources*, so DECSCUSR does
+not outlive a soft reset); `displayAlignmentTest()`/DECALN and both alt-screen
+carries (`enterAltScreen()` 1049, `enterAltScreenCursorOnly()` 1048) PRESERVE it
+(`SavedCursor` at `ptyx.h:2347-2363` has no style member and `cursor_shape` is
+one per-terminal field, `ptyx.h:2806`). The constructor reconciles a lone
+injected `Cursor` or `Mode` so the pair is consistent from time zero; a caller
+supplying BOTH halves verbatim is the one documented exception.
+`CursorShapeAgreementTest` pins all of it, seeded from shape 4/5 so no
+assertion can be satisfied by the accidental 0 that is the symptom.
+
+Consumers that need the `CursorShape` enum call
 `CursorShape::fromInt($mode->cursorShape)`.
 
 ## Focus event reporting implementation (step 07.06)

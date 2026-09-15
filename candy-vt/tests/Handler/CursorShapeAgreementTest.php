@@ -7,20 +7,27 @@ namespace SugarCraft\Vt\Tests\Handler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Vt\Buffer\Buffer;
+use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Handler\ScreenHandler;
+use SugarCraft\Vt\Mode\Mode;
 
 /**
  * Cursor-shape agreement across the state-rebuilding paths.
  *
- * The DECSCUSR handler (`CSI Ps SP q`) writes the shape to TWO places at
- * once — {@see \SugarCraft\Vt\Cursor\Cursor::$shape} for the renderer and
- * {@see \SugarCraft\Vt\Mode\Mode::$cursorShape} for mode queries. Any site
+ * The DECSCUSR handler (`CSI Ps SP q`) writes the shape to TWO fields at
+ * once — {@see \SugarCraft\Vt\Cursor\Cursor::$shape}, the copy a renderer
+ * would read, and {@see \SugarCraft\Vt\Mode\Mode::$cursorShape}, the copy
+ * mode state carries. Any site
  * that rebuilds the Cursor with `new Cursor(...)` and omits `shape:`
  * silently zeroes the renderer's copy while the mode keeps its value, so the
- * two disagree and the emulator draws a block cursor behind a terminal that
- * still believes it asked for a bar. Every test here asserts BOTH fields and
- * their agreement, always seeded from a non-default shape (4 or 5) so the
- * assertions cannot be satisfied by the accidental 0 that is the symptom.
+ * two disagree. No in-tree consumer renders or reports either field today
+ * (`Mode::$cursorShape`'s only reader is {@see \SugarCraft\Vt\Mode\Mode::equals()},
+ * and the candy-vcr rasterizers drive a different Cursor class), which is
+ * exactly why the divergence went unnoticed — it is a broken internal
+ * invariant and an API contract any future renderer will rely on. Every test
+ * here asserts BOTH fields and their agreement, always seeded from a
+ * non-default shape (4 or 5) so the assertions cannot be satisfied by the
+ * accidental 0 that is the symptom.
  *
  * Per-path expected outcomes, all from xterm-411 `charproc.c` (line numbers
  * cited at each site in ScreenHandler):
@@ -34,9 +41,13 @@ use SugarCraft\Vt\Handler\ScreenHandler;
  * | DECSET 1049h alt swap| `SavedCursor` has no style field;   | preserved |
  * |                      | `cursor_shape` is per-terminal      |          |
  * | DECSET 1048h cursor  | same                              | preserved |
+ * | DECSET 47h / 1047h   | buffer swap only, cursor untouched  | preserved |
+ * | DECSC / DECRC        | `SavedCursor` carries no style      | preserved |
  *
  * ResetTest owns the general reset matrix and DecalnWireTest owns the DECALN
- * shape guard; this file owns the DECSTR and alt-screen swap sites.
+ * wire seam plus its shape guard; this file owns the DECSTR and alt-screen
+ * swap sites, and re-tests DECALN only inside the table sweep below, whose
+ * thesis is that the invariant holds across ALL of these paths at once.
  *
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR, DECSCUSR, DEC 1048/1049)
  */
@@ -68,6 +79,60 @@ final class CursorShapeAgreementTest extends TestCase
             $h->cursor->shape,
             "{$when}: Mode::\$cursorShape and Cursor::\$shape must not diverge",
         );
+    }
+
+    // ─── Construction: the pair is a pair even before any escape arrives ────
+
+    public function testInjectingACursorCarriesItsShapeIntoTheMode(): void
+    {
+        // Cursor and Mode are independent optional parameters, so nothing in
+        // the signature enforces the invariant the DECSCUSR handler maintains.
+        // `new ScreenHandler($b, cursor: new Cursor(shape: 5))` used to yield
+        // cursor 5 / mode 0 — diverged at time zero, before any escape could
+        // touch it. The un-injected half now follows the injected half.
+        $h = new ScreenHandler(new Buffer(8, 4), cursor: new Cursor(shape: 5));
+        $this->assertSame(5, $h->cursor->shape);
+        $this->assertSame(5, $h->mode->cursorShape, 'the mode must adopt an injected cursor shape');
+        $this->assertShapesAgree($h, 'constructed from a lone Cursor(shape: 5)');
+    }
+
+    public function testInjectingAModeCarriesItsShapeIntoTheCursor(): void
+    {
+        // The symmetric case: a caller who seeds mode state gets a renderer
+        // copy that agrees with it.
+        $mode = (new Mode())->withCursorShape(6);
+        $h = new ScreenHandler(new Buffer(8, 4), mode: $mode);
+        $this->assertSame(6, $h->mode->cursorShape);
+        $this->assertSame(6, $h->cursor->shape, 'the cursor must adopt an injected mode shape');
+        $this->assertShapesAgree($h, 'constructed from a lone Mode(cursorShape: 6)');
+    }
+
+    public function testDefaultConstructionAgreesAtZero(): void
+    {
+        $h = $this->handler();
+        $this->assertSame(0, $h->cursor->shape);
+        $this->assertSame(0, $h->mode->cursorShape);
+        $this->assertShapesAgree($h, 'freshly constructed with no injected state');
+    }
+
+    public function testAltScreenCarryReadsTheCursorFieldNotTheModeField(): void
+    {
+        // Deliberate probe of WHICH field the alt-screen carry copies. Divergence
+        // is unreachable through the escape path (DECSCUSR writes both halves),
+        // so the only way to observe the carry's source is the one state the
+        // constructor leaves verbatim by design: BOTH halves injected and
+        // disagreeing. Here cursor 5 / mode 2, and entering the alt screen must
+        // reproduce the CURSOR's 5 — copying from the mode would give 2.
+        $h = new ScreenHandler(
+            new Buffer(8, 4),
+            cursor: new Cursor(shape: 5),
+            mode: (new Mode())->withCursorShape(2),
+        );
+        $this->assertSame(5, $h->cursor->shape, 'an explicitly supplied pair is taken verbatim');
+        $this->assertSame(2, $h->mode->cursorShape);
+
+        $h->enterAltScreen();
+        $this->assertSame(5, $h->cursor->shape, 'the swap carries the CURSOR shape, not the mode copy');
     }
 
     // ─── Seed sanity: the shapes used below are really non-default ─────────
@@ -121,13 +186,22 @@ final class CursorShapeAgreementTest extends TestCase
     public function testDecstrProgrammaticEntryMatchesTheWireForm(): void
     {
         // softReset() called directly must land in the same shape state as the
-        // CSI ! p bytes, so the two entry points cannot drift apart.
+        // CSI ! p bytes. NOTE: the two cross-comparisons below are tautological
+        // on purpose — csiDispatch routes `CSI ! p` straight to softReset(), so
+        // no implementation can make them differ. They exist to keep the two
+        // entry points fused if that routing ever changes; the assertions that
+        // actually carry information are the direction pins and the agreement
+        // check, which fail on the pre-fix code.
         $viaWire = $this->handler(self::BAR . "\x1b[!p");
         $direct = $this->handler(self::BAR);
         $direct->softReset();
 
         $this->assertSame($viaWire->cursor->shape, $direct->cursor->shape);
         $this->assertSame($viaWire->mode->cursorShape, $direct->mode->cursorShape);
+        $this->assertSame(0, $viaWire->cursor->shape, 'the wire form resets to 0, not merely to "the same"');
+        $this->assertSame(0, $viaWire->mode->cursorShape, 'and on both fields');
+        $this->assertSame(0, $direct->cursor->shape, 'programmatic call resets too');
+        $this->assertSame(0, $direct->mode->cursorShape);
         $this->assertShapesAgree($direct, 'programmatic softReset() from shape 5');
     }
 
@@ -264,21 +338,8 @@ final class CursorShapeAgreementTest extends TestCase
         $this->assertShapesAgree($h, 'after RIS');
     }
 
-    // ─── DECALN — preserved (already fixed in d110bb398), held to the same rule ─
-
-    public function testDecalnPreservesShapeOnBothFields(): void
-    {
-        // CASE_DECALN (`charproc.c:4837-4855`) clears ORIGIN and homes via
-        // `CursorSet(screen, 0, 0, xw->flags)` without a style argument, so the
-        // shape survives. DecalnWireTest owns the wire seam; this pins the same
-        // agreement invariant for the path this change class covers.
-        $h = $this->handler(self::BAR);
-        $h->displayAlignmentTest();
-
-        $this->assertSame(5, $h->cursor->shape, 'DECALN preserves the DECSCUSR shape');
-        $this->assertSame(5, $h->mode->cursorShape);
-        $this->assertShapesAgree($h, 'after DECALN');
-    }
+    // ─── DECALN — preserved and already fixed (d110bb398); covered by the
+    //     wire seam in DecalnWireTest and by the table sweep below. ─────────
 
     // ─── DECSC/DECRC — the general save slot must not disturb style either ───
 
