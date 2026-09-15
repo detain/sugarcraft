@@ -346,9 +346,9 @@ final class DefaultChannelHandlerTest extends TestCase
 
     /**
      * Run a shell request with the given explicit configured shell and
-     * process `SHELL` env value (null = unset) and capture the argv handed
-     * to the spawner. The env is restored in `finally` — putenv changes
-     * must never leak across tests.
+     * process `SHELL` env value (null = unset, '' = set-but-empty) and
+     * capture the argv handed to the spawner. The env is restored in
+     * `finally` — putenv changes must never leak across tests.
      *
      * @return list<string>
      */
@@ -425,6 +425,33 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame(
             ['/bin/fish', '-l'],
             $this->captureShellArgv('   ', '/bin/fish'),
+        );
+    }
+
+    /**
+     * E734: `SHELL=...` set-but-EMPTY is not a shell — the blank-coercion
+     * leg in resolveShell() must reject it and land on the fallback.
+     * Distinct from the unset leg (getenv() returns '' here, not false),
+     * which is what the `is_string()` arm alone would let through.
+     */
+    public function testEmptyShellEnvironmentFallsBackToDefault(): void
+    {
+        $this->assertSame(
+            [DefaultChannelHandler::FALLBACK_SHELL, '-l'],
+            $this->captureShellArgv(null, ''),
+        );
+    }
+
+    /**
+     * E734: whitespace-only `SHELL` is just as blank as '' — this is the
+     * leg that pins the trim() coercion itself (a bare `!== ''` compare
+     * would sail past '   ' and exec a garbage argv).
+     */
+    public function testWhitespaceOnlyShellEnvironmentFallsBackToDefault(): void
+    {
+        $this->assertSame(
+            [DefaultChannelHandler::FALLBACK_SHELL, '-l'],
+            $this->captureShellArgv(null, '   '),
         );
     }
 }
