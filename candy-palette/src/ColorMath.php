@@ -88,15 +88,25 @@ final class ColorMath
     /**
      * Convert CIE XYZ (D65) to CIE L*a*b* (CIE 1976).
      *
+     * The triple is parsed at this boundary (numeric, finite); ratios below the
+     * Lab epsilon — including negative extrapolations of out-of-range XYZ —
+     * take the linear branch, so the output is always finite.
+     *
      * @param array{x: float, y: float, z: float} $xyz
+     *
+     * @throws \InvalidArgumentException on a missing, non-numeric or non-finite component
      *
      * @return array{l: float, a: float, b: float}
      */
     public static function xyzToLab(array $xyz): array
     {
-        $fx = self::labCurve($xyz['x'] / self::WHITE_X);
-        $fy = self::labCurve($xyz['y'] / self::WHITE_Y);
-        $fz = self::labCurve($xyz['z'] / self::WHITE_Z);
+        $x = self::component($xyz, 'x');
+        $y = self::component($xyz, 'y');
+        $z = self::component($xyz, 'z');
+
+        $fx = self::labCurve($x / self::WHITE_X);
+        $fy = self::labCurve($y / self::WHITE_Y);
+        $fz = self::labCurve($z / self::WHITE_Z);
 
         return [
             'l' => 116 * $fy - 16,
@@ -106,7 +116,26 @@ final class ColorMath
     }
 
     /**
+     * Parse one XYZ component into a trusted finite float, failing loudly.
+     */
+    private static function component(array $xyz, string $key): float
+    {
+        if (!isset($xyz[$key]) || !is_numeric($xyz[$key])) {
+            throw new \InvalidArgumentException(Lang::t('colormath.invalid_xyz', ['key' => $key]));
+        }
+        $value = (float) $xyz[$key];
+        if (!is_finite($value)) {
+            throw new \InvalidArgumentException(Lang::t('colormath.invalid_xyz', ['key' => $key]));
+        }
+        return $value;
+    }
+
+    /**
      * The CIE 1976 cube-root / linear piecewise curve f(t).
+     *
+     * The radical branch is only reached for t > epsilon > 0, so a fractional
+     * exponent is never applied to a negative base; t <= epsilon (including
+     * negatives) extrapolates linearly.
      */
     private static function labCurve(float $t): float
     {

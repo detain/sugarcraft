@@ -38,9 +38,14 @@ final class NearestColorTest extends TestCase
         self::assertSame('#00ff00', $palette[16 + 6 * 5]->toHex());      // levels (0,5,0)
     }
 
-    public function testPaletteMemoReturnsStableObjectAndLabReferences(): void
+    public function testPaletteMemoIsStableAcrossCalls(): void
     {
         self::assertSame(NearestColor::palette256(), NearestColor::palette256());
+        // Element-level identity (arrays of objects compare instances with ===):
+        // the memo hands out the SAME Color objects, not re-created lookalikes.
+        self::assertSame(NearestColor::palette256()[42], NearestColor::palette256()[42]);
+        // Lab tables are arrays of floats, so === proves value stability; the
+        // static memo (not a recompute) is what guarantees identity of contents.
         self::assertSame(NearestColor::palette256Lab(), NearestColor::palette256Lab());
         self::assertSame(NearestColor::palette16Lab(), NearestColor::palette16Lab());
     }

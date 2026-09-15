@@ -114,4 +114,34 @@ final class ColorMathTest extends TestCase
             $color->toLab(),
         );
     }
+
+    public function testXyzToLabRejectsMalformedComponents(): void
+    {
+        // Public boundary: missing / non-numeric / non-finite components must
+        // fail loud rather than leak NAN/TypeError out of the cube-root branch.
+        try {
+            ColorMath::xyzToLab(['y' => 1.0, 'z' => 1.0]);
+            self::fail('missing component was accepted');
+        } catch (\InvalidArgumentException $expected) {
+            self::assertStringContainsString('"x" component', $expected->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        ColorMath::xyzToLab(['x' => NAN, 'y' => 1.0, 'z' => 1.0]);
+    }
+
+    public function testXyzToLabExtrapolatesBelowEpsilonWithoutNan(): void
+    {
+        // Ratios <= epsilon (black, or negative out-of-range XYZ) take the
+        // linear branch — never the fractional power that would yield NAN.
+        $black = ColorMath::xyzToLab(['x' => 0.0, 'y' => 0.0, 'z' => 0.0]);
+        self::assertEqualsWithDelta(0.0, $black['l'], 1e-12);
+        self::assertSame(0.0, $black['a']);
+        self::assertSame(0.0, $black['b']);
+
+        $negative = ColorMath::xyzToLab(['x' => -0.1, 'y' => 0.2, 'z' => -0.1]);
+        foreach ($negative as $component) {
+            self::assertTrue(\is_finite($component));
+        }
+    }
 }

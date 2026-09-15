@@ -11,7 +11,7 @@ use SugarCraft\Palette\ColorMath;
 use SugarCraft\Palette\DeltaE;
 
 /**
- * Strategy-enum coverage: dispatch, Lab-space aliasing, and back-compat scale.
+ * Strategy-enum coverage: dispatch, RGB/Lab separation of concerns, back-compat scale.
  */
 final class ColorDistanceTest extends TestCase
 {
@@ -53,14 +53,13 @@ final class ColorDistanceTest extends TestCase
         );
     }
 
-    public function testBetweenLabEuclideanAliasesCie76(): void
+    public function testBetweenLabOnEuclideanFailsLoudly(): void
     {
-        $labA = ColorMath::toLab(12, 34, 56);
-        $labB = ColorMath::toLab(200, 90, 30);
-        self::assertSame(
-            ColorDistance::Cie76->betweenLab($labA, $labB),
-            ColorDistance::Euclidean->betweenLab($labA, $labB),
-        );
+        // EUCLIDEAN compares RGB bytes; silently returning a Lab magnitude
+        // under the same case name is the scale-mixing trap this guards.
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('use between() instead of betweenLab()');
+        ColorDistance::Euclidean->betweenLab(ColorMath::toLab(12, 34, 56), ColorMath::toLab(200, 90, 30));
     }
 
     public function testBetweenLabDispatchesToCie94AndCie2000(): void

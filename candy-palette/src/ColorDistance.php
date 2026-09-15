@@ -48,16 +48,20 @@ enum ColorDistance: string
     /**
      * Distance between pre-computed Lab triples — the hot-loop entry point,
      * letting callers amortize the sRGB -> Lab conversion over a memoized
-     * palette. Under EUCLIDEAN this is the Lab-space distance (identical to
-     * {@see DeltaE::cie76()}); the RGB-space metric needs raw bytes instead.
+     * palette. EUCLIDEAN is an RGB-space metric with no meaning here: it
+     * throws instead of silently substituting Lab-space magnitudes, so mixing
+     * the two scales fails loudly.
      *
      * @param array{l: float, a: float, b: float} $labA
      * @param array{l: float, a: float, b: float} $labB
+     *
+     * @throws \LogicException when this case is EUCLIDEAN (use {@see self::between()})
      */
     public function betweenLab(array $labA, array $labB): float
     {
         return match ($this) {
-            self::Euclidean, self::Cie76 => DeltaE::cie76($labA, $labB),
+            self::Euclidean => throw new \LogicException(Lang::t('distance.euclidean_needs_rgb')),
+            self::Cie76 => DeltaE::cie76($labA, $labB),
             self::Cie94 => DeltaE::cie94($labA, $labB),
             self::Cie2000 => DeltaE::cie2000($labA, $labB),
         };

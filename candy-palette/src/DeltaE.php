@@ -163,7 +163,7 @@ final class DeltaE
                 // is_numeric() happily admits NAN / "1e999"; those would poison
                 // every downstream sqrt/cos with silent NAN results.
                 throw new \InvalidArgumentException(
-                    Lang::t('deltae.invalid_lab', ['label' => $label, 'key' => $key]),
+                    Lang::t('deltae.non_finite_lab', ['label' => $label, 'key' => $key]),
                 );
             }
             $components[] = $value;

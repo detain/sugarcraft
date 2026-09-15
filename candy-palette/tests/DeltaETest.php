@@ -10,7 +10,7 @@ use SugarCraft\Palette\DeltaE;
 /**
  * Coverage for the three delta-E metrics.
  *
- * CIEDE2000 is pinned against rows 1-20 of the 34 published test pairs in
+ * CIEDE2000 is pinned against all 34 published test pairs from
  * Sharma, Wu & Dalal, "The CIEDE2000 Color-Difference Formula", Color Research
  * & Application 30(1), 2005 — the canonical CIE-issued validation set.
  */
@@ -203,7 +203,7 @@ final class DeltaETest extends TestCase
                 DeltaE::cie76(['l' => 50.0, 'a' => $poison, 'b' => 0.0], ['l' => 50.0, 'a' => 0.0, 'b' => 0.0]);
                 self::fail('non-finite component was accepted');
             } catch (\InvalidArgumentException $expected) {
-                self::assertStringContainsString('missing a numeric "a" component', $expected->getMessage());
+                self::assertStringContainsString('non-finite "a" component', $expected->getMessage());
             }
         }
     }
