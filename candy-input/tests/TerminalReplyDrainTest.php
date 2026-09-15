@@ -546,6 +546,28 @@ final class TerminalReplyDrainTest extends TestCase
         $this->assertSame('', $chunked->remainder());
     }
 
+    public function testExactlyCapReplyIsNotFalselyTruncatedBySplitTerminator(): void
+    {
+        // A reply of EXACTLY 1 KiB whose chunk boundary lands between the ST's
+        // ESC and backslash must still drain whole and un-truncated — the
+        // dangling terminator byte may not breach the cap on its own.
+        $body = str_repeat('q', 1024);
+        $oneShot = new EscapeDecoder();
+        $chunked = new EscapeDecoder();
+        $chunkEvents = array_merge(
+            $chunked->decode("\x1b]" . $body),
+            $chunked->decode("\x1b"),
+            $chunked->decode("\\z"),
+        );
+        $oneShotEvents = $oneShot->decode("\x1b]" . $body . "\x1b\\z");
+        $this->assertSame(self::signatures($oneShotEvents), self::signatures($chunkEvents));
+        $this->assertCount(2, $oneShotEvents);
+        $this->assertFalse($oneShotEvents[0]->truncated, 'exactly-cap reply is whole, not truncated');
+        $this->assertSame(1024, strlen($oneShotEvents[0]->body));
+        $this->assertSame(1, $oneShot->drainedReplyCount());
+        $this->assertSame(1, $chunked->drainedReplyCount());
+    }
+
     public function testSplitStringTerminatorAfterOverflowIsNotLost(): void
     {
         // A >1 KiB DCS whose ST is split across the chunk boundary exactly

@@ -107,7 +107,9 @@ surfaces it as a `TerminalReplyEvent`:
 
 Hosts that ignore `TerminalReplyEvent` lose nothing — the bytes are consumed
 either way, so the input stream stays in sync. Hosts that do care (terminal
-probers, nested-TMUX diagnostics) get `params` and the exact `raw` bytes.
+probers, nested-TMUX diagnostics) get `params` and the `raw` bytes as drained —
+for a `string` reply clipped at the cap, `raw` covers only the drained head and
+`body` is the authoritative payload slice.
 
 `string` payloads are bounded: a reply longer than 1 KiB — whether it arrives
 in one read or across many — is surfaced exactly once with `truncated` set and
@@ -119,9 +121,10 @@ after 64 KiB of swallowed payload so keystrokes resume; that abandon boundary
 is byte-exact, so for never-terminated streams chunk size cannot change the
 decoded event stream. A pathological reply that terminates only *after*
 exceeding the abandon budget is the one documented divergence: bytes past the
-budget have already resumed decoding as keys when the real terminator arrives
-(the guarantee is "keystrokes always come back", not "oversized replies are
-wholly silent").
+budget may already have resumed decoding as keys by the time the real
+terminator arrives — which ones, exactly, depends on where the reads fell —
+so the guarantee there is "keystrokes always come back", not "oversized
+replies stay wholly silent".
 
 ### Observability: drained reply vs dropped unknown
 

@@ -1159,7 +1159,15 @@ final class EscapeDecoder
 
             $this->stringBuffer .= $fresh;
 
-            if (strlen($this->stringBuffer) > self::MAX_STRING_LENGTH) {
+            // A read boundary can split the ST terminator between its ESC and the
+            // backslash. Do not let that dangling ESC breach the cap on its own:
+            // a reply of exactly MAX_STRING_LENGTH bytes must drain whole and
+            // un-truncated no matter where the reads happened to fall.
+            $breached = strlen($this->stringBuffer) > self::MAX_STRING_LENGTH
+                && !($this->stringBuffer[strlen($this->stringBuffer) - 1] === "\x1b"
+                    && strlen($this->stringBuffer) === self::MAX_STRING_LENGTH + 1);
+
+            if ($breached) {
                 // Cap breached: drain the head as one truncated reply, then keep
                 // swallowing the rest of the payload until its terminator. The
                 // old behaviour cleared the string state outright, so every
