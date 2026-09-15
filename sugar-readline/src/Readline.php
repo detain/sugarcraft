@@ -45,12 +45,21 @@ final class Readline
     /** @var callable(PasteEvent): void|null */
     private $pasteHandler = null;
 
+    /** @var (callable(int): void)|null Idle-poll sleep seam (microseconds); null = usleep() */
+    private $idleSleeper;
+
+    /** Ceiling flag for the input pump — see stop(). Plain bool store, safe from a signal callback. */
+    private bool $stopped = false;
+
     /**
-     * @param InputDriver|null $input  Defaults to StreamInputDriver::fromStdin()
+     * @param InputDriver|null $input       Defaults to StreamInputDriver::fromStdin()
+     * @param callable|null    $idleSleeper Test seam invoked with the computed idle-poll
+     *                                      delay in microseconds; defaults to usleep().
      */
-    public function __construct(?InputDriver $input = null)
+    public function __construct(?InputDriver $input = null, ?callable $idleSleeper = null)
     {
         $this->input = $input;
+        $this->idleSleeper = $idleSleeper;
     }
 
     /**
@@ -127,6 +136,63 @@ final class Readline
     // -------------------------------------------------------------------------
 
     /**
+     * Sleep for the first empty (no-data) read; doubles per consecutive empty
+     * read until capped at IDLE_POLL_MAX_MICROSECONDS (E713 ladder floor).
+     */
+    public const IDLE_POLL_MIN_MICROSECONDS = 1_000;
+
+    /** Idle-poll cap: a fully idle pump costs at most 50 wake-ups per second. */
+    public const IDLE_POLL_MAX_MICROSECONDS = 20_000;
+
+    /**
+     * Request the input pump to cease on its next loop pass.
+     *
+     * sugar-readline arms no signal handlers of its own (a deliberate lib
+     * posture — prompts own their ctrl_c/esc aborts via isAborted()). This
+     * method is the cancel ceiling for everything else: a caller wiring
+     * SIGINT through pcntl_async_signals(), a watchdog timer, or another
+     * part of the same process. Its only work is a bool store, which is
+     * safe to perform from a signal callback.
+     *
+     * Affects the instance whose run() is executing — the loop reads the
+     * flag off $this, so hold on to the object passed to run(), not to a
+     * pre-onKey() clone (the registration methods clone; the flag lives on
+     * whichever instance is running).
+     */
+    public function stop(): void
+    {
+        $this->stopped = true;
+    }
+
+    /** Whether stop() has been requested for this instance. */
+    public function isStopped(): bool
+    {
+        return $this->stopped;
+    }
+
+    /**
+     * Sleep duration in microseconds for the Nth consecutive empty read:
+     * 1ms floor, doubling per pass, 20ms cap (E713 idle backoff ladder).
+     *
+     * Pure and static so the ladder is pinned without wall-clock timing.
+     * Counts below 1 coerce to the floor; absurd counts stay capped — the
+     * shift is clamped before it could overflow into garbage.
+     *
+     * @param int $consecutiveEmptyReads 1 = first empty read since last activity
+     */
+    public static function idlePollDelayMicroseconds(int $consecutiveEmptyReads): int
+    {
+        if ($consecutiveEmptyReads <= 1) {
+            return self::IDLE_POLL_MIN_MICROSECONDS;
+        }
+
+        $shift = min($consecutiveEmptyReads - 1, 16);
+        $doubled = self::IDLE_POLL_MIN_MICROSECONDS << $shift;
+
+        return min($doubled, self::IDLE_POLL_MAX_MICROSECONDS);
+    }
+
+    /**
      * Run the readline loop over a prompt object.
      *
      * Reads events from InputDriver and routes them to registered handlers.
@@ -142,9 +208,22 @@ final class Readline
      * of a keystroke storm; it is restored on every exit path. Only emitted
      * when the output is a real TTY, so tests and piped output are unaffected.
      *
+     * Poll contract (E713, round 82): this is the interactive input pump —
+     * by design it waits for input rather than returning on a schedule. Its
+     * idle cost and lifetime are nevertheless bounded. Empty reads back off
+     * exponentially from IDLE_POLL_MIN_MICROSECONDS (1ms) doubling per
+     * consecutive empty read up to the IDLE_POLL_MAX_MICROSECONDS cap (20ms),
+     * and snap back to the floor on any activity; a fully idle pump costs at
+     * most 50 wake-ups per second. The wait itself is bounded by stop(): the
+     * loop checks the ceiling flag on every pass, so run() returns within one
+     * idle poll of the call. When the loop ends via stop() the current prompt
+     * state is returned untouched — neither submitted nor aborted; inspect
+     * isSubmitted()/isAborted() to learn how the exchange ended. Note this is
+     * an input-side idle bound, not a wall-clock kill on a request (E646).
+     *
      * @param object       $prompt  Object with handleKey(string): object method
      * @param resource|null $output Output stream for repainting (default: STDOUT)
-     * @return object  The final prompt state after user submits or aborts
+     * @return object  The final prompt state after user submits, aborts, or stop() fires
      */
     public function run(object $prompt, $output = null): object
     {
@@ -169,14 +248,28 @@ final class Readline
         // Initial frame: repaint before entering the loop
         $this->repaint($prompt, $output);
 
+        $consecutiveEmptyReads = 0;
+
         while (true) {
+            if ($this->stopped) {
+                // Cancel ceiling (E713): stop() from a signal handler,
+                // watchdog, or this process. Last prompt state, untouched.
+                return $prompt;
+            }
+
             $event = $driver->read();
 
             if ($event === null) {
-                // Non-blocking empty read — sleep briefly before re-polling to avoid spinning
-                usleep(20000);
+                // No data this pass. Back off along the E713 ladder instead
+                // of a fixed 20ms spin; the sleeper seam lets tests pin the
+                // schedule without wall-clock time.
+                $consecutiveEmptyReads++;
+                $this->sleepIdlePoll(self::idlePollDelayMicroseconds($consecutiveEmptyReads));
                 continue;
             }
+
+            // Any activity snaps the ladder back to the 1ms floor.
+            $consecutiveEmptyReads = 0;
 
             if ($event instanceof KeyEvent) {
                 $keyName = $this->symbolicKey($event);
@@ -226,6 +319,21 @@ final class Readline
 
             // Unknown event — ignore
         }
+    }
+
+    /**
+     * Perform one idle-poll sleep: through the injected seam when present,
+     * otherwise usleep(). Never called while events are flowing.
+     */
+    private function sleepIdlePoll(int $microseconds): void
+    {
+        $sleeper = $this->idleSleeper;
+        if ($sleeper === null) {
+            usleep($microseconds);
+            return;
+        }
+
+        $sleeper($microseconds);
     }
 
     /**
