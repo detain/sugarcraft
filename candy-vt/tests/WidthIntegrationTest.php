@@ -80,8 +80,10 @@ final class WidthIntegrationTest extends TestCase
     {
         // Buffer width 3; write 'A' (col 0→1), 'B' (col 1→2), then '日' would
         // need cols 2+3 — col 3 is out of range. Don't write; clamp at 2.
+        // DECAWM is the power-on default now; this test pins the DECAWM-off
+        // discard path, so turn wrapping off explicitly.
         $term = Terminal::create(cols: 3, rows: 1);
-        $term->feed('AB日');
+        $term->feed("\x1b[?7lAB日");
         $s = $term->screen();
         $this->assertSame('A', $s->cell(0, 0)->grapheme);
         $this->assertSame('B', $s->cell(0, 1)->grapheme);

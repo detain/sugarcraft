@@ -36,12 +36,22 @@ final readonly class Mode
         /**
          * DECAWM — auto-wrap mode (CSI ?7 h/l).
          *
-         * When true, printing a character at the rightmost column advances
-         * the cursor to column 0 of the next row (triggering a scroll if
-         * the cursor is at the bottom of the DECSTBM scroll region).
-         * When false, characters at the rightmost column are discarded.
+         * POWER-ON DEFAULT IS ON (xterm, VT100 and up): DEC's documented
+         * initial mode state sets DECAWM; a terminal that begins with
+         * auto-wrap off mis-renders every un-linewrapped program.
+         *
+         * When true, a graphic that lands in the last column sets the
+         * cursor's wrapPending flag (deferred wrap / "wrapthrough"): the
+         * cursor visibly stays in the last column until the NEXT graphic
+         * arrives, which then triggers the advance to column 0 of the
+         * following row (scrolling if at the bottom of the DECSTBM
+         * region). When false, characters at the rightmost column
+         * overwrite it without advancing.
+         *
+         * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.3 (DECAWM)
+         * @see xterm ctlseqs: "wraparound" deferred to the next printable
          */
-        public bool $autoWrap = false,
+        public bool $autoWrap = true,
         /**
          * DECOM — origin mode (CSI ?6 h/l).
          *

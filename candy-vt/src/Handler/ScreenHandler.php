@@ -7,6 +7,7 @@ namespace SugarCraft\Vt\Handler;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Charset\Charsets;
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Hyperlink\Hyperlink;
@@ -54,6 +55,57 @@ final class ScreenHandler implements Handler
     /** Focus events recorded when DECSET 1004 is active (CSI I / CSI O). */
     public array $focusEvents = [];
 
+    /**
+     * DECAWM wrap-through ("phantom") flag — a glyph has landed in the
+     * last column and the advance to (row+1, 0) is deferred until the
+     * next graphic print consumes it.
+     *
+     * Lives on the handler, not the Cursor, mirroring
+     * `charmbracelet/x/vt Emulator.atPhantom` (emulator.go L72-74).
+     * Cleared by CR, LF/IND, BS, every CSI cursor movement, DECRC, ECH,
+     * RIS/DECSTR and resize; DELIBERATELY preserved by RI/back-index,
+     * tabs (HT/CHT/CBT), ED/EL and query reports — exactly the xterm
+     * roster (see vt/cc.go "This does not reset the phantom state").
+     * The flag itself is set by GEOMETRY after any print, not gated on
+     * the mode, so DECAWM can be re-enabled mid-wrap and the deferred
+     * advance resumes (xterm overwrite-then-wrap DECAWM semantics).
+     *
+     * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.3 (DECAWM)
+     * @see xterm ctlseqs "DECAWM" wraparound paragraph
+     */
+    public bool $wrapPending = false;
+
+    /**
+     * Query→reply channel: answer strings produced by DA1/DA2/DSR-CPR/
+     * DECRQM/XTWINOPS requests, in request order. The {@see
+     * \SugarCraft\Vt\Terminal\Terminal} facade either forwards each
+     * reply to a `feed()` callback or drains them via `replies()`.
+     *
+     * @var list<string>
+     */
+    public array $replies = [];
+
+    /**
+     * SCS designation state: G0..G3 charset bytes ('B', '0', 'U', …).
+     *
+     * @var array{0: string, 1: string, 2: string, 3: string}
+     *
+     * @see ECMA-48 §25 designation; xterm ctlseqs SCS (ESC ( ) * +)
+     */
+    public array $charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
+
+    /** Which designations occupy GL: 0 = G0 (SI/LS0), 1 = G1 (SO/LS1). */
+    public int $gl = 0;
+
+    /** Pending SS2/SS3 single shift (2, 3) or null — applies to one graphic only. */
+    public ?int $singleShift = null;
+
+    /** Cell width in pixels reported by XTWINOPS 16t/14t (emulator has no font). */
+    public int $cellWidthPx = 8;
+
+    /** Cell height in pixels reported by XTWINOPS 16t/14t (emulator has no font). */
+    public int $cellHeightPx = 16;
+
     /** Top row of the DECSTBM scroll region (0-indexed inclusive). */
     public int $scrollRegionTop = 0;
 
@@ -63,6 +115,9 @@ final class ScreenHandler implements Handler
     private ?Buffer $savedBuffer = null;
     private ?Cursor $savedCursor = null;
     private ?Sgr $savedSgr = null;
+
+    /** Per-screen phantom flag carried across alt-screen swaps (xterm keeps _wrapnext per screen). */
+    private ?bool $savedWrapPending = null;
 
     /**
      * Synchronized-output (DEC 2026) mutation queue.
@@ -107,6 +162,8 @@ final class ScreenHandler implements Handler
 
     public function printChar(string $rune): void
     {
+        $rune = $this->translateRune($rune);
+
         $r = $this->cursor->row;
         $c = $this->cursor->col;
 
@@ -124,6 +181,18 @@ final class ScreenHandler implements Handler
             return;
         }
 
+        // DECAWM wrap-through: a graphic landed in the last column deferred
+        // its advance; the NEXT graphic consumes it here — move to (row+1, 0)
+        // (scrolling at the region bottom) before writing. Mirrors xterm:
+        // the wrap decision is made when the next character arrives, so a
+        // cursor-position query, erase, or movement in between sees the
+        // cursor still in the last column.
+        if ($this->wrapPending && $this->mode->autoWrap) {
+            $this->cursor = $this->lineFeedNext();
+            $r = $this->cursor->row;
+            $c = $this->cursor->col;
+        }
+
         // If the char doesn't fit at all (too wide even at col 0), clamp.
         if ($c + $width > $this->buffer->cols) {
             if ($this->mode->autoWrap) {
@@ -133,9 +202,14 @@ final class ScreenHandler implements Handler
                 // If still doesn't fit after wrap, clamp.
                 if ($c + $width > $this->buffer->cols) {
                     $this->cursor = $this->cursor->withCol($this->buffer->cols - 1);
+                    $this->wrapPending = false;
                     return;
                 }
             } else {
+                // No wrap available: the wide glyph is discarded (nothing
+                // is written, cursor parks on the last column). The phantom
+                // flag is untouched — xterm's cursor_off recomputes it only
+                // when a cell is actually painted.
                 $this->cursor = $this->cursor->withCol($this->buffer->cols - 1);
                 return;
             }
@@ -151,15 +225,15 @@ final class ScreenHandler implements Handler
             $this->putCell($r, $c + $i, Cell::continuation($cell));
         }
 
+        // Deferred wrap (xterm `cursor_off` semantics): the cursor parks on
+        // the last column with the wrap flag set instead of advancing a full
+        // line; the advance happens on the next graphic print. The flag is
+        // set by GEOMETRY alone so a DECAWM toggle mid-wrap behaves like
+        // xterm — printing with ?7l overwrites the last cell (the flag
+        // re-arms), and re-enabling ?7h resumes the deferred wrap.
         $nextCol = $c + $width;
-        // With DECAWM auto-wrap, if cursor would advance past the right
-        // edge, wrap to the next line first for the NEXT character.
-        if ($this->mode->autoWrap && $nextCol >= $this->buffer->cols) {
-            $this->cursor = $this->cursor->withCol($nextCol);
-            $this->cursor = $this->lineFeedNext();
-        } else {
-            $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $nextCol));
-        }
+        $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $nextCol));
+        $this->wrapPending = $nextCol >= $this->buffer->cols;
     }
 
     public function execute(int $byte): void
@@ -167,12 +241,18 @@ final class ScreenHandler implements Handler
         match ($byte) {
             0x08 => $this->backspace(),
             0x09 => $this->horizontalTab(),
+            // SO (LS1) / SI (LS0): shift G1 / G0 into GL. ECMA-48 NISO/LS0;
+            // xterm treats them as G1→GL / G0→GL (SI=0x0F selects G0).
+            0x0E => $this->gl = 1,
+            0x0F => $this->gl = 0,
             0x0A, 0x0B, 0x0C => $this->lineFeed(),
             0x0D => $this->carriageReturn(),
             0x84 => $this->index(),         // IND (C1)
             0x85 => $this->nextLine(),       // NEL (C1)
             0x88 => $this->setTabStop(),     // HTS (C1)
             0x8D => $this->reverseIndex(),   // RI  (C1)
+            0x8E => $this->singleShift = 2,  // SS2 — G2 for the next graphic
+            0x8F => $this->singleShift = 3,  // SS3 — G3 for the next graphic
             default => null,
         };
     }
@@ -206,10 +286,22 @@ final class ScreenHandler implements Handler
                     $this->scrollRegionBottom,
                     $this->mode->originMode,
                 );
+                // A graphic-position change disarms the deferred wrap
+                // (xterm reset_wrapnext). DECSC ('s') only snapshots the
+                // position — the phantom cell survives it, and DECRC ('u')
+                // clears on the way back.
+                if ($finalChar !== 's') {
+                    $this->wrapPending = false;
+                }
                 return;
             case 'K': case 'J': case 'X': case 'P': case '@':
                 $pending = $this->mode->syncUpdate ? $this->pendingMutations : null;
                 $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $pending);
+                // ECH erases from the phantom cell forward → disarm; EL/ED
+                // never touch the wrap flag (xterm leaves _wrapnext alone).
+                if ($finalChar === 'X') {
+                    $this->wrapPending = false;
+                }
                 return;
             case 'S': case 'T':
                 $first = $params[0] ?? -1;
@@ -220,8 +312,46 @@ final class ScreenHandler implements Handler
                     $this->scrollDown($count);
                 }
                 return;
+            case 'L':
+                // IL — insert lines (ECMA-48 8.4.15). Only inside DECSTBM;
+                // no scrollback push (xterm: region-internal shift).
+                if ($prefix === 0 && $intermediate === 0) {
+                    $this->insertLines($params);
+                }
+                return;
+            case 'M':
+                // DL — delete lines (ECMA-48 8.4.10).
+                if ($prefix === 0 && $intermediate === 0) {
+                    $this->deleteLines($params);
+                }
+                return;
             case 'r':
                 $this->setScrollRegion($params);
+                return;
+            case 'c':
+                // DA — Device Attributes. CSI c = DA1, CSI > c = DA2.
+                $this->deviceAttributes($prefix, $params);
+                return;
+            case 'n':
+                // DSR — Device Status Report: 5 = terminal OK, 6 = CPR.
+                // DECXCPR (CSI ? 6 n) is not modelled — silent, like xterm
+                // built without the decCPRRequests resource.
+                if ($prefix === 0) {
+                    $this->deviceStatus($params);
+                }
+                return;
+            case 't':
+                // XTWINOPS window manipulation queries (14t/16t/18t answered).
+                if ($prefix === 0) {
+                    $this->windowOps($params);
+                }
+                return;
+            case 'p':
+                if ($intermediate === ord('!') && $prefix === 0) {
+                    $this->softReset();          // DECSTR — CSI ! p
+                } elseif ($intermediate === ord('$')) {
+                    $this->requestMode($params, $prefix); // DECRQM — CSI Ps $ p
+                }
                 return;
             case 'I': case 'Z':
                 $this->cursor = $this->cursor->withCol(
@@ -270,15 +400,74 @@ final class ScreenHandler implements Handler
 
     public function escDispatch(int $final, int $intermediate): void
     {
+        if ($intermediate !== 0) {
+            $this->designate($intermediate, $final);
+            return;
+        }
+
         match ($final) {
             0x37 /* '7' */ => $this->cursor = $this->cursor->save(),
-            0x38 /* '8' */ => $this->cursor = $this->cursor->restore(),
+            0x38 /* '8' */ => $this->restoreCursor(),
             0x44 /* 'D' */ => $this->index(),
             0x45 /* 'E' */ => $this->nextLine(),
             0x48 /* 'H' */ => $this->setTabStop(),
             0x4D /* 'M' */ => $this->reverseIndex(),
+            0x63 /* 'c' */ => $this->hardReset(), // RIS — full reset to power-on
+            // LS2 / LS3 locking shifts into GL (ECMA-48, mirrors
+            // charmbracelet x/vt handlers.go RegisterEscHandler 'n'/'o').
+            0x6E /* 'n' */ => $this->gl = 2,
+            0x6F /* 'o' */ => $this->gl = 3,
+            // ESC F / ESC G = S7C1T / S8C1T (ECMA-48): switch the C1
+            // transmission form. This emulator receives BOTH (the parser
+            // dispatches 0x84/0x85/0x8D C1 bytes and their ESC-7bit
+            // equivalents alike), so acceptance is a documented no-op.
+            0x46 /* 'F' */, 0x47 /* 'G' */ => null,
             default => null,
         };
+    }
+
+    /** DECRC — ESC 8: position change, so the phantom cell is dropped. */
+    private function restoreCursor(): void
+    {
+        $this->cursor = $this->cursor->restore();
+        $this->wrapPending = false;
+    }
+
+    /**
+     * SCS — designate a charset into G0..G3 (ECMA-48 §25, xterm ctlseqs
+     * "Single character selections and invocation of the character sets").
+     *
+     * ESC ( c → G0, ESC ) c → G1, ESC * c → G2, ESC + c → G3. Recognised
+     * designation finals: 'B' US ASCII, '0' DEC Special Graphics,
+     * 'A' United Kingdom, 'U' ISO Latin-1 (no-break space); anything else
+     * leaves the previous designation untouched, as upstream's
+     * handler-returns-false fallthrough does.
+     *
+     * Mirrors charmbracelet/x/vt handlers.go RegisterEscHandler SCS block.
+     */
+    private function designate(int $intermediate, int $final): void
+    {
+        $index = match ($intermediate) {
+            0x28 /* '(' */ => 0,
+            0x29 /* ')' */ => 1,
+            0x2A /* '*' */ => 2,
+            0x2B /* '+' */ => 3,
+            default => null, // ESC #, SP, etc. — not designations; ignore.
+        };
+        if ($index === null) {
+            return;
+        }
+        $charset = match ($final) {
+            ord('A'), ord('B'), ord('U'), ord('0') => chr($final),
+            default => null, // Unknown 94/96-set finals keep the old set.
+        };
+        if ($charset === null) {
+            return;
+        }
+        /** @var array{0: string, 1: string, 2: string, 3: string} $sets */
+        $sets = $this->charsets;
+        $sets[$index] = $charset;
+        $this->charsets = $sets;
     }
 
     public function oscDispatch(string $data): void
@@ -301,11 +490,18 @@ final class ScreenHandler implements Handler
 
     private function backspace(): void
     {
+        // BS moves the cursor back out of the phantom cell (charmbracelet
+        // x/vt moveCursor resets it; xterm do_backspaces → reset_wrapnext).
+        $this->wrapPending = false;
         $this->cursor = $this->cursor->withCol(max(0, $this->cursor->col - 1));
     }
 
     private function horizontalTab(): void
     {
+        // Tabs deliberately do NOT reset the deferred-wrap flag — the
+        // graphic still owes the line advance. Matches charmbracelet x/vt
+        // nextTab ("we use t.scr.setCursor here because we don't want to
+        // reset the phantom state") and xterm's _wrapnext survival over HT.
         $this->cursor = $this->cursor->withCol(
             $this->tabHandler->forward($this->cursor->col, $this->tabStops, $this->buffer->cols),
         );
@@ -325,11 +521,15 @@ final class ScreenHandler implements Handler
 
     private function carriageReturn(): void
     {
+        $this->wrapPending = false;
         $this->cursor = $this->cursor->withCol(0);
     }
 
     private function index(): void
     {
+        // IND/LF consumes vertical motion — the phantom cell is gone
+        // (charmbracelet x/vt index() "always clears"; xterm too).
+        $this->wrapPending = false;
         if ($this->cursor->row >= $this->scrollRegionBottom) {
             $this->scrollUp(1);
         } else {
@@ -339,6 +539,8 @@ final class ScreenHandler implements Handler
 
     private function reverseIndex(): void
     {
+        // RI / back-index: vertical move only — xterm's reverse_index and
+        // charmbracelet x/vt both preserve the phantom state here.
         if ($this->cursor->row <= $this->scrollRegionTop) {
             $this->scrollDown(1);
         } else {
@@ -358,6 +560,7 @@ final class ScreenHandler implements Handler
      */
     private function lineFeedNext(): Cursor
     {
+        $this->wrapPending = false;
         $this->cursor = $this->cursor->withCol(0);
         if ($this->cursor->row >= $this->scrollRegionBottom) {
             $this->scrollUp(1);
@@ -394,6 +597,347 @@ final class ScreenHandler implements Handler
 
         $this->scrollRegionTop = $top - 1;       // Convert to 0-indexed.
         $this->scrollRegionBottom = $bottom - 1;  // Convert to 0-indexed.
+    }
+
+    // ─── IL / DL (ECMA-48 insert/delete lines) ──────────────────────────────
+
+    /**
+     * IL — CSI Ps L: insert Ps blank lines at the cursor row, shifting
+     * lines down within the DECSTBM region.
+     *
+     * Per VT500 §IL and xterm ctlseqs: ignored when the cursor sits
+     * outside the scroll region; on success the cursor moves to the left
+     * margin (column 0) on its original row, exactly like
+     * charmbracelet/x/vt handlers.go IL; scrolled-off content is lost
+     * (no scrollback push — IL/DL edits stay region-internal).
+     *
+     * @param list<int> $params
+     */
+    private function insertLines(array $params): void
+    {
+        $first = $params[0] ?? -1;
+        $count = $first === -1 ? 1 : max(1, $first);
+        $row = $this->cursor->row;
+        if ($row < $this->scrollRegionTop || $row > $this->scrollRegionBottom) {
+            return;
+        }
+        $this->scrollHandler->insertLines(
+            $this->buffer,
+            $this->scrollRegionTop,
+            $this->scrollRegionBottom,
+            $row,
+            $count,
+        );
+        $this->cursor = $this->cursor->withCol(0);
+    }
+
+    /**
+     * DL — CSI Ps M: delete Ps lines at the cursor row, shifting lines
+     * up within the DECSTBM region; blanks land at the region bottom.
+     *
+     * Same region-clipping + column-home rules as {@see insertLines()}.
+     * When the deletion starts exactly at the region top and the region
+     * spans the full width, the deleted rows fall into scrollback first
+     * — mirroring charmbracelet/x/vt `Screen.DeleteLine`'s
+     * `scrollback.PushN` guard, so `less`-style scrolling up through
+     * deleted context keeps working.
+     *
+     * @param list<int> $params
+     */
+    private function deleteLines(array $params): void
+    {
+        $first = $params[0] ?? -1;
+        $count = $first === -1 ? 1 : max(1, $first);
+        $row = $this->cursor->row;
+        if ($row < $this->scrollRegionTop || $row > $this->scrollRegionBottom) {
+            return;
+        }
+        if ($row === $this->scrollRegionTop && $this->scrollRegionBottom === $this->buffer->rows - 1) {
+            $lines = min($count, $this->scrollRegionBottom - $row + 1);
+            for ($i = 0; $i < $lines; $i++) {
+                $this->scrollback->push($this->rowAt($row + $i));
+            }
+        }
+        $this->scrollHandler->deleteLines(
+            $this->buffer,
+            $this->scrollRegionTop,
+            $this->scrollRegionBottom,
+            $row,
+            $count,
+        );
+        $this->cursor = $this->cursor->withCol(0);
+    }
+
+    // ─── Query → reply channel ───────────────────────────────────────────────
+
+    /**
+     * DA / DA2 — Device Attributes request (xterm ctlseqs "Device Attributes").
+     *
+     * DA1 (CSI c / CSI 0 c) is answered with the same attribute list
+     * charmbracelet/x/vt emits — `ESC [ ?62;1;6;22 c` (VT220, 132-column,
+     * selective erase, ANSI colour) — deliberately WITHOUT the `;4` sixel
+     * attribute: the emulator renders no sixel, and candy-mosaic's
+     * `Detect::parseDa1Reply()` scans for `;4;` / `;4c` / `?4c` to enable
+     * sixel, so this reply correctly keeps mosaic on its text/half-block
+     * fallback. DA2 (CSI > c) answers `ESC [ >1;10;0 c`, again mirroring
+     * upstream. Requests with other first params (vendor DA variants)
+     * are left unanswered, as upstream guards them.
+     *
+     * @see https://vt100.net/docs/vt500-rm/chapter4.html#SG4.35 (DECDA)
+     * @see charmbracelet/x/vt handlers.go PrimaryDeviceAttributes/SecondaryDeviceAttributes
+     *
+     * @param array<int, int|string> $params CSI parameter list as dispatched by the parser
+     */
+    private function deviceAttributes(int $prefix, array $params): void
+    {
+        if ($prefix === ord('>')) {
+            if (($params[0] ?? -1) > 0) {
+                return;
+            }
+            $this->replies[] = "\x1b[>1;10;0c";
+            return;
+        }
+        if ($prefix === 0 && ($params[0] ?? -1) <= 0) {
+            $this->replies[] = "\x1b[?62;1;6;22c";
+        }
+        // Other private prefixes (ESC [ = / < c) belong to vendor
+        // trees we do not emulate — silent, like xterm unbound DA requests.
+    }
+
+    /**
+     * DSR — CSI Ps n: 5 → terminal OK (`ESC [ 0 n`), 6 → cursor position
+     * report (`ESC [ row ; col R`, 1-based).
+     *
+     * Answering CPR does NOT disturb a pending DECAWM wrap: the report
+     * only reads state — xterm likewise leaves `_wrapnext` set while the
+     * cursor keeps reporting the last column it painted.
+     *
+     * @param list<int> $params
+     *
+     * @see ECMA-48 §9.41 (MSR/DSR), xterm ctlseqs DSR
+     */
+    private function deviceStatus(array $params): void
+    {
+        $first = $params[0] ?? -1;
+        if ($first === -1 || $first === 5) {
+            $this->replies[] = "\x1b[0n";
+            return;
+        }
+        if ($first === 6) {
+            $this->replies[] = "\x1b[" . ($this->cursor->row + 1) . ';' . ($this->cursor->col + 1) . 'R';
+        }
+        // 15/25/26/55 (printer/status) — not modelled, no reply (xterm
+        // with printer off behaves the same).
+    }
+
+    /**
+     * DECRQM — CSI ? Ps $ p (private) / CSI Ps $ p (ANSI).
+     *
+     * Replies DECRPM `ESC [ ? Ps ; Pd $ y` with Pd: 0 unrecognized,
+     * 1 set, 2 reset (3/4 permanently set/reset are never produced — no
+     * mode here is hardware-locked). ANSI (non-private) modes report 0:
+     * this emulator routes only DEC private modes through ModeHandler.
+     *
+     * @param list<int> $params
+     *
+     * @see xterm ctlseqs DECRQM/DECRPM
+     * @see VT500 §DECRCQM
+     */
+    private function requestMode(array $params, int $prefix): void
+    {
+        $mode = $params[0] ?? -1;
+        if ($mode <= 0) {
+            return;
+        }
+        $private = $prefix === ord('?');
+        if ($private) {
+            $state = $this->decModeStatus($mode);
+            $this->replies[] = "\x1b[?{$mode};{$state}\$y";
+            return;
+        }
+        $this->replies[] = "\x1b[{$mode};0\$y";
+    }
+
+    /** Map a DEC private mode number to DECRQM status (0/1/2). */
+    private function decModeStatus(int $mode): int
+    {
+        $on = static fn (bool $v): int => $v ? 1 : 2;
+        return match ($mode) {
+            6 => $on($this->mode->originMode),
+            7 => $on($this->mode->autoWrap),
+            25 => $on($this->mode->cursorVisible),
+            47, 1047 => $on($this->mode->altScreenVariant === Mode::ALT_NO_SAVE),
+            1048 => $on($this->mode->altScreenVariant === Mode::ALT_CURSOR_ONLY),
+            1049 => $on($this->mode->altScreenVariant === Mode::ALT_FULL),
+            1000 => $on($this->mode->mouseAny),
+            1001, 1005, 1015 => $on($this->mode->mouseHighlights),
+            1002 => $on($this->mode->mouseCellMotion),
+            1003 => $on($this->mode->mouseExtended),
+            1004 => $on($this->mode->reportFocusEvents),
+            1006 => $on($this->mode->mouseSgr),
+            2004 => $on($this->mode->bracketedPaste),
+            2026 => $on($this->mode->syncUpdate),
+            default => 0,
+        };
+    }
+
+    /**
+     * XTWINOPS — CSI Ps t window queries (xterm ctlseqs "XTWINOPS").
+     *
+     * 16t answers `ESC [ 6 ; height ; width t` and 14t answers
+     * `ESC [ 4 ; height ; width t` from the emulator's nominal cell
+     * metrics (8×16 px unless `cellWidthPx`/`cellHeightPx` were set) —
+     * the exact field order candy-mosaic's `Detect::parseXtwinoReply()`
+     * expects. 18t answers `ESC [ 8 ; rows ; cols t` from true geometry.
+     *
+     * @param list<int> $params
+     *
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Window-manipulation-functions
+     */
+    private function windowOps(array $params): void
+    {
+        $first = $params[0] ?? -1;
+        $rows = $this->buffer->rows;
+        $cols = $this->buffer->cols;
+        match ($first === -1 ? 14 : $first) {
+            14 => $this->replies[] = "\x1b[4;" . ($rows * $this->cellHeightPx) . ';' . ($cols * $this->cellWidthPx) . 't',
+            16 => $this->replies[] = "\x1b[6;{$this->cellHeightPx};{$this->cellWidthPx}t",
+            18 => $this->replies[] = "\x1b[8;{$rows};{$cols}t",
+            default => null, // Resize/move requests (1-13, 15, 17, 19, 20+): not answered.
+        };
+    }
+
+    // ─── Reset family (RIS / DECSTR / DECALN) ────────────────────────────────
+
+    /**
+     * RIS — ESC c, full reset to the power-on state.
+     *
+     * RESETS: screen contents (fresh Buffer), cursor to home with the
+     * DECAWM phantom flag and saved cursor dropped, SGR pen, every DEC
+     * mode to its power-on value (DECAWM on, DECOM off, DECTCEM
+     * visible …), DECSTBM margins to full screen, tab stops to the
+     * 8-column default, SCS designations + GL shift + single-shift slot,
+     * active OSC 8 hyperlink, the alt-screen swap (returns to main
+     * screen), and any queued synchronized-update mutations.
+     * PRESERVED: scrollback ring — like charmbracelet/x/vt
+     * `Emulator.fullReset()`, which resets both Screen buffers but never
+     * the Scrollback (only ED 3 clears it), and xterm, whose RIS erase
+     * does not feed or flush the ring; window title; indexed palette;
+     * recorded clipboard/focus event logs; the pending reply queue.
+     *
+     * @see https://vt100.net/docs/vt500-rm/chapter4.html#S4.36 (RIS)
+     * @see charmbracelet/x/vt Emulator.fullReset
+     */
+    public function hardReset(): void
+    {
+        $cols = $this->buffer->cols;
+        $rows = $this->buffer->rows;
+
+        $this->buffer = new Buffer($cols, $rows);
+        $this->cursor = new Cursor();
+        $this->wrapPending = false;
+        $this->sgr = Sgr::empty();
+        $this->mode = new Mode();
+        $this->tabStops = TabHandler::defaults($cols);
+        $this->scrollRegionTop = 0;
+        $this->scrollRegionBottom = $rows - 1;
+        $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
+        $this->gl = 0;
+        $this->singleShift = null;
+        $this->currentHyperlink = null;
+        $this->savedBuffer = null;
+        $this->savedCursor = null;
+        $this->savedSgr = null;
+        $this->savedWrapPending = null;
+        $this->pendingMutations = [];
+    }
+
+    /**
+     * DECSTR — CSI ! p, soft reset.
+     *
+     * The xterm/VT500 contract: like RIS but "does not reset the
+     * scrolling region, tab stops, character-set designations, or
+     * anything else not explicitly mentioned" — and, per the brief's
+     * anchor, leaves the scrollback untouched. Resets: SGR pen, cursor
+     * home + visible, DECOM off, DECAWM back to its power-on ON, sync
+     * output off (flushing whatever the queue held), wrap flag dropped.
+     *
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-The-format-of-more-correct-xterm-window-title-and-workspace-reports (DECSTR)
+     * @see VT500 §DECSTR
+     */
+    public function softReset(): void
+    {
+        if ($this->mode->syncUpdate) {
+            // Exiting synchronized output — same flush rule as CSI 2026 l.
+            $this->flushPendingMutations();
+        }
+        $this->sgr = Sgr::empty();
+        $this->cursor = new Cursor(
+            visible: true,
+            savedRow: $this->cursor->savedRow,
+            savedCol: $this->cursor->savedCol,
+        );
+        $this->wrapPending = false;
+        $this->mode = $this->mode
+            ->withOriginMode(false)
+            ->withAutoWrap(true)
+            ->withCursorVisible(true)
+            ->withSyncUpdate(false);
+        $this->pendingMutations = [];
+    }
+
+    /**
+     * DECALN — CSI # 8, screen-alignment pattern.
+     *
+     * Fills the whole screen with 'E' (default rendition), resets the
+     * scroll margins to full, homes the cursor, resets the SGR pen, and
+     * restores the default character-set designation. xterm additionally
+     * "toggles DECOM/DECAWM and then restores them" — a no-op here.
+     *
+     * WIRE-LEVEL NOTE: the shared candy-ansi VT500 transition table
+     * treats '8' (0x38) as a parameter byte, so a raw `ESC [ # 8` never
+     * reaches csiDispatch() (the parser drops it to Ground without a
+     * dispatch — final bytes must be 0x40-0x7E). This entry point is
+     * therefore programmatic-only, like enableAltScreen(); enabling
+     * wire-level DECALN requires a candy-ansi parser change outside this
+     * lib (deferred; see PR notes).
+     *
+     * @see https://vt100.net/docs/vt500-rm/chapter4.html#S4.2 (DECALN)
+     */
+    public function displayAlignmentTest(): void
+    {
+        $blank = new Cell(grapheme: 'E');
+        for ($r = 0; $r < $this->buffer->rows; $r++) {
+            for ($c = 0; $c < $this->buffer->cols; $c++) {
+                $this->buffer->put($r, $c, $blank);
+            }
+        }
+        $this->sgr = Sgr::empty();
+        $this->cursor = new Cursor(
+            visible: $this->cursor->visible,
+            savedRow: $this->cursor->savedRow,
+            savedCol: $this->cursor->savedCol,
+        );
+        $this->wrapPending = false;
+        $this->scrollRegionTop = 0;
+        $this->scrollRegionBottom = $this->buffer->rows - 1;
+        $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
+        $this->gl = 0;
+        $this->singleShift = null;
+    }
+
+    /**
+     * Resolve a rune through the GL-invoked designation (or the armed
+     * SS2/SS3 set), consuming any single shift.
+     */
+    private function translateRune(string $rune): string
+    {
+        if ($this->singleShift !== null) {
+            $charset = $this->charsets[$this->singleShift];
+            $this->singleShift = null;
+            return Charsets::translate($charset, $rune);
+        }
+        return Charsets::translate($this->charsets[$this->gl], $rune);
     }
 
     /**
@@ -471,8 +1015,10 @@ final class ScreenHandler implements Handler
         $this->savedBuffer = $this->buffer;
         $this->savedCursor = $this->cursor;
         $this->savedSgr = $this->sgr;
+        $this->savedWrapPending = $this->wrapPending;
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
         $this->cursor = new Cursor(visible: $this->cursor->visible);
+        $this->wrapPending = false;
         $this->sgr = Sgr::empty();
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_FULL);
     }
@@ -489,9 +1035,11 @@ final class ScreenHandler implements Handler
         $this->buffer = $this->savedBuffer;
         $this->cursor = $this->savedCursor ?? $this->cursor;
         $this->sgr = $this->savedSgr ?? Sgr::empty();
+        $this->wrapPending = $this->savedWrapPending ?? false;
         $this->savedBuffer = null;
         $this->savedCursor = null;
         $this->savedSgr = null;
+        $this->savedWrapPending = null;
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
     }
 
@@ -538,8 +1086,10 @@ final class ScreenHandler implements Handler
             return;
         }
         $this->savedCursor = $this->cursor;
+        $this->savedWrapPending = $this->wrapPending;
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
         $this->cursor = new Cursor(visible: $this->cursor->visible);
+        $this->wrapPending = false;
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_CURSOR_ONLY);
     }
 
@@ -553,7 +1103,9 @@ final class ScreenHandler implements Handler
             return;
         }
         $this->cursor = $this->savedCursor;
+        $this->wrapPending = $this->savedWrapPending ?? false;
         $this->savedCursor = null;
+        $this->savedWrapPending = null;
         // Do NOT restore buffer or SGR
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
     }
@@ -569,7 +1121,9 @@ final class ScreenHandler implements Handler
     private function attachCombiningChar(string $combining): void
     {
         $r = $this->cursor->row;
-        $c = $this->cursor->col - 1;
+        // While the phantom cell is armed the last glyph sits UNDER the
+        // cursor (not one before it) — attach there instead.
+        $c = $this->wrapPending ? $this->cursor->col : $this->cursor->col - 1;
 
         if ($c < 0) {
             return; // Nothing before cursor to attach to.
