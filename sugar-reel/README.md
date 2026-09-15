@@ -96,6 +96,82 @@ Three named ramps are available:
 Reel::open('video.mp4')->withRamp('dense')->play();
 ```
 
+## Remote & embedded playback
+
+### Authenticated / signed streams
+
+`Reel::openUrl()` plays an `http(s)` stream and re-presents request headers on
+every open and every decoder rebuild (a seek or a resize re-spawns `ffmpeg`, so
+a short-lived signed URL or bearer token must be re-sent each time):
+
+```php
+use SugarCraft\Reel\Reel;
+
+Reel::openUrl(
+    'https://cdn.example.com/private/clip.mp4',
+    headers: [
+        'Authorization' => 'Bearer <token>',
+        'User-Agent'    => 'my-app/1.0',
+    ],
+    allowedHosts: ['cdn.example.com'], // optional host allowlist
+)->play();
+```
+
+Headers are validated at the boundary: a name or value containing a CR, LF or
+NUL (HPP / request-splitting), an empty name, a colon in the name, or a
+malformed field line all throw `InvalidArgumentException` before `ffmpeg` is
+ever spawned. **Migration note:** the second parameter used to be
+`$allowedHosts`; it is now `$headers` (prefer named arguments). The old
+positional shape fails loudly — a positional host list is rejected outright as
+the legacy `allowedHosts` shape (its own migration message), `null` as a
+`TypeError`. A `User-Agent` value is passed to
+`ffmpeg -user_agent`; every other header rides
+in a single `-headers` block. Both flags are emitted only for network sources —
+for a local file they are dropped and a reason is logged. Non-`http(s)` URL
+schemes (`rtsp://`, `rtmp://`, …) are not opened by `openUrl()`. Calling
+`openUrl()` without `allowedHosts:` also logs a one-line SSRF advisory
+(`ssrf.no_allowlist`, host only — never the path or query): ffmpeg resolves DNS
+and follows redirects, so an unbounded remote URL can reach internal hosts.
+
+```php
+// Mutate headers fluently on an existing Reel (validated the same way):
+$reel = $reel->withHeaders(['Cookie' => 'session=…']);
+```
+
+### Embedding the player without owning the loop
+
+`Reel::play()` builds its own candy-core `Program` and blocks. To drive playback
+from a host that already owns a `Program`/event loop, use `Reel::toPlayer()` to
+get the TEA `Player` model **paused** and mount it yourself. Building the model
+opens the source, so its `ffmpeg` child is spawned immediately — a host that
+mounts and never starts must still call `stop()` to release it.
+
+```php
+$player = Reel::openUrl($url, $headers)->toPlayer(); // paused; decoder child already spawned
+
+// Mount $player in your own Program, or fold it into a larger Model.
+// When the host leaves the player screen, release the child processes:
+$player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
+```
+
+**Host contract** — the caller that owns the loop is responsible for:
+
+- **Resize:** forward terminal resizes to the player as a `WindowSizeMsg`.
+  `Player` clamps columns to `[10, 200]` and rows to `[5, 80]` (the
+  `MIN_COLS`/`MAX_COLS`/`MIN_ROWS`/`MAX_ROWS` constants) and ignores a resize
+  that does not change the clamped cell grid. A clamp change rebuilds the
+  decoder **off the render hot path** (in `update`, never in `view`).
+- **Quit keys:** decide when to quit. Standalone playback quits on `q`, `Esc`,
+  or `Ctrl-C` and each of those paths calls `Player::stop()` first; a host
+  embedding the player may route different keys but must still call `stop()` on
+  teardown so no `ffmpeg`/audio child is orphaned.
+- **Tick:** the player self-schedules with `Cmd::tick()` while playing; do not
+  poll it from a separate timer. `toPlayer()` returns it **paused** — call
+  `$player->play()` (or send `Space`) to start.
+- **Source binding:** `toPlayer()` requires a bound source (a path or URL). An
+  unbound `Reel::new()` throws `InvalidArgumentException` rather than
+  silently substituting the synthetic pattern that `play()` uses.
+
 ## Keyboard controls
 
 | Key | Action |
@@ -175,3 +251,38 @@ reinvented: [candy-mosaic](../candy-mosaic) (image → cell renderers),
 - **Seeking repositions audio but not frame-exactly.** A seek creates a new AudioPlayer at the correct offset, but the video frame timing and audio timing are only approximately synchronized (frame-skip resync keeps them close at 1.0×).
 
 - **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
+
+- **Seek is fast, slightly less frame-exact (keyframe snap).** `seekToSeconds()`
+  uses ffmpeg *input* seeking (`-ss` placed before `-i`), which decodes from the
+  keyframe at or just before the requested time rather than walking the whole
+  file. That is what makes scrubbing a multi-GB network stream instant; the
+  trade-off is that the landed frame can be a touch less frame-exact than output
+  seeking, and `videoTime`/`frameIndex` are set to the requested target, so the
+  on-screen clock can lead the first displayed frame by up to one GOP on
+  sparsely-keyed sources. Index-based backward seeks (`withSeek()` to an earlier
+  frame) instead reopen from t0 and decode forward, which is frame-exact.
+
+- **Audio pause/seek on Windows.** `AudioPlayer` no longer relies on
+  `SIGSTOP`/`SIGCONT` (which are absent on Windows and unreliable under a PTY):
+  pause terminates the subprocess and resume re-spawns `ffplay`/`mpv` from the
+  banked playback position (`-ss`/`--start`). The trade-off is a short
+  re-open latency on resume, and the audio clock is quantised to the last
+  pause boundary rather than frame-exact.
+
+- **Authenticated video, unauthenticated audio.** The request headers given to
+  `Reel::openUrl()` ride on ffmpeg's video input (`-headers`/`-user_agent`) but
+  are NOT forwarded to the audio companion — `ffplay`/`mpv` spawn with the bare
+  URL. On a signed or 403-gated stream the video plays while audio silently
+  fails to connect (treat such sources as video-only until audio headers are
+  wired; `HttpHeaders::toMpvHeaderFields()` already renders the mpv form for
+  that future work).
+
+- **Decode is synchronous with an optional per-tick budget.** `next()` reads the
+  ffmpeg stdout pipe — non-blocking, behind a bounded `stream_select()` deadline —
+  so a stalled network source surfaces as end-of-stream instead of hanging the
+  loop. A tick that falls behind by many frames will decode the catch-up frames
+  inline; set a budget via `Player::open(..., frameBudgetMs: 8.0)` to cap that
+  work per tick (remaining catch-up converges over subsequent ticks instead of
+  blocking one). The budget is checked between frames, so it cannot preempt a
+  single frame decode already in flight; per-read bounding comes from the pipe
+  timeout.

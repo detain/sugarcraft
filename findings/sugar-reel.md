@@ -8,9 +8,41 @@ The code is generally well-structured with good documentation, comprehensive CAL
 
 ---
 
+## Resolution status — branch `ai/reel-server-stream`
+
+Legend: ✅ resolved · ◐ partially mitigated (note below) · *(prior)* = resolved on
+`master` before this branch, not a deliverable of this PR.
+
+Resolved by this PR: **✅ #1, ✅ #2, ✅ #5, ✅ #6, ✅ #7, ✅ #20, ✅ #36, ✅ #38,
+✅ #46, ✅ #51, ◐ #52** (bounded pipe reads + per-tick decode budget; full
+ReactPHP async I/O remains future work).
+
+Already resolved on master before this branch (verified present, listed for
+completeness; not claimed by this PR): ✅ *(prior)* #3, #4 (child exit codes
+captured/checked), #11 (PNG buffer capped at `MAX_PNG_BUFFER`), #25
+(`TickMsg::instance()`), #37 (`quarterCell` calls `LumaRamp::compute`), #49
+(`MIN_COLS`/`MAX_COLS`/`MIN_ROWS`/`MAX_ROWS` constants).
+
+Deferred / not addressed here: #8 (`mutate()` `??` semantics — footgun noted but
+unchanged), #9 (HalfBlock inline-vs-mosaic parity duplication), #13 (mode-cycle
+decoder churn), #45/#44-table (shared `FfmpegCommandBuilder`), and the SIGWINCH
+*fully-async* resize idea (see #52 note — the rebuild already runs in `update`,
+off the `view()` hot path, but still spawns ffmpeg synchronously).
+
+---
+
 ## Critical Issues (file:line format)
 
-### 1. `AudioPlayer.php:122-128` — SIGSTOP pause mechanism likely ineffective
+### ✅ 1. `AudioPlayer.php:122-128` — SIGSTOP pause mechanism likely ineffective
+
+> **Resolved (this PR).** The `SIGSTOP` send was already replaced with
+> `BoundedReaper::terminateNow()` + respawn on an earlier master change; this
+> branch completes it by banking elapsed play time into `$seekMs` (via an
+> injectable `?\Closure $clock`) so `resume()` re-spawns `ffplay`/`mpv` from the
+> *advanced* position instead of replaying from `startMs`. `position()` exposes
+> the tracked ms. Covered by `ClockAudioPlayer` tests
+> (`testPauseAdvancesPositionByElapsedPlay`,
+> `testResumeContinuesFromAdvancedPosition`) with no audio device or sleeping.
 
 ```php
 public function pause(): void
@@ -25,7 +57,10 @@ public function pause(): void
 
 **Recommended fix**: Use a pause flag that prevents reading from the decoder pipe, or use SIGTTOU/SIGTTIN to gently suspend without the harsh SIGSTOP. Alternatively, kill and recreate the audio subprocess on pause/resume (like the seek path does) — though this adds latency.
 
-### 2. `AudioPlayer.php:135-141` — SIGCONT resume same concerns
+### ✅ 2. `AudioPlayer.php:135-141` — SIGCONT resume same concerns
+
+> **Resolved (this PR).** Same terminate/respawn mechanism as #1; `resume()`
+> re-starts from the banked `$seekMs`. See #1 note and the position-tracking tests.
 
 ```php
 public function resume(): void
@@ -38,7 +73,7 @@ public function resume(): void
 ```
 Same issues as pause. SIGCONT may not reliably wake a process that was SIGSTOP'd under a PTY.
 
-### 3. `AudioPlayer.php:95-104` — stop() calls proc_close without checking exit status
+### ✅ (prior) 3. `AudioPlayer.php:95-104` — stop() calls proc_close without checking exit status
 
 ```php
 public function stop(): void
@@ -53,7 +88,7 @@ public function stop(): void
 ```
 `proc_close()` returns the exit code but it is discarded. A non-zero exit code may indicate an abnormal termination (killed by signal). The exit code should be checked and potentially logged.
 
-### 4. `FfmpegDecoder.php:355-362` — Same issue: exit code discarded in close()
+### ✅ (prior) 4. `FfmpegDecoder.php:355-362` — Same issue: exit code discarded in close()
 
 ```php
 if ($this->process !== null && is_resource($this->process)) {
@@ -70,7 +105,14 @@ The comment acknowledges the issue. A non-zero exit from ffmpeg may indicate cor
 
 ## High Severity Issues
 
-### 5. `Player.php:902-920` — `/fake` test path embedded in production rebuildDecoderAt()
+### ✅ 5. `Player.php:902-920` — `/fake` test path embedded in production rebuildDecoderAt()
+
+> **Resolved (this PR).** `rebuildDecoderAt()` / `rebuildDecoderAtSeconds()` now
+> branch on the decoder's own `Decoder::reopensInPlace()` capability — no
+> `videoPath === '/fake'` string compare and no `instanceof FakeDecoder` in
+> production code. The production `Player` also dropped its `use …\Tests\FakeDecoder`
+> import. Proven by `DecoderSeamTest` (an inline `ReopenOnlyDecoder` that is not a
+> `FakeDecoder` still routes through the reopen path).
 
 ```php
 private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
@@ -89,7 +131,15 @@ Every call to `rebuildDecoderAt()` pays the cost of a string comparison `=== '/f
 
 **Recommended fix**: Use a `DecoderInterface` that exposes a `reopen()` method only in the test implementation, or inject a `DecoderFactory` seam that returns a spy in tests.
 
-### 6. `Player.php:1089-1099` — `frameAt()` creates orphaned decoder process
+### ✅ 6. `Player.php:1089-1099` — `frameAt()` creates orphaned decoder process
+
+> **Resolved (this PR).** `frameAt()` now reopens in place for
+> `reopensInPlace()` decoders (so thumbnails work for injected/custom decoders),
+> snapshots a factory-owned decoder through a throwaway seeked spawn for real
+> paths, and **throws a clear `LogicException`** for an unbound factory-owned
+> Player instead of silently returning null on a `'/fake'`/`''` string test. The
+> orphaned-process concern stands for real paths (inherent to a one-shot grab) but
+> the throwaway is closed immediately.
 
 ```php
 public function frameAt(float $sec): ?RgbFrame
@@ -105,7 +155,7 @@ public function frameAt(float $sec): ?RgbFrame
 ```
 This spawns a full ffmpeg process to grab ONE frame for a thumbnail, reads it, and closes immediately. This is correct but expensive. More critically, the frame is decoded at the player's current mode/resolution, not necessarily at a thumbnail-appropriate size. The decoder creation is not cached or shared.
 
-### 7. `Player.php:926-1019` — `withSeek()` and `seekToSeconds()` duplicate identical audio rebuild logic
+### ✅ 7. `Player.php:926-1019` — `withSeek()` and `seekToSeconds()` duplicate identical audio rebuild logic
 
 Both methods (lines 931-942 and 1058-1068) contain identical code:
 ```php
@@ -157,7 +207,9 @@ if ($startSec > 0.0 && $fps > 0.0) {
 ```
 If `FlipDecoder::decode()` returns `[]`, the player will show a black screen with no error. At minimum this should be logged or a warning emitted. The `RgbFrame` returned will be 0×0 dimensions in some paths.
 
-### 11. `FfmpegDecoder.php:313-333` — PNG buffer grows unbounded; no size limit
+### ✅ (prior) 11. `FfmpegDecoder.php:313-333` — PNG buffer grows unbounded; no size limit
+
+> Note: an upper bound already exists on master (`MAX_PNG_BUFFER = 100 MiB`, enforced in `nextPng()`). This branch additionally bounds the raw RGB read path via `readStdout()`.
 
 ```php
 private function nextPng(): ?RgbFrame
@@ -266,7 +318,9 @@ The `Player` constructor takes 18 parameters. This is very high coupling — add
 
 Unlike most other classes in the codebase (`Player`, `Reel`, `FfmpegDecoder`, etc. are all `final`), `AudioPlayer` is a regular class. Since it has a `protected` method `buildCommand()` designed for subclassing (per the CALIBER_LEARNINGS: "fake-audio-player-test-double"), this is intentional, but conflicts with the project convention.
 
-### 20. `Player.php:219-222` — openForTest creates renderer with Mode::HalfBlock regardless of actual mode
+### ✅ 20. `Player.php:219-222` — openForTest creates renderer with Mode::HalfBlock regardless of actual mode
+
+> **Resolved (this PR).** The new public `Player::fromDecoder(...)` seam takes the `Mode` as an argument and builds the matching `FrameRenderer` via `RendererFactory::create($mode, …)`. `openForTest()` is retained only as a `@deprecated` alias forwarding to `fromDecoder()` with `HalfBlock` for the existing call sites.
 
 ```php
 $renderer = RendererFactory::create(Mode::HalfBlock, $ramp, $cellPxW, $cellPxH);
@@ -303,7 +357,9 @@ return $first ?: null;
 ```
 `strtok()` with `"\r\n"` will treat `\r\n`, `\r`, and `\n` as tokens. On the first call, `strtok` returns the first token or `false` if empty. The `return $first ?: null` is problematic: if `$first === '0'` or any falsy-but-valid path, it returns `null`. Use explicit `false !== $first` check.
 
-### 25. `Player.php:253-260` — `init()` returns `null` for tick when paused but tick command is recreated in update
+### ◐ (prior) 25. `Player.php:253-260` — `init()` returns `null` for tick when paused but tick command is recreated in update
+
+> Note: the `new TickMsg()` per-tick allocation was already replaced with `TickMsg::instance()` on master; the rest of the observation is unchanged.
 
 ```php
 public function init(): ?\Closure
@@ -367,11 +423,13 @@ If `GraphicsRenderer` fails (e.g., chafa not available and pure-PHP SixelRendere
 
 ## Duplicated Logic / Refactoring Opportunities
 
-### 36. Audio rebuild in `withSeek()` and `seekToSeconds()` — DUPLICATED
+### ✅ 36. Audio rebuild in `withSeek()` and `seekToSeconds()` — DUPLICATED
 
 Already noted in High Severity #7. Extract to `private function makeAudioAt(?int $startMs): ?AudioPlayer`.
 
-### 37. Luma computation `(77*R + 150*G + 29*B) >> 8` — DUPLICATED in 4 places
+### ◐ (prior) 37. Luma computation `(77*R + 150*G + 29*B) >> 8` — DUPLICATED in 4 places
+
+> Note: `quarterCell()` already delegates to `LumaRamp::compute()` on master; a separate inline luma line in the HalfBlock path remains.
 
 The BT.601 luma formula appears in:
 - `Player.php:724` — `LumaRamp::char()` call uses it internally via `LumaRamp::compute()`
@@ -381,7 +439,9 @@ The BT.601 luma formula appears in:
 
 The `quarterCell()` lambda at line 763 inlines the formula rather than calling `LumaRamp::compute()`. This should call `LumaRamp::compute()` directly.
 
-### 38. Player constructor call repeated across `withSeek()`, `withNewFrame()`, `mutate()`
+### ✅ 38. Player constructor call repeated across `withSeek()`, `withNewFrame()`, `mutate()`
+
+> **Resolved (this PR).** `withNewFrame()` and both `withSeek()` branches now go through `mutate()`, leaving `mutate()` as the single `new self(...)` site. The two new fields (`headers`, `frameBudgetMs`) are pinned there too.
 
 All three create a new `Player` instance with 18 fields. The `withNewFrame()` at line 1150-1182 is nearly identical to `mutate()` but cannot use `mutate()` because it needs to pass a new `decoder`. Consider a builder or a named constructor.
 
@@ -429,7 +489,9 @@ Both build ffmpeg-family command arrays. The ffplay path in `AudioPlayer` is sim
 
 ## Compatibility Issues
 
-### 46. `Player.php:122-123` — `Player::open()` calls `VideoSource::probe()` which runs ffprobe synchronously
+### ◐ 46. `Player.php:122-123` — `Player::open()` calls `VideoSource::probe()` which runs ffprobe synchronously
+
+> **Partially resolved (this PR).** `probe()` now drains ffprobe stdout under a bounded deadline (`drainWithTimeout()`, `PROBE_TIMEOUT_SECONDS=10`) and, on overrun, kills the child via `BoundedReaper::terminateNow()` and returns the zeroed default — a stalled probe can no longer hang the process. The drain-success path is bounded too: a child that emits JSON then wedges before exiting is reaped via `reapWithGrace()` (`PROBE_EXIT_GRACE_SECONDS=1`, escalation kill), so `proc_close()` cannot block unboundedly either; a killed child fails closed to the zeroed default even with bytes in hand. The underlying Windows `shell_exec`-in-`Probe::which()` fragility (#24) is unchanged.
 
 On Windows, `where` is used via `shell_exec()` in `Probe::which()`. On some Windows configurations, `shell_exec()` may be disabled or restricted, causing the probe to fail. The graceful fallback (returning default VideoSource) works, but probe results may be wrong.
 
@@ -447,7 +509,9 @@ return preg_match('#^https?://#i', $source) === 1;
 ```
 This covers `http://` and `https://` but misses `rtsp://`, `rtmp://`, `mms://` streams that ffmpeg supports. The reconnect options would also not be applied to those protocols. At minimum, the reconnect options being skipped for non-HTTP sources may be intentional (not all protocols support reconnect), but the behavior should be documented.
 
-### 49. `Player.php:361-362` — Window size clamp values are magic numbers
+### ✅ (prior) 49. `Player.php:361-362` — Window size clamp values are magic numbers
+
+> Note: the clamps are already named constants (`MIN_COLS`/`MAX_COLS`/`MIN_ROWS`/`MAX_ROWS`) on master, and are now documented as part of the `toPlayer()` host contract.
 
 ```php
 $cols = max(10, min($cols, 200));
@@ -459,7 +523,9 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 
 `Reel::play()` calls `(new Program($player, $options))->run()` which blocks the calling thread. In a ReactPHP context (this is an async ecosystem), blocking the event loop is problematic. There is no async-compatible entry point.
 
-### 51. SIGSTOP/SIGCONT not available on Windows
+### ✅ 51. SIGSTOP/SIGCONT not available on Windows
+
+> **Resolved (this PR).** Audio pause/resume no longer depends on `SIGSTOP`/`SIGCONT`: it terminates and re-spawns the audio subprocess from the banked `$seekMs` position, which works uniformly on Windows and under a PTY. Documented in the README *Known limitations* section.
 
 `AudioPlayer::pause()` and `resume()` check `\defined('SIGSTOP')` and `\defined('SIGCONT')` and return silently on Windows. This means audio pause/resume is completely non-functional on Windows — audio continues playing when the video is paused. This should be documented explicitly.
 
@@ -467,7 +533,9 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 
 ## Async Pattern Improvements
 
-### 52. Entire decode loop is blocking-synchronous
+### ◐ 52. Entire decode loop is blocking-synchronous
+
+> **Partially resolved (this PR).** `FfmpegDecoder::readStdout()` reads the pipe under `stream_select()` with a `READ_TIMEOUT_SEC` deadline (a stalled producer returns "no data"/EOF rather than blocking forever), a persistent `$rawBuffer` reassembles a partial RGB frame across bounded reads without desync, and `Player::open(..., frameBudgetMs:)` caps the inline catch-up decode per tick. Full `Loop::addReadStream()` ReactPHP integration (#56/#57 remainder) is still future work.
 
 `Player::updateTick()` (lines 292-351) calls `$this->decoder->next()` synchronously, which in `FfmpegDecoder` does a blocking `fread()` on the ffmpeg stdout pipe. If ffmpeg stalls (network stream dropout, slow disk), the entire PHP process blocks. There is no timeout on the `fread()` call.
 

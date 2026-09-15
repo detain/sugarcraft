@@ -9,6 +9,7 @@ use SugarCraft\Reel\Decode\FfmpegDecoder;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
+use SugarCraft\Reel\Tests\Concerns\CapturesErrorLog;
 use SugarCraft\Reel\Tests\Concerns\HidesPathBinaries;
 
 /**
@@ -23,6 +24,7 @@ use SugarCraft\Reel\Tests\Concerns\HidesPathBinaries;
  */
 final class FfmpegDecoderTest extends TestCase
 {
+    use CapturesErrorLog;
     use HidesPathBinaries;
 
     // -------------------------------------------------------------------------
@@ -40,6 +42,30 @@ final class FfmpegDecoderTest extends TestCase
         $this->withoutPathBinaries(
             static fn () => $decoder->open('/nonexistent/video.mp4', 80, 24, 30.0),
         );
+    }
+
+    /**
+     * @testdox headers on a LOCAL source are dropped with a logged reason (not silently)
+     *
+     * The ffmpeg open() path logs then discards request headers for a non-network
+     * source, because ffmpeg rejects -headers on a file input. The notice fires
+     * before the subprocess is even attempted, so hiding ffmpeg from PATH still lets
+     * us prove the log line without spawning anything.
+     */
+    public function testLocalSourceHeadersDroppedWithLoggedReason(): void
+    {
+        $logged = $this->captureErrorLog(function (): void {
+            $decoder = new FfmpegDecoder();
+            $this->withoutPathBinaries(static function () use ($decoder): void {
+                try {
+                    $decoder->open('/tmp/local.mkv', 80, 24, 30.0, Mode::HalfBlock, 0.0, ['Authorization' => 'Bearer x']);
+                } catch (\RuntimeException) {
+                    // Expected: ffmpeg hidden so open() throws AFTER the drop notice.
+                }
+            });
+        });
+
+        $this->assertStringContainsString('ignoring 1 HTTP request header', $logged);
     }
 
     // -------------------------------------------------------------------------
@@ -117,6 +143,177 @@ final class FfmpegDecoderTest extends TestCase
         $this->assertNull($decoder->next());
 
         fclose($stream);
+    }
+
+    /**
+     * @testdox a frame split across next() calls RESUMES from the buffered bytes
+     *
+     * findings #45/#50: reads are now bounded (a stalled pipe no longer blocks the
+     * UI forever). A bounded read can return mid-frame, so the partial bytes must
+     * persist across the null return and be completed by a later next() — dropping
+     * them would desync the forward-only pipe. No ffmpeg: pre-seed the buffer to the
+     * post-stall state, put the remaining bytes on the stream, assert completion.
+     */
+    public function testPartialFrameResumesAcrossCalls(): void
+    {
+        $cellsW = 2;
+        $frameH = 2;
+        $frameBytes = $cellsW * $frameH * 3; // 12
+
+        $halfB = str_repeat("\x22", 5);
+        $restB = str_repeat("\x33", $frameBytes - 5);
+
+        // The stream now holds only the TAIL of frame B; the head is already in the
+        // decoder's persistent buffer, exactly as a bounded read would leave it.
+        $stream = fopen('php://temp', 'r+b');
+        fwrite($stream, $restB);
+        rewind($stream);
+
+        $decoder = new FfmpegDecoder();
+        $this->injectStreamState($decoder, $stream, $cellsW, $frameH, $frameBytes);
+
+        // Seed the buffer with the half-frame a previous call left behind.
+        $raw = (new \ReflectionClass($decoder))->getProperty('rawBuffer');
+        $raw->setAccessible(true);
+        $raw->setValue($decoder, $halfB);
+
+        // The buffered head + this call's tail reassemble into one whole frame.
+        $resumed = $decoder->next();
+        $this->assertNotNull($resumed, 'the buffered half-frame is completed, not lost');
+        $this->assertSame($halfB . $restB, $resumed->bytes);
+
+        // Buffer is drained back to empty after a frame is produced.
+        $this->assertSame('', $raw->getValue($decoder));
+
+        fclose($stream);
+    }
+
+    /**
+     * @testdox a fully stalled pipe dies at the per-frame-fill deadline — and keeps the partial
+     *
+     * The witness for the absolute-deadline fix (findings #45/#50): reads inside
+     * ONE next() must race a single clock, so the call cannot outlive the fill's
+     * budget no matter how many bounded reads it would take. The pipe here is a
+     * unix socket pair whose peer stays open and silent — select() sees neither
+     * data nor EOF, so this exercises the pure-timeout path (a full budget spent
+     * waiting, then null). Any reintroduced internal retry that loops past the
+     * deadline pushes elapsed over the ceiling; a revert to the old blocking
+     * fread hangs instead. A plain per-read re-arm WITHOUT retry is invisible on
+     * a silent pipe (one timeout either way) — that mutation is caught by
+     * {@see self::testTrickleStillDiesAtFrameFillDeadline()} below,
+     * which drips bytes just inside each select window. `readTimeout` is the test
+     * seam that makes the bound observable on a 0.2 s scale.
+     */
+    public function testStalledPipeDiesAtFrameFillDeadline(): void
+    {
+        $cellsW = 2;
+        $frameH = 2;
+        $frameBytes = $cellsW * $frameH * 3; // 12
+        $partial = str_repeat("\x22", $frameBytes - 1); // one byte short of a frame
+
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        $this->assertNotFalse($pair, 'socket pair is the silent, never-EOF pipe');
+        [$peer, $readEnd] = $pair;
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $this->injectStreamState($decoder, $readEnd, $cellsW, $frameH, $frameBytes);
+
+            $r = new \ReflectionClass($decoder);
+            $raw = $r->getProperty('rawBuffer');
+            $raw->setAccessible(true);
+            $raw->setValue($decoder, $partial);
+            $timeout = $r->getProperty('readTimeout');
+            $timeout->setAccessible(true);
+            $timeout->setValue($decoder, 0.2);
+
+            $started = hrtime(true) / 1_000_000_000;
+            $frame = $decoder->next();
+            $elapsed = hrtime(true) / 1_000_000_000 - $started;
+
+            $this->assertNull($frame, 'a stalled fill yields no frame');
+            $this->assertGreaterThanOrEqual(
+                0.15,
+                $elapsed,
+                'the wait really used its bounded window (an instant EOF path would prove nothing)'
+            );
+            $this->assertLessThan(
+                0.35,
+                $elapsed,
+                'one stalled frame-fill never re-arms its budget past the deadline'
+            );
+            $this->assertSame($partial, $raw->getValue($decoder), 'the partial stays buffered for the next call');
+        } finally {
+            fclose($peer);
+            fclose($readEnd);
+        }
+    }
+
+    /**
+     * @testdox a trickling pipe still dies at the frame-fill deadline
+     *
+     * The companion witness to {@see self::testStalledPipeDiesAtFrameFillDeadline()}
+     * for the true findings #45/#50 wedge: a server that drips bytes just inside
+     * every individual select window, so all but the final bounded read succeed —
+     * the kill comes from the last, shrunken window timing out (or the spent-budget
+     * guard), which is exactly what a re-arm prevents since under a re-arm no window
+     * ever shrinks. An absolute
+     * per-frame-fill deadline still kills the call once the frame's total budget is
+     * spent; a per-read re-arm (deadline recomputed before every readStdout) would
+     * never fire and the UI would livelock. A child process trickles one byte every
+     * 80 ms into a pipe; the frame is 12 bytes and `readTimeout` is 0.4 s, so
+     * correct code returns null after ~0.4 s with only a few bytes buffered, while
+     * a re-arm mutation instead assembles a whole frame at ~1.0 s and turns the
+     * null-assertion red outright — the strongest possible pin. The child is
+     * terminated and reaped in `finally` (child-lifetime discipline).
+     */
+    public function testTrickleStillDiesAtFrameFillDeadline(): void
+    {
+        $cellsW = 2;
+        $frameH = 2;
+        $frameBytes = $cellsW * $frameH * 3; // 12
+
+        $child = proc_open(
+            [\PHP_BINARY, '-r', 'while (true) { fwrite(STDOUT, "x"); fflush(STDOUT); usleep(80_000); }'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($child, 'trickle child must start');
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $this->injectStreamState($decoder, $pipes[1], $cellsW, $frameH, $frameBytes);
+
+            $timeout = (new \ReflectionClass($decoder))->getProperty('readTimeout');
+            $timeout->setAccessible(true);
+            $timeout->setValue($decoder, 0.4);
+
+            $started = hrtime(true) / 1_000_000_000;
+            $frame = $decoder->next();
+            $elapsed = hrtime(true) / 1_000_000_000 - $started;
+
+            $this->assertNull(
+                $frame,
+                'a trickling fill is killed by the frame budget even though every individual read succeeds'
+            );
+            $this->assertGreaterThanOrEqual(
+                0.35,
+                $elapsed,
+                'bytes really were flowing — the loop kept reading, past many successful waits'
+            );
+            $this->assertLessThan(
+                0.65,
+                $elapsed,
+                'the ABSOLUTE fill deadline ended the wait; a per-read re-arm would still be looping here'
+            );
+        } finally {
+            // fclose the read end BEFORE proc_close: proc_close reaps the child
+            // and closes every remaining pipe itself, and a second fclose on an
+            // already-closed resource is a TypeError, not a no-op.
+            fclose($pipes[1]);
+            proc_terminate($child);
+            proc_close($child);
+        }
     }
 
     /**
@@ -614,7 +811,9 @@ final class FfmpegDecoderTest extends TestCase
                 $genPipes,
             );
             foreach ($genPipes as $p) {
-                if (is_resource($p)) { fclose($p); }
+                if (is_resource($p)) {
+                    fclose($p);
+                }
             }
             proc_close($gen);
 
@@ -656,7 +855,9 @@ final class FfmpegDecoderTest extends TestCase
             $genPipes,
         );
         foreach ($genPipes as $p) {
-            if (is_resource($p)) { fclose($p); }
+            if (is_resource($p)) {
+                fclose($p);
+            }
         }
         proc_close($gen);
 
@@ -700,7 +901,9 @@ final class FfmpegDecoderTest extends TestCase
             $genPipes,
         );
         foreach ($genPipes as $p) {
-            if (is_resource($p)) { fclose($p); }
+            if (is_resource($p)) {
+                fclose($p);
+            }
         }
         proc_close($gen);
 
@@ -759,7 +962,9 @@ final class FfmpegDecoderTest extends TestCase
             $genPipes,
         );
         foreach ($genPipes as $p) {
-            if (is_resource($p)) { fclose($p); }
+            if (is_resource($p)) {
+                fclose($p);
+            }
         }
         proc_close($gen);
 
@@ -798,7 +1003,9 @@ final class FfmpegDecoderTest extends TestCase
             $genPipes,
         );
         foreach ($genPipes as $p) {
-            if (is_resource($p)) { fclose($p); }
+            if (is_resource($p)) {
+                fclose($p);
+            }
         }
         proc_close($gen);
 

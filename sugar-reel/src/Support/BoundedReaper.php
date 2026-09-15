@@ -107,17 +107,22 @@ final class BoundedReaper
      * `proc_get_status()` reaps internally once the child is gone, so a
      * false 'running' here means `proc_close()` cannot block afterwards.
      *
+      * The deadline runs on the monotonic clock, not the wall clock: an NTP
+      * step during a teardown must not stretch the SIGTERM→SIGKILL escalation
+      * window (or shorten it to zero) — same discipline as every other bounded
+      * child/pipe wait in this lib.
+     *
      * @param resource $process
      */
     public static function hasExited($process, float $seconds): bool
     {
-        $deadline = \microtime(true) + $seconds;
+        $deadline = \hrtime(true) / 1_000_000_000 + $seconds;
         do {
             if (!(bool) (\proc_get_status($process)['running'] ?? false)) {
                 return true;
             }
             \usleep(self::TICK_MICROS);
-        } while (\microtime(true) < $deadline);
+        } while (\hrtime(true) / 1_000_000_000 < $deadline);
 
         return !(bool) (\proc_get_status($process)['running'] ?? false);
     }

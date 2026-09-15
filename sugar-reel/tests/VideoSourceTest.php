@@ -133,6 +133,72 @@ final class VideoSourceTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // drainWithTimeout() — the bounded probe drain (findings #46)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox drainWithTimeout() returns null (not a hang) when the child produces no stdout
+     *
+     * A hung ffprobe must fail closed instead of blocking Player::open() forever.
+     * Drive the bounded drain directly with a live-but-silent child and a short
+     * deadline — the timeout behaviour, not the 10s production constant, is under test.
+     */
+    public function testDrainWithTimeoutFailsClosedOnSilentChild(): void
+    {
+        $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
+        $process = proc_open(['sleep', '5'], $descriptors, $pipes);
+        if (!is_resource($process)) {
+            $this->markTestSkipped('proc_open unavailable');
+        }
+        fclose($pipes[0]); // close child stdin so `sleep` is not waiting on input
+
+        $method = new \ReflectionMethod(VideoSource::class, 'drainWithTimeout');
+        $method->setAccessible(true);
+
+        try {
+            $started = microtime(true);
+            $result = $method->invoke(null, $pipes[1], 0.2);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertNull($result, 'a silent child past the deadline yields null, not a block');
+            // Floor as well as ceiling: without it, a deadline bug that returned
+            // null INSTANTLY would pass for the wrong reason. The drain must
+            // actually wait out (most of) its 0.2s window before giving up.
+            $this->assertGreaterThanOrEqual(0.15, $elapsed, 'the drain waited out its deadline instead of bailing early');
+            $this->assertLessThan(2.0, $elapsed, 'the drain returned near the deadline, not after the full sleep');
+        } finally {
+            // Reap even when an assertion throws — a surviving `sleep 5` would
+            // outlive the failure report and muddy the child-lifetime guard.
+            proc_terminate($process, 9);
+            fclose($pipes[1]);
+            proc_close($process);
+        }
+    }
+
+    /**
+     * @testdox drainWithTimeout() collects the full output and reaches EOF on a chatty child
+     */
+    public function testDrainWithTimeoutCollectsChildOutput(): void
+    {
+        $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
+        // A child that writes a known line and exits → stdout reaches EOF quickly.
+        $process = proc_open(['printf', 'hello-ffprobe-json'], $descriptors, $pipes);
+        if (!is_resource($process)) {
+            $this->markTestSkipped('proc_open unavailable');
+        }
+        fclose($pipes[0]);
+
+        $method = new \ReflectionMethod(VideoSource::class, 'drainWithTimeout');
+        $method->setAccessible(true);
+        $result = $method->invoke(null, $pipes[1], 5.0);
+
+        $this->assertSame('hello-ffprobe-json', $result);
+
+        fclose($pipes[1]);
+        proc_close($process);
+    }
+
+    // -------------------------------------------------------------------------
     // probe() — graceful degradation when ffprobe is absent
     // -------------------------------------------------------------------------
 

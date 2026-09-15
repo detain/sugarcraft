@@ -9,6 +9,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Reel\Render\AutoMode;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
+use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Subtitle\WebVtt;
 
 /**
@@ -42,6 +43,7 @@ final class Reel
      * @param string|null  $subtitlePath  Path to a WebVTT/SRT subtitle file, or null
      * @param list<string>|null $allowedHosts  Host allowlist for remote (http(s)) sources,
      *               or null to disable host restriction (SSRF surface — see {@see openUrl()})
+     * @param array<array-key, string> $headers  HTTP request headers for a remote source
      */
     private function __construct(
         private readonly string $path,
@@ -53,6 +55,7 @@ final class Reel
         private readonly string $ramp = 'standard',
         private readonly ?string $subtitlePath = null,
         private readonly ?array $allowedHosts = null,
+        private readonly array $headers = [],
     ) {
     }
 
@@ -98,16 +101,48 @@ final class Reel
      * a warning is logged noting the remote URL is being fed to ffmpeg.
      *
      * @param string            $url          Remote http(s) URL.
+     * @param array<array-key, string> $headers HTTP request headers to present to the
+     *               server — e.g. `['Authorization' => 'Bearer …']` for a signed
+     *               stream, or any name=>value set. A positional LIST is rejected here
+     *               (it would be the pre-headers allowedHosts argument; hosts like
+     *               'cdn.example:8443' would parse as a legal junk header and the
+     *               allowlist would vanish silently). Validated at this boundary (a
+     *               CR/LF/NUL in a name or value is request smuggling and throws);
+     *               re-presented on every decoder rebuild so a resize or seek
+     *               never drops the credentials mid-playback. Passed to ffmpeg via
+     *               `-headers`/`-user_agent`; the audio companion does NOT receive
+     *               them (see README "Known limitations"). A non-network source
+     *               drops them with a logged notice.
      * @param list<string>|null $allowedHosts Case-insensitive host allowlist, or
      *               null to allow any host (logs an SSRF-surface warning).
-     * @throws \InvalidArgumentException When $url is not an http(s) URL, or when
+     * @throws \InvalidArgumentException When $url is not an http(s) URL, when a
+     *               header name/value is malformed (CR/LF injection), or when
      *               $allowedHosts is set and the URL's host is not in it.
      */
-    public static function openUrl(string $url, ?array $allowedHosts = null): self
+    public static function openUrl(string $url, array $headers = [], ?array $allowedHosts = null): self
     {
         if (preg_match('#^https?://#i', $url) !== 1) {
             throw new \InvalidArgumentException("Not an http(s) URL: {$url}");
         }
+
+        // Shape guard BEFORE parsing: an old call `openUrl($u, ['cdn.example'])`
+        // passed the ALLOWLIST positionally. A bare host has no colon so
+        // parse() would reject it — but `['cdn.example:8443']` parses as a legal
+        // `Name: value` pair, which would silently swap the SSRF allowlist for a
+        // junk header and let the fetch proceed unrestricted. A positional list
+        // at this boundary is therefore never treated as headers: fail loud with
+        // the migration note instead. (Field-line lists remain valid for every
+        // other headers entry point; only openUrl's positional slot has history.)
+        if ($headers !== [] && array_is_list($headers)) {
+            throw new \InvalidArgumentException(Lang::t('header.openurl_positional'));
+        }
+
+        // Validate at the boundary before anything is stored or handed downstream,
+        // so a smuggling attempt is rejected here rather than surfacing (or being
+        // silently dropped) deep inside the decoder. The return is intentionally
+        // discarded — the raw array is stored on the Reel and re-parsed by the
+        // decoder, which is idempotent now that these pairs are known safe.
+        HttpHeaders::parse($headers);
 
         if ($allowedHosts !== null) {
             self::assertHostAllowed($url, $allowedHosts);
@@ -115,7 +150,7 @@ final class Reel
             self::warnRemoteSsrf($url);
         }
 
-        return new self($url, null, 80, 24, null, false, 'standard', null, $allowedHosts);
+        return new self($url, null, 80, 24, null, false, 'standard', null, $allowedHosts, $headers);
     }
 
     /**
@@ -183,6 +218,16 @@ final class Reel
     public function allowedHosts(): ?array
     {
         return $this->allowedHosts;
+    }
+
+    /**
+     * The configured HTTP request headers for a remote source (empty otherwise).
+     *
+     * @return array<array-key, string>
+     */
+    public function headers(): array
+    {
+        return $this->headers;
     }
 
     /**
@@ -277,6 +322,93 @@ final class Reel
     }
 
     /**
+     * Set the HTTP request headers presented to a remote (http(s)) source.
+     *
+     * Validated here at the boundary exactly as {@see openUrl()} does — a CR/LF in
+     * a name or value is request smuggling and throws immediately — and re-presented
+     * on every decoder rebuild for the lifetime of playback. Returns a new Reel
+     * (immutable).
+     *
+     * @param array<array-key, string> $headers Name => value, or a list of "Name: value" lines.
+     * @throws \InvalidArgumentException When a header name/value is malformed.
+     */
+    public function withHeaders(array $headers): self
+    {
+        // Side-effecting parse: throws on any unsafe pair, result discarded because
+        // the raw array is what the decoder re-parses downstream (idempotent once safe).
+        HttpHeaders::parse($headers);
+
+        return $this->with(headers: $headers);
+    }
+
+    /**
+     * Build the playback Model from the configured options WITHOUT running it.
+     *
+     * This is the embed-without-owning-the-loop seam. A host that already drives
+     * its own candy-core Program — a dashboard, a kiosk shell, a multi-pane TUI —
+     * calls `toPlayer()` to get the fully configured {@see Player} Model and mounts
+     * it inside ITS program (as a sub-Model, or by forwarding messages to it),
+     * instead of handing the terminal to {@see play()}'s blocking `Program::run()`.
+     * The returned Player is paused and its decoder subprocess is ALREADY SPAWNED
+     * (building the Model opens the source); the host starts it (play key / an
+     * explicit play transition), ticks it in its own loop, and calls
+     * {@see Player::stop()} when leaving to release that child.
+     *
+     * HOST CONTRACT (what the embedding program is responsible for):
+     *  - RESIZE: forward a `WindowSizeMsg` on SIGWINCH. The Player clamps columns
+     *    to 10..200 and rows to 5..80 and no-ops when unchanged; it then
+     *    rebuilds the decoder at the new cell grid. That rebuild re-opens ffmpeg,
+     *    so keep resize off the per-frame hot path — react to the size change, do
+     *    not poll it.
+     *  - QUIT: the Player handles 'q'/Esc/Space/seek keys itself; the host decides
+     *    whether a quit key tears down its whole program or just unmounts the
+     *    player. Call {@see Player::stop()} when leaving so no audio/video
+     *    subprocess leaks across mount → unmount.
+     *  - TICK: forward {@see \SugarCraft\Reel\Msg\TickMsg} on the interval the
+     *    Player's `init()`/`update()` command requests — that pacing IS the frame
+     *    clock, so drive it from the host's timer, not a blocking loop.
+     *
+     * @throws \InvalidArgumentException When no source is configured.
+     */
+    public function toPlayer(): Player
+    {
+        // The source is required: unlike play(), which falls back to the synthetic
+        // test pattern so `Reel::new()->play()` shows something, an embedding host
+        // asking for a Model has an explicit real source in mind and a silent test
+        // pattern would mask a misconfiguration deep in the host.
+        if ($this->path === '') {
+            throw new \InvalidArgumentException(Lang::t('player.no_source_for_embedding'));
+        }
+
+        // Resolve auto-mode to the best available mode at runtime (F3).
+        $resolvedMode = $this->mode ?? RendererFactory::autoMode();
+
+        // Parse the subtitle track if a subtitle file was configured.
+        // A missing/unreadable file is silently treated as no subtitles.
+        $subtitles = null;
+        if ($this->subtitlePath !== null) {
+            $raw = @file_get_contents($this->subtitlePath);
+            if (is_string($raw) && $raw !== '') {
+                $subtitles = WebVtt::parse($raw);
+            }
+        }
+
+        return Player::open(
+            $this->path,
+            $this->cols,
+            $this->rows,
+            $this->fps,
+            $resolvedMode,
+            $this->loop,
+            $this->ramp,
+            10,
+            20,
+            $subtitles,
+            $this->headers,
+        );
+    }
+
+    /**
      * Run the player: creates a Player from the configured options and
      * executes the TEA program loop via Program::run().
      *
@@ -306,8 +438,9 @@ final class Reel
             }
         }
 
-        // Create the Player with the configured dimensions, fps, render mode, loop flag and ramp.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop, $this->ramp, 10, 20, $subtitles);
+        // Create the Player with the configured dimensions, fps, render mode, loop flag and ramp,
+        // and the remote-source request headers (empty for a local file).
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop, $this->ramp, 10, 20, $subtitles, $this->headers);
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -329,6 +462,7 @@ final class Reel
      * @param string|null        $ramp  Leave null to keep current
      * @param string|null        $subtitlePath  Path to subtitle file, leave null to keep current
      * @param list<string>|null  $allowedHosts  Remote-host allowlist, leave null to keep current
+     * @param array<array-key, string>|null $headers  HTTP request headers, leave null to keep current
      */
     private function with(
         ?string $path = null,
@@ -340,6 +474,7 @@ final class Reel
         ?string $ramp = null,
         ?string $subtitlePath = null,
         ?array $allowedHosts = null,
+        ?array $headers = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -354,6 +489,7 @@ final class Reel
             $ramp ?? $this->ramp,
             $subtitlePath ?? $this->subtitlePath,
             $allowedHosts ?? $this->allowedHosts,
+            $headers ?? $this->headers,
         );
     }
 
@@ -389,18 +525,18 @@ final class Reel
      * allowlist. Only the host is logged — never the full URL — so a signed
      * stream token in the query string is not leaked to the error log.
      *
+     * Deliberately fires for EVERY allowlist-less openUrl(), loopback included:
+     * 127.0.0.1 is itself a classic SSRF target (admin ports, metadata
+     * proxies), so there is no local-host exemption to grant.
+     *
      * Uses error_log() (not trigger_error()) so it never surfaces as a PHP
      * warning that a strict test harness would fail on.
      */
     private static function warnRemoteSsrf(string $url): void
     {
         $host = self::hostOf($url);
-        error_log(sprintf(
-            'sugar-reel: openUrl() to remote host "%s" without a host allowlist — the URL is '
-            . 'handed to ffmpeg, which resolves DNS and follows redirects and can reach '
-            . 'internal/link-local hosts (SSRF surface). Restrict it via openUrl($url, [...]) '
-            . 'or withAllowedHosts([...]).',
-            $host === '' ? '(unknown)' : $host
-        ));
+        error_log(Lang::t('ssrf.no_allowlist', [
+            'host' => $host === '' ? '(unknown)' : $host,
+        ]));
     }
 }

@@ -6,6 +6,7 @@ namespace SugarCraft\Reel\Decode;
 
 use SugarCraft\Flip\Decoder as FlipDecoder;
 use SugarCraft\Flip\Frame as FlipFrame;
+use SugarCraft\Reel\Lang;
 use SugarCraft\Reel\Render\Mode;
 
 /**
@@ -54,8 +55,19 @@ final class GifDecoder implements Decoder
      * (cellsW·cellPxW × cellsH·cellPxH) so the image protocols get real detail —
      * the raw frame is handed to {@see GraphicsRenderer}, which encodes it once.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
+        // A GIF is decoded from a local file by candy-flip, not fetched, so HTTP
+        // request headers never apply here. They are accepted (interface parity with
+        // the ffmpeg path) and dropped — but said so out loud, not silently, so a
+        // caller who believed credentials were being sent for a GIF source learns the
+        // truth from the log rather than debugging a phantom 200-OK-with-wrong-frames.
+        if ($headers !== []) {
+            error_log(Lang::t('header.ignored_local_source', [
+                'count' => count($headers),
+                'source' => $source,
+            ]));
+        }
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
         $this->frameIndex = 0;
@@ -145,9 +157,20 @@ final class GifDecoder implements Decoder
      *
      * Closes and re-opens the decoder with the given parameters.
      */
-    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
+    public function reopen(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, array $headers = []): void
     {
         $this->close();
-        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
+        $this->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+    }
+
+    /**
+     * A GIF decoder is factory-owned and re-decodes its file from scratch, so
+     * Player rebuilds it via DecoderFactory rather than reopening in place —
+     * matching the ffmpeg path. The distinction only matters for custom
+     * in-memory decoders injected through Player::fromDecoder().
+     */
+    public function reopensInPlace(): bool
+    {
+        return false;
     }
 }
