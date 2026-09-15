@@ -83,23 +83,35 @@ final class CoreEmitterRoundTripTest extends TestCase
     public function testRisEmitterRestoresEveryDesignationAndModeItTouches(): void
     {
         // Dirty the state the emitter's docblock promises RIS restores: two SCS
-        // designations, the GL shift, a single shift, the pen and a DEC mode —
-        // then reset through the emitter and require all of it back at power-on.
-        $h = $this->feed(
+        // designations, the GL shift, a single shift, the pen and a DEC mode.
+        // The dirtiness is asserted BEFORE the reset so the test is self-
+        // contained: if the prefix machinery ever stopped working, this fails on
+        // "not dirty" instead of passing vacuously on "back at power-on".
+        $handler = new ScreenHandler(new Buffer(self::COLS, self::ROWS));
+        $parser = new Parser($handler);
+        $parser->feed(
             Ansi::scsG0(Ansi::CHARSET_DEC_SPECIAL)
             . Ansi::scsG1(Ansi::CHARSET_UK)
             . Ansi::shiftOut()
-            . "\x8f"
-            . "\x1b[7m\x1b[?25l"
-            . Ansi::ris(),
+            . "\x8f",
         );
+        $parser->feed("\x1b[7m\x1b[?25l");
 
-        $this->assertSame([Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII], $h->charsets);
-        $this->assertSame(0, $h->gl, 'SO must be undone by RIS');
-        $this->assertNull($h->singleShift);
-        $this->assertTrue($h->mode->cursorVisible, 'DECTCEM returns to its power-on value');
-        $this->assertFalse($h->sgr->reverse, 'the pen returns to default rendition');
-        $this->assertSame('', $this->row($h));
+        $this->assertSame(Charsets::DEC_SPECIAL, $handler->charsets[0], 'G0 must be dirty first');
+        $this->assertSame(Charsets::UK, $handler->charsets[1], 'G1 must be dirty first');
+        $this->assertSame(1, $handler->gl, 'SO must be armed first');
+        $this->assertSame(3, $handler->singleShift, 'SS3 must be armed first');
+        $this->assertFalse($handler->mode->cursorVisible, 'DECTCEM must be off first');
+        $this->assertTrue($handler->sgr->reverse, 'the pen must be set first');
+
+        $parser->feed(Ansi::ris());
+
+        $this->assertSame([Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII], $handler->charsets);
+        $this->assertSame(0, $handler->gl, 'SO must be undone by RIS');
+        $this->assertNull($handler->singleShift);
+        $this->assertTrue($handler->mode->cursorVisible, 'DECTCEM returns to its power-on value');
+        $this->assertFalse($handler->sgr->reverse, 'the pen returns to default rendition');
+        $this->assertSame('', $this->row($handler));
     }
 
     // ─── DECALN (ESC # 8) ────────────────────────────────────────────────────
@@ -121,12 +133,25 @@ final class CoreEmitterRoundTripTest extends TestCase
         $this->assertSame(['E'], array_column($debug->filter('print'), 'detail'));
     }
 
-    public function testDecalnBytesReachTheHandlerThatModelsThem(): void
+    public function testDecalnEmitterLeavesTheReceiverReadyForTheNextGraphic(): void
     {
-        // candy-vt models DECALN programmatically (`displayAlignmentTest()`);
-        // this asserts the *handler* exists and produces the 'E' field the
-        // emitter's docblock describes, so the two vocabularies cannot drift
-        // apart silently while the parser gap is closed in a later change.
+        // Emitter → emulator at the level that matters on the wire: whatever
+        // follows DECALN must still be rendered, never swallowed as the final
+        // byte of a half-built sequence. Today candy-vt ignores `ESC # 8` and
+        // prints the 'E' at the cursor; if the emulator later executes DECALN,
+        // the alignment fill puts 'E' in that cell instead. Both outcomes pass,
+        // and no spelling of the broken `CSI # 8` form can produce them.
+        $h = $this->feed('abc' . Ansi::decaln() . 'E');
+
+        $this->assertSame('E', $h->buffer->cell(0, 3)->grapheme);
+    }
+
+    public function testAlignmentHandlerStillFillsTheScreenWhenInvokedProgrammatically(): void
+    {
+        // candy-vt models DECALN programmatically, not from the wire: this
+        // asserts the *handler* exists and produces the 'E' field the emitter's
+        // docblock describes, so the two vocabularies cannot drift apart while
+        // the parser gap is still open. See the test above for the wire path.
         $h = $this->feed('x');
         $h->displayAlignmentTest();
 
@@ -160,6 +185,25 @@ final class CoreEmitterRoundTripTest extends TestCase
                 "candy-core Ansi::{$coreConstant} must name the same designator as candy-vt Charsets::{$emulatorConstant}",
             );
         }
+
+        // …and the other direction: neither roster may grow alone. The pair map
+        // above is hand-written, so without this a charset added on the vt side
+        // would silently have no emitter (and vice versa).
+        $collect = static function (\ReflectionClass $class, string $prefix = ''): array {
+            $values = [];
+            foreach ($class->getReflectionConstants() as $constant) {
+                if ($constant->isPublic() && ($prefix === '' || str_starts_with($constant->getName(), $prefix))) {
+                    $values[] = $constant->getValue();
+                }
+            }
+            sort($values);
+            return $values;
+        };
+        $this->assertSame(
+            $collect($emulator),
+            $collect($core, 'CHARSET_'),
+            'Ansi::CHARSET_* and Charsets::* must cover exactly the same designators',
+        );
     }
 
     public function testScsG0DesignationDrawsTheDecSpecialGraphicsFrame(): void

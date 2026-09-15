@@ -46,7 +46,8 @@ final class AnsiResetScsTest extends TestCase
         // receiver mid-sequence and eat the next byte as its final.
         $this->assertSame("\x1b#8", Ansi::decaln());
         $this->assertSame('1b2338', bin2hex(Ansi::decaln()));
-        $this->assertStringStartsWith(Ansi::ESC, Ansi::decaln());
+        // The distinguishing property, not restating the literal above: the
+        // sequence must NOT begin with the CSI introducer.
         $this->assertStringNotContainsString(Ansi::CSI, Ansi::decaln());
     }
 
@@ -113,7 +114,7 @@ final class AnsiResetScsTest extends TestCase
 
     /**
      * DEC's own private designators live in the 0x30-0x3F band that ordinary
-     * escape finals exclude, so they must pass (ansicode.txt:224-231).
+     * escape finals exclude, so they must pass (ansicode.txt:223-230).
      *
      * @return array<string, array{0:string}>
      */
@@ -130,7 +131,7 @@ final class AnsiResetScsTest extends TestCase
     }
 
     #[DataProvider('legalDesignatorProvider')]
-    public function testAcceptsDesignatorsAcrossTheWholeFpRange(string $designator): void
+    public function testAcceptsDesignatorsAcrossTheWholeScsFinalRange(string $designator): void
     {
         $this->assertSame("\x1b(" . $designator, Ansi::scsG0($designator));
     }
@@ -182,15 +183,20 @@ final class AnsiResetScsTest extends TestCase
     {
         // The emitters must interleave with existing ones and still be
         // recognised as escapes by strip(). strip() is documented to drop the
-        // introducer and leave charset/Fe tails as inert text, so the durable
-        // invariant is "the graphic that follows survives" — never that a
-        // particular tail byte is or isn't removed.
+        // introducer and leave the charset/escape tails as inert text, so the
+        // durable invariant is "the graphic that follows survives" — never that
+        // a particular tail byte is or isn't removed.
         $frame = Ansi::decSpecialGraphics() . 'lqqqqk' . Ansi::asciiCharset()
             . ' box ' . Ansi::decaln() . 'X' . Ansi::ris() . 'Z';
         $stripped = Ansi::strip($frame);
         $this->assertStringEndsWith('Z', $stripped);
         $this->assertStringContainsString('lqqqqk', $stripped);
         $this->assertStringContainsString(' box ', $stripped);
+        // The discriminating one: 'X' directly follows DECALN. Were DECALN to
+        // regress to the `CSI # 8` spelling, 'X' would be swallowed as that
+        // CSI's final byte and this assertion would fail.
+        $this->assertStringContainsString('X', $stripped);
+        // Guards strip() itself (it always drops ESC), not the emitters.
         $this->assertStringNotContainsString(Ansi::ESC, $stripped);
     }
 }

@@ -53,10 +53,11 @@ final class Ansi
     public const BRACKETED_PASTE    = 2004; // Bracketed paste mode
     public const SYNCHRONIZED_OUTPUT = 2026; // Synchronized output
 
-    // SCS designator finals (ECMA-48 §25) — the four sets candy-vt's
-    // `Charset\Charsets` translates. Named here so an emitter call site can
-    // only spell a designator the receiver actually models; the pair of
-    // rosters is pinned equal by candy-vcr/tests/CoreEmitterRoundTripTest.php.
+    // SCS designator finals — the four sets candy-vt's `Charset\Charsets`
+    // translates. Named here so an emitter call site can only spell a
+    // designator the receiver actually models; candy-vcr/tests/
+    // CoreEmitterRoundTripTest.php pins this roster against the emulator's own
+    // public constants in both directions, so neither side can grow alone.
     public const CHARSET_ASCII        = 'B'; // US ASCII (the default)
     public const CHARSET_DEC_SPECIAL  = '0'; // DEC Special Graphics / line drawing
     public const CHARSET_UK           = 'A'; // UK Latin-1 (0x23 = £)
@@ -353,9 +354,9 @@ final class Ansi
      * PRESERVES scrollback, the window title and the OSC 4 palette — matching
      * charmbracelet/x/vt `Emulator.fullReset()`.
      *
-     * ECMA-48 Fe escape (no parameters); VT510 ch. 4;
-     * ansicode.txt:307 ("RIS - Reset to Initial State (VT100 does a power-on
-     * reset)"); xterm ctlseqs "ESC c".
+     * ECMA-48 two-character escape: `ESC` + a lowercase final, which X3.64
+     * Appendix E reserves for independent control functions (ansicode.txt:297-300;
+     * `143 63 c * RIS` at :307); VT510 ch. 4; xterm ctlseqs "ESC c".
      */
     public static function ris(): string
     {
@@ -370,17 +371,17 @@ final class Ansi
      * escape — `ESC`, intermediate `#` (0x23), final `8` (ansicode.txt:217) —
      * which is what this emits. The `CSI # 8` spelling that circulates in some
      * notes (including candy-vt's own docblock) is not a complete sequence: a
-     * CSI final byte must be 0x40-0x7E, so `ESC [ # 8` leaves the receiver
-     * still inside the CSI, where it consumes whatever the caller prints next
-     * as the final — eating output instead of testing alignment.
+     * CSI final byte must be 0x40-0x7E, so on a standards-conformant receiver
+     * `ESC [ # 8` stays inside the CSI, where it consumes whatever the caller
+     * prints next as the final — eating output instead of testing alignment.
      *
      * Neither spelling executes the pattern in candy-vt yet: this repo's parser
-     * closes CsiIntermediate on 0x30-0x3F by dropping to Ground without a
-     * dispatch (candy-ansi Transitions.php:215), and EscapeIntermediate reports
-     * `ESC # 8` as escDispatch(0x38, 0x23), which the emulator treats as a
-     * non-designation and ignores. So the sequence is pinned by an exact-byte
-     * test here, and in the round-trip suite by the dispatch the shared parser
-     * actually reports for it.
+     * closes CsiIntermediate on a 0x30-0x3F byte by dropping to Ground without
+     * any dispatch (candy-ansi's Transitions table), and EscapeIntermediate
+     * reports `ESC # 8` as escDispatch(0x38, 0x23), which the emulator treats
+     * as a non-designation and ignores. So the sequence is pinned by an
+     * exact-byte test here, and in the round-trip suite by the dispatch the
+     * shared parser actually reports for it.
      *
      * VT510 ch. 4 (DECALN); ansicode.txt:217 ("#8 * DECALN - Alignment
      * display, fill screen with \"E\" to adjust focus").
@@ -394,8 +395,9 @@ final class Ansi
 
     /**
      * SCS slot index (0-3, i.e. G0-G3) to its intermediate byte — the four
-     * `(`/`)`/`*`/`+` positions of ansicode.txt:222-246. Indexed access makes
-     * an out-of-range slot a plain null lookup rather than a silent default.
+     * `(`/`)`/`*`/`+` positions of ansicode.txt:222, 240, 242, 244. Indexed
+     * access makes an out-of-range slot a plain null lookup rather than a
+     * silent default.
      *
      * @var array<int, string>
      */
@@ -410,10 +412,10 @@ final class Ansi
      * in candy-vt are `B` (US ASCII), `0` (DEC Special Graphics), `A` (UK),
      * `U` (ISO Latin-1 no-break space); see {@see decSpecialGraphics()}.
      *
-     * Fails fast on an unknown slot or a designator outside the Fp final range
-     * (see {@see isScsDesignator()}): such a string would desynchronise the
-     * receiver's parser, which is precisely the class of bug this emitter
-     * exists to prevent.
+     * Fails fast on an unknown slot or a designator outside the 0x30-0x7E
+     * designation-final range (see {@see isScsDesignator()}): such a string
+     * would desynchronise the receiver's parser, which is precisely the class
+     * of bug this emitter exists to prevent.
      *
      * ECMA-48 §25 (character set designation); ansicode.txt:222-249
      * ("SCS - Select G0/G1/G2/G3 character set").
@@ -428,7 +430,7 @@ final class Ansi
         }
         if (strlen($designator) !== 1 || !self::isScsDesignator(\ord($designator))) {
             throw new \InvalidArgumentException(Lang::t('ansi.invalid_scs_designator', [
-                'designator' => bin2hex($designator),
+                'designator' => $designator === '' ? '<empty>' : '<' . bin2hex($designator) . '>',
             ]));
         }
 
@@ -1020,13 +1022,15 @@ final class Ansi
     }
 
     /**
-     * Is `$byte` a legal SCS designator? Character-set "Fp" finals occupy
-     * 0x30-0x7E (ansicode.txt:222-249) — wider than the 0x40-0x7E range of
-     * ordinary escape finals, because DEC's own sets live in the digits:
-     * `(0` line drawing, `(1`/`(2` alternate ROM, `(<` supplemental graphics.
-     * A byte below 0x30 is C0, which ABORTS the escape sequence rather than
-     * terminating it, so accepting one here would emit a string that leaves
-     * the receiver mid-sequence.
+     * Is `$byte` a legal SCS designator? Designation finals span 0x30-0x7E —
+     * ECMA-48's Fp (0x30-0x3F), Fe (0x40-0x5F) and Fs (0x60-0x7E) bands taken
+     * together (ansicode.txt:222-249) — which is wider than the 0x40-0x7E range
+     * of ordinary escape finals, because DEC's own sets live in the digits:
+     * `(0` line drawing, `(1`/`(2` alternate ROM, `(<` supplemental graphics
+     * (ansicode.txt:223-230). A byte below 0x30 is C0: candy-ansi's transition
+     * table EXECUTES it and stays in the Escape state, so it never terminates
+     * the designation — the receiver would be left mid-sequence with a charset
+     * silently unapplied. 0x7F (DEL) is ignored the same way.
      */
     private static function isScsDesignator(int $byte): bool
     {
