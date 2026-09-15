@@ -336,9 +336,10 @@ final class AnsiGuard
      * (2, 3 or 4), or 0 when the byte there is not such a lead. ASCII reports 0 as
      * well and the caller advances it a single byte; do not "fix" this to return 1
      * for ASCII — the RFC 3629 range check below only has meaning for a lead of two
-     * bytes or more, and would otherwise judge the byte following a plain letter. The first continuation byte is checked
-     * against the RFC 3629 ranges, not merely `80–BF`, because that is what excludes
-     * the over-long and surrogate forms: `E0 81 9B` is a lenient decoder's `ESC`, and
+     * bytes or more, and would otherwise judge the byte following a plain letter.
+     * The first continuation byte is checked against the RFC 3629 ranges, not
+     * merely `80–BF`, because that is what excludes the over-long and surrogate
+     * forms: `E0 81 9B` is a lenient decoder's `ESC`, and
      * accepting it as a text sequence would hand an injection straight back to
      * whatever logs or transcodes the title later. A rejected form reports 0 and is
      * then read byte by byte, so its bytes fall to the C1 test individually.

@@ -90,7 +90,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>PosterGrid</td><td>new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
+<tr><td>PosterGrid</td><td>static new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
 <tr><td>PosterGrid</td><td>reset(int $total): self</td><td>Begin a fresh result set — drop cached cards, return the cursor to the top</td></tr>
 <tr><td>PosterGrid</td><td>withTotal(int $total): self</td><td>Update the known total without dropping cards, clamping the cursor</td></tr>
 <tr><td>PosterGrid</td><td>withItems(array $items): self</td><td>Splice a page of cards in at their absolute indices (new cards win)</td></tr>
@@ -123,7 +123,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterCard</td><td>withPoster(string $ansi): self</td><td>Attach the rendered ANSI poster (e.g. when an async render resolves)</td></tr>
 <tr><td>PosterCard</td><td>withImage(string $bytes, int $id): self</td><td>Attach an overlay fill (sixel / kitty / iterm2): the card draws only the marker cell, the runtime paints the art over it</td></tr>
 <tr><td>PosterCard</td><td>withStyledTitle(string $ansi, bool $assertSafe = false): self</td><td>A pre-styled title, emitted verbatim — the caller is the trust boundary; $assertSafe guards the bytes first and throws on anything but SGR</td></tr>
-<tr><td>PosterCard</td><td>withSafeStyledTitle(string $ansi): self</td><td>The coercion half: keep the SGR, drop every other escape — and keep the plain title when nothing visible survives</td></tr>
+<tr><td>PosterCard</td><td>withSafeStyledTitle(string $ansi): self</td><td>The coercion half: keep the SGR, drop every other escape — and keep the plain title when only styling and ASCII blank space survive (`trim` semantics; a non-breaking space is text)</td></tr>
 <tr><td>PosterCard</td><td>static assertSafeAnsi(string $ansi): string</td><td>Return the styled title or throw — the same guard, standalone</td></tr>
 <tr><td>PosterCard</td><td>withProgress(?float $progress): self</td><td>Set (or clear) the continue-watching progress bar</td></tr>
 <tr><td>PosterCard</td><td>hasPoster(): bool</td><td>Whether art will actually paint here — inline text or a marker-addressed overlay</td></tr>

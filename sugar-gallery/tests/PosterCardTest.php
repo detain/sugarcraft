@@ -491,6 +491,26 @@ final class PosterCardTest extends TestCase
         }
     }
 
+    public function testWithSafeStyledTitleTreatsANonBreakingSpaceAsTextNotEmpty(): void
+    {
+        $card = new PosterCard('1', 'Plain Title');
+
+        // The blankness rule is trim(), and trim() does not know U+00A0. A
+        // non-breaking space is TEXT to AnsiGuard — it survives the guard and the
+        // stripper untouched — so styling wrapped around it is a fill the caller
+        // asked for, not an empty row. Pinned so the boundary stays deliberate: if
+        // this ever flips, the docblock on withSafeStyledTitle() must flip with it.
+        $nbsp = "\e[41m\u{a0}\e[0m";
+        $kept = $card->withSafeStyledTitle($nbsp);
+
+        self::assertNotSame($card, $kept, 'an NBSP is a character, not whitespace');
+        self::assertSame($nbsp, $kept->styledTitle);
+        self::assertStringContainsString("\u{a0}", AnsiGuard::stripControls($kept->styledTitle));
+
+        // Contrast the ASCII space, which the same rule calls blank.
+        self::assertSame($card, $card->withSafeStyledTitle("\e[41m \e[0m"));
+    }
+
     public function testAnOverlayImageWithoutAnIdIsNotAFilledCell(): void
     {
         // withImage() cannot build this state (it takes an int), but the constructor

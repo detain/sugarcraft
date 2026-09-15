@@ -132,11 +132,15 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   failure) is not `1`, so the scanner is skipped and the input passes as safe.
   `AnsiGuard` looks its bytes up with `strpbrk()` over a `ESCAPABLE_BYTES` set.
 - **`withSafeStyledTitle()` returns `$this` when sanitising leaves nothing to
-  show** (empty, or styling and blank space only — the test pins both), rather
-  than setting a styled title that would render a blank row: the
+  show** (empty, or styling and ASCII blank space only — the test pins empty,
+  styling-only and space-only, and pins that `日` / `7` / `🎬` under styling are
+  *kept*), rather than setting a styled title that would render a blank row: the
   plain title is the sanitised path, so falling back to it is strictly better than
-  blanking the cell. Same identity-means-no-op convention as `synced()` and
-  `withoutItemsOutside()`.
+  blanking the cell. The blankness test is `trim()`, so a non-breaking space counts
+  as text and keeps its styling — deliberate, because `AnsiGuard` itself treats
+  `U+00A0` as text, and widening the rule would mean a Unicode-aware regex over
+  the very bytes the scanner owns. Same identity-means-no-op convention as
+  `synced()` and `withoutItemsOutside()`.
 - **`findings/sugar-gallery.md` predates this lib's rewrite** (it audits a
   `Gallery.php`/`FFIDecoder.php` that no longer exist). Do not treat that file as
   current: verify against `src/` before acting on a finding from it.

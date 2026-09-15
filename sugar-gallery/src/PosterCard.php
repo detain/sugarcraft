@@ -135,12 +135,18 @@ final readonly class PosterCard
      * {@see withStyledTitle()} trust boundary, for a highlight built over text
      * the caller does not control. Colour may be lost; a cursor move never will be.
      *
-     * When sanitising leaves nothing to show — empty, or styling and blank space
-     * only — the card keeps its plain {@see $title} (and the receiver is returned
-     * unchanged) rather than rendering a blank title row: the plain path is the
-     * sanitised one by design. A payload-only input like `"\e[31m\e[2J"` sanitises
-     * to a lone colour sequence — non-empty, but carrying no text at all — and is
-     * treated the same way.
+     * When sanitising leaves nothing to show — empty, or styling and ASCII blank
+     * space only — the card keeps its plain {@see $title} (and the receiver is
+     * returned unchanged) rather than rendering a blank title row: the plain path
+     * is the sanitised one by design. A payload-only input like `"\e[31m\e[2J"`
+     * sanitises to a lone colour sequence — non-empty, but carrying no text at
+     * all — and is treated the same way.
+     *
+     * The line is drawn at `trim()`'s whitespace, not at every blank-looking
+     * glyph: a non-breaking space is text to {@see AnsiGuard} (it survives the
+     * guard and the stripper alike), so styling wrapped around `"\u{a0}"` is kept
+     * rather than discarded — a deliberate residue, since a caller who asked for
+     * an invisible-but-present run of background colour gets the one they wrote.
      */
     public function withSafeStyledTitle(string $ansi): self
     {
