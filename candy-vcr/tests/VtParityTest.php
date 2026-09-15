@@ -414,7 +414,7 @@ final class VtParityTest extends TestCase
         // shipped with the BCE fix, so it discriminates the two engines
         // honestly. Once published dev-master carries the fix the 'I1' arm is
         // dead — delete it and the ternary.
-        $bceFixed = \method_exists(Scrollback::class, 'clear');
+        $bceFixed = self::vtCarriesMarker(Scrollback::class, 'clear');
         self::assertSame('I7', self::rendererFg($renderer, 0, 5), 'renderer: default-pen blank');
         self::assertSame(
             $bceFixed ? 'I7' : 'I1',
@@ -748,5 +748,20 @@ final class VtParityTest extends TestCase
     private static function emulatorBg(EmulatorTerminal $terminal, int $row, int $col): string
     {
         return self::normaliseColour($terminal->screen()->cell($row, $col)->sgr()->background, 0);
+    }
+
+    /**
+     * Does the candy-vt actually installed in vendor/ carry $method on $marker?
+     * Routing through a parameter defeats PHPStan's constant folding: it
+     * analyses the body once against `class-string`, so the probe is neither
+     * "always true" (linked monorepo vt) nor "always false" (the stale
+     * Packagist dev-master the CI matrix resolves) — both vintages are
+     * legitimate subjects of this differential test.
+     *
+     * @param class-string $marker
+     */
+    private static function vtCarriesMarker(string $marker, string $method): bool
+    {
+        return \method_exists($marker, $method);
     }
 }

@@ -187,7 +187,7 @@ final class SaveRestoreSlotsTest extends TestCase
         $this->assertSame(2, $h->cursor->row, 'main general slot intact after the round-trip');
         $this->assertSame(3, $h->cursor->col);
         $this->assertNotNull($h->sgr->background, 'main pen restored by DECRC');
-        $this->assertTrue($h->sgr->background->equals(Color::indexed16(6)));
+        $this->assertTrue($h->sgr->background->equals(Color::indexed16(6)), 'main pen colour is cyan (idx 6) after DECRC');
         $this->assertSame('0', $h->charsets[0], 'main designation restored by DECRC');
     }
 
