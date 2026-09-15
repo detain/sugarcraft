@@ -196,6 +196,14 @@ final class KittyStream
         $payloadBase64 = $separator === false ? '' : substr($body, $separator + 1);
 
         $params = self::parseParams($paramsString);
+
+        // Continuation chunks (`m=1`) are stitched only in the DCS-`q` framing this
+        // decoder is built for; a chunked standard-APC stream would otherwise be
+        // silently mis-decoded as several truncated images, so reject it loudly.
+        if (($params['m'] ?? '0') === '1') {
+            throw new MalformedGraphicsException(Lang::t('graphics.kitty.chunked_apc_unsupported'));
+        }
+
         $payload = self::decodeBase64($payloadBase64);
 
         $this->images[] = $this->buildImage($params, $payload);

@@ -21,6 +21,9 @@ return [
     'graphics.detect.unknown_protocol' => 'Stream does not introduce a recognised graphics protocol (Sixel/Kitty/iTerm2)',
     'graphics.gd.unavailable' => 'The GD extension is required to materialise this image',
     'graphics.payload_not_image' => 'The decoded payload is not a readable image',
+    'graphics.grid.ragged_rows' => 'Pixel grid row {row} has {got} cells but the first row declared {expected}',
+    'graphics.iterm2.non_numeric_parameter' => 'iTerm2 argument "{key}" must be a non-negative integer, got "{value}"',
+    'graphics.kitty.non_numeric_parameter' => 'Kitty control parameter "{key}" must be a non-negative integer, got "{value}"',
 
     'graphics.sixel.missing_dcs_header' => 'Sixel stream is missing its DCS header (ESC P)',
     'graphics.sixel.unterminated' => 'Sixel stream is missing its ST terminator (ESC \\)',
@@ -42,6 +45,7 @@ return [
     'graphics.kitty.unterminated_begin' => 'Kitty transmit header is not closed by ST (ESC \\)',
     'graphics.kitty.missing_end' => 'Kitty transmit is missing its m=0 end marker',
     'graphics.kitty.bad_chunk' => 'Kitty data chunk is malformed (expected m=<0|1>,<base64>)',
+    'graphics.kitty.chunked_apc_unsupported' => 'Chunked Kitty APC transmit (m=1) is not supported; only the DCS-`q` framing stitches continuation chunks',
     'graphics.kitty.invalid_base64' => 'Kitty payload is not valid base64',
     'graphics.kitty.decompress_failed' => 'Kitty zlib payload failed to inflate',
     'graphics.kitty.no_payload' => 'Kitty image {id} carries no payload data',

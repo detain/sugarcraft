@@ -186,6 +186,54 @@ final class KittyStreamTest extends TestCase
         KittyStream::decode("\x1bPqc=8,garbage\x1b\\m=0,AAAA=m=0\x1b\\");
     }
 
+    public function testDecodesHeaderFollowedByWhitespace(): void
+    {
+        // candy-mosaic emits no gap, but a padded `\x1b\\ m=` must not be misread
+        // as a bare placement: skip the whitespace and still reassemble the chunk.
+        $raw = Fixture::bytes('kitty_red.kitty');
+        $st = strpos($raw, "\x1b\\");
+        $stream = substr($raw, 0, $st + 2) . " \t" . substr($raw, $st + 2);
+
+        $image = KittyStream::decode($stream)->image();
+
+        self::assertSame(8, $image->cols());
+        self::assertSame(4, $image->rows());
+        self::assertStringStartsWith("\x89PNG", $image->png());
+    }
+
+    public function testPlacementFollowedByTransmitIsNotMisConsumed(): void
+    {
+        // A bare placement self-closes; the rescan must then find the next DCS-`q`
+        // transmit rather than swallowing it as the placement's (absent) chunks.
+        $stream = Fixture::bytes('kitty_place.kitty') . Fixture::bytes('kitty_red.kitty');
+        $kitty = KittyStream::decode($stream);
+
+        self::assertSame(2, $kitty->count());
+        self::assertSame('p', $kitty->images()[0]->action());
+        self::assertSame(8, $kitty->images()[1]->cols());
+        self::assertStringStartsWith("\x89PNG", $kitty->images()[1]->png());
+    }
+
+    public function testNonNumericControlParameterThrows(): void
+    {
+        // `i=abc` must fail loud at the boundary, not surface as a misleading id 0.
+        $png = Iterm2Stream::decode(Fixture::bytes('iterm2_red.iterm2'))->png();
+        $stream = "\x1b_Gi=abc;" . base64_encode($png) . "\x1b\\";
+
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('non-negative integer');
+        KittyStream::decode($stream);
+    }
+
+    public function testChunkedApcThrows(): void
+    {
+        // Standard-APC continuation (`m=1`) is unsupported framing; reject rather
+        // than silently emit a stream of truncated partial images.
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('not supported');
+        KittyStream::decode("\x1b_Gm=1;aGVsbG8=\x1b\\");
+    }
+
     /**
      * A minimal standard-APC transmit wrapping the real 8x4 red PNG.
      *

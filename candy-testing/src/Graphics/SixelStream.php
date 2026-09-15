@@ -269,8 +269,8 @@ final class SixelStream
         // or run of whitespace before the data byte (`!count char`), which some
         // encoders emit. None of these characters are data bytes, so the skip is
         // unambiguous and always terminates.
-        while (true) {
-            $peek = $body[$this->cursor] ?? '';
+        while ($this->cursor < $this->length) {
+            $peek = $body[$this->cursor];
             if ($peek !== ';' && $peek !== ' ' && $peek !== "\t") {
                 break;
             }

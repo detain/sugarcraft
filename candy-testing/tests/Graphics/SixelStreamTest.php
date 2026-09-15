@@ -151,6 +151,22 @@ final class SixelStreamTest extends TestCase
         SixelStream::decode("\x1bP0;1;0q\"1;1;4;4#0;2;100;0;0#0\x00\x1b\\");
     }
 
+    public function testRunMissingCountThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('missing its repeat count');
+        // `!` immediately followed by a data char — no repeat count to read.
+        SixelStream::decode("\x1bP0;1;0q\"1;1;4;6#0;2;100;0;0#0!~\x1b\\");
+    }
+
+    public function testRunMissingDataCharThrows(): void
+    {
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('missing its data character');
+        // `!4` names a run length but the stream ends before any data byte arrives.
+        SixelStream::decode("\x1bP0;1;0q\"1;1;4;6#0;2;100;0;0#0!4\x1b\\");
+    }
+
     public function testSpaceSeparatedRunDecodes(): void
     {
         // Canonical RLE is `!4~`; be lenient about the `!4 ~` spacing some
@@ -159,6 +175,16 @@ final class SixelStreamTest extends TestCase
 
         self::assertSame([255, 0, 0], $sixel->pixel(0, 0));
         self::assertSame([255, 0, 0], $sixel->pixel(3, 0));
+    }
+
+    public function testSemicolonSeparatedRunDecodes(): void
+    {
+        // The other tolerated form: `!4;~` with an explicit `;` before the data
+        // byte — same four lit columns as the space-separated case above.
+        $sixel = SixelStream::decode("\x1bP0;1;0q\"1;1;4;6#0;2;100;0;0#0!4;~\x1b\\");
+
+        self::assertSame([255, 0, 0], $sixel->pixel(0, 0));
+        self::assertSame([255, 0, 0], $sixel->pixel(3, 5));
     }
 
     public function testNonRgbColorSpaceThrows(): void

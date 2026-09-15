@@ -32,13 +32,26 @@ final class PixelGrid
      * Build a grid from a fully-formed row-major array of RGB triples.
      *
      * @param list<list<array{int, int, int}|null>> $pixels
+     *
+     * @throws RuntimeException when the rows are ragged (differing cell counts)
      */
     public static function fromRgbGrid(array $pixels): self
     {
-        $height = count($pixels);
-        $width = $height === 0 ? 0 : count($pixels[0]);
+        $rows = array_values($pixels);
+        $height = count($rows);
+        $width = $height === 0 ? 0 : count($rows[0]);
 
-        return new self($width, $height, array_values($pixels));
+        foreach ($rows as $index => $row) {
+            if (count($row) !== $width) {
+                throw new RuntimeException(Lang::t('graphics.grid.ragged_rows', [
+                    'row' => $index,
+                    'expected' => $width,
+                    'got' => count($row),
+                ]));
+            }
+        }
+
+        return new self($width, $height, $rows);
     }
 
     /**

@@ -27,6 +27,9 @@ final class Iterm2Stream
 
     private const ST = "\x1b\\";
 
+    /** Arguments whose value must be a non-negative integer. */
+    private const NUMERIC_KEYS = ['width', 'height'];
+
     /**
      * @param array<string, string> $params
      */
@@ -57,7 +60,28 @@ final class Iterm2Stream
 
         [$params, $payload] = self::parseFile($command, $arguments);
 
+        self::assertNumericParameters($params);
+
         return new self($command, $params, $payload);
+    }
+
+    /**
+     * Fail fast when a numeric argument is not an integer, so a corrupt
+     * `width=8x4` can never surface as a misleading `0`.
+     *
+     * @param array<string, string> $params
+     */
+    private static function assertNumericParameters(array $params): void
+    {
+        foreach (self::NUMERIC_KEYS as $key) {
+            $value = $params[$key] ?? null;
+            if ($value !== null && !ctype_digit($value)) {
+                throw new MalformedGraphicsException(Lang::t('graphics.iterm2.non_numeric_parameter', [
+                    'key' => $key,
+                    'value' => $value,
+                ]));
+            }
+        }
     }
 
     /**
@@ -77,7 +101,7 @@ final class Iterm2Stream
     }
 
     /**
-     * The decoded image bytes (empty for control-only sequences).
+     * The decoded payload bytes (empty for control-only sequences).
      */
     public function payload(): string
     {

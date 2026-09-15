@@ -26,6 +26,17 @@ final class PixelGridTest extends TestCase
         self::assertSame([100, 110, 120], $grid->pixel(1, 1));
     }
 
+    public function testFromRgbGridRejectsRaggedRows(): void
+    {
+        // A short row must not become an invisible transparent tail; reject it.
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('first row declared');
+        PixelGrid::fromRgbGrid([
+            [[1, 1, 1], [2, 2, 2], [3, 3, 3]],
+            [[4, 4, 4], [5, 5, 5]],
+        ]);
+    }
+
     public function testPixelOutsideBoundsIsNull(): void
     {
         $grid = PixelGrid::fromRgbGrid([[[1, 2, 3]]]);

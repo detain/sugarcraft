@@ -35,6 +35,16 @@ enum Mode: string
             return self::Iterm2;
         }
 
+        // A Sixel DCS carries a `"` raster attribute immediately after its `q`
+        // introducer (`ESC P …q"1;1;W;H`); a Kitty DCS-`q` carries `k=v` control
+        // parameters there instead. Probe the Sixel raster form first so a
+        // zero-parameter `ESC P q"` transmit is never mistaken for Kitty. The
+        // optional gap mirrors SixelStream::parseHeader, which ltrims before the
+        // raster declaration.
+        if (preg_match('/\x1bP[0-9;]*q\s*"/', $stream) === 1) {
+            return self::Sixel;
+        }
+
         if (str_contains($stream, "\x1bPq") || str_contains($stream, "\x1b_G")) {
             return self::Kitty;
         }

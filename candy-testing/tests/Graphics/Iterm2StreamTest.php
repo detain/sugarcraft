@@ -33,6 +33,14 @@ final class Iterm2StreamTest extends TestCase
         self::assertSame(4, $iterm2->cellsHeight());
     }
 
+    public function testNonNumericWidthArgumentThrows(): void
+    {
+        // A corrupt `width=8x4` must fail loud, not surface as a misleading `0`.
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('non-negative integer');
+        Iterm2Stream::decode("\x1b]1337;File=width=8x4:AAAA\x07");
+    }
+
     public function testDecodesControlOnlySequence(): void
     {
         $iterm2 = Iterm2Stream::decode("\x1b]1337;Pop\x07");

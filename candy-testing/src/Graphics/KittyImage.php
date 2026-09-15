@@ -18,6 +18,9 @@ use SugarCraft\Testing\Lang;
  */
 final class KittyImage
 {
+    /** Control keys whose transmitted value must be a non-negative integer. */
+    private const NUMERIC_KEYS = ['i', 'I', 'c', 'r', 's', 'v', 'x', 'y', 'z'];
+
     /**
      * @param array<string, string> $params raw control keys (a,i,c,r,s,v,x,y,z,f,q,…)
      */
@@ -32,7 +35,28 @@ final class KittyImage
      */
     public static function fromTransmit(array $params, string $payload): self
     {
+        self::assertNumericParameters($params);
+
         return new self($params, $payload);
+    }
+
+    /**
+     * Fail fast at the boundary when a numeric control value is not an integer,
+     * so a corrupt `i=abc` can never reach callers as a misleading id of `0`.
+     *
+     * @param array<string, string> $params
+     */
+    private static function assertNumericParameters(array $params): void
+    {
+        foreach (self::NUMERIC_KEYS as $key) {
+            $value = $params[$key] ?? null;
+            if ($value !== null && !ctype_digit($value)) {
+                throw new MalformedGraphicsException(Lang::t('graphics.kitty.non_numeric_parameter', [
+                    'key' => $key,
+                    'value' => $value,
+                ]));
+            }
+        }
     }
 
     public function action(): string
