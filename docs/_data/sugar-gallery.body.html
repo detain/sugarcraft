@@ -117,7 +117,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>Rail</td><td>focusedCard(): ?PosterCard</td><td>The card under the cursor, or null</td></tr>
 <tr><td>Rail</td><td>isEmpty(): bool</td><td>Whether the rail has no cards</td></tr>
 <tr><td>Rail</td><td>moveCursor(int $delta, int $perRow): self</td><td>Move the cursor by $delta, scrolling so it stays visible</td></tr>
-<tr><td>Rail</td><td>perRow(int $railWidth, int $cardWidth, int $spacing = 2): int</td><td>How many cards of $cardWidth fit in $railWidth at $spacing gap</td></tr>
+<tr><td>Rail</td><td>static perRow(int $railWidth, int $cardWidth, int $spacing = 2): int</td><td>How many cards of $cardWidth fit in $railWidth at $spacing gap</td></tr>
 <tr><td>Rail</td><td>render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string</td><td>Render the title plus the visible slice of cards</td></tr>
 <tr><td>PosterCard</td><td>__construct(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null, ?string $styledTitle = null, ?string $posterImage = null, ?int $imageId = null)</td><td>One tile: poster area, title, and optional progress bar</td></tr>
 <tr><td>PosterCard</td><td>withPoster(string $ansi): self</td><td>Attach the rendered ANSI poster (e.g. when an async render resolves)</td></tr>
@@ -131,7 +131,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>AnsiGuard</td><td>static assertSafe(string $ansi): string</td><td>Return $ansi when it carries only SGR styling and printable text, else throw with the byte offset and hex of the offender</td></tr>
 <tr><td>AnsiGuard</td><td>static isSafe(string $ansi): bool</td><td>The same question without the exception</td></tr>
 <tr><td>AnsiGuard</td><td>static sanitize(string $ansi): string</td><td>Drop every non-SGR escape and control byte, keeping styling and text — colour may be lost, a cursor move never will be</td></tr>
-<tr><td>AnsiGuard</td><td>static stripControls(string $ansi): string</td><td>Drop escapes and styling alike — what a plain, untrusted title is rendered through</td></tr>
+<tr><td>AnsiGuard</td><td>static stripControls(string $text): string</td><td>Drop escapes and styling alike — what a plain, untrusted title is rendered through</td></tr>
 </table>
   </div>
 </section>

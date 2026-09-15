@@ -450,8 +450,8 @@ final class PosterGridTest extends TestCase
         // 0 has no source to fetch from; 2 and 3 are filled (hasPoster() spans both
         // fill modes); only 1 and 4 are pending — 4 because an overlay with no id
         // paints nothing, so the window must offer it again rather than park a
-        // permanent skeleton. Indices 5..11 are skeletons — not loaded cards — so
-        // they are absent from the result entirely.
+        // permanent skeleton. Index 9 is loaded but names no URL, and indices
+        // 5..8/10..11 are absent from the sparse map — skeletons either way.
         self::assertSame([1, 4], $g->indicesNeedingPoster());
         self::assertFalse($g->item(4)->hasPoster());
     }

@@ -334,10 +334,10 @@ final class PosterGrid
      *         // load the poster for $grid->item($index), splice back withItem()
      *     }
      *
-     * An index qualifies when a card is loaded there, that card has no poster
-     * yet (neither inline ANSI nor an overlay image — {@see PosterCard::hasPoster()}
-     * spans both fill modes), and $isFillable agrees a poster can be sourced for
-     * it. The default $isFillable is "the card names a poster URL"; a supplied
+     * An index qualifies when a card is loaded there, that card has nothing to
+     * paint yet ({@see PosterCard::hasPoster()} spans both fill modes — inline
+     * ANSI, or an overlay with a marker id to address it), and $isFillable agrees
+     * a poster can be sourced for it. The default $isFillable is "the card names a poster URL"; a supplied
      * predicate REPLACES that default rather than adding to it, so pass your own
      * rule when the URL is discovered lazily (a detail fetch first — then return
      * true for every card) or when your transport policy rejects some URLs

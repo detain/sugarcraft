@@ -135,17 +135,18 @@ final readonly class PosterCard
      * {@see withStyledTitle()} trust boundary, for a highlight built over text
      * the caller does not control. Colour may be lost; a cursor move never will be.
      *
-     * When sanitising leaves nothing that a terminal would actually show, the card
-     * keeps its plain {@see $title} (and the receiver is returned unchanged) rather
-     * than rendering a blank title row: the plain path is the sanitised one by
-     * design. A payload-only input like `"\e[31m\e[2J"` sanitises to a lone colour
-     * sequence — non-empty, but invisible — and is treated the same way.
+     * When sanitising leaves nothing to show — empty, or styling and blank space
+     * only — the card keeps its plain {@see $title} (and the receiver is returned
+     * unchanged) rather than rendering a blank title row: the plain path is the
+     * sanitised one by design. A payload-only input like `"\e[31m\e[2J"` sanitises
+     * to a lone colour sequence — non-empty, but carrying no text at all — and is
+     * treated the same way.
      */
     public function withSafeStyledTitle(string $ansi): self
     {
         $safe = AnsiGuard::sanitize($ansi);
 
-        return $safe === '' || AnsiGuard::stripControls($safe) === '' ? $this : $this->withStyledTitle($safe);
+        return trim(AnsiGuard::stripControls($safe)) === '' ? $this : $this->withStyledTitle($safe);
     }
 
     /**

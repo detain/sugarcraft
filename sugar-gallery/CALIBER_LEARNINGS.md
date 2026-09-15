@@ -119,7 +119,8 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   against the RFC 3629 ranges, not merely `80–BF`.
 - **`AnsiGuard`'s exception message is deliberately NOT routed through `Lang::t`.**
   It is a developer diagnostic — byte offset plus a hex dump — thrown because the
-  *programmer* passed the wrong bytes, and the tests assert it verbatim. `lang/en.php`
+  *programmer* passed the wrong bytes, and the tests pin the part that matters —
+  `Unsafe escape sequence at offset N` plus the hex dump of the offending bytes. `lang/en.php`
   is for user-facing strings; do not "fix" this on a future audit pass.
 - **Never write a security filter as `preg_replace('/[\x00-\x1f]/u', …, $s) ?? $s`.**
   The `/u` makes the call return `null` when the *subject* holds a single invalid
@@ -130,8 +131,9 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   `preg_match('/[\x00-\x1f\x7f-\x9f]/', $s) === 1`: PCRE's `false` (any internal
   failure) is not `1`, so the scanner is skipped and the input passes as safe.
   `AnsiGuard` looks its bytes up with `strpbrk()` over a `ESCAPABLE_BYTES` set.
-- **`withSafeStyledTitle()` returns `$this` when sanitising leaves an empty
-  string**, rather than setting a styled title that would render a blank row: the
+- **`withSafeStyledTitle()` returns `$this` when sanitising leaves nothing to
+  show** (empty, or styling and blank space only — the test pins both), rather
+  than setting a styled title that would render a blank row: the
   plain title is the sanitised path, so falling back to it is strictly better than
   blanking the cell. Same identity-means-no-op convention as `synced()` and
   `withoutItemsOutside()`.

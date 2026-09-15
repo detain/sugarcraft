@@ -473,14 +473,22 @@ final class PosterCardTest extends TestCase
         // title row and throw away the plain title the fallback exists to protect.
         self::assertSame($card, $card->withSafeStyledTitle("\e[31m\e[2J"), 'styling with no text left is nothing');
         self::assertSame($card, $card->withSafeStyledTitle("\e[31m"));
+        self::assertSame($card, $card->withSafeStyledTitle("\e[41m \e[0m"), 'a row of blank space says nothing either');
         self::assertNull($card->styledTitle);
         self::assertStringContainsString('Plain Title', $card->render(false, 20, 1));
 
-        // Styling that does carry text still wins, colour and all.
+        // Styling that does carry text still wins, colour and all — including text
+        // the strip cannot mistake for a control: a digit, a wide glyph, an emoji.
         $styled = $card->withSafeStyledTitle("\e[31mNeon\e[2J");
         self::assertNotSame($card, $styled);
         self::assertSame("\e[31mNeon", $styled->styledTitle);
         self::assertStringContainsString('Neon', $styled->render(false, 20, 1));
+
+        foreach (["\e[31m日\e[0m", "\e[31m7\e[0m", "\e[31m🎬\e[0m"] as $carries) {
+            $kept = $card->withSafeStyledTitle($carries);
+            self::assertNotSame($card, $kept, $carries . ' carries a glyph the plain title does not');
+            self::assertSame($carries, $kept->styledTitle);
+        }
     }
 
     public function testAnOverlayImageWithoutAnIdIsNotAFilledCell(): void
