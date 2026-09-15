@@ -11,7 +11,14 @@ use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Ansi\Parser\Parser;
 
 /**
- * Tests for DECAWM (DEC Auto-Wrap Mode) — CSI ? 7 h enable, CSI ? 7 l disable.
+ * Tests for DECAWM (DEC Auto-Wrap Mode) — CSI ? 7 h enable, CSI ? 7 l reset.
+ *
+ * DECAWM powers on SET (VT100-and-up documented initial state) and the
+ * wrap is DEFERRED: a glyph landing in the last column leaves the cursor
+ * parked there with the phantom flag set; the advance happens when the
+ * next graphic print arrives. Mirrors charmbracelet/x/vt Emulator.atPhantom.
+ *
+ * @see https://vt100.net/docs/vt510-rm/chapter4.html (DECAWM)
  */
 final class AutoWrapTest extends TestCase
 {
@@ -29,23 +36,26 @@ final class AutoWrapTest extends TestCase
 
     // ─── Mode field & wither ────────────────────────────────────────────────
 
-    public function testAutoWrapDefaultsToFalse(): void
+    public function testAutoWrapDefaultsToTrue(): void
     {
+        // DEC documents DECAWM as one of the few modes ON at power-on;
+        // a terminal starting with it off mis-renders every program that
+        // relies on line wrap.
         $m = new Mode();
-        $this->assertFalse($m->autoWrap);
+        $this->assertTrue($m->autoWrap);
     }
 
     public function testWithAutoWrapReturnsNewInstance(): void
     {
         $m = new Mode();
-        $m2 = $m->withAutoWrap(true);
-        $this->assertFalse($m->autoWrap);
-        $this->assertTrue($m2->autoWrap);
+        $m2 = $m->withAutoWrap(false);
+        $this->assertTrue($m->autoWrap);
+        $this->assertFalse($m2->autoWrap);
     }
 
     public function testAutoWrapIncludedInEquals(): void
     {
-        $a = (new Mode())->withAutoWrap(true);
+        $a = (new Mode())->withAutoWrap(false);
         $b = new Mode();
         $this->assertFalse($a->equals($b));
         $this->assertTrue($a->equals($a));
@@ -54,21 +64,30 @@ final class AutoWrapTest extends TestCase
 
     // ─── CSI ? 7 h / l ─────────────────────────────────────────────────────
 
-    public function testCsiQuestion7hEnablesAutoWrap(): void
+    public function testCsiQuestion7lDisablesAutoWrap(): void
     {
         $h = $this->handler();
+        $this->assertTrue($h->mode->autoWrap);
+        (new Parser($h))->feed("\x1b[?7l");
+        $this->assertFalse($h->mode->autoWrap);
+    }
+
+    public function testCsiQuestion7hReEnablesAutoWrap(): void
+    {
+        $h = $this->handler();
+        (new Parser($h))->feed("\x1b[?7l");
         $this->assertFalse($h->mode->autoWrap);
         (new Parser($h))->feed("\x1b[?7h");
         $this->assertTrue($h->mode->autoWrap);
     }
 
-    public function testCsiQuestion7lDisablesAutoWrap(): void
+    public function testAutoWrapEnableIsIdempotent(): void
     {
         $h = $this->handler();
         (new Parser($h))->feed("\x1b[?7h");
         $this->assertTrue($h->mode->autoWrap);
-        (new Parser($h))->feed("\x1b[?7l");
-        $this->assertFalse($h->mode->autoWrap);
+        (new Parser($h))->feed("\x1b[?7h");
+        $this->assertTrue($h->mode->autoWrap);
     }
 
     public function testAutoWrapDisableIsIdempotent(): void
@@ -80,12 +99,12 @@ final class AutoWrapTest extends TestCase
         $this->assertFalse($h->mode->autoWrap);
     }
 
-    // ─── Print behaviour with auto-wrap OFF (default) ─────────────────────
+    // ─── Print behaviour with auto-wrap OFF ─────────────────────────────────
 
     public function testAutoWrapOffClampOverwritesLastColumn(): void
     {
-        // 4 cols, write 5 chars — last char 'E' overwrites col 3.
-        $h = $this->feed('ABCDE', cols: 4);
+        // 4 cols, wrap disabled: write 5 chars — last char 'E' overwrites col 3.
+        $h = $this->feed("\x1b[?7lABCDE", cols: 4);
         $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame('B', $h->buffer->cell(0, 1)->grapheme);
         $this->assertSame('C', $h->buffer->cell(0, 2)->grapheme);
@@ -95,7 +114,7 @@ final class AutoWrapTest extends TestCase
 
     public function testAutoWrapOffCursorStaysAtLastColumn(): void
     {
-        $h = $this->feed('ABCD', cols: 4);
+        $h = $this->feed("\x1b[?7lABCD", cols: 4);
         $this->assertSame(3, $h->cursor->col);
         // Next char would also overwrite col 3.
         (new Parser($h))->feed('X');
@@ -103,11 +122,11 @@ final class AutoWrapTest extends TestCase
         $this->assertSame(3, $h->cursor->col);
     }
 
-    // ─── Print behaviour with auto-wrap ON ─────────────────────────────────
+    // ─── Print behaviour with auto-wrap ON (deferred wrap) ─────────────────
 
     public function testAutoWrapOnWrapsToNextLine(): void
     {
-        // 4 cols, auto-wrap ON, write 5 chars.
+        // 4 cols, write 5 chars with DECAWM on (power-on default).
         $h = $this->feed("\x1b[?7hABCDE", cols: 4);
         $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
         $this->assertSame('B', $h->buffer->cell(0, 1)->grapheme);
@@ -116,6 +135,18 @@ final class AutoWrapTest extends TestCase
         $this->assertSame('E', $h->buffer->cell(1, 0)->grapheme); // wrapped to row 1, col 0
         $this->assertSame(1, $h->cursor->row);
         $this->assertSame(1, $h->cursor->col);
+    }
+
+    public function testAutoWrapLastGlyphParksCursorInThePhantomCell(): void
+    {
+        // Writing exactly to the last column must NOT advance yet — the
+        // glyph lands at col 3, the cursor stays there with the phantom
+        // flag armed, and only the next graphic consumes the wrap.
+        $h = $this->feed("\x1b[?7hABCD", cols: 4);
+        $this->assertSame('D', $h->buffer->cell(0, 3)->grapheme);
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(3, $h->cursor->col);
+        $this->assertTrue($h->wrapPending);
     }
 
     public function testAutoWrapOnMultipleLines(): void
@@ -133,16 +164,33 @@ final class AutoWrapTest extends TestCase
 
     public function testAutoWrapOnFollowedByDisableStopsWrapping(): void
     {
-        // Enable, write 4 chars (fills row) — wraps after D, cursor at (1, 0).
+        // Write 4 chars (fills row) — with deferred wrap the cursor parks
+        // at (0, 3) phantom-flagged instead of jumping to (1, 0).
         $h = $this->feed("\x1b[?7hABCD", cols: 4);
-        $this->assertSame(1, $h->cursor->row);
-        $this->assertSame(0, $h->cursor->col);
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(3, $h->cursor->col);
+        $this->assertTrue($h->wrapPending);
 
         // Disable auto-wrap.
         (new Parser($h))->feed("\x1b[?7l");
         $this->assertFalse($h->mode->autoWrap);
 
-        // Write 'E' at current cursor (1, 0) — no wrap since auto-wrap is off.
+        // With DECAWM off the phantom wrap is not consumed: 'E' overwrites
+        // the last cell in place (xterm behavior with wrap disabled).
+        (new Parser($h))->feed('E');
+        $this->assertSame('E', $h->buffer->cell(0, 3)->grapheme);
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(3, $h->cursor->col);
+    }
+
+    public function testAutoWrapReEnabledMidWrapResumesDeferredAdvance(): void
+    {
+        // The phantom flag is geometry-set, not mode-gated (xterm DECAWM
+        // toggle semantics): turning wrap off and back on while parked in
+        // the last column must still wrap on the next print.
+        $h = $this->feed("\x1b[?7hABCD", cols: 4);
+        (new Parser($h))->feed("\x1b[?7l");
+        (new Parser($h))->feed("\x1b[?7h");
         (new Parser($h))->feed('E');
         $this->assertSame('E', $h->buffer->cell(1, 0)->grapheme);
         $this->assertSame(1, $h->cursor->row);
@@ -167,6 +215,16 @@ final class AutoWrapTest extends TestCase
         $h = $this->feed("\x1b[?7h\x1b[1;4H日", cols: 4);
         $this->assertSame('日', $h->buffer->cell(1, 0)->grapheme); // wrapped to row 1, col 0
         $this->assertSame(2, $h->cursor->col); // after 2-cell wide char
+    }
+
+    public function testWideCharEndingAtLastColumnArmsPhantom(): void
+    {
+        // A 2-wide glyph in cols 2-3 of a 4-col screen leaves the cursor
+        // parked at col 3 with the phantom flag set.
+        $h = $this->feed("\x1b[?7hAB日", cols: 4);
+        $this->assertSame('日', $h->buffer->cell(0, 2)->grapheme);
+        $this->assertSame(3, $h->cursor->col);
+        $this->assertTrue($h->wrapPending);
     }
 
     // ─── Interaction with scroll region ───────────────────────────────────
@@ -196,5 +254,31 @@ final class AutoWrapTest extends TestCase
         $this->assertSame('D', $h->buffer->cell(2, 3)->grapheme);
         $this->assertSame('E', $h->buffer->cell(3, 0)->grapheme);
         $this->assertSame(' ', $h->buffer->cell(1, 0)->grapheme);
+    }
+
+    // ─── Phantom consumption by line operations ───────────────────────────
+
+    public function testLineFeedWhilePhantomArmedMovesDownWithoutExtraWrap(): void
+    {
+        // LF from the phantom cell moves down one row and disarms the
+        // flag — it must not double-advance. LF is vertical-only, so the
+        // column survives (only NEL/CR home it), matching xterm index().
+        $h = $this->feed("\x1b[?7hABCD\n", cols: 4);
+        $this->assertFalse($h->wrapPending);
+        $this->assertSame(1, $h->cursor->row);
+        $this->assertSame(3, $h->cursor->col);
+
+        // X lands on row 1 col 3 (column survived the LF) and re-arms
+        // the phantom at the right edge, as any last-column glyph does.
+        (new Parser($h))->feed('X');
+        $this->assertSame('X', $h->buffer->cell(1, 3)->grapheme);
+        $this->assertTrue($h->wrapPending);
+    }
+
+    public function testCarriageReturnDisarmsPhantom(): void
+    {
+        $h = $this->feed("\x1b[?7hABCD\rX", cols: 4);
+        $this->assertSame('X', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertFalse($h->wrapPending);
     }
 }

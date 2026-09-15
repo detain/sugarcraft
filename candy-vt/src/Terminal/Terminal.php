@@ -63,9 +63,45 @@ final class Terminal
         return self::new($cols, $rows);
     }
 
-    public function feed(string $bytes): void
+    /**
+     * Drive bytes through the parser.
+     *
+     * Backwards-compatible query→reply channel (audit §B): when
+     * `$respond` is given, the full queue of terminal→host answers —
+     * DA1/DA2, DECRPM, CPR, XTWINOPS … — produced by this feed (plus any
+     * earlier ones still queued) is handed to it in request order as the
+     * raw bytes a real terminal would write back to the application's
+     * tty. Without a callback the answers queue for {@see replies()}
+     * draining, which keeps the original `feed(string): void` contract
+     * untouched for all existing callers.
+     *
+     * Mirrors charmbracelet/x/vt's `Emulator.Read()` io.Pipe semantics in
+     * pull form (x/vt emulator.go L265-281).
+     *
+     * @param (callable(string): void)|null $respond
+     */
+    public function feed(string $bytes, ?callable $respond = null): void
     {
         $this->parser->feed($bytes);
+        if ($respond !== null) {
+            foreach ($this->handler->replies as $reply) {
+                $respond($reply);
+            }
+            $this->handler->replies = [];
+        }
+    }
+
+    /**
+     * Drain the queued terminal→host replies (DA1/DA2, DECRPM, CPR,
+     * XTWINOPS …) in request order.
+     *
+     * @return list<string>
+     */
+    public function replies(): array
+    {
+        $pending = $this->handler->replies;
+        $this->handler->replies = [];
+        return $pending;
     }
 
     /**
@@ -86,6 +122,17 @@ final class Terminal
     public function cursor(): Cursor
     {
         return $this->handler->cursor;
+    }
+
+    /**
+     * True while a DECAWM deferred wrap is armed: a glyph has landed in
+     * the last column and the cursor is parked there until the next
+     * graphic print consumes it (mirrors xterm `_wrapnext` / charmbracelet
+     * x/vt `Emulator.atPhantom`).
+     */
+    public function isWrapPending(): bool
+    {
+        return $this->handler->wrapPending;
     }
 
     public function mode(): Mode
@@ -123,6 +170,26 @@ final class Terminal
             throw new \InvalidArgumentException('cols and rows must be >= 1');
         }
         $this->handler->buffer = $this->handler->buffer->resize($cols, $rows);
+        // Deferred-wrap + bounds maintenance on the new geometry, mirroring
+        // charmbracelet/x/vt Emulator.Resize (emulator.go L218-221): a
+        // phantom cell that became a plain in-bounds position after a width
+        // growth resolves to a real advance; any out-of-range cursor is
+        // clamped back into the grid.
+        $cursor = $this->handler->cursor;
+        if ($this->handler->wrapPending && $cursor->col < $cols - 1) {
+            $this->handler->wrapPending = false;
+            $this->handler->cursor = $cursor->withCol($cursor->col + 1);
+            $cursor = $this->handler->cursor;
+        }
+        $clampedCol = min($cursor->col, $cols - 1);
+        $clampedRow = min($cursor->row, $rows - 1);
+        if ($clampedCol !== $cursor->col || $clampedRow !== $cursor->row) {
+            $this->handler->cursor = $cursor->withCol($clampedCol)->withRow($clampedRow);
+        }
+        if ($this->handler->scrollRegionBottom > $rows - 1) {
+            $this->handler->scrollRegionBottom = $rows - 1;
+            $this->handler->scrollRegionTop = min($this->handler->scrollRegionTop, $rows - 1);
+        }
     }
 
     public function __clone(): void
@@ -197,6 +264,23 @@ final class Terminal
         $clone = clone $this;
         $clone->scrollbackSize = $size;
         $clone->handler->scrollback = new Scrollback($size);
+        return $clone;
+    }
+
+    /**
+     * Return a new Terminal reporting the given nominal cell pixel size
+     * in XTWINOPS 14t/16t replies. The emulator renders no font, so the
+     * classic 8×16 defaults are advisory; mosaic's `probeFontSize()` only
+     * consumes them as cell/window ratios.
+     */
+    public function withCellPixels(int $widthPx, int $heightPx): self
+    {
+        if ($widthPx < 1 || $heightPx < 1) {
+            throw new \InvalidArgumentException('cell pixel size must be >= 1');
+        }
+        $clone = clone $this;
+        $clone->handler->cellWidthPx = $widthPx;
+        $clone->handler->cellHeightPx = $heightPx;
         return $clone;
     }
 

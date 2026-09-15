@@ -67,6 +67,68 @@ final class ScrollHandler
     }
 
     /**
+     * IL — insert $count blank lines starting at row $from, shifting the
+     * rows below it down inside the DECSTBM region [top, bottom].
+     *
+     * Mirrors charmbracelet/x/vt Screen.InsertLine: a no-op when
+     * `$from` lies outside the region or $count < 1; the shift never
+     * touches rows above $from, and nothing is pushed to scrollback —
+     * IL/DL are region-internal edits (only IND/SU scrolling feeds the
+     * ring). Blank fill honours no pen attributes (plain Cell::empty —
+     * upstream uses the pen's background only via its blankCell(); the
+     * caller passes SGR when BCE matters, kept simple here).
+     *
+     * @see ECMA-48 §8.4.15 (IL)
+     * @see https://vt100.net/docs/vt510-rm/IL.html
+     */
+    public function insertLines(Buffer $buffer, int $scrollTop, int $scrollBottom, int $from, int $count): void
+    {
+        if ($from < $scrollTop || $from > $scrollBottom) {
+            return;
+        }
+        $region = $scrollBottom - $from + 1;
+        $shift = min(max(1, $count), $region);
+        for ($r = $scrollBottom; $r >= $from + $shift; $r--) {
+            for ($c = 0; $c < $buffer->cols; $c++) {
+                $buffer->put($r, $c, $buffer->cell($r - $shift, $c));
+            }
+        }
+        for ($r = $from; $r < $from + $shift; $r++) {
+            for ($c = 0; $c < $buffer->cols; $c++) {
+                $buffer->put($r, $c, Cell::empty());
+            }
+        }
+    }
+
+    /**
+     * DL — delete $count lines starting at row $from, pulling rows below
+     * up inside the DECSTBM region; blanks land at the region bottom.
+     *
+     * Same region-guarding rules as {@see insertLines()}.
+     *
+     * @see ECMA-48 §8.4.10 (DL)
+     * @see https://vt100.net/docs/vt510-rm/DL.html
+     */
+    public function deleteLines(Buffer $buffer, int $scrollTop, int $scrollBottom, int $from, int $count): void
+    {
+        if ($from < $scrollTop || $from > $scrollBottom) {
+            return;
+        }
+        $region = $scrollBottom - $from + 1;
+        $shift = min(max(1, $count), $region);
+        for ($r = $from; $r <= $scrollBottom - $shift; $r++) {
+            for ($c = 0; $c < $buffer->cols; $c++) {
+                $buffer->put($r, $c, $buffer->cell($r + $shift, $c));
+            }
+        }
+        for ($r = $scrollBottom - $shift + 1; $r <= $scrollBottom; $r++) {
+            for ($c = 0; $c < $buffer->cols; $c++) {
+                $buffer->put($r, $c, Cell::empty());
+            }
+        }
+    }
+
+    /**
      * Scroll the region up by $count rows (SU).
      *
      * @param int $scrollTop    Top row of the scroll region (0-indexed inclusive).
