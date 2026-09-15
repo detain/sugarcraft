@@ -493,10 +493,12 @@ final class LruMapTest extends TestCase
         // Writing through one must not disturb the other's contents or counters —
         // the difference from cloning a Semaphore, which would be a second budget.
         $map->put('c', 3);
-        $fork->remove('a');
+        $fork->resize(1); // shrinks the clone below its load: 'a' drops LRU-first
 
         self::assertSame(['c', 'b', 'a'], $map->keys(), 'the original keeps its own writes');
         self::assertSame(['b'], $fork->keys(), 'the clone keeps its own');
+        self::assertSame(0, $map->evictions(), 'neither cap-3 write reaches the eviction door');
+        self::assertSame(1, $fork->evictions(), 'the eviction counter is per-clone');
         // Pinned as magnitudes, not `assertNotSame` on two small ints: identity of
         // interned integers is an engine detail, and these are the real claim.
         self::assertSame(3, $map->count());

@@ -186,9 +186,10 @@ final class LruMap implements \Countable, \IteratorAggregate
         unset($this->data[$key]);
 
         // Evict before inserting so the capacity test reads the occupancy that
-        // excludes the newcomer: a full map sheds exactly one entry to make
-        // room. (The newcomer is inserted at the tail and the victim is taken
-        // from the head, so it is never itself the eviction.)
+        // excludes the newcomer: a full map then sheds exactly one entry to make
+        // room. (The victim is still taken from the head, so the newcomer at the
+        // tail is never itself the eviction — the ordering here is about the
+        // count, not about which entry is chosen.)
         if (count($this->data) >= $this->capacity) {
             $this->evictOldest();
         }
