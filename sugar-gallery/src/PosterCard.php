@@ -37,7 +37,10 @@ final readonly class PosterCard
      * @param int|null    $imageId      Overlay id for {@see $posterImage}; the card
      *                                   draws a one-cell {@see ImageOverlay::marker()}
      *                                   at the poster's top-left and the runtime
-     *                                   paints the bytes there.
+     *                                   paints the bytes there. Null with an image
+     *                                   set means nothing can address the art, so
+     *                                   the cell renders as a skeleton and
+     *                                   {@see hasPoster()} reports it unfilled.
      */
     public function __construct(
         public string $id,
@@ -132,15 +135,17 @@ final readonly class PosterCard
      * {@see withStyledTitle()} trust boundary, for a highlight built over text
      * the caller does not control. Colour may be lost; a cursor move never will be.
      *
-     * When sanitising leaves nothing but empty string the card keeps its plain
-     * {@see $title} (and the receiver is returned unchanged) rather than rendering
-     * a blank title row: the plain path is the sanitised one by design.
+     * When sanitising leaves nothing that a terminal would actually show, the card
+     * keeps its plain {@see $title} (and the receiver is returned unchanged) rather
+     * than rendering a blank title row: the plain path is the sanitised one by
+     * design. A payload-only input like `"\e[31m\e[2J"` sanitises to a lone colour
+     * sequence — non-empty, but invisible — and is treated the same way.
      */
     public function withSafeStyledTitle(string $ansi): self
     {
         $safe = AnsiGuard::sanitize($ansi);
 
-        return $safe === '' ? $this : $this->withStyledTitle($safe);
+        return $safe === '' || AnsiGuard::stripControls($safe) === '' ? $this : $this->withStyledTitle($safe);
     }
 
     /**
@@ -159,9 +164,15 @@ final readonly class PosterCard
         return AnsiGuard::assertSafe($ansi);
     }
 
+    /**
+     * Whether this cell holds art the grid can paint — either inline cell text or
+     * an overlay fill. The fill policy keys on this, so it must agree with what
+     * {@see render()} actually draws: an overlay blob with no id has no marker to
+     * paint, renders as a skeleton, and must count as unfilled so the owner re-queues it.
+     */
     public function hasPoster(): bool
     {
-        return $this->poster !== null || $this->posterImage !== null;
+        return $this->poster !== null || ($this->posterImage !== null && $this->imageId !== null);
     }
 
     /**

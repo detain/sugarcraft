@@ -442,12 +442,18 @@ final class PosterGridTest extends TestCase
             1 => PosterCard::new('1', 'Url, no art', 'https://cdn/1.png'),
             2 => PosterCard::new('2', 'Art already inlined', 'https://cdn/2.png')->withPoster('ansi'),
             3 => PosterCard::new('3', 'Art as an overlay', 'https://cdn/3.png')->withImage('bytes', 7),
+            // An overlay blob with no id paints no marker, so it is not a fill: the
+            // owner has to be able to re-queue it or the cell stays a skeleton forever.
+            4 => PosterCard::new('4', 'Overlay, no id', 'https://cdn/4.png', posterImage: 'bytes'),
         ]);
 
         // 0 has no source to fetch from; 2 and 3 are filled (hasPoster() spans both
-        // fill modes); only 1 is pending. Indices 4..11 are skeletons — not loaded
-        // cards — so they are absent from the result entirely.
-        self::assertSame([1], $g->indicesNeedingPoster());
+        // fill modes); only 1 and 4 are pending — 4 because an overlay with no id
+        // paints nothing, so the window must offer it again rather than park a
+        // permanent skeleton. Indices 5..11 are skeletons — not loaded cards — so
+        // they are absent from the result entirely.
+        self::assertSame([1, 4], $g->indicesNeedingPoster());
+        self::assertFalse($g->item(4)->hasPoster());
     }
 
     public function testPendingHelpersNeverMutateTheGrid(): void

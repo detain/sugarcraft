@@ -464,6 +464,37 @@ final class PosterCardTest extends TestCase
         self::assertStringContainsString('Plain Title', $card->render(false, 20, 1));
     }
 
+    public function testWithSafeStyledTitleFallsBackWhenOnlyInvisibleStylingSurvives(): void
+    {
+        $card = new PosterCard('1', 'Plain Title');
+
+        // A payload-only input sanitises to a lone colour sequence: not the empty
+        // string, yet a terminal shows nothing for it. Accepting it would blank the
+        // title row and throw away the plain title the fallback exists to protect.
+        self::assertSame($card, $card->withSafeStyledTitle("\e[31m\e[2J"), 'styling with no text left is nothing');
+        self::assertSame($card, $card->withSafeStyledTitle("\e[31m"));
+        self::assertNull($card->styledTitle);
+        self::assertStringContainsString('Plain Title', $card->render(false, 20, 1));
+
+        // Styling that does carry text still wins, colour and all.
+        $styled = $card->withSafeStyledTitle("\e[31mNeon\e[2J");
+        self::assertNotSame($card, $styled);
+        self::assertSame("\e[31mNeon", $styled->styledTitle);
+        self::assertStringContainsString('Neon', $styled->render(false, 20, 1));
+    }
+
+    public function testAnOverlayImageWithoutAnIdIsNotAFilledCell(): void
+    {
+        // withImage() cannot build this state (it takes an int), but the constructor
+        // can — and a blob with no marker id paints nothing, so it must not read as
+        // filled or the cell parks as a permanent skeleton outside the fill policy.
+        $card = PosterCard::new('1', 'Orphan', 'https://cdn.example/1.png', posterImage: 'bytes');
+
+        self::assertFalse($card->hasPoster(), 'an overlay with no id paints no marker');
+        self::assertStringContainsString('░', $card->render(false, 12, 3));
+        self::assertTrue($card->withImage('bytes', 3)->hasPoster(), 'the same blob with an id is a fill');
+    }
+
     public function testAssertSafeAnsiIsTheCardLevelEntryWayIntoTheGuard(): void
     {
         self::assertSame("\e[31mX\e[0m", PosterCard::assertSafeAnsi("\e[31mX\e[0m"));

@@ -86,8 +86,9 @@ final class AnsiGuard
         foreach (self::runs($ansi) as [$kind, $bytes]) {
             if ($kind === self::UNSAFE) {
                 throw new InvalidArgumentException(sprintf(
-                    'Unsafe escape sequence at offset %d: %s. Only SGR styling (ESC [ <params> m) '
-                    . 'may be embedded in a styled title; use AnsiGuard::sanitize() to drop everything else.',
+                    'Unsafe escape sequence at offset %d: %s. Only SGR styling (ESC [ then only '
+                    . 'digits, ";" and ":" up to a final "m") may be embedded in a styled title; '
+                    . 'use AnsiGuard::sanitize() to drop everything else.',
                     $offset,
                     self::describe($bytes),
                 ));

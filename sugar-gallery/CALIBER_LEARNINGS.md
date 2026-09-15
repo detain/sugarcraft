@@ -50,7 +50,10 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   register it with candy-mosaic's `ImageLayer` and use `withImage($bytes, $id)`;
   the card then draws a one-cell `ImageOverlay::marker()` and the runtime paints
   the art on top. `hasPoster()` deliberately covers BOTH fill modes, so the grid's
-  fill policy never has to know which one a cell is in — keep it that way.
+  fill policy never has to know which one a cell is in — keep it that way. It keys
+  on what can actually *paint*: an overlay blob with no marker id (only reachable
+  through the constructor, since `withImage()` takes an `int`) counts as unfilled,
+  because it renders as a skeleton and the owner must be offered the cell again.
 - **Cache the rendered bytes, keyed by protocol.** `DiskCache::key($url, $w, $h,
   $mosaic->protocol())` — width, height and protocol all change the bytes, and
   candy-mosaic bumps its `FORMAT_VERSION` when a renderer is fixed so old entries
