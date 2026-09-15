@@ -22,6 +22,17 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
  * snapshots it via reflection, installs exactly the state it means to probe,
  * and restores the WHOLE bucket array afterwards so nothing leaks into the
  * sibling suites that share this pid.
+ *
+ * E737 SHIPPED THE COROLLARY OF SHARING: the pid bucket belongs to the
+ * PROCESS, not to this class, so a cold-read test may assert only that ITS OWN
+ * canonical decision path is absent from the buckets — never that a whole
+ * bucket is empty. In a K=8 shard the runner sits at the repo-root cwd
+ * (scripts/parallel-tests.sh `cd "$REPO"`), where an operator's `.mcp.json`
+ * trusted by the real HOME config turns ANY earlier sibling that reaches
+ * {@see Bootstrap::mcpClient()} through the root-less launch funnel into a
+ * leaker of foreign keys. Whole-bucket emptiness asserted green on every run
+ * until now only because serial runs at a cwd without the file.
+ * {@see testAForeignTrustedLaunchLeavesTheColdReadsUnspoiled()} pins the shape.
  */
 final class BootstrapMcpLivenessTest extends TestCase
 {
@@ -73,7 +84,11 @@ final class BootstrapMcpLivenessTest extends TestCase
         $this->grantProjectTrust($root);
 
         self::assertNull(Bootstrap::mcpLivenessSnapshot($root));
-        self::assertSame([], $this->readMemo()[getmypid()] ?? [], 'the snapshot must not memoise a client it found missing');
+        self::assertArrayNotHasKey(
+            $this->canonicalDecisionPath($root),
+            $this->readMemo()[getmypid()] ?? [],
+            'the snapshot must not memoise a client it found missing',
+        );
         self::assertFileDoesNotExist($mark, 'a liveness readout that spawned the declared server is the defect this method forbids');
     }
 
@@ -177,7 +192,14 @@ final class BootstrapMcpLivenessTest extends TestCase
         // Deliberate: NO grantProjectTrust() call.
 
         self::assertNull(Bootstrap::mcpLivenessSnapshot($root));
-        self::assertSame([], $this->readMemo()[getmypid()] ?? []);
+        // KEY-SCOPED, not whole-bucket (E737): this process may legitimately
+        // hold a foreign entry another test seeded; the claim is only that THIS
+        // untrusted root never entered the memo.
+        self::assertArrayNotHasKey(
+            $this->canonicalDecisionPath($root),
+            $this->readMemo()[getmypid()] ?? [],
+            'the untrusted cold read must not memoise a client for this root',
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -232,7 +254,13 @@ final class BootstrapMcpLivenessTest extends TestCase
         $this->grantProjectTrust($root);
 
         self::assertNull(Bootstrap::mcpConfigChangedSinceLaunch($root));
-        self::assertSame([], $this->readDigests()[getmypid()] ?? []);
+        // KEY-SCOPED, not whole-bucket (E737): silence is claimed for THIS
+        // never-launched root, whatever else this shared process has digested.
+        self::assertArrayNotHasKey(
+            $this->canonicalDecisionPath($root),
+            $this->readDigests()[getmypid()] ?? [],
+            'a root this process never launched must carry no digest of its own',
+        );
     }
 
     /**
@@ -277,6 +305,62 @@ final class BootstrapMcpLivenessTest extends TestCase
         Bootstrap::stopMcpServers();
 
         self::assertArrayNotHasKey($path, $this->readDigests()[getmypid() ?: 0] ?? []);
+    }
+
+    /**
+     * E737 REGRESSION — THE SHARD POISON SHAPE, INSIDE ONE PROCESS: the K=8
+     * runner sits at the repo-root cwd (scripts/parallel-tests.sh `cd "$REPO"`),
+     * and when that checkout carries a `.mcp.json` the operator's REAL HOME
+     * config trusts, any earlier in-bucket sibling that reaches
+     * {@see Bootstrap::mcpClient()} through the root-less launch funnel
+     * (`chat()`/`app()`/`backend()`/`tools()` → `mcpTools(getcwd())`) memoises
+     * and digests that foreign path into THIS pid's buckets and never cleans
+     * them up. This test launches a poisoned fixture root for real (git type,
+     * in-process, hermetic — no network, no child binary), leaves the entries
+     * standing, and demands the cold reads answer their own truth with the
+     * buckets demonstrably NON-empty: the exact scenario E737's whole-bucket
+     * `assertSame([], ...)` form died on, pinned in every run shape instead of
+     * only the shard's. tearDown's snapshot restore makes the leak
+     * test-bounded; stopServers() releases the git server.
+     */
+    public function testAForeignTrustedLaunchLeavesTheColdReadsUnspoiled(): void
+    {
+        $poisoned = $this->makeLivenessRoot();
+        $this->writeConfigNaming($poisoned, ['sibling' => ['type' => 'git']]);
+        $this->grantProjectTrust($poisoned);
+
+        // THE LEAK ITSELF: a trusted root launched through the production
+        // factory, seeded while its own trust grant is live.
+        $client = Bootstrap::mcpClient($poisoned);
+        self::assertInstanceOf(McpClient::class, $client, 'sanity: the seed must be a real launch, not a refusal');
+        $poisonedPath = $this->canonicalDecisionPath($poisoned);
+        self::assertArrayHasKey($poisonedPath, $this->readMemo()[getmypid()] ?? [], 'sanity: the shared memo bucket must be genuinely poisoned for this pin to mean anything');
+        self::assertArrayHasKey($poisonedPath, $this->readDigests()[getmypid()] ?? [], 'sanity: the shared digest bucket must be genuinely poisoned for this pin to mean anything');
+
+        // Re-point HOME (a NEW frozen trust read) so the probes below run while
+        // the foreign grant is no longer even visible — buckets still carry it.
+        $quiet = $this->makeLivenessRoot();
+        $this->writeConfigNaming($quiet, ['quiet' => ['type' => 'git']]);
+        $this->grantProjectTrust($quiet);
+
+        // A trusted-but-cold root: still null, still unmemoised, foreign entry
+        // surviving untouched.
+        self::assertNull(Bootstrap::mcpLivenessSnapshot($quiet));
+        self::assertArrayNotHasKey($this->canonicalDecisionPath($quiet), $this->readMemo()[getmypid()] ?? []);
+        self::assertNull(Bootstrap::mcpConfigChangedSinceLaunch($quiet));
+        self::assertArrayNotHasKey($this->canonicalDecisionPath($quiet), $this->readDigests()[getmypid()] ?? []);
+
+        // An absent root: same silence through the same keying.
+        $absent = $this->makeLivenessRoot();
+        self::assertNull(Bootstrap::mcpLivenessSnapshot($absent));
+        self::assertArrayNotHasKey($this->canonicalDecisionPath($absent), $this->readMemo()[getmypid()] ?? []);
+
+        // THE PIN'S TEETH: the poison is still standing, and no cold read
+        // erased or consulted it.
+        self::assertArrayHasKey($poisonedPath, $this->readMemo()[getmypid()] ?? [], 'cold reads must neither drop nor overwrite a foreign memo entry');
+        self::assertArrayHasKey($poisonedPath, $this->readDigests()[getmypid()] ?? [], 'cold reads must neither drop nor overwrite a foreign digest entry');
+
+        $client->stopServers();
     }
 
     // -------------------------------------------------------------------------
