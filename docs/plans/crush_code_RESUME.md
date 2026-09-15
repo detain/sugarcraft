@@ -77,8 +77,10 @@ OPEN  **E738**
 $   # 7 survivors: E729 E730 E731 E735 E736 (OPEN, unchanged) + E737 (PARTIAL survivor) + E738 (NEW mint)
 ```
 
-r83 wave-1 welded E732/E733(2-of-3)/E734 CLOSED + E737 PARTIAL(test half); ProgressRing third site rides
-lane r5 (in-flight); E738 minted from r3's method.
+r83 wave-1 welded E732/E733(2-of-3)/E734 CLOSED + E737 PARTIAL(test half); E733 completed to 3/3 by the
+wave-1-COMPLETION pick (lane r5 `e4f6e7e23` → pick `76218c66e` — ProgressRing ctor fold; completion weld dash
+5964T/9823A/1S exit0). Census VERBATIM re-run after the completion stamps: SAME 7 survivors (r5 was
+pre-stamped pending-CLOSED inside the CLOSED §E733 paragraph — no census movement, as predicted).
 
 The phase-4 ledger: 13 minted at `279daf7bc` (E711–E723) + 5 minted at `e765b1742` (E724–E728) =
 **18 rows, ALL CLOSED** — wave-1 five (q1/q2/q3/q4/q6), wave-2 four (q7/q8/q9/q5-marks), wave-3 three
