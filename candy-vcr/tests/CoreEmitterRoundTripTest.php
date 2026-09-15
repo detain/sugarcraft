@@ -119,13 +119,38 @@ final class CoreEmitterRoundTripTest extends TestCase
 
     // ─── DECALN (ESC # 8) ────────────────────────────────────────────────────
 
+    /**
+     * Receiver state dirtied on the dimensions the DECALN tests below actually
+     * pin — grid content, cursor position, the scroll-region top edge, DECOM,
+     * the SGR pen and the G0 designation — so those assertions are discriminating
+     * rather than passing on values already at their default. (displayAlignmentTest
+     * also resets gl and carries the cursor shape through — both pinned by
+     * candy-vt's own DecalnWireTest — and clears singleShift/wrapPending, which no
+     * suite pins yet and which is deliberately out of scope here.) The
+     * cursor park comes LAST because `ESC [ r` (DECSTBM) homes the cursor as a
+     * side effect — parking before it would let "cursor homed" pass whether or
+     * not DECALN ever fired.
+     */
+    private const DECALN_DIRTY =
+        "\x1b[2;3r"       // DECSTBM region top=1, bottom=2 (bottom is only discriminating on the 5-row ARMS buffer)
+        . "\x1b[?6h"      // DECOM origin mode ON
+        . "\x1b[41m"      // SGR background colour — a non-default pen
+        . "\x1b(0"        // G0 designated DEC Special Graphics
+        . "\x1b[3;5HW";   // park the cursor at (2,5) and print a content marker
+
     public function testDecalnEmitterDispatchesWithTheHashIntermediate(): void
     {
         // The single most important property of this emitter: `#` must arrive as
         // the INTERMEDIATE (0x23) and `8` as the FINAL (0x38) of one complete
-        // escape. The `CSI # 8` spelling people reach for never dispatches at
-        // all — candy-ansi closes CsiIntermediate on 0x30-0x3F by dropping to
-        // Ground — and would strand the receiver mid-sequence.
+        // escape, so the handler receives them as one DEC-family dispatch. The
+        // `ESC [ # 8` spelling people reach for is a misquote of xterm's
+        // palette-stack substate (`CSI # P/Q/R/S`, where the `8` is a collected
+        // digit awaiting a colour final, not a final of its own): candy-ansi
+        // closes CsiIntermediate on a 0x30-0x3F byte by returning to Ground, so
+        // the CSI form never dispatches DECALN — and because it recovers to
+        // Ground rather than stranding mid-sequence, the next graphic still
+        // prints. That inertness is pinned negatively by
+        // {@see testCsiHash8MisquoteDoesNotArmDecaln}.
         $debug = new DebugHandler();
         (new Parser($debug))->feed(Ansi::decaln() . 'E');
 
@@ -136,35 +161,136 @@ final class CoreEmitterRoundTripTest extends TestCase
         $this->assertSame(['E'], array_column($debug->filter('print'), 'detail'));
     }
 
-    public function testDecalnEmitterLeavesTheReceiverReadyForTheNextGraphic(): void
+    public function testDecalnEmitterArmsTheAlignmentFillAndResetsTheReceiver(): void
     {
-        // Emitter → emulator at the level that matters on the wire: whatever
-        // follows DECALN must still be rendered, never swallowed as the final
-        // byte of a half-built sequence. Today candy-vt ignores `ESC # 8` and
-        // prints the 'E' at the cursor; if the emulator later executes DECALN,
-        // the alignment fill puts 'E' in that cell instead. Both outcomes pass.
-        // Scope note: this is the tripwire for a receiver that EATS the next
-        // graphic (a physical terminal given `ESC [ # 8` does exactly that). It
-        // does NOT catch a regression to the CSI spelling, because this repo's
-        // parser drops the `8` without dispatching and still prints the 'E'. The
-        // spelling is pinned by the dispatch-shape test above and the exact-byte
-        // test in candy-core — neither is redundant with this one.
-        $h = $this->feed('abc' . Ansi::decaln() . 'E');
+        // The full emitter→emulator round trip of the DECALN contract (VT510
+        // ch.4). Since PR #1431 made {@see ScreenHandler::escDispatch()} intercept
+        // the `#` (0x23) intermediate and dispatch final 0x38 to
+        // displayAlignmentTest() instead of swallowing it in designate(), feeding
+        // Ansi::decaln() must actually RUN the alignment test on the receiver —
+        // not merely be consumed. Every post-DECALN effect assertion below is red
+        // under the pre-#1431 parser, where `ESC # 8` fell through to designate()
+        // and was ignored: the grid would keep the DIRTY content instead of the E
+        // field, the cursor would stay parked off-origin, both scroll-region edges
+        // would keep their non-default DECSTBM values, DECOM would stay on and the
+        // pen would stay red. The dirtiness is asserted BEFORE the sequence (the
+        // same self-contained discipline as the RIS tests) so a silent no-op cannot
+        // masquerade as a reset of values already at their defaults.
+        $this->assertSame("\x1b#8", Ansi::decaln(), 'the emitter must put ESC # 8 (1B 23 38) on the wire');
 
-        $this->assertSame('E', $h->buffer->cell(0, 3)->grapheme);
+        // A buffer two rows taller than the class default so DECSTBM's lower edge
+        // (2) differs from the full-screen reset value (rows-1): on the 3-row
+        // default the bottom edge would coincide with DECALN's reset and that one
+        // assertion would carry no signal. The parked cursor is read back rather
+        // than hard-coded, because its landing is buffer-height dependent.
+        $rows = self::ROWS + 2;
+        $handler = new ScreenHandler(new Buffer(self::COLS, $rows));
+        $parser = new Parser($handler);
+        $parser->feed(self::DECALN_DIRTY);
+
+        $parkRow = $handler->cursor->row;
+        $parkCol = $handler->cursor->col;
+        $this->assertNotSame(0, $parkRow, 'cursor parked off the top row first');
+        $this->assertGreaterThan(0, $parkCol, 'cursor parked off the left margin first');
+        $this->assertSame('W', $handler->buffer->cell($parkRow, $parkCol - 1)->grapheme, 'pre-DECALN content present first');
+        $this->assertNotSame(0, $handler->scrollRegionTop, 'DECSTBM top edge off the page first');
+        $this->assertNotSame($rows - 1, $handler->scrollRegionBottom, 'DECSTBM bottom edge off the page first');
+        $this->assertTrue($handler->mode->originMode, 'DECOM armed first');
+        $this->assertNotNull($handler->sgr->background, 'pen coloured first');
+        $this->assertSame(Charsets::DEC_SPECIAL, $handler->charsets[0], 'a non-ASCII designation set first');
+
+        $parser->feed(Ansi::decaln());
+
+        // Every cell of the live grid, row by row and column by column — not a
+        // single probe that a partial fill could slip past.
+        for ($r = 0; $r < $rows; $r++) {
+            for ($c = 0; $c < self::COLS; $c++) {
+                $this->assertSame('E', $handler->buffer->cell($r, $c)->grapheme, "DECALN must fill cell ({$r},{$c})");
+            }
+        }
+        $this->assertSame(0, $handler->cursor->row, 'DECALN homes the cursor');
+        $this->assertSame(0, $handler->cursor->col, 'DECALN homes the cursor');
+        $this->assertSame(0, $handler->scrollRegionTop, 'DECALN resets the scroll region top to the page edge');
+        $this->assertSame($rows - 1, $handler->scrollRegionBottom, 'DECALN resets the scroll region bottom to the page edge');
+        $this->assertFalse($handler->mode->originMode, 'DECALN clears DECOM (xterm-411 UIntClr ORIGIN)');
+        $this->assertNull($handler->sgr->background, 'DECALN resets the SGR pen');
+        $this->assertSame(
+            [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII],
+            $handler->charsets,
+            'DECALN restores the default ASCII designations',
+        );
+    }
+
+    public function testDecalnLeavesTheReceiverReadyForTheNextGraphic(): void
+    {
+        // Whatever follows DECALN must still be rendered, never swallowed as the
+        // final byte of a half-built sequence. DECALN homes the cursor, so the
+        // trailing 'Z' lands on (0,0); pinning the E fill behind it at (0,1) is
+        // what turns this from a bare "the byte printed" check (which the old
+        // ignore-DECALN receiver also passed) into a real DECALN tripwire — the
+        // alignment fill must have run for that cell to hold 'E'.
+        $h = $this->feed(Ansi::decaln() . 'Z');
+
+        $this->assertSame('Z', $h->buffer->cell(0, 0)->grapheme, 'the graphic after DECALN prints at the homed cursor');
+        $this->assertSame('E', $h->buffer->cell(0, 1)->grapheme, 'DECALN filled the row behind the trailing graphic');
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(1, $h->cursor->col, 'the trailing graphic advanced the cursor one cell');
+    }
+
+    public function testCsiHash8MisquoteDoesNotArmDecaln(): void
+    {
+        // Negative pin, consistent with candy-vt's
+        // DecalnWireTest::testCsiHash8MisquoteDoesNotArmDecaln. `ESC [ # 8` is
+        // the circulating misquote (xterm's palette-stack `CSI # P/Q/R/S`), not
+        // the DEC encoding, and must NOT arm DECALN. Under the correct parser the
+        // sequence is dropped to Ground without dispatch, so every dimension the
+        // alignment test touches is left exactly as DIRTY set it, AND the graphic
+        // that follows still prints in place (the misquote recovers to Ground
+        // rather than stranding — vt's DecalnWireTest pins the same recovery with
+        // its trailing 'X'). Each assertion here goes red the moment someone
+        // "fixes" the parser to dispatch DECALN from the CSI spelling.
+        $probe = $this->feed(self::DECALN_DIRTY);
+        $parkRow = $probe->cursor->row;
+        $parkCol = $probe->cursor->col;
+        $this->assertGreaterThan(0, $parkRow, 'the dirty prefix parks the cursor off-origin');
+
+        $h = $this->feed(self::DECALN_DIRTY . "\x1b[#8Z");
+
+        $this->assertSame('W', $h->buffer->cell($parkRow, $parkCol - 1)->grapheme, 'pre-sequence content survived — the screen was not filled with E');
+        $this->assertSame('Z', $h->buffer->cell($parkRow, $parkCol)->grapheme, 'the graphic after the misquote printed in place — recovered to Ground, not swallowed');
+        // Probing a never-written row rather than cell(0,0): under an (incorrectly)
+        // armed reading DECALN homes the cursor to (0,0) and the trailing 'Z' then
+        // overwrites it, so "cell(0,0) is not E" would pass in the very failure case
+        // it claims to catch. Row 1 is untouched by DECALN_DIRTY, so it can only be
+        // blank if the alignment fill never ran.
+        $this->assertSame('', $this->row($h, 1), 'no E field anywhere — the never-written middle row stays blank');
+        $this->assertSame($parkRow, $h->cursor->row, 'the cursor stayed on its parked row — DECALN did not home it');
+        $this->assertSame($parkCol + 1, $h->cursor->col, 'only the trailing graphic advanced the cursor one cell');
+        $this->assertSame(1, $h->scrollRegionTop, 'the scroll region top was not reset');
+        $this->assertTrue($h->mode->originMode, 'DECOM was not cleared');
+        $this->assertNotNull($h->sgr->background, 'the pen was not reset');
     }
 
     public function testAlignmentHandlerStillFillsTheScreenWhenInvokedProgrammatically(): void
     {
-        // candy-vt models DECALN programmatically, not from the wire: this
-        // asserts the *handler* exists and produces the 'E' field the emitter's
-        // docblock describes, so the two vocabularies cannot drift apart while
-        // the parser gap is still open. See the test above for the wire path.
-        $h = $this->feed('x');
+        // The programmatic entry point {@see ScreenHandler::displayAlignmentTest()}
+        // pinned directly — the very method the `ESC # 8` wire sequence now
+        // dispatches to since PR #1431. The wire seam itself is covered by
+        // {@see testDecalnEmitterArmsTheAlignmentFillAndResetsTheReceiver}; this is
+        // the direct-API guarantee other libs (and candy-vt's own reset matrix)
+        // rely on, so the two entry points cannot drift apart.
+        $h = $this->feed(self::DECALN_DIRTY);
         $h->displayAlignmentTest();
 
-        $this->assertSame(str_repeat('E', self::COLS), $this->row($h));
-        $this->assertSame(str_repeat('E', self::COLS), $this->row($h, self::ROWS - 1));
+        for ($r = 0; $r < self::ROWS; $r++) {
+            for ($c = 0; $c < self::COLS; $c++) {
+                $this->assertSame('E', $h->buffer->cell($r, $c)->grapheme, "programmatic DECALN fills cell ({$r},{$c})");
+            }
+        }
+        $this->assertSame(0, $h->cursor->row, 'programmatic DECALN homes the cursor');
+        $this->assertSame(0, $h->scrollRegionTop, 'programmatic DECALN resets the region top');
+        $this->assertFalse($h->mode->originMode, 'programmatic DECALN clears DECOM');
+        $this->assertNull($h->sgr->background, 'programmatic DECALN resets the pen');
     }
 
     // ─── SCS (ESC ( ) * + F) ─────────────────────────────────────────────────
