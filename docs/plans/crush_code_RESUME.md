@@ -53,10 +53,10 @@ logs were pipe-shaped all along and its "tmux" STATE label was wrong.)**
 
 ### 1b. THE STANDARD LOCAL GATE — unchanged (K=8 sharded, FAIL-CLOSED conservation, fresh `--out`, plain pipe; durations manifest must carry a row for every new test file BEFORE sharded conservation means anything — r81 re-proved the silent-drop; serial is the re-pin truth AND the only gate that sees whole-tree doc/comment/roster censuses). Canonical command + regeneration recipe: APPENDIX II §1b. Pass `--against-json sugar-crush/tests/Config/Support/suite-figure.json` for the script's own CONSERVATION verdict line.
 
-### 2. ACTIONABLE QUEUE — PHASE-4 LIVE (sibling-lib sweep r82+): 8 SURVIVORS AFTER ROUND-82 WAVE-1
+### 2. ACTIONABLE QUEUE — PHASE-4 LIVE (sibling-lib sweep r82+): 4 SURVIVORS AFTER ROUND-82 WAVE-2
 
-**(a) Row census = 8 survivors.** Command RE-RUN LIVE against `docs/plans/crush_code_backlog_triage.md`
-at the round-82 wave-1 weld (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status/evidence
+**(a) Row census = 4 survivors.** Command RE-RUN LIVE against `docs/plans/crush_code_backlog_triage.md`
+at the round-82 wave-2 weld (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status/evidence
 cells lead-scanned per the census rule — recount by re-running, never by chained arithmetic):
 
 ```
@@ -65,20 +65,19 @@ $ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
     /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
     if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
 OPEN  **E714** 
-OPEN  **E716** 
 OPEN  **E717** 
-OPEN  **E718** 
-OPEN  **E720** 
 OPEN  **E721** 
 OPEN  **E722** 
-OPEN  **E723** 
 ```
 
-13 minted at `279daf7bc` − 5 wave-1 closures: **E711, E712, E713, E715, E719 all CLOSED-in-place** at this
-weld (lanes q1/q2/q3/q4/q6, picks `3336bea5f`/`05f155145`/`2fc01a77e`/`8df8c26d8`/`174a12447` + companion
-fold `5c3bb3d1c`). Survivors by queue home: E714 (LOW — UNASSIGNED, r83 candidate); E720 (wave-1 lane q5 —
-review PENDING, DEFERRED from this weld); E716 (q7, FOUNDATION ordering) · E718 (q8) · E723 (q9) — wave-2;
-E717 (q10) · E721 (q11) · E722 (q12) — wave-3. [PHASE 3 (operator UX, r81: E704–E710) and PHASE 2
+13 minted at `279daf7bc` − 5 wave-1 closures (**E711, E712, E713, E715, E719 CLOSED-in-place** at the
+wave-1 weld — lanes q1/q2/q3/q4/q6, picks `3336bea5f`/`05f155145`/`2fc01a77e`/`8df8c26d8`/`174a12447` +
+companion fold `5c3bb3d1c`) − 4 wave-2 closures (**E716, E718, E720 as CLOSED-MARKS, E723 sugar-dash-half
+CLOSED-in-place** at this weld — lanes q7/q8/q9/q5, picks `364c43b16`/`57a270cb1`/`2dfeaf3b4`+`87c3f5ab4`/
+`3d053be7b` + corruption repair `d51bb2a6f` + companion fold `269101e30`). Survivors by queue home:
+E714 (LOW — UNASSIGNED, r83 candidate); E717 (q10) · E721 (q11) · E722 (q12) — wave-3 PENDING. E720's
+20 RESIDUAL candidates flow to the ROUND-82 CLOSEOUT mint decision (top rows in
+`/home/sites/crush-r61-artifacts/q5/verdicts.md`; NOT minted at this weld). [PHASE 3 (operator UX, r81: E704–E710) and PHASE 2
 (r77–r80: E695–E703) remain COMPLETE; PHASE-4 sweep supersedes the §2(c) decision point — see the
 minted-2026-09-15 paragraph above.]
 
