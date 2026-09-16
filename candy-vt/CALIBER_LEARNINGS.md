@@ -587,3 +587,23 @@ in `tests/fixtures/` with a `.golden` extension. Re-record goldens with
 `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes.
 Mirrors: `docs/repo_map_step_28.md`.
 
+
+## Async input surface (finding #29)
+
+`Terminal\Terminal::feedAsync()` / `feedStream()` deliver the query→reply
+channel as promise values (`react/promise` + `react/stream`, require-lines
+only). `feedStream` feeds per `data` event (parser state persists across
+chunk boundaries), flushes at `end`, and rejects on `error` or close-without-
+end so truncated transport can never look complete. Tests use `ThroughStream`
+— its events fire synchronously, so no loop run and no timers are armed;
+if that ever changes, `tests/bootstrap.php` must call
+`LoopPin::pinStableClock()` FIRST.
+
+## Type internal cells with the canonical FQN, not the BC alias
+
+Since the Cell unification, `SugarCraft\Vt\Cell\Cell` is a pure
+`class_alias` shim. phpstan cannot see through `class_alias`, so lib-internal
+`use SugarCraft\Vt\Cell\Cell;` imports made every cell-returning API an
+unknown class and cascaded false errors repo-wide. Internal code must
+`use SugarCraft\Vt\Cell;`; only the alias-pinning tests (CellTest,
+CellAliasTest, tests/Cell/*) may keep the historical FQN.

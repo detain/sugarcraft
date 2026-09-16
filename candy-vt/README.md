@@ -88,7 +88,7 @@ candy-vt ships **two** Terminal entry-points for distinct use cases:
 
 | Class | Use case | Methods |
 |-------|----------|---------|
-| `SugarCraft\Vt\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `create(cols, rows, ?scrollbackSize)`, `feed(bytes)`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
+| `SugarCraft\Vt\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `create(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
 | `SugarCraft\Vt\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`. |
 
 ```php
@@ -193,6 +193,14 @@ encoding.
 Partial input is supported — feed any byte boundary and the parser
 state persists across `feed()` calls. Subparameter colons
 (`CSI 4:2 m` → double underline) are parsed natively.
+
+The full emulator also speaks ReactPHP: `feedAsync()` parses a chunk and
+resolves with the terminal→host reply bytes (DA1/CPR/XTWINOPS …) instead of
+requiring the `feed($bytes, $respond)` callback, and `feedStream()` pumps a
+`ReadableStreamInterface` (PTY output, socket) through the same parser —
+incrementally per `data` event, flushed at `end`, rejecting on `error` or a
+close that never signalled end-of-stream. The synchronous `feed()` surface is
+unchanged; these are additive.
 
 ## CSI coverage table
 
