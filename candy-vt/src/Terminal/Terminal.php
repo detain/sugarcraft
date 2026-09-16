@@ -162,7 +162,11 @@ final class Terminal
      * the callback's error and detaches before the exception surfaces to
      * the emitter (on the `data` route it re-throws for parity with the
      * sync `feed($bytes, $respond)` contract, where a throwing callback
-     * bubbles to whoever wrote the bytes).
+     * bubbles to whoever wrote the bytes). On that data-route failure the
+     * replies spliced out of the queue but not yet handed over are DROPPED
+     * with the dead pump — unlike sync `feed()`, which leaves its queue
+     * intact for a later retry, a rejected promise is the caller's notice
+     * and a resurrected answer on a dead stream would be a phantom.
      *
      * @param (callable(string): void)|null $respond
      *
@@ -189,24 +193,32 @@ final class Terminal
             if ($settled) {
                 return; // defense in depth: a settled pump never re-enters the parser.
             }
-            $this->parser->feed($chunk);
-            if ($respond === null) {
-                return;
-            }
-            // Clear-by-slice BEFORE delivering: a callback that throws
-            // mid-loop must not leave already-delivered replies queued
-            // for duplicate delivery on the next chunk (round-1 review n2).
-            $pending = $this->handler->replies;
-            $this->handler->replies = [];
             try {
+                $this->parser->feed($chunk);
+                if ($respond === null) {
+                    return;
+                }
+                // Clear-by-slice BEFORE delivering: a callback that throws
+                // mid-loop must not leave already-delivered replies queued
+                // for duplicate delivery on the next chunk (round-1 review n2).
+                $pending = $this->handler->replies;
+                $this->handler->replies = [];
                 foreach ($pending as $reply) {
                     $respond($reply);
                 }
             } catch (\Throwable $error) {
+                // Anything the callee throws — parser internals (round-2
+                // review n5) or the caller's own $respond — settles the
+                // pump exactly once: reject, detach, then re-throw for
+                // parity with the sync feed($bytes, $respond) contract,
+                // where the exception bubbles to whoever wrote the bytes.
+                // Replies spliced out but never handed over are dropped
+                // with the dead pump — the rejection is the caller's
+                // notice; a half-dead pump must not re-deliver them.
                 $settled = true;
                 $detach();
                 $deferred->reject($error);
-                throw $error; // sync-route parity: the emitter learns the pump died.
+                throw $error;
             }
         };
         $listeners['error'] = function (\Throwable $error) use ($deferred, $detach, &$settled): void {

@@ -313,6 +313,43 @@ final class AsyncFeedTest extends TestCase
         $this->assertSame(1, $settles, 'the rejection was the single settlement; later events cannot re-settle');
     }
 
+    public function testThrowingRespondOnDataDropsUndeliveredReplies(): void
+    {
+        // Documented data-route failure semantics: the queue is spliced
+        // before delivery, so when the callback dies on reply #1 the #2
+        // that was already queued with it is dropped — no resurrection of
+        // answers on a pump that just rejected (round-2 review m2).
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $seen = [];
+        $promise = $t->feedStream($stream, static function (string $reply) use (&$seen): void {
+            $seen[] = $reply;
+
+            throw new LogicException('dead on the first answer');
+        });
+
+        $reason = null;
+        $promise->then(null, static function (Throwable $e) use (&$reason): void {
+            $reason = $e;
+        });
+
+        try {
+            $stream->write("\x1b[c\x1b[>c"); // DA1 + DA2 queue in one chunk
+            $this->fail('the respond error must bubble to the emitter');
+        } catch (LogicException) {
+            // expected
+        }
+
+        $this->assertCount(1, $seen, 'the first answer was delivered before the throw');
+        $this->assertInstanceOf(LogicException::class, $reason);
+        $this->assertSame([], $t->replies(), 'the undelivered sibling is dropped with the dead pump');
+
+        // And it stays dropped: a later chunk cannot resurrect it either.
+        $stream->write("\x1b[c");
+        $this->assertSame([self::DA1], $seen);
+        $this->assertSame([], $t->replies());
+    }
+
     public function testThrowingRespondOnEndRejectsWithoutHangingThePromise(): void
     {
         $t = Terminal::new(10, 3);
