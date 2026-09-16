@@ -415,14 +415,52 @@ final class ScreenHandler implements Handler
                 $this->wrapPending = false;
                 return;
             case 's':
-                // CSI s — SCO save-cursor alias of DECSC: same GENERAL slot
-                // as ESC 7, and the phantom cell survives the snapshot (it
-                // is DECRC that clears on the way back).
-                $this->saveCursor();
-                return;
             case 'u':
-                // CSI u — SCO restore-cursor alias of DECRC.
-                $this->restoreCursor();
+                // Private-marker forms are NOT the SCO aliases. xterm switches
+                // the whole final-byte table on a `?` marker (VTPrsTbl.c:558
+                // `?` = CASE_DEC_STATE → charproc.c:3898-3900 parsestate =
+                // dec_table), where 's' saves the DEC private MODE settings
+                // (VTPrsTbl.c:4195 CASE_XTERM_SAVE → charproc.c:6209-6210 →
+                // savemodes(), "process xterm private modes save",
+                // charproc.c:8049-8053) — a feature this emulator does not
+                // model, a deliberate gap — and 'u' is ignored outright
+                // (VTPrsTbl.c:4198 CASE_GROUND_STATE). tmux agrees by
+                // table miss: its CSI entries carry ('s', "") and ('u', "")
+                // only (input.c:345,347), marker bytes 0x3c-0x3f collect into
+                // the key's interm_buf (input.c:577), and a miss returns
+                // before the switch (input.c:1483-1487). So `CSI ? u` — the
+                // kitty keyboard-capability QUERY — must be inert here: no
+                // cursor move, no GENERAL-slot touch. (We still do not answer
+                // it: no kitty reply channel, by design.) Intermediate bytes
+                // are deliberately NOT gated on this pair — `CSI SP s`/`CSI !
+                // s` still save here, inert in both refs (xterm csi_sp_table
+                // 's' = GROUND, VTPrsTbl.c:1920; csi_ex_table VTPrsTbl.c:1271;
+                // tmux strcmp miss, input.c:771-779): the marked finals are
+                // the query hazard this gate answers.
+                if ($prefix !== 0) {
+                    return;
+                }
+                // CSI s / CSI u — SCO save/restore-cursor aliases of DECSC/
+                // DECRC: same GENERAL slot as ESC 7/8, and the phantom cell
+                // survives the snapshot (it is DECRC that clears on the way
+                // back). `CSI Ps s` / `CSI Ps u` (params, NO SP intermediate)
+                // stay save/restore: xterm routes them to the very same
+                // ANSI_SC/ANSI_RC cases (VTPrsTbl.c:623,626) — it merely
+                // no-ops the non-default param spelling via only_default()
+                // (charproc.c:4899,4912-4913 + 2219-2223; xterm's LR-margin
+                // DECSLRM branch at charproc.c:4885-4898 is not modelled —
+                // candy-vt has no DECLRMM) — while tmux ignores the param
+                // (input.c:1820-1831 → input_save_state/input_restore_state,
+                // input.c:849-871). Never a cursor shape: DECSCUSR needs the
+                // SP intermediate + 'q' (xterm csi_sp_table, VTPrsTbl.c:1917-
+                // 1918; tmux input.c:342 `{ 'q', " ", INPUT_CSI_DECSCUSR }`),
+                // handled by the `case 'q'` arm below — following tmux here
+                // keeps the request in save/restore, silently swallowed.
+                if ($finalChar === 's') {
+                    $this->saveCursor();
+                } else {
+                    $this->restoreCursor();
+                }
                 return;
             case 'K': case 'J': case 'X': case 'P': case '@':
                 if ($finalChar === 'J' && ($params[0] ?? -1) === 3 && $intermediate === 0

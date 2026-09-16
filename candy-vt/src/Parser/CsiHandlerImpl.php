@@ -334,13 +334,13 @@ final class CsiHandlerImpl implements CsiHandler
             $p >= 90 && $p <= 97 => [$p - 90 + 8, $this->bg, $this->attrs, $i + 1],
             $p >= 100 && $p <= 107 => [$this->fg, $p - 100 + 8, $this->attrs, $i + 1],
 
-            $p === 38 => $this->sgrExtended($params, $i, fg: true),
-            $p === 48 => $this->sgrExtended($params, $i, fg: false),
+            $p === 38 => $this->sgrExtended($params, $i, $subs, fg: true),
+            $p === 48 => $this->sgrExtended($params, $i, $subs, fg: false),
             // Underline colour — neither this pen nor the emulator's Sgr
             // model stores it; both CONSUME the extended triplet so its
             // components cannot masquerade as independent SGRs (the old
             // default-arm let `58;5;33` repaint the fg green on both paths).
-            $p === 58 => $this->sgrExtendedDiscard($params, $i),
+            $p === 58 => $this->sgrExtendedDiscard($params, $i, $subs),
             $p === 59 => [$this->fg, $this->bg, $this->attrs, $i + 1],
 
             default => [$this->fg, $this->bg, $this->attrs, $i + 1],
@@ -390,11 +390,40 @@ final class CsiHandlerImpl implements CsiHandler
      * default pen is the closest faithful rendering; the emulator keeps the
      * RGB, a documented representation limit (VtParityTest::DIVERGENCE_NOTE).
      *
+     * Also takes the ECMA-48 colon forms — `38:5:N`, `38:2:R:G:B`,
+     * `38:2::R:G:B`, `38:2:CS:R:G:B` — whose whole specification rides in ONE
+     * parameter group (the parser flattens the colons; the continuation flags
+     * mark them). The group's slots are consumed to its end either way so a
+     * trailing component can never replay as an independent SGR; kind 2's
+     * optional colour-space sub-parameter (5 slots = no CS, 6 = CS first,
+     * exactly as xterm's `have > 4` offset at charproc.c:2142-2146 and tmux's
+     * `n == 5 ? 2 : 3` at input.c:2362-2365) is skipped, and no palette index
+     * is derivable from an RGB triple in this model, so the pen keeps its
+     * colour — the same drop-to-default documented for the semicolon form.
+     *
      * @param list<int> $params
+     * @param list<bool>|null $subs
      * @return array{0: int, 1: int, 2: int, 3: int}
      */
-    private function sgrExtended(array $params, int $i, bool $fg): array
+    private function sgrExtended(array $params, int $i, ?array $subs, bool $fg): array
     {
+        if ($subs !== null && ($subs[$i] ?? false) === true) {
+            $end = $this->colonGroupEnd($i, $params, $subs);
+            $next = $end + 1;
+            $kind = $params[$i + 1] ?? -1;
+            if ($kind === 5) {
+                // The index must live INSIDE the group: `38:5;3` has no slot
+                // of its own after the kind, and the following 3 is a
+                // separate SGR — mirroring the emulator's group-scoped read.
+                $index = $end >= $i + 2 ? $params[$i + 2] : 0;
+                return $fg
+                    ? [$index, $this->bg, $this->attrs, $next]
+                    : [$this->fg, $index, $this->attrs, $next];
+            }
+            // Kind 2 (or malformed): the triplet (± colour space) has nowhere
+            // to live in a palette-index pen — consume the group, keep the pen.
+            return [$this->fg, $this->bg, $this->attrs, $next];
+        }
         $kind = $params[$i + 1] ?? -1;
         if ($kind === 5) {
             $index = $params[$i + 2] ?? 0;
@@ -413,15 +442,38 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
-     * Handle 58 (underline colour): parse-and-discard the extended form so
-     * its components never run as independent SGRs. 59 resets it — also a
-     * no-op here, as the pen stores nothing to reset.
+     * Last flat slot index of the colon group starting at $i — identical
+     * reading of {@see \SugarCraft\Ansi\Parser\Parser::subparams()} as the
+     * emulator's {@see \SugarCraft\Vt\Handler\SgrHandler}.
      *
      * @param list<int> $params
+     * @param list<bool> $subs
+     */
+    private function colonGroupEnd(int $i, array $params, array $subs): int
+    {
+        $end = $i;
+        $n = count($params);
+        while ($end + 1 < $n && ($subs[$end] ?? false) === true) {
+            $end++;
+        }
+        return $end;
+    }
+
+    /**
+     * Handle 58 (underline colour): parse-and-discard the extended form so
+     * its components never run as independent SGRs — colon groups included
+     * (consume to the group end, mirroring {@see sgrExtended()}).
+     * 59 resets it — also a no-op here, as the pen stores nothing to reset.
+     *
+     * @param list<int> $params
+     * @param list<bool>|null $subs
      * @return array{0: int, 1: int, 2: int, 3: int}
      */
-    private function sgrExtendedDiscard(array $params, int $i): array
+    private function sgrExtendedDiscard(array $params, int $i, ?array $subs): array
     {
+        if ($subs !== null && ($subs[$i] ?? false) === true) {
+            return [$this->fg, $this->bg, $this->attrs, $this->colonGroupEnd($i, $params, $subs) + 1];
+        }
         $kind = $params[$i + 1] ?? -1;
         if ($kind === 5) {
             return [$this->fg, $this->bg, $this->attrs, $i + 3];
