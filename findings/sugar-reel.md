@@ -50,6 +50,90 @@ audio-header passthrough gap (documented in `sugar-reel/README.md`,
 
 ---
 
+## Resolution status — branch `ai/reel-findings-closeout`
+
+Same legend as the blocks above.
+
+Resolved by this PR: **✅ #8, ✅ #13, ✅ #44, ✅ #45** (numbered 44/45 in the
+summary table as rows 43/44), **◐ #52** (audio-header passthrough + debounced
+SIGWINCH rebuild), **◐ #9** (premise corrected — see below — and the parity
+contract made exact; the deletion the finding asked for was NOT performed).
+
+- **#8** — `Player::mutate()` already used `array_key_exists()` per field on
+  master (the earlier `w4` note); what was missing was the *why* and any test.
+  The false comment is gone, `mutate()` now documents both failure modes of `??`
+  (a nullable field could never be cleared; falsy-but-present values survived by
+  operator accident), and `tests/PlayerMutateTest.php` pins `ended => false` /
+  `frameIndex => 0` / `videoTime => 0.0` / `paused => false` pass-through,
+  explicit-`null` clearing, omitted-key preservation and the pinned
+  `videoPath`/`headers`/`frameBudgetMs` fields — plus the three real update paths
+  that depend on it.
+- **#9** — the finding's premise is **inverted**, so the requested deletion was
+  not made. The inline block inside `Player::frameToBuffer()` is the LIVE runtime
+  path for `Mode::HalfBlock` (`view()` routes everything but the four direct-render
+  modes through it); the NEVER-reached duplicate is the separate
+  `SugarCraft\Reel\Render\HalfBlockRenderer` class. Deleting the inline copy would
+  rewrite every HalfBlock snapshot: the two paths agree on colour but not on bytes
+  (`\x1b[0;38;2;R;G;B;48;2;R;G;Bm▀` vs a per-cell reset
+  `\x1b[38;2;…m\x1b[48;2;…m▀\x1b[0m`), and the mosaic path additionally resamples
+  through `RgbFrame::toGd()` + `PixelGrid` and needs ext-gd, which this lib does not
+  require. Per the brief's stop-and-report guard, the duplication is instead *pinned
+  honest*: `tests/Support/HalfBlockStream.php` decodes both outputs into per-cell
+  `{glyph,fg,bg}` triples, `tests/HalfBlockParityTest.php` asserts cell-by-cell
+  equality over eight geometries (the old test only compared ▀ counts), and it
+  documents the one real divergence found — an odd *pixel*-height frame pads vs
+  resamples — which is unreachable from a conforming decoder (HalfBlock decodes at
+  `cellsH × rowsPerCell`, always even) and therefore pinned rather than reconciled.
+- **#13** — the `m` branch now compares a `decodeGeometry()` signature
+  (`isGraphics()` + `colsPerCell()` + `rowsPerCell()`, the only three things a
+  decoder consults the mode for) and rebuilds only on a crossing. Equal-geometry
+  hops (Ascii↔Ansi256↔TrueColor, Sixel↔Kitty↔Iterm2) swap mode + renderer and carry
+  the decoder and the frame in hand over untouched. `tests/ModeCycleTest.php` counts
+  opens/reopens/closes on the injected fakes — a full five-mode cycle went from 5
+  rebuilds to 3 — and asserts `assertSame` identity on the surviving decoder.
+- **#44** — `Player::rgbToStyleColor()` was the last caller still inlining the
+  packing expression; it now goes through `Render\Color::pack()`, the helper
+  `RgbFrame::toGd()` and `Player::quarterCell()` already used. Parity is pinned
+  against the verbatim legacy expression over a 729-point corner/edge lattice and a
+  stride walk of the whole 0x000000–0xFFFFFF range, plus a cross-path test that
+  `rgbToStyleColor()` and `imagecolorat()` agree on 31 named/grey colours.
+- **#45** — new `src/Support/FfmpegCommandBuilder.php` owns the shared ffmpeg-family
+  argv pieces (network predicate, reconnect flags, header input flags, mpv
+  `--http-header-fields`, `-ss` seek, ms→`s.mmm`), with `FfmpegDecoder::buildCommand()`
+  and `AudioPlayer::buildCommand()` both delegating. Byte-identity is proven against
+  a golden captured from the **pre-refactor** code (`tests/Support/argv-golden-pre-refactor.json`,
+  14 cases — 8 decoder + 3 ffplay + 3 mpv, host binaries normalised), asserted by `tests/Support/ArgvGoldenTest.php`.
+- **#52 (partial)** — two pieces closed:
+  (a) *audio-header passthrough* — `HttpHeaders::toMpvHeaderFields()`/
+  `toFfmpegHeaderString()` finally reach the audio players: `AudioPlayer` gained a
+  4th `$headers` ctor param and `Player`'s audio-factory sites (now consolidated in
+  `Player::defaultAudioFactory()`) pass `$this->headers`, so a signed media URL no
+  longer plays video over an
+  unauthenticated `ffplay`/`mpv`. A local path downgrades to no headers with a
+  logged note (`header.ignored_local_source.audio`, credential-redacted — round-2
+  review NEW-3 widened the mask to the whole authority userinfo so a multi-`@`
+  non-conforming URL leaks no fragment, pinned by
+  `testRedactCredentialsMasksWholeAuthorityUserinfo`; round-2 NEW-1 stubs the local
+  drop test's PATH binaries so its security assertions run on hosts without any
+  media tooling — the suite is green end-to-end on a PATH farm with
+  ffmpeg/ffprobe/ffplay/mpv hidden).
+  (b) *SIGWINCH* — the rebuild no longer runs once per event on the hot path.
+  A `WindowSizeMsg` now clamps, records the target in the new `pendingResize` slot
+  and returns a 50 ms one-shot timer; the spawn happens in `applyPendingResize()`
+  when the burst settles, so a dragged resize costs one rebuild instead of one per
+  reflow, a superseded or snapped-back timer applies nothing, and `stop()` latches
+  the player against a late rebuild. NOTE (round-1 review M4): the deferred apply is
+  still synchronous work inside `update()` — the win is the COLLAPSE (1 stall per burst
+  instead of N), not off-loop concurrency. No new `proc_open` site: the apply
+  reuses `rebuildDecoderAt()`, which still closes the child it replaces (pinned by
+  `testDeferredResizeClosesTheSupersededDecoder`).
+  **Residual, still open (larger than this wave):** the decode loop itself remains
+  synchronous — `Player::updateTick()` → `Decoder::next()` still does a bounded but
+  blocking pipe read on the loop thread, and `Reel::play()` still owns a blocking
+  `Program::run()`. Full `Loop::addReadStream()` integration (#53–#57) is untouched.
+
+---
+
 ## Critical Issues (file:line format)
 
 ### ✅ 1. `AudioPlayer.php:122-128` — SIGSTOP pause mechanism likely ineffective
@@ -191,7 +275,29 @@ if ($this->audioPlayer !== null) {
 ```
 Extract this to `private function rebuildAudio(?int $startMs): ?AudioPlayer`.
 
-### 8. `Player.php:1189-1217` — `mutate()` accepts ALL 18 Player fields; silent `??` means `false`/`0` can't be passed through
+### ✅ 8. `Player.php:1189-1217` — `mutate()` accepts ALL 18 Player fields; silent `??` means `false`/`0` can't be passed through
+
+> **Resolved (branch `ai/reel-findings-closeout`).** Per-field `array_key_exists()`
+> (the operator change landed on master earlier; this branch removed the comment that
+> still *claimed* `??` was fine and documented the real reason), plus
+> `tests/PlayerMutateTest.php` — 10 tests covering falsy pass-through, explicit-`null`
+> clearing, omitted-key preservation, pinned fields, and the seek/loop paths that rely
+> on it. See the branch status block above. **Residual:** the wide signature itself
+> (all 18→25 fields in one map) is unchanged — that is finding #18's constructor problem.
+>
+> **MUTATION PROOF (round-1 review M3, actually run):** reverting the `renderer` leg
+> of `mutate()` from `array_key_exists('renderer', $changes) ? $changes['renderer'] :
+> $this->renderer` back to `$changes['renderer'] ?? $this->renderer` turns exactly the
+> discriminating test RED — `??` passes falsy values through, so the falsy legs cannot
+> discriminate the operators (they pin the contract against a future `?:`/`!empty()`
+> rewrite instead). Observed output:
+>
+> ```
+> 1) SugarCraft\Reel\Tests\PlayerMutateTest::testExplicitNullClearsNullableFields
+> the renderer key must apply as given
+> Failed asserting that SugarCraft\Reel\Render\AsciiRenderer Object #4692 (…) is null.
+> FAILURES!  Tests: 1, Assertions: 6, Failures: 1.
+> ```
 
 ```php
 private function mutate(array $changes): self
@@ -205,7 +311,29 @@ private function mutate(array $changes): self
 ```
 The comment at line 1206-1207 acknowledges this: "?? is null-coalescing, so passing ended => false / frameIndex => 0 through mutate() is honourée (false/0 are not null)". This is a footgun — any caller who writes `$this->mutate(['ended' => false])` will be surprised. Use `array_key_exists()` or a dedicated builder instead.
 
-### 9. `Player.php:664-693` — HalfBlock inline rendering duplicates MosaicHalfBlockRenderer path
+### ◐ 9. `Player.php:664-693` — HalfBlock inline rendering duplicates MosaicHalfBlockRenderer path
+
+> **Premise inverted; deletion deliberately NOT performed (branch
+> `ai/reel-findings-closeout`).** The finding has the two paths backwards. The inline
+> block in `frameToBuffer()` is the LIVE runtime path for `Mode::HalfBlock`; the
+> NEVER-reached copy is the `Render\HalfBlockRenderer` class (`RendererFactory` maps
+> `Mode::HalfBlock` to it, but `view()` never asks the factory for that mode). Routing
+> `view()` onto the renderer is not output-preserving: inline emits one combined SGR
+> per cell (`\x1b[0;38;2;255;0;0;48;2;0;128;0m▀`), the mosaic path emits a per-cell
+> reset (`\x1b[38;2;255;0;0m\x1b[48;2;0;128;0m▀\x1b[0m`) and additionally resamples via
+> `RgbFrame::toGd()`/`PixelGrid`, which needs ext-gd — a dependency this lib does not
+> declare. What this branch did instead: `tests/Support/HalfBlockStream.php` decodes
+> either output into `{glyph,fg,bg}` triples, the new `tests/HalfBlockParityTest.php`
+> asserts cell-by-cell equality over eight geometries plus the two-tone fg/bg rule,
+> and the pre-existing `testHalfBlockInlineMatchesMosaicRenderer` was strengthened
+> from "same number of ▀ glyphs" (vacuous) to exact per-cell equality; the inline
+> block's and the renderer class's comments now state which path is which. Found and
+> *pinned* one genuine divergence: for an odd pixel height the inline path pads the
+> orphan row with black while the mosaic resamples both channels — unreachable from a
+> conforming decoder (HalfBlock decodes at `cellsH × 2`), so documented, not
+> reconciled. **Residual:** the duplication itself remains, now as a tested contract
+> rather than an untested accident; collapsing it means picking one byte format and
+> regenerating every HalfBlock golden.
 
 The `frameToBuffer()` method (lines 664-693) has a dedicated inline HalfBlock rendering path that mirrors exactly what `HalfBlockRenderer` (which delegates to `candy-mosaic`) does. The test `testHalfBlockInlineMatchesMosaicRenderer` guards parity, but this is fragile — any change to the inline math (luma, color packing, glyph) won't automatically update the mosaic path and vice versa. The inline path is marked "NEVER reached by the Player runtime" per the comment at line 41.
 
@@ -257,7 +385,17 @@ if (!self::isNetworkSource($source) && !is_file($source)) {
 ```
 Between `is_file()` returning true and `proc_open()` executing, the file could be deleted. This is a TOCTOU race. Acceptable for this use case, but worth documenting.
 
-### 13. `Player.php:535-572` — Mode cycle rebuilds decoder and renderer on every `m` keypress
+### ✅ 13. `Player.php:535-572` — Mode cycle rebuilds decoder and renderer on every `m` keypress
+
+> **Resolved (branch `ai/reel-findings-closeout`).** The `m` branch now computes
+> `decodeGeometry($mode)` — an opaque `graphics|text : COLSxROWS` signature built from
+> the only three things a decoder ever consults the mode for (`isGraphics()`,
+> `colsPerCell()`, `rowsPerCell()`, proven against `FfmpegDecoder::open()` and
+> `GifDecoder::open()`) — and on an equal signature returns
+> `mutate(['mode','renderer'])` only: the decoder object and the frame already in hand
+> are carried over, so no child is closed and none is spawned. A full five-mode cycle
+> went from 5 rebuilds to 3 (`tests/ModeCycleTest.php`, using open/reopen/close counts
+> on the injected fakes — no ffmpeg required).
 
 ```php
 if ($msg->type === KeyType::Char && $msg->rune === 'm') {
@@ -496,11 +634,42 @@ if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || ...) {
 ```
 This `renderDirect` vs `frameToBuffer` branch is a dispatch on mode. This could be a `RendererStrategy` pattern injected into the Player, reducing the `view()` method complexity.
 
-### 44. Color packing `(($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF)` — appears in multiple places
+### ✅ 44. Color packing `(($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF)` — appears in multiple places
+
+> **Resolved (branch `ai/reel-findings-closeout`).** `Render\Color::pack()` was already
+> the helper `RgbFrame::toGd()` and `Player::quarterCell()` used; `Player::rgbToStyleColor()`
+> was the last site still re-deriving the expression and now calls `Color::pack()` too; the
+> round-1 review caught two more unmasked inlinings in `Render/AsciiRenderer.php` (the
+> TrueColor dedup sentinel `$lastFg` and `emitColorCode()`'s `$fg`) which are routed through
+> `Color::pack()` as well — so there is exactly one packing implementation in the lib, and
+> `grep -rn '<< 16' src/` now only hits `Color.php` itself. Parity is pinned three ways:
+> `ColorTest::testPackMatchesLegacyFormulaAcrossCornerAndEdgeLattice` (729-point lattice vs
+> the verbatim legacy expression), `testPackCoversFullRangeWithoutCollision` (stride walk of
+> the whole 24-bit space, unpack + collision-free) and `Render/ColorPackingParityTest.php`,
+> which asserts `rgbToStyleColor()` and `imagecolorat()` agree for 31 named/grey colours,
+> plus an out-of-byte-channel leg pinning `AsciiRenderer::emitColorCode()`'s sentinel to
+> `Color::pack()` exactly (only the masked formula survives it).
 
 In `Player::rgbToStyleColor()` and `RgbFrame::toGd()`. Extract to `Color::pack()` or a shared utility.
 
-### 45. `FfmpegDecoder::buildCommand()` duplicated partially in `AudioPlayer::buildCommand()`
+### ✅ 45. `FfmpegDecoder::buildCommand()` duplicated partially in `AudioPlayer::buildCommand()`
+
+> **Resolved (branch `ai/reel-findings-closeout`).** New
+> `src/Support/FfmpegCommandBuilder.php` owns the shared argv pieces:
+> `isNetworkSource()` (the single `#^https?://#i` predicate both call sites and
+> `DecoderFactory` now agree on), `networkReconnectFlags()`, `headerInputFlags()`
+> (`-headers`/`-user_agent`), `mpvHeaderFieldFlags()` (`--http-header-fields=` per pair),
+> `inputSeekFlag()`, `secondsFromMillis()`, and the two audio shapes `ffplayAudioCommand()`
+> / `mpvAudioCommand()`. `FfmpegDecoder::buildCommand()` keeps its own
+> `-hide_banner -loglevel error` prefix and the output-format/`-vf` scale+pad logic (those
+> are decode-specific, not shared), `AudioPlayer::buildCommand()` keeps the `Probe`
+> resolution. Every value still passes through `escapeshellarg()` where it is used as a
+> shell word. The extraction is proven **byte-identical on argv** against a golden captured
+> from the pre-refactor code (`tests/Support/argv-golden-pre-refactor.json`, 8 decoder +
+> 3 ffplay + 3 mpv cases, binary slot normalised to `/usr/bin/{ffmpeg,ffplay,mpv}`), asserted by
+> `tests/Support/ArgvGoldenTest.php` — whose call-site legs run against stubbed PATH
+> binaries, so the pinning holds even on hosts without ffplay or mpv installed. That builder is also what made the #52 audio-header
+> passthrough a two-line change.
 
 Both build ffmpeg-family command arrays. The ffplay path in `AudioPlayer` is similar to the ffmpeg path in `FfmpegDecoder`. The reconnect options, the `-ss` input-seek approach, and the array-based command building are all similar. A shared `FfmpegCommandBuilder` utility could reduce duplication.
 
@@ -566,6 +735,46 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 
 **Improvement**: Wrap the pipe read in a non-blocking `stream_select()` with a timeout, or use ReactPHP's `Loop::addReadStream()` for async I/O on the pipe.
 
+> **Second piece closed (branch `ai/reel-findings-closeout`).** The pipe read itself
+> was already bounded (previous branch); this branch moves the *spawn* of the resize
+> rebuild out of the signal path: a `WindowSizeMsg` now only records the clamped target in
+> `Player::$pendingResize` and returns a 50 ms one-shot `Cmd::tick()`; the rebuild runs
+> in `applyPendingResize()` once the burst settles, so a drag-resize costs **one**
+> ffmpeg respawn instead of one per reflow, a snap-back to the applied geometry
+> CANCELS the deferred target (`testSnapbackResizeCancelsThePendingRebuild`), and
+> `stop()` latches the instance so an in-flight debounce timer can never resurrect a
+> torn-down decoder (`testStopCancelsAnInFlightDebounceTimer`), and — per round-3
+> review R3-1 — the latch also refuses the TICK path, so a stopped looping player's
+> in-flight `TickMsg` can no longer reach end-of-stream and respawn frame 0 through
+> `onReachedEnd()` (`testStopSilencesALoopingPlaybackTick`). A timer whose geometry
+> already landed applies nothing (`tests/PlayerTest::testResizeStormRebuildsTheDecoderOnce`,
+> `testStaleDebounceTimerAppliesNothing`, `testPendingResizeSurvivesAnInterleavedTick`,
+> `testResizeCommandDispatchesTheRebuildMessage`). No new `proc_open` site, so the
+> fail-closed child-lifetime roster is unchanged (`tools/check-child-lifetimes.php` rc=0),
+> and the apply still closes the child it replaces.
+>
+> **HONEST SCOPE (round-1 review M4):** this collapse is a COST win, not concurrency.
+> `applyPendingResize()` still performs `close()` + `DecoderFactory::create()` — the
+> `proc_open` and the forward decode to the playhead — synchronously inside `update()`
+> when the deferred message lands; the loop still stalls for exactly one spawn. What
+> changed is the count (one stall per burst instead of N), not the synchrony.
+>
+> **STILL OPEN — the remainder of this finding, deliberately out of scope for this
+> wave:** the decode loop is still blocking-synchronous. `Player::updateTick()` calls
+> `Decoder::next()` on the loop thread (bounded reads, but bounded ≠ async),
+> `Reel::play()` still runs a blocking `Program::run()`, and there is no
+> `Loop::addReadStream()` registration for the ffmpeg stdout pipe. Follow-ups #53–#57
+> track exactly that; the *async decode pump* is the work item, not the resize.
+>
+> **Also closed here (was untracked in this file):** the audio-header passthrough gap
+> noted in the `ai/w4-reel` block. `AudioPlayer` now takes `$headers` (4th ctor param,
+> after the injectable `$clock`) and `Player`'s three audio-factory sites pass
+> `$this->headers`, so `HttpHeaders::toMpvHeaderFields()` / `toFfmpegHeaderString()`
+> finally reach the `ffplay`/`mpv` argv: signed media URLs no longer play video over an
+> unauthenticated audio child. A non-network source drops the headers and logs
+> `header.ignored_local_source`. Covered by `tests/AudioHeaderPassthroughTest.php`
+> (fake builders + a never-spawning `HeaderSpyAudioPlayer`, so no audio device needed).
+
 ### 53. AudioPlayer uses blocking `proc_open()`
 
 `AudioPlayer::start()` calls `proc_open()` and immediately returns. But the `isPlaying()` check uses `proc_get_status()` which can also block briefly. More importantly, if the audio subprocess becomes unresponsive, there is no async recovery mechanism.
@@ -620,12 +829,12 @@ This is a blocking read. Using `Loop::addReadStream($this->stdout, fn($sock) => 
 | High | 5 | /fake test path embedded in rebuildDecoderAt() | Player.php:902-920 | High |
 | High | 6 | frameAt() creates expensive orphaned decoder | Player.php:1089-1099 | Medium |
 | High | 7 | withSeek() and seekToSeconds() duplicate audio rebuild | Player.php:931-942, 1058-1068 | Low |
-| High | 8 | mutate() can't pass false/0 values | Player.php:1189-1217 | Medium |
-| High | 9 | HalfBlock inline path duplicates Mosaic path | Player.php:664-693 | Medium |
+| High | 8 | ✅ mutate() can't pass false/0 values — fixed (`array_key_exists` + `PlayerMutateTest`) | Player.php:1189-1217 | Medium |
+| High | 9 | ◐ HalfBlock inline path duplicates Mosaic path — premise inverted; duplication pinned by per-cell parity, not deleted | Player.php:664-693 | Medium |
 | Medium | 10 | GifDecoder silently falls back to empty on decode failure | GifDecoder.php:57-77 | Low |
 | Medium | 11 | PNG buffer grows unbounded on malformed frame | FfmpegDecoder.php:313-333 | Medium |
 | Medium | 12 | TOCTOU race on is_file() before proc_open | FfmpegDecoder.php:120-122 | Low |
-| Medium | 13 | Mode switch closes/reopens decoder unnecessarily | Player.php:563 | Medium |
+| Medium | 13 | ✅ Mode switch closes/reopens decoder unnecessarily — fixed (geometry signature; `ModeCycleTest`) | Player.php:563 | Medium |
 | Medium | 14 | Inconsistent pixel access guards in AsciiRenderer vs Player | Player.php:819-826, AsciiRenderer.php:52-58 | Low |
 | Medium | 15 | renderPlaceholder() not memoized | Player.php:866-875 | Low |
 | Medium | 16 | Subtitle file not found silently ignored | Reel.php:245-251 | Low |
@@ -655,8 +864,8 @@ This is a blocking read. Using `Loop::addReadStream($this->stdout, fn($sock) => 
 | Refactor | 40 | cellDimensions() redundant on FrameRenderer | Render/FrameRenderer.php | Low |
 | Refactor | 41 | DecoderFactory create+open two-step | DecoderFactory.php | Low |
 | Refactor | 42 | renderDirect vs frameToBuffer dispatch | Player.php:604-608 | Medium |
-| Refactor | 43 | Color packing utility | — | Low |
-| Refactor | 44 | FfmpegCommandBuilder shared utility | — | Medium |
+| Refactor | 43 | ✅ Color packing utility — `Render\Color::pack()` is the single site | — | Low |
+| Refactor | 44 | ✅ FfmpegCommandBuilder shared utility — `src/Support/FfmpegCommandBuilder.php`, argv golden | — | Medium |
 | Async | 45 | No timeout on ffmpeg pipe fread | FfmpegDecoder.php:280 | Medium |
 | Async | 46 | No ReactPHP Loop integration for decoder | FfmpegDecoder.php | High |
 | Async | 47 | No async generator for frame delivery | FfmpegDecoder.php:338-343 | High |

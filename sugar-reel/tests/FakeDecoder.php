@@ -24,6 +24,12 @@ class FakeDecoder implements Decoder
     /** How many times reopen() was called — observable proof a seek used it. */
     private int $reopenCount = 0;
 
+    /** How many times open() was called — proves a mode switch did NOT re-spawn. */
+    private int $openCount = 0;
+
+    /** How many times close() was called — a re-spawn always closes first. */
+    private int $closeCount = 0;
+
     /** $startSec of the most recent reopen() — lets tests verify seek targets. */
     private ?float $lastReopenStartSec = null;
 
@@ -51,6 +57,7 @@ class FakeDecoder implements Decoder
         $this->opened = true;
         $this->everOpened = true;
         $this->index = 0;
+        $this->openCount++;
     }
 
     /**
@@ -85,6 +92,7 @@ class FakeDecoder implements Decoder
     {
         $this->opened = false;
         $this->everOpened = true; // Mark as "was opened then closed"
+        $this->closeCount++;
     }
 
     public function getIterator(): \Generator
@@ -118,6 +126,27 @@ class FakeDecoder implements Decoder
     public function reopenCount(): int
     {
         return $this->reopenCount;
+    }
+
+    /**
+     * Number of open() calls since construction. Together with reopenCount()/
+     * closeCount() this is the observable proof for finding #13: a mode cycle
+     * that keeps the decode geometry must leave all three counters untouched,
+     * because a decoder that survives the switch never re-spawns its source.
+     */
+    public function openCount(): int
+    {
+        return $this->openCount;
+    }
+
+    /**
+     * Number of close() calls since construction. A legitimate rebuild closes the
+     * old process first (finding F21: no leaked ffmpeg), so a nonzero count here
+     * always has a matching reopen()/re-spawn behind it.
+     */
+    public function closeCount(): int
+    {
+        return $this->closeCount;
     }
 
     /**

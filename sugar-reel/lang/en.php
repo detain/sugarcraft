@@ -26,6 +26,7 @@ return [
     'header.malformed_field' => 'Malformed HTTP header field {field}: expected "Name: value"',
     'header.openurl_positional' => 'sugar-reel: Reel::openUrl() second argument is HTTP headers as a name => value map, not a positional list — a list looks like the old allowedHosts position; pass headers as name => value entries and the host allowlist as the named allowedHosts: argument',
     'header.ignored_local_source' => 'sugar-reel: ignoring {count} HTTP request header(s) — the decoder reads "{source}" without an HTTP request of its own, so there is nothing for them to ride on',
+    'header.ignored_local_source.audio' => 'sugar-reel: ignoring {count} HTTP request header(s) — the audio companion plays "{source}" without an HTTP request of its own, so there is nothing for them to ride on',
     'ssrf.no_allowlist' => 'sugar-reel: openUrl() to remote host "{host}" without a host allowlist — the URL is handed to ffmpeg, which resolves DNS and follows redirects and can reach internal/link-local hosts (SSRF surface). Restrict it via openUrl($url, allowedHosts: [...]) or withAllowedHosts([...]).',
 
     // Player status messages

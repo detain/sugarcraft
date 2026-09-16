@@ -6,6 +6,7 @@ namespace SugarCraft\Reel\Render;
 
 use SugarCraft\Palette\Color;
 use SugarCraft\Reel\Decode\RgbFrame;
+use SugarCraft\Reel\Render\Color as RgbColor;
 
 /**
  * ASCII / ANSI renderer — maps each pixel to a grayscale character
@@ -67,7 +68,7 @@ final class AsciiRenderer implements FrameRenderer
                 };
                 // Update lastFg after emitting (even for Ascii which doesn't change it).
                 if ($mode === Mode::TrueColor) {
-                    $lastFg = ($r << 16) | ($g << 8) | $b;
+                    $lastFg = RgbColor::pack($r, $g, $b);
                 } elseif ($mode === Mode::Ansi256) {
                     $lastFg = (new Color($r, $g, $b))->toAnsi256Index();
                 }
@@ -89,7 +90,7 @@ final class AsciiRenderer implements FrameRenderer
      */
     private function emitColorCode(int $r, int $g, int $b, mixed $lastFg): string
     {
-        $fg = ($r << 16) | ($g << 8) | $b;
+        $fg = RgbColor::pack($r, $g, $b);
         if ($fg === $lastFg) {
             return '';
         }
