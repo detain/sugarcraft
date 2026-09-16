@@ -680,10 +680,13 @@ final class ScreenHandler implements SubparamsAwareHandler
      *
      * VT500 §DECSC saves cursor position, active SGR rendition, the
      * G0..G3 charset designations (SCS state) and DECOM. The position
-     * half rides on the Cursor value object (`savedRow`/`savedCol`), so
-     * the slot survives DECSTR/DECALN exactly as before; the remaining
-     * three halves land in the `generalSaved*` fields. The AUX alt-screen
-     * slot is untouched — the two saves are independent.
+     * half rides on the Cursor value object (`savedRow`/`savedCol`); the
+     * remaining three halves land in the `generalSaved*` fields. DECALN
+     * preserves this whole slot, but DECSTR OVERWRITES it with home and
+     * re-saves the companions from the post-reset default state — xterm's
+     * DECSTR branch issues `CursorSave` then forces `sc[whichBuf].row/.col`
+     * to 0 (`charproc.c:14559-14561`); see {@see self::softReset()}. The AUX
+     * alt-screen slot is untouched — the two saves are independent.
      */
     private function saveCursor(): void
     {
@@ -1217,18 +1220,35 @@ final class ScreenHandler implements SubparamsAwareHandler
      *
      * Design choice — xterm's ctlseqs records DECSTR in a single line;
      * VT510 Table 5-9 enumerates DEC hardware, whose variant resets more.
-     * We follow a deliberately narrower subset than xterm-411 where the
-     * buffer geometry is concerned (see DIVERGENCE), while matching xterm
-     * on cursor shape.
+     * We now match xterm-411 on the full soft-reset subset (see RESETS vs
+     * PRESERVES below), having closed the earlier narrower-subset divergence
+     * on margins, character sets and the DECSC slot. The one place we still
+     * differ from xterm is the VISIBLE cursor: xterm's DECSTR leaves it in
+     * place (only the `if (full)` branch calls `CursorSet(0,0)`,
+     * `charproc.c:14546`), while candy-vt homes it — a pre-existing choice,
+     * orthogonal to the four in-scope buffer-geometry items (margins, charsets
+     * and the DECSC slot now reset; tab stops left preserved — all four now
+     * matching xterm), pinned by the reset matrix.
      *
-     * Resets: SGR pen, cursor home + visible, DECOM off, DECAWM back to its
-     * power-on ON, sync output off (flushing whatever the queue held), wrap
-     * flag dropped, and the DECSCUSR cursor shape — on BOTH
-     * {@see Cursor::$shape} and {@see Mode::$cursorShape}.
-     * SCOPED SUBSET: the DEC-private extension modes outside this list —
-     * mouse tracking, bracketed paste, focus reporting, alt screen — SURVIVE.
-     * Cursor shape is NOT in that list; it is reset, for the source-backed
-     * reason below.
+     * RESETS — everything in this list matches xterm-411's DECSTR except the
+     * visible-cursor home, the declared divergence disclosed above:
+     * SGR pen, cursor home + visible,
+     * DECOM off, DECAWM back to its power-on ON, sync output off (flushing
+     * whatever the queue held), wrap flag dropped, the DECSCUSR cursor shape on
+     * BOTH {@see Cursor::$shape} and {@see Mode::$cursorShape}, the scrolling
+     * region to full screen, the character-set designations (G0/G1 to ASCII,
+     * G2/G3 to the supplemental-set default that candy-vt holds as ASCII, GL→G0,
+     * single shift dropped), and the DECSC saved slot to home — with its
+     * rendition companions re-saved from the post-reset state, exactly what
+     * xterm's `CursorSave` leaves in `sc[whichBuf]` for the state this port
+     * models (xterm's `wrap_flag`/`curgr` members have no candy-vt counterpart).
+     * PRESERVES: screen contents, scrollback, tab stops, line rendition
+     * (DECDHL/DECSWL/DECDWL), the alt screen, and the DEC-private extension
+     * modes outside the list above (mouse tracking, bracketed paste, focus
+     * reporting) — tab stops and the scrollback preserved because xterm gates
+     * them behind `full`/`saved` arguments DECSTR passes False, not a divergence.
+     * Cursor shape is NOT in the preserve list; it is reset, for the
+     * source-backed reason below.
      *
      * CURSOR SHAPE: xterm resets DECSCUSR on the soft reset. `CASE_DECSTR`
      * (`charproc.c:6154-6156`) calls `VTReset(xw, False, False)`, which runs
@@ -1258,19 +1278,19 @@ final class ScreenHandler implements SubparamsAwareHandler
      * {@see self::__construct()}, and no rasterizer reads this Cursor class,
      * so this is state-integrity work, not a visible-drawing fix.
      *
-     * DIVERGENCE (our choice, not xterm's): xterm also resets the scrolling
-     * region (`resetMarginMode(xw)`, `charproc.c:14398`, likewise above the
-     * `if (full)` gate), the character-set designations
-     * (`resetCharsets(screen)`, `charproc.c:14410`, same side of the gate),
-     * and the DECSC saved cursor — the DECSTR branch itself issues
-     * `CursorSave(xw)` then forces `screen->sc[screen->whichBuf].row` and
-     * `.col` to 0 (`charproc.c:14559-14561`), i.e. it overwrites the save
-     * slot with home rather than preserving it. candy-vt keeps margins,
-     * tab stops, charsets, the saved cursor and the scrollback across
-     * DECSTR; only the items in the Resets list above move. Tab stops and
-     * the scrollback agree with xterm, whose `TabReset` is inside
-     * `if (full)` (`charproc.c:14449`) and whose scrollback flush is gated
-     * on the separate `saved` argument (`charproc.c:14372-14375`).
+     * RESOLVED DIVERGENCE: an earlier revision preserved the scrolling region,
+     * the character-set designations and the DECSC saved cursor across DECSTR as
+     * a deliberately narrower subset. That was a divergence from xterm, whose
+     * soft reset runs `resetMarginMode(xw)` (`charproc.c:14398`) and
+     * `resetCharsets(screen)` (`charproc.c:14410`) above the RIS-only
+     * `if (full)` gate, and whose DECSTR branch issues `CursorSave(xw)` then
+     * forces `screen->sc[screen->whichBuf].row` and `.col` to 0
+     * (`charproc.c:14559-14561`) — overwriting the save slot with home. Those
+     * three are now reset to match. What remains untouched — tab stops and the
+     * scrollback — AGREES with xterm rather than diverging: `TabReset` sits
+     * inside `if (full)` (`charproc.c:14449`) and the scrollback flush is gated
+     * on the separate `saved` argument (`charproc.c:14372-14375`) that DECSTR
+     * passes False.
      *
      * LINE RENDITION (`ESC # 3`–`ESC # 6`): DECDHL/DECSWL/DECDWL act on the
      * cursor's current line the instant they arrive — they stamp a per-cell
@@ -1291,18 +1311,43 @@ final class ScreenHandler implements SubparamsAwareHandler
             // Exiting synchronized output — same flush rule as CSI 2026 l.
             $this->flushPendingMutations();
         }
+
+        // Scrolling region back to full screen. xterm's `CASE_DECSTR` routes to
+        // `VTReset(xw, False, False)` (`charproc.c:6154-6156`), and
+        // `ReallyReset()` runs `resetMarginMode(xw)` (`charproc.c:14398`)
+        // ABOVE the RIS-only `if (full)` gate at `charproc.c:14432` — so the
+        // soft reset resets top/bottom margins exactly as the hard one does.
+        $this->scrollRegionTop = 0;
+        $this->scrollRegionBottom = $this->buffer->rows - 1;
+
         $this->sgr = Sgr::empty();
-        // `shape: 0` here equals Cursor's own default, so deleting it would
-        // change nothing today — it is written explicitly so the reset is
-        // legible at the call site and survives a future change to that
-        // default. The behavioural half of this reset is the
-        // ->withCursorShape(0) on the mode below. See the CURSOR SHAPE
-        // paragraph above for why xterm mandates a reset at all.
+
+        // Character-set designations back to their reset defaults, GL to G0, any
+        // armed single shift dropped. xterm runs `resetCharsets(screen)`
+        // (`charproc.c:14410`), likewise above the gate: `initCharset(0/1,
+        // nrc_ASCII)` sends G0/G1 to ASCII (`charproc.c:1271-1272`), G2/G3 to
+        // `dft_upss` (`charproc.c:1273-1274`) which UTF-8 forces back to ASCII
+        // (`charproc.c:1259-1261` — this port is UTF-8 only), and `curgl = 0` /
+        // `curgr = 2` / `curss = 0` (`charproc.c:1277-1279`) drop the GL/GR/SS
+        // invocations. candy-vt models no UPSS/GR resource, so all four GL slots
+        // land on ASCII exactly as hardReset()/DECALN already leave them, and the
+        // single shift is dropped.
+        $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
+        $this->gl = 0;
+        $this->singleShift = null;
+
+        // DECSC slot home. xterm's DECSTR branch (the `else` of `if (full)`)
+        // issues `CursorSave(xw)` then forces `screen->sc[whichBuf].row` and
+        // `.col` to 0 (`charproc.c:14559-14561`) — it OVERWRITES the saved
+        // position with home rather than preserving it, so `savedRow`/`savedCol`
+        // go to 0 (a real save), NOT the carried-through value this method used
+        // to keep. `shape: 0` equals Cursor's own default (see CURSOR SHAPE
+        // above); the visible cursor homes as before.
         $this->cursor = new Cursor(
             visible: true,
             shape: 0,
-            savedRow: $this->cursor->savedRow,
-            savedCol: $this->cursor->savedCol,
+            savedRow: 0,
+            savedCol: 0,
         );
         $this->wrapPending = false;
         $this->mode = $this->mode
@@ -1311,6 +1356,33 @@ final class ScreenHandler implements SubparamsAwareHandler
             ->withCursorVisible(true)
             ->withSyncUpdate(false)
             ->withCursorShape(0);
+
+        // The DECSC slot's rendition companions — VT500 §DECSC also saves SGR,
+        // G0..G3, GL and DECOM, and xterm keeps those in the very same `sc[]`
+        // struct that DECSTR's `CursorSave` just overwrote (cursor.c:419-423
+        // indexes `sc[whichBuf]`, so the OTHER buffer's slot — ours `parkedGeneral`
+        // — is not written here either). Because xterm issues a fresh save from
+        // the post-reset cursor, these now hold the DEFAULT (post-reset) state,
+        // so a following DECRC restores home + default pen + ASCII rather than a
+        // stale pre-reset snapshot. Read from the live fields exactly like
+        // saveCursor() does — origin mode is already false from the
+        // withOriginMode(false) above, so this mirrors a literal false today but
+        // stays honest if the reset order ever changes.
+        $this->generalSavedSgr = $this->sgr;
+        $this->generalSavedCharsets = $this->charsets;
+        $this->generalSavedGl = $this->gl;
+        $this->generalSavedOriginMode = $this->mode->originMode;
+
+        // Tab stops and the scrollback are DELIBERATELY untouched — and these
+        // two never diverged from xterm at all (unlike the three items above,
+        // which this change just aligned): its `TabReset(xw->tabs)` sits INSIDE
+        // `if (full)` (`charproc.c:14449`),
+        // so DECSTR never rebuilds the stops (only RIS does), and its scrollback
+        // flush is gated on the separate `saved` argument (`charproc.c:14372-14375`)
+        // that DECSTR passes as False. The line rendition (DECDHL/DECSWL/DECDWL)
+        // likewise survives — DECSTR clears no screen content, so it clears no
+        // stamped cell attribute (see LINE RENDITION above).
+
         $this->pendingMutations = [];
     }
 
