@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Tests\Screen;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Screen\Scrollback;
@@ -175,6 +176,78 @@ final class ScrollbackTest extends TestCase
         $term = Terminal::create();
         $this->expectException(\InvalidArgumentException::class);
         $term->withScrollbackSize(0);
+    }
+
+    /**
+     * Bounds guard (ledger #113): capacity is the ring's modulo base at
+     * push()/all()/at() — `maxSize >= 1` must hold from construction, not
+     * fail latently on first scroll. Throw (not clamp) mirrors the sibling
+     * contract `Terminal::withScrollbackSize()` (`scrollbackSize must be >= 1`).
+     */
+    public function testConstructorRejectsZeroCapacity(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('maxSize must be >= 1');
+        new Scrollback(0);
+    }
+
+    /**
+     * A negative capacity used to leak `array_fill()`'s builtin ValueError
+     * ("Argument #2 ($count) must be greater than or equal to 0") — wrong
+     * class, wrong vocabulary. The guard replaces it with the semantic
+     * InvalidArgumentException every other candy-vt bound throws.
+     */
+    #[DataProvider('invalidCapacities')]
+    public function testConstructorRejectsNegativeCapacity(int $size): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Scrollback($size);
+    }
+
+    /** @return array<string, array{int}> */
+    public static function invalidCapacities(): array
+    {
+        return [
+            'minus one' => [-1],
+            'minus five' => [-5],
+        ];
+    }
+
+    /** Terminal::new() forwards its 3rd arg unguarded — the ctor guard must catch it. */
+    public function testTerminalNewRejectsZeroScrollbackSize(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Terminal::new(80, 24, 0);
+    }
+
+    /** The direct constructor is the same unguarded entry point. */
+    public function testTerminalConstructorRejectsZeroScrollbackSize(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Terminal(8, 3, null, null, null, 0);
+    }
+
+    /**
+     * Boundary acceptance + ring-overwrite exactness at the smallest legal
+     * capacity: modulo-by-1 makes every index 0, so pushes must collapse to
+     * "keep only the newest row" rather than crash or grow unbounded.
+     */
+    public function testCapacityOneKeepsOnlyNewestRow(): void
+    {
+        $sb = new Scrollback(1);
+        $this->assertSame(1, $sb->maxSize());
+
+        $sb->push($this->makeRow('AAA'));
+        $sb->push($this->makeRow('BBB'));
+        $sb->push($this->makeRow('CCC'));
+
+        $this->assertSame(1, $sb->count());
+        $this->assertSame('CCC', $this->rowToString($sb->at(0)));
+        $this->assertNull($sb->at(1));
+
+        $all = $sb->all();
+        $this->assertCount(1, $all);
+        $this->assertSame('CCC', $this->rowToString($all[0]));
     }
 
     public function testScrollbackSurvivesMultipleScreenSnapshots(): void

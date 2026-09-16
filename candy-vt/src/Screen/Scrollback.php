@@ -29,9 +29,27 @@ final class Scrollback
     /** Number of valid entries currently in the buffer. */
     private int $count = 0;
 
+    /**
+     * @param int $maxSize ring capacity; MUST be >= 1.
+     *
+     * @throws \InvalidArgumentException when $maxSize < 1.
+     *
+     * The invariant lives here because every ring index is computed
+     * `% $this->maxSize` (push/all/at) — a zero capacity is a latent
+     * DivisionByZeroError on first push, a negative one an opaque
+     * array_fill() ValueError. Throw rather than clamp: this is a
+     * programmer error with no coherent fallback, and the sibling entry
+     * point `Terminal::withScrollbackSize()` (Terminal.php:511) already
+     * rejects the same input with InvalidArgumentException — clamping
+     * here would make the two paths contradict each other. No upstream
+     * Go counterpart: port-side guard.
+     */
     public function __construct(
         private readonly int $maxSize = 1000,
     ) {
+        if ($maxSize < 1) {
+            throw new \InvalidArgumentException('maxSize must be >= 1');
+        }
         $this->rows = array_fill(0, $maxSize, null);
     }
 
