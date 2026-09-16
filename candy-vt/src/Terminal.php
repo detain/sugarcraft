@@ -6,6 +6,7 @@ namespace SugarCraft\Vt;
 
 use SugarCraft\Ansi\Parser\HandlerAdapter;
 use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Parser\OscHandlerImpl;
 use SugarCraft\Vt\Parser\RendererHandler;
@@ -13,13 +14,13 @@ use SugarCraft\Vt\Parser\RendererHandler;
 /**
  * Public terminal surface for the vcr renderer path.
  *
- * Holds a CellGrid, Cursor, and candy-ansi's Parser with CsiHandlerImpl +
+ * Holds a Buffer, Cursor, and candy-ansi's Parser with CsiHandlerImpl +
  * OscHandlerImpl wired through candy-ansi's HandlerAdapter. Feed bytes
  * through `feed()`, capture frames via `snapshot()`.
  */
 final class Terminal
 {
-    private CellGrid $grid;
+    private Buffer $grid;
     private Cursor $cursor;
     private Parser $parser;
     private CsiHandlerImpl $csi;
@@ -29,7 +30,7 @@ final class Terminal
     public function __construct(
         public readonly int $cols,
         public readonly int $rows,
-        CellGrid $grid,
+        Buffer $grid,
         Cursor $cursor,
         Parser $parser,
         CsiHandlerImpl $csi,
@@ -47,7 +48,7 @@ final class Terminal
     public static function new(int $cols = 80, int $rows = 24, ?Theme $theme = null): self
     {
         $theme ??= new Theme();
-        $grid = new CellGrid($cols, $rows);
+        $grid = new Buffer($cols, $rows);
         $cursor = new Cursor();
 
         $csi = new CsiHandlerImpl($grid, $cursor, $theme);
@@ -56,14 +57,10 @@ final class Terminal
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
+        // RendererHandler is the parser's sink and a SubparamsAwareHandler, so
+        // the colon continuation flags SGR needs are pushed down to CsiHandlerImpl
+        // on every dispatch — no late-bound back-reference to this parser exists.
         $parser = new Parser($handler, maxStringBuffer: 65536);
-
-        // The parser records ECMA-48 colon continuation flags per dispatch
-        // (Parser::subparams()); SGR reads them through this late binding to
-        // tell `CSI 4 : 3 m` from `CSI 4 ; 3 m`. The capture of the local is
-        // safe — unlike the emulator's reset(), the renderer never rebuilds
-        // its parser (single construction site).
-        $csi->attachSubparamsProvider(static fn(): array => $parser->subparams());
 
         return new self($cols, $rows, $grid, $cursor, $parser, $csi, $osc, $theme);
     }
@@ -99,7 +96,7 @@ final class Terminal
         return $this->csi->wrapPending();
     }
 
-    public function grid(): CellGrid
+    public function grid(): Buffer
     {
         return $this->grid;
     }

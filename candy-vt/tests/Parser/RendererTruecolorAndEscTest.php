@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests\Parser;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Rendition;
@@ -25,7 +25,7 @@ final class RendererTruecolorAndEscTest extends TestCase
 {
     private function csi(int $cols = 20, int $rows = 6, int $row = 0, int $col = 0): CsiHandlerImpl
     {
-        return new CsiHandlerImpl(new CellGrid($cols, $rows), new Cursor(row: $row, col: $col), new Theme());
+        return new CsiHandlerImpl(new Buffer($cols, $rows), new Cursor(row: $row, col: $col), new Theme());
     }
 
     // ─── A2: truecolour pen storage on the renderer path ────────────────────
@@ -36,7 +36,7 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi->sgr([38, 2, 200, 100, 50, 48, 2, 10, 20, 30]);
         $csi->printable('X');
 
-        $cell = $csi->grid()->get(0, 0);
+        $cell = $csi->grid()->cell(0, 0);
         $this->assertSame(200 << 16 | 100 << 8 | 50, $cell->fgTruecolor);
         $this->assertSame(10 << 16 | 20 << 8 | 30, $cell->bgTruecolor);
         $this->assertSame([200, 100, 50], $cell->fgRgb());
@@ -52,7 +52,7 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi->sgr([31]);
         $csi->printable('X');
 
-        $cell = $csi->grid()->get(0, 0);
+        $cell = $csi->grid()->cell(0, 0);
         $this->assertNull($cell->fgTruecolor, 'fg truecolour forgotten by a palette set');
         $this->assertSame(1, $cell->fg);
     }
@@ -64,7 +64,7 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi->sgr([39]); // default fg
         $csi->printable('X');
 
-        $this->assertNull($csi->grid()->get(0, 0)->fgTruecolor);
+        $this->assertNull($csi->grid()->cell(0, 0)->fgTruecolor);
     }
 
     // ─── A3: line rendition stamping ────────────────────────────────────────
@@ -91,11 +91,11 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi->escLineRendition($final);
 
         for ($c = 0; $c < 20; $c++) {
-            $this->assertSame($expected, $csi->grid()->get(2, $c)->rendition);
+            $this->assertSame($expected, $csi->grid()->cell(2, $c)->rendition);
         }
         // Neighbouring rows untouched.
-        $this->assertSame(Rendition::None, $csi->grid()->get(1, 0)->rendition);
-        $this->assertSame(Rendition::None, $csi->grid()->get(3, 0)->rendition);
+        $this->assertSame(Rendition::None, $csi->grid()->cell(1, 0)->rendition);
+        $this->assertSame(Rendition::None, $csi->grid()->cell(3, 0)->rendition);
     }
 
     public function testEscLineRenditionIgnoresUnknownFinal(): void
@@ -103,8 +103,8 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi = $this->csi();
         $csi->printable('Z');
         $csi->escLineRendition(0x30); // 'ESC # 0' — no rendition
-        $this->assertSame(Rendition::None, $csi->grid()->get(0, 0)->rendition);
-        $this->assertSame('Z', $csi->grid()->get(0, 0)->char);
+        $this->assertSame(Rendition::None, $csi->grid()->cell(0, 0)->rendition);
+        $this->assertSame('Z', $csi->grid()->cell(0, 0)->char);
     }
 
     public function testDoubleWidthMakesRendererGlyphOccupyTwoColumns(): void
@@ -113,8 +113,8 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi->escLineRendition(0x36); // DECDWL
         $csi->printable('X');
 
-        $this->assertSame('X', $csi->grid()->get(0, 0)->char);
-        $this->assertTrue($csi->grid()->get(0, 1)->continuation, 'trailing column is a continuation');
+        $this->assertSame('X', $csi->grid()->cell(0, 0)->char);
+        $this->assertTrue($csi->grid()->cell(0, 1)->continuation, 'trailing column is a continuation');
         $this->assertSame(2, $csi->cursor()->col, 'pen advanced two columns');
     }
 
@@ -126,11 +126,11 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi = $this->csi(row: 2, col: 3);
         $csi->printable('abc');
         $csi->escLineRendition(0x36); // DECDWL
-        $this->assertSame(Rendition::DoubleWidth, $csi->grid()->get(2, 0)->rendition);
+        $this->assertSame(Rendition::DoubleWidth, $csi->grid()->cell(2, 0)->rendition);
         $csi->escLineRendition(0x35); // DECSWL
 
         for ($c = 0; $c < 20; $c++) {
-            $this->assertSame(Rendition::None, $csi->grid()->get(2, $c)->rendition);
+            $this->assertSame(Rendition::None, $csi->grid()->cell(2, $c)->rendition);
         }
     }
 
@@ -143,13 +143,13 @@ final class RendererTruecolorAndEscTest extends TestCase
         $pair = $this->csi(cols: 4, row: 0, col: 2);
         $pair->escLineRendition(0x36);
         $pair->printable('X');
-        $this->assertSame('X', $pair->grid()->get(0, 2)->char);
-        $this->assertTrue($pair->grid()->get(0, 3)->continuation, 'pair owns the final column');
+        $this->assertSame('X', $pair->grid()->cell(0, 2)->char);
+        $this->assertTrue($pair->grid()->cell(0, 3)->continuation, 'pair owns the final column');
 
         $edge = $this->csi(cols: 4, row: 0, col: 3);
         $edge->escLineRendition(0x36);
         $edge->printable('Y');
-        $this->assertSame('Y', $edge->grid()->get(0, 3)->char, 'no room for a tail — stays single');
+        $this->assertSame('Y', $edge->grid()->cell(0, 3)->char, 'no room for a tail — stays single');
     }
 
     public function testOutOfRangePaletteIndexClampsLikeTheEmulator(): void
@@ -160,12 +160,12 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi = $this->csi();
         $csi->sgr([38, 5, 300]);
         $csi->printable('X');
-        $this->assertSame(255, $csi->grid()->get(0, 0)->fg, 'over-range index clamps to 255');
+        $this->assertSame(255, $csi->grid()->cell(0, 0)->fg, 'over-range index clamps to 255');
 
         $low = $this->csi();
         $low->sgr([38, 5, -1]);
         $low->printable('Y');
-        $this->assertSame(0, $low->grid()->get(0, 0)->fg, 'default sentinel resolves to 0');
+        $this->assertSame(0, $low->grid()->cell(0, 0)->fg, 'default sentinel resolves to 0');
     }
 
     public function testSaveRestoreCarriesTheTruecolourPen(): void
@@ -180,7 +180,7 @@ final class RendererTruecolorAndEscTest extends TestCase
         $csi->scorc();
         $csi->printable('Q');
 
-        $cell = $csi->grid()->get(0, 0);
+        $cell = $csi->grid()->cell(0, 0);
         $this->assertSame(10 << 16 | 20 << 8 | 30, $cell->fgTruecolor, 'saved fg RGB returns');
         $this->assertSame(40 << 16 | 50 << 8 | 60, $cell->bgTruecolor, 'saved bg RGB returns');
     }
@@ -231,9 +231,9 @@ final class RendererTruecolorAndEscTest extends TestCase
 
         $this->assertSame(0, $csi->cursor()->row);
         $this->assertSame(0, $csi->cursor()->col);
-        $this->assertSame(' ', $csi->grid()->get(0, 0)->char, 'grid cleared');
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char, 'grid cleared');
         // A fresh print after RIS carries no leftover truecolour.
         $csi->printable('K');
-        $this->assertNull($csi->grid()->get(0, 0)->fgTruecolor, 'pen truecolour forgotten by RIS');
+        $this->assertNull($csi->grid()->cell(0, 0)->fgTruecolor, 'pen truecolour forgotten by RIS');
     }
 }

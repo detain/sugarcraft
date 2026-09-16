@@ -6,21 +6,21 @@ namespace SugarCraft\Vt\Tests\Parser;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Theme;
 
 final class CsiHandlerImplTest extends TestCase
 {
-    private CellGrid $grid;
+    private Buffer $grid;
     private Cursor $cursor;
     private Theme $theme;
     private CsiHandlerImpl $csi;
 
     protected function setUp(): void
     {
-        $this->grid = new CellGrid(80, 24);
+        $this->grid = new Buffer(80, 24);
         $this->cursor = new Cursor();
         $this->theme = new Theme();
         $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
@@ -147,7 +147,7 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(0, $this->csi->cursor()->row);
         $this->assertSame(1, $this->csi->cursor()->col);
@@ -161,7 +161,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([1]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(Cell::ATTR_BOLD, $cell->attrs & Cell::ATTR_BOLD);
     }
@@ -175,7 +175,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([22]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(0, $cell->attrs & Cell::ATTR_BOLD);
     }
@@ -188,7 +188,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([31]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(1, $cell->fg);
     }
@@ -201,7 +201,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([42]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(2, $cell->bg);
     }
@@ -214,7 +214,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([38, 5, 196]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(196, $cell->fg);
     }
@@ -227,7 +227,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([48, 5, 21]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(21, $cell->bg);
     }
@@ -241,7 +241,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->sgr([0]);
         $this->csi->printable('X');
 
-        $cell = $this->csi->grid()->get(0, 0);
+        $cell = $this->csi->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(7, $cell->fg);
         $this->assertSame(0, $cell->bg);
@@ -296,9 +296,9 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->csi->ed(0);
 
-        $this->assertSame(' ', $this->csi->grid()->get(1, 0)->char);
-        $this->assertSame(' ', $this->csi->grid()->get(1, 1)->char);
-        $this->assertSame(' ', $this->csi->grid()->get(23, 79)->char);
+        $this->assertSame(' ', $this->csi->grid()->cell(1, 0)->char);
+        $this->assertSame(' ', $this->csi->grid()->cell(1, 1)->char);
+        $this->assertSame(' ', $this->csi->grid()->cell(23, 79)->char);
     }
 
     public function testEdMode2ClearsEntireScreen(): void
@@ -309,8 +309,8 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->csi->ed(2);
 
-        $this->assertSame(' ', $this->csi->grid()->get(0, 0)->char);
-        $this->assertSame(' ', $this->csi->grid()->get(5, 5)->char);
+        $this->assertSame(' ', $this->csi->grid()->cell(0, 0)->char);
+        $this->assertSame(' ', $this->csi->grid()->cell(5, 5)->char);
     }
 
     public function testElMode0ClearsToEndOfLine(): void
@@ -329,8 +329,8 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->csi->el(0);
 
-        $this->assertSame('o', $this->csi->grid()->get(0, 4)->char);
-        $this->assertSame(' ', $this->csi->grid()->get(0, 5)->char);
+        $this->assertSame('o', $this->csi->grid()->cell(0, 4)->char);
+        $this->assertSame(' ', $this->csi->grid()->cell(0, 5)->char);
     }
 
     public function testDecstbmSetsScrollRegion(): void
@@ -359,9 +359,9 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->cup(10, 1);
         $this->csi->lf();
 
-        $this->assertSame('B', $this->csi->grid()->get(8, 0)->char, 'line 9 took line 10 content');
-        $this->assertSame(' ', $this->csi->grid()->get(9, 0)->char, 'region bottom blanked');
-        $this->assertSame('K', $this->csi->grid()->get(3, 0)->char, 'outside the region, untouched');
+        $this->assertSame('B', $this->csi->grid()->cell(8, 0)->char, 'line 9 took line 10 content');
+        $this->assertSame(' ', $this->csi->grid()->cell(9, 0)->char, 'region bottom blanked');
+        $this->assertSame('K', $this->csi->grid()->cell(3, 0)->char, 'outside the region, untouched');
     }
 
     public function testCbtMovesCursorBackwardByCount(): void
@@ -404,7 +404,7 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->csi->printable('X');
 
-        $this->assertSame('X', $this->csi->grid()->get(0, 79)->char);
+        $this->assertSame('X', $this->csi->grid()->cell(0, 79)->char);
         $this->assertSame(79, $this->csi->cursor()->col, 'cursor parks on the last column');
         $this->assertSame(0, $this->csi->cursor()->row);
         $this->assertTrue($this->csi->wrapPending(), 'wrap deferred until the next graphic');
@@ -413,7 +413,7 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->assertSame(1, $this->csi->cursor()->row);
         $this->assertSame(1, $this->csi->cursor()->col, 'Y landed at (1,0), cursor advanced to (1,1)');
-        $this->assertSame('Y', $this->csi->grid()->get(1, 0)->char);
+        $this->assertSame('Y', $this->csi->grid()->cell(1, 0)->char);
         $this->assertFalse($this->csi->wrapPending());
     }
 
@@ -520,17 +520,17 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->scorc();
         $this->csi->printable('Q');
 
-        $cell = $this->csi->grid()->get(1, 1);
+        $cell = $this->csi->grid()->cell(1, 1);
         $this->assertSame('Q', $cell->char);
         $this->assertSame(1, $cell->fg, 'red pen back from the save (exact palette index, not masked)');
         $this->assertSame(Cell::ATTR_BOLD, $cell->attrs & Cell::ATTR_BOLD, 'bold returns with the saved pen, green stays discarded');
 
         // With nothing saved, restore leaves the live pen untouched.
-        $fresh = new CsiHandlerImpl(new CellGrid(5, 2), new Cursor(), $this->theme);
+        $fresh = new CsiHandlerImpl(new Buffer(5, 2), new Cursor(), $this->theme);
         $fresh->sgr([34]);
         $fresh->scorc();
         $fresh->printable('Z');
-        $this->assertSame(4, $fresh->grid()->get(0, 0)->fg & 0x0F, 'un-saved scorc keeps the live pen');
+        $this->assertSame(4, $fresh->grid()->cell(0, 0)->fg & 0x0F, 'un-saved scorc keeps the live pen');
     }
 
     public function testCombiningMarkAttachesToPhantomHostCell(): void
@@ -546,8 +546,8 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->csi->printable("\u{0301}");
 
-        $this->assertStringContainsString("\u{0301}", $this->grid->get(0, 79)->char);
-        $this->assertSame(' ', $this->grid->get(0, 78)->char, 'neighbour cell must stay untouched');
+        $this->assertStringContainsString("\u{0301}", $this->grid->cell(0, 79)->char);
+        $this->assertSame(' ', $this->grid->cell(0, 78)->char, 'neighbour cell must stay untouched');
     }
 
     public function testDecawmOffOverwritesLastColumn(): void
@@ -561,7 +561,7 @@ final class CsiHandlerImplTest extends TestCase
         $this->csi->printable('A');
         $this->csi->printable('B');
 
-        $this->assertSame('B', $this->csi->grid()->get(0, 79)->char, 'second glyph overwrites the last column');
+        $this->assertSame('B', $this->csi->grid()->cell(0, 79)->char, 'second glyph overwrites the last column');
         $this->assertSame(0, $this->csi->cursor()->row, 'no wrap, no scroll');
         $this->assertSame(79, $this->csi->cursor()->col);
 
@@ -645,7 +645,7 @@ final class CsiHandlerImplTest extends TestCase
 
     public function testSuScrollsRegionUp(): void
     {
-        $grid = new CellGrid(4, 4);
+        $grid = new Buffer(4, 4);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->cup(1, 1);
         $csi->printable('A'); // row 0
@@ -655,13 +655,13 @@ final class CsiHandlerImplTest extends TestCase
         $csi->su(1);
 
         // Row 1's 'B' moves up to row 0; the bottom row is blanked.
-        $this->assertSame('B', $csi->grid()->get(0, 0)->char);
-        $this->assertSame(' ', $csi->grid()->get(3, 0)->char);
+        $this->assertSame('B', $csi->grid()->cell(0, 0)->char);
+        $this->assertSame(' ', $csi->grid()->cell(3, 0)->char);
     }
 
     public function testSdScrollsRegionDown(): void
     {
-        $grid = new CellGrid(4, 4);
+        $grid = new Buffer(4, 4);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->cup(1, 1);
         $csi->printable('A'); // row 0
@@ -669,13 +669,13 @@ final class CsiHandlerImplTest extends TestCase
         $csi->sd(1);
 
         // 'A' shifts down to row 1; the top row is blanked.
-        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
-        $this->assertSame('A', $csi->grid()->get(1, 0)->char);
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char);
+        $this->assertSame('A', $csi->grid()->cell(1, 0)->char);
     }
 
     public function testIlInsertsBlankLineShiftingDown(): void
     {
-        $grid = new CellGrid(4, 4);
+        $grid = new Buffer(4, 4);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->cup(1, 1);
         $csi->printable('A'); // row 0
@@ -686,14 +686,14 @@ final class CsiHandlerImplTest extends TestCase
         $csi->il(1);
 
         // A blank line is inserted at row 0, pushing 'A' and 'B' down.
-        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
-        $this->assertSame('A', $csi->grid()->get(1, 0)->char);
-        $this->assertSame('B', $csi->grid()->get(2, 0)->char);
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char);
+        $this->assertSame('A', $csi->grid()->cell(1, 0)->char);
+        $this->assertSame('B', $csi->grid()->cell(2, 0)->char);
     }
 
     public function testDlDeletesLineShiftingUp(): void
     {
-        $grid = new CellGrid(4, 4);
+        $grid = new Buffer(4, 4);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->cup(1, 1);
         $csi->printable('A'); // row 0
@@ -704,12 +704,12 @@ final class CsiHandlerImplTest extends TestCase
         $csi->dl(1);
 
         // Row 0 is deleted; 'B' shifts up to row 0.
-        $this->assertSame('B', $csi->grid()->get(0, 0)->char);
+        $this->assertSame('B', $csi->grid()->cell(0, 0)->char);
     }
 
     public function testIchInsertsBlankCellsShiftingRight(): void
     {
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->printable('A');
         $csi->printable('B');
@@ -718,15 +718,15 @@ final class CsiHandlerImplTest extends TestCase
 
         $csi->ich(1);
 
-        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
-        $this->assertSame('A', $csi->grid()->get(0, 1)->char);
-        $this->assertSame('B', $csi->grid()->get(0, 2)->char);
-        $this->assertSame('C', $csi->grid()->get(0, 3)->char);
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char);
+        $this->assertSame('A', $csi->grid()->cell(0, 1)->char);
+        $this->assertSame('B', $csi->grid()->cell(0, 2)->char);
+        $this->assertSame('C', $csi->grid()->cell(0, 3)->char);
     }
 
     public function testDchDeletesCellsShiftingLeft(): void
     {
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->printable('A');
         $csi->printable('B');
@@ -735,34 +735,34 @@ final class CsiHandlerImplTest extends TestCase
 
         $csi->dch(1);
 
-        $this->assertSame('B', $csi->grid()->get(0, 0)->char);
-        $this->assertSame('C', $csi->grid()->get(0, 1)->char);
-        $this->assertSame(' ', $csi->grid()->get(0, 2)->char);
+        $this->assertSame('B', $csi->grid()->cell(0, 0)->char);
+        $this->assertSame('C', $csi->grid()->cell(0, 1)->char);
+        $this->assertSame(' ', $csi->grid()->cell(0, 2)->char);
     }
 
     public function testRepRepeatsLastPrintable(): void
     {
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->printable('X'); // col 0, cursor -> col 1
 
         $csi->rep(3);
 
-        $this->assertSame('X', $csi->grid()->get(0, 0)->char);
-        $this->assertSame('X', $csi->grid()->get(0, 1)->char);
-        $this->assertSame('X', $csi->grid()->get(0, 2)->char);
-        $this->assertSame('X', $csi->grid()->get(0, 3)->char);
+        $this->assertSame('X', $csi->grid()->cell(0, 0)->char);
+        $this->assertSame('X', $csi->grid()->cell(0, 1)->char);
+        $this->assertSame('X', $csi->grid()->cell(0, 2)->char);
+        $this->assertSame('X', $csi->grid()->cell(0, 3)->char);
         $this->assertSame(4, $csi->cursor()->col);
     }
 
     public function testRepIsNoOpWithoutPriorPrintable(): void
     {
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
 
         $csi->rep(3);
 
-        $this->assertSame(' ', $csi->grid()->get(0, 0)->char);
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char);
         $this->assertSame(0, $csi->cursor()->col);
     }
 
@@ -794,7 +794,7 @@ final class CsiHandlerImplTest extends TestCase
 
     public function testIlHomesCursorAndDisarmsPhantom(): void
     {
-        $grid = new CellGrid(5, 4);
+        $grid = new Buffer(5, 4);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
 
         $csi->printable('A');
@@ -810,12 +810,12 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertSame(2, $csi->cursor()->row, 'IL keeps the row…');
         $this->assertSame(0, $csi->cursor()->col, '…and homes to column 0 (VT500 §IL, emulator parity)');
         $this->assertFalse($csi->wrapPending(), 'column-home drops the phantom armed at the old margin');
-        $this->assertSame(' ', $csi->grid()->get(2, 0)->char, 'inserted line is blank');
+        $this->assertSame(' ', $csi->grid()->cell(2, 0)->char, 'inserted line is blank');
     }
 
     public function testDlHomesCursor(): void
     {
-        $grid = new CellGrid(5, 4);
+        $grid = new Buffer(5, 4);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
 
         $csi->cup(3, 4);
@@ -827,7 +827,7 @@ final class CsiHandlerImplTest extends TestCase
 
     public function testCupClampsToBufferNotScrollRegion(): void
     {
-        $csi = new CsiHandlerImpl(new CellGrid(5, 4), new Cursor(), $this->theme);
+        $csi = new CsiHandlerImpl(new Buffer(5, 4), new Cursor(), $this->theme);
         $csi->decstbm(2, 3);
 
         $csi->cup(1, 1);
@@ -843,24 +843,24 @@ final class CsiHandlerImplTest extends TestCase
         // The curated-parity repro: CUP beyond both margins then one glyph.
         // Old behaviour advanced off the corner and scrolled a line early;
         // deferred wrap parks on the phantom cell instead (emulator parity).
-        $csi = new CsiHandlerImpl(new CellGrid(5, 4), new Cursor(), $this->theme);
+        $csi = new CsiHandlerImpl(new Buffer(5, 4), new Cursor(), $this->theme);
         $csi->cup(1, 1);
         $csi->printable('K'); // canary on the top row
 
         $csi->cup(99, 99);
         $csi->printable('Z');
 
-        $this->assertSame('Z', $csi->grid()->get(3, 4)->char, 'Z lands bottom-right');
-        $this->assertSame('K', $csi->grid()->get(0, 0)->char, 'no early scroll shifted the grid');
+        $this->assertSame('Z', $csi->grid()->cell(3, 4)->char, 'Z lands bottom-right');
+        $this->assertSame('K', $csi->grid()->cell(0, 0)->char, 'no early scroll shifted the grid');
         $this->assertSame(3, $csi->cursor()->row);
         $this->assertSame(4, $csi->cursor()->col);
         $this->assertTrue($csi->wrapPending());
 
         // Only the NEXT graphic consumes the wrap — and it scrolls there.
         $csi->printable('W');
-        $this->assertSame('W', $csi->grid()->get(3, 0)->char);
-        $this->assertSame('Z', $csi->grid()->get(2, 4)->char, 'old bottom row moved up intact, Z included');
-        $this->assertSame(' ', $csi->grid()->get(0, 0)->char, 'the canary scrolled out of the region');
+        $this->assertSame('W', $csi->grid()->cell(3, 0)->char);
+        $this->assertSame('Z', $csi->grid()->cell(2, 4)->char, 'old bottom row moved up intact, Z included');
+        $this->assertSame(' ', $csi->grid()->cell(0, 0)->char, 'the canary scrolled out of the region');
     }
 
     public function testSgr29ClearsStrikethrough(): void
@@ -872,8 +872,8 @@ final class CsiHandlerImplTest extends TestCase
         $csi->sgr([29]);
         $csi->printable('N');
 
-        $this->assertSame(Cell::ATTR_STRIKETHROUGH, $this->grid->get(0, 0)->attrs);
-        $this->assertSame(0, $this->grid->get(0, 1)->attrs);
+        $this->assertSame(Cell::ATTR_STRIKETHROUGH, $this->grid->cell(0, 0)->attrs);
+        $this->assertSame(0, $this->grid->cell(0, 1)->attrs);
     }
 
     public function testSgr58ConsumeIndexedFormWithoutTouchingPen(): void
@@ -883,7 +883,7 @@ final class CsiHandlerImplTest extends TestCase
         $csi->sgr([58, 5, 33]);
         $csi->printable('U');
 
-        $cell = $this->grid->get(0, 0);
+        $cell = $this->grid->cell(0, 0);
         $this->assertSame(7, $cell->fg, 'the 33 in 58;5;33 must not repaint the fg');
         $this->assertSame(0, $cell->attrs);
     }
@@ -895,7 +895,7 @@ final class CsiHandlerImplTest extends TestCase
         $csi->sgr([58, 2, 1, 2, 3]);
         $csi->printable('U');
 
-        $cell = $this->grid->get(0, 0);
+        $cell = $this->grid->cell(0, 0);
         $this->assertSame(7, $cell->fg);
         $this->assertSame(0, $cell->attrs, 'the 1/2/3 components must not land as bold/blink/italic');
     }
@@ -911,46 +911,47 @@ final class CsiHandlerImplTest extends TestCase
         $csi->sgr([31]);
         $csi->sgr([38, 2, 255, 0, 0]);
         $csi->printable('R');
-        $this->assertSame(1, $this->grid->get(0, 0)->fg, 'pen survives the dropped truecolour form');
+        $this->assertSame(1, $this->grid->cell(0, 0)->fg, 'pen survives the dropped truecolour form');
 
         $csi->sgr([1]);
         $csi->sgr([48, 2, 1, 2, 3]);
         $csi->printable('B');
-        $this->assertSame(1, $this->grid->get(0, 1)->attrs & Cell::ATTR_BOLD, 'bold survives; components not misread');
+        $this->assertSame(1, $this->grid->cell(0, 1)->attrs & Cell::ATTR_BOLD, 'bold survives; components not misread');
     }
 
     public function testSgrUnderlineColonSubparamVsSemicolon(): void
     {
-        // With the parser's continuation flags wired, `4:3` is ONE curly
+        // With the parser's continuation flags PUSHED (setSubparams, as
+        // RendererHandler forwards them), `4:3` is ONE curly
         // underline (renderer: the single underline bit) while `4;3` is two
-        // independent SGRs (underline + italic). Without flags — direct
+        // independent SGRs (underline + italic). Without a push — direct
         // construction — the flat-list behaviour is preserved.
-        $colon = new CsiHandlerImpl(new CellGrid(8, 2), new Cursor(), $this->theme);
-        $colon->attachSubparamsProvider(static fn(): array => [true, false]);
+        $colon = new CsiHandlerImpl(new Buffer(8, 2), new Cursor(), $this->theme);
+        $colon->setSubparams([true, false]);
         $colon->sgr([4, 3]);
         $colon->printable('C');
         $this->assertSame(
             Cell::ATTR_UNDERLINE,
-            $colon->grid()->get(0, 0)->attrs,
+            $colon->grid()->cell(0, 0)->attrs,
             '4:3 → underline only',
         );
 
-        $semicolon = new CsiHandlerImpl(new CellGrid(8, 2), new Cursor(), $this->theme);
-        $semicolon->attachSubparamsProvider(static fn(): array => [false, false]);
+        $semicolon = new CsiHandlerImpl(new Buffer(8, 2), new Cursor(), $this->theme);
+        $semicolon->setSubparams([false, false]);
         $semicolon->sgr([4, 3]);
         $semicolon->printable('S');
         $this->assertSame(
             Cell::ATTR_UNDERLINE | Cell::ATTR_ITALIC,
-            $semicolon->grid()->get(0, 0)->attrs,
+            $semicolon->grid()->cell(0, 0)->attrs,
             '4;3 → underline + italic',
         );
 
-        $flat = new CsiHandlerImpl(new CellGrid(8, 2), new Cursor(), $this->theme);
+        $flat = new CsiHandlerImpl(new Buffer(8, 2), new Cursor(), $this->theme);
         $flat->sgr([4, 3]);
         $flat->printable('F');
         $this->assertSame(
             Cell::ATTR_UNDERLINE | Cell::ATTR_ITALIC,
-            $flat->grid()->get(0, 0)->attrs,
+            $flat->grid()->cell(0, 0)->attrs,
             'unattached stays flat (historical renderer semantics)',
         );
     }
@@ -958,27 +959,27 @@ final class CsiHandlerImplTest extends TestCase
     public function testSgrUnderlineColonZeroClearsUnderline(): void
     {
         $csi = new CsiHandlerImpl($this->grid, new Cursor(), $this->theme);
-        $csi->attachSubparamsProvider(static fn(): array => [true, false]);
+        $csi->setSubparams([true, false]);
 
         $csi->sgr([4]);
         $csi->sgr([4, 0]);
         $csi->printable('U');
 
-        $this->assertSame(0, $this->grid->get(0, 0)->attrs, '4:0 = underline off (SgrHandler parity)');
+        $this->assertSame(0, $this->grid->cell(0, 0)->attrs, '4:0 = underline off (SgrHandler parity)');
     }
 
     public function testDecawmOffClampsWideGlyphWithoutWrapping(): void
     {
         // `?7l` + a double-width glyph at the last column: dropped, cursor
         // parked on the last column, no scroll (emulator printChar guard).
-        $grid = new CellGrid(4, 2);
+        $grid = new Buffer(4, 2);
         $csi = new CsiHandlerImpl($grid, new Cursor(), $this->theme);
         $csi->decrst(7, 0x3F);
 
         $csi->cup(1, 4);
         $csi->printable('あ');
 
-        $this->assertSame(' ', $grid->get(1, 0)->char, 'no wrap to the next row');
+        $this->assertSame(' ', $grid->cell(1, 0)->char, 'no wrap to the next row');
         $this->assertSame(3, $csi->cursor()->col);
         $this->assertFalse($csi->wrapPending());
     }

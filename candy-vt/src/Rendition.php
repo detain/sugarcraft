@@ -10,9 +10,10 @@ namespace SugarCraft\Vt;
  * DEC's "hash" family (`ESC # n`) selects a LINE attribute, so the state
  * travels with every cell on the affected row rather than living on a
  * per-row side table. Stamping it on the cell means a scroll carries the
- * attribute with its glyphs for free — the renderer's `CellGrid` and the
- * emulator's `Buffer` both move cells wholesale on scroll, so no separate
- * line-attribute bookkeeping can drift out of sync with the content.
+ * attribute with its glyphs for free — emulator and renderer share the one
+ * {@see \SugarCraft\Vt\Buffer\Buffer} grid, which moves cells wholesale on
+ * scroll, so no separate line-attribute bookkeeping can drift out of sync
+ * with the content.
  *
  * The four cases map one-to-one onto the four DEC escapes:
  *  - {@see Rendition::DoubleTop}   — `ESC # 3` DECDHL, double-height top half

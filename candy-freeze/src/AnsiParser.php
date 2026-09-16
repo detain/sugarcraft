@@ -65,10 +65,10 @@ final class AnsiParser
         $parser = new Parser($handler);
         // The flattened `list<int>` a handler receives cannot distinguish
         // `38:2::80:160:240` (one parameter group) from `38;2;80;160;240`, so
-        // the handler reads the parser's ECMA-48 sub-parameter flags to tell
-        // them apart. Binding after construction: the parser needs the handler,
-        // the handler needs the parser — neither can own the other's creation.
-        $handler->bindParser($parser);
+        // the handler reads the ECMA-48 sub-parameter flags the parser PUSHES
+        // it (SgrStateHandler implements SubparamsAwareHandler) before each CSI
+        // dispatch. No bind-after-construct dance: the handler no longer holds
+        // a reference back to the parser that dispatches it.
         $parser->feed($line);
         $parser->flush();
         $flush();

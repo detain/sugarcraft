@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests\Screen;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Terminal\Terminal;
 

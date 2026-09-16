@@ -6,6 +6,7 @@ namespace SugarCraft\Vt\Parser;
 
 use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Ansi\Parser\HandlerAdapter;
+use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
 
 /**
  * Renderer-path {@see Handler} that finally routes ESC bytes to the grid.
@@ -28,12 +29,28 @@ use SugarCraft\Ansi\Parser\HandlerAdapter;
  *
  * Mirrors charmbracelet/x/vt ESC dispatch table (renderer subset).
  */
-final class RendererHandler implements Handler
+final class RendererHandler implements SubparamsAwareHandler
 {
     public function __construct(
         private readonly CsiHandlerImpl $csi,
         private readonly HandlerAdapter $delegate,
     ) {
+    }
+
+    /**
+     * The parser pushes the ECMA-48 colon continuation flags here — this
+     * decorator, not the wrapped {@see HandlerAdapter}, is the object handed to
+     * {@see \SugarCraft\Ansi\Parser\Parser::__construct()}, so it is the only
+     * handler the capability check can see. Forward them down to the concrete
+     * {@see CsiHandlerImpl} whose `sgr()` needs them to tell `CSI 4 : 3 m`
+     * (curly underline) from `CSI 4 ; 3 m` (underline + italic): the parser
+     * calls this immediately before the same-call-chain `csiDispatch()`.
+     *
+     * @param list<bool> $subparams
+     */
+    public function setSubparams(array $subparams): void
+    {
+        $this->csi->setSubparams($subparams);
     }
 
     public function printChar(string $rune): void

@@ -84,7 +84,7 @@ final class RendererTest extends TestCase
 
         $this->assertCount(1, $frames);
         $grid = $frames[0]->grid;
-        $cell = $grid->get(0, 0);
+        $cell = $grid->cell(0, 0);
         $this->assertSame('b', $cell->char);
         $this->assertSame(1, $cell->attrs & \SugarCraft\Vt\Cell::ATTR_BOLD);
     }

@@ -167,7 +167,7 @@ final class InspectCommand implements Command
         $hash = hash_init('sha1');
         for ($r = 0; $r < $grid->rows; $r++) {
             for ($c = 0; $c < $grid->cols; $c++) {
-                $cell = $grid->get($r, $c);
+                $cell = $grid->cell($r, $c);
                 hash_update($hash, sprintf(
                     "%d|%d|%s|%d|%d|%d|%d|%d|%d\n",
                     $r,

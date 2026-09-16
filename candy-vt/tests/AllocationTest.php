@@ -11,8 +11,7 @@ use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Ansi\Parser\State;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell as RendererCell;
-use SugarCraft\Vt\Cell\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Parser\OscHandlerImpl;
@@ -45,11 +44,11 @@ use SugarCraft\Vt\Theme;
  *
  * `SugarCraft\Vt\Grid\Grid` and `ScrollingBuffer`/`FixedBuffer` named in the
  * source audit do not exist in this lib; the real allocation surfaces are
- * {@see Buffer} (emulator path, `Cell\Cell` singleton-filled),
- * {@see CellGrid} (vcr renderer path, per-cell `Vt\Cell`),
+ * {@see Buffer} — the one grid, shared by the emulator (ScreenHandler) and
+ *   the vcr renderer path, `Cell\Cell` singleton-filled —
  * {@see Screen}/{@see Scrollback} (snapshot + ring), and the candy-ansi
  * {@see Parser} driving {@see ScreenHandler} via {@see Terminal}. The Parser
- * itself has no resize — resize lives on Buffer/CellGrid and is exercised
+ * itself has no resize — resize lives on Buffer and is exercised
  * through Terminal::resize(); parser churn is therefore feed()+reset().
  */
 final class AllocationTest extends TestCase
@@ -61,9 +60,9 @@ final class AllocationTest extends TestCase
      * live set (one grid of the current geometry), so that shared instance
      * cancels out of the delta — what the ceiling actually bounds is
      * *per-iteration retention*. A genuine leak overshoots it immediately:
-     * one leaked 320x120 Buffer clone is ~1.5 MB and one leaked CellGrid
-     * ~6.3 MB, i.e. two orders of magnitude over this 256 KiB slack, which
-     * is sized only for allocator metadata on a shared CI runner.
+     * one leaked 320x120 Buffer clone is ~1.5 MB and one leaked 160x50
+     * clone ~0.7 MB, i.e. an order of magnitude over this 256 KiB slack,
+     * which is sized only for allocator metadata on a shared CI runner.
      */
     private const GROWTH_CEILING_BYTES = 262_144;
 
@@ -75,8 +74,8 @@ final class AllocationTest extends TestCase
      * Healthy churn transiently holds one extra full grid: `resize()` and
      * `Screen::fromBuffer()` build the new structure before the old one is
      * released, so peak sits ~one grid above the settled value by design
-     * (measured ~1.3-3.0 MB for the 320x120 Buffer path, ~1.3 MB for the
-     * 160x50 CellGrid path). 8 MiB covers the largest such transient with
+     * (measured ~1.3-3.0 MB for the 320x120 Buffer path, ~0.7 MB for the
+     * 160x50 renderer-grid path). 8 MiB covers the largest such transient with
      * slack; a per-iteration retention (≥1.5 MB leaked clone × dozens of
      * cycles) smashes straight through it. Each test scopes this to its own
      * phase via {@see capturePeakBaseline()} resetting the monotone mark.
@@ -145,28 +144,36 @@ final class AllocationTest extends TestCase
         }
     }
 
-    public function testCellGridAllocatesExactlyColsTimesRowsValueCells(): void
+    public function testUnifiedGridStaysExactlyColsTimesRowsAcrossClearAndResizeChurn(): void
     {
-        // The vcr path has no shared empty() singleton: every slot is its
-        // own immutable value object. Assert the census is *exactly*
-        // cols*rows — not cols*rows + slack retained by a stale resize —
-        // and that 80 clear/resize round-trips leave the count unchanged.
-        $grid = new CellGrid(160, 50);
-        $this->assertSame(160 * 50, $this->distinctCellCensus($grid));
+        // The retired CellGrid pinned this census through per-slot object
+        // identity; the unified Buffer shares the empty() singleton, so the
+        // same no-slack guarantee is asserted structurally: every cycle —
+        // resize round-trips AND clear re-allocation — exposes exactly
+        // rows arrays of exactly cols cells, never rows×cols plus retained
+        // geometry from the discarded shape.
+        $grid = new Buffer(160, 50);
+        $this->assertSameGridSize($grid);
 
         for ($i = 0; $i < 80; $i++) {
-            // clear() re-allocates the whole grid; resize() round-trips a
-            // wider grid and back. Either way the live census must settle
-            // on exactly cols*rows — no slack from the discarded shape.
             $grid = $grid->resize(161, 51)->resize(160, 50);
             $grid = $grid->clear();
-            $this->assertSame(160 * 50, $this->distinctCellCensus($grid), "cycle {$i}: grid stayed cols*rows");
+            $this->assertSameGridSize($grid, "cycle {$i}");
+        }
+    }
+
+    private function assertSameGridSize(Buffer $grid, string $context = 'initial'): void
+    {
+        $copy = $grid->copy();
+        $this->assertCount(50, $copy, "{$context}: exactly rows row arrays");
+        foreach ($copy as $row => $cells) {
+            $this->assertCount(160, $cells, "{$context}: row {$row} has exactly cols cells");
         }
     }
 
     public function testDirtyRegionBoundsStayInsideGridAcrossChurn(): void
     {
-        $grid = new CellGrid(160, 50);
+        $grid = new Buffer(160, 50);
         $handler = new HandlerAdapter(
             new CsiHandlerImpl($grid, new Cursor(), new Theme()),
             new OscHandlerImpl(),
@@ -188,7 +195,7 @@ final class AllocationTest extends TestCase
             $this->assertLessThan(50, $dirty['maxRow'], 'dirty region must never exceed the grid');
             $this->assertGreaterThanOrEqual(0, $dirty['minCol']);
             $this->assertLessThan(160, $dirty['maxCol'], 'dirty region must never exceed the grid');
-            $this->assertSame('z', $grid->get($row, $col)->char, 'the dispatched write must land in the grid');
+            $this->assertSame('z', $grid->cell($row, $col)->char, 'the dispatched write must land in the grid');
         }
     }
 
@@ -408,7 +415,7 @@ final class AllocationTest extends TestCase
     public function testParserFeedResetCycleDoesNotGrowHeap(): void
     {
         // Parser exposes feed()/flush()/reset() but no resize — resize lives
-        // on Buffer/CellGrid and is exercised through the terminal tests
+        // on Buffer and is exercised through the terminal tests
         // above, so the parser half of the cycle is feed()+reset(). The
         // handler discards dispatches on purpose: a DebugHandler $log grows
         // with input volume (legitimately) and would measure the fixture,
@@ -477,9 +484,8 @@ final class AllocationTest extends TestCase
     public function testRendererTerminalGridAndSnapshotChurnDoesNotGrowHeap(): void
     {
         // The second pipeline ({@see RendererTerminal}, vcr renderer path)
-        // owns a CellGrid + Snapshot per frame. 300 feed/snapshot cycles at
-        // 160x50 (~1.3 MB per grid of value cells) — with snapshots dropped
-        // each cycle.
+        // owns the shared Buffer + a Snapshot per frame. 300 feed/snapshot
+        // cycles at 160x50 — with snapshots dropped each cycle.
         $terminal = RendererTerminal::new(160, 50);
         $stream = "\x1b[1;1Hhello 日本 \x1b[2J\x1b[10;20Hx";
 
@@ -517,22 +523,6 @@ final class AllocationTest extends TestCase
         }
 
         return memory_get_usage();
-    }
-
-    /**
-     * Distinct live `Vt\Cell` object count across the whole vcr grid —
-     * exactly cols*rows while nothing else references the discarded grids.
-     */
-    private function distinctCellCensus(CellGrid $grid): int
-    {
-        $ids = [];
-        for ($r = 0; $r < $grid->rows; $r++) {
-            for ($c = 0; $c < $grid->cols; $c++) {
-                $ids[spl_object_id($grid->get($r, $c))] = true;
-            }
-        }
-
-        return count($ids);
     }
 
     /**

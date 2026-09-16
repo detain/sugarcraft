@@ -25,7 +25,7 @@ final class TerminalTest extends TestCase
 
         $t->feed("Hello");
 
-        $cell = $t->grid()->get(0, 0);
+        $cell = $t->grid()->cell(0, 0);
         $this->assertSame('H', $cell->char);
     }
 
@@ -54,7 +54,7 @@ final class TerminalTest extends TestCase
 
         $t->feed("\x1b[31mX");
 
-        $cell = $t->grid()->get(0, 0);
+        $cell = $t->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(1, $cell->fg);
     }
@@ -77,17 +77,17 @@ final class TerminalTest extends TestCase
 
         $t->feed("\x1b[31mX\x1b[90mB\x1b[97mW");
 
-        $this->assertSame(1, $t->grid()->get(0, 0)->fg, 'red, the control');
-        $this->assertSame(8, $t->grid()->get(0, 1)->fg, 'SGR 90 is palette slot 8');
-        $this->assertSame(15, $t->grid()->get(0, 2)->fg, 'SGR 97 is palette slot 15');
+        $this->assertSame(1, $t->grid()->cell(0, 0)->fg, 'red, the control');
+        $this->assertSame(8, $t->grid()->cell(0, 1)->fg, 'SGR 90 is palette slot 8');
+        $this->assertSame(15, $t->grid()->cell(0, 2)->fg, 'SGR 97 is palette slot 15');
 
         $t = Terminal::new();
 
         $t->feed("\x1b[41mX\x1b[100mB\x1b[107mW");
 
-        $this->assertSame(1, $t->grid()->get(0, 0)->bg, 'red background, the control');
-        $this->assertSame(8, $t->grid()->get(0, 1)->bg, 'SGR 100 is palette slot 8');
-        $this->assertSame(15, $t->grid()->get(0, 2)->bg, 'SGR 107 is palette slot 15');
+        $this->assertSame(1, $t->grid()->cell(0, 0)->bg, 'red background, the control');
+        $this->assertSame(8, $t->grid()->cell(0, 1)->bg, 'SGR 100 is palette slot 8');
+        $this->assertSame(15, $t->grid()->cell(0, 2)->bg, 'SGR 107 is palette slot 15');
     }
 
     public function testFeedCSIBold(): void
@@ -96,7 +96,7 @@ final class TerminalTest extends TestCase
 
         $t->feed("\x1b[1mX");
 
-        $cell = $t->grid()->get(0, 0);
+        $cell = $t->grid()->cell(0, 0);
         $this->assertSame('X', $cell->char);
         $this->assertSame(Cell::ATTR_BOLD, $cell->attrs & Cell::ATTR_BOLD);
     }
@@ -107,8 +107,8 @@ final class TerminalTest extends TestCase
 
         $t->feed("\x1b[1;31mX\x1b[0mY");
 
-        $xCell = $t->grid()->get(0, 0);
-        $yCell = $t->grid()->get(0, 1);
+        $xCell = $t->grid()->cell(0, 0);
+        $yCell = $t->grid()->cell(0, 1);
 
         $this->assertSame('X', $xCell->char);
         $this->assertSame(Cell::ATTR_BOLD, $xCell->attrs & Cell::ATTR_BOLD);
@@ -125,8 +125,8 @@ final class TerminalTest extends TestCase
 
         $t->feed("\x1b[2J");
 
-        $this->assertSame(' ', $t->grid()->get(0, 0)->char);
-        $this->assertSame(' ', $t->grid()->get(23, 79)->char);
+        $this->assertSame(' ', $t->grid()->cell(0, 0)->char);
+        $this->assertSame(' ', $t->grid()->cell(23, 79)->char);
     }
 
     public function testFeedCSIElClearLine(): void
@@ -135,8 +135,8 @@ final class TerminalTest extends TestCase
 
         $t->feed("Hello\x1b[K");
 
-        $this->assertSame('H', $t->grid()->get(0, 0)->char);
-        $this->assertSame(' ', $t->grid()->get(0, 5)->char);
+        $this->assertSame('H', $t->grid()->cell(0, 0)->char);
+        $this->assertSame(' ', $t->grid()->cell(0, 5)->char);
     }
 
     public function testFeedCSIDectcemHidesCursor(): void
@@ -168,7 +168,7 @@ final class TerminalTest extends TestCase
 
         $snap = $t->snapshot(1.5);
 
-        $this->assertSame('X', $snap->grid->get(0, 0)->char);
+        $this->assertSame('X', $snap->grid->cell(0, 0)->char);
         $this->assertSame(1.5, $snap->time);
     }
 
@@ -190,9 +190,9 @@ final class TerminalTest extends TestCase
 
         $grid = $t->grid();
 
-        $this->assertSame('A', $grid->get(0, 0)->char);
-        $this->assertSame('B', $grid->get(0, 1)->char);
-        $this->assertSame('C', $grid->get(0, 2)->char);
+        $this->assertSame('A', $grid->cell(0, 0)->char);
+        $this->assertSame('B', $grid->cell(0, 1)->char);
+        $this->assertSame('C', $grid->cell(0, 2)->char);
     }
 
     public function testWindowTitleFromOSC(): void
@@ -209,7 +209,7 @@ final class TerminalTest extends TestCase
         $theme = new Theme(defaultFg: 0, defaultBg: 15);
         $t = Terminal::new(80, 24, $theme);
 
-        $cell = $t->grid()->get(0, 0);
+        $cell = $t->grid()->cell(0, 0);
         $this->assertSame(' ', $cell->char);
     }
 
@@ -219,8 +219,8 @@ final class TerminalTest extends TestCase
 
         $t->feed("\x1b[31m\x1b[1mRed Bold\x1b[0m Normal");
 
-        $this->assertSame('R', $t->grid()->get(0, 0)->char);
-        $this->assertSame(1, $t->grid()->get(0, 0)->fg);
-        $this->assertSame(Cell::ATTR_BOLD, $t->grid()->get(0, 0)->attrs & Cell::ATTR_BOLD);
+        $this->assertSame('R', $t->grid()->cell(0, 0)->char);
+        $this->assertSame(1, $t->grid()->cell(0, 0)->fg);
+        $this->assertSame(Cell::ATTR_BOLD, $t->grid()->cell(0, 0)->attrs & Cell::ATTR_BOLD);
     }
 }

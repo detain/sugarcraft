@@ -261,11 +261,14 @@ final class AnsiParserColonSubparametersTest extends TestCase
         $this->assertStringContainsString('fill="#ff8000"', $plain);
     }
 
-    public function testHandlerWithoutBoundParserStillReadsFlatParameters(): void
+    public function testParserDrivenHandlerReadsColonGroupsWithoutExtraWiring(): void
     {
-        // `bindParser()` is what unlocks colon grouping. A handler driven
-        // without a binding must keep working for the flat spelling rather than
-        // degrade into a crash or a malformed value.
+        // Colon grouping used to need a SECOND wiring step — `bindParser()` —
+        // and a Parser built without it silently degraded `38:2::…` to the flat
+        // reading. That crutch is gone: SgrStateHandler implements
+        // SubparamsAwareHandler, so EVERY parser constructed over the handler
+        // pushes the grouping before each dispatch — there is nothing left to
+        // forget to wire.
         $state = new SgrState();
         $textBuf = '';
         $segments = [];
@@ -293,20 +296,53 @@ final class AnsiParserColonSubparametersTest extends TestCase
         $this->assertCount(1, $segments);
         $this->assertSame('#50a0f0', $segments[0]->fg);
 
-        // The bound path is what `AnsiParser::parse()` uses, and it is the one
-        // that reads the group. Unbound, the same bytes degrade to the flat
-        // reading — deterministic and still a colour, never a crash.
-        $unbound = new SgrStateHandler($state, $textBuf, $flush, $segments);
-        $unboundParser = new Parser($unbound);
-        $unboundParser->feed("\x1b[38:2::80:160:240mW");
-        $unboundParser->flush();
+        // The plain-`;` spelling and the colon spelling now agree even on a
+        // hand-built parser+handler pair — previously this exact shape degraded
+        // to `#0050a0` unless the caller remembered bindParser().
+        $direct = new SgrStateHandler($state, $textBuf, $flush, $segments);
+        $directParser = new Parser($direct);
+        $directParser->feed("\x1b[38:2::80:160:240mW");
+        $directParser->flush();
         $flush();
 
-        $this->assertSame('#0050a0', $segments[1]->fg);
+        $this->assertSame('#50a0f0', $segments[1]->fg);
 
         $bound = AnsiParser::parse("\x1b[38:2::80:160:240mY");
         $this->assertSame('#50a0f0', $bound[0]->fg);
         $oversized = AnsiParser::parse("\x1b[38;2;999;999;999mZ");
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $oversized[0]->fg);
+    }
+
+    public function testHandlerWithoutAnyPushStillReadsFlatParameters(): void
+    {
+        // The honest floor: a handler driven by manual csiDispatch() calls —
+        // no parser, therefore no push — must keep working for the flat
+        // spelling rather than crash or emit a malformed colour.
+        $state = new SgrState();
+        $textBuf = '';
+        $segments = [];
+        $flush = static function () use (&$segments, &$textBuf, &$state): void {
+            if ($textBuf === '') {
+                return;
+            }
+            $segments[] = new Segment(
+                text:      $textBuf,
+                fg:        $state->fg,
+                bold:      $state->bold,
+                italic:    $state->italic,
+                underline: $state->underline,
+                bg:        $state->bg,
+            );
+            $textBuf = '';
+        };
+
+        $handler = new SgrStateHandler($state, $textBuf, $flush, $segments);
+        $handler->printChar('X');
+        $handler->csiDispatch(ord('m'), [38, 2, 80, 160, 240], 0, 0);
+        $handler->printChar('Y');
+        $flush();
+
+        $this->assertCount(2, $segments, 'the dispatch flushed "X" on its own, as always');
+        $this->assertSame('#50a0f0', $segments[1]->fg, 'flat reading works with zero push');
     }
 }

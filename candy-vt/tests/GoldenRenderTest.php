@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
  * These tests capture the byte-exact output of render() methods
  * to detect unintended changes to terminal output.
  *
- * Note: candy-vt is primarily a parser (ANSI bytes -> CellGrid).
+ * Note: candy-vt is primarily a parser (ANSI bytes -> Buffer).
  * The "render" here is the parsed cell grid state after feeding
  * a sequence of ANSI bytes.
  */
@@ -39,7 +39,7 @@ final class GoldenRenderTest extends TestCase
         $output = '';
         for ($r = 0; $r < $grid->rows; $r++) {
             for ($c = 0; $c < $grid->cols; $c++) {
-                $cell = $grid->get($r, $c);
+                $cell = $grid->cell($r, $c);
                 if ($cell->char !== "\0" && $cell->char !== ' ') {
                     $output .= $cell->char;
                 }
@@ -65,7 +65,7 @@ final class GoldenRenderTest extends TestCase
         $output = '';
         for ($r = 0; $r < min(3, $grid->rows); $r++) {
             for ($c = 0; $c < min(10, $grid->cols); $c++) {
-                $cell = $grid->get($r, $c);
+                $cell = $grid->cell($r, $c);
                 $output .= $cell->char;
             }
             $output .= "\n";

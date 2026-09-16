@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Tests\Cell;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Handler\ScreenHandler;

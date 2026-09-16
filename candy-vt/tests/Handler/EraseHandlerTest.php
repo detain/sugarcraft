@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests\Handler;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Handler\EraseHandler;
 

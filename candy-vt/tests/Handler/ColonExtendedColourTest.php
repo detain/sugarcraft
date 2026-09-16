@@ -53,8 +53,9 @@ final class ColonExtendedColourTest extends TestCase
     {
         $h = new ScreenHandler(new Buffer(12, 4));
         $parser = new Parser($h);
-        // Same late-binding the emulator facade wires (Terminal\Terminal).
-        $h->attachSubparamsProvider(static fn(): array => $parser->subparams());
+        // The handler is the parser's sink and a SubparamsAwareHandler: the
+        // colon flags arrive by push, exactly as in the emulator facade
+        // (Terminal\Terminal) — no provider wiring here or there.
         // A printable afterwards: the pen must survive into the cell that
         // uses it, and a stray SGR 0 would have reset it before then.
         $parser->feed($csi . 'X');
