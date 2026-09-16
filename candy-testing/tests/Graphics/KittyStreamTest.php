@@ -270,9 +270,12 @@ final class KittyStreamTest extends TestCase
 
     public function testStitchesFourFrameApcTransaction(): void
     {
-        // The begin frame may carry the first payload slice, so a real mosaic
-        // stream is four frames deep: `m=1` begin + two `m=1` continuations +
-        // the `m=0` closer. All four must collapse into ONE image.
+        // The begin frame may carry the first payload slice, so a deep capture
+        // is four frames: `m=1` begin + two `m=1` continuations + the `m=0`
+        // closer. All four must collapse into ONE image. (This shape is
+        // protocol-legal lenience, not a candy-mosaic transcript — mosaic's
+        // begin frame carries no data and spells PNG `f=100`; see
+        // `testDecodesCandyCoreAnsiChunkedEmitterWithPngPassthrough`.)
         $frames = str_split(base64_encode($this->redPng()), 40);
         $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . array_shift($frames) . "\x1b\\";
         while (count($frames) > 1) {
@@ -415,9 +418,10 @@ final class KittyStreamTest extends TestCase
     {
         // `z` is the kitty z-index, NOT a transmission-compression flag — the
         // format key alone decides that. candy-mosaic's
-        // `KittyOptions::transmit()->withZIndex(1)` emits this pair over a plain
-        // PNG for both PNG spellings, so inflating here would reject its own
-        // wire output. (Upstream's compression key is `o=z`, which this decoder
+        // `KittyOptions::transmit()->withZIndex(1)` emits `f=100,z=1` over a plain
+        // PNG (mosaic only ever spells PNG `100`), so inflating on `z` would make
+        // this decoder reject its own primary producer's wire output. The loop
+        // below pins both accepted spellings. (Upstream's compression key is `o=z`, which this decoder
         // does not act on — see `testCompressionFlagOnPngPassthroughIsNotInflated`.)
         foreach (['12', '100'] as $format) {
             $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => $format, 'z' => '1', 'i' => '9']))->image();

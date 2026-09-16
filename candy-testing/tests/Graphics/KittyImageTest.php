@@ -35,9 +35,9 @@ final class KittyImageTest extends TestCase
 
     public function testPngPassthroughCoversBothPngSpellings(): void
     {
-        // `100` is the upstream protocol code for a PNG payload; `12` is a
-        // synonym some external tooling emits (no SugarCraft producer uses it).
-        // The decoder treats them identically so neither spelling misreads.
+        // `100` is the upstream protocol code for a PNG payload; `12` is the
+        // synonym this decoder accepts alongside it (nothing in this monorepo
+        // emits `12`). Both must report passthrough so neither misreads.
         self::assertTrue(KittyImage::fromTransmit(['f' => '12'], 'payload')->pngPassthrough());
         self::assertTrue(KittyImage::fromTransmit(['f' => '100'], 'payload')->pngPassthrough());
     }

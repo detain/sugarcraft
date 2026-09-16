@@ -42,7 +42,7 @@ final class KittyImage
     /** PNG — the upstream protocol's own code for a complete PNG payload. */
     public const FORMAT_PNG = '100';
 
-    /** A second PNG spelling some tooling emits (no SugarCraft producer uses it); decoded like {@see FORMAT_PNG}. */
+    /** A second PNG spelling decoded leniently so a capture that uses it round-trips; no SugarCraft producer emits it. */
     public const FORMAT_PNG_ALT = '12';
 
     /**
@@ -193,7 +193,7 @@ final class KittyImage
 
     /**
      * Whether the payload is a PNG delivered untransformed — `f=100` (the
-     * upstream code) or `f=12` (the SugarCraft-plan spelling), both listed in
+     * upstream code) or `f=12` (the synonym accepted alongside it), both listed in
      * {@see PNG_PASSTHROUGH_FORMATS}.
      */
     public function pngPassthrough(): bool
