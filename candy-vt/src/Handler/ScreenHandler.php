@@ -15,6 +15,7 @@ use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Msg\FocusInMsg;
 use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Rendition;
 use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
@@ -339,14 +340,31 @@ final class ScreenHandler implements Handler
             }
         }
 
+        // A graphic printed onto a line already carrying a DEC "hash" line
+        // rendition inherits it: the stamp lives on the cells (so it scrolls
+        // with the content), and re-writing one must not silently drop it.
+        // Mirror of the renderer's {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::printable()}.
+        $rendition = $this->buffer->cell($r, $c)->rendition;
+
         $cell = new Cell(
             grapheme: $rune,
             sgr: $this->sgr,
+            rendition: $rendition,
             hyperlink: $this->currentHyperlink,
         );
         $this->putCell($r, $c, $cell);
         for ($i = 1; $i < $width; $i++) {
             $this->putCell($r, $c + $i, Cell::continuation($cell));
+        }
+
+        // DECDWL (`ESC # 6`) draws this line double-width: while the rendition
+        // is DoubleWidth a single-cell glyph claims one extra column (a base +
+        // continuation), and only when the pair still fits — at the right
+        // margin the glyph stays single-cell so the phantom-wrap geometry is
+        // untouched. Identical rule to the renderer path.
+        $extra = $rendition === Rendition::DoubleWidth && $c + $width + 1 <= $this->buffer->cols ? 1 : 0;
+        for ($i = 0; $i < $extra; $i++) {
+            $this->putCell($r, $c + $width + $i, Cell::continuation($cell));
         }
 
         // Deferred wrap (xterm `cursor_off` semantics): the cursor parks on
@@ -355,7 +373,7 @@ final class ScreenHandler implements Handler
         // set by GEOMETRY alone so a DECAWM toggle mid-wrap behaves like
         // xterm — printing with ?7l overwrites the last cell (the flag
         // re-arms), and re-enabling ?7h resumes the deferred wrap.
-        $nextCol = $c + $width;
+        $nextCol = $c + $width + $extra;
         $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $nextCol));
         $this->wrapPending = $nextCol >= $this->buffer->cols;
     }
@@ -612,9 +630,11 @@ final class ScreenHandler implements Handler
         // `CSI # P/Q/R/S`) where '8' is a collected digit, not a final; no
         // surveyed emulator dispatches DECALN from a CSI form and the
         // candy-ansi transition table we mirror agrees. Do not "fix" the
-        // parser for it. Unimplemented # finals (DECDHL ESC # 3/# 4,
-        // DECSWL/DECDWL ESC # 5/# 6 — follow-up work) fall through to
-        // designate(), preserving their historical silent-ignore exactly.
+        // parser for it. The DEC line-rendition family `ESC # 3`/`# 4` (DECDHL
+        // double-height top/bottom), `ESC # 5` (DECSWL single) and `ESC # 6`
+        // (DECDWL double-width) are implemented via {@see setLineRendition()};
+        // any OTHER `#` final still falls through to designate(), preserving
+        // its historical silent-ignore exactly.
         // (The candy-ansi parser keeps a SINGLE intermediate byte, last-wins,
         // so the malformed double-intermediate stream `ESC ( # 8` arrives as
         // ('8', '#') and now runs DECALN where it used to be ignored — an
@@ -622,7 +642,11 @@ final class ScreenHandler implements Handler
         // it, garbage streams are the only way to send it.)
         if ($intermediate === 0x23 /* '#' */) {
             match ($final) {
-                0x38 /* '8' */ => $this->displayAlignmentTest(),
+                0x33 /* '3' */ => $this->setLineRendition(Rendition::DoubleTop),     // DECDHL top half
+                0x34 /* '4' */ => $this->setLineRendition(Rendition::DoubleBottom),  // DECDHL bottom half
+                0x35 /* '5' */ => $this->setLineRendition(Rendition::None),          // DECSWL single width/height
+                0x36 /* '6' */ => $this->setLineRendition(Rendition::DoubleWidth),   // DECDWL double width
+                0x38 /* '8' */ => $this->displayAlignmentTest(),                      // DECALN
                 default => $this->designate($intermediate, $final),
             };
             return;
@@ -1261,6 +1285,16 @@ final class ScreenHandler implements Handler
      * `if (full)` (`charproc.c:14449`) and whose scrollback flush is gated
      * on the separate `saved` argument (`charproc.c:14372-14375`).
      *
+     * LINE RENDITION (`ESC # 3`–`ESC # 6`): DECDHL/DECSWL/DECDWL act on the
+     * cursor's current line the instant they arrive — they stamp a per-cell
+     * attribute onto existing screen content rather than arming a pending
+     * mode. DECSTR clears no screen content, so it clears no rendition either,
+     * and there is no "double-size mode" state for it to forget; this AGREES
+     * with xterm, whose soft reset likewise leaves the per-cell double-height/
+     * double-width attributes in place (contrast {@see self::displayAlignmentTest()},
+     * DECALN, which rewrites every cell to a default-rendition 'E' and so does
+     * reset them — again matching xterm's `xterm_ResetDouble` under DECALN).
+     *
      * @see https://vt100.net/docs/vt510-rm/DECSTR.html (DECSTR)
      * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR)
      */
@@ -1310,9 +1344,10 @@ final class ScreenHandler implements Handler
      * (`screen->do_wrap = False`) — NOT the DECAWM mode; `resetRendition`;
      * `resetMargins`; `xterm_ResetDouble`; `CursorSet(screen, 0, 0, ...)`; and
      * `ScrnFillRectangle(..., 'E', nrc_ASCII, ...)`. This method reproduces every
-     * step of that list which candy-vt models; `xterm_ResetDouble` has no
-     * counterpart because line-width/height modes (DECDHL/DECSWL/DECDWL) are
-     * unimplemented here — see {@see self::escDispatch()}. Because the fill walks
+     * step of that list which candy-vt models, `xterm_ResetDouble` included:
+     * the whole-screen fill re-writes every cell with a default-rendition 'E'
+     * cell, which clears any DECDHL/DECSWL/DECDWL line state set by
+     * {@see setLineRendition()} as a side effect. Because the fill walks
      * the whole buffer (rows × cols) and homes to absolute 0,0, the 'E' pattern
      * covers the screen regardless of any DECSTBM region or origin mode left
      * behind, and origin mode is off afterwards.
@@ -1371,6 +1406,34 @@ final class ScreenHandler implements Handler
         $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
         $this->gl = 0;
         $this->singleShift = null;
+    }
+
+    /**
+     * DECDHL / DECSWL / DECDWL — apply a line width/height rendition to the
+     * CURSOR row by re-stamping every cell on it.
+     *
+     * The state rides on the cells (not a side table) so it scrolls with the
+     * content and reaches the snapshot; {@see printChar()} reads it back off
+     * the under-cursor cell to keep painting the line in the selected
+     * rendition. `ESC # 3`/`# 4` mark the row double-height (top/bottom half),
+     * `ESC # 5` (DECSWL) clears it to {@see Rendition::None}, and `ESC # 6`
+     * (DECDWL) marks it double-width — the extra-column-per-glyph consequence
+     * is applied in {@see printChar()}. Mirror of the renderer's
+     * {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::escLineRendition()}.
+     *
+     * @see https://vt100.net/docs/vt510-rm/DECST8.html (DECDHL/DECSWL/DECDWL)
+     */
+    private function setLineRendition(Rendition $rendition): void
+    {
+        $row = $this->cursor->row;
+        if ($row < 0 || $row >= $this->buffer->rows) {
+            return;
+        }
+
+        $cols = $this->buffer->cols;
+        for ($c = 0; $c < $cols; $c++) {
+            $this->putCell($row, $c, $this->buffer->cell($row, $c)->withRendition($rendition));
+        }
     }
 
     /**

@@ -522,7 +522,7 @@ final class CsiHandlerImplTest extends TestCase
 
         $cell = $this->csi->grid()->get(1, 1);
         $this->assertSame('Q', $cell->char);
-        $this->assertSame(1, $cell->fg & 0x0F, 'red pen back from the save');
+        $this->assertSame(1, $cell->fg, 'red pen back from the save (exact palette index, not masked)');
         $this->assertSame(Cell::ATTR_BOLD, $cell->attrs & Cell::ATTR_BOLD, 'bold returns with the saved pen, green stays discarded');
 
         // With nothing saved, restore leaves the live pen untouched.
