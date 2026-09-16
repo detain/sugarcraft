@@ -66,9 +66,11 @@ Diff review shows predecessor ADDED tests addressing M1/M2/m3/m5 and rewrote sav
 - [x] php-cs-fixer --dry-run: 0 of 2 fixable
 - [x] guards: check-path-repos --no-lib-path-repos rc=0; check-child-lifetimes rc=0
 - [x] consumer suites AFTER (linked, MY-EDIT VISIBLE via reflection): vcr OK 910/7964 S14; freeze 333/720 W3 (freeze: no candy-vt dep)
-- [ ] Review r2 → iterate clean
-- [ ] Commit single (folds predecessor — documented in notes), push, PR NO-MERGE
-- [ ] Handoff with MERGE_SHA_PLACEHOLDER
+- [x] Review r2: APPROVE (0C/0M/1min/2nit) — prose fixes applied pre-commit + suite re-greened
+- [x] .probe/ removed (n4); single commit 68aa35d20 authored Joe Huss (predecessor folded — documented in commit body)
+- [x] Pushed ai/w7-decstr-verdict; PR #1451 OPEN (not merged): https://github.com/detain/sugarcraft/pull/1451
+- [x] Handoff /home/sites/sc-briefs/w7-handoff-decstr.md with MERGE_SHA_PLACEHOLDER marker (+ findings-file row text)
+DONE 2026-09-16.
 
 ## Decisions
 - VERDICT: OPEN. Four-item table above. Tab stops: brief said "rebuild defaults" — xterm-411 source
