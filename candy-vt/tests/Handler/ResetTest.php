@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Rendition;
 use SugarCraft\Ansi\Parser\Parser;
 
 /**
@@ -30,6 +31,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * | DECSTBM margins    | full screen | preserved       |
  * | tab stops          | default 8   | preserved       |
  * | SCS G0-G3 / GL     | ASCII / G0  | preserved       |
+ * | line rendition ESC #3–#6 | cleared (cells rewritten) | preserved |
  * | DEC 2026 sync      | off (queue discarded) | off (queue flushed) |
  * | alt screen         | main screen | preserved       |
  * | window title       | preserved   | preserved       |
@@ -196,6 +198,39 @@ final class ResetTest extends TestCase
         $h = $this->handler("\x1b[?2026hQ\x1b[!p", cols: 4, rows: 4);
         $this->assertFalse($h->mode->syncUpdate);
         $this->assertSame('Q', $h->buffer->cell(0, 0)->grapheme, 'pending mutations flushed, not dropped');
+    }
+
+    public function testDecstrPreservesLineRendition(): void
+    {
+        // DECDHL/DECSWL/DECDWL are immediate per-cell stamps, not a pending
+        // mode; DECSTR clears no screen content so it clears no rendition
+        // either (agrees with xterm — see the softReset() doc-block).
+        $h = $this->handler("\x1b[2;1Habcdef\x1b#6\x1b[!p", cols: 8, rows: 3);
+        // Row 1 was parked on by `ESC # 6` before the cursor moved to it and
+        // printed; DECSTR must leave that double-width stamp standing.
+        $this->assertSame(
+            Rendition::DoubleWidth,
+            $h->buffer->cell(1, 0)->rendition,
+            'soft reset must not forget a stamped line rendition',
+        );
+        $this->assertSame('a', $h->buffer->cell(1, 0)->grapheme, 'content preserved too');
+    }
+
+    public function testDecalnClearsLineRendition(): void
+    {
+        // DECALN rewrites every cell to a default-rendition 'E', so it is the
+        // reset that DOES clear double-size lines (xterm runs resetDouble here).
+        $h = $this->handler("\x1b#6\x1b#8", cols: 4, rows: 2);
+        for ($r = 0; $r < 2; $r++) {
+            for ($c = 0; $c < 4; $c++) {
+                $this->assertSame(
+                    Rendition::None,
+                    $h->buffer->cell($r, $c)->rendition,
+                    "DECALN clears the rendition at {$r},{$c}",
+                );
+                $this->assertSame('E', $h->buffer->cell($r, $c)->grapheme);
+            }
+        }
     }
 
     // ─── DECALN ─────────────────────────────────────────────────────────────

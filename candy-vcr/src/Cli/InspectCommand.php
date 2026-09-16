@@ -25,9 +25,11 @@ use SugarCraft\Vt\Theme;
  * `--frames` switches to the frame timeline view: walks the cassette through
  * a Renderer + Terminal exactly as `render-tape` does, then prints one line
  * per Snapshot with `time<TAB>cursor_row,cursor_col<TAB>grid_sha1`. The
- * grid hash digests `row|col|char|fg|bg|attrs` tuples in deterministic
- * row-major order so two grids producing the same visible output share a
- * hash regardless of cell-construction order.
+ * grid hash digests `row|col|char|fg|bg|attrs|fgTruecolor|bgTruecolor|rendition`
+ * tuples (the two truecolour slots hashing to `-1` when unset) in
+ * deterministic row-major order, so two grids producing the same visible
+ * output share a hash regardless of cell-construction order — while a
+ * differing packed truecolour or line rendition separates them.
  */
 final class InspectCommand implements Command
 {
@@ -152,9 +154,12 @@ final class InspectCommand implements Command
 
     /**
      * Deterministic SHA-1 of the grid: walks row-major, emitting
-     * `row|col|char|fg|bg|attrs` per cell so two grids agree iff they'd
-     * render identically. The cursor is hashed too so blink-only frames
-     * still get distinct hashes.
+     * `row|col|char|fg|bg|attrs|fgTruecolor|bgTruecolor|rendition` per cell so
+     * two grids agree iff they'd render identically. The 24-bit slots and the
+     * line rendition are folded in so a truecolour repaint or a DECDHL/DECDWL
+     * stamp changes the hash even when the glyph and palette numbers are
+     * unchanged (`-1` marks a palette/default slot with no packed RGB). The
+     * cursor is hashed too so blink-only frames still get distinct hashes.
      */
     private function hashGrid(Snapshot $snapshot): string
     {
@@ -163,7 +168,18 @@ final class InspectCommand implements Command
         for ($r = 0; $r < $grid->rows; $r++) {
             for ($c = 0; $c < $grid->cols; $c++) {
                 $cell = $grid->get($r, $c);
-                hash_update($hash, sprintf("%d|%d|%s|%d|%d|%d\n", $r, $c, $cell->char, $cell->fg, $cell->bg, $cell->attrs));
+                hash_update($hash, sprintf(
+                    "%d|%d|%s|%d|%d|%d|%d|%d|%d\n",
+                    $r,
+                    $c,
+                    $cell->char,
+                    $cell->fg,
+                    $cell->bg,
+                    $cell->attrs,
+                    $cell->fgTruecolor ?? -1,
+                    $cell->bgTruecolor ?? -1,
+                    $cell->rendition->value,
+                ));
             }
         }
         hash_update($hash, sprintf("cursor|%d|%d|%d|%d", $snapshot->cursor->row, $snapshot->cursor->col, $snapshot->cursor->shape, $snapshot->cursor->visible ? 1 : 0));

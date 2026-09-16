@@ -9,6 +9,7 @@ use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Handler\ScreenHandler;
+use SugarCraft\Vt\Rendition;
 use SugarCraft\Vt\Terminal\Terminal;
 
 /**
@@ -212,16 +213,94 @@ final class DecalnWireTest extends TestCase
         $this->assertSame($direct->mode->cursorShape, $direct->cursor->shape);
     }
 
-    // ─── Negative: unsupported '#' finals must not corrupt state ───────────
+    // ─── Line-rendition family: `ESC # 3`–`ESC # 6` stamp the cursor row ────
+
+    /**
+     * The four DEC special-line escapes now dispatch from the '#' intermediate
+     * to {@see ScreenHandler}'s line-rendition setter rather than falling
+     * through to designate(). Each marks the current cursor row with its
+     * {@see Rendition} while leaving the graphemes, cursor position, pen and
+     * charset state exactly as they were — the attribute travels on the cells,
+     * it does not reflow them.
+     *
+     * @return array<string, array{0: int, 1: Rendition}>
+     */
+    public static function renditionFinals(): array
+    {
+        return [
+            'DECDHL top (ESC # 3)' => [0x33, Rendition::DoubleTop],
+            'DECDHL bottom (ESC # 4)' => [0x34, Rendition::DoubleBottom],
+            'DECSWL single (ESC # 5)' => [0x35, Rendition::None],
+            'DECDWL double (ESC # 6)' => [0x36, Rendition::DoubleWidth],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('renditionFinals')]
+    public function testHashRenditionFinalsStampTheCursorRow(int $final, Rendition $expected): void
+    {
+        // Park the cursor on row 1 and print content so the stamped row is
+        // distinguishable from its untouched neighbours.
+        $h = $this->handler("\x1b[2;2Hab\x1b" . '#' . chr($final), cols: 4, rows: 3);
+
+        for ($c = 0; $c < 4; $c++) {
+            $this->assertSame(
+                $expected,
+                $h->buffer->cell(1, $c)->rendition,
+                sprintf('ESC # %s marks every column of the cursor row %s', chr($final), $expected->name),
+            );
+        }
+        // Neighbouring rows are untouched.
+        $this->assertSame(Rendition::None, $h->buffer->cell(0, 0)->rendition, 'row above keeps its rendition');
+        $this->assertSame(Rendition::None, $h->buffer->cell(2, 0)->rendition, 'row below keeps its rendition');
+
+        // The stamp is an attribute-only change: content and pointer survive.
+        $this->assertSame('ab', substr($this->cellRun($h, 1, 4), 1, 2), 'graphemes preserved');
+        $this->assertSame(1, $h->cursor->row, 'cursor not moved by the rendition escape');
+    }
+
+    public function testDecswlClearsAPreviousDoubleWidthStamp(): void
+    {
+        // `ESC # 6` then `ESC # 5` on the same row returns it to single width.
+        $h = $this->handler("\x1b#6\x1b#5", cols: 3, rows: 2);
+        foreach ([0, 1, 2] as $c) {
+            $this->assertSame(Rendition::None, $h->buffer->cell(0, $c)->rendition, 'DECSWL overrides DECDWL');
+        }
+    }
+
+    public function testDoubleWidthStampMakesTheNextGlyphSpanTwoColumns(): void
+    {
+        // With DECDWL armed on the cursor row, a subsequent narrow glyph writes
+        // its own cell plus a continuation cell so it occupies two columns.
+        $h = $this->handler("\x1b#6X", cols: 4, rows: 2);
+        $this->assertSame('X', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertTrue($h->buffer->cell(0, 1)->continuation, 'the trailing column is a continuation');
+        $this->assertSame(Rendition::DoubleWidth, $h->buffer->cell(0, 0)->rendition);
+        $this->assertSame(2, $h->cursor->col, 'the pen advances two columns');
+    }
+
+    public function testDoubleWidthPairRespectsTheRightMargin(): void
+    {
+        // Same `col+width+1 <= cols` bound as the renderer (MIN-4): a DW glyph
+        // at col 2 of a 4-col grid claims the (2,3) pair, but at col 3 there is
+        // no room for the tail — it stays a single cell and never overruns.
+        $pair = $this->handler("\x1b[1;3H\x1b#6X", cols: 4, rows: 2);
+        $this->assertSame('X', $pair->buffer->cell(0, 2)->grapheme);
+        $this->assertTrue($pair->buffer->cell(0, 3)->continuation, 'pair reaches the last column');
+
+        $edge = $this->handler("\x1b[1;4H\x1b#6Y", cols: 4, rows: 2);
+        $this->assertSame('Y', $edge->buffer->cell(0, 3)->grapheme, 'no room for a tail — stays single');
+    }
+
+    // ─── Negative: other '#' finals must stay silent designator-ignores ──────
 
     public function testUnsupportedHashFinalsRemainSilentIgnores(): void
     {
-        // DECDHL (ESC # 3 / # 4) and DECSWL/DECDWL (ESC # 5 / # 6) are NOT
-        // implemented — this test pins their ACTUAL current behaviour: they
-        // fall through to designate(), which treats '#' as a non-designator
-        // and ignores them. Screen, pen, margins, cursor and GL/SCS state
-        // must be exactly what DIRTY left behind.
-        foreach ([0x30, 0x33, 0x34, 0x35, 0x36] as $final) {
+        // Finals outside the rendition family and DECALN (0x38) still fall
+        // through to designate(), which treats '#' as a non-designator and
+        // ignores them. Screen, pen, margins, cursor and GL/SCS state must be
+        // exactly what DIRTY left behind — and critically NO rendition is
+        // stamped, distinguishing these from the implemented `# 3`–`# 6`.
+        foreach ([0x30, 0x31, 0x32, 0x37, 0x39] as $final) {
             $before = $this->handler(self::DIRTY, cols: 6, rows: 3);
             $after = $this->handler(self::DIRTY . chr(0x1b) . '#' . chr($final), cols: 6, rows: 3);
             $this->assertSame(
@@ -235,6 +314,13 @@ final class DecalnWireTest extends TestCase
             $this->assertSame($before->cursor->col, $after->cursor->col);
             $this->assertSame($before->scrollRegionTop, $after->scrollRegionTop);
             $this->assertSame($before->scrollRegionBottom, $after->scrollRegionBottom);
+            for ($r = 0; $r < 3; $r++) {
+                $this->assertSame(
+                    Rendition::None,
+                    $after->buffer->cell($r, 0)->rendition,
+                    sprintf('ESC # %s must not stamp a rendition', chr($final)),
+                );
+            }
         }
     }
 

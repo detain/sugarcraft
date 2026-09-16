@@ -8,6 +8,7 @@ use SugarCraft\Ansi\Parser\HandlerAdapter;
 use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Parser\OscHandlerImpl;
+use SugarCraft\Vt\Parser\RendererHandler;
 
 /**
  * Public terminal surface for the vcr renderer path.
@@ -52,7 +53,7 @@ final class Terminal
         $csi = new CsiHandlerImpl($grid, $cursor, $theme);
         $osc = new OscHandlerImpl();
 
-        $handler = new HandlerAdapter($csi, $osc);
+        $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
         $parser = new Parser($handler, maxStringBuffer: 65536);

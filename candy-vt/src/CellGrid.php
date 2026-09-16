@@ -48,7 +48,13 @@ final class CellGrid
         for ($r = 0; $r < $rows; $r++) {
             $row = [];
             for ($c = 0; $c < $cols; $c++) {
-                $row[] = Cell::empty();
+                // A fresh value object per slot, NOT the shared
+                // {@see Cell::empty()} singleton: the vcr renderer path owns
+                // one distinct cell per grid position (AllocationTest pins the
+                // census at exactly cols×rows so a stale resize cannot retain
+                // slack). The emulator's Buffer shares the singleton; the two
+                // grids intentionally differ here.
+                $row[] = new Cell();
             }
             $grid[] = $row;
         }

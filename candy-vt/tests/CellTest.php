@@ -86,4 +86,46 @@ final class CellTest extends TestCase
         $b = new Cell(grapheme: 'X', sgr: $sgr);
         $this->assertTrue($a->equals($b));
     }
+
+    public function testEqualsFalseOnBoldDifference(): void
+    {
+        // Same grapheme, both cells carry an SGR: equality must consult the
+        // SGR rendition, not the (default, identical) palette ints. This is
+        // what the representation-aware branch of equals() guards.
+        $a = new Cell(grapheme: 'X', sgr: Sgr::empty()->withBold(true));
+        $b = new Cell(grapheme: 'X', sgr: Sgr::empty());
+        $this->assertFalse($a->equals($b));
+    }
+
+    public function testEqualsFalseOnForegroundColorDifference(): void
+    {
+        $a = new Cell(grapheme: 'X', sgr: Sgr::empty()->withForeground(Color::indexed16(1)));
+        $b = new Cell(grapheme: 'X', sgr: Sgr::empty()->withForeground(Color::indexed16(4)));
+        $this->assertFalse($a->equals($b), 'foreground colour alone must distinguish emulator cells');
+    }
+
+    public function testEqualsTrueOnIdenticalTruecolourSgr(): void
+    {
+        $sgr = Sgr::empty()->withForeground(Color::truecolor(1, 2, 3));
+        $a = new Cell(grapheme: 'X', sgr: $sgr);
+        $b = new Cell(grapheme: 'X', sgr: $sgr);
+        $this->assertTrue($a->equals($b));
+        $this->assertSame([1, 2, 3], $a->fgRgb());
+    }
+
+    public function testEqualsDistinguishesTruecolourOnPaletteCells(): void
+    {
+        // Renderer-shape cells (sgr === null) must compare the packed RGB
+        // slots too — the palette int alone is not the whole colour story.
+        // Deleting the truecolour comparison in equals() must turn these RED.
+        $red = new Cell(char: 'x', fg: 1, fgTruecolor: 0xFF0000);
+        $green = new Cell(char: 'x', fg: 1, fgTruecolor: 0x00FF00);
+        $blueBg = new Cell(char: 'x', fg: 1, bgTruecolor: 0x0000FF);
+        $paletteOnly = new Cell(char: 'x', fg: 1);
+
+        $this->assertFalse($red->equals($green), 'packed fg RGB must distinguish');
+        $this->assertFalse($red->equals($blueBg), 'packed bg RGB must distinguish');
+        $this->assertTrue($red->equals(new Cell(char: 'x', fg: 1, fgTruecolor: 0xFF0000)), 'identical RGB compares equal');
+        $this->assertFalse($red->equals($paletteOnly), 'a truecolour cell must never equal a palette-only cell');
+    }
 }
