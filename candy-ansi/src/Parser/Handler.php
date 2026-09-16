@@ -8,7 +8,7 @@ namespace SugarCraft\Ansi\Parser;
  * Receives actions from the VT500 parser state machine.
  *
  * Implement this for the real terminal emulator (`ScreenHandler` in
- * later slices), a debug logger ({@see DebugHandler}), or a unit-test
+ * candy-vt), a debug logger ({@see DebugHandler}), or a unit-test
  * mock for any sub-handler.
  *
  * Mirrors charmbracelet/x/ansi.Handler

@@ -227,19 +227,17 @@ final class Parser
      * parameter group. Indices beyond the last flag default to false — an
      * empty result means the list held no `:` separators.
      *
-     * The flags are read during a {@see Handler} dispatch callback (the
-     * handler holds no parser reference of its own, so a front-end that owns
-     * the Parser — e.g. an emulator terminal — consults them there) or after
-     * `feed()` for the last completed sequence. They reset when the next
-     * sequence's params start accumulating.
+     * A handler that owns its Parser reads them back mid-dispatch this way —
+     * `sugar-spark`'s `AnsiHandler` does exactly that — and a driver reads them
+     * after `feed()` for the last completed sequence; they reset when the next
+     * sequence's params start accumulating. This is the PULL route.
      *
-     * Pulling them here is the LEGACY route for a handler that does not
-     * implement {@see SubparamsAwareHandler}: reaching back requires the
-     * handler to hold a reference to the parser dispatching it, which is the
-     * back-reference {@see SubparamsAwareHandler::setSubparams()} removes. This
-     * accessor stays exactly as it is (it is still how a parser *owner* reads
-     * the last sequence) while both routes are live; see the
-     * "Retirement sequencing" section of that interface for the plan.
+     * The alternative — the one the candy-vt and candy-freeze sinks now use — is
+     * the PUSH: implement {@see SubparamsAwareHandler} and be handed the same
+     * flags in the dispatch call chain, so the handler needs no back-reference to
+     * the parser dispatching it. {@see SubparamsAwareHandler::setSubparams()}
+     * removes that back-reference where taken; it does not forbid pulling. Both
+     * routes stay live and byte-identical (see that interface).
      *
      * @return list<bool>
      */
@@ -363,8 +361,9 @@ final class Parser
     private function param(int $byte): void
     {
         // ';' (0x3B) and ':' (0x3A) both start a new param slot; ':' additionally
-        // marks the PRECEDING slot as a sub-parameter group continuation (ECMA-48
-        // §14.1.1), which is recorded in $subparams and surfaced via subparams().
+        // marks the PRECEDING slot as a sub-parameter group continuation (the
+        // ECMA-48 `:` sub-parameter separator), recorded in $subparams and
+        // surfaced via subparams().
         $n = count($this->params);
         if ($byte === 0x3B || $byte === 0x3A) {
             if ($n >= self::MAX_PARAMS) {
@@ -458,11 +457,12 @@ final class Parser
      * — it opted into {@see SubparamsAwareHandler}.
      *
      * A handler that did not opt in is dispatched exactly as it was before this
-     * capability existed: no extra call, no changed argument, so the existing
-     * `Handler` implementations (candy-vt's `ScreenHandler`/`CsiHandlerImpl`,
-     * candy-freeze's `SgrStateHandler`) keep reading the flags by pulling
-     * {@see subparams()} through their own late binding until that plumbing is
-     * retired in favour of the push.
+     * capability existed: no extra call, no changed argument. The in-tree sinks
+     * DO opt in and read the push — candy-vt's `ScreenHandler` (emulator) and
+     * `RendererHandler` (renderer, forwarding to `CsiHandlerImpl`), and
+     * candy-freeze's `SgrStateHandler` — so none of them needs the late-bound
+     * back-reference any more. {@see subparams()} remains public for a program
+     * that owns a Parser directly; see {@see SubparamsAwareHandler}.
      */
     private function pushSubparams(): void
     {

@@ -12,19 +12,22 @@ namespace SugarCraft\Ansi\Parser;
  * control sequence separate parameters with `;` and sub-parameters with `:`
  * inside that string), so `CSI 4 : 3 m` (curly underline) and
  * `CSI 4 ; 3 m` (underline, then italic) both arrive as `[4, 3]`. The continuation flags that distinguish them
- * live on the parser, and until this interface existed the only way a handler
- * could get them was to *pull*: the front-end that owns the Parser hands the
- * handler a way back to it, and the handler calls {@see Parser::subparams()}
- * from inside its own dispatch. Two shapes do this today — candy-vt injects a
- * closure (`attachSubparamsProvider()`), candy-freeze injects the Parser object
- * itself (`bindParser()`) — which is itself an argument for one pushed contract.
+ * live on the parser, and before this interface existed the only way a handler
+ * could get them was to *pull*: the front-end that owns the Parser handed the
+ * handler a way back to it, and the handler read {@see Parser::subparams()}
+ * from inside its own dispatch. The two injection helpers that bridged this on
+ * the candy-vt/candy-freeze paths (a closure via `attachSubparamsProvider()`, a
+ * Parser object via `bindParser()`) are gone now — those paths take the push
+ * instead. The pull itself is NOT a dead route: a handler that owns its Parser
+ * (sugar-spark's `AnsiHandler` does `new Parser($this)` and reads
+ * {@see Parser::subparams()} mid-dispatch) still pulls, and remains free to.
  *
- * That pull inverts the dependency the parser otherwise has — the handler ends
- * up holding a reference to the thing dispatching it — and the reference can go
- * stale in ways the type system cannot see: candy-vt's `Terminal::__clone()` has
+ * That pull inverted the dependency the parser otherwise has — the handler ended
+ * up holding a reference to the thing dispatching it — and the reference could go
+ * stale in ways the type system cannot see: a handler reused across two parsers
+ * reads whichever one bound last, and candy-vt's `Terminal::__clone()` once had
  * to re-attach the closure after cloning precisely because the inherited one
- * still late-binds to the *original* terminal's parser, and a handler reused
- * across two parsers reads whichever one bound last. Pushing the flags at
+ * still late-binds to the *original* terminal's parser. Pushing the flags at
  * dispatch time removes the back-reference entirely: the handler is told, in the
  * same call chain that shows it the parameters, how those parameters were
  * grouped.
@@ -52,47 +55,55 @@ namespace SugarCraft\Ansi\Parser;
  * the parameter list carries its own continuation flags instead of requiring
  * callers to consult the parser.
  *
- * ## Retirement sequencing (both routes live for one wave)
+ * ## Two live routes: push (new) and pull (still used)
  *
- * The pull-based late binding is NOT deleted by this interface's introduction:
- * its call sites live in consuming libraries, and removing the pull route from
- * here would fatally break their CI. The follow-up (wave-6 child "vt-B") must
- * migrate the consumers, then tag the three plumbing symbols `@deprecated` —
- * they are defined OUTSIDE this repository, which is why no `@deprecated` tag
- * can accompany this interface:
+ * This interface shipped one wave ahead of its consumers so neither side needed a
+ * big-bang cutover, then wave-6 "vt-B" (#1447) migrated the candy-vt and
+ * candy-freeze paths to the push and DELETED the pull-bridging injection
+ * helpers those paths used (a closure-injection helper on two classes, a
+ * Parser-injection helper on a third) —
+ * `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()`,
+ * `SugarCraft\Vt\Parser\CsiHandlerImpl::attachSubparamsProvider()`, and
+ * `SugarCraft\Freeze\SgrStateHandler::bindParser()`. Those helpers live in
+ * consuming libraries (never in candy-ansi), which is why no `@deprecated` tag
+ * ever accompanied this interface.
  *
- *  - `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()`
- *  - `SugarCraft\Vt\Parser\CsiHandlerImpl::attachSubparamsProvider()`
- *  - `SugarCraft\Freeze\SgrStateHandler::bindParser()`
+ * The raw pull via {@see Parser::subparams()} is a separate matter and is NOT
+ * retired: `sugar-spark`'s `AnsiHandler` owns its Parser (`new Parser($this)`)
+ * and reads the flags back mid-`csiDispatch()` without implementing this
+ * interface. So both routes remain live — push where a handler opts in, pull
+ * where a handler owns the parser it was passed to.
  *
- * ### Which of those the push can actually reach
+ * ### Which objects the push actually reaches (re-derived from current wiring)
  *
  * The parser consults exactly one object: the {@see Handler} passed to
- * {@see Parser::__construct()}. A capable handler *nested behind* a plain
- * wrapper therefore receives nothing, so the migration is not uniformly
- * mechanical, and vt-B must check the wiring rather than assume it:
+ * {@see Parser::__construct()}. A capable handler *nested behind* a plain wrapper
+ * receives nothing, so the *sink* must be the capable one. The sinks that opt in:
  *
- *  - **push-reachable** — `ScreenHandler` (given straight to `new Parser(...)`
- *    by `candy-vt/src/Terminal/Terminal.php`, both the constructor and
- *    `__clone()`) and `SgrStateHandler` (`candy-freeze/src/AnsiParser.php`).
- *    Implementing this interface on those two classes is sufficient.
- *  - **NOT push-reachable** — `CsiHandlerImpl` in the candy-vt *renderer* path,
- *    where `candy-vt/src/Terminal.php::new()` (not the same class as the
- *    `Terminal/Terminal.php` emulator above) hands the parser a plain
- *    {@see HandlerAdapter} and
- *    keeps `CsiHandlerImpl` inside it as that adapter's constructor argument.
- *    Either the adapter grows the capability and forwards `setSubparams()` down
- *    to the wrapped handler, or this path keeps the pull route. Deleting
- *    `CsiHandlerImpl::attachSubparamsProvider()` without doing one of those two
- *    would silently regress colon SGRs there — no fatal, no red test.
+ *  - `SugarCraft\Vt\Handler\ScreenHandler` — the emulator's sink, handed straight
+ *    to `new Parser(...)` by `candy-vt/src/Terminal/Terminal.php`; implements this
+ *    interface.
+ *  - `SugarCraft\Vt\Parser\RendererHandler` — the renderer's sink, handed to
+ *    `new Parser(...)` by `candy-vt/src/Terminal.php` (a different class from the
+ *    `Terminal/Terminal.php` emulator above); implements this interface and
+ *    FORWARDS the flags down to the wrapped `CsiHandlerImpl` whose `sgr()` needs
+ *    them. The plain {@see HandlerAdapter} sits *inside* that decorator and is no
+ *    longer passed to the parser directly, which is why its own `escDispatch()`
+ *    can stay a no-op: `RendererHandler` takes over just that one event.
+ *  - `SugarCraft\Freeze\SgrStateHandler` — candy-freeze's sink
+ *    (`candy-freeze/src/AnsiParser.php`); implements this interface.
  *
- * Re-derive this map from the wiring at migration time: the only object that
- * matters is the one passed to `new Parser(...)`, and wrappers come and go.
+ * Sinks that do NOT opt in need nothing pushed and are dispatched unchanged —
+ * e.g. candy-vcr's `MouseModeTracker` and candy-pty's `AnsiOutputParser` pass a
+ * plain {@see Handler}, and sugar-spark's `AnsiHandler` pulls instead (above).
  *
- * Until every consumer has migrated, {@see Parser::subparams()} stays public and
- * byte-compatible, and a class is free to implement this interface while
- * ignoring the pull route. Non-implementors are dispatched with zero behaviour
- * change.
+ * Re-derive this map from the wiring before trusting it: the only object that
+ * matters is the one passed to `new Parser(...)`, and wrappers move between waves.
+ *
+ * {@see Parser::subparams()} stays public and byte-compatible — for pull handlers
+ * like sugar-spark's and for any driver reading the last sequence after `feed()`.
+ * A class is free to implement this interface while ignoring the pull route.
+ * Non-implementors are dispatched with zero behaviour change.
  */
 interface SubparamsAwareHandler extends Handler
 {
