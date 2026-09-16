@@ -10,14 +10,11 @@ use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CompressedJsonlFormat;
-use SugarCraft\Vcr\Format\Format;
+use SugarCraft\Vcr\Tests\Support\DecodedJson;
 
 final class CompressedJsonlFormatTest extends TestCase
 {
-    public function testImplementsFormatInterface(): void
-    {
-        $this->assertInstanceOf(Format::class, new CompressedJsonlFormat());
-    }
+    use DecodedJson;
 
     public function testHeaderEncodesAsFirstLine(): void
     {
@@ -26,7 +23,7 @@ final class CompressedJsonlFormatTest extends TestCase
         $lines = explode("\n", trim($encoded));
 
         $this->assertCount(1, $lines);
-        $decoded = json_decode($lines[0], true);
+        $decoded = self::decodeArray($lines[0]);
         $this->assertSame(1, $decoded['v']);
         $this->assertSame(80, $decoded['cols']);
         $this->assertSame(24, $decoded['rows']);
@@ -49,17 +46,17 @@ final class CompressedJsonlFormatTest extends TestCase
         $lines = explode("\n", rtrim($encoded, "\n"));
         $this->assertCount(4, $lines, '1 header + 3 events');
 
-        $resize = json_decode($lines[1], true);
+        $resize = self::decodeArray($lines[1]);
         $this->assertSame('resize', $resize['k']);
         $this->assertSame(0.001, $resize['t']);
         $this->assertSame(80, $resize['cols']);
         $this->assertSame(24, $resize['rows']);
 
-        $input = json_decode($lines[2], true);
+        $input = self::decodeArray($lines[2]);
         $this->assertSame('input', $input['k']);
-        $this->assertSame('KeyMsg', $input['msg']['@type']);
+        $this->assertSame('KeyMsg', self::decodeNested($input, 'msg')['@type']);
 
-        $quit = json_decode($lines[3], true);
+        $quit = self::decodeArray($lines[3]);
         $this->assertSame('quit', $quit['k']);
         $this->assertArrayNotHasKey('payload', $quit);
     }
@@ -91,15 +88,16 @@ final class CompressedJsonlFormatTest extends TestCase
         $this->assertSame(EventKind::Quit, $loaded->events[3]->kind);
 
         $this->assertSame(["\x1b[2J\x1b[H"], [$loaded->events[1]->payload['b']]);
-        $this->assertSame('q', $loaded->events[2]->payload['msg']['key']);
+        $this->assertSame('q', self::decodeNested($loaded->events[2]->payload, 'msg')['key']);
         $this->assertSame([], $loaded->events[3]->payload);
         $this->assertSame(1.201, $loaded->events[3]->t);
     }
 
     public function testFileWriteAndReadWithGzipExtension(): void
     {
-        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-test-') . '.gz';
-        $this->assertNotFalse($path);
+        $base = tempnam(sys_get_temp_dir(), 'candy-vcr-test-');
+        $this->assertNotFalse($base);
+        $path = $base . '.gz';
 
         $cassette = new Cassette(
             $this->stubHeader(),
@@ -155,8 +153,9 @@ final class CompressedJsonlFormatTest extends TestCase
 
     public function testGzipFileIsActuallyCompressed(): void
     {
-        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-test-') . '.gz';
-        $this->assertNotFalse($path);
+        $base = tempnam(sys_get_temp_dir(), 'candy-vcr-test-');
+        $this->assertNotFalse($base);
+        $path = $base . '.gz';
 
         $cassette = new Cassette(
             $this->stubHeader(),
@@ -239,8 +238,9 @@ final class CompressedJsonlFormatTest extends TestCase
 
     public function testCustomCompressionLevel(): void
     {
-        $path = tempnam(sys_get_temp_dir(), 'candy-vcr-test-') . '.gz';
-        $this->assertNotFalse($path);
+        $base = tempnam(sys_get_temp_dir(), 'candy-vcr-test-');
+        $this->assertNotFalse($base);
+        $path = $base . '.gz';
 
         $cassette = new Cassette(
             $this->stubHeader(),

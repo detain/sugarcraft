@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\CassetteHeader;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for CassetteHeader constructor validation.
@@ -24,10 +25,23 @@ final class CassetteHeaderValidationTest extends TestCase
         $path = \tempnam(\sys_get_temp_dir(), 'candy-vcr-cassette-');
         self::assertIsString($path);
         \file_put_contents($path, $json);
-        $decoded = \json_decode((string) \file_get_contents($path), true);
+        $decoded = \json_decode((string) Stream::read($path), true);
         \unlink($path);
 
         return $decoded;
+    }
+
+    /**
+     * Builds a CassetteHeader through reflection. These tests feed the
+     * constructor's runtime guards values the declared parameter types
+     * statically forbid — exactly the hostile-cassette shapes the guards
+     * exist to reject — so the call must bypass static argument checking.
+     *
+     * @param array<string, mixed> $args
+     */
+    private static function newHeaderRuntime(array $args): CassetteHeader
+    {
+        return (new \ReflectionClass(CassetteHeader::class))->newInstanceArgs($args);
     }
 
     public function testRejectsVersionZero(): void
@@ -158,14 +172,14 @@ final class CassetteHeaderValidationTest extends TestCase
         // The mode arrives from a decoded cassette line, so model that boundary
         // (JSON → mixed) instead of a literal the declared type can never hold.
         $mode = self::decodeCassetteValue('"invalid"');
-        new CassetteHeader(
-            version: 1,
-            createdAt: '2026-05-07T10:00:00Z',
-            cols: 80,
-            rows: 24,
-            runtime: 'test',
-            timestampMode: $mode,
-        );
+        self::newHeaderRuntime([
+            'version' => 1,
+            'createdAt' => '2026-05-07T10:00:00Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'test',
+            'timestampMode' => $mode,
+        ]);
     }
 
     public function testRejectsEmptyEnvKey(): void
@@ -189,14 +203,14 @@ final class CassetteHeaderValidationTest extends TestCase
         // Decoding a JSON object with a numeric-string key yields a real int
         // key — exactly how a hand-edited cassette smuggles this past the type.
         $env = self::decodeCassetteValue('{"123": "value"}');
-        new CassetteHeader(
-            version: 1,
-            createdAt: '2026-05-07T10:00:00Z',
-            cols: 80,
-            rows: 24,
-            runtime: 'test',
-            env: $env,
-        );
+        self::newHeaderRuntime([
+            'version' => 1,
+            'createdAt' => '2026-05-07T10:00:00Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'test',
+            'env' => $env,
+        ]);
     }
 
     public function testRejectsNonStringEnvValue(): void
@@ -204,14 +218,14 @@ final class CassetteHeaderValidationTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('must be a string');
         $env = self::decodeCassetteValue('{"KEY": 123}');
-        new CassetteHeader(
-            version: 1,
-            createdAt: '2026-05-07T10:00:00Z',
-            cols: 80,
-            rows: 24,
-            runtime: 'test',
-            env: $env,
-        );
+        self::newHeaderRuntime([
+            'version' => 1,
+            'createdAt' => '2026-05-07T10:00:00Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'test',
+            'env' => $env,
+        ]);
     }
 
     public function testRejectsNonIntEnvValue(): void
@@ -219,14 +233,14 @@ final class CassetteHeaderValidationTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('must be a string');
         $env = self::decodeCassetteValue('{"KEY": ["array"]}');
-        new CassetteHeader(
-            version: 1,
-            createdAt: '2026-05-07T10:00:00Z',
-            cols: 80,
-            rows: 24,
-            runtime: 'test',
-            env: $env,
-        );
+        self::newHeaderRuntime([
+            'version' => 1,
+            'createdAt' => '2026-05-07T10:00:00Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'test',
+            'env' => $env,
+        ]);
     }
 
     public function testAllOptionalParameters(): void

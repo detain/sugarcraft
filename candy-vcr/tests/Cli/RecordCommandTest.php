@@ -9,7 +9,9 @@ use SugarCraft\Vcr\Cli\Application;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.1 — `candy-vcr record` skeleton. The command spawns a real
@@ -27,8 +29,8 @@ final class RecordCommandTest extends TestCase
     public function testApplicationRegistersRecordCommand(): void
     {
         $app = new Application();
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $app->run(['candy-vcr', 'help'], $stdout, $stderr);
@@ -45,9 +47,9 @@ final class RecordCommandTest extends TestCase
 
     public function testMissingCommandPrintsUsage(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run([], $stdout, $stderr);
@@ -63,9 +65,9 @@ final class RecordCommandTest extends TestCase
 
     public function testUnknownOptionExitsTwo(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(['--bogus', '--', '/bin/echo'], $stdout, $stderr);
@@ -81,9 +83,9 @@ final class RecordCommandTest extends TestCase
 
     public function testNonPositiveDimensionsRejected(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(['--cols=0', '--', '/bin/echo'], $stdout, $stderr);
@@ -106,9 +108,9 @@ final class RecordCommandTest extends TestCase
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-echo-');
         $this->assertIsString($cassette);
 
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(
@@ -135,7 +137,7 @@ final class RecordCommandTest extends TestCase
             $sawResize = false;
             foreach ($loaded->events as $event) {
                 if ($event->kind === EventKind::Output) {
-                    $outputBlob .= (string) ($event->payload['b'] ?? '');
+                    $outputBlob .= Scalars::string($event->payload['b'] ?? '', 'recorded output bytes');
                 } elseif ($event->kind === EventKind::Quit) {
                     $sawQuit = true;
                 } elseif ($event->kind === EventKind::Resize) {
@@ -171,9 +173,9 @@ final class RecordCommandTest extends TestCase
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-size-');
         $this->assertIsString($cassette);
 
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(
@@ -217,9 +219,9 @@ final class RecordCommandTest extends TestCase
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-fail-');
         $this->assertIsString($cassette);
 
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(

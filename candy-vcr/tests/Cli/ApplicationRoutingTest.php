@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\Application;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Regression: positional args reach Symfony commands through
@@ -25,8 +26,8 @@ final class ApplicationRoutingTest extends TestCase
 {
     public function testPositionalTapeArgReachesRenderTapeCommand(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $this->assertNotFalse($stdout);
         $this->assertNotFalse($stderr);
 

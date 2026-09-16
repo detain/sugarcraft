@@ -64,7 +64,8 @@ final class CassetteTest extends TestCase
 
     public function testHeaderCurrentVersionConstant(): void
     {
-        $this->assertSame(1, CassetteHeader::CURRENT_VERSION);
+        $currentVersion = (new \ReflectionClassConstant(CassetteHeader::class, 'CURRENT_VERSION'))->getValue();
+        $this->assertSame(1, $currentVersion);
     }
 
     public function testCassetteConstructorAndAccessors(): void

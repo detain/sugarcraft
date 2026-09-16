@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Encode;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\TapeToGif;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * End-to-end proof that a tape's `Output <path>` directive routes the rendered
@@ -54,7 +55,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
         // Pre-fix the directive was discarded and the GIF landed at demo.gif.
         $this->assertSame($expected, $written);
         $this->assertFileExists($expected);
-        $this->assertSame('GIF89a', (string) file_get_contents($expected, false, null, 0, 6));
+        $this->assertSame('GIF89a', (string) Stream::readPrefix($expected, 6));
         $this->assertFileDoesNotExist($this->dir . '/demo.gif');
     }
 
@@ -111,7 +112,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             $this->assertSame($default, $written);
             $this->assertFileExists($default);
             $this->assertFalse(is_link($default), 'symlink entry must be replaced by a regular file');
-            $this->assertSame('GIF89a', (string) file_get_contents($default, false, null, 0, 6));
+            $this->assertSame('GIF89a', (string) Stream::readPrefix($default, 6));
             $this->assertFileDoesNotExist($escapeTarget, 'render must NOT write through the symlink to the outside target');
         } finally {
             @unlink($escapeTarget);
@@ -141,7 +142,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             $this->assertSame($explicit, $written);
             $this->assertFileExists($explicit);
             $this->assertFalse(is_link($explicit), 'symlink entry must be replaced by a regular file');
-            $this->assertSame('GIF89a', (string) file_get_contents($explicit, false, null, 0, 6));
+            $this->assertSame('GIF89a', (string) Stream::readPrefix($explicit, 6));
             $this->assertFileDoesNotExist($escapeTarget, 'render must NOT write through the symlink');
         } finally {
             @unlink($escapeTarget);
@@ -176,7 +177,7 @@ final class TapeToGifOutputDirectiveTest extends TestCase
             clearstatcache();
             $this->assertSame($default, $written);
             $this->assertFileExists($default);
-            $this->assertSame($known, (string) file_get_contents($outside), 'hard-linked outside file must not be truncated');
+            $this->assertSame($known, (string) Stream::read($outside), 'hard-linked outside file must not be truncated');
             $this->assertNotSame($originalInode, fileinode($default), 'output must be a fresh inode, not the shared one');
         } finally {
             @unlink($outside);

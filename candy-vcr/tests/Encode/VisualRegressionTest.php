@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\TapeToGif;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Visual regression: re-render each curated tape and diff against the

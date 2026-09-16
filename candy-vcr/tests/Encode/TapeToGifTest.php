@@ -10,6 +10,7 @@ use SugarCraft\Vcr\Encode\GifEncoder;
 use SugarCraft\Vcr\Encode\PhpGifEncoder;
 use SugarCraft\Vcr\Encode\TapeToGif;
 use SugarCraft\Vcr\Tape\Compiler;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for TapeToGif pipeline.
@@ -45,7 +46,7 @@ final class TapeToGifTest extends TestCase
             $this->assertFileExists($outputPath);
             $this->assertGreaterThan(0, filesize($outputPath));
 
-            $header = file_get_contents($outputPath, false, null, 0, 6);
+            $header = Stream::readPrefix($outputPath, 6);
             $this->assertSame('GIF89a', $header);
         } finally {
             @unlink($outputPath);
@@ -82,7 +83,7 @@ final class TapeToGifTest extends TestCase
             $this->assertFileExists($outputPath);
             $this->assertGreaterThan(0, filesize($outputPath));
 
-            $header = file_get_contents($outputPath, false, null, 0, 6);
+            $header = Stream::readPrefix($outputPath, 6);
             $this->assertSame('GIF89a', $header);
         } finally {
             @unlink($outputPath);
@@ -108,7 +109,7 @@ final class TapeToGifTest extends TestCase
             $this->assertFileExists($outputPath);
             $this->assertGreaterThan(0, filesize($outputPath));
 
-            $header = file_get_contents($outputPath, false, null, 0, 6);
+            $header = Stream::readPrefix($outputPath, 6);
             $this->assertSame('GIF89a', $header);
         } finally {
             @unlink($outputPath);
@@ -131,7 +132,7 @@ final class TapeToGifTest extends TestCase
             $this->assertFileExists($outputPath);
             $this->assertGreaterThan(0, filesize($outputPath));
 
-            $header = file_get_contents($outputPath, false, null, 0, 6);
+            $header = Stream::readPrefix($outputPath, 6);
             $this->assertSame('GIF89a', $header);
         } finally {
             @unlink($outputPath);

@@ -11,6 +11,7 @@ use SugarCraft\Vcr\Cli\DiffCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for DiffCommand CLI.
@@ -18,6 +19,9 @@ use SugarCraft\Vcr\Format\JsonlFormat;
  */
 final class DiffCommandTest extends TestCase
 {
+    /**
+     * @param list<Event> $events
+     */
     private function writeCassette(string $path, array $events, int $version = 1, int $cols = 80, int $rows = 24, string $runtime = 'test'): string
     {
         $cassette = new Cassette(
@@ -36,8 +40,8 @@ final class DiffCommandTest extends TestCase
 
     public function testDiffWrongArityZero(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new DiffCommand())->run([], $stdout, $stderr);
         rewind($stderr);
         $err = (string) stream_get_contents($stderr);
@@ -51,8 +55,8 @@ final class DiffCommandTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'cv-diff-');
         $this->writeCassette($path, []);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$path], $stdout, $stderr);
             rewind($stderr);
             $err = (string) stream_get_contents($stderr);
@@ -73,8 +77,8 @@ final class DiffCommandTest extends TestCase
         $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events);
         $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -93,8 +97,8 @@ final class DiffCommandTest extends TestCase
         $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events, 1);
         $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events, 2);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -113,8 +117,8 @@ final class DiffCommandTest extends TestCase
         $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events, 1, 80, 24);
         $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events, 1, 120, 40);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -133,8 +137,8 @@ final class DiffCommandTest extends TestCase
         $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events, 1, 80, 24, 'runtime-a');
         $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $events, 1, 80, 24, 'runtime-b');
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -161,8 +165,8 @@ final class DiffCommandTest extends TestCase
             ]
         );
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -193,8 +197,8 @@ final class DiffCommandTest extends TestCase
             ]
         );
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -225,8 +229,8 @@ final class DiffCommandTest extends TestCase
             ]
         );
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -250,8 +254,8 @@ final class DiffCommandTest extends TestCase
             [new Event(t: 0.0, kind: EventKind::Resize, payload: ['cols' => 80, 'rows' => 24])]
         );
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -275,8 +279,8 @@ final class DiffCommandTest extends TestCase
             [new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'b'])]
         );
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -291,8 +295,8 @@ final class DiffCommandTest extends TestCase
 
     public function testDiffNonExistentFile(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new DiffCommand())->run(['/no/such/a.cas', '/no/such/b.cas'], $stdout, $stderr);
         rewind($stderr);
         $err = (string) stream_get_contents($stderr);

@@ -512,8 +512,10 @@ final class RecordCommand implements Command
         $effectiveRegex = ($regex === null || $regex === '') ? self::SECRET_KEY_REGEX : $regex;
 
         $kept = [];
+        // Both feeding branches above yield array<string,string>, so only the
+        // empty-name edge can skip an entry here.
         foreach ($env as $k => $v) {
-            if (!\is_string($k) || $k === '' || !\is_string($v)) {
+            if ($k === '') {
                 continue;
             }
             if (!$captureAll && @\preg_match($effectiveRegex, $k) === 1) {

@@ -11,6 +11,7 @@ use SugarCraft\Vcr\Cli\Application;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Section I.2 — `candy-vcr inspect <cassette> --frames` walks the cassette
@@ -128,8 +129,8 @@ final class InspectFramesTest extends TestCase
      */
     private function runCli(array $argv): array
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $this->assertNotFalse($stdout);
         $this->assertNotFalse($stderr);
 

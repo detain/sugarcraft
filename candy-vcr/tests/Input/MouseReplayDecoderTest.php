@@ -46,6 +46,9 @@ final class MouseReplayDecoderTest extends TestCase
         self::assertNull(MouseReplayDecoder::decode("\x1b[M\x20\x21\x22", new MouseModeTracker()));
     }
 
+    /**
+     * @param class-string<\SugarCraft\Core\Msg> $class
+     */
     #[DataProvider('legacyButtonBitsProvider')]
     public function testButtonBitSemanticsMirrorInputReader(int $buttonCode, string $class, MouseButton $button, MouseAction $action): void
     {
@@ -59,6 +62,9 @@ final class MouseReplayDecoderTest extends TestCase
         self::assertSame(6, $msg->y);
     }
 
+    /**
+     * @return array<string, array{int, class-string<\SugarCraft\Core\Msg>, MouseButton, MouseAction}>
+     */
     public static function legacyButtonBitsProvider(): array
     {
         return [

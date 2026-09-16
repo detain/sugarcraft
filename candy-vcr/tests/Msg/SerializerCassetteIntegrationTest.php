@@ -14,6 +14,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Msg\Registry;
+use SugarCraft\Vcr\Support\ObjectMap;
 
 /**
  * Verifies the Msg serializer envelope round-trips cleanly through the
@@ -42,7 +43,9 @@ final class SerializerCassetteIntegrationTest extends TestCase
         $loaded = $format->decode($format->encode($cassette));
 
         $this->assertSame(1, $loaded->eventCount());
-        $msg = $registry->decode($loaded->events[0]->payload['msg']);
+        $raw = $loaded->events[0]->payload['msg'];
+        $this->assertIsArray($raw);
+        $msg = $registry->decode(ObjectMap::of($raw, 'test envelope'));
         $this->assertInstanceOf(KeyMsg::class, $msg);
         $this->assertSame('q', $msg->rune);
         $this->assertTrue($msg->ctrl);
@@ -68,7 +71,9 @@ final class SerializerCassetteIntegrationTest extends TestCase
         $loaded = $format->decode($format->encode($cassette));
 
         $this->assertSame('q', $loaded->events[0]->payload['b']);
-        $msg = $registry->decode($loaded->events[1]->payload['msg']);
+        $raw = $loaded->events[1]->payload['msg'];
+        $this->assertIsArray($raw);
+        $msg = $registry->decode(ObjectMap::of($raw, 'test envelope'));
         $this->assertInstanceOf(WindowSizeMsg::class, $msg);
         $this->assertSame(80, $msg->cols);
         $this->assertSame(24, $msg->rows);
@@ -89,7 +94,9 @@ final class SerializerCassetteIntegrationTest extends TestCase
 
         $format = new JsonlFormat();
         $loaded = $format->decode($format->encode($cassette));
-        $msg = $registry->decode($loaded->events[0]->payload['msg']);
+        $raw = $loaded->events[0]->payload['msg'];
+        $this->assertIsArray($raw);
+        $msg = $registry->decode(ObjectMap::of($raw, 'test envelope'));
 
         $this->assertInstanceOf(UserJsonableMsg::class, $msg);
         $this->assertSame('tap', $msg->name);

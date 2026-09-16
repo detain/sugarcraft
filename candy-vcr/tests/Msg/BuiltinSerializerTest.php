@@ -55,6 +55,7 @@ final class BuiltinSerializerTest extends TestCase
         $envelope = (new BuiltinSerializer())->encode($msg);
         $this->assertSame('up', $envelope['type']);
         $decoded = (new BuiltinSerializer())->decode($envelope);
+        $this->assertInstanceOf(KeyMsg::class, $decoded);
         $this->assertSame(KeyType::Up, $decoded->type);
     }
 

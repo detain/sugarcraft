@@ -16,6 +16,7 @@ use SugarCraft\Vcr\Cli\StatsCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 final class ApplicationTest extends TestCase
 {
@@ -220,8 +221,8 @@ final class ApplicationTest extends TestCase
      */
     private function exec($target, array $argv = [], array $cmdArgs = []): array
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         if ($target instanceof Application) {
             $exit = $target->run($argv, $stdout, $stderr);
         } else {

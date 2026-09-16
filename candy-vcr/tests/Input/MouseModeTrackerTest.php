@@ -52,6 +52,9 @@ final class MouseModeTrackerTest extends TestCase
         self::assertFalse($tracker->enabled(MouseModeTracker::URXVT_COORDINATES));
     }
 
+    /**
+     * @return array<string, array{int}>
+     */
     public static function watchedModeProvider(): array
     {
         return [

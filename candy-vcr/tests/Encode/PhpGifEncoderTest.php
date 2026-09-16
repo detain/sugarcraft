@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Encode;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\GifEncoder;
 use SugarCraft\Vcr\Encode\PhpGifEncoder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for PhpGifEncoder.
@@ -114,7 +115,7 @@ final class PhpGifEncoderTest extends TestCase
 
         $encoder->encode([$pngPath], $outputPath, 30);
 
-        $content = file_get_contents($outputPath);
+        $content = Stream::read($outputPath);
         $this->assertNotEmpty($content);
         $this->assertStringStartsWith('GIF89a', $content);
     }
@@ -152,7 +153,7 @@ final class PhpGifEncoderTest extends TestCase
         $encoder->encode([$pngPath], $outputPath, 30);
 
         $this->assertFileExists($outputPath);
-        $bytes = file_get_contents($outputPath);
+        $bytes = Stream::read($outputPath);
         $this->assertIsString($bytes);
 
         $this->assertStringStartsWith('GIF89a', $bytes);

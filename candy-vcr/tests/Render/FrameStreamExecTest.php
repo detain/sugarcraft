@@ -13,6 +13,7 @@ use SugarCraft\Vcr\Tape\Parser;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 use SugarCraft\Vt\Snapshot;
 use SugarCraft\Vt\Terminal;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Exec-mode proof: with `Set Shell`, FrameStream must actually RUN the typed
@@ -96,7 +97,7 @@ final class FrameStreamExecTest extends TestCase
      */
     private function compileTape(): array
     {
-        $source = file_get_contents(self::TAPE);
+        $source = Stream::read(self::TAPE);
         self::assertIsString($source);
         $tokens = (new Lexer())->tokenize($source);
         $ast = (new Parser())->parse($tokens);

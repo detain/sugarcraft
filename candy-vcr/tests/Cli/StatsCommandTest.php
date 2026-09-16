@@ -7,10 +7,12 @@ namespace SugarCraft\Vcr\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
+use SugarCraft\Vcr\Cli\Command;
 use SugarCraft\Vcr\Cli\StatsCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * @covers \SugarCraft\Vcr\Cli\StatsCommand
@@ -175,8 +177,8 @@ final class StatsCommandTest extends TestCase
      */
     private function exec($command, array $args): array
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = $command->run($args, $stdout, $stderr);
         rewind($stdout);
         rewind($stderr);

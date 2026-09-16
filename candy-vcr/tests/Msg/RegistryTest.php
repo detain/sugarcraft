@@ -53,6 +53,7 @@ final class RegistryTest extends TestCase
 
         $r = (new Registry())->register($custom)->register(new BuiltinSerializer());
         $envelope = $r->encode(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($envelope);
         $this->assertSame('CustomKey', $envelope['@type']);
     }
 

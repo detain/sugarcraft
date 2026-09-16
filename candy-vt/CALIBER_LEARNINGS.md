@@ -607,3 +607,31 @@ Since the Cell unification, `SugarCraft\Vt\Cell\Cell` is a pure
 unknown class and cascaded false errors repo-wide. Internal code must
 `use SugarCraft\Vt\Cell;`; only the alias-pinning tests (CellTest,
 CellAliasTest, tests/Cell/*) may keep the historical FQN.
+
+## Grid→SGR re-emit: closed with a verdict (W8-F, 2026-09-16)
+
+The w7 handoff asked whether anything should consume `Cell::colorSgr()`
+(grid→SGR re-emit) and recorded "zero production callers, nothing to build
+today". Fresh repo-wide re-derivation on `ai/w8-vcr-tail` (grep
+`\->(colorSgr|fgRgb|bgRgb)\(` across all 58 libs, vendor excluded):
+
+- `Cell::fgRgb()` / `Cell::bgRgb()` — the premise drifted: the candy-vcr
+  raster pipeline consumes them for real (`src/Raster/CellColor.php`
+  `foreground()/background()/pack()` → `GdRasterizer` lines 141/142/248/249/291,
+  `ImagickRasterizer` lines 185/186/337). Pixels want triples, not SGR — the
+  correct seam is the RGB getters, and it is already wired.
+- `Cell::colorSgr()` — still zero production callers anywhere. The only
+  non-Cell.php references are its pins: `candy-vt/tests/Parser/
+  RendererTruecolorAndEscTest` and `candy-vcr/tests/CellColorSgrTest` (which
+  itself states "rasterizers do not yet consume colorSgr()").
+
+**Decision: do not wire a caller; do not fabricate a feature.** The two
+candidate consumers decline the offer on inspection — rasterizers draw pixels
+(RGB triples), and the terminal-output paths (`Player`, `DiffWriter`,
+`InspectCommand`) replay prebuilt byte streams or dump ints; re-emitting SGR
+from a rendered grid would invent a second, lossier encoding of bytes the
+tape already carries. `colorSgr()` stays a tested public parity bridge
+(cell-level SGR 38;2/48;5 emitter): if a consumer appears (e.g. a future
+"diff two snapshots as coloured ANSI" view), build on it rather than
+hand-rolling `38;2;` sprintf. Silence is not an outcome — this entry closes
+the item.

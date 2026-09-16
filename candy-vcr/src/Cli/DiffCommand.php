@@ -80,24 +80,29 @@ final class DiffCommand implements Command
             $aEvent = $a->events[$i] ?? null;
             $bEvent = $b->events[$i] ?? null;
 
+            // $i < max(aCount, bCount) guarantees at least one side exists,
+            // but the null-safe reads below keep that visible to the types.
+            $aKind = $aEvent?->kind->value ?? '∅';
+            $bKind = $bEvent?->kind->value ?? '∅';
+
             if ($aEvent === null) {
-                $diffs[] = sprintf('event[%d]: missing in A, present in B (%s)', $i, $bEvent->kind->value);
+                $diffs[] = sprintf('event[%d]: missing in A, present in B (%s)', $i, $bKind);
                 continue;
             }
             if ($bEvent === null) {
-                $diffs[] = sprintf('event[%d]: present in A (%s), missing in B', $i, $aEvent->kind->value);
+                $diffs[] = sprintf('event[%d]: present in A (%s), missing in B', $i, $aKind);
                 continue;
             }
             if ($aEvent->kind !== $bEvent->kind) {
                 $diffs[] = sprintf(
                     'event[%d]: kind %s != %s',
                     $i,
-                    $aEvent->kind->value,
-                    $bEvent->kind->value,
+                    $aKind,
+                    $bKind,
                 );
             }
             if ($aEvent->payload !== $bEvent->payload) {
-                $diffs[] = sprintf('event[%d] payload differs (%s)', $i, $aEvent->kind->value);
+                $diffs[] = sprintf('event[%d] payload differs (%s)', $i, $aKind);
             }
         }
 

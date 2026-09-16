@@ -90,9 +90,11 @@ trait RequiresWorkingPty
             ];
         }
 
-        $devNullIn = @\fopen('/dev/null', 'r');
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        // Raw fopen keeps this gate a graceful skip when streams fail —
+        // Stream::memory() would throw instead.
+        $devNullIn = @fopen('/dev/null', 'r');
+        $stdout = fopen('php://memory', 'r+');
+        $stderr = fopen('php://memory', 'r+');
         if (!\is_resource($devNullIn) || !\is_resource($stdout) || !\is_resource($stderr)) {
             if (\is_resource($devNullIn)) {
                 \fclose($devNullIn);

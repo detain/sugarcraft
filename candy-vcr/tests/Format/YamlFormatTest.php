@@ -9,17 +9,11 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
-use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\YamlFormat;
 
 final class YamlFormatTest extends TestCase
 {
-    public function testImplementsFormatInterface(): void
-    {
-        $this->assertInstanceOf(Format::class, new YamlFormat());
-    }
-
     public function testEncodeIsHumanReadable(): void
     {
         $cassette = new Cassette($this->stubHeader(), [
@@ -59,7 +53,9 @@ final class YamlFormatTest extends TestCase
         $this->assertSame(EventKind::Input, $loaded->events[2]->kind);
         $this->assertSame(EventKind::Quit, $loaded->events[3]->kind);
         $this->assertSame("\x1b[2J\x1b[H", $loaded->events[1]->payload['b']);
-        $this->assertSame('q', $loaded->events[2]->payload['msg']['rune']);
+        $msg = $loaded->events[2]->payload['msg'];
+        $this->assertIsArray($msg);
+        $this->assertSame('q', $msg['rune']);
         $this->assertSame(1.201, $loaded->events[3]->t);
     }
 

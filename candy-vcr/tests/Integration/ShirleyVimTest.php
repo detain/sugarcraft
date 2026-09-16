@@ -8,8 +8,10 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 use SugarCraft\Vt\Terminal\Terminal;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.5 — Shirley-style integration: record a real vim session
@@ -64,8 +66,8 @@ final class ShirleyVimTest extends TestCase
         // soon; keep it open until after the recording completes.
 
         $cmd = new RecordCommand($stdinRead);
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $start = \microtime(true);
@@ -100,7 +102,7 @@ final class ShirleyVimTest extends TestCase
             foreach ($loaded->events as $event) {
                 if ($event->kind === EventKind::Output) {
                     $sawOutput = true;
-                    $allOutput .= (string) ($event->payload['b'] ?? '');
+                    $allOutput .= Scalars::string($event->payload['b'] ?? '', 'recorded output bytes');
                 } elseif ($event->kind === EventKind::Quit) {
                     $sawQuit = true;
                 }
@@ -127,7 +129,7 @@ final class ShirleyVimTest extends TestCase
             // (Some vim builds defer write; tolerate either outcome,
             // but if the file is present it must contain our text.)
             if (\is_file($scratch) && \filesize($scratch) > 0) {
-                $contents = (string) \file_get_contents($scratch);
+                $contents = (string) Stream::read($scratch);
                 $this->assertStringContainsString('Hello', $contents);
             }
         } finally {
