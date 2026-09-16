@@ -312,15 +312,17 @@ final class KittyStreamTest extends TestCase
     {
         // Chunk state lives on the decoder, not on frame adjacency, so a
         // producer may spray unrelated traffic between chunks: printable text,
-        // SGR, a BEL-terminated OSC 1337, and a whole Sixel DCS image. None of
-        // those carries a Kitty introducer, so the transaction must still close
-        // into exactly one image.
+        // SGR, a BEL-terminated OSC 1337, a foreign APC string sequence
+        // (`ESC _ X`, the same ECMA-48 class Kitty's `ESC _ G` rides in), and a
+        // whole Sixel DCS image. None of those carries a Kitty introducer, so
+        // the transaction must still close into exactly one image.
         $b64 = base64_encode($this->redPng());
         $cut = intdiv(strlen($b64), 2);
 
         $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . substr($b64, 0, $cut) . "\x1b\\"
             . "hello \x1b[31mworld\x1b[0m"
             . "\x1b]1337;File=inline=1:AAAA\x07"
+            . "\x1b_Xtmux-style foreign APC payload\x1b\\"
             . Fixture::bytes('sixel_red.six')
             . "\x1b_Gm=0;" . substr($b64, $cut) . "\x1b\\";
 
@@ -410,14 +412,36 @@ final class KittyStreamTest extends TestCase
     {
         // `z` is the kitty z-index, NOT a transmission-compression flag — the
         // format key alone decides that. candy-mosaic's
-        // `KittyOptions::withZIndex(1)` emits exactly this pair over a plain
-        // PNG, so inflating here would break its own wire output.
-        $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '12', 'z' => '1', 'i' => '9']))->image();
+        // `KittyOptions::transmit()->withZIndex(1)` emits this pair over a plain
+        // PNG for both PNG spellings, so inflating here would reject its own
+        // wire output. (Upstream's compression key is `o=z`, which this decoder
+        // does not act on — see `testCompressionFlagOnPngPassthroughIsNotInflated`.)
+        foreach (['12', '100'] as $format) {
+            $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => $format, 'z' => '1', 'i' => '9']))->image();
 
-        self::assertSame(1, $image->zIndex());
-        self::assertTrue($image->pngPassthrough());
+            self::assertSame(1, $image->zIndex(), "f={$format}: z stays the stacking index");
+            self::assertTrue($image->pngPassthrough(), "f={$format} must report PNG passthrough");
+            self::assertFalse($image->compressed(), "f={$format} must not report a zlib transmit");
+            self::assertSame($this->redPng(), $image->rawPayload(), "f={$format} must travel byte for byte");
+        }
+    }
+
+    public function testCompressionFlagOnPngPassthroughIsNotInflated(): void
+    {
+        // Upstream signals transmission compression with `o=z` for any format.
+        // This decoder keys inflate on `f=1` alone, so an `o=z` capture arrives
+        // exactly as sent — the documented gap, pinned so a future change to it
+        // is a decision rather than a surprise.
+        $stream = $this->apcFrame(['a' => 'T', 'f' => '100', 'o' => 'z'], base64_encode(gzcompress($this->redPng())));
+        $image = KittyStream::decode($stream)->image();
+
         self::assertFalse($image->compressed());
-        self::assertSame($this->redPng(), $image->rawPayload());
+        self::assertTrue($image->pngPassthrough());
+        self::assertSame(gzcompress($this->redPng()), $image->rawPayload(), 'the zlib bytes must not be inflated');
+
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('does not decode to a readable image');
+        $image->pixelDimensions();
     }
 
     public function testZlibFormatInflatesWhateverTheZIndexSays(): void
@@ -432,10 +456,10 @@ final class KittyStreamTest extends TestCase
         self::assertSame($this->redPng(), $image->png());
     }
 
-    public function testLegacyF100IsAcceptedAsPngPassthroughAlias(): void
+    public function testF100IsAcceptedAsPngPassthrough(): void
     {
-        // No `f=100` exists in the kitty table; candy-mosaic declared PNG
-        // passthrough that way, so the decoder honours it as an alias of `12`.
+        // `f=100` is what candy-mosaic's KittyRenderer and sugar-charts' Picture
+        // put on the wire for a PNG — the upstream protocol's own PNG code.
         $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '100', 'i' => '11']))->image();
 
         self::assertSame('100', $image->format());
@@ -444,17 +468,17 @@ final class KittyStreamTest extends TestCase
         self::assertSame($this->redPng(), $image->rawPayload());
     }
 
-    public function testLegacyF100AndCanonicalF12DecodeIdentically(): void
+    public function testBothPngSpellingsDecodeIdentically(): void
     {
         $png12 = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '12', 'i' => '3']))->image();
         $png100 = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '100', 'i' => '3']))->image();
 
-        self::assertSame($png12->rawPayload(), $png100->rawPayload(), 'the alias must be behaviourally identical');
+        self::assertSame($png12->rawPayload(), $png100->rawPayload(), 'both spellings must be behaviourally identical');
         self::assertTrue($png12->pngPassthrough());
         self::assertTrue($png100->pngPassthrough());
     }
 
-    public function testLegacyF100SurvivesChunkedStitching(): void
+    public function testF100SurvivesChunkedStitching(): void
     {
         $b64 = base64_encode($this->redPng());
         $cut = intdiv(strlen($b64), 2);
@@ -470,8 +494,9 @@ final class KittyStreamTest extends TestCase
 
     public function testUnknownFormatTravelsUntransformed(): void
     {
-        // Anything outside the zlib row of the format table (here a JPEG code)
-        // is documented as raw passthrough: no inflate, and no rejection either.
+        // Anything outside the zlib row of the format table is documented as raw
+        // passthrough — here `f=24`, upstream's three-bytes-per-pixel RGB code —
+        // so no inflate is attempted and nothing is rejected either.
         $jpegish = "\xff\xd8\xff\xe0not-a-real-jpeg";
         $image = KittyStream::decode($this->apcFrame(['a' => 'T', 'f' => '24'], base64_encode($jpegish)))->image();
 

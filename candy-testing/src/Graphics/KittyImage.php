@@ -14,42 +14,43 @@ use SugarCraft\Testing\Lang;
  * (already base64-decoded and, for `f=1`, zlib-inflated into a PNG). A `a=p`
  * placement carries no payload — only an id and a target offset.
  *
- * Every other transmission format travels untransformed: an `f=12` transmit (or
- * its candy-mosaic legacy alias `f=100`) already carries a whole PNG, and this
- * decoder hands those bytes over byte-for-byte — no inflate, no re-encode.
+ * Every other transmission format travels untransformed: a PNG transmit already
+ * carries a whole image, so this decoder hands those bytes over byte-for-byte —
+ * no inflate, no re-encode.
  *
- * The `f` (transmission format) codes, per the kitty graphics protocol:
- * `0` untransformed RGB/RGBA pixels, `1` zlib-compressed payload, `2` PNG
- * (deprecated upstream in favour of `12`), `3` hex-encoded pixels, `12` PNG
- * passthrough, `24`/`32`/`33` JPEG variants. There is no `100` in that table —
- * candy-mosaic's `KittyRenderer` declared PNG passthrough as `f=100` from its
- * first port, so {@see PNG_PASSTHROUGH_FORMATS} honours it as a legacy alias for
- * sibling interop. Any other (or absent) `f` travels untouched: the decoder
- * mirrors what a terminal would see instead of guessing at a payload it was not
- * told how to read.
+ * The `f` (transmission format) codes, and who says what. The kitty graphics
+ * protocol's control-data reference lists `f` as one of `24` (RGB — three bytes
+ * per pixel), `32` (RGBA) or `100` (PNG), defaulting to `32`, with transmission
+ * compression carried SEPARATELY by the `o=z` key and `z` itself meaning the
+ * image z-index. SugarCraft's own producers predate/widen that: candy-mosaic's
+ * `KittyOptions::withCompression(1)` declares a zlib-wrapped payload as `f=1`,
+ * and the monorepo graphics plan spells PNG passthrough `f=12`. Rather than
+ * privilege one spelling, {@see PNG_PASSTHROUGH_FORMATS} accepts both `100` and
+ * `12` and inflates only on `f=1`; any other (or absent) `f` travels untouched,
+ * so an unknown code can never silently corrupt a capture — the decoder mirrors
+ * what a terminal would see instead of guessing at a payload it was not told
+ * how to read.
  *
- * Mirrors charmbracelet/kitty `GLTP` transmit semantics (inverse).
+ * Mirrors the kitty graphics protocol transmit semantics (inverse).
  */
 final class KittyImage
 {
-    /** Untransformed pixel data (`f=0`); the payload is raw RGB/RGBA, not an image file. */
-    public const FORMAT_RAW = '0';
-
-    /** Zlib-wrapped payload (`f=1`); the only code {@see KittyStream} inflates. */
+    /** Zlib-wrapped payload — candy-mosaic's `f=1` convention; the only code {@see KittyStream} inflates. */
     public const FORMAT_ZLIB = '1';
 
-    /** PNG passthrough (`f=12`): the payload is the image, delivered as sent. */
-    public const FORMAT_PNG_PASSTHROUGH = '12';
+    /** PNG — the upstream protocol's own code for a complete PNG payload. */
+    public const FORMAT_PNG = '100';
 
-    /** `f=100` — candy-mosaic legacy alias of {@see FORMAT_PNG_PASSTHROUGH}, NOT a kitty code. */
-    public const FORMAT_LEGACY_PNG_ALIAS = '100';
+    /** PNG passthrough as spelled by the SugarCraft graphics plan; decoded exactly like {@see FORMAT_PNG}. */
+    public const FORMAT_PNG_ALT = '12';
 
     /**
      * `f` values whose payload is a complete PNG delivered untransformed.
      *
      * @var list<string>
      */
-    public const PNG_PASSTHROUGH_FORMATS = [self::FORMAT_PNG_PASSTHROUGH, self::FORMAT_LEGACY_PNG_ALIAS];
+    public const PNG_PASSTHROUGH_FORMATS = [self::FORMAT_PNG_ALT, self::FORMAT_PNG];
+
 
     /**
      * Control keys that carry an integer value.
@@ -167,9 +168,11 @@ final class KittyImage
     /**
      * The `z` stacking index — deliberately NOT a compression flag.
      *
-     * The kitty spec types `z` as a signed integer index (with negative values
-     * legal for frame gaps), and candy-mosaic's `KittyOptions::withZIndex()`
-     * emits it as such; transmission compression is carried by `f=1` alone.
+     * The kitty spec types `z` as a signed integer index (negative values are
+     * legal), and candy-mosaic's `KittyOptions::withZIndex()` emits it as such.
+     * Upstream carries transmission compression on the separate `o=z` key and
+     * SugarCraft signals it with `f=1`, so nothing here reads `z` as a hint to
+     * inflate.
      */
     public function zIndex(): ?int
     {
@@ -189,8 +192,9 @@ final class KittyImage
     }
 
     /**
-     * Whether the payload is a PNG delivered untransformed: `f=12`, or the
-     * candy-mosaic legacy alias `f=100` (see {@see PNG_PASSTHROUGH_FORMATS}).
+     * Whether the payload is a PNG delivered untransformed — `f=100` (the
+     * upstream code) or `f=12` (the SugarCraft-plan spelling), both listed in
+     * {@see PNG_PASSTHROUGH_FORMATS}.
      */
     public function pngPassthrough(): bool
     {

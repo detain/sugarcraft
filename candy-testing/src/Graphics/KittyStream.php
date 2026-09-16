@@ -20,9 +20,9 @@ use SugarCraft\Testing\Lang;
  *
  * Payload base64 is reassembled across `m=1` continuation chunks and — for a
  * `f=1` transmit — zlib-inflated back into a PNG. Every other format travels
- * untransformed, so an `f=12` transmit (or candy-mosaic's legacy `f=100` alias)
- * yields the sender's PNG bytes byte-for-byte. Multi-image streams yield one
- * {@see KittyImage} per transmit.
+ * untransformed, so a PNG transmit (`f=100` in the upstream table, spelled
+ * `f=12` by the SugarCraft graphics plan) yields the sender's bytes
+ * byte-for-byte. Multi-image streams yield one {@see KittyImage} per transmit.
  *
  * Mirrors charmbracelet/candy-mosaic KittyRenderer (inverse).
  */
@@ -212,11 +212,14 @@ final class KittyStream
      * candy-mosaic emits them (one self-framed APC sequence per chunk since the
      * ANSI audit fix).
      *
-     * The open transaction lives on the decoder, not on adjacency, so a
-     * producer may interleave unrelated traffic between chunks: screen text,
-     * SGR, OSC 1337, or a Sixel image all sit outside the two Kitty introducers
-     * this scanner looks for (`\x1b_G` and the bare `\x1bPq`) and are therefore
-     * skipped without splitting the frame stream.
+     * The open transaction lives on the decoder rather than on frame adjacency,
+     * so this reader tolerates a capture that interleaves unrelated traffic
+     * between chunks: screen text, SGR, OSC 1337 or a Sixel image all sit
+     * outside the two Kitty introducers the scanner looks for (`\x1b_G` and the
+     * bare `\x1bPq`) and are skipped without splitting the frame stream. That is
+     * lenience for captures, not a licence to emit — upstream requires a client
+     * to finish every chunk of one image before sending any other
+     * graphics-related escape code.
      */
     private function consumeApc(string $stream, int $at): int
     {
@@ -327,12 +330,14 @@ final class KittyStream
     /**
      * Inflate a zlib-wrapped payload when — and only when — `f=1` declares one.
      *
-     * `f=12` (and candy-mosaic's legacy alias `f=100`) is PNG passthrough: the
-     * bytes already are the image, so inflating them would corrupt a valid
-     * payload into a `decompress_failed` error. The `z` key stays the kitty
-     * z-index in this decoder, so `f=12,z=1` must not be inflated either —
-     * `KittyOptions::withZIndex(1)` emits exactly that pair. Any other (or
-     * absent) `f` likewise travels untouched.
+     * A PNG transmit (`f=100` upstream, `f=12` in the SugarCraft plan) already
+     * holds the whole image, so inflating it would turn a valid payload into a
+     * `decompress_failed` error. And `z` is the image z-index, never a
+     * compression hint: `KittyOptions::withZIndex(1)` emits an uncompressed PNG
+     * under exactly `f=100,z=1`. Upstream's real compression key is `o=z`, which
+     * this decoder deliberately does not act on — a capture using it surfaces as
+     * an undecodable payload instead of a guessed inflate (documented gap, see
+     * the wave handoff). Any other, or absent, `f` travels untouched.
      *
      * @param array<string, string> $params
      */

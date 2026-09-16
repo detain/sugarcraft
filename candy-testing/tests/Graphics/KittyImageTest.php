@@ -32,8 +32,11 @@ final class KittyImageTest extends TestCase
         self::assertTrue(KittyImage::fromTransmit(['a' => 'T', 'f' => '1'], 'payload')->compressed());
     }
 
-    public function testPngPassthroughCoversCanonicalAndLegacyCodes(): void
+    public function testPngPassthroughCoversBothPngSpellings(): void
     {
+        // `100` is the upstream protocol code for a PNG payload, `12` is how the
+        // monorepo graphics plan spells the same thing; the decoder treats them
+        // identically so neither producer's captures are misread.
         self::assertTrue(KittyImage::fromTransmit(['f' => '12'], 'payload')->pngPassthrough());
         self::assertTrue(KittyImage::fromTransmit(['f' => '100'], 'payload')->pngPassthrough());
     }
@@ -52,27 +55,38 @@ final class KittyImageTest extends TestCase
 
     public function testZIndexIsNeverACompressionSignal(): void
     {
-        // candy-mosaic's `KittyOptions::withZIndex(1)` emits `z=1` next to an
-        // uncompressed PNG; reading that as compression would reject its own
-        // output, so `z` must stay orthogonal to both format predicates.
-        $image = KittyImage::fromTransmit(['a' => 'T', 'f' => '12', 'z' => '1'], 'payload');
+        // candy-mosaic's `KittyOptions::transmit()->withZIndex(1)` emits `z=1`
+        // next to an uncompressed `f=100` PNG; reading that `z` as compression
+        // would reject the monorepo's own output, so `z` stays orthogonal to
+        // both format predicates.
+        $image = KittyImage::fromTransmit(['a' => 'T', 'f' => '100', 'z' => '1'], 'payload');
 
         self::assertSame(1, $image->zIndex());
         self::assertTrue($image->pngPassthrough());
         self::assertFalse($image->compressed());
     }
 
-    public function testFormatTableMatchesTheKittyProtocolCodes(): void
+    public function testFormatConstantsMatchTheBehaviourTheyGate(): void
     {
-        // Pinned against the kitty graphics protocol "image format" table, which
-        // has no 100 — that value is candy-mosaic's legacy alias of 12.
-        self::assertSame('0', KittyImage::FORMAT_RAW);
+        // Deliberately not a constants-vs-constants echo: every code is checked
+        // against the predicates it is documented to select, so swapping `1`,
+        // `12` and `100` in the constant table would fail here.
         self::assertSame('1', KittyImage::FORMAT_ZLIB);
-        self::assertSame('12', KittyImage::FORMAT_PNG_PASSTHROUGH);
-        self::assertSame('100', KittyImage::FORMAT_LEGACY_PNG_ALIAS);
+        self::assertSame('12', KittyImage::FORMAT_PNG_ALT);
+        self::assertSame('100', KittyImage::FORMAT_PNG);
         self::assertSame(
-            [KittyImage::FORMAT_PNG_PASSTHROUGH, KittyImage::FORMAT_LEGACY_PNG_ALIAS],
+            [KittyImage::FORMAT_PNG_ALT, KittyImage::FORMAT_PNG],
             KittyImage::PNG_PASSTHROUGH_FORMATS,
         );
+
+        $zlib = KittyImage::fromTransmit(['a' => 'T', 'f' => KittyImage::FORMAT_ZLIB], 'payload');
+        self::assertTrue($zlib->compressed(), 'f=1 is the zlib row');
+        self::assertFalse($zlib->pngPassthrough());
+
+        foreach ([KittyImage::FORMAT_PNG_ALT, KittyImage::FORMAT_PNG] as $format) {
+            $png = KittyImage::fromTransmit(['a' => 'T', 'f' => $format], 'payload');
+            self::assertTrue($png->pngPassthrough(), "f={$format} must decode as PNG passthrough");
+            self::assertFalse($png->compressed(), "f={$format} must never be inflated");
+        }
     }
 }
