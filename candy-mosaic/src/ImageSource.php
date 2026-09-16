@@ -29,6 +29,22 @@ final class ImageSource
     public const MAX_PIXELS = 50_000_000;
 
     /**
+     * Hard ceiling on the byte size of a file handed to
+     * {@see self::fromAnimatedFile()} before any of it is read into memory. The
+     * pixel budget cannot bound a decompression/parse bomb on its own because the
+     * bytes must be resident before their geometry is inspectable; this caps the
+     * read itself. 64 MB is far above any sane terminal-scale animation.
+     */
+    public const MAX_BYTES = 67_108_864;
+
+    /**
+     * candy-flip's internal cell-grid ceiling (its `Decoder::MAX_CELLS`). Exposed
+     * here so {@see self::fromAnimatedFile()} can refuse an over-large GIF with a
+     * clear mosaic-owned message rather than surfacing flip's exception mid-decode.
+     */
+    private const FLIP_MAX_CELLS = 100_000;
+
+    /**
      * @param string $bytes    Raw image bytes (PNG/JPEG/GIF)
      * @param string $format   MIME type: 'image/png', 'image/jpeg', 'image/gif'
      * @param int    $width    Pixel width
@@ -385,14 +401,22 @@ final class ImageSource
      *   • APNG → {@see ApngDecoder}, a pure-PHP `fcTL`/`fdAT` walk with the
      *     dispose-op state machine, returning fully composited RGBA frames.
      *
-     * A plain (non-animated) PNG is accepted as the degenerate one-frame
-     * animation with a zero delay, so callers can feed any still/animated image
-     * through one entry point. Any other format fails fast.
-     *
-     * MAX_PIXELS is enforced twice: per frame (each frame is ≤ the ceiling on its
-     * own pixel count) AND in aggregate (frames × total pixels), so an animation
-     * that is small per-frame but huge across frames — the classic decompression
-     * bomb — is refused before it can exhaust memory.
+      * A plain (non-animated) PNG is accepted as the degenerate one-frame
+      * animation with a zero delay. A single-frame GIF returns one frame carrying
+      * its own GCE delay. JPEG/WebP and every other container fail fast — this
+      * entry point decodes only GIF and APNG animation (still PNG is the one
+      * non-animated convenience).
+      *
+      * Budgets, all enforced before the expensive work:
+      *   • {@see self::MAX_BYTES} bounds the file read itself (a pixel budget
+      *     cannot, because bytes are resident before geometry is inspectable).
+      *   • MAX_PIXELS is enforced per frame AND in aggregate (frames × total
+      *     pixels) so an animation that is small per-frame but huge across frames
+      *     — the classic decompression bomb — is refused before it exhausts memory.
+      *   • The APNG path reconciles its `acTL` attestation against the frames the
+      *     stream actually carries, and the GIF path reconciles a structural
+      *     descriptor count against the decoder's output, so neither can be fooled
+      *     by an under-declared frame count nor a mis-synchronised sibling walk.
      *
      * Detection is about SOURCE decoding only: protocol/terminal selection
      * (kitty → iterm2 → sixel → chafa → halfblock) is unchanged and every frame
@@ -414,13 +438,28 @@ final class ImageSource
         if (!extension_loaded('gd')) {
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
         }
-        $bytes = file_get_contents($path);
+        // Bound the read BEFORE slurping: a pixel budget cannot stop a bomb whose
+        // bytes must be resident before its geometry is even inspectable.
+        $size = @filesize($path);
+        if ($size !== false && $size > self::MAX_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('image_source.file_too_large', [
+                'size' => $size,
+                'max'  => self::MAX_BYTES,
+            ]));
+        }
+        $bytes = file_get_contents($path, false, null, 0, self::MAX_BYTES + 1);
         if ($bytes === false) {
             throw new \InvalidArgumentException(Lang::t('image_source.cannot_read', ['path' => $path]));
         }
+        if (strlen($bytes) > self::MAX_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('image_source.file_too_large', [
+                'size' => $size !== false ? $size : strlen($bytes),
+                'max'  => self::MAX_BYTES,
+            ]));
+        }
 
         if (str_starts_with($bytes, 'GIF87a') || str_starts_with($bytes, 'GIF89a')) {
-            return self::animatedFramesFromGif($path, $maxPixels);
+            return self::animatedFramesFromGif($path, $bytes, $maxPixels);
         }
 
         if (ApngDecoder::isAnimatedPng($bytes)) {
@@ -443,7 +482,7 @@ final class ImageSource
      * @throws \InvalidArgumentException  on an unreadable header or an over-ceiling
      *                                    per-frame/aggregate pixel count
      */
-    private static function animatedFramesFromGif(string $path, int $maxPixels): Animation
+    private static function animatedFramesFromGif(string $path, string $bytes, int $maxPixels): Animation
     {
         $info = @getimagesize($path);
         if ($info === false) {
@@ -455,22 +494,42 @@ final class ImageSource
         // Per-frame ceiling on the logical-screen size, before flip allocates.
         self::guardPixelCount($w, $h, $maxPixels);
 
-        // flip decodes to a cell grid; requesting the GIF's pixel dimensions maps
-        // one cell to one pixel (no resample) and its LZW + disposal compositing
-        // produce fully-rendered frames. flip's own 100k-cell grid cap is a
-        // second, independent fail-fast against oversized input.
-        $flipFrames = FlipDecoder::decode($path, $w, $h);
+        // candy-flip renders one cell per pixel and caps its cell grid at 100k, so
+        // a GIF above ~316×316 is unloadable by it. Fail loud with a mosaic-owned,
+        // translated reason instead of leaking flip's untranslated RuntimeException.
+        if ($w * $h > self::FLIP_MAX_CELLS) {
+            throw new \InvalidArgumentException(Lang::t('animation.gif_too_large_for_flip', [
+                'width' => $w,
+                'height' => $h,
+                'max'   => self::FLIP_MAX_CELLS,
+            ]));
+        }
 
-        $count = count($flipFrames);
-        // Aggregate ceiling: frames × pixels. Checked after decode (flip bounds
-        // its own memory), before we raster every frame into a PNG container.
-        if ($maxPixels > 0 && $w > 0 && $h > 0 && $w * $h * $count > $maxPixels) {
+        // Cheap, structural frame count from the container bytes — no LZW decode.
+        // This drives the AGGREGATE budget BEFORE flip materialises every frame
+        // (a 20 KiB file claiming hundreds of frames must fail fast, not after
+        // paying for the whole decode), and doubles as the reconciliation oracle
+        // that catches the sibling decoder's frame-desync on real multi-frame GIFs.
+        $declared = self::countGifFrames($bytes);
+        if ($maxPixels > 0 && $w > 0 && $h > 0 && $w * $h * $declared > $maxPixels) {
             throw new \InvalidArgumentException(Lang::t('animation.too_many_pixels', [
-                'frames' => $count,
+                'frames' => $declared,
                 'width'  => $w,
                 'height' => $h,
-                'total'  => $w * $h * $count,
+                'total'  => $w * $h * $declared,
                 'max'    => $maxPixels,
+            ]));
+        }
+
+        $flipFrames = self::decodeGifFramesSafely($path, $w, $h);
+
+        // Fail loud rather than ship a silently short/shuffled animation: if flip
+        // disagrees with the container's own descriptor count (its header walk is
+        // known to mis-skip image data on many real GIFs), refuse.
+        if ($declared !== count($flipFrames)) {
+            throw new \InvalidArgumentException(Lang::t('animation.gif_frame_count_mismatch', [
+                'expected' => $declared,
+                'got'      => count($flipFrames),
             ]));
         }
 
@@ -483,6 +542,107 @@ final class ImageSource
         }
 
         return new Animation($frames, $delays);
+    }
+
+    /**
+     * Count a GIF's image-descriptor blocks by walking the container structure
+     * (extension/data sub-blocks) WITHOUT decoding LZW. A correct walk must skip
+     * the mandatory LZW minimum-code-size byte before following the image-data
+     * sub-blocks — the exact byte that the sibling header walk gets wrong.
+     *
+     * @throws \InvalidArgumentException on a structurally corrupt container
+     */
+    private static function countGifFrames(string $bytes): int
+    {
+        $len = strlen($bytes);
+        $i = 13; // past header (6) + logical screen descriptor (7)
+        $gct = ord($bytes[10]);
+        if (($gct & 0x80) !== 0) {
+            $i += 3 * (2 << ($gct & 0x07)); // global colour table
+        }
+
+        $frames = 0;
+        while ($i < $len) {
+            $block = ord($bytes[$i]);
+            if ($block === 0x3B) {
+                break; // trailer
+            }
+            if ($block === 0x21) {
+                // Extension: label byte, then length-prefixed sub-blocks to a 0 terminator.
+                $i += 2;
+                $i = self::skipGifSubBlocks($bytes, $i, $len);
+                continue;
+            }
+            if ($block === 0x2C) {
+                // Image descriptor: 4 shorts + packed (9 bytes) at i+1.
+                if ($i + 10 > $len) {
+                    throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => 'GIF']));
+                }
+                $packed = ord($bytes[$i + 9]);
+                $j = $i + 10;
+                if (($packed & 0x80) !== 0) {
+                    $j += 3 * (2 << ($packed & 0x07)); // local colour table
+                }
+                ++$j; // LZW minimum code size — the byte flip fails to skip
+                $j = self::skipGifSubBlocks($bytes, $j, $len);
+                $i = $j;
+                if (++$frames > Animation::MAX_FRAMES) {
+                    throw new \InvalidArgumentException(Lang::t('animation.too_many_frames', [
+                        'max'   => Animation::MAX_FRAMES,
+                        'count' => $frames,
+                    ]));
+                }
+                continue;
+            }
+            // Unknown block type — cannot trust the rest of the stream.
+            throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => 'GIF']));
+        }
+
+        return $frames;
+    }
+
+    /**
+     * Advance past a run of length-prefixed GIF sub-blocks terminated by a 0 byte.
+     */
+    private static function skipGifSubBlocks(string $bytes, int $i, int $len): int
+    {
+        while ($i < $len) {
+            $sub = ord($bytes[$i]);
+            ++$i;
+            if ($sub === 0) {
+                return $i;
+            }
+            $i += $sub;
+        }
+
+        return $i;
+    }
+
+    /**
+     * Drive candy-flip's decoder under a temporary error handler so a corrupt GIF
+     * (which trips GD/`imagecreatefromstring` warnings inside the sibling) and any
+     * foreign exception surface as one clean, translated fail-fast rather than
+     * warning text sprayed across a terminal or an untranslated RuntimeException.
+     *
+     * @return list<FlipFrame>
+     */
+    private static function decodeGifFramesSafely(string $path, int $w, int $h): array
+    {
+        $handler = static function (int $severity, string $message, string $file, int $line): bool {
+            throw new \ErrorException($message, 0, $severity, $file, $line);
+        };
+        set_error_handler($handler);
+        try {
+            $frames = FlipDecoder::decode($path, $w, $h);
+        } catch (\Throwable $e) {
+            throw new \InvalidArgumentException(Lang::t('animation.gif_decode_failed', [
+                'reason' => $e->getMessage(),
+            ]));
+        } finally {
+            restore_error_handler();
+        }
+
+        return $frames;
     }
 
     /**

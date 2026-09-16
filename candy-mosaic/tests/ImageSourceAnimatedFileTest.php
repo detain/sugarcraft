@@ -154,4 +154,46 @@ final class ImageSourceAnimatedFileTest extends TestCase
         $this->expectExceptionMessageMatches('/exceeding/i');
         ImageSource::fromAnimatedFile($this->write('agg.png', $apng), 6);
     }
+
+    /**
+     * Round-1 review C2: candy-flip's header walk mis-skips image data on many
+     * real multi-frame GIFs, so it silently returns FEWER frames (and shuffled
+     * delays) than the file carries. fromAnimatedFile must reconcile a structural
+     * descriptor count against flip's output and REFUSE — never hand back a short,
+     * wrong animation. A 10-frame GIF is the demonstrated break point.
+     */
+    public function testGifDecoderFrameDesyncIsRefusedNotSilentlyTruncated(): void
+    {
+        $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255], [200, 120, 40]];
+        $frames = [];
+        for ($i = 0; $i < 10; $i++) {
+            $frames[] = ['pixels' => array_fill(0, 24, ($i % 6) + 1), 'delay' => 10 + $i];
+        }
+        $gif = F::gif(6, 4, $colors, $frames);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/carries 10 frames but the frame decoder returned \d+/');
+        ImageSource::fromAnimatedFile($this->write('desync.gif', $gif));
+    }
+
+    /**
+     * Round-1 review H1: the GIF aggregate budget is computed from a cheap
+     * structural count BEFORE flip decodes, so a large-frame-count GIF is refused
+     * without materialising every frame.
+     */
+    public function testGifAggregateCeilingIsCheckedBeforeDecode(): void
+    {
+        $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255], [200, 120, 40]];
+        $frames = [];
+        for ($i = 0; $i < 10; $i++) {
+            $frames[] = ['pixels' => array_fill(0, 24, ($i % 6) + 1), 'delay' => 10 + $i];
+        }
+        $gif = F::gif(6, 4, $colors, $frames);
+
+        // per-frame 24 ≤ 200 passes; structural aggregate 24 × 10 = 240 > 200 trips
+        // — and it must trip on the DECLARED frame count, before any decode.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/declares 10 frames .*exceeding/i');
+        ImageSource::fromAnimatedFile($this->write('gifagg.gif', $gif), 200);
+    }
 }

@@ -121,9 +121,11 @@ kept as design rationale for what shipped._
   `\x1bPtmux;`, ESC-doubles each chunk as it streams, and closes `\x1b\\`,
   byte-equal to `wrap(render())` because a sixel payload is one DCS whose only
   ESC bytes are the introducer and the ST (all interior bytes are printable), so
-  per-chunk doubling composes exactly; it throws `LogicException`
-  (`tmux.stream_not_sixel`) if the inner renderer is not Sixel, mirroring the
-  one-shot `render()` refusal.
+   per-chunk doubling composes exactly; it throws `LogicException`
+   (`tmux.stream_not_sixel`) if the inner renderer is not Sixel — the band stream is
+   a sixel-only capability, so unlike the one-shot `render()` (which wraps any
+   protocol's final buffer) the streaming path has no meaning for a non-Sixel inner
+   and refuses rather than silently buffering.
 
 - **#18 GIF/APNG multi-frame decode (IMPLEMENTED).** New
   `ImageSource::fromAnimatedFile(string $path, int $maxPixels = self::MAX_PIXELS): Animation`
@@ -134,20 +136,50 @@ kept as design rationale for what shipped._
   fcTL/fdAT walk over the PNG container, zlib-inflate + per-row unfilter, a real
   dispose-op state machine — none keeps the canvas, background clears the frame
   rect, previous restores the pre-frame canvas — plus source/over blend and
-  palette+tRNS expansion); a still PNG/GIF/JPEG that is not animated degrades to a
-  single-frame `Animation` with delay `[0]`; anything else throws
-  `animation.unsupported_format`. GIF frame delays are centiseconds in the GCE so
-  they are ×10 to milliseconds. Audit constraint (c) honoured: `MAX_PIXELS` is
-  checked PER FRAME (`image_source.too_large`) AND in AGGREGATE
-  (`animation.too_many_pixels`, = canvasW×canvasH×frameCount) BEFORE inflating, so
-  a small-per-frame/huge-in-total bomb is refused cheaply. `DiskCache::FORMAT_VERSION`
-  was NOT bumped: #17 is byte-identical on every existing render path and #18 is
-  purely additive (a new method + a new class), so no already-cached bytes change
-  meaning. Gotcha found building GIF fixtures: flip's `parseHeader` image-data skip
-  starts at the LZW min-code-size byte (treats it as a sub-block length), so a
-  handcrafted LZW stream can decode wrong — generate GIF test fixtures from GD
-  `imagegif()` per frame (shared 4-slot GCT, `imagecreate` reserves index 0 as
-  black) rather than hand-rolling LZW. See `tests/Support/AnimatedImageFixtures.php`.
+   palette+tRNS expansion); a still PNG degrades to a single-frame `Animation`
+   with delay `[0]` and a single-frame GIF returns one frame at its GCE delay;
+   JPEG/WebP and any other container throw `animation.unsupported_format` (this
+   entry point decodes only GIF/APNG animation — still PNG is the lone
+   non-animated convenience); GIF frame delays are centiseconds in the GCE so
+   they are ×10 to milliseconds. Audit constraint (c) honoured and HARDENED in
+   review (PR #1442 round 1): `MAX_PIXELS` is checked PER FRAME
+   (`image_source.too_large`) AND in AGGREGATE (`animation.too_many_pixels`), and
+   the aggregate is computed from the frames the stream ACTUALLY carries — a
+   metadata-only `collectFrames()` runs first and its count is reconciled against
+   the `acTL` attestation (`apng.frame_count_mismatch`), because an attacker-authored
+   `acTL` under-declaring the count would otherwise shrink the budget while the
+   composite loop pays a full canvas per real frame; `Animation::MAX_FRAMES` is also
+   enforced before compositing, not only in the constructor after the fact. The
+   per-frame inflate is bounded with `gzuncompress($data, $expected)` and must land
+   on `strlen() === $expected` (PNG scanline matrices are exact) so an oversized
+   stream is refused rather than materialised. The loader caps the file READ at
+   `ImageSource::MAX_BYTES` (a pixel budget cannot, because bytes must be resident
+   before geometry is inspectable). **candy-flip GIF gotcha (blocking sibling
+   finding, NOT fixable from candy-mosaic):** `Flip\Decoder::parseHeader` skips a
+   frame's image data starting at the LZW min-code-size byte rather than the byte
+   AFTER it (`$j = $i + 10` at `candy-flip/src/Decoder.php:371`, should be `+ 11`),
+   so it desyncs on most real multi-frame GIFs and silently returns too few frames
+   with shuffled delays — this is also why GIF test fixtures are generated from GD
+   `imagegif()` per frame (shared 4-slot GCT, `imagecreate` reserves index 0 as
+   black) rather than hand-rolled LZW (see `tests/Support/AnimatedImageFixtures.php`).
+   mosaic now counts GIF image descriptors with its OWN correct structural walk
+   (`ImageSource::countGifFrames`), guards the aggregate on that count BEFORE
+   calling flip, and REFUSES (`animation.gif_frame_count_mismatch`) whenever flip's
+   decoded count disagrees — never a silently short animation. flip also emits raw
+   GD warnings on corrupt GIFs, so `decodeGifFramesSafely()` wraps the call in a
+   throwing error handler and maps any failure to one translated fail-fast.
+   **Sixel DCS-state safety (round 1):** a sixel payload is exactly one DCS, so a
+   half-written stream (a consumer `$write` throwing on a closed pipe, or a GD load
+   error mid-band) strands the terminal inside DECGXL and swallows later output;
+   `encodeInto()` now emits the string terminator from a `finally` when the header
+   reached the wire but the terminator did not, and `TmuxPassthroughDecorator::
+   encodeBandStream()` opens the `\x1bPtmux;` envelope LAZILY on the first real chunk
+   (early inner failure writes nothing) and guarantees the outer terminator in a
+   `finally`. Both keep byte-identity with `render()` on the happy path.
+   `DiskCache::FORMAT_VERSION` was NOT bumped: #17 is byte-identical on every existing
+   render path and #18 is purely additive (a new method + a new class + fail-fast
+   guards that only turn previously-silent corruption into loud errors), so no
+   already-cached bytes change meaning.
 
 ## This session's API additions (2026-09, upstream-track PR)
 

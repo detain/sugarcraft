@@ -245,4 +245,79 @@ final class AnimatedImageFixtures
     {
         return pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data));
     }
+
+    /**
+     * Public chunk assembler so a test can hand-craft an adversarial stream
+     * (a lying `acTL`, an oversized inflate, a non-ASCII chunk type, a torn
+     * `PLTE`) without the decoder's normal-bytes path masking the defect.
+     *
+     * @param list<array{type:string,data:string}> $chunks  ordered chunks after the signature
+     */
+    public static function png(array $chunks): string
+    {
+        $bytes = "\x89PNG\r\n\x1a\n";
+        foreach ($chunks as $c) {
+            $bytes .= self::chunk($c['type'], $c['data']);
+        }
+
+        return $bytes;
+    }
+
+    /**
+     * IHDR payload for a colour-type-6 / depth-8 / non-interlaced canvas.
+     */
+    public static function ihdr(int $w, int $h, int $colorType = 6): string
+    {
+        return pack('NN', $w, $h) . chr(8) . chr($colorType) . chr(0) . chr(0) . chr(0);
+    }
+
+    /**
+     * acTL payload declaring a frame count that may DISAGREE with the frames the
+     * stream actually ships — the C1 decompression-bomb vector.
+     */
+    public static function actl(int $declaredFrames, int $plays = 0): string
+    {
+        return pack('N', $declaredFrames) . pack('N', $plays);
+    }
+
+    /**
+     * fcTL payload with explicit geometry + ops, for hand-built adversarial frames.
+     */
+    public static function fctl(
+        int $seq,
+        int $w,
+        int $h,
+        int $x,
+        int $y,
+        int $delayNum,
+        int $delayDen,
+        int $dispose = 0,
+        int $blend = 0,
+    ): string {
+        return pack('N', $seq) . pack('N', $w) . pack('N', $h) . pack('N', $x) . pack('N', $y)
+            . pack('n', $delayNum) . pack('n', $delayDen) . chr($dispose) . chr($blend);
+    }
+
+    /**
+     * A valid full-canvas colour-type-6 frame's scanline data (filter None rows),
+     * zlib-compressed — reused as IDAT (frame 0) or the body of an fdAT.
+     *
+     * @param list<array{0:int,1:int,2:int,3:int}> $pixels
+     */
+    public static function frameStream(array $pixels, int $w, int $h, int $channels = 4, int $filterByte = 0): string
+    {
+        $raw = '';
+        for ($y = 0; $y < $h; $y++) {
+            $raw .= chr($filterByte);
+            for ($x = 0; $x < $w; $x++) {
+                $px = $pixels[$y * $w + $x];
+                $raw .= chr($px[0]);
+                for ($c = 1; $c < $channels; $c++) {
+                    $raw .= chr($px[$c] ?? 0);
+                }
+            }
+        }
+
+        return gzcompress($raw);
+    }
 }

@@ -64,14 +64,22 @@ final class ApngDecoder
             return false;
         }
 
-        foreach (self::walkChunks($bytes, 8) as $chunk) {
-            if ($chunk['type'] === 'acTL') {
-                return true;
+        // A total predicate: this is a SNIFF, not a decoder. A PNG with a damaged
+        // ancillary chunk or a truncated tail is "not provably animated" here and
+        // falls back to single-frame loading; {@see decode()} stays the fail-loud
+        // authority when we DO commit to an APNG path.
+        try {
+            foreach (self::walkChunks($bytes, 8) as $chunk) {
+                if ($chunk['type'] === 'acTL') {
+                    return true;
+                }
+                // acTL must precede the first IDAT; stop at the image data.
+                if ($chunk['type'] === 'IDAT' || $chunk['type'] === 'IEND') {
+                    break;
+                }
             }
-            // acTL must precede the first IDAT; stop at the image data.
-            if ($chunk['type'] === 'IDAT' || $chunk['type'] === 'IEND') {
-                break;
-            }
+        } catch (\InvalidArgumentException) {
+            return false;
         }
 
         return false;
@@ -106,28 +114,56 @@ final class ApngDecoder
         $ihdr = self::parseIhdr($chunks[0]['data']);
         [$width, $height, $channels, $colorType] = $ihdr;
 
+        // Per-frame ceiling on the declared canvas: a single oversized frame is
+        // refused before anything is allocated or inflated, using the honest IHDR
+        // geometry.
+        if ($maxPixels > 0 && $width > 0 && $height > 0 && $width * $height > $maxPixels) {
+            throw new \InvalidArgumentException(Lang::t('image_source.too_large', [
+                'width'  => $width,
+                'height' => $height,
+                'max'    => $maxPixels,
+            ]));
+        }
+
         $frameCount = self::parseAcTL($chunks);
 
-        // Guard the declared dimensions BEFORE allocating the W×H canvas: a
-        // single oversized frame is refused like the container paths, and the
-        // aggregate (frames × pixels) is bounded so an animation bomb cannot OOM.
-        if ($maxPixels > 0 && $width > 0 && $height > 0) {
-            if ($width * $height > $maxPixels) {
-                throw new \InvalidArgumentException(Lang::t('image_source.too_large', [
-                    'width'  => $width,
-                    'height' => $height,
-                    'max'    => $maxPixels,
-                ]));
-            }
-            if ($frameCount > 0 && $width * $height * $frameCount > $maxPixels) {
-                throw new \InvalidArgumentException(Lang::t('animation.too_many_pixels', [
-                    'frames' => $frameCount,
-                    'width'  => $width,
-                    'height' => $height,
-                    'total'  => $width * $height * $frameCount,
-                    'max'    => $maxPixels,
-                ]));
-            }
+        // Cheap, metadata-only frame walk: pair fcTL with IDAT/fdAT payload
+        // pointers WITHOUT inflating or allocating any canvas. This is what the
+        // aggregate budget is measured against — `acTL`'s declared count is an
+        // attacker-supplied attestation, never a budget.
+        $frames = self::collectFrames($chunks);
+        if ($frames === []) {
+            throw new \InvalidArgumentException(Lang::t('apng.no_frames', ['frames' => $frameCount]));
+        }
+
+        // Reconcile the header against the stream. A file that under-declares
+        // acTL (e.g. claims 0 or 1 while shipping thousands) would otherwise slip
+        // past an aggregate check computed from the declared count and then pay
+        // one full-canvas composite per real frame.
+        if ($frameCount !== count($frames)) {
+            throw new \InvalidArgumentException(Lang::t('apng.frame_count_mismatch', [
+                'declared'  => $frameCount,
+                'collected' => count($frames),
+            ]));
+        }
+        if (count($frames) > Animation::MAX_FRAMES) {
+            throw new \InvalidArgumentException(Lang::t('animation.too_many_frames', [
+                'max'   => Animation::MAX_FRAMES,
+                'count' => count($frames),
+            ]));
+        }
+
+        // Aggregate ceiling on the VERIFIED frame count, before compositing, so a
+        // small-per-frame / huge-in-total animation bomb fails fast.
+        $aggregate = $width * $height * count($frames);
+        if ($maxPixels > 0 && $width > 0 && $height > 0 && $aggregate > $maxPixels) {
+            throw new \InvalidArgumentException(Lang::t('animation.too_many_pixels', [
+                'frames' => count($frames),
+                'width'  => $width,
+                'height' => $height,
+                'total'  => $aggregate,
+                'max'    => $maxPixels,
+            ]));
         }
 
         $palette = self::parsePalette($chunks);
@@ -135,11 +171,6 @@ final class ApngDecoder
 
         if ($colorType === 3 && $palette === []) {
             throw new \InvalidArgumentException(Lang::t('apng.no_plte'));
-        }
-
-        $frames = self::collectFrames($chunks);
-        if ($frames === []) {
-            throw new \InvalidArgumentException(Lang::t('apng.no_frames', ['frames' => $frameCount]));
         }
 
         return self::composite($frames, $width, $height, $channels, $colorType, $palette, $trns);
@@ -166,6 +197,14 @@ final class ApngDecoder
             $un = unpack('N', substr($bytes, $offset, 4));
             $dataLen = $un === false ? 0 : $un[1];
             $type = substr($bytes, $offset + 4, 4);
+
+            // A PNG chunk type is exactly four ASCII letters (ISO 15948 §5.3). The
+            // CRC-failure message below interpolates the type, and this is a TUI
+            // library whose product is terminal bytes — never let raw attacker
+            // bytes reach an exception string. Reject anything else up front.
+            if (preg_match('/^[A-Za-z]{4}$/', $type) !== 1) {
+                throw new \InvalidArgumentException(Lang::t('apng.bad_chunk_type', ['type' => bin2hex($type)]));
+            }
 
             $dataStart = $offset + 8;
             $crcStart  = $dataStart + $dataLen;
@@ -211,6 +250,11 @@ final class ApngDecoder
         if ($u['interlace'] !== 0) {
             throw new \InvalidArgumentException(Lang::t('apng.unsupported_interlace'));
         }
+        // Only deflate/inflate compression (0) and adaptive filtering (0) exist;
+        // any other value is a future/invalid revision we must not guess at.
+        if ($u['comp'] !== 0 || $u['filter'] !== 0) {
+            throw new \InvalidArgumentException(Lang::t('apng.unsupported_method'));
+        }
         if (!isset(self::CHANNELS[$u['color']])) {
             throw new \InvalidArgumentException(Lang::t('apng.unsupported_color_type', ['type' => $u['color']]));
         }
@@ -245,6 +289,12 @@ final class ApngDecoder
     {
         foreach ($chunks as $c) {
             if ($c['type'] === 'PLTE') {
+                // PLTE is a sequence of whole RGB triples, 1..256 of them. A torn
+                // length is corruption — refuse rather than read a split entry.
+                if (strlen($c['data']) % 3 !== 0 || strlen($c['data']) > 768) {
+                    throw new \InvalidArgumentException(Lang::t('apng.bad_plte', ['bytes' => strlen($c['data'])]));
+                }
+
                 return array_values(unpack('C*', $c['data']) ?: []);
             }
         }
@@ -370,6 +420,14 @@ final class ApngDecoder
 
             if ($fw <= 0 || $fh <= 0 || $fx < 0 || $fy < 0 || $fx + $fw > $canvasW || $fy + $fh > $canvasH) {
                 throw new \InvalidArgumentException(Lang::t('apng.bad_fcTL'));
+            }
+            // dispose_op ∈ {0,1,2} and blend_op ∈ {0,1}; the reserved values must
+            // not be silently coerced to a neighbouring op.
+            if ($dispose < self::DISPOSE_NONE || $dispose > self::DISPOSE_PREVIOUS) {
+                throw new \InvalidArgumentException(Lang::t('apng.unsupported_dispose', ['op' => $dispose]));
+            }
+            if ($blend !== self::BLEND_SOURCE && $blend !== self::BLEND_OVER) {
+                throw new \InvalidArgumentException(Lang::t('apng.unsupported_blend', ['op' => $blend]));
             }
 
             // Snapshot BEFORE drawing, for DISPOSE_PREVIOUS.
@@ -508,18 +566,30 @@ final class ApngDecoder
     private static function inflateAndUnfilter(string $zlibData, int $fw, int $fh, int $channels, int $colorType, array $palette, array $trns): string
     {
         if ($zlibData === '') {
-            throw new \InvalidArgumentException(Lang::t('apng.no_frames', ['frames' => 0]));
-        }
-        $inflated = @gzuncompress($zlibData);
-        if ($inflated === false) {
-            throw new \InvalidArgumentException(Lang::t('apng.inflate_failed'));
+            throw new \InvalidArgumentException(Lang::t('apng.no_frame_data'));
         }
 
         // Stride in bytes of the raw (pre-filter) scanline.
         $stride = $fw * $channels;
         $expected = $fh * ($stride + 1); // + filter byte per row
-        if (strlen($inflated) < $expected) {
-            throw new \InvalidArgumentException(Lang::t('apng.truncated'));
+
+        // Bound the inflate ITSELF to the declared geometry before a single byte
+        // materialises: PHP stops decompressing at $expected rather than building a
+        // multi-megabyte buffer for a tiny frame (decompression bomb). A well-formed
+        // stream inflates to EXACTLY $expected (ISO 15948 §6.3 — one filter byte plus
+        // one stride per scanline), so anything larger is a bomb and anything smaller
+        // is truncation; both are refused.
+        $inflated = @gzuncompress($zlibData, $expected);
+        if ($inflated === false) {
+            // false means either a corrupt stream or one that would overflow the
+            // ceiling — both fail loud, neither spends the memory.
+            throw new \InvalidArgumentException(Lang::t('apng.inflate_failed'));
+        }
+        if (strlen($inflated) !== $expected) {
+            throw new \InvalidArgumentException(Lang::t('apng.bad_frame_length', [
+                'actual'   => strlen($inflated),
+                'expected' => $expected,
+            ]));
         }
 
         // bytes-per-pixel for the filter reference (>=1; whole pixels for depth 8).
@@ -562,7 +632,7 @@ final class ApngDecoder
                 2       => $rawByte + $up,
                 3       => $rawByte + intdiv($left + $up, 2),
                 4       => $rawByte + self::paeth($left, $up, $upLeft),
-                default => throw new \InvalidArgumentException(Lang::t('apng.truncated')),
+                default => throw new \InvalidArgumentException(Lang::t('apng.unsupported_filter', ['type' => $filterType])),
             };
             $cur[$i] = chr($recon & 0xFF);
         }
@@ -593,12 +663,22 @@ final class ApngDecoder
     private static function expandRowToRgba(string $row, int $channels, int $colorType, int $fw, array $palette, array $trns): string
     {
         if ($colorType === 3) {
+            $size = intdiv(count($palette), 3);
             $out = '';
             for ($x = 0; $x < $fw; $x++) {
                 $idx = ord($row[$x]);
-                $r = $palette[$idx * 3] ?? 0;
-                $g = $palette[$idx * 3 + 1] ?? 0;
-                $b = $palette[$idx * 3 + 2] ?? 0;
+                // An index past the palette is a fatal spec violation — fail loud
+                // rather than paint opaque black and hide the corruption.
+                if (!isset($palette[$idx * 3 + 2])) {
+                    throw new \InvalidArgumentException(Lang::t('apng.palette_index_out_of_range', [
+                        'index' => $idx,
+                        'size'  => $size,
+                    ]));
+                }
+                $r = $palette[$idx * 3];
+                $g = $palette[$idx * 3 + 1];
+                $b = $palette[$idx * 3 + 2];
+                // A tRNS shorter than the palette is legal: absent entries are opaque.
                 $a = $trns[$idx] ?? 255;
                 $out .= chr($r) . chr($g) . chr($b) . chr($a);
             }

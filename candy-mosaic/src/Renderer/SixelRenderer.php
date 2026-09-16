@@ -118,8 +118,11 @@ final class SixelRenderer implements Renderer
         $pixelW = max(1, $width * $this->cellWidth);
         $pixelH = max(1, $cellH * $this->cellHeight);
 
-        // Load and resize the image to the pixel canvas.
-        $src = imagecreatefromstring($image->bytes);
+        // Load and resize the image to the pixel canvas. GD raises a PHP warning on
+        // unrecognised bytes; the falsy result is the real signal and is turned into
+        // a typed exception below, so the warning is suppressed rather than sprayed
+        // across a terminal (this library's product is terminal bytes).
+        $src = @imagecreatefromstring($image->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
         }
@@ -143,6 +146,9 @@ final class SixelRenderer implements Renderer
             imagesx($src), imagesy($src)
         );
         imagedestroy($src);
+
+        $headWritten = false;
+        $terminated = false;
 
         try {
             // Fully-transparent pixels become the background register: when the
@@ -168,6 +174,7 @@ final class SixelRenderer implements Renderer
             }
             $head .= $this->emitPalette($palette, $offset);
             $write($head);
+            $headWritten = true;
 
             // Pull index rows lazily and emit a 6-row band per write. The
             // graphics-newline `-` that separates bands PREFIXES every band
@@ -189,7 +196,20 @@ final class SixelRenderer implements Renderer
             }
 
             $write(Ansi::sixelTerminator());
+            $terminated = true;
         } finally {
+            // Never strand the terminal inside a DCS: if the header reached the
+            // wire but a later band or a consumer `$write` blew up (a closed pipe
+            // mid-playback), emit the string terminator anyway so subsequent output
+            // is not swallowed as sixel parameters. On the happy path `$terminated`
+            // is already true, so this is a no-op and the byte stream is unchanged.
+            if ($headWritten && !$terminated) {
+                try {
+                    $write(Ansi::sixelTerminator());
+                } catch (\Throwable) {
+                    // The consumer is gone; nothing left to terminate for.
+                }
+            }
             imagedestroy($resized);
         }
     }
@@ -505,7 +525,10 @@ final class SixelRenderer implements Renderer
         $reach = match ($dither) {
             Dither::FloydSteinberg => 1,
             Dither::Stucki, Dither::Atkinson => 2,
-            default => 0,
+            // Named (not `default`) so a future Dither case that forgets to declare
+            // its error-diffusion reach raises UnhandledMatchError here rather than
+            // silently getting a 1-row window and corrupting output.
+            Dither::None => 0,
         };
 
         /** @var array<int, list<array{float,float,float}>> $window  absolute row → RGB accumulators */

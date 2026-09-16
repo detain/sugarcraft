@@ -71,11 +71,32 @@ final class TmuxPassthroughDecorator implements Renderer
             );
         }
 
-        $write("\x1bPtmux;");
-        $inner->encodeBandStream($image, $width, static function (string $chunk) use ($write): void {
-            $write(str_replace("\x1b", "\x1b\x1b", $chunk));
-        }, $height);
-        $write("\x1b\\");
+        // Open the envelope lazily, on the first inner chunk: if the encode fails
+        // before emitting anything (a GD load error, an over-ceiling frame) the TTY
+        // is left untouched rather than stranded inside an unterminated
+        // `\x1bPtmux;` passthrough. The outer terminator is then guaranteed via
+        // finally, so a mid-stream consumer failure still closes the envelope.
+        $opened = false;
+        $closed = false;
+        try {
+            $inner->encodeBandStream($image, $width, static function (string $chunk) use ($write, &$opened): void {
+                if (!$opened) {
+                    $write("\x1bPtmux;");
+                    $opened = true;
+                }
+                $write(str_replace("\x1b", "\x1b\x1b", $chunk));
+            }, $height);
+            $write("\x1b\\");
+            $closed = true;
+        } finally {
+            if ($opened && !$closed) {
+                try {
+                    $write("\x1b\\");
+                } catch (\Throwable) {
+                    // The consumer is gone; the envelope cannot be closed for it.
+                }
+            }
+        }
     }
 
     public function name(): string

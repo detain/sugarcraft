@@ -178,4 +178,70 @@ final class SixelStreamTest extends TestCase
         $decorator = new TmuxPassthroughDecorator(new SixelRenderer());
         $this->assertInstanceOf(Renderer::class, $decorator);
     }
+
+    /**
+     * Round-1 review M4: if a consumer's `$write` throws mid-stream (a closed pipe
+     * during video playback is the realistic trigger), the encoder must still emit
+     * the DCS string terminator so the terminal is not left swallowing later output
+     * as sixel parameters.
+     */
+    public function testStreamTerminatesDcsWhenConsumerFailsMidStream(): void
+    {
+        $renderer = new SixelRenderer();
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/500x400_noise.png');
+
+        $writes = [];
+        $boom = new \RuntimeException('pipe closed');
+        try {
+            $renderer->encodeBandStream($image, 20, static function (string $chunk) use (&$writes, $boom): void {
+                $writes[] = $chunk;
+                if (count($writes) === 3) {
+                    throw $boom;
+                }
+            }, 12);
+            $this->fail('the consumer failure must propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame($boom, $e, 'the original consumer error must surface');
+        }
+
+        // The header (write #1) reached the wire, so the finally must have appended
+        // the terminator even though band emission was abandoned.
+        $this->assertNotEmpty($writes);
+        $this->assertStringEndsWith(
+            self::ESC . '\\',
+            implode('', $writes),
+            'a half-written DCS must still be terminated',
+        );
+    }
+
+    /**
+     * Round-1 review M1: when the inner Sixel encode fails BEFORE producing any
+     * fragment (a GD load failure), the tmux decorator must not have opened the
+     * `\x1bPtmux;` passthrough at all — a dangling opener would swallow the whole
+     * terminal. The envelope is opened lazily, on the first real chunk.
+     */
+    public function testTmuxStreamNeverOpensEnvelopeWhenInnerFailsEarly(): void
+    {
+        // A source whose bytes are not a decodable image: imagecreatefromstring
+        // fails inside encodeInto() before a single write, exactly the pre-first-
+        // chunk failure the lazy-open guard targets.
+        $broken = new ImageSource('this is not a PNG', 'image/png', 8, 4);
+        $decorator = new TmuxPassthroughDecorator(new SixelRenderer());
+
+        $writes = [];
+        try {
+            $decorator->encodeBandStream($broken, 8, static function (string $chunk) use (&$writes): void {
+                $writes[] = $chunk;
+            }, 4);
+            $this->fail('a corrupt source must throw');
+        } catch (\Throwable) {
+            // expected — the point is that nothing was written.
+        }
+
+        $this->assertSame(
+            [],
+            $writes,
+            'the tmux passthrough envelope must not open when the inner encode never emits',
+        );
+    }
 }
