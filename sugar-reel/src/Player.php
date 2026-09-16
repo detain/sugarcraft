@@ -12,12 +12,14 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Palette\Probe;
 use SugarCraft\Palette\Probe\Capability;
 use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
+use SugarCraft\Reel\Msg\ResizeRebuildMsg;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Render\Color;
 use SugarCraft\Reel\Render\FrameRenderer;
@@ -60,6 +62,16 @@ final class Player implements Model
     private const MAX_ROWS = 80;
 
     /**
+     * Debounce window for applying a pending resize (finding #52), in seconds.
+     *
+     * Sized to comfortably exceed a manual drag-resize's inter-reflow gap (a
+     * terminal reflows on each character-cell change, so events arrive milliseconds
+     * apart) while staying well under a frame the user would notice: at the default
+     * 24 fps the picture holds its pre-resize geometry for barely one frame.
+     */
+    private const RESIZE_DEBOUNCE_SECONDS = 0.05;
+
+    /**
      * @param Decoder                      $decoder      Frame source iterator
      * @param Mode                         $mode         Rendering mode
      * @param float                       $speed        Playback speed multiplier
@@ -77,13 +89,14 @@ final class Player implements Model
      * @param bool                        $ended        True once the decoder is exhausted (playback stopped at end)
      * @param bool                        $loop         When true, restart from frame 0 at end instead of stopping
      * @param string                      $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
-     * @param \Closure                    $audioFactory Factory fn(string $path, ?int $startMs): AudioPlayer
+     * @param \Closure                    $audioFactory Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer
      * @param int                         $cellPxW      Pixel width of a terminal cell (graphics-mode resolution)
      * @param int                         $cellPxH      Pixel height of a terminal cell
      * @param WebVtt|null                 $subtitles    Parsed subtitle track, or null when no subtitles
      * @param FrameRenderer|null          $renderer     Cached renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256)
      * @param array<array-key, string>    $headers      HTTP request headers for a remote source, re-presented on every decoder rebuild
      * @param float                       $frameBudgetMs Wall-clock budget for one tick's decode+skip work before catch-up bails (0 = unbounded); enforced between frames, never mid-decode
+     * @param WindowSizeMsg|null          $pendingResize Clamped geometry received from a `WindowSizeMsg` whose decoder rebuild is still deferred by the resize debounce (finding #52); null when nothing is pending
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -110,6 +123,7 @@ final class Player implements Model
         private readonly ?FrameRenderer $renderer = null,
         private readonly array $headers = [],
         private readonly float $frameBudgetMs = 0.0,
+        private readonly ?WindowSizeMsg $pendingResize = null,
     ) {
     }
 
@@ -154,13 +168,17 @@ final class Player implements Model
 
         // Audio companion factory: creates AudioPlayer on demand. The factory
         // is threaded through the Player so tests can inject a spy subclass.
-        $audioFactory = static fn (string $path, ?int $startMs = null): AudioPlayer
-            => new AudioPlayer($path, $startMs);
+        // It takes the header map (finding #52) because ffplay/mpv fetch the
+        // audio track from the SAME remote URL as the video: a signed stream
+        // whose token rides in the request headers is playable for video and
+        // 403-silent for audio unless the headers are re-presented here too.
+        $audioFactory = static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
+            => new AudioPlayer($path, $startMs, null, $headers);
 
         // Audio companion is created when the source has audio but is NOT
         // started here — the Player starts it on first play (see updateKey)
         // so audio and the video wall clock share the same t0.
-        $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null) : null;
+        $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null, $headers) : null;
 
         // Build and cache the renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256).
         // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
@@ -221,7 +239,7 @@ final class Player implements Model
      *                                decoder; '' for a pure injected stream.
      * @param bool     $loop          Restart from frame 0 at end-of-stream.
      * @param string   $ramp          Luma ramp name: 'minimal', 'standard', 'dense'.
-     * @param \Closure|null $audioFactory Factory fn(string $path, ?int $startMs): AudioPlayer.
+     * @param \Closure|null $audioFactory Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer.
      * @param AudioPlayer|null $audioPlayer Initial audio companion (null = silent).
      * @param bool     $paused        Start paused (default true).
      * @param int      $cellPxW       Pixel width of one terminal cell.
@@ -249,8 +267,8 @@ final class Player implements Model
         array $headers = [],
         float $frameBudgetMs = 0.0,
     ): self {
-        $factory = $audioFactory ?? static fn (string $path, ?int $startMs = null): AudioPlayer
-            => new AudioPlayer($path, $startMs);
+        $factory = $audioFactory ?? static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
+            => new AudioPlayer($path, $startMs, null, $headers);
 
         // The renderer follows the mode — including the direct-render image
         // protocols — so a host mounting a graphics stream gets the matching
@@ -300,7 +318,7 @@ final class Player implements Model
      * @param string       $videoPath      Fake path for seeking (default '/fake')
      * @param bool         $loop           Restart from frame 0 at end-of-stream instead of stopping
      * @param string       $ramp           Luma ramp name: 'minimal', 'standard', 'dense'
-     * @param \Closure     $audioFactory   Factory fn(string $path, ?int $startMs): AudioPlayer
+     * @param \Closure     $audioFactory   Factory fn(string $path, ?int $startMs, array $headers): AudioPlayer
      * @param AudioPlayer  $audioPlayer   Optional initial AudioPlayer instance (for spy injection)
      * @param bool         $paused         Start paused (default true)
      * @param WebVtt|null  $subtitles      Parsed subtitle track for testing
@@ -373,8 +391,13 @@ final class Player implements Model
 
         // F10: WindowSizeMsg — resize the player cell dimensions and rebuild
         // the decoder so frames are decoded at the correct resolution.
-        if ($msg instanceof \SugarCraft\Core\Msg\WindowSizeMsg) {
+        if ($msg instanceof WindowSizeMsg) {
             return $this->updateResize($msg->cols, $msg->rows);
+        }
+
+        // Finding #52: the debounce window armed by updateResize() elapsed.
+        if ($msg instanceof ResizeRebuildMsg) {
+            return $this->applyPendingResize();
         }
 
         return [$this, null];
@@ -469,8 +492,19 @@ final class Player implements Model
     }
 
     /**
-     * Handle a WindowSizeMsg: clamp, no-op if unchanged, otherwise rebuild
-     * the decoder at the new cell dimensions and reschedule ticks.
+     * Handle a WindowSizeMsg: clamp, no-op if unchanged, otherwise record the
+     * geometry and DEFER the decoder rebuild behind a debounce timer.
+     *
+     * WHY deferred (finding #52): a rebuild closes the running ffmpeg child and
+     * spawns another at the new resolution, then decodes forward to the current
+     * playhead — the single most expensive thing this model does, and on master it
+     * ran synchronously inside `update()`. SIGWINCH does not arrive once per resize,
+     * it arrives once per reflow: dragging a terminal edge delivers a burst of
+     * dozens, so a synchronous rebuild paid that cost dozens of times to display
+     * intermediate sizes nobody sees, while blocking the tick pipeline for the whole
+     * duration of every spawn. `update()` therefore does the cheap part only (stash
+     * the clamped geometry) and arms a one-shot timer; {@see applyPendingResize()}
+     * does the expensive part when the burst settles.
      *
      * @return array{0:Player, 1:?Closure}
      */
@@ -479,16 +513,62 @@ final class Player implements Model
         $cols = max(self::MIN_COLS, min($cols, self::MAX_COLS));
         $rows = max(self::MIN_ROWS, min($rows, self::MAX_ROWS));
 
+        // Compare against the *pending* geometry, not just the applied one: during a
+        // burst each event re-states the size, and only a genuinely new target needs
+        // a fresh timer. Re-arming for an identical target would only add another
+        // message that applies nothing.
+        $pending = $this->pendingResize;
         if ($cols === $this->cellsW && $rows === $this->cellsH) {
-            return [$this, null]; // no-op when unchanged
+            // Already decoding at this size. Nothing pending, or a pending rebuild
+            // that has since been cancelled by the terminal snapping back.
+            return [$this, null];
         }
+
+        if ($pending !== null && $pending->cols === $cols && $pending->rows === $rows) {
+            return [$this, null];
+        }
+
+        // Stash the clamped target so the rebuild honours the same bounds a
+        // synchronous path would have, and so `view()` keeps painting the current
+        // (slightly stale) frame instead of a black box while the burst settles.
+        $nextPlayer = $this->mutate(['pendingResize' => new WindowSizeMsg($cols, $rows)]);
+
+        return [$nextPlayer, Cmd::tick(self::RESIZE_DEBOUNCE_SECONDS, static fn (): Msg => ResizeRebuildMsg::instance())];
+    }
+
+    /**
+     * Apply the pending resize recorded by {@see updateResize()} — the debounced
+     * second half of a `WindowSizeMsg`.
+     *
+     * Rebuilds the decoder at the new cell dimensions, swaps in a renderer for the
+     * new grid, and reschedules the tick chain exactly as the old synchronous path
+     * did; only the *timing* moved. Every `ResizeRebuildMsg` whose geometry has
+     * already been applied (or cancelled) finds nothing pending and no-ops, which is
+     * what makes a burst of N armed timers cost one rebuild rather than N.
+     *
+     * @return array{0:Player, 1:?Closure}
+     */
+    private function applyPendingResize(): array
+    {
+        $pending = $this->pendingResize;
+        if ($pending === null) {
+            // Superseded by a later resize that already landed, or the terminal
+            // snapped back to the current size. No spawn, no re-render.
+            return [$this, null];
+        }
+
+        $cols = $pending->cols;
+        $rows = $pending->rows;
 
         [$decoder, $frame] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
 
-        // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx).
+        // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx),
+        // and clear the pending slot in the same mutate() so the apply is atomic: no
+        // Player instance ever shows the new grid while still owning the old decoder.
         $nextPlayer = $this->mutate([
             'cellsW' => $cols,
             'cellsH' => $rows,
+            'pendingResize' => null,
             'decoder' => $decoder,
             'currentFrame' => $frame ?? $this->currentFrame,
             'lastTickTime' => microtime(true),
@@ -670,8 +750,17 @@ final class Player implements Model
             }
             $nextMode = $allModes[($currentIdx + 1) % count($allModes)];
 
-            // Rebuild the decoder so the decoded frame resolution matches the
-            // new mode (HalfBlock decodes at 2× cell height). Keep position.
+            // Rebuild the decoder ONLY when the new mode needs a different decode
+            // geometry — the frames already in hand are exactly what an
+            // equal-geometry mode renders, so re-spawning ffmpeg and decoding
+            // forward to the current playhead (finding #13) would be pure churn.
+            if ($this->decodeGeometry($nextMode) === $this->decodeGeometry($this->mode)) {
+                return [$this->mutate([
+                    'mode' => $nextMode,
+                    'renderer' => RendererFactory::create($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
+                ]), null];
+            }
+
             [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
 
             $nextPlayer = $this->mutate([
@@ -684,6 +773,29 @@ final class Player implements Model
         }
 
         return [$this, null];
+    }
+
+    /**
+     * The decode geometry a rendering mode demands from its source, as an
+     * opaque comparable signature.
+     *
+     * WHY this is the right reuse key (finding #13): a decoder consults the mode
+     * for exactly three things — `isGraphics()` (rawvideo rgb24 vs a PNG
+     * image2pipe), `colsPerCell()` and `rowsPerCell()` (the pixel size of one
+     * source cell). `FfmpegDecoder::open()` and `GifDecoder::open()` derive
+     * `$graphics`/`$frameW`/`$frameH` from nothing else, so two modes with equal
+     * signatures produce byte-identical decoder argv and an identical frame grid.
+     * Ascii → Ansi256 → TrueColor therefore share one decoder process, and the
+     * Sixel/Kitty/iTerm2 trio share theirs, while crossing into HalfBlock
+     * (2 source rows per cell) or QuarterBlock (2×2) still rebuilds as before.
+     *
+     * @return string
+     */
+    private static function decodeGeometry(Mode $mode): string
+    {
+        return $mode->isGraphics()
+            ? sprintf('graphics:%dx%d', $mode->colsPerCell(), $mode->rowsPerCell())
+            : sprintf('text:%dx%d', $mode->colsPerCell(), $mode->rowsPerCell());
     }
 
     /**
@@ -785,11 +897,22 @@ final class Player implements Model
         if ($mode === Mode::HalfBlock) {
             // INLINE HalfBlock path: renders directly via Buffer → toAnsi().
             // This is the runtime path used by Player::view() for HalfBlock.
-            // There is a SEPARATE HalfBlockRenderer (wired at RendererFactory:98)
+            // There is a SEPARATE HalfBlockRenderer (wired at RendererFactory)
             // that is NEVER reached by the Player runtime — only by direct
-            // factory use / tests. The parity test testHalfBlockInlineMatchesMosaicRenderer
-            // guards that these two paths produce identical colored half-blocks,
-            // so they can't silently drift apart.
+            // factory use / tests.
+            //
+            // Why the duplicate survives (finding #9, deliberately NOT deleted):
+            // it is the only executable specification of the mosaic contract this
+            // renderer must keep, and the two paths do NOT emit identical bytes —
+            // Buffer::toAnsi() writes one combined `0;38;2;r;g;b;48;2;r;g;bm` run
+            // per cell while mosaic writes a reset-terminated fg/bg pair, and
+            // mosaic resamples through GD. Routing view() at mosaic would rewrite
+            // every HalfBlock snapshot and pull ext-gd (not a declared dependency
+            // of this lib) onto the hot path. `tests/HalfBlockParityTest` therefore
+            // compares the decoded per-cell (glyph, fg, bg) stream — the picture,
+            // not the encoding — on every geometry a conforming decoder can emit,
+            // and pins the one shape where they legitimately differ (odd pixel
+            // height, which cellsH × rowsPerCell() cannot produce).
             //
             // HalfBlock: each cell shows 2 vertically-stacked pixels.
             // Upper pixel = foreground, lower pixel = background.
@@ -950,6 +1073,10 @@ final class Player implements Model
      * (TrueColor/HalfBlock) pack the channels into a 0xRRGGBB int. Ansi256 and
      * the image protocols never use the Buffer path (they renderDirect()).
      *
+     * Packing delegates to {@see Color::pack()} — the same helper `RgbFrame::toGd()`
+     * uses — so the terminal path and the GD export path can never drift on how
+     * three bytes become one int (finding #44).
+     *
      * @return int|null 0xRRGGBB color for TrueColor/HalfBlock, null for Ascii
      */
     private static function rgbToStyleColor(int $r, int $g, int $b, Mode $mode): ?int
@@ -957,7 +1084,8 @@ final class Player implements Model
         if ($mode === Mode::Ascii) {
             return null;
         }
-        return (($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF);
+
+        return Color::pack($r, $g, $b);
     }
 
     /**
@@ -1314,9 +1442,12 @@ final class Player implements Model
             return null;
         }
         $this->audioPlayer->stop();
-        $factory = $this->audioFactory ?? static fn (string $path, ?int $ms): AudioPlayer
-            => new AudioPlayer($path, $ms);
-        $newAudio = $factory($this->videoPath, $startMs);
+        $factory = $this->audioFactory ?? static fn (string $path, ?int $ms, array $headers = []): AudioPlayer
+            => new AudioPlayer($path, $ms, null, $headers);
+        // Re-present the source headers on the respawned companion (finding #52):
+        // every seek/loop/mode rebuild used to drop them, so audio worked only
+        // on an unauthenticated URL.
+        $newAudio = $factory($this->videoPath, $startMs, $this->headers);
         if (!$this->paused) {
             $newAudio->start();
         }
@@ -1348,6 +1479,30 @@ final class Player implements Model
     /**
      * Generic mutable-update helper: create a new Player with changed fields.
      *
+     * WHY `array_key_exists()` and not `??` (finding #8). The old implementation
+     * read `$changes['ended'] ?? $this->ended`, which reads as "fall back when the
+     * caller gave me nothing" but actually means "fall back when the caller gave
+     * me *null*". Two real consequences, both silent:
+     *
+     *  - A nullable field could never be CLEARED. `['audioPlayer' => null]` (stop
+     *    following an audio companion) or `['currentFrame' => null]` would have
+     *    quietly kept the previous value, so the new Player would claim a state the
+     *    update path explicitly discarded — and then try to start audio that no
+     *    longer belongs to this stream position.
+     *  - Falsy-but-present values were only accidentally safe. `ended => false`,
+     *    `frameIndex => 0`, `videoTime => 0.0` and `paused => false` are all
+     *    meaningful state the loop-restart and seek paths pass, and their survival
+     *    depended on a quirk of the operator rather than on intent.
+     *
+     * Key-existence makes presence the single signal: if the key is in the map the
+     * value is used verbatim, whatever it is. Callers therefore express "no change"
+     * by omitting the key — never by passing null.
+     *
+     * `videoPath`, `headers` and `frameBudgetMs` are pinned (not read from
+     * $changes at all): they describe the *source* and the host's decode budget,
+     * not the playback state a rebuild is allowed to revise, so any attempt to
+     * change them through this seam would be a bug we want to be unable to write.
+     *
      * @param array<string, mixed> $changes
      */
     private function mutate(array $changes): self
@@ -1377,6 +1532,10 @@ final class Player implements Model
             renderer: array_key_exists('renderer', $changes) ? $changes['renderer'] : $this->renderer,
             headers: $this->headers, // pinned — the source's request headers outlive any rebuild
             frameBudgetMs: $this->frameBudgetMs, // pinned for the player's lifetime
+            // Carried, not pinned: a tick, seek or mode switch that happens inside
+            // the debounce window must not silently swallow the deferred rebuild, or
+            // the player keeps decoding at the superseded geometry forever.
+            pendingResize: array_key_exists('pendingResize', $changes) ? $changes['pendingResize'] : $this->pendingResize,
         );
     }
 

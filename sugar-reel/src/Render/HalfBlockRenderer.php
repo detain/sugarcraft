@@ -40,9 +40,15 @@ final class HalfBlockRenderer implements FrameRenderer
         // Delegate to candy-mosaic's HalfBlockRenderer (HalfBlockRenderer.php:33).
         // NOTE: This renderer is the "Mosaic" path — it is NEVER used by Player::view()
         // at runtime (Player uses the inline Buffer path in frameToBuffer instead).
-        // This class exists for direct RendererFactory::create(Mode::HalfBlock) callers
-        // and is guarded by testHalfBlockInlineMatchesMosaicRenderer, which asserts
-        // that both paths produce identical colored half-block cells.
+        // This class exists for direct RendererFactory::create(Mode::HalfBlock) callers.
+        //
+        // Parity with the runtime path is guarded per CELL — glyph, foreground and
+        // background compared as decoded semantics, not bytes — by
+        // `tests/HalfBlockParityTest` and PlayerTest::testHalfBlockInlineMatchesMosaicRenderer.
+        // Byte equality is NOT achievable here: Buffer::toAnsi() coalesces the SGR
+        // runs while mosaic terminates each cell with a reset, and this path resamples
+        // through GD (so it needs ext-gd, which sugar-reel does not require). Do not
+        // "simplify" view() onto this path without regenerating every HalfBlock golden.
         $renderer = new MosaicHalfBlockRenderer();
 
         // Half-block uses full width in cells, double height density.

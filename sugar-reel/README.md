@@ -159,8 +159,13 @@ $player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
 - **Resize:** forward terminal resizes to the player as a `WindowSizeMsg`.
   `Player` clamps columns to `[10, 200]` and rows to `[5, 80]` (the
   `MIN_COLS`/`MAX_COLS`/`MIN_ROWS`/`MAX_ROWS` constants) and ignores a resize
-  that does not change the clamped cell grid. A clamp change rebuilds the
-  decoder **off the render hot path** (in `update`, never in `view`).
+  that does not change the clamped cell grid. A change rebuilds the decoder
+  **off the render hot path** (in `update`, never in `view`) *and* off the signal
+  itself: the handler only records the target and returns a short debounce
+  command, and the re-spawn happens once the burst settles — so dragging a
+  terminal edge costs one `ffmpeg` re-open, not one per character cell. The host
+  must actually run the command `update()` returns, or the player keeps decoding
+  at the superseded size.
 - **Quit keys:** decide when to quit. Standalone playback quits on `q`, `Esc`,
   or `Ctrl-C` and each of those paths calls `Player::stop()` first; a host
   embedding the player may route different keys but must still call `stop()` on
@@ -309,13 +314,18 @@ reinvented: [candy-mosaic](../candy-mosaic) (image → cell renderers),
   re-open latency on resume, and the audio clock is quantised to the last
   pause boundary rather than frame-exact.
 
-- **Authenticated video, unauthenticated audio.** The request headers given to
-  `Reel::openUrl()` ride on ffmpeg's video input (`-headers`/`-user_agent`) but
-  are NOT forwarded to the audio companion — `ffplay`/`mpv` spawn with the bare
-  URL. On a signed or 403-gated stream the video plays while audio silently
-  fails to connect (treat such sources as video-only until audio headers are
-  wired; `HttpHeaders::toMpvHeaderFields()` already renders the mpv form for
-  that future work).
+- **Audio headers are forwarded, but only in the two dialects `ffplay`/`mpv`
+  understand.** The request headers given to `Reel::openUrl()` ride on ffmpeg's
+  video input (`-headers`/`-user_agent`) *and* on the audio companion: `ffplay`
+  gets the same `-headers` blob, `mpv` gets one
+  `--http-header-fields="Name: value"` per pair (rendered by
+  `HttpHeaders::toMpvHeaderFields()`, which includes `User-Agent`, so mpv is
+  never also given `--user-agent`). A header that neither child can be handed —
+  a per-request nonce, or a cookie the video side obtained by redirect — still
+  will not reach audio. On a signed or 403-gated stream audio therefore now
+  authenticates the same way video does; a local path drops the headers
+  altogether and logs `header.ignored_local_source` rather than sending
+  credentials to a file.
 
 - **Decode is synchronous with an optional per-tick budget.** `next()` reads the
   ffmpeg stdout pipe — non-blocking, behind a bounded `stream_select()` deadline —

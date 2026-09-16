@@ -9,6 +9,7 @@ use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\Probe;
 use SugarCraft\Reel\Support\BoundedReaper;
+use SugarCraft\Reel\Support\FfmpegCommandBuilder;
 
 /**
  * Ffmpeg-based video decoder using proc_open.
@@ -295,37 +296,18 @@ final class FfmpegDecoder implements Decoder
         $headers ??= HttpHeaders::none();
         $cmd = [$ffmpegPath, '-hide_banner', '-loglevel', 'error'];
 
-        $network = self::isNetworkSource($source);
+        $network = FfmpegCommandBuilder::isNetworkSource($source);
 
         if ($network) {
-            array_push(
-                $cmd,
-                '-reconnect',
-                '1',
-                '-reconnect_streamed',
-                '1',
-                '-reconnect_on_network_error',
-                '1',
-                '-reconnect_delay_max',
-                '4',
-            );
+            array_push($cmd, ...FfmpegCommandBuilder::networkReconnectFlags());
 
             // Authenticated passthrough: emit the header blob / user agent only
             // for a network source. A local path omits them (open() already
             // logged that non-network headers are dropped).
-            $headerString = $headers->toFfmpegHeaderString();
-            if ($headerString !== null) {
-                array_push($cmd, '-headers', $headerString);
-            }
-            $userAgent = $headers->userAgent();
-            if ($userAgent !== null) {
-                array_push($cmd, '-user_agent', $userAgent);
-            }
+            array_push($cmd, ...FfmpegCommandBuilder::headerInputFlags($headers));
         }
 
-        if ($startSec > 0.0) {
-            array_push($cmd, '-ss', sprintf('%.3f', $startSec));
-        }
+        array_push($cmd, ...FfmpegCommandBuilder::inputSeekFlag($startSec));
 
         array_push($cmd, '-i', $source);
 
@@ -366,11 +348,13 @@ final class FfmpegDecoder implements Decoder
      *
      * Public because {@see DecoderFactory::create()} routes on exactly this
      * test — one predicate means the factory's routing and the decoder's
-     * header-gating decision cannot drift apart.
+     * header-gating decision cannot drift apart. The predicate itself now lives
+     * in {@see FfmpegCommandBuilder::isNetworkSource()} so the audio command
+     * builders route on the same test; this is the decoder's own spelling of it.
      */
     public static function isNetworkSource(string $source): bool
     {
-        return preg_match('#^https?://#i', $source) === 1;
+        return FfmpegCommandBuilder::isNetworkSource($source);
     }
 
     /**

@@ -10,6 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Reel\AudioPlayer;
 use SugarCraft\Reel\Decode\RgbFrame;
+use SugarCraft\Reel\Msg\ResizeRebuildMsg;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Player;
 use SugarCraft\Reel\Source\Probe;
@@ -741,10 +742,14 @@ final class PlayerTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * Regression for F10. When a WindowSizeMsg arrives, the Player must
-     * update its cellsW/cellsH AND rebuild the decoder at the new size
-     * (so frames are decoded at the correct resolution for the new mode).
-     * On master update() has no WindowSizeMsg branch — this no-ops silently
+     * Regression for F10, re-scoped by finding #52. When a WindowSizeMsg arrives the
+     * Player must take the new cellsW/cellsH AND rebuild the decoder at it (so frames
+     * are decoded at the correct resolution for the new mode) — but the rebuild is now
+     * DEBOUNCED: the signal handler only records the clamped target and arms a timer,
+     * and the geometry lands when the ResizeRebuildMsg it dispatches is delivered.
+     * Both halves are asserted here.
+     *
+     * On master update() had no WindowSizeMsg branch at all — this no-ops silently
      * and the video stays at the constructor's fixed 80×24.
      */
     public function testWindowSizeMsgUpdatesCellDimensions(): void
@@ -759,17 +764,161 @@ final class PlayerTest extends TestCase
         $resize = new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40);
         [$player2, $cmd] = $player->update($resize);
 
+        // The signal handler must not block on a spawn — it schedules the rebuild.
+        $this->assertNotNull($cmd, 'a resize must schedule the deferred rebuild');
         $this->assertSame(
             120,
+            $this->pendingResizeTarget($player2)->cols,
+            'the target must be recorded synchronously'
+        );
+        $this->assertSame(
+            80,
             $this->getPlayerProperty($player2, 'cellsW'),
-            'cellsW must update to the WindowSizeMsg cols'
+            'the applied grid must not change until the debounce elapses'
+        );
+
+        [$player3, $tick] = $player2->update(ResizeRebuildMsg::instance());
+
+        $this->assertSame(
+            120,
+            $this->getPlayerProperty($player3, 'cellsW'),
+            'cellsW must update once the debounce elapses'
         );
         $this->assertSame(
             40,
-            $this->getPlayerProperty($player2, 'cellsH'),
-            'cellsH must update to the WindowSizeMsg rows'
+            $this->getPlayerProperty($player3, 'cellsH'),
+            'cellsH must update once the debounce elapses'
         );
-        $this->assertNotNull($cmd, 'resize while playing must schedule a tick');
+        $this->assertNotNull($tick, 'a resize landing while playing must keep the tick chain alive');
+        $this->assertNull($this->getPlayerProperty($player3, 'pendingResize'), 'the apply must consume the pending slot');
+    }
+
+    /**
+     * Finding #52 — a burst of WindowSizeMsgs (a dragged terminal edge reflows per
+     * character cell) must cost ONE decoder rebuild, not one per event. The fake
+     * decoder counts its own spawns, so this measures the process-level cost directly.
+     */
+    public function testResizeStormRebuildsTheDecoderOnce(): void
+    {
+        // GeometryFakeDecoder regenerates on reopen (reopen() delegates to open()),
+        // so openCount() is the true count of "a new decode grid was built" — exactly
+        // the expensive event the debounce must collapse.
+        $decoder = new GeometryFakeDecoder(200);
+        $decoder->open('/fake', 80, 24, 30.0, Mode::HalfBlock);
+        $player = Player::openForTest($decoder, 30.0, 200, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        $opensBefore = $decoder->openCount();
+        $current = $player;
+        /** @var list<?\Closure> $cmds */
+        $cmds = [];
+        // 25 distinct sizes that never revisit the applied 80×24, with no rebuild
+        // applied in between — a pure burst.
+        for ($i = 0; $i < 25; $i++) {
+            [$current, $cmd] = $current->update(new \SugarCraft\Core\Msg\WindowSizeMsg(40 + $i, 20 + intdiv($i, 5)));
+            $cmds[] = $cmd;
+        }
+
+        $this->assertCount(25, $cmds);
+        $this->assertSame(
+            $opensBefore,
+            $decoder->openCount(),
+            'the resize signal handler must not touch the decoder at all'
+        );
+
+        // Every armed timer fires. Only the first may rebuild; the rest must find
+        // nothing pending and no-op — that IS the debounce contract.
+        $rebuilds = 0;
+        foreach ($cmds as $cmd) {
+            $this->assertNotNull($cmd, 'each new target must arm a debounce timer');
+            $before = $decoder->openCount();
+            [$current] = $current->update(ResizeRebuildMsg::instance());
+            $rebuilds += $decoder->openCount() - $before;
+        }
+
+        $this->assertSame(1, $rebuilds, 'a 25-event burst must spawn exactly one decoder rebuild');
+        $this->assertSame(64, $this->getPlayerProperty($current, 'cellsW'), 'the last geometry must win');
+        $this->assertSame(24, $this->getPlayerProperty($current, 'cellsH'));
+    }
+
+    /**
+     * Finding #52 — the deferred apply must not orphan a child. It goes through the
+     * same close-then-create seam the F21 regression pins for a backward seek, so the
+     * decoder it replaces is closed before the replacement is built. Driven with a
+     * SpyDecoder (reopensInPlace() === false) on a real .gif path so the production
+     * rebuild branch — not the in-memory reopen branch — is the one exercised.
+     */
+    public function testDeferredResizeClosesTheSupersededDecoder(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gifPath = $this->createTempGif();
+        $spy = new SpyDecoder(array_fill(0, 20, $this->makeFrame("\x10\x20\x30")));
+        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(16, 12));
+        $this->assertNotNull($cmd);
+        $this->assertSame(0, $spy->closeCount, 'the signal handler itself must close nothing');
+
+        [$player] = $player->update(ResizeRebuildMsg::instance());
+
+        $this->assertSame(1, $spy->closeCount, 'the applied rebuild must close the child it replaces');
+        $this->assertSame(16, $this->getPlayerProperty($player, 'cellsW'));
+    }
+
+    /**
+     * Finding #52 — a resize that snaps back to the applied geometry cancels the
+     * burst's work: the stale timer must then apply nothing rather than rebuild twice.
+     */
+    public function testStaleDebounceTimerAppliesNothing(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $this->assertNotNull($cmd);
+        [$player] = $player->update(ResizeRebuildMsg::instance());
+        $reopensAfterApply = $decoder->reopenCount();
+        $this->assertSame(1, $reopensAfterApply, 'the burst must have rebuilt once');
+
+        // The same timer firing again (a second armed event from the same burst)
+        // finds nothing pending.
+        [$player2, $cmd2] = $player->update(ResizeRebuildMsg::instance());
+        $this->assertSame($player, $player2, 'a stale debounce must be identity');
+        $this->assertNull($cmd2, 'a stale debounce must schedule nothing');
+        $this->assertSame(
+            $reopensAfterApply,
+            $decoder->reopenCount(),
+            'a stale debounce must not rebuild again'
+        );
+    }
+
+    /**
+     * Finding #52 — a pending resize must survive other updates. A tick landing
+     * inside the debounce window must not swallow the deferred rebuild, or the player
+     * would keep decoding at the superseded geometry forever.
+     */
+    public function testPendingResizeSurvivesAnInterleavedTick(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        [$player] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        [$player] = $player->update(TickMsg::instance());
+
+        $this->assertNotNull(
+            $this->getPlayerProperty($player, 'pendingResize'),
+            'an interleaved tick must carry the pending resize forward'
+        );
+
+        [$player] = $player->update(ResizeRebuildMsg::instance());
+        $this->assertSame(120, $this->getPlayerProperty($player, 'cellsW'));
+        $this->assertSame(40, $this->getPlayerProperty($player, 'cellsH'));
     }
 
     /**
@@ -792,8 +941,9 @@ final class PlayerTest extends TestCase
 
     /**
      * Regression for F10. Resize clamps to sane bounds (cols≥10, rows≥5).
-     * A WindowSizeMsg(5, 3) must be clamped to cols=10, rows=5 before
-     * any rebuild. A zero-area buffer would crash the decoder.
+     * A WindowSizeMsg(5, 3) must be clamped to cols=10, rows=5 before anything
+     * else sees it — including the deferred rebuild, which must never be handed a
+     * zero-area grid (that would crash the decoder).
      */
     public function testWindowSizeMsgClampsToMinimum(): void
     {
@@ -804,16 +954,59 @@ final class PlayerTest extends TestCase
         $tiny = new \SugarCraft\Core\Msg\WindowSizeMsg(5, 3);
         [$player2, $cmd] = $player->update($tiny);
 
+        $this->assertNotNull($cmd, 'a clamped resize is still a resize');
         $this->assertSame(
             10,
-            $this->getPlayerProperty($player2, 'cellsW'),
-            'cols below 10 must be clamped to 10'
+            $this->pendingResizeTarget($player2)->cols,
+            'cols below 10 must be clamped to 10 before they are recorded'
         );
         $this->assertSame(
             5,
-            $this->getPlayerProperty($player2, 'cellsH'),
-            'rows below 5 must be clamped to 5'
+            $this->pendingResizeTarget($player2)->rows,
+            'rows below 5 must be clamped to 5 before they are recorded'
         );
+
+        [$player3] = $player2->update(ResizeRebuildMsg::instance());
+        $this->assertSame(10, $this->getPlayerProperty($player3, 'cellsW'), 'the applied grid must be the clamped width');
+        $this->assertSame(5, $this->getPlayerProperty($player3, 'cellsH'), 'the applied grid must be the clamped height');
+    }
+
+    /**
+     * Finding #52 — pin the wiring the debounce depends on: the command a resize
+     * returns must be a one-shot timer that dispatches ResizeRebuildMsg (not a
+     * playback tick, which would fork the tick chain), so the host that runs it gets
+     * exactly one deferred apply per armed window.
+     */
+    public function testResizeCommandDispatchesTheRebuildMessage(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        [, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $this->assertNotNull($cmd);
+
+        $request = $cmd();
+        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $request, 'a resize arms a timer, it does not inline work');
+        $this->assertGreaterThan(0.0, $request->seconds, 'the debounce window must be a real delay');
+        $this->assertLessThan(0.5, $request->seconds, '…but short enough that the reflow is not visibly late');
+        $this->assertInstanceOf(ResizeRebuildMsg::class, ($request->produce)());
+    }
+
+    /**
+     * The recorded (clamped) resize target, for asserting the debounce contract
+     * without waiting on a real timer.
+     */
+    private function pendingResizeTarget(Player $player): \SugarCraft\Core\Msg\WindowSizeMsg
+    {
+        $pending = $this->getPlayerProperty($player, 'pendingResize');
+        $this->assertInstanceOf(
+            \SugarCraft\Core\Msg\WindowSizeMsg::class,
+            $pending,
+            'expected update() to record a pending resize'
+        );
+
+        return $pending;
     }
 
     // -------------------------------------------------------------------------
@@ -1400,6 +1593,9 @@ final class PlayerTest extends TestCase
         $renderer = $this->getPlayerProperty($player, 'renderer');
         $headers = $this->getPlayerProperty($player, 'headers');
         $frameBudgetMs = $this->getPlayerProperty($player, 'frameBudgetMs');
+        // Carried like any other playback state: dropping a pending resize here
+        // would silently cancel a debounced rebuild the test is about to trigger.
+        $pendingResize = $this->getPlayerProperty($player, 'pendingResize');
 
         // Order MUST match the Player constructor positionally — the new Player
         // instance is built via array_values($values) through the private ctor.
@@ -1428,6 +1624,7 @@ final class PlayerTest extends TestCase
             'renderer' => $renderer,
             'headers' => $headers,
             'frameBudgetMs' => $frameBudgetMs,
+            'pendingResize' => $pendingResize,
         ];
 
         foreach ($overrides as $k => $v) {
@@ -1556,21 +1753,31 @@ final class PlayerTest extends TestCase
         $renderer = new HalfBlockRenderer();
         $mosaicView = $renderer->render($frame, Mode::HalfBlock);
 
-        // Strip SGR escape sequences for pure-char comparison.
+        // Glyph count alone is a weak guard — two paths that disagree on every
+        // colour still produce four ▀ — so the comparison is now on the decoded
+        // per-cell semantics (glyph, foreground, background). See HalfBlockStream.
         $stripSgr = static fn (string $s): string => preg_replace('/\x1b\[[0-9;]*m/', '', $s);
+        $this->assertSame(substr_count($stripSgr($mosaicView), '▀'), substr_count($stripSgr($inlineView), '▀'));
 
-        $inlineChars = $stripSgr($inlineView);
-        $mosaicChars = $stripSgr($mosaicView);
+        $inlineCells = \SugarCraft\Reel\Tests\Support\HalfBlockStream::cells($inlineView);
+        $mosaicCells = \SugarCraft\Reel\Tests\Support\HalfBlockStream::cells($mosaicView);
 
-        // Both must produce the same number of ▀ glyphs (one per cell = 4 cells).
-        $inlineGlyphs = substr_count($inlineChars, '▀');
-        $mosaicGlyphs = substr_count($mosaicChars, '▀');
-
-        $this->assertEquals(
-            $mosaicGlyphs,
-            $inlineGlyphs,
-            'Inline HalfBlock path and Mosaic HalfBlockRenderer must produce the same '
-                . "glyph count (guarded by testHalfBlockInlineMatchesMosaicRenderer)"
+        $this->assertCount(4, $inlineCells, 'one cell per column for a 4x2 frame');
+        $this->assertSame(
+            [
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+                ['glyph' => '▀', 'fg' => '255,0,0', 'bg' => '0,128,0'],
+            ],
+            $inlineCells,
+            'the inline path must paint the upper pixel as foreground and the lower as background'
+        );
+        $this->assertSame(
+            $mosaicCells,
+            $inlineCells,
+            'Inline HalfBlock path and Mosaic HalfBlockRenderer must agree on every cell, '
+                . 'not merely on how many cells they emit'
         );
     }
 

@@ -448,10 +448,14 @@ final class Reel
      *
      * HOST CONTRACT (what the embedding program is responsible for):
      *  - RESIZE: forward a `WindowSizeMsg` on SIGWINCH. The Player clamps columns
-     *    to 10..200 and rows to 5..80 and no-ops when unchanged; it then
-     *    rebuilds the decoder at the new cell grid. That rebuild re-opens ffmpeg,
-     *    so keep resize off the per-frame hot path — react to the size change, do
-     *    not poll it.
+     *    to 10..200 and rows to 5..80 and no-ops when unchanged. The decoder rebuild
+     *    that follows is DEBOUNCED (finding #52): the message handler only records
+     *    the target and returns a short one-shot command, and the rebuild — which
+     *    re-opens ffmpeg — happens once the burst settles, so a dragged terminal edge
+     *    costs one spawn rather than one per reflow. The consequence for the host is
+     *    only that it must actually RUN the command the update returns; a host that
+     *    drops it leaves the player decoding at the superseded size. Still keep
+     *    resize off the per-frame hot path: react to the size change, do not poll it.
      *  - QUIT: the Player handles 'q'/Esc/Space/seek keys itself; the host decides
      *    whether a quit key tears down its whole program or just unmounts the
      *    player. Call {@see Player::stop()} when leaving so no audio/video
