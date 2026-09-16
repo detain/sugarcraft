@@ -1000,6 +1000,30 @@ final class PlayerTest extends TestCase
     }
 
     /**
+     * Round-3 review R3-1: the stop() latch must cover the TICK path too, not just
+     * the two resize sites. A looping player that is stopped mid-run used to let an
+     * in-flight TickMsg walk to end-of-stream and reopen frame 0 through
+     * onReachedEnd() — respawning a decoder child whose owner had already torn the
+     * instance down. The latch refuses the tick outright.
+     */
+    public function testStopSilencesALoopingPlaybackTick(): void
+    {
+        $decoder = $this->makeFakeDecoder(2);
+        $player = Player::openForTest($decoder, 30.0, totalFrames: 2, loop: true, paused: false);
+        $decoder->next();
+        $player = $this->setCurrentFrame($player, $decoder->next(), 1);
+
+        $player->stop();
+
+        [$after, $cmd] = $player->update(new TickMsg());
+
+        $this->assertSame($player, $after, 'a stopped player must not derive a looping reopen');
+        $this->assertNull($cmd, 'a stopped tick schedules nothing further');
+        $this->assertSame(0, $decoder->reopenCount(), 'the end-of-stream loop must not respawn a closed player');
+        $this->assertSame(1, $this->getPlayerProperty($after, 'frameIndex'), 'frame position stays frozen at teardown');
+    }
+
+    /**
      * Regression for F10. Resize with the SAME size must be a no-op
      * (no decoder rebuild, no tick reschedule).
      */

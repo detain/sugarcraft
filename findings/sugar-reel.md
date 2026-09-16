@@ -743,7 +743,10 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 > ffmpeg respawn instead of one per reflow, a snap-back to the applied geometry
 > CANCELS the deferred target (`testSnapbackResizeCancelsThePendingRebuild`), and
 > `stop()` latches the instance so an in-flight debounce timer can never resurrect a
-> torn-down decoder (`testStopCancelsAnInFlightDebounceTimer`). A timer whose geometry
+> torn-down decoder (`testStopCancelsAnInFlightDebounceTimer`), and — per round-3
+> review R3-1 — the latch also refuses the TICK path, so a stopped looping player's
+> in-flight `TickMsg` can no longer reach end-of-stream and respawn frame 0 through
+> `onReachedEnd()` (`testStopSilencesALoopingPlaybackTick`). A timer whose geometry
 > already landed applies nothing (`tests/PlayerTest::testResizeStormRebuildsTheDecoderOnce`,
 > `testStaleDebounceTimerAppliesNothing`, `testPendingResizeSurvivesAnInterleavedTick`,
 > `testResizeCommandDispatchesTheRebuildMessage`). No new `proc_open` site, so the

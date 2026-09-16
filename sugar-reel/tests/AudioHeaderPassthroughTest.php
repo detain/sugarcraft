@@ -305,45 +305,45 @@ final class AudioHeaderPassthroughTest extends TestCase
 
     public function testDefaultAudioFactoryCarriesHeadersThroughToTheChild(): void
     {
-        $ffplay = Probe::ffplay();
-        if ($ffplay === null) {
-            self::markTestSkipped('ffplay not installed; cannot build the default audio command');
-        }
+        // Round-3 review R3-2: a stubbed ffplay/mpv PATH runs the default-factory
+        // chain on every host — nothing executes these binaries; every assertion
+        // reads only the argv buildCommand() assembles.
+        $this->withStubbedBinaries(['ffplay', 'mpv'], function (): void {
+            // No audioFactory injected → Player's own default closure runs on rebuild.
+            $player = Player::fromDecoder(
+                new FakeDecoder(array_fill(0, 4, new RgbFrame("\x10\x20\x30", 1, 1))),
+                fps: 24.0,
+                totalFrames: 4,
+                videoPath: self::SOURCE,
+                audioPlayer: new HeaderSpyAudioPlayer(self::SOURCE),
+                paused: true,
+                headers: self::signedHeaders(),
+            );
 
-        // No audioFactory injected → Player's own default closure runs on rebuild.
-        $player = Player::fromDecoder(
-            new FakeDecoder(array_fill(0, 4, new RgbFrame("\x10\x20\x30", 1, 1))),
-            fps: 24.0,
-            totalFrames: 4,
-            videoPath: self::SOURCE,
-            audioPlayer: new HeaderSpyAudioPlayer(self::SOURCE),
-            paused: true,
-            headers: self::signedHeaders(),
-        );
+            $rebuilt = $player->withSeek(1);
 
-        $rebuilt = $player->withSeek(1);
+            $playerProp = new ReflectionProperty(Player::class, 'audioPlayer');
+            $playerProp->setAccessible(true);
+            $audio = $playerProp->getValue($rebuilt);
+            self::assertInstanceOf(AudioPlayer::class, $audio, 'the seek must have respawned a real companion');
 
-        $playerProp = new ReflectionProperty(Player::class, 'audioPlayer');
-        $playerProp->setAccessible(true);
-        $audio = $playerProp->getValue($rebuilt);
-        self::assertInstanceOf(AudioPlayer::class, $audio, 'the seek must have respawned a real companion');
+            $prop = new ReflectionProperty(AudioPlayer::class, 'headers');
+            $prop->setAccessible(true);
+            /** @var HttpHeaders $headers */
+            $headers = $prop->getValue($audio);
+            self::assertSame(
+                [
+                    ['name' => 'Authorization', 'value' => 'Bearer signed-token-9000'],
+                    ['name' => 'Referer', 'value' => 'https://player.example.test/'],
+                ],
+                $headers->pairs(),
+                'the default factory must hand the headers to the respawned AudioPlayer',
+            );
 
-        $prop = new ReflectionProperty(AudioPlayer::class, 'headers');
-        $prop->setAccessible(true);
-        /** @var HttpHeaders $headers */
-        $headers = $prop->getValue($audio);
-        self::assertSame(
-            [
-                ['name' => 'Authorization', 'value' => 'Bearer signed-token-9000'],
-                ['name' => 'Referer', 'value' => 'https://player.example.test/'],
-            ],
-            $headers->pairs(),
-            'the default factory must hand the headers to the respawned AudioPlayer',
-        );
-
-        $argv = self::argvOf($audio);
-        self::assertNotNull($argv);
-        self::assertContains('-headers', $argv);
+            $argv = self::argvOf($audio);
+            self::assertNotNull($argv);
+            self::assertContains('-headers', $argv);
+        });
     }
 
     public function testModeCycleKeepsHeadersOnTheRebuiltDecoder(): void

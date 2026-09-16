@@ -433,6 +433,14 @@ final class Player implements Model
      */
     private function updateTick(): array
     {
+        if ($this->stopped) {
+            // Same owner rule as applyPendingResize() (round-1 M2, extended per
+            // round-3 R3-1): stop() closed the decoder child this instance owned;
+            // no in-flight tick — least of all a looping player's end-of-stream
+            // reopen — may spawn a replacement with no one left to reap it.
+            return [$this, null];
+        }
+
         if ($this->paused) {
             return [$this, null];
         }
@@ -1432,7 +1440,8 @@ final class Player implements Model
      *
      * The stop latch is per object tree (round-2 NEW-4): it is copied forward by
      * `mutate()`, so no instance derived from a stopped player will ever rebuild
-     * or respawn again — a late debounce timer resolves to identity. Hosts that
+     * or respawn again — the resize arming path, the deferred debounce apply,
+     * and every playback tick all resolve to identity (round-3 R3-1). Hosts that
      * want to play again must construct a FRESH Player (or `open()` a new one);
      * reusing the stopped instance will not resurrect its decoder.
      */
