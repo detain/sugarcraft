@@ -9,6 +9,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\MCP\GitMcpServer;
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\McpLaunchEnabledTrait;
 
 /**
  * E698: {@see Bootstrap::mcpLivenessSnapshot()} reads the memo and NOTHING
@@ -37,6 +38,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 final class BootstrapMcpLivenessTest extends TestCase
 {
     use HomeSandboxTrait;
+    use McpLaunchEnabledTrait;
 
     /** @var array<int, array<string, McpClient>> */
     private array $memoBefore = [];
@@ -49,6 +51,7 @@ final class BootstrapMcpLivenessTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->armMcpLaunchEnabled();
 
         $this->tmpDir = sys_get_temp_dir() . '/sc_mcp_liveness_' . bin2hex(random_bytes(6));
         mkdir($this->tmpDir, 0o755, true);
@@ -63,6 +66,7 @@ final class BootstrapMcpLivenessTest extends TestCase
         $this->writeDigests($this->digestsBefore);
         $this->removeLeftoverTree();
         $this->restoreHomeSandbox();
+        $this->restoreMcpLaunchEnabled();
 
         parent::tearDown();
     }

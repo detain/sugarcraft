@@ -5484,6 +5484,30 @@ final class Bootstrap
     public const MCP_TRUSTED = 'trusted';
 
     /**
+     * E737 — the opt-out hatch. Env var that forces the MCP decision to
+     * `MCP_ABSENT` regardless of what the project root holds.
+     *
+     * WHY AN ENV VAR AND NOT A SETTING: the consumers that need it most are
+     * automated environments that have no settings file to edit and must not
+     * inherit one — sharded test runs (the E737 mechanism: the shard runner
+     * sits at the checkout root, where an operator's own `.mcp.json` is real,
+     * and any sibling that reaches {@see mcpClient()} through the root-less
+     * funnel used to spawn those servers as a side effect of a test run;
+     * `scripts/parallel-tests.sh` now sets this variable on the shard launch
+     * so that side effect is gone), scripted hosts, and any operator who
+     * wants the TUI fully MCP-off.
+     *
+     * THE TRUTHY VOCABULARY IS NARROWER THAN THE FLAG-STYLE SWITCHES: only
+     * `1`, `true` and `yes` (case-insensitive) disable. Unset, `0`, empty and
+     * every other value keep MCP enabled — exactly what the flag-style
+     * variables do for their OFF-side — so a test, a CI matrix or a wrapper
+     * script that clears its own environment can trust the default: only an
+     * explicit opt-out turns the gate off. {@see mcpDisabledByEnvironment()}
+     * owns the spelling.
+     */
+    public const MCP_DISABLE_ENV = 'SUGARCRUSH_MCP_DISABLE';
+
+    /**
      * Where this project's `.mcp.json` is, and whether this launch is allowed
      * to start the servers it names — WITHOUT starting any of them.
      *
@@ -5497,6 +5521,10 @@ final class Bootstrap
      *
      * Records the same {@see $projectTierRefusals} entries the inline version
      * did, keyed by the same path, so calling it twice is idempotent.
+     *
+     * {@see self::MCP_DISABLE_ENV} short-circuits this whole gate to
+     * {@see self::MCP_ABSENT} before any stat or trust read — the decision
+     * stays the one discovery path, it just answers the environment first.
      *
      * @return array{path: string, root: string, canonicalRoot: string|false, status: string}
      *   `status` is one of {@see self::MCP_ABSENT}, {@see self::MCP_OUTSIDE_TREE},
@@ -5518,6 +5546,19 @@ final class Bootstrap
             . '/' . self::MCP_CONFIG_FILENAME;
 
         $decision = ['path' => $path, 'root' => $root, 'canonicalRoot' => $canonicalRoot];
+
+        // E737 — the opt-out hatch, honored ABOVE every other gate and BEFORE
+        // any stat, containment compare, trust read or refusal write, and it
+        // answers the very shape a config-less miss answers: the same
+        // `MCP_ABSENT` with a well-formed path. Every consumer treats a
+        // non-TRUSTED decision as "nothing to launch", so the environment can
+        // silence the whole subsystem (zero launches, zero children) without
+        // any of them learning a new status to special-case — which is also
+        // why NO notice is recorded here: an operator who disabled MCP does
+        // not want to be told to trust it on every launch.
+        if (self::mcpDisabledByEnvironment()) {
+            return $decision + ['status' => self::MCP_ABSENT];
+        }
 
         // is_file() FIRST, so the overwhelmingly common "no MCP config" case
         // costs one stat and reaches neither the containment compare, the trust
@@ -5577,6 +5618,23 @@ final class Bootstrap
         }
 
         return $decision + ['status' => self::MCP_TRUSTED];
+    }
+
+    /**
+     * THE SPELLING behind {@see self::MCP_DISABLE_ENV}, one place so the
+     * narrower truthy vocabulary — only `1`, `true`, `yes`, case-insensitive
+     * — cannot drift into the flag-style default-everything-on convention.
+     * Deliberately NOT the `!== false && !== '' && !== '0'` shape the other
+     * switches use: here the DEFAULT-ON side must be every value, so a
+     * launcher that cannot control what its environment carries (a shard
+     * runner inheriting an operator shell) still gets the documented default
+     * unless it sees one of the three words.
+     */
+    private static function mcpDisabledByEnvironment(): bool
+    {
+        $value = getenv(self::MCP_DISABLE_ENV);
+
+        return $value !== false && \in_array(strtolower($value), ['1', 'true', 'yes'], true);
     }
 
     /**

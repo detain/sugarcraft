@@ -199,6 +199,12 @@ Environment variables:
                           Any value other than empty or 0 keeps Chat's
                           "onToken observer threw" line on stderr. The
                           detach itself happens either way.
+   SUGARCRUSH_MCP_DISABLE
+                          1, true or yes (case-insensitive) silences project
+                          MCP entirely: .mcp.json is treated as absent, no
+                          server starts. Unset, 0 or any other value keeps
+                          MCP enabled — unlike the flag-style variables,
+                          only these three words count.
 
    docs/ENVIRONMENT.md tabulates every variable this build reads, with its
    full contract.

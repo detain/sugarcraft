@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\MCP\McpClient;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\McpLaunchEnabledTrait;
 
 /**
  * E699 — the operator tier of the `claude-mcp` transport: what
@@ -19,6 +20,7 @@ use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 final class BootstrapClaudeMcpGrantTest extends TestCase
 {
     use HomeSandboxTrait;
+    use McpLaunchEnabledTrait;
 
     /** @var array<int, array<string, McpClient>> */
     private array $memoBefore;
@@ -43,6 +45,10 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
 
         $this->ocGrantTmp = sys_get_temp_dir() . '/oc_grant_' . bin2hex(random_bytes(6));
         mkdir($this->ocGrantTmp, 0o700, true);
+
+        // E737: this suite asserts real builds, so it owns its launch gate —
+        // armed AFTER the HOME sandbox per lane-cf law, never exported.
+        $this->armMcpLaunchEnabled();
 
         $memo = new \ReflectionProperty(Bootstrap::class, 'mcpClients');
         $memo->setAccessible(true);
@@ -74,6 +80,7 @@ final class BootstrapClaudeMcpGrantTest extends TestCase
         $this->ocRemoveTree($this->ocGrantTmp);
         $this->ocRemoveTree($this->ocGrantHome);
         $this->restoreHomeSandbox();
+        $this->restoreMcpLaunchEnabled();
 
         parent::tearDown();
     }

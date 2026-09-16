@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Tui;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\McpLaunchEnabledTrait;
 use SugarCraft\Crush\Tui\McpPanel;
 
 /**
@@ -28,12 +29,14 @@ use SugarCraft\Crush\Tui\McpPanel;
 final class McpPanelTest extends TestCase
 {
     use HomeSandboxTrait;
+    use McpLaunchEnabledTrait;
 
     private string $tmpDir;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->armMcpLaunchEnabled();
 
         $this->tmpDir = sys_get_temp_dir() . '/sc_mcp_panel_' . bin2hex(random_bytes(6));
         mkdir($this->tmpDir, 0o755, true);
@@ -43,6 +46,7 @@ final class McpPanelTest extends TestCase
     {
         $this->removeTree($this->tmpDir);
         $this->restoreHomeSandbox();
+        $this->restoreMcpLaunchEnabled();
 
         parent::tearDown();
     }

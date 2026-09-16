@@ -16,6 +16,7 @@ use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Crush\Tests\Support\McpLaunchEnabledTrait;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\ToolCall;
 
@@ -99,6 +100,7 @@ use SugarCraft\Crush\Tools\ToolCall;
 final class McpToolWiringTest extends TestCase
 {
     use HomeSandboxTrait;
+    use McpLaunchEnabledTrait;
 
     private string $tempDir;
     private string $repo;
@@ -117,6 +119,7 @@ final class McpToolWiringTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->armMcpLaunchEnabled();
 
         $this->tempDir = sys_get_temp_dir() . '/sc_mcp_wiring_' . bin2hex(random_bytes(6));
         mkdir($this->tempDir . '/repo', 0o755, true);
@@ -148,6 +151,7 @@ final class McpToolWiringTest extends TestCase
 
         $this->restoreHomeSandbox();
         $this->removeTree($this->tempDir);
+        $this->restoreMcpLaunchEnabled();
 
         parent::tearDown();
     }

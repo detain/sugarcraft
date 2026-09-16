@@ -51,7 +51,11 @@
 #    from the baseline junit. Deterministic: same input => byte-identical
 #    manifests, so a resumed run rebuilds the same plan (done-markers).
 #  * Per shard: own --cache-directory, explicit file args, same -c config,
-#    </dev/null, --colors=never, no coverage unless --clover opts in (E691). Each shard re-runs
+#    </dev/null, --colors=never, no coverage unless --clover opts in (E691),
+#    and SUGARCRUSH_MCP_DISABLE=1 as a command prefix on the phpunit launch
+#    (E737 — shards run at the checkout root, where an operator's own trusted
+#    `.mcp.json` must not let the suite spawn its servers; serial launches do
+#    not go through this script and keep the default-on behavior). Each shard re-runs
 #    tests/bootstrap.php in its own process (TMPDIR sandbox, loop pin, stdin
 #    pin, HOME handling are all per-process).
 #  * CRITICAL RUNNER REQUIREMENT (measured 2026-09-10): do NOT wrap shards in
@@ -189,7 +193,16 @@ for i in $(seq 0 $((K - 1))); do
 	fi
 	(
 		s=$SECONDS
-		timeout "$SHARD_TIMEOUT" $PHPUNIT -c sugar-crush/phpunit.xml --colors=never \
+		# E737: the shard launch is the ONE place this run silences project
+		# MCP. Shards execute at the checkout root (the `cd "$REPO"` above),
+		# where an operator's own trusted `.mcp.json` is live, and any test
+		# that walks the MCP launch funnel would otherwise SPAWN those servers
+		# as a side effect of the suite. The assignment is a command prefix —
+		# scoped to phpunit and its children only, never exported into this
+		# shell — and it is set for shards ONLY: a serial run launched
+		# directly (`vendor/bin/phpunit`) keeps the documented default-on
+		# behavior, exactly as an operator's interactive launch does.
+		SUGARCRUSH_MCP_DISABLE=1 timeout "$SHARD_TIMEOUT" $PHPUNIT -c sugar-crush/phpunit.xml --colors=never \
 			--cache-directory "$OUT/cache-k$K-$i" \
 			--log-junit "$OUT/junit-$i.xml" \
 			"${COV_ARGS[@]}" \
