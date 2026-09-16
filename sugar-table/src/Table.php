@@ -19,6 +19,7 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Table\Lang;
@@ -2170,44 +2171,44 @@ final class Table
                         }
                     }
                     break;
-                // Standard colors 30-37 (fg) and 40-47 (bg)
-                case 30: $fg = 0x000000; break;
-                case 31: $fg = 0xcc0000; break;
-                case 32: $fg = 0x00cc00; break;
-                case 33: $fg = 0xcccc00; break;
-                case 34: $fg = 0x0000cc; break;
-                case 35: $fg = 0xcc00cc; break;
-                case 36: $fg = 0x00cccc; break;
-                case 37: $fg = 0xcccccc; break;
-                case 40: $bg = 0x000000; break;
-                case 41: $bg = 0xcc0000; break;
-                case 42: $bg = 0x00cc00; break;
-                case 43: $bg = 0xcccc00; break;
-                case 44: $bg = 0x0000cc; break;
-                case 45: $bg = 0xcc00cc; break;
-                case 46: $bg = 0x00cccc; break;
-                case 47: $bg = 0xcccccc; break;
-                // Bright colors 90-97 (fg) and 100-107 (bg)
-                case 90: $fg = 0x808080; break;
-                case 91: $fg = 0xff0000; break;
-                case 92: $fg = 0x00ff00; break;
-                case 93: $fg = 0xffff00; break;
-                case 94: $fg = 0x0000ff; break;
-                case 95: $fg = 0xff00ff; break;
-                case 96: $fg = 0x00ffff; break;
-                case 97: $fg = 0xffffff; break;
-                case 100: $bg = 0x808080; break;
-                case 101: $bg = 0xff0000; break;
-                case 102: $bg = 0x00ff00; break;
-                case 103: $bg = 0xffff00; break;
-                case 104: $bg = 0x0000ff; break;
-                case 105: $bg = 0xff00ff; break;
-                case 106: $bg = 0x00ffff; break;
-                case 107: $bg = 0xffffff; break;
+                // Standard colors 30-37 (fg) / 40-47 (bg) and bright 90-97 /
+                // 100-107 — all sixteen slots resolve through the shared
+                // decoder below; the former per-case 256-cube literals
+                // (0xcc*/0x808080/#0000ff blues) are deleted.
+                case 30: case 31: case 32: case 33: case 34: case 35: case 36: case 37:
+                    $fg = $this->ansiColorToRgb($code - 30, false);
+                    break;
+                case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47:
+                    $bg = $this->ansiColorToRgb($code - 40, false);
+                    break;
+                case 90: case 91: case 92: case 93: case 94: case 95: case 96: case 97:
+                    $fg = $this->ansiColorToRgb($code - 90, true);
+                    break;
+                case 100: case 101: case 102: case 103: case 104: case 105: case 106: case 107:
+                    $bg = $this->ansiColorToRgb($code - 100, true);
+                    break;
             }
         }
 
         return Style::new($fg, $bg, $attrs);
+    }
+
+    /**
+     * Map an SGR colour index (0-7, bright variant when {@see $bright}) to a
+     * packed 24-bit RGB int. The triples come from candy-core's canonical
+     * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
+     * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
+     * {@see Color::ANSI16_RGB} so this decode can never fork its own blues
+     * again. Both callers only ever supply 0-7, so the out-of-range guard is
+     * defensive: it lands on the table's white slot (7, or 15 for the bright
+     * half). Malformed negative `38;5;-n` input never reaches here — it keeps
+     * its own default-to-black in {@see color256ToRgb()}.
+     */
+    private function ansiColorToRgb(int $idx, bool $bright): int
+    {
+        $offset = $bright ? 8 : 0;
+        [$r, $g, $b] = Color::ANSI16_RGB[$offset + $idx] ?? Color::ANSI16_RGB[$offset + 7];
+        return ($r << 16) | ($g << 8) | $b;
     }
 
     /**
@@ -2216,14 +2217,17 @@ final class Table
     private function color256ToRgb(int $idx, bool $_isFg): int
     {
         if ($idx < 16) {
-            // Standard colors (same as 30-37 / 40-47)
-            $colors = [
-                0x000000, 0xcc0000, 0x00cc00, 0xcccc00,
-                0x0000cc, 0xcc00cc, 0x00cccc, 0xcccccc,
-                0x808080, 0xff0000, 0x00ff00, 0xffff00,
-                0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
-            ];
-            return $colors[$idx] ?? 0x000000;
+            // Malformed negative index (e.g. "38;5;-5" off the wire) predates
+            // the canon and must keep the black default it always had rather
+            // than the decoder's defensive white slot.
+            if ($idx < 0) {
+                return 0x000000;
+            }
+            // Standard colors — the same 16-slot canon the SGR 30-37/40-47
+            // and 90-97/100-107 codes decode to; the old duplicated cube
+            // table here is deleted so `38;5;n` (n<16) can never diverge
+            // from its `3n`/`4n` spelling.
+            return $this->ansiColorToRgb($idx % 8, $idx >= 8);
         }
         if ($idx < 232) {
             // 216-color cube (6x6x6)
