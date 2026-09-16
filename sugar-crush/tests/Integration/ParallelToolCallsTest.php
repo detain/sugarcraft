@@ -84,6 +84,37 @@ final class ParallelToolCallsTest extends TestCase
      */
     private const SERIAL_WAIT = 0.25;
 
+    /**
+     * The wedged-box ceiling on a child that has been RELEASED, as opposed to
+     * the rendezvous width in {@see self::RENDEZVOUS_WAIT}.
+     *
+     * A parent awaiting a fact that can only arrive from a released child —
+     * its `finish.log` line, its stranded payload — is not measuring a
+     * rendezvous any more; the only thing that can make it late is scheduling,
+     * and a contended box (this repo's own reproduction: `taskset -c 11,1`
+     * with spinners, the worklog's "run the fork-heavy integration tests under
+     * CPU contention") can withhold a wake-up far past {@see self::RENDEZVOUS_WAIT}.
+     * Reusing the 3.0s rendezvous figure there reddened
+     * `testTheAbandonmentCleanupNeverKillsAStillRunningChild` on a perfectly
+     * healthy Runtime — a verdict on the scheduler, not on the cleanup.
+     *
+     * The figure is not arbitrary: a released child must wake within its own
+     * barrier ceiling — it either sees the release marker or its barrier
+     * expires, and BOTH paths log and exit — so one ceiling-width measured
+     * from the release instant is provably longer than any legitimate child
+     * life. {@see self::SIBLING_AWAIT} adds the wake margin.
+     */
+    private const STALLED_CHILD_CEILING = 10.0;
+
+    /**
+     * The await bound for every parent-side poll of a post-release fact:
+     * one child-ceiling width (the released child cannot legitimately outlive
+     * it, whatever it does with the release) plus one full rendezvous budget
+     * as wake margin. Exceeding THIS on a runnable child is a wedged box, and
+     * no bound weaker than wedged-box can be defended against contention.
+     */
+    private const SIBLING_AWAIT = self::STALLED_CHILD_CEILING + self::RENDEZVOUS_WAIT;
+
     protected function setUp(): void
     {
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
@@ -1070,12 +1101,14 @@ final class ParallelToolCallsTest extends TestCase
         // the immediate read then sees one stranded (or none), and the control —
         // correctly, on a perfectly healthy Runtime — redded. This waits for the
         // EXACT condition the control is about (both siblings present) rather than
-        // trusting a sleep, bounded by this file's own RENDEZVOUS_WAIT and mirroring
+        // trusting a sleep, bounded by this file's SIBLING_AWAIT (a released
+        // sibling is owed a child-ceiling plus wake margin, not a rendezvous
+        // width — see STALLED_CHILD_CEILING) and mirroring
         // the poll in testTheAbandonmentCleanupNeverKillsAStillRunningChild(). It is
         // a strengthening, not a widening: the count is now pinned to exactly 2, so
         // a detector seeing one, or a bug leaving job 0's payload un-discarded for
         // 3, still reds.
-        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        $deadline = microtime(true) + self::SIBLING_AWAIT;
         while (\count($this->strandedRuntimePayloads()) < 2 && microtime(true) < $deadline) {
             usleep(2_000);
         }
@@ -1117,7 +1150,9 @@ final class ParallelToolCallsTest extends TestCase
      * (`peers: 2` in a group directory only this test can complete) rather than
      * paused for a guessed duration, so "still running at the moment of
      * abandonment" is a fact the test arranges, not a race it hopes to win.
-     * Releasing it afterwards is one file_put_contents().
+     * Releasing it afterwards is one file_put_contents() — after a bounded
+     * handshake on its marker, because the child arriving AT the rendezvous
+     * is itself a fact only the child can have established.
      */
     public function testTheAbandonmentCleanupNeverKillsAStillRunningChild(): void
     {
@@ -1131,8 +1166,12 @@ final class ParallelToolCallsTest extends TestCase
             $this->rendezvousCall('quick', peers: 1, wait: 0.0, group: 'nokill0'),
             // Blocks until this test drops the second marker into its group
             // directory. The wait is a ceiling on a wedged box, not a timing
-            // assumption: nothing else can ever satisfy `peers: 2` here.
-            $this->rendezvousCall('survivor', peers: 2, wait: 10.0, group: 'nokill1', barrierNeverMet: true),
+            // assumption: nothing else can ever satisfy `peers: 2` here. It is
+            // STALLED_CHILD_CEILING itself — the parent's awaits below bound
+            // the survivor's completion by one ceiling width from the release
+            // instant, which is only sound while that is the child's own
+            // ceiling too.
+            $this->rendezvousCall('survivor', peers: 2, wait: self::STALLED_CHILD_CEILING, group: 'nokill1', barrierNeverMet: true),
         ], $app, null, null);
 
         $this->assertSame('saw=1', $generator->current()->content());
@@ -1156,11 +1195,42 @@ final class ParallelToolCallsTest extends TestCase
                 . 'hold the whole turn hostage to the slowest abandoned child',
         );
 
+        // THE HANDSHAKE THE OLD CODE SKIPPED: this release is only a release
+        // if the survivor is AT its rendezvous to see it. The child creates
+        // its group directory and drops its own marker as the first act of
+        // being scheduled — an unconditional write here races that, and on a
+        // core-pinned box it lost: the ENOENT went into a PHP warning the
+        // suite's failOnWarning merely surfaced, the child never saw the
+        // release, and it logged only at its own barrier ceiling, handing the
+        // completion await below a verdict on the scheduler. Await the marker
+        // — the EXACT fact the write depends on — bounded by SIBLING_AWAIT,
+        // and fail loudly if it never arrives. On the green path this guard
+        // costs no assertion; it only adds one when it fires.
+        $atRendezvous = $this->dir . '/nokill1/survivor';
+        $deadline = microtime(true) + self::SIBLING_AWAIT;
+        while (!is_file($atRendezvous) && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+        if (!is_file($atRendezvous)) {
+            self::fail(
+                'the survivor never reached the rendezvous within ' . self::SIBLING_AWAIT . 's — '
+                    . 'nothing downstream of this line can distinguish "cleanup killed it" from '
+                    . '"scheduler never ran it", so the test stops here with that stated.',
+            );
+        }
+
         // Release it, and let it prove it was never killed by finishing.
         $release = $this->dir . '/nokill1/release';
         file_put_contents($release, '1');
 
-        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        // Bounded by the released child's own ceiling plus wake margin
+        // (SIBLING_AWAIT), not by a rendezvous width: from this instant the
+        // survivor owes us one log line within its barrier ceiling — it sees
+        // the release or its ceiling expires, and either path logs — and the
+        // only thing that can stretch that is a starved wake-up. A 3.0s
+        // rendezvous budget here was a timing assumption wearing a ceiling's
+        // clothes and flaked under `taskset -c 11,1` contention.
+        $deadline = microtime(true) + self::SIBLING_AWAIT;
         while (!in_array('survivor', $this->finishLog(), true) && microtime(true) < $deadline) {
             usleep(2_000);
         }
@@ -1181,8 +1251,9 @@ final class ParallelToolCallsTest extends TestCase
         // ...and the other half of the same decision: its payload is left
         // where sweep() will find it, because the parent has no idea whether
         // the child had finished writing. This doubles as the known-positive
-        // control that the scanner below is alive.
-        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        // control that the scanner below is alive. Same bound as the await
+        // above: the payload follows the log line out of the same dying child.
+        $deadline = microtime(true) + self::SIBLING_AWAIT;
         while ($this->strandedRuntimePayloads() === [] && microtime(true) < $deadline) {
             usleep(2_000);
         }
@@ -1241,9 +1312,11 @@ final class ParallelToolCallsTest extends TestCase
         // both siblings exit during job 0's slow release, but 0.5s is a PROXY for
         // "both fast children landed a payload and were WNOHANG-reaped" that a
         // contended shard can break, redding a healthy Runtime. Await the exact
-        // condition (both present), bounded by RENDEZVOUS_WAIT, then PIN the count
+        // condition (both present), bounded by SIBLING_AWAIT — a released
+        // sibling is owed a child-ceiling plus wake margin, never a rendezvous
+        // width — then PIN the count
         // at 2 — fewer means a dead detector, more means job 0 was never collected.
-        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        $deadline = microtime(true) + self::SIBLING_AWAIT;
         while (\count($this->strandedRuntimePayloads()) < 2 && microtime(true) < $deadline) {
             usleep(2_000);
         }
