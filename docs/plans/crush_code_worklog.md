@@ -11598,6 +11598,69 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 84 (2026-09-16) — E735 leftover tail CLOSED in a single six-lane weld; floor UNCHANGED 12,027 / 172,610 (zero sugar-crush test files moved — no re-pin); census survivors 3 to 2 (E731/E736); the 68d73f9ba downstream-goldens family FULLY swept
+
+**Closed 2026-09-16 at the W1 weld (code tip `7a3280759`, closeout docs atop; NEVER pushed).** The round
+executed the §0-NOW-85 §2(b) proposal cut exactly: six lanes t1–t6 across four file-disjoint libs + docs,
+ALL reviewed APPROVE-class before merge, ZERO cherry-pick conflicts. Pick order t2, t3, t4, t6, t1, t5 —
+t6 deliberately BEFORE t1 so the golden-cure precedes the code lane's carried-red narrative; after both,
+dash reads 0F.
+
+### The lane ledger
+
+| lane | lib | tip → pick | shipped | gate |
+|---|---|---|---|---|
+| t2 `17e1036cb` | sugar-stash | → `e0bff28cc` | E735 10.06: diff-view syntax highlighting via shared lexer (`DiffHighlighter`, 1 new test file) | stash FULL 256T/659A/5S exit0 |
+| t3 `7031e17dc` | sugar-spark | → `5499c50bd` | E735 10.16: C1 truth pass — SOS/PM naming, DEL fidelity, colon-SGR regressions (upstream had landed most; 8 defects fixed) | spark FULL 269T/1380A exit0 |
+| t4 `dd1fec6c0` | sugar-glow | → `676e597d7` | E735 10.25: GlamourTheme JSON themes + pager auto-reload (watch-integration) + width pins (3 new test files) | glow FULL 122T/313A exit0 |
+| t6 `39671bedd` | sugar-dash goldens | → `bb2e28cfb` | re-roll the 2 stale toast goldens after upstream 68d73f9ba blue revalue (surgical 2-file/+2-line; self-verified probe+x2+mutation) | dash golden pair CURED — zero stale blues tree-wide |
+| t1 `837763041` | sugar-dash code+tests | → `35f327d5b` | E735 03.09: NotificationQueue dual-ring verified ALREADY-SHIPPED + fixed state-losing withers + stale example | dash FULL x2: 5977T/9,889-9,890A/0F/1S exit0 |
+| t5 `7e28b3c9e` | docs/plans/leftover/updates.md | → `7a3280759` (AMENDED) | E735 06.01 verify-only Done-line (PR#581/582 audit) | candy-core `--filter Subscription` 14T/38A/1S exit0 |
+
+### Deaths, resumes, and process lessons of the round
+
+- **t1: three blank resumes, then landed** — with an honest ALREADY-SHIPPED premise verdict plus three
+  real defect fixes. Resume-same-task law (<=10x) held again.
+- **t6: TWO fragment-deaths recovered by DISK-PROBE-BETWEEN-RESUMES** — the probe between resumes found
+  the partial landing, and the finisher resume completed from disk truth (evidence-to-files made this
+  cheap). Pattern minted: a fragment/replay death is not a restart — probe, then resume the same task
+  with the disk state named.
+- **rv-t5 APPROVE-WITH-FIX, folded via `commit --amend` BEFORE ff** — the Done-line figure attribution
+  `SubscriptionsReconcileTest 14T/38A` corrected to `--filter Subscription scope 14T/38A, class alone
+  12T/36A` (gate re-run 14T/38A/1S). Amending a cherry-picked tip pre-ff is the only clean window;
+  post-ff picks are never amended (campaign law).
+- **rv-t1 MINOR (report-accuracy only, no code):** the M3 mutation row "ctor clamp" should read
+  "hang RC=124" — recorded here, artifact-level truth.
+- **DURATIONS SCOPE FACT (new):** `scripts/parallel-tests-durations.tsv` is SUGAR-CRUSH-ONLY
+  (`parallel-tests.sh` walks `sugar-crush/phpunit.xml`; sibling suites run as non-sharded single CI
+  jobs). The r84 brief's "4 durations rows for the new stash/glow test files" was a scope
+  misattribution — the weld adds ZERO crush test files, and the tsv<->tree set-diff is EMPTY both
+  directions at 532 rows. Future sibling-lib briefs: do NOT promise durations rows.
+- **One-in-three K=8 flake, recorded not minted:** the FIRST shardcheck reddened exactly
+  `CallbackAuthoredRefusalTest::testACallbackThatReturnsARosterPrefixIsHonouredAsARefusal` dataset
+  "Refused" (tests/Chat/CallbackAuthoredRefusalTest.php:92, shard 6); green isolated WITH the gate env,
+  green serial (12,027 EXACT), green SECOND full K=8 (all rc_marker=ok). Order/timing pollution family
+  (E655 backlog) — added to the trigger-watch roster.
+- **five-guard window measured 125T/7362A green** — the brief predicted 127T; census-by-command wins.
+- Master stood at `2f770abb1` for the whole weld (step-0 + pre-ff re-checks); config md5
+  `d96e124ee7967eb34ef479ef824231ad` start==end in both trees; both worktrees porcelain-clean at every
+  checkpoint.
+
+### The floor
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-84 FINAL** | **12,027 / 172,610 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial 9m34s, plain pipe, linked, cwd=sugar-crush) — EXACT r83 carry, NO re-pin owed (zero crush test files moved) | link-domain |
+| lib gates | dash **5,977 / 9,890 / 0F / 1S** x2 (9,889 first read, +/-1 wobble) - stash **256/659/5S** - spark **269/1380** - glow **122/313** - candy-core `--filter Subscription` **14/38/1S** | lib-local |
+| repo tools | `examples/dashboard-status.php` rc=0 - `tools/check-child-lifetimes.php` rc=0 - `tools/check-path-repos.php --no-lib-path-repos` rc=0 - K=8 CONSERVATION green (run 2; run 1 = the flake above) | |
+
+### Queue carried to round 85 (2 survivors)
+
+E731 (sugar-dash AbstractChart umbrella + COMP-2) and E736 (MATCHUPS 7 yellow + 1 red ports, one-lib-per-
+wave). Phase-12 stays PAUSED by user decision. The next move is an OPERATOR DECISION POINT (§0-NOW-86 §2):
+remaining work is product completion at port scale, not defect work — pick one lib for r85 or close the
+campaign.
+
 ## ROUND 83 (2026-09-16) — PHASE 5 (docs-minted hygiene + adjudication, E729–E740) ships CLOSED: twelve lanes r1–r11 + s1–s4 in three waves + three in-round upstream merges (#1429–#1435 became the W3 base; #1436 absorbed at the close); floor 11,991 → 12,027 (one sugar-crush lane: E737); `failOnWarning` mandate COMPLETE repo-wide 58/58; census survivors 3 (E731/E735/E736)
 
 **Closed 2026-09-16 at the wave-3 weld (code tip `c9a0cafff`, docs atop; final tip `14428ef61` after the
