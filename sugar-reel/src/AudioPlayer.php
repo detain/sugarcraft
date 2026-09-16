@@ -74,18 +74,22 @@ class AudioPlayer
     }
 
     /**
-     * Strip userinfo (`scheme://user:[email protected]`) from a source before it is
+     * Strip the userinfo segment — everything from `scheme://` up to the LAST `@`
+     * before the first path separator — from a source before it is
      * interpolated into a log line.
      *
      * WHY: `isNetworkSource()` only matches http(s), so an `rtsp` or `ftp` URL whose
-     * authority embeds credentials (a `user:password` pair before the host separator)
+     * authority embeds credentials (a username/password pair before the host separator)
      * takes the header-DROP branch — and the drop
      * notice prints the source verbatim, password included, straight into error_log.
      * Refusing to send credentials and then logging them is no refusal at all.
      */
     private static function redactCredentials(string $source): string
     {
-        return (string) preg_replace('#^(\w+://)[^/@]*@#', '$1***@', $source);
+        // Greedy within the authority (the class excludes `/`, so it cannot cross
+        // into the path): a non-conforming URL with several `@` signs masks ALL of
+        // the userinfo, not just the run before the first `@`.
+        return (string) preg_replace('#^(\w+://)[^/]*@#', '$1***@', $source);
     }
 
     /**

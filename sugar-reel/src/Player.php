@@ -1429,6 +1429,12 @@ final class Player implements Model
      * (terminating its ffmpeg subprocess). Idempotent — safe to call more than
      * once. A host screen calls this when leaving the player so no audio/video
      * subprocess leaks across play → back.
+     *
+     * The stop latch is per object tree (round-2 NEW-4): it is copied forward by
+     * `mutate()`, so no instance derived from a stopped player will ever rebuild
+     * or respawn again — a late debounce timer resolves to identity. Hosts that
+     * want to play again must construct a FRESH Player (or `open()` a new one);
+     * reusing the stopped instance will not resurrect its decoder.
      */
     public function stop(): void
     {

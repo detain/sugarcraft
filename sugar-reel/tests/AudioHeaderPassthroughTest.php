@@ -16,6 +16,7 @@ use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\Probe;
 use SugarCraft\Reel\Tests\Concerns\CapturesErrorLog;
+use SugarCraft\Reel\Tests\Concerns\StubbedPathBinaries;
 use SugarCraft\Reel\Support\FfmpegCommandBuilder;
 
 /**
@@ -39,6 +40,7 @@ use SugarCraft\Reel\Support\FfmpegCommandBuilder;
 final class AudioHeaderPassthroughTest extends TestCase
 {
     use CapturesErrorLog;
+    use StubbedPathBinaries;
 
     private const SOURCE = 'https://cdn.example.test/clip.mp4?sig=a1b2';
 
@@ -143,11 +145,16 @@ final class AudioHeaderPassthroughTest extends TestCase
     {
         // A local path cannot carry HTTP headers: ffmpeg would reject the option,
         // and silently forwarding them would hide a host misconfiguration.
+        // The argv leg needs a resolvable binary, so it is pinned to a stubbed
+        // ffplay/mpv on PATH (round-2 NEW-1): this security assertion must run on
+        // hosts without any media tooling — and still never invokes a real binary.
         $audio = null;
         $argv = null;
         $logged = $this->captureErrorLog(function () use (&$audio, &$argv): void {
-            $audio = new AudioPlayer('/tmp/local-clip.mp4', null, null, self::signedHeaders());
-            $argv = self::argvOf($audio);
+            $this->withStubbedBinaries(['ffplay', 'mpv'], function () use (&$audio, &$argv): void {
+                $audio = new AudioPlayer('/tmp/local-clip.mp4', null, null, self::signedHeaders());
+                $argv = self::argvOf($audio);
+            });
         });
 
         self::assertNotNull($argv);
@@ -199,6 +206,43 @@ final class AudioHeaderPassthroughTest extends TestCase
             'audio companion',
             $logged,
             'the audio emitter must name itself, not send the operator hunting for a decoder that does not exist',
+        );
+    }
+
+    /**
+     * Round-2 review NEW-3: the mask covers the WHOLE authority userinfo, not just
+     * the run before the first `@` — a non-conforming URL carrying several `@`
+     * signs in its authority must not leave a second credential fragment visible.
+     * Behaviour on every conforming URL is unchanged.
+     */
+    public function testRedactCredentialsMasksWholeAuthorityUserinfo(): void
+    {
+        $redact = new ReflectionMethod(AudioPlayer::class, 'redactCredentials');
+        $redact->setAccessible(true);
+
+        self::assertSame(
+            'rtsp://***@media.example.test/clip.mp4',
+            (string) $redact->invoke(null, 'rtsp://viewer:hunter2' . '@' . 'media.example.test/clip.mp4'),
+        );
+        self::assertSame(
+            'rtsp://***@host.example.test/x',
+            (string) $redact->invoke(null, 'rtsp://a' . '@' . 'b:c' . '@' . 'host.example.test/x'),
+            'a multi-@ authority must not leak its second fragment',
+        );
+        self::assertSame(
+            'https://cdn.example.test/clip.mp4?sig=a1b2',
+            (string) $redact->invoke(null, 'https://cdn.example.test/clip.mp4?sig=a1b2'),
+            'a credential-free URL passes through untouched',
+        );
+        self::assertSame(
+            '/tmp/local-clip.mp4',
+            (string) $redact->invoke(null, '/tmp/local-clip.mp4'),
+            'a bare path passes through untouched',
+        );
+        self::assertSame(
+            'https://host/a' . '@' . 'b.png',
+            (string) $redact->invoke(null, 'https://host/a' . '@' . 'b.png'),
+            'an @ inside the PATH is not userinfo and must survive',
         );
     }
 

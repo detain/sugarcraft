@@ -110,7 +110,13 @@ contract made exact; the deletion the finding asked for was NOT performed).
   `Player::defaultAudioFactory()`) pass `$this->headers`, so a signed media URL no
   longer plays video over an
   unauthenticated `ffplay`/`mpv`. A local path downgrades to no headers with a
-  logged note (`header.ignored_local_source.audio`, credential-redacted).
+  logged note (`header.ignored_local_source.audio`, credential-redacted — round-2
+  review NEW-3 widened the mask to the whole authority userinfo so a multi-`@`
+  non-conforming URL leaks no fragment, pinned by
+  `testRedactCredentialsMasksWholeAuthorityUserinfo`; round-2 NEW-1 stubs the local
+  drop test's PATH binaries so its security assertions run on hosts without any
+  media tooling — the suite is green end-to-end on a PATH farm with
+  ffmpeg/ffprobe/ffplay/mpv hidden).
   (b) *SIGWINCH* — the rebuild no longer runs once per event on the hot path.
   A `WindowSizeMsg` now clamps, records the target in the new `pendingResize` slot
   and returns a 50 ms one-shot timer; the spawn happens in `applyPendingResize()`
