@@ -1810,7 +1810,16 @@ final class HookRegistryTest extends TestCase
      * THE ONE WALL PRECONDITION THAT REMAINS (floor, not verdict): `warmup` must
      * still finish inside the 0.9s chain budget, or the registry denies at the
      * chain level BEFORE the hook runs and the regex/read-count pair reddens on
-     * healthy code. That needs the box to stretch a 300 ms `usleep` past 600 ms —
+     * healthy code. Re-measured on this tree the cliff sits at the FULL budget,
+     * not the 600 ms this note once claimed: a warmup stretched anywhere from
+     * 300 to 899.5 ms still leaves a positive remainder, and `withTimeoutSeconds()`
+     * floors that remainder at one `EXIT_POLL_MICROSECONDS` tick (0.01 s) instead
+     * of letting it render as a zero, so the hook still runs and the scripted
+     * clock still expires it inside the [2,4] reads allowed here (12 sweep points
+     * from 300_000 to 899_500 µs of `usleep`, all green; `reads` is 3 at the
+     * ordinary 0.6 s charge and 2 at any charge of 0.5 s or less). The first red
+     * is 900 ms: `remaining <= 0.0`, the chain-level refusal fires, and `reads`
+     * sits at zero. So the box has to TRIPLE a 300 ms `usleep` to redden this —
      * a scheduling collapse that stops far more of this suite first. The old
      * version made the VERDICT wall-coupled at ordinary load; this only fails at
      * extraordinary load, which is the categorically weaker coupling the fixture
