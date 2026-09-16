@@ -8,9 +8,9 @@ namespace SugarCraft\Ansi\Parser;
  * Opt-in declaration that a {@see Handler} reads ECMA-48 colon sub-parameters
  * and wants the parser to PUSH them to it, instead of reaching back for them.
  *
- * The parser flattens every parameter string into one list (ECMA-48 §14.1.1
- * allows both `;` parameter separation and `:` sub-parameter separation inside
- * it), so `CSI 4 : 3 m` (curly underline) and `CSI 4 ; 3 m` (underline, then
+ * The parser flattens every parameter string into one list (ECMA-48 lets a
+ * control sequence separate parameters with `;` and sub-parameters with `:`
+ * inside that string), so `CSI 4 : 3 m` (curly underline) and `CSI 4 ; 3 m` (underline, then
  * italic) both arrive as `[4, 3]`. The continuation flags that distinguish them
  * live on the parser, and until this interface existed the only way a handler
  * could get them was to *pull*: the front-end that owns the Parser late-binds a
@@ -75,12 +75,15 @@ namespace SugarCraft\Ansi\Parser;
  *    `__clone()`) and `SgrStateHandler` (`candy-freeze/src/AnsiParser.php`).
  *    Implementing this interface on those two classes is sufficient.
  *  - **NOT push-reachable** — `CsiHandlerImpl` in the candy-vt *renderer* path,
- *    where `candy-vt/src/Terminal.php` hands the parser a `RendererHandler`
- *    wrapping a {@see HandlerAdapter}, both of which are plain. Either that
- *    wrapper chain grows the capability and forwards `setSubparams()` down to
- *    `CsiHandlerImpl`, or this path keeps the pull route. Deleting
+ *    where `Terminal::new()` hands the parser a plain {@see HandlerAdapter} and
+ *    keeps `CsiHandlerImpl` inside it as that adapter's constructor argument.
+ *    Either the adapter grows the capability and forwards `setSubparams()` down
+ *    to the wrapped handler, or this path keeps the pull route. Deleting
  *    `CsiHandlerImpl::attachSubparamsProvider()` without doing one of those two
  *    would silently regress colon SGRs there — no fatal, no red test.
+ *
+ * Re-derive this map from the wiring at migration time: the only object that
+ * matters is the one passed to `new Parser(...)`, and wrappers come and go.
  *
  * Until every consumer has migrated, {@see Parser::subparams()} stays public and
  * byte-compatible, and a class is free to implement this interface while
@@ -98,19 +101,24 @@ interface SubparamsAwareHandler extends Handler
      * {@see Handler::escDispatch()}, {@see Handler::oscDispatch()} or
      * {@see Handler::sosPmApcDispatch()}.
      *
-     * CSI and DCS are wired because both carry a §14.1.1 *parameter string*
-     * before their final byte: the parser collects DCS prelude separators with
-     * the same `Action::Param` path as CSI, so `DCS 1 ; 2 : 3 q` reaches
-     * {@see Handler::dcsDispatch()} as the flat `[1, 2, 3]` with the grouping
-     * otherwise recoverable only by pulling — the same defect this interface
-     * closes for CSI. Sixel/ReGIS consumers sit behind that dispatch.
+     * CSI and DCS are wired because both carry a *parameter string* before their
+     * final byte. DCS's is a property of the DEC VT500 grammar this parser
+     * implements rather than of ECMA-48, which defines DCS as introducing a
+     * string: the state machine runs DCS bytes 0x30-0x3F through the same
+     * `Action::Param` path as CSI (see {@see Transitions}, states `DcsEntry` and
+     * `DcsParam`), so `DCS 1 ; 2 : 3 q` reaches {@see Handler::dcsDispatch()} as
+     * the flat `[1, 2, 3]` with the grouping otherwise recoverable only by
+     * pulling — the same defect this interface closes for CSI. No in-tree handler
+     * needs that today (candy-vt's `dcsDispatch` is a documented no-op); sixel
+     * and ReGIS consumers are the ones that would.
      *
      * The other three are deliberately excluded because none has a parameter
      * string to describe. In the DEC VT500 grammar (the diagram linked from
      * {@see Parser}) the `escape` and `escape intermediate` states accept only
      * bytes in 0x20-0x2F before the final byte — no digits, no `;`, no `:` — and
      * OSC/SOS/PM/APC buffer an opaque *string* whose internal separators belong
-     * to the registering application, not to §14.1.1. Pushing there would mean
+     * to the registering application, not to the parameter grammar. Pushing
+     * there would mean
      * inventing a value.
      *
      * The contract on the list:

@@ -209,13 +209,13 @@ final class SubparamsAwareHandlerTest extends TestCase
      * {@see Parser::__construct()}. A capable handler nested behind a plain
      * wrapper therefore receives no push at all.
      *
-     * Pinned because candy-vt's renderer path is shaped like this (`Terminal.php`
-     * gives the parser a `RendererHandler` wrapping a {@see HandlerAdapter},
-     * both plain, with the colon-consuming `CsiHandlerImpl` behind them), so the
-     * consumer migration cannot be mechanical: either the wrapper chain grows the
-     * capability and forwards, or that path keeps the pull route. Discovering
-     * this from a silent colon-SGR regression instead of here is the failure mode
-     * this test exists to prevent.
+     * Pinned because candy-vt's renderer path is shaped like this: `Terminal.php`
+     * hands the parser a plain {@see HandlerAdapter} and keeps the
+     * colon-consuming `CsiHandlerImpl` inside it, as that adapter's constructor
+     * argument. So the consumer migration cannot be mechanical — either the
+     * wrapper grows the capability and forwards, or that path keeps the pull
+     * route. Discovering this from a silent colon-SGR regression rather than from
+     * here is the failure mode this test exists to prevent.
      */
     public function testCapabilityIsOnlyConsultedOnTheHandlerGivenToTheParser(): void
     {
@@ -284,7 +284,7 @@ final class SubparamsAwareHandlerTest extends TestCase
     }
 
     /**
-     * DCS carries a §14.1.1 parameter string in its prelude exactly as CSI does
+     * DCS carries a parameter string in its prelude exactly as CSI does
      * (`dcsDispatch` already receives `$params`), so the same flags must be
      * pushed — otherwise `DCS 1 ; 2 : 3 q` (sixel/ReGIS sub-parameters) would be
      * structurally ambiguous with no way for the handler to recover the grouping.
@@ -339,9 +339,9 @@ final class SubparamsAwareHandlerTest extends TestCase
 
     /**
      * Sequences with no parameter string get no push at all. ESC is
-     * `ESC` + intermediates (0x20-0x2F) + one final byte (ECMA-48 §14.1), and
-     * OSC/SOS/PM/APC carry an application-defined string payload whose separators
-     * are not §14.1.1 parameters — pushing here would have to invent a value.
+     * `ESC` + intermediates (0x20-0x2F) + one final byte, and OSC/SOS/PM/APC
+     * carry an application-defined string payload whose separators are not
+     * parameters at all — pushing here would have to invent a value.
      */
     public function testUnparameterisedDispatchesReceiveNoPush(): void
     {
