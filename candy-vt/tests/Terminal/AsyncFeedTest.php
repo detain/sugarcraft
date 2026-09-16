@@ -8,6 +8,8 @@ use LogicException;
 use PHPUnit\Framework\TestCase;
 use React\Stream\ThroughStream;
 use RuntimeException;
+use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Vt\Terminal\Terminal;
 use Throwable;
 
@@ -398,5 +400,180 @@ final class AsyncFeedTest extends TestCase
             $resolved = $bytes;
         });
         $this->assertSame('', $resolved);
+    }
+
+    // ─── cancellation handle (wave-7 A1, closes n3) ──────────────────────────
+    //
+    // Every case here is driven through ThroughStream, whose write/end/close
+    // emit synchronously — no event loop run, no timers, so nothing is ever
+    // armed on the shared Loop::get(). That is why candy-vt needs no
+    // tests/bootstrap.php / LoopPin for this surface: there is no wall-clock
+    // bound to keep stable. The "no residue" assertion is on the STREAM
+    // (zero listeners after settle), which is exactly what a detached pump owes.
+
+    public function testCancelMidStreamRejectsDetachesAndBlocksReentry(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $source = CancellationSource::new();
+        $promise = $t->feedStream($stream, null, $source->token());
+
+        $stream->write('ab');
+        $this->assertSame('a', $t->screen()->cell(0, 0)->grapheme, 'bytes before the cancel landed');
+        $this->assertSame('b', $t->screen()->cell(0, 1)->grapheme, 'both pre-cancel bytes landed');
+
+        $reason = null;
+        /** @var list<string> $settleLog every promise settlement, in order */
+        $settleLog = [];
+        $promise->then(
+            static function () use (&$settleLog): void {
+                $settleLog[] = 'resolve';
+            },
+            static function (Throwable $e) use (&$reason, &$settleLog): void {
+                $reason = $e;
+                $settleLog[] = 'reject';
+            },
+        );
+
+        $source->cancel();
+
+        // Supertype first: assert the BC (catchable as a plain RuntimeException)
+        // before the subtype assertion narrows $reason, so the check stays honest
+        // rather than an always-true tautology.
+        $this->assertInstanceOf(RuntimeException::class, $reason, 'cancel rejects as a RuntimeException (BC)');
+        $this->assertInstanceOf(OperationCancelledException::class, $reason, '...and specifically the candy-async cancel signal');
+        $this->assertSame(['reject'], $settleLog, 'the cancel was the single settlement');
+        $this->assertSame([], $stream->listeners('data'), 'listeners detached — pump left no residue on the stream');
+        $this->assertSame([], $stream->listeners('end'));
+        $this->assertSame([], $stream->listeners('error'));
+        $this->assertSame([], $stream->listeners('close'));
+
+        // Post-cancel writes must NOT re-enter the parser: neither the grid nor
+        // the reply queue moves, and no fresh answer is resurrected.
+        $stream->write('cdef');
+        $this->assertSame('a', $t->screen()->cell(0, 0)->grapheme);
+        $this->assertSame('b', $t->screen()->cell(0, 1)->grapheme, 'the pre-cancel write is intact');
+        $this->assertSame(' ', $t->screen()->cell(0, 2)->grapheme, 'post-cancel writes never re-enter the detached parser');
+        $this->assertSame([], $t->replies(), 'a detached pump does not answer queries');
+        $this->assertCount(1, $settleLog, 'the write after cancel cannot re-settle');
+    }
+
+    public function testAlreadyCancelledTokenRejectsBeforeAnyData(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $source = CancellationSource::new();
+        $source->cancel(); // cancelled before attach → onCancel fires synchronously
+
+        $reason = null;
+        $t->feedStream($stream, null, $source->token())
+            ->then(null, static function (Throwable $e) use (&$reason): void {
+                $reason = $e;
+            });
+
+        $this->assertInstanceOf(OperationCancelledException::class, $reason, 'a pre-cancelled token rejects on return');
+        $this->assertSame([], $stream->listeners('data'), 'the synchronously-fired cancel still detached the just-attached listeners');
+        $this->assertSame([], $t->replies());
+
+        // The stream is still open and writable — feeding it changes nothing.
+        $stream->write('hi');
+        $this->assertSame(' ', $t->screen()->cell(0, 0)->grapheme, 'nothing reached the grid');
+    }
+
+    public function testCancelIsIdempotent(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $source = CancellationSource::new();
+        $promise = $t->feedStream($stream, null, $source->token());
+
+        $settles = 0;
+        $promise->then(null, static function () use (&$settles): void {
+            $settles++;
+        });
+
+        $source->cancel();
+        $source->cancel();
+        $source->cancel();
+
+        $this->assertSame(1, $settles, 'N cancels settle the pump exactly once');
+        $this->assertSame([], $stream->listeners('data'));
+    }
+
+    public function testCancelWinsRaceAgainstNaturalEnd(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $source = CancellationSource::new();
+        $promise = $t->feedStream($stream, null, $source->token());
+
+        $settles = 0;
+        $reason = 'unset';
+        $value = 'unset';
+        $promise->then(
+            static function (string $bytes) use (&$settles, &$value): void {
+                $settles++;
+                $value = $bytes;
+            },
+            static function (Throwable $e) use (&$settles, &$reason): void {
+                $settles++;
+                $reason = $e;
+            },
+        );
+
+        $source->cancel();
+        $stream->end();
+        $stream->close();
+
+        $this->assertSame(1, $settles, 'settle-once latch: cancel then end is a single settlement');
+        $this->assertInstanceOf(OperationCancelledException::class, $reason, 'the first event (cancel) owns the outcome');
+        $this->assertSame('unset', $value, 'the later end never resolves the already-cancelled pump');
+    }
+
+    public function testCancelAfterNaturalEndIsANoOp(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $source = CancellationSource::new();
+        $promise = $t->feedStream($stream, null, $source->token());
+
+        $settles = 0;
+        $resolved = 'unset';
+        $rejected = false;
+        $promise->then(
+            static function (string $bytes) use (&$settles, &$resolved): void {
+                $settles++;
+                $resolved = $bytes;
+            },
+            static function () use (&$settles, &$rejected): void {
+                $settles++;
+                $rejected = true;
+            },
+        );
+
+        $stream->end(); // natural settle wins first
+        $source->cancel(); // arrives after settle — must be inert
+
+        $this->assertSame(1, $settles, 'the natural end was the only settlement');
+        $this->assertFalse($rejected, 'a late cancel cannot flip a resolved pump to rejected');
+        $this->assertSame('', $resolved);
+    }
+
+    public function testNullTokenKeepsThePlainFeedStreamContractByteIdentical(): void
+    {
+        // Explicitly passing null is the same pump as the two-arg form — the
+        // whole existing end/error/close settlement behaviour runs down this branch unchanged.
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $promise = $t->feedStream($stream, null, null);
+
+        $stream->end();
+
+        $resolved = 'unset';
+        $promise->then(static function (string $bytes) use (&$resolved): void {
+            $resolved = $bytes;
+        });
+        $this->assertSame('', $resolved);
+        $this->assertSame([], $stream->listeners('data'), 'no cancel closure was ever registered on a null token');
     }
 }

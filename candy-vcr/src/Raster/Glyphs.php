@@ -90,6 +90,13 @@ final class Glyphs
     /**
      * Get or create a cached tile for (char, fg, bg, bold, italic, underline).
      *
+     * The optional `$fgRgb`/`$bgRgb` are exact 24-bit `0xRRGGBB` values supplied
+     * by {@see CellColor} when the cell carries SGR `38;2`/`48;2` truecolour; when
+     * present they win over the palette slots for painting AND are folded into the
+     * cache key so two cells sharing a palette index but differing in truecolour
+     * never collide. Both null leaves the key — and every cache statistic — exactly
+     * as the palette-only path.
+     *
      * @return \GdImage pre-rendered tile at cell dimensions
      */
     public function tile(
@@ -99,8 +106,10 @@ final class Glyphs
         bool $bold,
         bool $italic,
         bool $underline,
+        ?int $fgRgb = null,
+        ?int $bgRgb = null,
     ): \GdImage {
-        $key = $this->cacheKey($char, $fg, $bg, $bold, $italic, $underline);
+        $key = $this->cacheKey($char, $fg, $bg, $bold, $italic, $underline, $fgRgb, $bgRgb);
 
         if (isset($this->cache[$key])) {
             $this->hits++;
@@ -109,7 +118,7 @@ final class Glyphs
 
         $this->misses++;
         $this->evictIfNeeded();
-        $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $this->cellW);
+        $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $this->cellW, $fgRgb, $bgRgb);
         $this->cache[$key] = $tile;
         $this->evictionQueue->enqueue($key);
 
@@ -118,6 +127,9 @@ final class Glyphs
 
     /**
      * Get or create a cached wide-character tile (2x cell width).
+     *
+     * @param int|null $fgRgb exact 24-bit foreground override, see {@see tile()}
+     * @param int|null $bgRgb exact 24-bit background override, see {@see tile()}
      *
      * @return \GdImage pre-rendered tile at 2×cell dimensions
      */
@@ -128,8 +140,10 @@ final class Glyphs
         bool $bold,
         bool $italic,
         bool $underline,
+        ?int $fgRgb = null,
+        ?int $bgRgb = null,
     ): \GdImage {
-        $key = $this->cacheKey($char, $fg, $bg, $bold, $italic, $underline) . ':wide';
+        $key = $this->cacheKey($char, $fg, $bg, $bold, $italic, $underline, $fgRgb, $bgRgb) . ':wide';
 
         if (isset($this->cache[$key])) {
             $this->hits++;
@@ -139,7 +153,7 @@ final class Glyphs
         $this->misses++;
         $this->evictIfNeeded();
         $wideW = $this->cellW * 2;
-        $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $wideW);
+        $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $wideW, $fgRgb, $bgRgb);
         $this->cache[$key] = $tile;
         $this->evictionQueue->enqueue($key);
 
@@ -172,9 +186,24 @@ final class Glyphs
         return $isWide ? [$this->cellW * 2, $this->cellH] : [$this->cellW, $this->cellH];
     }
 
-    private function cacheKey(string $char, int $fg, int $bg, bool $bold, bool $italic, bool $underline): string
-    {
-        return "{$char}|{$fg}|{$bg}|" . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0');
+    private function cacheKey(
+        string $char,
+        int $fg,
+        int $bg,
+        bool $bold,
+        bool $italic,
+        bool $underline,
+        ?int $fgRgb = null,
+        ?int $bgRgb = null,
+    ): string {
+        $key = "{$char}|{$fg}|{$bg}|" . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0');
+        // Palette-only cells contribute nothing here, so their keys — and the
+        // cache hit/miss census — stay byte-identical to before truecolour support.
+        if ($fgRgb !== null || $bgRgb !== null) {
+            $key .= '|tc' . ($fgRgb ?? '-') . ',' . ($bgRgb ?? '-');
+        }
+
+        return $key;
     }
 
     private function renderTile(
@@ -185,6 +214,8 @@ final class Glyphs
         bool $italic,
         bool $underline,
         int $width,
+        ?int $fgRgb = null,
+        ?int $bgRgb = null,
     ): \GdImage {
         \assert($width >= 1 && $this->cellH >= 1);
         $tile = imagecreatetruecolor($width, $this->cellH);
@@ -195,8 +226,8 @@ final class Glyphs
         imagesavealpha($tile, true);
         imagealphablending($tile, false);
 
-        $bgColor = $this->allocateColor($tile, $bg);
-        $fgColor = $this->allocateColor($tile, $fg);
+        $bgColor = $this->allocateColor($tile, $bg, $bgRgb);
+        $fgColor = $this->allocateColor($tile, $fg, $fgRgb);
 
         imagefilledrectangle($tile, 0, 0, $width - 1, $this->cellH - 1, $bgColor);
 
@@ -256,9 +287,9 @@ final class Glyphs
         return null;
     }
 
-    private function allocateColor(\GdImage $image, int $paletteIndex): int
+    private function allocateColor(\GdImage $image, int $paletteIndex, ?int $overrideRgb = null): int
     {
-        $rgb = $this->theme->color($paletteIndex);
+        $rgb = $overrideRgb ?? $this->theme->color($paletteIndex);
         $r = ($rgb >> 16) & 0xff;
         $g = ($rgb >> 8) & 0xff;
         $b = $rgb & 0xff;
