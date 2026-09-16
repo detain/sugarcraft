@@ -1,5 +1,8 @@
 {
     "name": "sugar-crush",
     "worktreeCleanupPeriodDays": 30,
-    "worktreeIncludeFile": ".worktreeinclude"
+    "worktreeIncludeFile": ".worktreeinclude",
+    "trustedProjectMcp": [
+        "/home/sites/sugarcraft"
+    ]
 }
