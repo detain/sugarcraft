@@ -195,6 +195,44 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('src/A.php', $out);
     }
 
+    public function testRenderDiffOverlayHighlightsPhpTokens(): void
+    {
+        $dv = DiffViewer::fromRawDiff('src/A.php', [
+            'diff --git a/src/A.php b/src/A.php',
+            '@@ -1,3 +1,4 @@',
+            '+function compute() { return 42; }',
+        ]);
+        $a = new App($this->git(), diffViewer: $dv);
+        $out = Renderer::render($a);
+
+        // Keyword + number accents ride inside the (selected) hunk's reverse.
+        $this->assertStringContainsString("\x1b[7m\x1b[38;2;137;180;250mfunction\x1b[0m", $out);
+        $this->assertStringContainsString("\x1b[7m\x1b[38;2;167;139;250m42\x1b[0m", $out);
+        // Marker keeps the add-line green, not the keyword blue.
+        $this->assertStringContainsString("\x1b[7m\x1b[38;2;110;231;183m +\x1b[0m", $out);
+        // The diff header line is metadata, never tokenised: 'diff'/'git' stay
+        // inside the single lavender wrap (no blue keyword SGR around them).
+        $this->assertStringNotContainsString("\x1b[38;2;137;180;250mdiff\x1b[0m", $out);
+    }
+
+    public function testRenderDiffOverlayUnknownLanguageStaysPlain(): void
+    {
+        $dv = DiffViewer::fromRawDiff('docs/notes.txt', [
+            'diff --git a/docs/notes.txt b/docs/notes.txt',
+            '@@ -1,3 +1,4 @@',
+            '+function compute() { return 42; }',
+        ]);
+        $a = new App($this->git(), diffViewer: $dv);
+        $out = Renderer::render($a);
+
+        // Whole line keeps its single add-line SGR wrap; no interior accents.
+        $this->assertStringContainsString(
+            "\x1b[7m\x1b[38;2;110;231;183m +function compute() { return 42; }\x1b[0m",
+            $out,
+        );
+        $this->assertStringNotContainsString("\x1b[38;2;137;180;250mfunction\x1b[0m", $out);
+    }
+
     public function testRenderRebaseOverlay(): void
     {
         $g = new FixtureGit([], [], []);

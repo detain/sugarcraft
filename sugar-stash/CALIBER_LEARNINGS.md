@@ -226,3 +226,20 @@ Interactive rebase shows a todo list of commits, each with an assignable action
 Pattern: When a lib needs type-to-filter with ranked results, adopt `sugarcraft/candy-fuzzy` and use `SmithWatermanMatcher::matchAll()` — it returns scored `MatchResult` objects with grapheme-aligned highlight indices.
 Anti-pattern: Ad-hoc `str_contains()` or `stripos()` boolean filtering; it gives no ranking signal and no match-position data for highlighting.
 Source: step-33 ai/filter-consumers
+
+### 2026-09-16 — Consume candy-core's shared lexer for diff syntax highlighting
+Pattern: Step 10.06's deferred "syntax highlighting in diff view" landed by
+consuming `SugarCraft\Core\Syntax\RegexHighlighter` — the pure tokenisation
+primitive shipped with the step 10.24 highlighting pipeline (sugar-glow itself
+is a pager CLI with no embeddable highlight surface; candy-shine's
+`SyntaxHighlighter` and candy-freeze's `CodeHighlighter` are the other two
+consumers of this same lexer). `DiffHighlighter` keeps ZERO colour knowledge:
+it maps file extension → lexer language (only languages the lexer actually
+recognises — never invents) and returns `null` for header lines, empty
+payloads, unknown languages, and all-Plain tokenisations. `Renderer` owns the
+accent palette and composites spans over the diff-state colour; the `null`
+contract makes unrecognised diffs render byte-for-byte as before (opt-in law,
+same posture candy-freeze documents for its highlighter).
+Anti-pattern: adding a dependency on sugar-glow to "consume" it — the pager
+exposes no API, and a dep bump on a CLI lib buys nothing at render time.
+Source: leftover-rollout step 10.06 Phase 4 (round-84 lane t2, E735)

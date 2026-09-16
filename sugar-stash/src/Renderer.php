@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stash;
 
+use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
@@ -267,6 +268,11 @@ final class Renderer
         $lines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
             ->render(' diff: ' . self::sanitize($dv->path) . ' ');
 
+        // Step 10.06 syntax pass: accent recognised-language tokens inside diff
+        // bodies. '' language (or an unaccentable line) keeps the plain
+        // whole-line rendering below byte-for-byte (DiffHighlighter opt-in law).
+        $language = DiffHighlighter::languageForPath($dv->path);
+
         foreach ($dv->lines as $i => $line) {
             $isSelectedHunkLine = false;
             // Highlight the selected hunk block
@@ -298,7 +304,22 @@ final class Renderer
                 $st = $st->reverse();
             }
 
-            $lines[] = $st->render(' ' . $line);
+            $spans = DiffHighlighter::tokenizeLine($line, $language);
+            if ($spans === null) {
+                $lines[] = $st->render(' ' . $line);
+                continue;
+            }
+
+            // Marker (+/-/space) and unclassified content keep the diff-state
+            // colour; only recognised tokens steal the accent.
+            $row = $st->render(' ' . $line[0]);
+            foreach ($spans as $span) {
+                $spanStyle = $span->kind === TokenKind::Plain
+                    ? $st
+                    : self::syntaxAccent($span->kind, $isSelectedHunkLine);
+                $row .= $spanStyle->render($span->text);
+            }
+            $lines[] = $row;
         }
 
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
@@ -313,6 +334,25 @@ final class Renderer
             ->render(implode("\n", $lines) . "\n" . $hint);
 
         return "\n" . $box . "\n";
+    }
+
+    /**
+     * Accent style for one recognised syntax token inside a diff body line.
+     * Hues extend the overlay palette (amber/violet/dim already frame the
+     * diff); Plain is never asked for — the caller keeps the line-state
+     * colour for unclassified text. Exhaustive over TokenKind by design.
+     */
+    private static function syntaxAccent(TokenKind $kind, bool $selected): Style
+    {
+        $style = match ($kind) {
+            TokenKind::Keyword => Style::new()->foreground(Color::hex('#89b4fa')),
+            TokenKind::StringToken => Style::new()->foreground(Color::hex('#fde68a')),
+            TokenKind::Number => Style::new()->foreground(Color::hex('#a78bfa')),
+            TokenKind::Comment => Style::new()->foreground(Color::hex('#7d6e98'))->italic(),
+            TokenKind::Plain => Style::new()->foreground(Color::hex('#c5b6dd')),
+        };
+
+        return $selected === TRUE ? $style->reverse() : $style;
     }
 
     private static function rebaseOverlay(App $a): string
