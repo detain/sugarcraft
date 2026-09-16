@@ -20,8 +20,9 @@ final class KittyImageTest extends TestCase
 
     public function testOnlyZlibFormatReportsCompressed(): void
     {
-        // `f=1` is the single code that means "inflate me"; `f=0` (raw pixels),
-        // `f=12`/`f=100` (PNG passthrough) and the JPEG codes must not claim it.
+        // `f=1` is the single code this decoder inflates on: the upstream
+        // raw-pixel codes (`24` RGB, `32` RGBA), both PNG spellings and any
+        // other value must not claim it.
         foreach (['0', '2', '12', '24', '32', '100'] as $format) {
             self::assertFalse(
                 KittyImage::fromTransmit(['a' => 'T', 'f' => $format], 'payload')->compressed(),
@@ -34,9 +35,9 @@ final class KittyImageTest extends TestCase
 
     public function testPngPassthroughCoversBothPngSpellings(): void
     {
-        // `100` is the upstream protocol code for a PNG payload, `12` is how the
-        // monorepo graphics plan spells the same thing; the decoder treats them
-        // identically so neither producer's captures are misread.
+        // `100` is the upstream protocol code for a PNG payload; `12` is a
+        // synonym some external tooling emits (no SugarCraft producer uses it).
+        // The decoder treats them identically so neither spelling misreads.
         self::assertTrue(KittyImage::fromTransmit(['f' => '12'], 'payload')->pngPassthrough());
         self::assertTrue(KittyImage::fromTransmit(['f' => '100'], 'payload')->pngPassthrough());
     }

@@ -311,11 +311,14 @@ final class KittyStreamTest extends TestCase
     public function testInterleavedTrafficDoesNotSplitAnApcTransaction(): void
     {
         // Chunk state lives on the decoder, not on frame adjacency, so a
-        // producer may spray unrelated traffic between chunks: printable text,
-        // SGR, a BEL-terminated OSC 1337, a foreign APC string sequence
-        // (`ESC _ X`, the same ECMA-48 class Kitty's `ESC _ G` rides in), and a
-        // whole Sixel DCS image. None of those carries a Kitty introducer, so
-        // the transaction must still close into exactly one image.
+        // capture that mixes unrelated traffic between chunks still stitches:
+        // printable text, SGR, a BEL-terminated OSC 1337, a foreign APC string
+        // sequence (`ESC _ X`, the same ECMA-48 class Kitty's `ESC _ G` rides
+        // in), and a whole Sixel DCS image. Upstream forbids a *producer* from
+        // emitting graphics escapes mid-transaction; this is decoder lenience
+        // for interleaved captures, not a licence to emit. None of the traffic
+        // here carries a Kitty introducer, so the transaction must still close
+        // into exactly one image.
         $b64 = base64_encode($this->redPng());
         $cut = intdiv(strlen($b64), 2);
 
@@ -432,7 +435,9 @@ final class KittyStreamTest extends TestCase
         // This decoder keys inflate on `f=1` alone, so an `o=z` capture arrives
         // exactly as sent — the documented gap, pinned so a future change to it
         // is a decision rather than a surprise.
-        $stream = $this->apcFrame(['a' => 'T', 'f' => '100', 'o' => 'z'], base64_encode(gzcompress($this->redPng())));
+        // `S` is the uncompressed byte count upstream sends with `o=z`, so the
+        // frame here is spec-shaped even though the flag itself is inert.
+        $stream = $this->apcFrame(['a' => 'T', 'f' => '100', 'o' => 'z', 'S' => (string) strlen($this->redPng())], base64_encode(gzcompress($this->redPng())));
         $image = KittyStream::decode($stream)->image();
 
         self::assertFalse($image->compressed());
@@ -494,13 +499,16 @@ final class KittyStreamTest extends TestCase
 
     public function testUnknownFormatTravelsUntransformed(): void
     {
-        // Anything outside the zlib row of the format table is documented as raw
-        // passthrough — here `f=24`, upstream's three-bytes-per-pixel RGB code —
-        // so no inflate is attempted and nothing is rejected either.
-        $jpegish = "\xff\xd8\xff\xe0not-a-real-jpeg";
-        $image = KittyStream::decode($this->apcFrame(['a' => 'T', 'f' => '24'], base64_encode($jpegish)))->image();
+        // Anything outside the zlib row of the format table travels untouched —
+        // here `f=24`, upstream's raw three-bytes-per-pixel RGB code, sent as a
+        // 4-pixel red scanline. No inflate is attempted, nothing is rejected.
+        // NOTE: if raw f=24/f=32 pixel decoding ever lands (graphics plan item
+        // 2d), this payload becomes interpretable and this pin must be upgraded
+        // to assert decoded pixels instead of passthrough bytes.
+        $rawRgb = str_repeat("\xff\x00\x00", 4);
+        $image = KittyStream::decode($this->apcFrame(['a' => 'T', 'f' => '24'], base64_encode($rawRgb)))->image();
 
-        self::assertSame($jpegish, $image->rawPayload());
+        self::assertSame($rawRgb, $image->rawPayload());
         self::assertFalse($image->pngPassthrough());
         self::assertFalse($image->compressed());
     }
@@ -526,7 +534,7 @@ final class KittyStreamTest extends TestCase
         $b64 = base64_encode($this->redPng());
         $cut = intdiv(strlen($b64), 2);
 
-        $stream = Ansi::kittyGraphicsBegin(['a' => 'T', 'c' => 8, 'r' => 4, 'f' => 12])
+        $stream = Ansi::kittyGraphicsBegin(['a' => 'T', 'c' => 8, 'r' => 4, 'f' => 100])
             . Ansi::kittyGraphicsChunk(substr($b64, 0, $cut), true)
             . Ansi::kittyGraphicsChunk(substr($b64, $cut), false);
 

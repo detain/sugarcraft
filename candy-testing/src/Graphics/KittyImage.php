@@ -22,14 +22,15 @@ use SugarCraft\Testing\Lang;
  * protocol's control-data reference lists `f` as one of `24` (RGB — three bytes
  * per pixel), `32` (RGBA) or `100` (PNG), defaulting to `32`, with transmission
  * compression carried SEPARATELY by the `o=z` key and `z` itself meaning the
- * image z-index. SugarCraft's own producers predate/widen that: candy-mosaic's
+ * image z-index. SugarCraft's own producers widen that: candy-mosaic's
  * `KittyOptions::withCompression(1)` declares a zlib-wrapped payload as `f=1`,
- * and the monorepo graphics plan spells PNG passthrough `f=12`. Rather than
- * privilege one spelling, {@see PNG_PASSTHROUGH_FORMATS} accepts both `100` and
- * `12` and inflates only on `f=1`; any other (or absent) `f` travels untouched,
- * so an unknown code can never silently corrupt a capture — the decoder mirrors
- * what a terminal would see instead of guessing at a payload it was not told
- * how to read.
+ * and `f=12` is accepted as a second PNG spelling so a capture written by
+ * tooling that uses it still round-trips (nothing in this monorepo emits `12`).
+ * Rather than privilege one spelling, {@see PNG_PASSTHROUGH_FORMATS} accepts
+ * `100` and `12` alike and inflates only on `f=1`; any other (or absent) `f`
+ * travels untouched, so an unknown code can never silently corrupt a capture —
+ * the decoder mirrors what a terminal would see instead of guessing at a payload
+ * it was not told how to read.
  *
  * Mirrors the kitty graphics protocol transmit semantics (inverse).
  */
@@ -41,7 +42,7 @@ final class KittyImage
     /** PNG — the upstream protocol's own code for a complete PNG payload. */
     public const FORMAT_PNG = '100';
 
-    /** PNG passthrough as spelled by the SugarCraft graphics plan; decoded exactly like {@see FORMAT_PNG}. */
+    /** A second PNG spelling some tooling emits (no SugarCraft producer uses it); decoded like {@see FORMAT_PNG}. */
     public const FORMAT_PNG_ALT = '12';
 
     /**
@@ -50,7 +51,6 @@ final class KittyImage
      * @var list<string>
      */
     public const PNG_PASSTHROUGH_FORMATS = [self::FORMAT_PNG_ALT, self::FORMAT_PNG];
-
 
     /**
      * Control keys that carry an integer value.
@@ -220,7 +220,9 @@ final class KittyImage
     }
 
     /**
-     * The PNG bytes for this image.
+     * The image payload bytes for this transmit: a PNG for a PNG-format
+     * (`f=100`/`f=12`) transmit or an inflated `f=1` one, raw pixel data for an
+     * `f=24`/`f=32` transmit.
      *
      * @throws MalformedGraphicsException when the transmit is a data-less placement
      */

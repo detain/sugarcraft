@@ -20,9 +20,9 @@ use SugarCraft\Testing\Lang;
  *
  * Payload base64 is reassembled across `m=1` continuation chunks and — for a
  * `f=1` transmit — zlib-inflated back into a PNG. Every other format travels
- * untransformed, so a PNG transmit (`f=100` in the upstream table, spelled
- * `f=12` by the SugarCraft graphics plan) yields the sender's bytes
- * byte-for-byte. Multi-image streams yield one {@see KittyImage} per transmit.
+ * untransformed, so a PNG transmit (`f=100` in the upstream table, or the
+ * `f=12` synonym) yields the sender's bytes byte-for-byte. Multi-image streams
+ * yield one {@see KittyImage} per transmit.
  *
  * Mirrors charmbracelet/candy-mosaic KittyRenderer (inverse).
  */
@@ -330,14 +330,15 @@ final class KittyStream
     /**
      * Inflate a zlib-wrapped payload when — and only when — `f=1` declares one.
      *
-     * A PNG transmit (`f=100` upstream, `f=12` in the SugarCraft plan) already
-     * holds the whole image, so inflating it would turn a valid payload into a
+     * A PNG transmit (`f=100` upstream, or the `f=12` synonym) already holds the
+     * whole image, so inflating it would turn a valid payload into a
      * `decompress_failed` error. And `z` is the image z-index, never a
      * compression hint: `KittyOptions::withZIndex(1)` emits an uncompressed PNG
      * under exactly `f=100,z=1`. Upstream's real compression key is `o=z`, which
-     * this decoder deliberately does not act on — a capture using it surfaces as
-     * an undecodable payload instead of a guessed inflate (documented gap, see
-     * the wave handoff). Any other, or absent, `f` travels untouched.
+     * this decoder deliberately does not act on — honouring it has to land
+     * together with the emitters that would use it, so today such a capture
+     * surfaces as an undecodable payload instead of a guessed inflate. Any
+     * other, or absent, `f` travels untouched.
      *
      * @param array<string, string> $params
      */
