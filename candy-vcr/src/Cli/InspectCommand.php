@@ -10,6 +10,7 @@ use SugarCraft\Vcr\Format\CassetteLoader;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\Renderer;
+use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vt\Snapshot;
 use SugarCraft\Vt\Terminal;
 use SugarCraft\Vt\Theme;
@@ -222,18 +223,30 @@ final class InspectCommand implements Command
         return $base . '  ' . match ($event->kind) {
             EventKind::Resize => sprintf(
                 '%dx%d',
-                (int) ($event->payload['cols'] ?? 0),
-                (int) ($event->payload['rows'] ?? 0),
+                Scalars::int($event->payload['cols'] ?? 0, 'inspect resize cols'),
+                Scalars::int($event->payload['rows'] ?? 0, 'inspect resize rows'),
             ),
-            EventKind::Output => $this->summarizeBytes((string) ($event->payload['b'] ?? '')),
+            EventKind::Output => $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'inspect output bytes')),
             EventKind::Input => isset($event->payload['msg'])
-                ? '@' . ($event->payload['msg']['@type'] ?? '?')
-                : $this->summarizeBytes((string) ($event->payload['b'] ?? '')),
+                ? $this->formatMsgTag($event->payload['msg'])
+                : $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'inspect input bytes')),
             EventKind::Quit => '',
-            EventKind::Snapshot => 'screenshot: ' . ($event->payload['path'] ?? '?'),
+            EventKind::Snapshot => 'screenshot: ' . Scalars::string($event->payload['path'] ?? '?', 'inspect snapshot path'),
             EventKind::Hide => '',
             EventKind::Show => '',
         };
+    }
+
+    /**
+     * `@<type>` label for an input envelope. A non-array `msg` (malformed
+     * tape) degrades to `@?` exactly as nested null-coalescing did.
+     */
+    private function formatMsgTag(mixed $msg): string
+    {
+        if (!is_array($msg)) {
+            return '@?';
+        }
+        return '@' . Scalars::string($msg['@type'] ?? '?', 'inspect msg @type');
     }
 
     private function summarizeBytes(string $bytes): string

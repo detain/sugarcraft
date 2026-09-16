@@ -28,7 +28,10 @@ final class InspectHashSensitivityTest extends TestCase
         $method = new ReflectionMethod(InspectCommand::class, 'hashGrid');
         $method->setAccessible(true);
 
-        return $method->invoke(new InspectCommand(), $snapshot);
+        $hash = $method->invoke(new InspectCommand(), $snapshot);
+        $this->assertIsString($hash);
+
+        return $hash;
     }
 
     /** @param callable(Buffer): void $paint */

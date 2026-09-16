@@ -10,6 +10,8 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
+use SugarCraft\Vcr\Support\ObjectMap;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * Human-readable YAML cassette format. JSONL is the primary on-disk
@@ -148,7 +150,7 @@ final class YamlFormat implements Format
         return new Cassette($header, $events);
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     private function decodeHeader(array $data): CassetteHeader
     {
         if (!isset($data['v'])) {
@@ -159,35 +161,66 @@ final class YamlFormat implements Format
                 throw new \RuntimeException("candy-vcr: YAML header missing '{$key}'");
             }
         }
+        $envRaw = $data['env'] ?? [];
+        if (!\is_array($envRaw)) {
+            throw new \RuntimeException("candy-vcr: YAML header 'env' must be a map");
+        }
+        $env = [];
+        foreach ($envRaw as $k => $v) {
+            if (!\is_string($k) || !\is_string($v)) {
+                throw new \InvalidArgumentException('candy-vcr: YAML header env must map strings to strings');
+            }
+            $env[$k] = $v;
+        }
+
         return new CassetteHeader(
-            version: (int) $data['v'],
-            createdAt: (string) $data['created'],
-            cols: (int) $data['cols'],
-            rows: (int) $data['rows'],
-            runtime: (string) $data['runtime'],
-            timestampMode: $data['timestampMode'] ?? CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
-            env: is_array($data['env'] ?? null) ? $data['env'] : [],
-            typingSpeed: isset($data['typingSpeed']) ? (float) $data['typingSpeed'] : null,
-            theme: isset($data['theme']) ? (string) $data['theme'] : null,
-            playbackSpeed: isset($data['playbackSpeed']) ? (float) $data['playbackSpeed'] : null,
-            fontSize: isset($data['fontSize']) ? (int) $data['fontSize'] : null,
-            fontFamily: isset($data['fontFamily']) ? (string) $data['fontFamily'] : null,
+            version: Scalars::int($data['v'], 'YAML header v'),
+            createdAt: Scalars::string($data['created'], 'YAML header created'),
+            cols: Scalars::int($data['cols'], 'YAML header cols'),
+            rows: Scalars::int($data['rows'], 'YAML header rows'),
+            runtime: Scalars::string($data['runtime'], 'YAML header runtime'),
+            timestampMode: self::timestampModeOf($data['timestampMode'] ?? CassetteHeader::TIMESTAMP_MODE_ABSOLUTE),
+            env: $env,
+            typingSpeed: isset($data['typingSpeed']) ? Scalars::float($data['typingSpeed'], 'YAML header typingSpeed') : null,
+            theme: isset($data['theme']) ? Scalars::string($data['theme'], 'YAML header theme') : null,
+            playbackSpeed: isset($data['playbackSpeed']) ? Scalars::float($data['playbackSpeed'], 'YAML header playbackSpeed') : null,
+            fontSize: isset($data['fontSize']) ? Scalars::int($data['fontSize'], 'YAML header fontSize') : null,
+            fontFamily: isset($data['fontFamily']) ? Scalars::string($data['fontFamily'], 'YAML header fontFamily') : null,
         );
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * Parse the timestampMode discriminator at the trust boundary so the
+     * literal-union type reaches CassetteHeader intact; the header ctor
+     * re-validates independently.
+     *
+     * @return 'absolute'|'relative'
+     */
+    private static function timestampModeOf(mixed $value): string
+    {
+        $mode = Scalars::string($value, 'YAML header timestampMode');
+        if ($mode === CassetteHeader::TIMESTAMP_MODE_ABSOLUTE || $mode === CassetteHeader::TIMESTAMP_MODE_RELATIVE) {
+            return $mode;
+        }
+        throw new \InvalidArgumentException(
+            "CassetteHeader timestampMode must be 'absolute' or 'relative', got '{$mode}'",
+        );
+    }
+
+    /** @param array<array-key, mixed> $data */
     private function decodeEvent(array $data, int $eventNo): Event
     {
         if (!array_key_exists('t', $data) || !array_key_exists('k', $data)) {
             throw new \RuntimeException("candy-vcr: YAML event #{$eventNo} missing 't' or 'k'");
         }
-        $kind = EventKind::tryFrom((string) $data['k']);
+        $kind = EventKind::tryFrom(Scalars::string($data['k'], 'YAML event k'));
         if ($kind === null) {
-            $bad = (string) $data['k'];
+            $bad = Scalars::string($data['k'], 'YAML event k');
             throw new \RuntimeException("candy-vcr: YAML event #{$eventNo} has unknown kind '{$bad}'");
         }
-        $t = (float) $data['t'];
+        $t = Scalars::float($data['t'], 'YAML event t');
         unset($data['t'], $data['k']);
-        return new Event(t: $t, kind: $kind, payload: $data);
+
+        return new Event(t: $t, kind: $kind, payload: ObjectMap::of($data, "YAML event #{$eventNo} payload"));
     }
 }

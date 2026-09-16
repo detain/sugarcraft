@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Encode;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\PhpGifEncoder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Regression: PhpGifEncoder honors per-frame durations in centiseconds.
@@ -55,7 +56,7 @@ final class PhpGifEncoderDelayTest extends TestCase
             $encoder = new PhpGifEncoder();
             $encoder->encode($pngPaths, $gifPath, 30, [100, 500, 100]);
 
-            $gif = file_get_contents($gifPath);
+            $gif = Stream::read($gifPath);
             $this->assertIsString($gif);
 
             $delays = $this->extractGceDelays($gif);

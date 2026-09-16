@@ -15,6 +15,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Cell-grid round-trip: record a Program session, then replay into a
@@ -81,7 +82,7 @@ final class ScreenRoundTripTest extends TestCase
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         $this->assertNotFalse($sockets);
         [$reader, $writer] = $sockets;
-        $output = fopen('php://memory', 'w+');
+        $output = Stream::memory('w+');
         $this->assertNotFalse($output);
 
         $loop = new StreamSelectLoop();
@@ -148,7 +149,12 @@ final class ScreenRoundTripTest extends TestCase
 
     private function programFactory(bool $divergent = false): \Closure
     {
-        return static function ($input, $output, LoopInterface $loop) use ($divergent): Program {
+        $factory = static function ($input, $output, LoopInterface $loop) use ($divergent): Program {
+            // Player hands the factory stream resources; parse that contract
+            // at the boundary instead of trusting mixed all the way down.
+            if (!is_resource($input) || !is_resource($output)) {
+                throw new \TypeError('program factory expects stream resources');
+            }
             return new Program(
                 new TickModel(quitAfter: PHP_INT_MAX, divergent: $divergent),
                 new ProgramOptions(
@@ -162,6 +168,8 @@ final class ScreenRoundTripTest extends TestCase
                 ),
             );
         };
+
+        return $factory;
     }
 }
 

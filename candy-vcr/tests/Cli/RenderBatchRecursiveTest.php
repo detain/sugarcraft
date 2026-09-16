@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\Application;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Regression: `render-batch --recursive` walks subdirectories.
@@ -35,8 +36,8 @@ final class RenderBatchRecursiveTest extends TestCase
         file_put_contents($bTape, $tapeBody);
 
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $this->assertNotFalse($stdout);
             $this->assertNotFalse($stderr);
 

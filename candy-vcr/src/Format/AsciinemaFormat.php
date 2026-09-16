@@ -8,6 +8,7 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * Import asciinema v3 cast files as candy-vcr Cassette objects.
@@ -39,7 +40,6 @@ final class AsciinemaFormat
     public function read(string $path): Cassette
     {
         $handle = $this->openFile($path);
-        $this->assertFileReadable($path, $handle);
 
         // Read header line
         $headerLine = fgets($handle);
@@ -57,15 +57,19 @@ final class AsciinemaFormat
         $version = $headerData['version'] ?? null;
         if ($version !== 3) {
             fclose($handle);
+            // Non-scalar versions cannot interpolate to text — name their type instead.
+            $label = is_scalar($version) || $version === null ? (string) $version : get_debug_type($version);
             throw new \InvalidArgumentException(
-                "asciinema format version {$version} not supported (only v3): {$path}",
+                "asciinema format version {$label} not supported (only v3): {$path}",
             );
         }
 
-        $cols = $headerData['term']['width'] ?? 80;
-        $rows = $headerData['term']['height'] ?? 24;
+        // Malformed `term` shapes degrade to defaults exactly as nested `?? 80`/`?? 24` did.
+        $term = is_array($headerData['term'] ?? null) ? $headerData['term'] : [];
+        $cols = Scalars::int($term['width'] ?? 80, 'asciinema term.width');
+        $rows = Scalars::int($term['height'] ?? 24, 'asciinema term.height');
         $createdAt = isset($headerData['timestamp'])
-            ? gmdate('Y-m-d\TH:i:s\Z', (int) $headerData['timestamp'])
+            ? gmdate('Y-m-d\TH:i:s\Z', Scalars::int($headerData['timestamp'], 'asciinema timestamp'))
             : gmdate('Y-m-d\TH:i:s\Z');
 
         // Read events
@@ -86,8 +90,8 @@ final class AsciinemaFormat
             new CassetteHeader(
                 version: CassetteHeader::CURRENT_VERSION,
                 createdAt: $createdAt,
-                cols: (int) $cols,
-                rows: (int) $rows,
+                cols: $cols,
+                rows: $rows,
                 runtime: 'asciinema/v3',
             ),
             $events,
@@ -97,8 +101,12 @@ final class AsciinemaFormat
     /**
      * Open a file handle, detecting gzip compression by .gz extension.
      *
+     * Fails loud here so every caller receives a guaranteed `resource` and
+     * never has to re-check for `false` (parse, don't validate).
+     *
      * @param string $path
      * @return resource
+     * @throws \RuntimeException If the file cannot be opened
      */
     private function openFile(string $path)
     {
@@ -107,17 +115,10 @@ final class AsciinemaFormat
         } else {
             $handle = @fopen($path, 'rb');
         }
-        return $handle;
-    }
-
-    /**
-     * @param resource $handle
-     */
-    private function assertFileReadable(string $path, $handle): void
-    {
         if ($handle === false) {
             throw new \RuntimeException("Cannot open asciinema cast file: {$path}");
         }
+        return $handle;
     }
 
     /**
@@ -141,11 +142,11 @@ final class AsciinemaFormat
         $data = $decoded[2] ?? '';
 
         // Convert relative time offset to absolute time from cassette start
-        $t = $previousTime + (float) $timeOffset;
+        $t = $previousTime + Scalars::float($timeOffset, 'asciinema event time');
 
         return match ($type) {
-            'o' => new Event(t: $t, kind: EventKind::Output, payload: ['b' => (string) $data]),
-            'i' => new Event(t: $t, kind: EventKind::Input, payload: ['b' => (string) $data]),
+            'o' => new Event(t: $t, kind: EventKind::Output, payload: ['b' => Scalars::string($data, 'asciinema event data')]),
+            'i' => new Event(t: $t, kind: EventKind::Input, payload: ['b' => Scalars::string($data, 'asciinema event data')]),
             'x' => new Event(t: $t, kind: EventKind::Quit, payload: []),
             default => null, // Unknown event type, skip
         };

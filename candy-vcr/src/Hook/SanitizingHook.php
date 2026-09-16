@@ -43,8 +43,9 @@ final class SanitizingHook implements Hook
         $this->replacePatterns = $replacePatterns;
     }
 
-    public function beforeSave(Event $event): ?Event
+    public function beforeSave(Event $event): Event
     {
+        /** @var array<array-key, mixed> $payload */
         $payload = $event->payload;
 
         // Remove specified keys (recursively)
@@ -60,7 +61,12 @@ final class SanitizingHook implements Hook
             return $event;
         }
 
-        return new Event($event->t, $event->kind, $payload);
+        // The walks only replace values and unset string keys — the top
+        // level stays the string-keyed map Event::$payload requires.
+        /** @var array<string, mixed> $typed */
+        $typed = $payload;
+
+        return new Event($event->t, $event->kind, $typed);
     }
 
     public function afterCapture(Event $event): void
@@ -71,8 +77,8 @@ final class SanitizingHook implements Hook
     /**
      * Recursively apply regex replacement to payload values.
      *
-     * @param array $data
-     * @return array
+     * @param array<array-key, mixed> $data
+     * @return array<array-key, mixed>
      */
     private function applyPattern(array $data, string $pattern, string $replacement): array
     {
@@ -90,9 +96,9 @@ final class SanitizingHook implements Hook
     /**
      * Recursively remove keys from payload.
      *
-     * @param array $data
+     * @param array<array-key, mixed> $data
      * @param list<string> $keys
-     * @return array
+     * @return array<array-key, mixed>
      */
     private function removeKeysRecursive(array $data, array $keys): array
     {

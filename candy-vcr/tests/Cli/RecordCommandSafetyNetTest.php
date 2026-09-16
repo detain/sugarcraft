@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Contract\Termios;
 use SugarCraft\Vcr\Cli\RecordCommand;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.4 — host termios safety net. The recorder installs a
@@ -35,7 +36,8 @@ final class RecordCommandSafetyNetTest extends TestCase
         // shutdown_function will fire after every PHP run, including
         // tests that never went through `record`.
         RecordCommand::rescueRestore();
-        $this->assertTrue(true, 'rescueRestore must be safe to call with no prior install');
+        // Returning from rescueRestore() without throwing is the assertion.
+        $this->addToAssertionCount(1);
     }
 
     public function testRescueRestoreCallsTermiosRestoreOnce(): void
@@ -92,11 +94,12 @@ final class RecordCommandSafetyNetTest extends TestCase
         // Parent: reap the child.
         $status = 0;
         \pcntl_waitpid($pid, $status);
+        $this->assertIsInt($status);
 
         // The TrackingTermios wrote 'RESTORED' to the marker, and the
         // child was killed by SIGTERM before reaching the trailing
         // append, so the file contains exactly the restore marker.
-        $contents = (string) @\file_get_contents($marker);
+        $contents = (string) @Stream::read($marker);
         $this->assertStringContainsString('RESTORED', $contents);
         $this->assertStringNotContainsString('REACHED_AFTER_HANDLER', $contents);
 
@@ -126,10 +129,12 @@ final class RecordCommandSafetyNetTest extends TestCase
 
         $markerPath = $ref->getProperty('rescueMarkerPath');
         $markerPath->setAccessible(true);
-        $path = (string) $markerPath->getValue();
+        $rawMarker = $markerPath->getValue();
+        $this->assertIsString($rawMarker);
+        $path = $rawMarker;
         $this->assertNotSame('', $path);
         $this->assertFileExists($path);
-        $payload = (string) \file_get_contents($path);
+        $payload = (string) Stream::read($path);
         $this->assertStringContainsString('tty=', $payload);
         $this->assertStringContainsString('pid=' . \getmypid(), $payload);
 

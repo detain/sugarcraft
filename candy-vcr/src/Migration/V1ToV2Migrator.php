@@ -19,14 +19,10 @@ use SugarCraft\Vcr\EventKind;
  *           or `{"t":0.0,"k":"quit"}`
  *
  * v2 format adds:
- *   - Header gains `formatVersion` field (string "2.0") alongside numeric `v`
- *   - Header gains `migrationMeta` object tracking source version, migratedAt timestamp,
- *     and migrator identifier
- *   - Events gain an `id` field (zero-based sequential integer) for stable event
+ *   - Numeric `v` header field carries the semantic target version (2)
+ *   - Events gain a `_id` field (zero-based sequential integer) for stable event
  *     references across migrations
- *   - Output events gain `enc` (encoding) field set to "utf-8" for explicit encoding
- *   - Quit events are split into `quit` (normal) and `crash` (unhandled termination)
- *     with `exitCode` field
+ *   - Output events gain `_enc` (encoding) field set to "utf-8" for explicit encoding
  *
  * Since v2 does not yet exist in the codebase this migrator future-proofs the
  * infrastructure. It is a no-op when the cassette is already v2+.
@@ -74,15 +70,15 @@ final class V1ToV2Migrator implements CassetteMigrator
 
     public function describe(): string
     {
-        return 'Upgrades cassette format v1 to v2: adds formatVersion string, '
-            . 'migrationMeta, event ids, explicit encoding on output events, '
-            . 'and distinguishes normal quit from crash exit.';
+        return 'Upgrades cassette format v1 to v2: adds event ids and '
+            . 'explicit encoding on output events.';
     }
 
     private function migrateHeader(CassetteHeader $header): CassetteHeader
     {
         // Build v2 header. Numeric `v` is bumped; `formatVersion` carries the
-        // semantic version string. `migrationMeta` records the upgrade path.
+        // semantic version string. (No `migrationMeta` header slot exists in
+        // CassetteHeader v2 — the upgrade path is described by describe().)
         return new CassetteHeader(
             version: self::TARGET_VERSION,
             createdAt: $header->createdAt,
@@ -90,18 +86,6 @@ final class V1ToV2Migrator implements CassetteMigrator
             rows: $header->rows,
             runtime: $header->runtime,
         );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildMigrationMeta(): array
-    {
-        return [
-            'sourceVersion' => 1,
-            'migratedAt' => gmdate('Y-m-d\TH:i:s\Z'),
-            'migrator' => self::class,
-        ];
     }
 
     private function migrateEvent(Event $event, int $eventId): Event

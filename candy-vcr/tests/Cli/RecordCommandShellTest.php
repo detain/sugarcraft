@@ -8,7 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.2 — `--shell` flag. Records a session running the user's
@@ -22,9 +24,9 @@ final class RecordCommandShellTest extends TestCase
 
     public function testShellAndPositionalCmdAreMutuallyExclusive(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
         try {
             $rc = $cmd->run(['--shell', '--', '/bin/echo', 'hi'], $stdout, $stderr);
             $this->assertSame(2, $rc);
@@ -39,9 +41,9 @@ final class RecordCommandShellTest extends TestCase
 
     public function testShellUsageStringIncludesShellFlag(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
         try {
             $rc = $cmd->run(['--help'], $stdout, $stderr);
             $this->assertSame(2, $rc);
@@ -69,9 +71,9 @@ final class RecordCommandShellTest extends TestCase
 
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-shell-');
         $this->assertIsString($cassette);
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             // -l + immediate exit so the shell doesn't block waiting
@@ -117,9 +119,9 @@ final class RecordCommandShellTest extends TestCase
 
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-shell-real-');
         $this->assertIsString($cassette);
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(
@@ -133,7 +135,7 @@ final class RecordCommandShellTest extends TestCase
             $blob = '';
             foreach ($loaded->events as $event) {
                 if ($event->kind === EventKind::Output) {
-                    $blob .= (string) ($event->payload['b'] ?? '');
+                    $blob .= Scalars::string($event->payload['b'] ?? '', 'recorded output bytes');
                 }
             }
             $this->assertStringContainsString('shell-marker', $blob);

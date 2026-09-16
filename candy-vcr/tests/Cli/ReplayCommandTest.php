@@ -11,6 +11,7 @@ use SugarCraft\Vcr\Cli\ReplayCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for ReplayCommand CLI.
@@ -18,6 +19,9 @@ use SugarCraft\Vcr\Format\JsonlFormat;
  */
 final class ReplayCommandTest extends TestCase
 {
+    /**
+     * @param list<Event> $events
+     */
     private function writeCassette(string $path, array $events): string
     {
         $cassette = new Cassette(
@@ -42,8 +46,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 0.5, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new ReplayCommand())->run([$path, '--speed=instant'], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -63,8 +67,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 0.05, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $start = microtime(true);
             $exit = (new ReplayCommand())->run([$path, '--speed=realtime'], $stdout, $stderr);
             $elapsed = microtime(true) - $start;
@@ -88,8 +92,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 5.0, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $start = microtime(true);
             // With --idle-trim=0.1, a 5 second gap should be clamped to 0.1
             $exit = (new ReplayCommand())->run([$path, '--speed=realtime', '--idle-trim=0.1'], $stdout, $stderr);
@@ -114,8 +118,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 0.01, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new ReplayCommand())->run([$path, '--speed=realtime', '--idle-trim=0.5'], $stdout, $stderr);
             rewind($stdout);
             $out = (string) stream_get_contents($stdout);
@@ -135,8 +139,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 0.01, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new ReplayCommand())->run([$path, '--idle-trim=0'], $stdout, $stderr);
             rewind($stderr);
             $err = (string) stream_get_contents($stderr);
@@ -156,8 +160,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 0.01, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new ReplayCommand())->run([$path, '--idle-trim=-1'], $stdout, $stderr);
             rewind($stderr);
             $err = (string) stream_get_contents($stderr);
@@ -189,8 +193,8 @@ final class ReplayCommandTest extends TestCase
         );
         (new JsonlFormat())->write($cassette, $path);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             // Without --no-trim, tRaw is ignored
             $exit = (new ReplayCommand())->run([$path, '--speed=instant', '--no-trim'], $stdout, $stderr);
             rewind($stdout);
@@ -205,8 +209,8 @@ final class ReplayCommandTest extends TestCase
 
     public function testReplayMissingPath(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new ReplayCommand())->run([], $stdout, $stderr);
         rewind($stderr);
         $err = (string) stream_get_contents($stderr);
@@ -222,8 +226,8 @@ final class ReplayCommandTest extends TestCase
             new Event(t: 0.0, kind: EventKind::Quit, payload: []),
         ]);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new ReplayCommand())->run([$path, '--speed=invalid'], $stdout, $stderr);
             rewind($stderr);
             $err = (string) stream_get_contents($stderr);
@@ -237,8 +241,8 @@ final class ReplayCommandTest extends TestCase
 
     public function testReplayNonExistentFile(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new ReplayCommand())->run(['/no/such/file.cas'], $stdout, $stderr);
         rewind($stderr);
         $err = (string) stream_get_contents($stderr);

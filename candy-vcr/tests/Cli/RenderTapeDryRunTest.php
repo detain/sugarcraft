@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\Application;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Section I.1 — `candy-vcr render-tape --dry-run` runs Lexer + Parser +
@@ -19,8 +20,8 @@ final class RenderTapeDryRunTest extends TestCase
         $tape = $this->writeTape("Set Theme \"Dracula\"\nType \"hi\"\nEnter\n");
         $gifPath = sys_get_temp_dir() . '/candy-vcr-dryrun-' . bin2hex(random_bytes(4)) . '.gif';
 
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $this->assertNotFalse($stdout);
         $this->assertNotFalse($stderr);
 
@@ -69,8 +70,8 @@ final class RenderTapeDryRunTest extends TestCase
 
     public function testDryRunFailsCleanlyForMissingTape(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $this->assertNotFalse($stdout);
         $this->assertNotFalse($stderr);
 

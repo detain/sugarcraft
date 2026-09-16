@@ -11,6 +11,7 @@ use SugarCraft\Vcr\Cli\MigrateCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for MigrateCommand CLI.
@@ -35,8 +36,8 @@ final class MigrateCommandTest extends TestCase
 
     public function testMigrateShowsUsageWhenNoInput(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new MigrateCommand())->run([], $stdout, $stderr);
         rewind($stdout);
         rewind($stderr);
@@ -49,8 +50,8 @@ final class MigrateCommandTest extends TestCase
 
     public function testMigrateUnknownOption(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new MigrateCommand())->run(['--unknown-opt'], $stdout, $stderr);
         rewind($stdout);
         rewind($stderr);
@@ -65,8 +66,8 @@ final class MigrateCommandTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
         $this->writeCassette($path);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new MigrateCommand())->run([$path, 'out1.cas', 'out2.cas'], $stdout, $stderr);
             rewind($stdout);
             rewind($stderr);
@@ -81,8 +82,8 @@ final class MigrateCommandTest extends TestCase
 
     public function testMigrateUnreadableFile(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new MigrateCommand())->run(['/no/such/path.cas'], $stdout, $stderr);
         rewind($stdout);
         rewind($stderr);
@@ -97,8 +98,8 @@ final class MigrateCommandTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
         file_put_contents($path, "not valid json\n");
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new MigrateCommand())->run([$path], $stdout, $stderr);
             rewind($stdout);
             rewind($stderr);
@@ -117,8 +118,8 @@ final class MigrateCommandTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
         $this->writeCassette($path, 2);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new MigrateCommand())->run([$path], $stdout, $stderr);
             rewind($stdout);
             rewind($stderr);
@@ -137,8 +138,8 @@ final class MigrateCommandTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'cv-migrate-');
         $this->writeCassette($path, 1);
         try {
-            $stdout = fopen('php://memory', 'w+');
-            $stderr = fopen('php://memory', 'w+');
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
             $exit = (new MigrateCommand())->run([$path, '--dry-run'], $stdout, $stderr);
             rewind($stdout);
             rewind($stderr);
@@ -153,8 +154,8 @@ final class MigrateCommandTest extends TestCase
 
     public function testMigrateInfoFlag(): void
     {
-        $stdout = fopen('php://memory', 'w+');
-        $stderr = fopen('php://memory', 'w+');
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
         $exit = (new MigrateCommand())->run(['--info'], $stdout, $stderr);
         rewind($stdout);
         rewind($stderr);

@@ -155,9 +155,8 @@ final class TapeToGif
                 $frameHoldsMs[] = (int) round($frameInfo['hold'] * 1000);
 
                 // Handle screenshot capture — confined to output directory for safety
-                if (($frameInfo['screenshotPath'] ?? false) !== false) {
-                    $rawScreenshotPath = $frameInfo['screenshotPath'];
-                    $confinedPath = $this->confineScreenshotPath($rawScreenshotPath, $outputDir);
+                if (($frameInfo['screenshotPath'] ?? null) !== null) {
+                    $confinedPath = $this->confineScreenshotPath($frameInfo['screenshotPath'], $outputDir);
                     $screenshotImage = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
                     try {
                         $written = $screenshotImage instanceof \Imagick
@@ -302,7 +301,7 @@ final class TapeToGif
     }
 
     /**
-     * @return \Generator<int, array{snapshot:Snapshot, hold:float}>
+     * @return \Generator<int, array{snapshot: Snapshot, hold: float, screenshotPath: string|null}>
      */
     private function buildFramesWithHolds(FrameStream $frameStream, float $frameInterval): \Generator
     {

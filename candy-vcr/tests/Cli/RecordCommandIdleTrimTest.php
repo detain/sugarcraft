@@ -9,8 +9,10 @@ use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\Cli\ReplayCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Support\Scalars;
 use SugarCraft\Vcr\Recorder;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.3 — `--idle-trim` records both `t` (compressed) and `tRaw`
@@ -25,9 +27,9 @@ final class RecordCommandIdleTrimTest extends TestCase
 
     public function testIdleTrimRequiresPositiveSeconds(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
         try {
             $rc = $cmd->run(['--idle-trim=0', '--', '/bin/echo'], $stdout, $stderr);
             $this->assertSame(2, $rc);
@@ -42,9 +44,9 @@ final class RecordCommandIdleTrimTest extends TestCase
 
     public function testIdleTrimUsageStringMentionsTRaw(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
         try {
             $cmd->run(['--help'], $stdout, $stderr);
             \rewind($stderr);
@@ -60,8 +62,8 @@ final class RecordCommandIdleTrimTest extends TestCase
     public function testReplayUsageStringMentionsNoTrim(): void
     {
         $cmd = new ReplayCommand();
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
         try {
             $cmd->run([], $stdout, $stderr);
             \rewind($stderr);
@@ -140,7 +142,7 @@ final class RecordCommandIdleTrimTest extends TestCase
         // trimmed gap (≤ 0.2s above the first event); tRaw is the
         // real elapsed time (≥ 0.6s).
         $this->assertArrayHasKey('tRaw', $second->payload);
-        $tRaw = (float) $second->payload['tRaw'];
+        $tRaw = Scalars::float($second->payload['tRaw'], 'tRaw timestamp');
         $this->assertGreaterThanOrEqual(0.55, $tRaw, 'tRaw must reflect the real sleep');
         $this->assertLessThan(
             0.35,
@@ -170,8 +172,8 @@ final class RecordCommandIdleTrimTest extends TestCase
         $this->assertIsArray($pair);
         [$stdinRead, $stdinWrite] = $pair;
         $cmd = new RecordCommand($stdinRead);
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             // bash mini-script: print 'pre', sleep 1.2s, print 'post'.
@@ -199,7 +201,7 @@ final class RecordCommandIdleTrimTest extends TestCase
             // payload bytes contain 'post'. That event is the canary.
             $postEvent = null;
             foreach ($outputEvents as $event) {
-                if (\str_contains((string) ($event->payload['b'] ?? ''), 'post')) {
+                if (\str_contains(Scalars::string($event->payload['b'] ?? '', 'recorded output bytes'), 'post')) {
                     $postEvent = $event;
                     break;
                 }
@@ -210,7 +212,7 @@ final class RecordCommandIdleTrimTest extends TestCase
                 $postEvent->payload,
                 "'post' event must carry tRaw because it follows a >0.4s sleep",
             );
-            $tRaw = (float) $postEvent->payload['tRaw'];
+            $tRaw = Scalars::float($postEvent->payload['tRaw'], 'tRaw timestamp');
             $this->assertGreaterThanOrEqual(
                 1.0,
                 $tRaw,
@@ -245,8 +247,8 @@ final class RecordCommandIdleTrimTest extends TestCase
         $this->assertIsArray($pair2);
         [$stdinRead2, $stdinWrite2] = $pair2;
         $rec = new RecordCommand($stdinRead2);
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $rec->run([
@@ -260,8 +262,8 @@ final class RecordCommandIdleTrimTest extends TestCase
 
             // Default replay (no --no-trim) must finish well under the
             // recorded sleep — uses the compressed t.
-            $replayStdout = \fopen('php://memory', 'r+');
-            $replayStderr = \fopen('php://memory', 'r+');
+            $replayStdout = Stream::memory();
+            $replayStderr = Stream::memory();
             try {
                 $start = \microtime(true);
                 $replayRc = (new ReplayCommand())->run(

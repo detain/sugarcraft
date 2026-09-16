@@ -10,9 +10,6 @@ use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Matcher\EventMatcher;
 use SugarCraft\Vcr\Matcher\PassthroughMatcher;
 
-/**
- * @implements EventMatcher
- */
 final class StubEventMatcher implements EventMatcher
 {
     public function __construct(private readonly bool $result)
@@ -27,12 +24,6 @@ final class StubEventMatcher implements EventMatcher
 
 final class EventMatcherTest extends TestCase
 {
-    public function testPassthroughMatcherIsInstanceOfEventMatcher(): void
-    {
-        $matcher = new PassthroughMatcher();
-        $this->assertInstanceOf(EventMatcher::class, $matcher);
-    }
-
     public function testStubMatcherReturnsConfiguredResult(): void
     {
         $trueStub = new StubEventMatcher(true);

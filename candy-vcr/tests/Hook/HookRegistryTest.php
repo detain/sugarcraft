@@ -36,10 +36,11 @@ final class HookRegistryTest extends TestCase
     {
         $calls = [];
         $hook1 = new class ($calls, 1) implements Hook {
-            public function __construct(private array &$calls, private int $order)
+            /** @param list<int> $calls */
+            public function __construct(public array &$calls, private int $order)
             {
             }
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 $this->calls[] = $this->order;
                 return $event;
@@ -49,10 +50,11 @@ final class HookRegistryTest extends TestCase
             }
         };
         $hook2 = new class ($calls, 2) implements Hook {
-            public function __construct(private array &$calls, private int $order)
+            /** @param list<int> $calls */
+            public function __construct(public array &$calls, private int $order)
             {
             }
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 $this->calls[] = $this->order;
                 return $event;
@@ -97,10 +99,11 @@ final class HookRegistryTest extends TestCase
     {
         $calls = [];
         $hook1 = new class ($calls) implements Hook {
-            public function __construct(private array &$calls)
+            /** @param list<int> $calls */
+            public function __construct(public array &$calls)
             {
             }
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 return $event;
             }
@@ -110,10 +113,11 @@ final class HookRegistryTest extends TestCase
             }
         };
         $hook2 = new class ($calls) implements Hook {
-            public function __construct(private array &$calls)
+            /** @param list<int> $calls */
+            public function __construct(public array &$calls)
             {
             }
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 return $event;
             }
@@ -136,7 +140,7 @@ final class HookRegistryTest extends TestCase
     public function testAfterCaptureErrorsAreSwallowed(): void
     {
         $throwingHook = new class () implements Hook {
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 return $event;
             }
@@ -153,16 +157,18 @@ final class HookRegistryTest extends TestCase
 
         // Should not throw
         $registry->afterCapture($event);
-        $this->assertTrue(true);
+        // A throwing hook escaping afterCapture() is the failure mode; reaching
+        // here is the assertion.
+        $this->addToAssertionCount(1);
     }
 
     public function testChainedTransformations(): void
     {
         $doubleHook = new class () implements Hook {
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 $payload = $event->payload;
-                if (isset($payload['value'])) {
+                if (isset($payload['value']) && is_int($payload['value'])) {
                     $payload['value'] = $payload['value'] * 2;
                 }
                 return new Event($event->t, $event->kind, $payload);
@@ -178,6 +184,7 @@ final class HookRegistryTest extends TestCase
 
         $event = new Event(t: 0.1, kind: EventKind::Output, payload: ['value' => 5]);
         $result = $registry->beforeSave($event);
+        $this->assertNotNull($result);
 
         $this->assertSame(20, $result->payload['value']);
     }
@@ -188,7 +195,7 @@ final class HookRegistryTest extends TestCase
         $this->assertSame(0, $registry->count());
 
         $registry->addHook(new class () implements Hook {
-            public function beforeSave(Event $event): ?Event
+            public function beforeSave(Event $event): Event
             {
                 return $event;
             }

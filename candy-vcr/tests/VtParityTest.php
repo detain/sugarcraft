@@ -232,7 +232,7 @@ final class VtParityTest extends TestCase
             self::assertSame(
                 self::normaliseEmulator(self::feedEmulator($bytes)),
                 self::normaliseRenderer(self::feedRenderer($bytes)),
-                "ESC roster divergence: {$label}",
+                "ESC roster divergence: {$label} — " . self::DIVERGENCE_NOTE,
             );
         }
     }
@@ -653,7 +653,7 @@ final class VtParityTest extends TestCase
     private static function feedInChunksRenderer(string $bytes, int $size): RendererTerminal
     {
         $terminal = RendererTerminal::new(self::COLS, self::ROWS);
-        foreach (str_split($bytes, $size) as $chunk) {
+        foreach (str_split($bytes, max(1, $size)) as $chunk) {
             $terminal->feed($chunk);
         }
         return $terminal;
@@ -669,7 +669,7 @@ final class VtParityTest extends TestCase
     private static function feedInChunks(string $bytes, int $size): EmulatorTerminal
     {
         $terminal = EmulatorTerminal::new(self::COLS, self::ROWS);
-        foreach (str_split($bytes, $size) as $chunk) {
+        foreach (str_split($bytes, max(1, $size)) as $chunk) {
             $terminal->feed($chunk);
         }
         return $terminal;

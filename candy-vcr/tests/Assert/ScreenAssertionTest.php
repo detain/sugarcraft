@@ -5,16 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests\Assert;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Vcr\Assert\Assertion;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
 
 final class ScreenAssertionTest extends TestCase
 {
-    public function testImplementsAssertion(): void
-    {
-        $this->assertInstanceOf(Assertion::class, new ScreenAssertion());
-    }
-
     public function testIdenticalBytesPass(): void
     {
         $r = (new ScreenAssertion())->compare("hello", "hello");

@@ -21,6 +21,7 @@ use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Round-trip integration: record a Program session, then replay it
@@ -30,8 +31,10 @@ final class PlayerTest extends TestCase
 {
     public function testInstantSpeedConstantExists(): void
     {
-        $this->assertSame(0, Player::SPEED_INSTANT);
-        $this->assertSame(1, Player::SPEED_REALTIME);
+        $instant = (new \ReflectionClassConstant(Player::class, 'SPEED_INSTANT'))->getValue();
+        $realtime = (new \ReflectionClassConstant(Player::class, 'SPEED_REALTIME'))->getValue();
+        $this->assertSame(0, $instant);
+        $this->assertSame(1, $realtime);
     }
 
     public function testCassetteAccessorExposesUnderlyingCassette(): void
@@ -156,7 +159,7 @@ final class PlayerTest extends TestCase
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         $this->assertNotFalse($sockets);
         [$reader, $writer] = $sockets;
-        $output = fopen('php://memory', 'w+');
+        $output = Stream::memory('w+');
         $this->assertNotFalse($output);
 
         $loop = new StreamSelectLoop();
@@ -194,7 +197,12 @@ final class PlayerTest extends TestCase
 
     private function programFactory(int $quitAfter, bool $divergent = false): \Closure
     {
-        return static function ($input, $output, LoopInterface $loop) use ($quitAfter, $divergent): Program {
+        $factory = static function ($input, $output, LoopInterface $loop) use ($quitAfter, $divergent): Program {
+            // Player hands the factory stream resources; parse that contract
+            // at the boundary instead of trusting mixed all the way down.
+            if (!is_resource($input) || !is_resource($output)) {
+                throw new \TypeError('program factory expects stream resources');
+            }
             return new Program(
                 new TickModel(quitAfter: $quitAfter, divergent: $divergent),
                 new ProgramOptions(
@@ -208,6 +216,8 @@ final class PlayerTest extends TestCase
                 ),
             );
         };
+
+        return $factory;
     }
 
     private function stubHeader(): CassetteHeader

@@ -66,7 +66,10 @@ final class JsonableSerializer implements MsgSerializer
     {
         $tag = $envelope['@type'] ?? '';
         if (!is_string($tag) || !class_exists($tag)) {
-            throw new \RuntimeException("JsonableSerializer cannot resolve class for @type '{$tag}'");
+            // This branch runs precisely when $tag may not be a string —
+            // name its type instead of interpolating a non-string.
+            $label = is_string($tag) ? "'{$tag}'" : get_debug_type($tag);
+            throw new \RuntimeException("JsonableSerializer cannot resolve class for @type {$label}");
         }
         if (!is_a($tag, Msg::class, true)) {
             throw new \RuntimeException("JsonableSerializer: class {$tag} does not implement SugarCraft\\Core\\Msg");

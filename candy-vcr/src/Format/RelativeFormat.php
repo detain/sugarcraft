@@ -8,6 +8,8 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
+use SugarCraft\Vcr\Support\ObjectMap;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * JSONL cassette serializer that uses relative/delta timestamps (dt) instead
@@ -114,7 +116,7 @@ final class RelativeFormat implements Format
     /**
      * Decode dt lines back to absolute timestamps.
      *
-     * @param list<array<string, mixed>> $eventsData
+     * @param list<array<array-key, mixed>> $eventsData
      * @return list<Event>
      */
     private function decodeEvents(array $eventsData): array
@@ -152,7 +154,7 @@ final class RelativeFormat implements Format
         return $this->jsonEncode($data);
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     private function decodeHeader(array $data, int $lineNo): CassetteHeader
     {
         if (!isset($data['v'])) {
@@ -172,11 +174,11 @@ final class RelativeFormat implements Format
             }
         }
         return new CassetteHeader(
-            version: (int) $data['v'],
-            createdAt: (string) $data['created'],
-            cols: (int) $data['cols'],
-            rows: (int) $data['rows'],
-            runtime: (string) $data['runtime'],
+            version: Scalars::int($data['v'], 'header v'),
+            createdAt: Scalars::string($data['created'], 'header created'),
+            cols: Scalars::int($data['cols'], 'header cols'),
+            rows: Scalars::int($data['rows'], 'header rows'),
+            runtime: Scalars::string($data['runtime'], 'header runtime'),
             timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
             env: $env,
         );
@@ -185,28 +187,29 @@ final class RelativeFormat implements Format
     /**
      * Decode one event line, converting dt to absolute t.
      *
-     * @param array<string, mixed> $data
+     * @param array<array-key, mixed> $data
      */
     private function decodeEvent(array $data, int $lineNo, float $cumulativeBase): Event
     {
         if (!array_key_exists('dt', $data) || !array_key_exists('k', $data)) {
             throw new \RuntimeException("candy-vcr: event on line {$lineNo} missing 'dt' or 'k'");
         }
-        $kind = EventKind::tryFrom((string) $data['k']);
+        $kind = EventKind::tryFrom(Scalars::string($data['k'], 'event k'));
         if ($kind === null) {
-            $bad = (string) $data['k'];
+            $bad = Scalars::string($data['k'], 'event k');
             throw new \RuntimeException("candy-vcr: event on line {$lineNo} has unknown kind '{$bad}'");
         }
-        $dt = (float) $data['dt'];
+        $dt = Scalars::float($data['dt'], 'event dt');
         if ($dt < 0) {
             throw new \InvalidArgumentException("candy-vcr: negative dt on line {$lineNo}");
         }
         $absoluteT = round($cumulativeBase + $dt, self::T_PRECISION);
         unset($data['dt'], $data['k']);
-        return new Event(t: $absoluteT, kind: $kind, payload: $data);
+
+        return new Event(t: $absoluteT, kind: $kind, payload: ObjectMap::of($data, "event on line {$lineNo} payload"));
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     private function jsonEncode(array $data): string
     {
         $json = json_encode($data, JSON_UNESCAPED_SLASHES);

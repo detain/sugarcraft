@@ -627,6 +627,9 @@ final class Compiler
         );
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
     private function emitEvent(EventKind $kind, array $payload): void
     {
         $this->events[] = new Event(

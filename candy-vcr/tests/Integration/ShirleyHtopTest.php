@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Support\Scalars;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.5 — Shirley-style integration: record a real htop session,
@@ -83,8 +85,8 @@ final class ShirleyHtopTest extends TestCase
         [$stdinRead, $stdinWrite] = $pair;
 
         $cmd = new RecordCommand($stdinRead);
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $start = \microtime(true);
@@ -120,7 +122,7 @@ final class ShirleyHtopTest extends TestCase
             $sawQuit = false;
             foreach ($loaded->events as $event) {
                 if ($event->kind === EventKind::Output) {
-                    $allOutput .= (string) ($event->payload['b'] ?? '');
+                    $allOutput .= Scalars::string($event->payload['b'] ?? '', 'recorded output bytes');
                 } elseif ($event->kind === EventKind::Quit) {
                     $sawQuit = true;
                 }

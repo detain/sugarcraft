@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.2 — `--env` flag with secret-name regex filter. The plan's
@@ -222,9 +223,9 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-env-');
         $this->assertIsString($cassette);
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(
@@ -255,9 +256,9 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-noenv-');
         $this->assertIsString($cassette);
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(
@@ -287,9 +288,9 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         $cassette = \tempnam(\sys_get_temp_dir(), 'rec-envall-');
         $this->assertIsString($cassette);
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(
@@ -323,9 +324,9 @@ final class RecordCommandEnvFilterTest extends TestCase
 
     public function testInvalidEnvRegexExitsTwo(): void
     {
-        $cmd = new RecordCommand(\fopen('/dev/null', 'r'));
-        $stdout = \fopen('php://memory', 'r+');
-        $stderr = \fopen('php://memory', 'r+');
+        $cmd = new RecordCommand(Stream::devNull());
+        $stdout = Stream::memory();
+        $stderr = Stream::memory();
 
         try {
             $rc = $cmd->run(

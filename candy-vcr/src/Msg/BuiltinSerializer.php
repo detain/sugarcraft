@@ -25,6 +25,7 @@ use SugarCraft\Core\Msg\PasteEndMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\PasteStartMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * Serializer for the candy-core Msg classes commonly produced by the
@@ -67,8 +68,8 @@ final class BuiltinSerializer implements MsgSerializer
                     'shift' => $m->shift,
                 ],
                 'decode' => static fn (array $e): KeyMsg => new KeyMsg(
-                    type: KeyType::from((string) $e['type']),
-                    rune: (string) ($e['rune'] ?? ''),
+                    type: KeyType::from(Scalars::string($e['type'] ?? '', 'KeyMsg type')),
+                    rune: Scalars::string($e['rune'] ?? '', 'KeyMsg rune'),
                     alt: (bool) ($e['alt'] ?? false),
                     ctrl: (bool) ($e['ctrl'] ?? false),
                     shift: (bool) ($e['shift'] ?? false),
@@ -85,8 +86,8 @@ final class BuiltinSerializer implements MsgSerializer
                     'rows' => $m->rows,
                 ],
                 'decode' => static fn (array $e): WindowSizeMsg => new WindowSizeMsg(
-                    cols: (int) $e['cols'],
-                    rows: (int) $e['rows'],
+                    cols: Scalars::int($e['cols'] ?? 0, 'WindowSizeMsg cols'),
+                    rows: Scalars::int($e['rows'] ?? 0, 'WindowSizeMsg rows'),
                 ),
             ],
             FocusGainedMsg::class => [
@@ -115,7 +116,7 @@ final class BuiltinSerializer implements MsgSerializer
                     'content' => $m->content,
                 ],
                 'decode' => static fn (array $e): PasteMsg => new PasteMsg(
-                    content: (string) ($e['content'] ?? ''),
+                    content: Scalars::string($e['content'] ?? '', 'PasteMsg content'),
                 ),
             ],
             BackgroundColorMsg::class => [
@@ -124,9 +125,9 @@ final class BuiltinSerializer implements MsgSerializer
                     'r' => $m->r, 'g' => $m->g, 'b' => $m->b,
                 ],
                 'decode' => static fn (array $e): BackgroundColorMsg => new BackgroundColorMsg(
-                    r: (int) $e['r'],
-                    g: (int) $e['g'],
-                    b: (int) $e['b'],
+                    r: Scalars::int($e['r'] ?? 0, 'BackgroundColorMsg r'),
+                    g: Scalars::int($e['g'] ?? 0, 'BackgroundColorMsg g'),
+                    b: Scalars::int($e['b'] ?? 0, 'BackgroundColorMsg b'),
                 ),
             ],
             ForegroundColorMsg::class => [
@@ -135,9 +136,9 @@ final class BuiltinSerializer implements MsgSerializer
                     'r' => $m->r, 'g' => $m->g, 'b' => $m->b,
                 ],
                 'decode' => static fn (array $e): ForegroundColorMsg => new ForegroundColorMsg(
-                    r: (int) $e['r'],
-                    g: (int) $e['g'],
-                    b: (int) $e['b'],
+                    r: Scalars::int($e['r'] ?? 0, 'ForegroundColorMsg r'),
+                    g: Scalars::int($e['g'] ?? 0, 'ForegroundColorMsg g'),
+                    b: Scalars::int($e['b'] ?? 0, 'ForegroundColorMsg b'),
                 ),
             ],
             CursorPositionMsg::class => [
@@ -146,8 +147,8 @@ final class BuiltinSerializer implements MsgSerializer
                     'row' => $m->row, 'col' => $m->col,
                 ],
                 'decode' => static fn (array $e): CursorPositionMsg => new CursorPositionMsg(
-                    row: (int) $e['row'],
-                    col: (int) $e['col'],
+                    row: Scalars::int($e['row'] ?? 0, 'CursorPositionMsg row'),
+                    col: Scalars::int($e['col'] ?? 0, 'CursorPositionMsg col'),
                 ),
             ],
             FocusInMsg::class => [
@@ -178,17 +179,21 @@ final class BuiltinSerializer implements MsgSerializer
         if (!isset($this->handlers[$class])) {
             throw new \LogicException("BuiltinSerializer cannot encode {$class}");
         }
-        return ($this->handlers[$class]['encode'])($msg);
+        /** @var \Closure(Msg): array<string, mixed> $encoder */
+        $encoder = $this->handlers[$class]['encode'];
+        return $encoder($msg);
     }
 
     public function decode(array $envelope): Msg
     {
-        $tag = $envelope['@type'] ?? '';
-        $class = self::classForTag((string) $tag);
+        $tag = Scalars::string($envelope['@type'] ?? '', 'BuiltinSerializer @type');
+        $class = self::classForTag($tag);
         if ($class === null || !isset($this->handlers[$class])) {
             throw new \LogicException("BuiltinSerializer cannot decode '{$tag}'");
         }
-        return ($this->handlers[$class]['decode'])($envelope);
+        /** @var \Closure(array<string, mixed>): Msg $decoder */
+        $decoder = $this->handlers[$class]['decode'];
+        return $decoder($envelope);
     }
 
     /**
@@ -242,7 +247,7 @@ final class BuiltinSerializer implements MsgSerializer
     private static function mouseHandler(string $class, string $tag): array
     {
         return [
-            'encode' => static fn ($m): array => [
+            'encode' => static fn (MouseClickMsg|MouseMotionMsg|MouseWheelMsg|MouseReleaseMsg $m): array => [
                 '@type' => $tag,
                 'x' => $m->x,
                 'y' => $m->y,
@@ -253,10 +258,10 @@ final class BuiltinSerializer implements MsgSerializer
                 'ctrl' => $m->ctrl,
             ],
             'decode' => static fn (array $e) => new $class(
-                x: (int) $e['x'],
-                y: (int) $e['y'],
-                button: MouseButton::from((string) $e['button']),
-                action: MouseAction::from((string) $e['action']),
+                x: Scalars::int($e['x'] ?? 0, "{$tag} x"),
+                y: Scalars::int($e['y'] ?? 0, "{$tag} y"),
+                button: MouseButton::from(Scalars::string($e['button'] ?? '', "{$tag} button")),
+                action: MouseAction::from(Scalars::string($e['action'] ?? '', "{$tag} action")),
                 shift: (bool) ($e['shift'] ?? false),
                 alt: (bool) ($e['alt'] ?? false),
                 ctrl: (bool) ($e['ctrl'] ?? false),
