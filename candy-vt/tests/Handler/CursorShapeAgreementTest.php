@@ -26,10 +26,11 @@ use SugarCraft\Vt\Mode\Mode;
  * and the candy-vcr rasterizers drive a different Cursor class), which is
  * exactly why the divergence went unnoticed — it is a broken internal
  * invariant and an API contract any future renderer will rely on. Every test
- * here asserts BOTH fields and their agreement. Each BEHAVIOURAL case is
- * seeded from a non-default shape (4, 5 or 6) so it cannot be satisfied by the
- * accidental 0 that is the symptom; the two tests that deliberately pin 0
- * (default construction, and RIS) say so in their own comments.
+ * asserts BOTH fields; every behavioural case asserts their agreement and
+ * seeds from a non-default shape (4, 5 or 6) so it cannot be satisfied by the
+ * accidental 0 that is the symptom. The two tests that deliberately pin 0
+ * (default construction, and RIS) and the one probe that deliberately seeds a
+ * divergent pair say so in their own comments.
  *
  * Per-path expected outcomes, all from xterm-411 `charproc.c` (line numbers
  * cited at each site in ScreenHandler):
