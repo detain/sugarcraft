@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Glow\Tests;
 
 use SugarCraft\Glow\GlowModel;
+use SugarCraft\Glow\ReloadTickMsg;
 use SugarCraft\Glow\RenderCommand;
+use SugarCraft\Shine\Renderer;
 use SugarCraft\Shine\Theme;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -554,5 +556,61 @@ final class RenderCommandTest extends TestCase
         $this->assertStringContainsString('line1', $model->view());
         // The model should not be exited initially.
         $this->assertFalse($model->isExited());
+    }
+
+    public function testPagerFileWatchIsWiredIntoTheExecuteBranch(): void
+    {
+        // E735 step 10.25 CLI half: execute() must hoist the file argument
+        // and arm the pump ONLY for a file pager — stdin has nothing to
+        // watch. Source-scan pin (house idiom): the wiring is a Program
+        // branch that cannot be unit-invoked without blocking on run().
+        $method = new ReflectionMethod(RenderCommand::class, 'execute');
+        $lines  = array_slice(
+            file((string) $method->getFileName()),
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        );
+        $body = implode('', $lines);
+
+        $this->assertMatchesRegularExpression(
+            '/\$fileArg\s*=\s*\(string\)\s*\(\$input->getArgument\([\'"]file[\'"]\)/',
+            $body,
+            'execute() must hoist the file argument once for both branches'
+        );
+        $this->assertMatchesRegularExpression(
+            '/if \(\$fileArg !== [\'"]{2}\) \{\s*\$model = self::armPagerWatch\(\$model, \$fileArg, \$renderer\);/',
+            $body,
+            'the pager branch must arm the watch behind the non-empty-file gate'
+        );
+        $this->assertSame(1, substr_count($body, 'self::armPagerWatch('), 'exactly one arming call site');
+    }
+
+    public function testArmPagerWatchReloadsThroughTheLiveRenderer(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'glow-arm-') . '.md';
+        file_put_contents($path, "# Alpha Title\n\nfirst body\n");
+
+        try {
+            $renderer = new Renderer(Theme::dark(), 60);
+            $method   = new ReflectionMethod(RenderCommand::class, 'armPagerWatch');
+            $method->setAccessible(true);
+            $model = $method->invoke(null, GlowModel::fromContent('stale', 60, 10), $path, $renderer);
+
+            $this->assertTrue($model->isWatching());
+
+            file_put_contents($path, "# Bravo Title\n\nsecond body\n");
+            clearstatcache();
+
+            [$reloaded, $cmd] = $model->update(new ReloadTickMsg());
+            $this->assertNotNull($cmd, 'arming the watch keeps the re-arm chain alive');
+            $this->assertSame(1, $reloaded->reloadCount);
+            // Re-rendered through the live Renderer, not copied verbatim:
+            // headings reach the view styled but text intact.
+            $view = $reloaded->view();
+            $this->assertStringContainsString('Bravo Title', $view);
+            $this->assertStringNotContainsString('Alpha Title', $view);
+        } finally {
+            @unlink($path);
+        }
     }
 }

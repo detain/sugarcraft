@@ -59,6 +59,52 @@ final class FileWatcher
     }
 
     /**
+     * Current (mtime, size) fingerprint of a file, or null when the path is
+     * not a readable regular file. Baseline for {@see pollTuple()}.
+     *
+     * E735 step 10.25: the pager's auto-reload sweep takes one snapshot per
+     * tick without sleeping — unlike {@see watch()}, this is a single-shot
+     * probe, so the E714 pump contract has nothing to bound here.
+     *
+     * @return array{0:int, 1:int}|null
+     */
+    public static function snapshot(string $path): ?array
+    {
+        if (is_file($path) === false) {
+            return null;
+        }
+
+        clearstatcache();
+        $mtime = @filemtime($path);
+        $size  = @filesize($path);
+
+        return $mtime === false ? null : [$mtime, $size === false ? 0 : $size];
+    }
+
+    /**
+     * One non-blocking change check against a (mtime, size) baseline.
+     *
+     * Returns the NEW fingerprint when the file moved off the baseline (or
+     * appeared where it was absent — baseline [0, 0]), null when unchanged
+     * or still missing. This is the same tuple law {@see watch()} runs on
+     * every sweep, exposed for callers that poll from a tick pump instead
+     * of driving a Generator (the pager's auto-reload, E735 step 10.25).
+     *
+     * @param int $lastMtime baseline mtime (0 = "file assumed absent")
+     * @param int $lastSize  baseline size in bytes (0 pairs with mtime 0)
+     * @return array{0:int, 1:int}|null
+     */
+    public static function pollTuple(string $path, int $lastMtime, int $lastSize): ?array
+    {
+        $current = self::snapshot($path);
+        if ($current === null) {
+            return null;
+        }
+
+        return ($current[0] !== $lastMtime || $current[1] !== $lastSize) ? $current : null;
+    }
+
+    /**
      * Sleep duration in microseconds for the Nth consecutive no-change sweep:
      * 1ms floor, doubling per sweep, capped at $capMicroseconds (E714 ladder).
      *
@@ -109,15 +155,12 @@ final class FileWatcher
      */
     public static function watch(string $path, int $intervalMs = 500, ?callable $idleSleeper = null): \Generator
     {
-        if (is_file($path) === false) {
+        $baseline = self::snapshot($path);
+        if ($baseline === null) {
             return;
         }
 
-        $lastMtime = @filemtime($path);
-        $lastSize  = @filesize($path);
-        if ($lastMtime === false) {
-            return;
-        }
+        [$lastMtime, $lastSize] = $baseline;
 
         // The pump refuses a cap below the ladder floor (a zero/negative
         // interval would otherwise usleep(0)-spin); the pure ladder itself
@@ -138,13 +181,9 @@ final class FileWatcher
                 $idleSleeper
             );
 
-            clearstatcache();
-            $currentMtime = @filemtime($path);
-            $currentSize  = @filesize($path);
-
-            if ($currentMtime !== false && ($currentMtime !== $lastMtime || $currentSize !== $lastSize)) {
-                $lastMtime = $currentMtime;
-                $lastSize  = $currentSize;
+            $changed = self::pollTuple($path, $lastMtime, $lastSize);
+            if ($changed !== null) {
+                [$lastMtime, $lastSize] = $changed;
                 // Any change batch snaps the ladder back to the 1ms floor.
                 $consecutiveIdleSweeps = 0;
                 yield true;

@@ -37,7 +37,10 @@ Flags:
   — picks a CandyShine preset. `solarized`, `monokai`, and `github` load
   JSON theme files from `themes/`.
 - `--style` / `-s` — alias for `--theme` (glamour-compat).
-- `--theme-config <path>` — load a custom JSON theme via
+- `--theme-config <path>` — load a custom JSON theme. Two shapes are
+  detected automatically: a **glamour** config (top-level `"document"`
+  block with nested element/chroma maps) is mapped by `GlamourTheme` onto
+  a CandyShine `Theme`; the historic flat colour map goes through
   `Theme::fromJson`. Overrides `--theme`.
 - `--width` / `-w <N>` — word-wrap paragraphs / blockquotes / list bodies.
   0 = no wrap.
@@ -59,6 +62,12 @@ Standard reader keys come from `Viewport`:
 | `Home` / `g` | top |
 | `End` / `G` | bottom |
 | `q` / `Esc` / `Ctrl+C` | exit |
+
+When the pager is opened on a file (not stdin) it **auto-reloads**: the
+model polls the source with `FileWatcher::pollTuple()` on a 0.5 s idle
+tick and re-renders in place whenever the mtime/size tuple changes, so
+edits to the Markdown appear without restarting. A delete-and-recreate
+keeps the last good frame until the file returns.
 
 ## Demos
 
@@ -93,7 +102,21 @@ if ($watcher->hasChangedSince($lastMtime)) {
 foreach (FileWatcher::watch('/path/to/file.md', 500) as $changed) {
     // $changed === true each time the file is modified
 }
+
+// Stateless tuple API (drives the pager's auto-reload):
+$base = FileWatcher::snapshot($path) ?? [0, 0];      // [mtime, size]
+$changed = FileWatcher::pollTuple($path, ...$base);  // new tuple or null
 ```
+
+### GlamourTheme
+
+`GlamourTheme` parses charmbracelet/glamour style JSON (a `"document"`
+block, per-element `StylePrimitive` maps, and a `chroma` token map) and
+projects it onto CandyShine's `Theme`: document block affixes, indent and
+margin, heading/paragraph/inline element styles, and the Keyword /
+LiteralString / LiteralNumber / Comment chroma families. Unmappable fields
+are exposed verbatim through `element()` / `chroma()` for integrations
+that need them.
 
 ### Width helpers
 

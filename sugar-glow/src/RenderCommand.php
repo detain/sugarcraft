@@ -60,7 +60,8 @@ final class RenderCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $raw = self::loadInput((string) ($input->getArgument('file') ?? ''));
+        $fileArg = (string) ($input->getArgument('file') ?? '');
+        $raw = self::loadInput($fileArg);
         if ($raw === null) {
             $output->writeln('<error>no input</error>');
             return Command::FAILURE;
@@ -101,8 +102,15 @@ final class RenderCommand extends Command
         }
 
         // Pager mode: drop into a Program with a Viewport-backed Model.
+        // A file argument also arms auto-reload (E735 step 10.25): the pager
+        // re-reads and re-renders the SAME file through the SAME renderer —
+        // theme, width and hyperlink choices survive every reload frame.
+        // Stdin input has nothing to watch and never arms the pump.
         $size  = (new Tty())->size();
         $model = self::buildPagerModel($rendered, $size['cols'], $size['rows']);
+        if ($fileArg !== '') {
+            $model = self::armPagerWatch($model, $fileArg, $renderer);
+        }
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,
@@ -185,6 +193,12 @@ final class RenderCommand extends Command
      * {@see Theme::fromJson()} slurps the whole file unbounded; reading at
      * most {@see self::MAX_THEME_CONFIG_BYTES}+1 bytes here bounds memory and
      * rejects an oversized config instead of letting it through to the decoder.
+     *
+     * Two JSON schemas are accepted (E735 step 10.25): a top-level
+     * `document` OBJECT marks a glamour style file and routes through
+     * {@see GlamourTheme::toShineTheme()} via the sniff below; anything else
+     * keeps the historic flat per-element shape. The signatures cannot
+     * collide — the flat schema has no `document` key.
      */
     private static function loadThemeConfig(string $path): Theme
     {
@@ -198,6 +212,12 @@ final class RenderCommand extends Command
                 'limit' => self::MAX_THEME_CONFIG_BYTES,
             ]));
         }
+
+        $decoded = json_decode($raw, associative: true);
+        if (is_array($decoded) && GlamourTheme::isGlamourSchema($decoded)) {
+            return GlamourTheme::fromDecoded($decoded)->toShineTheme();
+        }
+
         return Theme::fromJsonString($raw);
     }
 
@@ -207,5 +227,15 @@ final class RenderCommand extends Command
     private static function buildPagerModel(string $rendered, int $cols, int $rows): GlowModel
     {
         return GlowModel::fromContent($rendered, $cols, $rows);
+    }
+
+    /**
+     * Arm the pager's file-watch pump (E735 step 10.25). The reload closure
+     * re-renders fresh Markdown with the live {@see Renderer}, so a save
+     * while paging shows the updated document with identical styling.
+     */
+    private static function armPagerWatch(GlowModel $model, string $path, Renderer $renderer): GlowModel
+    {
+        return $model->withWatch($path, static fn(string $markdown): string => $renderer->render($markdown));
     }
 }
