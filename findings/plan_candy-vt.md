@@ -6,6 +6,8 @@ updated: 2026-06-30
 
 # Implementation Plan: candy-vt
 
+> **SUPERSEDED (2026-09-16, on master `aeb34bee4`) — the `CellGrid` tasks are moot; `src/CellGrid.php` was deleted.** **§2.1** (and its §12.1 / §12.6 follow-ons and the phase-summary table row) target `CellGrid::set()`/`resize()` in `src/CellGrid.php`. That class was collapsed into `src/Buffer/Buffer.php` by commit `40cfe4e3b`, landed via **PR #1447 (merge `f7fe7c33b`)**; `CsiHandlerImpl` now uses `Buffer` directly (`candy-vt/src/Parser/CsiHandlerImpl.php:92`). There is no `CellGrid` left to change. Original prose is preserved for history; see the matching note atop `findings/candy-vt.md`.
+
 ## Goal
 
 Address all 31 findings from the candy-vt code review, organized into phases by severity and dependency order, ensuring thread-safety, immutability contracts, API completeness, and reduced maintenance burden.
