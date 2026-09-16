@@ -11598,9 +11598,10 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
-## ROUND 83 (2026-09-16) — PHASE 5 (docs-minted hygiene + adjudication, E729–E740) ships CLOSED: twelve lanes r1–r11 + s1–s4 in three waves + two in-round upstream merges; floor 11,991 → 12,027 (one sugar-crush lane: E737); `failOnWarning` mandate COMPLETE repo-wide 58/58; census survivors 3 (E731/E735/E736)
+## ROUND 83 (2026-09-16) — PHASE 5 (docs-minted hygiene + adjudication, E729–E740) ships CLOSED: twelve lanes r1–r11 + s1–s4 in three waves + three in-round upstream merges (#1429–#1435 became the W3 base; #1436 absorbed at the close); floor 11,991 → 12,027 (one sugar-crush lane: E737); `failOnWarning` mandate COMPLETE repo-wide 58/58; census survivors 3 (E731/E735/E736)
 
-**Closed 2026-09-16 at the wave-3 weld (code tip `c9a0cafff`, docs atop); NEVER pushed.** The round opened
+**Closed 2026-09-16 at the wave-3 weld (code tip `c9a0cafff`, docs atop; final tip `14428ef61` after the
+closing absorb-merge); NEVER pushed.** The round opened
 from the operator's PHASE-5 MINT — E729–E737 minted at `c65e56c57` after the big upstream merge
 `61b28175c` (w4 review wave, re-pin `052025282`) — plus E738–E740 minted at the wave-1 weld. Every
 reviewed APPROVE-class; all twelve lanes shipped.
@@ -11636,6 +11637,14 @@ reviewed APPROVE-class; all twelve lanes shipped.
   overlap between the upstream delta and the four picks before any cherry-pick (no `sugar-crush/` path
   touched; pick libs untouched), the weld went onto the LIVE tip, all four picks landed stat-identical,
   and ff-only into master was preserved. Deviation documented in the closeout REPORT.
+- **The base moved a SECOND time, mid-closeout** (PR #1436 sugar-toast/sugar-calendar ANSI16 indexing +
+  origin-sync merge → `a12aed306`, again ZERO overlap with every weld path — verified via diff --stat).
+  Because the closeout docs had already committed and cite the eight weld SHAs, the correct absorb is a
+  MERGE (`git merge a12aed306` onto the weld branch → `14428ef61`), NOT a rebase — rebasing would have
+  orphaned every ledger-cited SHA into dangling objects (the campaign's worst failure mode). Master then
+  advanced by the literal step-8 `git merge --ff-only`. Post-merge guards + both repo tools re-run:
+  byte-identical green (127T/7410A, rc0/rc0). LAW: when closeout docs cite weld SHAs, absorb later master
+  moves by merge, never rebase.
 - **Config md5 law hit its first legitimate supersession**: the standing pin `05480c74…2210` was retired
   by the OPERATOR's own commit `e2818fd15` (added `trustedProjectMcp` to tracked `.sugar-crush/config.json`,
   +4/−1, benign). New at-rest truth `d96e124ee7967eb34ef479ef824231ad`, start==end verified in BOTH trees
