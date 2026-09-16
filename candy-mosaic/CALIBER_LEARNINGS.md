@@ -162,20 +162,38 @@ kept as design rationale for what shipped._
    with shuffled delays — this is also why GIF test fixtures are generated from GD
    `imagegif()` per frame (shared 4-slot GCT, `imagecreate` reserves index 0 as
    black) rather than hand-rolled LZW (see `tests/Support/AnimatedImageFixtures.php`).
-   mosaic now counts GIF image descriptors with its OWN correct structural walk
-   (`ImageSource::countGifFrames`), guards the aggregate on that count BEFORE
-   calling flip, and REFUSES (`animation.gif_frame_count_mismatch`) whenever flip's
-   decoded count disagrees — never a silently short animation. flip also emits raw
-   GD warnings on corrupt GIFs, so `decodeGifFramesSafely()` wraps the call in a
-   throwing error handler and maps any failure to one translated fail-fast.
-   **Sixel DCS-state safety (round 1):** a sixel payload is exactly one DCS, so a
-   half-written stream (a consumer `$write` throwing on a closed pipe, or a GD load
-   error mid-band) strands the terminal inside DECGXL and swallows later output;
-   `encodeInto()` now emits the string terminator from a `finally` when the header
-   reached the wire but the terminator did not, and `TmuxPassthroughDecorator::
-   encodeBandStream()` opens the `\x1bPtmux;` envelope LAZILY on the first real chunk
-   (early inner failure writes nothing) and guarantees the outer terminator in a
-   `finally`. Both keep byte-identity with `render()` on the happy path.
+    mosaic now counts GIF image descriptors with its OWN correct structural walk
+    (`ImageSource::countGifFrames`) AND predicts candy-flip's return with a faithful
+    clone of flip's buggy walk (`ImageSource::countGifFramesAsFlipWalks` — same LZW
+    mis-skip, same "step one byte on an unknown block", same 256-frame slice). The
+    aggregate guard uses the WORST of the two counts, and the two are reconciled
+    BEFORE flip is ever called: because the predictor reproduces flip exactly (verified
+    — it equals `count(FlipDecoder::decode())` on clean GIFs and predicts flip's 1-frame
+    desync on the 10-frame fixture without running it), a stream flip would decode
+    wrongly is refused cheaply (`animation.gif_frame_count_mismatch`) instead of buying
+    a few-hundred-MB materialise-then-reject. flip stores one PHP array per cell, so
+    the RGBA-tuned `MAX_PIXELS` is NOT a memory bound for it — a separate
+    `FLIP_MAX_TOTAL_CELLS` caps the aggregate grid handed to the sibling, and
+    `FLIP_MAX_CELLS` (flip's 100k per-frame grid ceiling) is checked up front so a
+    ~316×316+ GIF gets a mosaic message, not flip's untranslated exception. flip also
+    emits raw GD warnings on corrupt GIFs, so `decodeGifFramesSafely()` wraps the call
+    in a throwing error handler and maps any failure to one translated fail-fast.
+    **Sixel DCS-state safety (rounds 1-2):** a sixel payload is exactly one DCS, so a
+    half-written stream (a consumer `$write` throwing on a closed pipe, or a GD load
+    error mid-band) strands the terminal inside DECGXL and swallows later output;
+    `encodeInto()` emits the string terminator from a `finally` when the header reached
+    the wire but the terminator did not. The "header delivered" flag is set BEFORE the
+    `$write($head)` call, not after — a pty consumer that flushes bytes then dies on the
+    FIRST write still triggers the guaranteed terminator (round-2 NEW-3; an orphan ST is
+    inert, an open DCS is not). `TmuxPassthroughDecorator::encodeBandStream()` opens the
+    `\x1bPtmux;` envelope LAZILY on the first real chunk (early inner failure writes
+    nothing) with the same open-before-deliver ordering, and closes it in a `finally`.
+    Both keep byte-identity with `render()` on the happy path. `readBoundedRegularFile()`
+    stats the SAME descriptor it reads and demands `S_IFREG`, so a path swapped to a
+    FIFO after the size check can neither block the read nor slip past `MAX_BYTES`
+    (round-2 TOCTOU finding); `ApngDecoder::decode()` verifies the 8-byte signature and
+    a hard `HARD_MAX_DIM` ceiling so a direct call cannot decode a non-PNG blob or reach
+    `str_repeat()` with a float operand when the pixel budget is disabled.
    `DiskCache::FORMAT_VERSION` was NOT bumped: #17 is byte-identical on every existing
    render path and #18 is purely additive (a new method + a new class + fail-fast
    guards that only turn previously-silent corruption into loud errors), so no

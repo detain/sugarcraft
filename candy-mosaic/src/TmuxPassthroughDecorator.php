@@ -81,8 +81,12 @@ final class TmuxPassthroughDecorator implements Renderer
         try {
             $inner->encodeBandStream($image, $width, static function (string $chunk) use ($write, &$opened): void {
                 if (!$opened) {
-                    $write("\x1bPtmux;");
+                    // Open the envelope flag before delivering the introducer, so a
+                    // consumer that writes then throws on the first chunk still gets
+                    // the guaranteed `finally` close. An orphan ST is inert; an
+                    // unterminated `\x1bPtmux;` swallows the rest of the session.
                     $opened = true;
+                    $write("\x1bPtmux;");
                 }
                 $write(str_replace("\x1b", "\x1b\x1b", $chunk));
             }, $height);

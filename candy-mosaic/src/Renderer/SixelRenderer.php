@@ -173,8 +173,14 @@ final class SixelRenderer implements Renderer
                 $head .= self::TRANSPARENT_BACKGROUND;
             }
             $head .= $this->emitPalette($palette, $offset);
-            $write($head);
+            // Mark the DCS open BEFORE handing the head to the consumer: if the
+            // first `$write` forwards the bytes then throws (a pty that flushes
+            // then dies), the flag is already set so `finally` still emits the
+            // terminator. Setting it after would strand an unterminated DCS on
+            // the TTY. A stray terminator on a `$write` that delivered nothing
+            // is harmless; an open DCS is not.
             $headWritten = true;
+            $write($head);
 
             // Pull index rows lazily and emit a 6-row band per write. The
             // graphics-newline `-` that separates bands PREFIXES every band

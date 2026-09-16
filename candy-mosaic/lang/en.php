@@ -71,6 +71,7 @@ return [
     'animation.gif_frame_count_mismatch' => 'Animated GIF carries {expected} frames but the frame decoder returned {got}; refusing to emit a partial animation',
     'animation.gif_decode_failed'     => 'Animated GIF could not be decoded: {reason}',
     'animation.gif_too_large_for_flip' => 'Animated GIF {width}×{height} exceeds the {max}-pixel frame-grid limit of the GIF decoder',
+    'animation.gif_too_many_cells' => 'Animated GIF of {frames} {width}×{height} frames exceeds the {max}-cell budget of the GIF decoder',
 
     // APNG (pure-PHP frame walk)
     'apng.no_ihdr'           => 'APNG/PNG stream has no IHDR header',
@@ -95,4 +96,6 @@ return [
     'apng.unsupported_filter' => 'APNG scanline filter {type} is not one of 0..4',
     'apng.bad_chunk_type'    => 'APNG chunk type {type} is not four ASCII letters',
     'apng.bad_chunk_crc'     => 'APNG chunk {type} failed its CRC check',
+    'apng.no_signature'      => 'Stream is not a PNG/APNG (bad 8-byte signature)',
+    'apng.unsupported_dimensions' => 'APNG logical screen {width}x{height} is outside the supported 1..{max} range',
 ];

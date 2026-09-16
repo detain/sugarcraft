@@ -244,4 +244,68 @@ final class SixelStreamTest extends TestCase
             'the tmux passthrough envelope must not open when the inner encode never emits',
         );
     }
+
+    /**
+     * Round-2 review NEW-3 / M-1: a real pty consumer FORWARDS the bytes it is handed
+     * and only THEN dies (a write() that partially succeeds before EPIPE). Recording
+     * before throwing models exactly that. Because the "DCS opened" flag is set before
+     * delivery (not after), even a first-chunk forward-then-throw must still get the
+     * terminator — otherwise the very first band strands the terminal inside a DCS.
+     */
+    public function testSixelStreamTerminatesWhenConsumerThrowsOnFirstChunk(): void
+    {
+        $renderer = new SixelRenderer();
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/500x400_noise.png');
+
+        $writes = [];
+        $boom = new \RuntimeException('pty died mid-write');
+        try {
+            $renderer->encodeBandStream($image, 20, static function (string $chunk) use (&$writes, $boom): void {
+                $writes[] = $chunk; // delivered to the wire...
+                throw $boom;         // ...then the consumer dies
+            }, 12);
+            $this->fail('the consumer failure must propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame($boom, $e);
+        }
+
+        $this->assertNotEmpty($writes, 'the head was already delivered before the throw');
+        $this->assertStringEndsWith(
+            self::ESC . '\\',
+            implode('', $writes),
+            'a DCS whose first write was delivered then failed must still be terminated',
+        );
+    }
+
+    /**
+     * Same first-write boundary for the tmux envelope: a consumer that flushes the
+     * `\x1bPtmux;` introducer then throws must still receive the closing ST, because
+     * the open flag is set before delivery. The alternative strands the whole session
+     * inside tmux passthrough.
+     */
+    public function testTmuxStreamTerminatesWhenConsumerThrowsOnFirstChunk(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new SixelRenderer());
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/500x400_noise.png');
+
+        $writes = [];
+        $boom = new \RuntimeException('pty died mid-write');
+        try {
+            $decorator->encodeBandStream($image, 20, static function (string $chunk) use (&$writes, $boom): void {
+                $writes[] = $chunk;
+                throw $boom;
+            }, 12);
+            $this->fail('the consumer failure must propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame($boom, $e);
+        }
+
+        $this->assertNotEmpty($writes);
+        $this->assertStringStartsWith(self::ESC . 'Ptmux;', $writes[0]);
+        $this->assertStringEndsWith(
+            self::ESC . '\\',
+            implode('', $writes),
+            'an opened tmux envelope must be closed even when the first delivered write fails',
+        );
+    }
 }

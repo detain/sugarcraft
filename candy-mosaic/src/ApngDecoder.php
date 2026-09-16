@@ -49,6 +49,15 @@ final class ApngDecoder
     /** Colour type → samples per pixel (valid only for bit depth 8, the sole depth accepted). */
     private const CHANNELS = [0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4];
 
+    /**
+     * Hard ceiling on each logical-screen dimension, independent of the pixel
+     * budget. A PNG dimension is a uint32; two large ones multiplied together can
+     * overflow past {@see PHP_INT_MAX} when the budget is disabled
+     * (`$maxPixels <= 0`) and surface as a raw `TypeError` from `str_repeat()`
+     * rather than a typed parse error. No TUI needs an image wider than this.
+     */
+    private const HARD_MAX_DIM = 16384;
+
     private function __construct() {}
 
     /**
@@ -103,6 +112,13 @@ final class ApngDecoder
      */
     public static function decode(string $bytes, int $maxPixels): array
     {
+        // `@internal` is a comment, not an access boundary — decode() is public and
+        // callable directly (bypassing isAnimatedPng()), so verify the signature
+        // here rather than letting an arbitrary 8-byte prefix decode to a
+        // no_ihdr/bad_chunk_crc that blames the wrong thing.
+        if (strlen($bytes) < 8 || substr($bytes, 0, 8) !== self::SIGNATURE) {
+            throw new \InvalidArgumentException(Lang::t('apng.no_signature'));
+        }
         $chunks = self::walkChunks($bytes, 8);
         if ($chunks === []) {
             throw new \InvalidArgumentException(Lang::t('apng.no_ihdr'));
@@ -113,6 +129,18 @@ final class ApngDecoder
 
         $ihdr = self::parseIhdr($chunks[0]['data']);
         [$width, $height, $channels, $colorType] = $ihdr;
+
+        // Format sanity independent of the pixel budget (L3/NEW-6): reject zero or
+        // absurd geometry with a typed parse error so the str_repeat() canvas
+        // allocation downstream can never see a float operand (which happens when
+        // two huge uint32 dims multiply past PHP_INT_MAX with $maxPixels <= 0).
+        if ($width <= 0 || $height <= 0 || $width > self::HARD_MAX_DIM || $height > self::HARD_MAX_DIM) {
+            throw new \InvalidArgumentException(Lang::t('apng.unsupported_dimensions', [
+                'width'  => $width,
+                'height' => $height,
+                'max'    => self::HARD_MAX_DIM,
+            ]));
+        }
 
         // Per-frame ceiling on the declared canvas: a single oversized frame is
         // refused before anything is allocated or inflated, using the honest IHDR
