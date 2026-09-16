@@ -15,9 +15,45 @@ final class FileOutputWriter implements OutputWriter
 
     public function __construct(string $path)
     {
-        $this->fp = fopen($path, 'w');
-        if ($this->fp === false) {
+        // E739: fopen() reports an unopenable path with an E_WARNING *before* it returns
+        // false, so the refusal below used to arrive after the noise — under this library's
+        // failOnWarning gate that made the honest door look like a defect, and in a log
+        // pipeline it put a PHP warning ahead of the message that explains it. The shapes a
+        // write-open can fail in are enumerable, so name them loudly here and leave fopen()
+        // for the bytes. The === false guard stays as the fail-closed net for whatever the
+        // pre-checks cannot see (a permission flip in between, a read-only remount, a
+        // symlink racing out from under dirname()); a warning there is a real surprise.
+        $this->refuseUnopenablePath($path);
+
+        $handle = fopen($path, 'w');
+        if ($handle === false) {
             throw new \RuntimeException("Failed to open file for writing: {$path}");
+        }
+
+        $this->fp = $handle;
+    }
+
+    /**
+     * @throws \RuntimeException when no write-open on $path can possibly succeed
+     */
+    private static function refuseUnopenablePath(string $path): void
+    {
+        $directory = dirname($path);
+
+        if (is_dir($path)) {
+            throw new \RuntimeException("Failed to open file for writing: {$path} (path is a directory)");
+        }
+
+        if (!is_dir($directory)) {
+            throw new \RuntimeException("Failed to open file for writing: {$path} (directory does not exist: {$directory})");
+        }
+
+        if (!is_writable($directory)) {
+            throw new \RuntimeException("Failed to open file for writing: {$path} (directory is not writable: {$directory})");
+        }
+
+        if (file_exists($path) && !is_writable($path)) {
+            throw new \RuntimeException("Failed to open file for writing: {$path} (file is not writable)");
         }
     }
 

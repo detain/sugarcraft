@@ -164,8 +164,14 @@ final class LanguageDetector
             return self::SHEBANG_MAP[$firstLine];
         }
 
-        // Try to extract interpreter name
-        if (preg_match('#^#!/usr/bin/env\s+(\w+)#', $firstLine, $matches)) {
+        // Try to extract interpreter name.
+        //
+        // E739: these two patterns used to be `#`-delimited, but a shebang *is* a literal
+        // `#`, so the delimiter closed at `#!/` and the trailing `!` parsed as a modifier —
+        // preg_match() warned "Unknown modifier '!'" and returned false, which meant the
+        // whole arm below never ran and env-form shebangs silently fell through to content
+        // scoring. `~` cannot collide with anything a shebang line contains.
+        if (preg_match('~^#!/usr/bin/env\s+(\w+)~', $firstLine, $matches)) {
             $interp = $matches[1];
             return match ($interp) {
                 'node', 'nodejs' => 'javascript',
@@ -178,7 +184,9 @@ final class LanguageDetector
             };
         }
 
-        if (preg_match('#^#!/([^\s]+)/(\w+)#', $firstLine, $matches)) {
+        // Same E739 delimiter defect: direct-path shebangs (`#!/usr/local/bin/python3`) are
+        // not in SHEBANG_MAP, and this arm was the only thing that could ever name them.
+        if (preg_match('~^#!/([^\s]+)/(\w+)~', $firstLine, $matches)) {
             $interpreter = $matches[2];
             return match ($interpreter) {
                 'php' => 'php',

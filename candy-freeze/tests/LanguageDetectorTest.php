@@ -372,4 +372,112 @@ final class LanguageDetectorTest extends TestCase
         $content = "<?php\nconst x = 1;\n";
         $this->assertSame('php', LanguageDetector::detect($content));
     }
+
+    // --- E739: the two shebang preg arms, live for the first time -------------------
+    //
+    // Both arms used to be `#`-delimited, so the shebang's own `#` closed the delimiter
+    // and `!` parsed as an unknown modifier: preg_match() warned and returned false, and
+    // every fixture below was decided by CONTENT scoring instead. Each assertion here is
+    // chosen so the answer can only come from the shebang arm — the bodies are crafted so
+    // content scoring disagrees, which is what makes a re-broken regex go red.
+
+    public function testE739EnvArmNamesInterpretersTheMapLacks(): void
+    {
+        // SHEBANG_MAP only lists bare names; the arm covers the versioned spellings. The
+        // bodies all say "bash" to content scoring, so a non-bash answer is arm-only.
+        $this->assertSame('python', LanguageDetector::detect("#!/usr/bin/env python2\necho hi\n"));
+        $this->assertSame('perl', LanguageDetector::detect("#!/usr/bin/env perl5\necho hi\n"));
+        $this->assertSame('javascript', LanguageDetector::detect("#!/usr/bin/env nodejs\necho hi\n"));
+        $this->assertSame('ruby', LanguageDetector::detect("#!/usr/bin/env rbenv\necho hi\n"));
+    }
+
+    public function testE739EnvArmReadsInterpreterAheadOfItsFlags(): void
+    {
+        // A flag after the interpreter makes the line stop matching SHEBANG_MAP exactly;
+        // the arm only needs the first word.
+        $this->assertSame('python', LanguageDetector::detect("#!/usr/bin/env python3 -E\necho hi\n"));
+    }
+
+    public function testE739EnvArmDecidesAnOtherwiseEmptyBody(): void
+    {
+        // The interpreter name is off-map (so the exact-match tier cannot answer) and the
+        // body is empty (so content scoring cannot either): only the arm can produce this.
+        $this->assertSame('python', LanguageDetector::detect("#!/usr/bin/env python2\n"));
+    }
+
+    public function testE739DirectPathArmNamesPhpAgainstMisleadingContent(): void
+    {
+        // The flagship repair: `echo "hi";` scores as bash, the shebang says php.
+        $this->assertSame('php', LanguageDetector::detect("#!/usr/bin/php\necho \"hi\";\n"));
+    }
+
+    public function testE739DirectPathArmWalksNestedInterpreterPaths(): void
+    {
+        // Greedy first segment keeps /usr/local/bin/... reachable, not just /usr/bin.
+        $this->assertSame('python', LanguageDetector::detect("#!/usr/local/bin/python3\necho hi\n"));
+        $this->assertSame('javascript', LanguageDetector::detect("#!/opt/node/bin/node\n"));
+    }
+
+    public function testE739EnvArmReportsTextForAnUnknownInterpreter(): void
+    {
+        // Written intent (default => 'text'): a shebang is authoritative even when this
+        // library cannot name it, so it must not be second-guessed by content scoring.
+        // Pre-E739 this returned 'bash' from the body.
+        $this->assertSame('text', LanguageDetector::detect("#!/usr/bin/env tcsh\necho hi\n"));
+    }
+
+    public function testE739DirectPathArmReportsTextForAnUnknownInterpreter(): void
+    {
+        // Asymmetry surfaced by the fix, kept as written: the env arm knows zsh, the
+        // direct-path arm's shorter list does not.
+        $this->assertSame('text', LanguageDetector::detect("#!/usr/bin/zsh\necho hi\n"));
+    }
+
+    public function testE739DirectPathArmReportsTextForAFlaggedShell(): void
+    {
+        // `#!/bin/sh` is an exact SHEBANG_MAP hit; adding a flag drops to the arm, whose
+        // list has no shell entries at all.
+        $this->assertSame('text', LanguageDetector::detect("#!/bin/sh -e\necho hi\n"));
+    }
+
+    public function testE739BareEnvShebangIsText(): void
+    {
+        // No interpreter to extract: the direct-path arm reads the literal 'env' as the
+        // program name, which is not a language this library claims.
+        $this->assertSame('text', LanguageDetector::detect("#!/usr/bin/env\necho hi\n"));
+    }
+
+    public function testE739ArmsStandDownForASingleSegmentShebang(): void
+    {
+        // `#!/onlyone` matches neither arm (the direct-path arm needs a directory and a
+        // program), so content scoring still decides.
+        $this->assertSame('bash', LanguageDetector::detect("#!/onlyone\necho hi\n"));
+    }
+
+    public function testE739ArmsStandDownForASpaceSeparatedShebang(): void
+    {
+        // Both arms anchor on the exact `#!/` prefix; a space keeps them out, and the body
+        // (not the interpreter name) decides again.
+        $this->assertSame('bash', LanguageDetector::detect("#! /usr/bin/env php\necho hi\n"));
+    }
+
+    public function testE739ExactMapEntryStillWinsAheadOfTheArms(): void
+    {
+        // Ordering pin: the same line would answer 'text' if the arms got there first.
+        $this->assertSame('sh', LanguageDetector::detect("#!/bin/sh\necho hi\n"));
+    }
+
+    public function testE739ShebangPatternsCarryNoHashDelimiter(): void
+    {
+        // Literal guard for the defect class: `#` cannot delimit a shebang pattern, and a
+        // behavioural suite can only prove the fix for the inputs it happens to try.
+        $source = file_get_contents(__DIR__ . '/../src/LanguageDetector.php');
+        $this->assertIsString($source);
+        $this->assertStringNotContainsString("'#^#!/", $source);
+        $this->assertSame(
+            2,
+            substr_count($source, "preg_match('~^#!/"),
+            'both shebang arms must stay ~-delimited (E739)',
+        );
+    }
 }
