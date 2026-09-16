@@ -89,7 +89,7 @@ inside the sequence it closed; an abandoned `ESC O` leaves the text behind it
 alone; and a sequence the stream cut short still arrives, as a `truncated …`
 segment carrying its raw bytes.
 
-Eight deviations from exact byte equality are known, and each is pinned by a
+Nine deviations from exact byte equality are known, and each is pinned by a
 named test rather than hidden — anything *else* that loses a byte is a bug:
 
 1. An OSC is re-emitted with a BEL terminator (`ESC ] … BEL`) even when the input
@@ -124,12 +124,23 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
 8. A truncated UTF-8 rune at end of stream is dropped, because that is not an
    escape-sequence state for `Parser::flush()` to report.
    (`testTruncatedUtf8TailIsDroppedExactlyAsTheParserDropsIt`)
+9. A sequence opened by an **8-bit C1 introducer** (`0x90` DCS, `0x98` SOS,
+   `0x9B` CSI, `0x9D` OSC, `0x9E` PM, `0x9F` APC) is re-emitted in its 7-bit
+   `ESC` spelling: candy-ansi folds the introducer choice away before the
+   dispatch callback, leaving this inspector only the parsed pieces and a
+   7-bit template to rebuild from — so `\x9b31m` arrives as `ESC [ 31 m`.
+   An *unterminated* tail is the exception: it replays the bytes in flight
+   verbatim, keeping the raw C1 introducer.
+   (`testEightBitCsiIntroducerIsReplayedInSevenBitForm`,
+   `testEightBitSosAndPmCarryTheirPayloadThroughTheSevenBitReplay`)
 
 The first two are this inspector's own re-emission choices. Items 3–8 are
 candy-ansi rewriting the bytes before this lib ever sees a dispatch — recorded in
 `CALIBER_LEARNINGS.md`, and each transformation is byte-identical to the behaviour
 before this contract was written, so they are fidelity items for candy-ansi, not
-for this inspector. What *is* new here is what the inspector reports afterwards:
+for this inspector. Item 9 is the same fold in the other direction: candy-ansi
+loses which spelling opened the sequence, so the inspector's re-emission can only
+pick one. What *is* new here is what the inspector reports afterwards:
 before this branch a truncated tail simply vanished, which is why item 7's
 cancelled prelude can now reappear inside one.
 

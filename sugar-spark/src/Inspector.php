@@ -168,36 +168,21 @@ final class Inspector
         if ($params === '' || $params === '0') {
             return 'reset';
         }
-        // Handle SGR underline styles 4:1 through 4:5 (single, double, curly, dotted, dashed).
-        if (preg_match('/^(\d+):(\d+)$/', $params, $m) === 1) {
-            $main = (int) $m[1];
-            $sub = (int) $m[2];
-            if ($main === 4) {
-                return self::underlineStyleName($sub);
-            }
-            return 'SGR ' . $params;
-        }
         $codes = explode(';', $params);
         $parts = [];
         for ($i = 0, $n = count($codes); $i < $n; $i++) {
             $codeStr = $codes[$i];
             $code = (int) $codeStr;
-            // Handle SGR 4:N underline styles - either standalone "4:2" or embedded in codeStr "4:2".
-            if ($code === 4) {
-                // Check if current codeStr is "4:N" format (sub-param embedded in same element).
-                if (preg_match('/^4:(\d+)$/', $codeStr, $m) === 1) {
-                    $sub = (int) $m[1];
-                    $parts[] = self::underlineStyleName($sub);
-                    continue;
-                }
-                // Also check if next element is "4:N" format.
-                if (isset($codes[$i + 1]) && preg_match('/^4:(\d+)$/', $codes[$i + 1], $m) === 1) {
-                    $sub = (int) $codes[$i + 1];
-                    $parts[] = self::underlineStyleName($sub);
-                    $i++; // Skip the sub-parameter.
-                    continue;
-                }
-
+            // An underline style variant (`4:2`) always rides inside its own
+            // parameter group; a bare `4` is the ordinary underline and the
+            // switch below names it. An earlier revision also peeked at the
+            // NEXT element for a `4:N`, but groups never split across a
+            // semicolon that way — and `(int)` on the borrowed group re-read
+            // `4;4:3` as style 4 (dotted) instead of two effects (underline,
+            // underline curly), so step 10.16 removed the heuristic outright.
+            if (preg_match('/^4:(\d+)$/', $codeStr, $underlined) === 1) {
+                $parts[] = self::underlineStyleName((int) $underlined[1]);
+                continue;
             }
             // 38;5;n (256-color fg) and 38;2;r;g;b (truecolor fg).
             if ($code === 38 || $code === 48) {
@@ -512,6 +497,13 @@ final class Inspector
             'D' => 'index (move cursor down)',
             'M' => 'reverse index (move cursor up)',
             'E' => 'next line',
+            // The 7-bit spellings of the SOS / PM / ST C1 controls. A bare
+            // `ESC X` (or `ESC ^`) never opens a string long enough to
+            // dispatch — it flushes empty at end of stream — but naming the
+            // introducer here is what step 10.16 asks the Inspector to do.
+            'X' => 'start of string (SOS)',
+            '^' => 'privacy message (PM)',
+            '\\' => 'string terminator (ST)',
             'c' => 'reset to initial state',
             default => 'ESC ' . $byte,
         };
@@ -536,15 +528,29 @@ final class Inspector
             str_starts_with($bytes, "\x1b^") => 'PM',
             str_starts_with($bytes, "\x1bO") => 'SS3',
             str_starts_with($bytes, "\x1b") => 'ESC',
+            // The 8-bit C1 spellings that can actually reach end of stream
+            // unterminated: 0x9B opens the CSI family and 0x90 the DCS family
+            // directly (no ESC rewrite by then — the tail carries the raw
+            // byte). The other C1 openers flush their string instead of
+            // leaving a tail.
+            str_starts_with($bytes, "\x9b") => 'CSI',
+            str_starts_with($bytes, "\x90") => 'DCS',
             default => 'escape',
         };
 
         return 'truncated ' . $family . ' (unterminated)';
     }
 
+    /**
+     * Name an SGR underline style sub-parameter (`4:n`, ECMA-48). Mirrors the
+     * SugarCraft\Vt\Sgr\UnderlineStyle enum shipped by candy-vt step 07.05 —
+     * sugar-spark carries no candy-vt dependency, so this table is the local
+     * reflection of that enum and must be kept in step with it.
+     */
     private static function underlineStyleName(int $n): string
     {
         return match ($n) {
+            0 => 'no underline',
             1 => 'underline single',
             2 => 'underline double',
             3 => 'underline curly',

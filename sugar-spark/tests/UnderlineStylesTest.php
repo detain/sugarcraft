@@ -126,4 +126,40 @@ final class UnderlineStylesTest extends TestCase
         $this->assertStringNotContainsString('underline style 38', $desc);
         $this->assertStringNotContainsString('blink', $desc);
     }
+
+    /**
+     * Step 10.16: a colon style must never be borrowed across the semicolon.
+     * An earlier revision peeked at the NEXT parameter group for a `4:N` and
+     * cast it with (int), so `4;4:3` re-read the group `4:3` as style 4 and
+     * reported one effect "underline dotted" where ECMA-48 has two: a plain
+     * underline and an underline curly.
+     */
+    public function testSemicolonBeforeColonStyleYieldsTwoEffectsNotOne(): void
+    {
+        $desc = Inspector::describeCsi('4;4:3', 'm');
+        $this->assertStringContainsString('underline, underline curly', $desc);
+        $this->assertStringNotContainsString('dotted', $desc);
+    }
+
+    /**
+     * `4:0` is "underline off" — ECMA-48 names the zero sub-parameter, and
+     * the candy-vt UnderlineStyle enum (step 07.05) carries it as None, so
+     * the report must not fall through to the numbered-label fallback.
+     */
+    public function testZeroStyleTurnsUnderlineOff(): void
+    {
+        $this->assertSame('SGR no underline', Inspector::describeCsi('4:0', 'm'));
+    }
+
+    /**
+     * A truncated colon colour belongs to the 38/48 colour machinery, not to
+     * the colon-interception path an earlier revision short-circuited — that
+     * one double-prefixed every non-underline `N:M` group as "SGR SGR 38:5".
+     */
+    public function testTruncatedColonColourIsNamedByTheColourBranch(): void
+    {
+        $desc = Inspector::describeCsi('38:5', 'm');
+        $this->assertStringContainsString('foreground truncated 256-color', $desc);
+        $this->assertStringNotContainsString('SGR SGR', $desc);
+    }
 }

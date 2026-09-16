@@ -270,6 +270,17 @@ final class AnsiHandler implements Handler
             );
             $this->inFlightBytes = '';
         }
+        // DEL (0x7F) belongs to the C0 set of ISO 6429 even though it sits
+        // outside the 0x00–0x1F range the branch above covers, and the VT500
+        // anywhere table routes it through Action::Execute while in Ground.
+        // Before step 10.16 it matched neither branch and vanished — exactly
+        // the kind of unlisted byte loss the README fidelity contract forbids.
+        if ($byte === 0x7F) {
+            $this->flushPendingSs3();
+            $this->flushText();
+            $this->segments[] = new SequenceSegment(chr($byte), 'DEL (delete)');
+            $this->inFlightBytes = '';
+        }
         // C1 bytes 0x80–0x9F: the VT500 "anywhere" transition table routes
         // 0x80–0x8F, 0x91–0x97, and 0x9C through Action::Execute (→ Ground).
         // The remaining C1 bytes (0x90, 0x98, 0x9A, 0x9B, 0x9D, 0x9E,
@@ -423,8 +434,8 @@ final class AnsiHandler implements Handler
         $this->flushText();
 
         $label = match ($kind) {
-            'sos' => self::describeSosPm($data),
-            'pm'  => self::describeSosPm($data),
+            'sos' => self::describeSosPm('SOS', $data),
+            'pm'  => self::describeSosPm('PM', $data),
             'apc' => Inspector::describeApc($data),
             default => "{$kind} {$data}",
         };
@@ -460,12 +471,19 @@ final class AnsiHandler implements Handler
         $this->ss3Buffered = false;
     }
 
-    private static function describeSosPm(string $data): string
+    /**
+     * SOS and PM carry opaque strings with no internal structure to decode,
+     * so the honest label is the family plus the payload length. The two
+     * shared one "SOS/PM" label until step 10.16 split them the way
+     * ECMA-48 §5.6 does — a report should not make the reader guess which
+     * privacy flavor the stream used.
+     */
+    private static function describeSosPm(string $family, string $data): string
     {
         if ($data === '') {
-            return 'SOS string';
+            return $family . ' string';
         }
-        return 'SOS/PM ' . strlen($data) . ' bytes';
+        return $family . ' string (' . strlen($data) . ' bytes)';
     }
 
     /**

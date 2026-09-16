@@ -16,13 +16,15 @@ use SugarCraft\Spark\TextSegment;
  *
  * The inspector's whole value is that what it reports is what the terminal
  * actually sent, so every case here pins exact bytes rather than merely a
- * shape. Four defect families are covered, keyed to the ANSI conformance
- * audit (`docs/research/ansi-tmux-ansicode-audit.md`):
+ * shape. Five defect families are covered, keyed to the ANSI conformance
+ * audit (`docs/research/ansi-tmux-ansicode-audit.md`) and the step 10.16
+ * C1 rollout:
  *
  *  - SP-R5 parameter separators were rewritten (`ESC[4;3m` → `ESC[4:3m`).
  *  - SP-R2 a string terminator leaked out again as a ghost `ESC \` segment.
  *  - SP-R1 a CSI cut short by end-of-stream vanished without a segment.
  *  - SP-R8 an abandoned `ESC O` swallowed the printable that followed it.
+ *  - SP-R9 the 8-bit C1 controls replay in 7-bit form, and DEL survives.
  *
  * @see https://www.ecma-international.org/publications-and-standards/standards/ecma-48/
  */
@@ -876,5 +878,56 @@ final class ByteFidelityTest extends TestCase
             $this->assertSame($input, $segments[0]->raw());
             $this->assertStringContainsString($expected, $segments[0]->describe(), $input);
         }
+    }
+
+    // --- SP-R9: the C1 controls (step 10.16) --------------------------------
+
+    public function testDelByteSurvivesTheStreamByteForByte(): void
+    {
+        // DEL (0x7F) used to reach execute(), match no branch, and vanish —
+        // the fidelity contract says anything not on the deviations list that
+        // loses a byte is a bug, and this was one.
+        $this->assertSame("ab\x7fcd", self::reemit(Inspector::parse("ab\x7fcd")));
+    }
+
+    public function testEightBitCsiIntroducerIsReplayedInSevenBitForm(): void
+    {
+        // Deviation #9: candy-ansi opens the CSI family directly on 0x9B, but
+        // the dispatch callback hands the handler only (final, params, …) and
+        // the handler rebuilds the sequence from the `ESC [` template — so the
+        // re-emitted stream carries bytes the sender did not use. The handler
+        // cannot see the difference, and neither can this pin let anyone forget.
+        $this->assertSame(
+            [SequenceSegment::class . "|\x1b[31m|ESC[31m  SGR foreground red"],
+            self::fingerprint(Inspector::parse("\x9b31m")),
+        );
+    }
+
+    public function testEightBitSosAndPmCarryTheirPayloadThroughTheSevenBitReplay(): void
+    {
+        $this->assertSame(
+            [SequenceSegment::class . "|\x1bXabc\x1b\\|ESCXabcESC\\  SOS string (3 bytes)"],
+            self::fingerprint(Inspector::parse("\x98abc\x9c")),
+        );
+        $this->assertSame(
+            [SequenceSegment::class . "|\x1b^priv\x1b\\|ESC^privESC\\  PM string (4 bytes)"],
+            self::fingerprint(Inspector::parse("\x9epriv\x9c")),
+        );
+    }
+
+    public function testUnterminatedEightBitTailsKeepTheirRawByteAndNameTheirFamily(): void
+    {
+        // The rewrite of deviation #9 applies to DISPATCHED sequences only. A
+        // tail reports the bytes in flight verbatim — and since step 10.16 it
+        // names the family from the 8-bit introducer instead of the generic
+        // "escape".
+        $this->assertSame(
+            [SequenceSegment::class . "|\x9b|\x9b  truncated CSI (unterminated)"],
+            self::fingerprint(Inspector::parse("\x9b")),
+        );
+        $this->assertSame(
+            [SequenceSegment::class . "|\x90|\x90  truncated DCS (unterminated)"],
+            self::fingerprint(Inspector::parse("\x90")),
+        );
     }
 }
