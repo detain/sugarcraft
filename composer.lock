@@ -62,16 +62,16 @@
         },
         {
             "name": "aws/aws-sdk-php",
-            "version": "3.394.11",
+            "version": "3.395.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/aws/aws-sdk-php.git",
-                "reference": "0a16c43453b30b5ec4025293f33028e299cf448e"
+                "reference": "22f2bce297541ae41ca9e03207032ede4e805ad4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/0a16c43453b30b5ec4025293f33028e299cf448e",
-                "reference": "0a16c43453b30b5ec4025293f33028e299cf448e",
+                "url": "https://api.github.com/repos/aws/aws-sdk-php/zipball/22f2bce297541ae41ca9e03207032ede4e805ad4",
+                "reference": "22f2bce297541ae41ca9e03207032ede4e805ad4",
                 "shasum": ""
             },
             "require": {
@@ -153,29 +153,30 @@
             "support": {
                 "forum": "https://github.com/aws/aws-sdk-php/discussions",
                 "issues": "https://github.com/aws/aws-sdk-php/issues",
-                "source": "https://github.com/aws/aws-sdk-php/tree/3.394.11"
+                "source": "https://github.com/aws/aws-sdk-php/tree/3.395.3"
             },
-            "time": "2026-09-09T18:06:19+00:00"
+            "time": "2026-09-15T18:07:56+00:00"
         },
         {
             "name": "brick/math",
-            "version": "0.18.0",
+            "version": "1.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/brick/math.git",
-                "reference": "82944324d1c1bdb2c2618e89978d4e2ad78d69ad"
+                "reference": "2effe05d2177c451b86c6a073196a4034c02f211"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/brick/math/zipball/82944324d1c1bdb2c2618e89978d4e2ad78d69ad",
-                "reference": "82944324d1c1bdb2c2618e89978d4e2ad78d69ad",
+                "url": "https://api.github.com/repos/brick/math/zipball/2effe05d2177c451b86c6a073196a4034c02f211",
+                "reference": "2effe05d2177c451b86c6a073196a4034c02f211",
                 "shasum": ""
             },
             "require": {
                 "php": "^8.2"
             },
             "require-dev": {
-                "phpstan/phpstan": "2.1.22",
+                "phpstan/phpstan": "2.2.13",
+                "phpstan/phpstan-phpunit": "2.0.18",
                 "phpunit/phpunit": "^11.5"
             },
             "type": "library",
@@ -206,7 +207,7 @@
             ],
             "support": {
                 "issues": "https://github.com/brick/math/issues",
-                "source": "https://github.com/brick/math/tree/0.18.0"
+                "source": "https://github.com/brick/math/tree/1.0.0"
             },
             "funding": [
                 {
@@ -214,7 +215,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-06-14T18:21:03+00:00"
+            "time": "2026-09-12T10:28:18+00:00"
         },
         {
             "name": "dflydev/dot-access-data",
@@ -340,23 +341,23 @@
         },
         {
             "name": "firebase/php-jwt",
-            "version": "v7.1.0",
+            "version": "v7.1.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/php-jwt.git",
-                "reference": "b374a5d1a4f1f67fadc2165cdb284645945e2fc0"
+                "reference": "9bc93bd7e3ee5bead4cd23c365ec12f3c1fb0a6a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/php-jwt/zipball/b374a5d1a4f1f67fadc2165cdb284645945e2fc0",
-                "reference": "b374a5d1a4f1f67fadc2165cdb284645945e2fc0",
+                "url": "https://api.github.com/repos/googleapis/php-jwt/zipball/9bc93bd7e3ee5bead4cd23c365ec12f3c1fb0a6a",
+                "reference": "9bc93bd7e3ee5bead4cd23c365ec12f3c1fb0a6a",
                 "shasum": ""
             },
             "require": {
                 "php": "^8.0"
             },
             "require-dev": {
-                "guzzlehttp/guzzle": "^7.4",
+                "guzzlehttp/guzzle": "^7.4||^8.0",
                 "phpfastcache/phpfastcache": "^9.2",
                 "phpseclib/phpseclib": "~3.0",
                 "phpspec/prophecy-phpunit": "^2.0",
@@ -400,22 +401,22 @@
             ],
             "support": {
                 "issues": "https://github.com/googleapis/php-jwt/issues",
-                "source": "https://github.com/googleapis/php-jwt/tree/v7.1.0"
+                "source": "https://github.com/googleapis/php-jwt/tree/v7.1.1"
             },
-            "time": "2026-06-11T17:54:14+00:00"
+            "time": "2026-09-14T17:48:47+00:00"
         },
         {
             "name": "google/auth",
-            "version": "v1.53.0",
+            "version": "v1.54.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/google-auth-library-php.git",
-                "reference": "d677d0b0c4bd52ab222a85df8e74e0d491c0cc5a"
+                "reference": "a9e3aedd93f01997e935556adbd1866fec576968"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/google-auth-library-php/zipball/d677d0b0c4bd52ab222a85df8e74e0d491c0cc5a",
-                "reference": "d677d0b0c4bd52ab222a85df8e74e0d491c0cc5a",
+                "url": "https://api.github.com/repos/googleapis/google-auth-library-php/zipball/a9e3aedd93f01997e935556adbd1866fec576968",
+                "reference": "a9e3aedd93f01997e935556adbd1866fec576968",
                 "shasum": ""
             },
             "require": {
@@ -444,6 +445,14 @@
                 "phpseclib/phpseclib": "May be used in place of OpenSSL for signing strings or for token management. Please require version ^2."
             },
             "type": "library",
+            "extra": {
+                "component": {
+                    "id": "auth",
+                    "path": "Auth",
+                    "entry": "README.md",
+                    "target": "googleapis/google-auth-library-php.git"
+                }
+            },
             "autoload": {
                 "psr-4": {
                     "Google\\Auth\\": "src"
@@ -454,7 +463,7 @@
                 "Apache-2.0"
             ],
             "description": "Google Auth Library for PHP",
-            "homepage": "https://github.com/google/google-auth-library-php",
+            "homepage": "https://github.com/googleapis/google-auth-library-php",
             "keywords": [
                 "Authentication",
                 "google",
@@ -463,27 +472,27 @@
             "support": {
                 "docs": "https://cloud.google.com/php/docs/reference/auth/latest",
                 "issues": "https://github.com/googleapis/google-auth-library-php/issues",
-                "source": "https://github.com/googleapis/google-auth-library-php/tree/v1.53.0"
+                "source": "https://github.com/googleapis/google-auth-library-php/tree/v1.54.0"
             },
-            "time": "2026-07-22T22:36:10+00:00"
+            "time": "2026-09-14T18:27:51+00:00"
         },
         {
             "name": "google/cloud-ai-platform",
-            "version": "v1.66.0",
+            "version": "v1.66.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/google-cloud-php-ai-platform.git",
-                "reference": "f27b4b62b58afb0aaf468437178155990f4f0012"
+                "reference": "196d22d087a5429454f85bb170aa604e359d9963"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/google-cloud-php-ai-platform/zipball/f27b4b62b58afb0aaf468437178155990f4f0012",
-                "reference": "f27b4b62b58afb0aaf468437178155990f4f0012",
+                "url": "https://api.github.com/repos/googleapis/google-cloud-php-ai-platform/zipball/196d22d087a5429454f85bb170aa604e359d9963",
+                "reference": "196d22d087a5429454f85bb170aa604e359d9963",
                 "shasum": ""
             },
             "require": {
                 "google/gax": "^1.38.0",
-                "php": "^8.1"
+                "php": "^8.2"
             },
             "require-dev": {
                 "phpunit/phpunit": "^9.0"
@@ -513,27 +522,27 @@
             ],
             "description": "Google Cloud Ai Platform Client for PHP",
             "support": {
-                "source": "https://github.com/googleapis/google-cloud-php-ai-platform/tree/v1.66.0"
+                "source": "https://github.com/googleapis/google-cloud-php-ai-platform/tree/v1.66.1"
             },
-            "time": "2026-09-01T17:33:42+00:00"
+            "time": "2026-09-14T18:27:51+00:00"
         },
         {
             "name": "google/common-protos",
-            "version": "4.14.2",
+            "version": "4.14.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/common-protos-php.git",
-                "reference": "a0ceb5e7b9f966e9e53592bb358b1e5dc3377ad3"
+                "reference": "3c219d28f513a8997ac5d098f43943e3c5b4509a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/common-protos-php/zipball/a0ceb5e7b9f966e9e53592bb358b1e5dc3377ad3",
-                "reference": "a0ceb5e7b9f966e9e53592bb358b1e5dc3377ad3",
+                "url": "https://api.github.com/repos/googleapis/common-protos-php/zipball/3c219d28f513a8997ac5d098f43943e3c5b4509a",
+                "reference": "3c219d28f513a8997ac5d098f43943e3c5b4509a",
                 "shasum": ""
             },
             "require": {
                 "google/protobuf": "^4.31||^5.0",
-                "php": "^8.1"
+                "php": "^8.2"
             },
             "require-dev": {
                 "phpunit/phpunit": "^9.6"
@@ -572,22 +581,22 @@
                 "google"
             ],
             "support": {
-                "source": "https://github.com/googleapis/common-protos-php/tree/v4.14.2"
+                "source": "https://github.com/googleapis/common-protos-php/tree/v4.14.3"
             },
-            "time": "2026-09-01T17:33:42+00:00"
+            "time": "2026-09-14T18:27:51+00:00"
         },
         {
             "name": "google/gax",
-            "version": "v1.49.0",
+            "version": "v1.49.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/gax-php.git",
-                "reference": "6c46a601c493ad7fe057b457662d79cf7b01d8e2"
+                "reference": "920d4d96f324c9138b20eb1851c8f4ea9123f3af"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/gax-php/zipball/6c46a601c493ad7fe057b457662d79cf7b01d8e2",
-                "reference": "6c46a601c493ad7fe057b457662d79cf7b01d8e2",
+                "url": "https://api.github.com/repos/googleapis/gax-php/zipball/920d4d96f324c9138b20eb1851c8f4ea9123f3af",
+                "reference": "920d4d96f324c9138b20eb1851c8f4ea9123f3af",
                 "shasum": ""
             },
             "require": {
@@ -599,7 +608,7 @@
                 "grpc/grpc": "^1.13",
                 "guzzlehttp/promises": "^2.0.3||^3.0",
                 "guzzlehttp/psr7": "^2.6.3||^3.0",
-                "php": "^8.1",
+                "php": "^8.2",
                 "ramsey/uuid": "^4.0"
             },
             "conflict": {
@@ -609,7 +618,8 @@
                 "google/cloud-tools": "^0.16.1",
                 "phpspec/prophecy-phpunit": "^2.1",
                 "phpstan/phpstan": "^2.0",
-                "phpunit/phpunit": "^9.6"
+                "phpunit/phpunit": "^9.6",
+                "webmozart/assert": "^1.11.0"
             },
             "type": "library",
             "extra": {
@@ -636,9 +646,9 @@
             ],
             "support": {
                 "issues": "https://github.com/googleapis/gax-php/issues",
-                "source": "https://github.com/googleapis/gax-php/tree/v1.49.0"
+                "source": "https://github.com/googleapis/gax-php/tree/v1.49.1"
             },
-            "time": "2026-08-24T22:04:34+00:00"
+            "time": "2026-09-14T18:27:51+00:00"
         },
         {
             "name": "google/grpc-gcp",
@@ -687,16 +697,16 @@
         },
         {
             "name": "google/longrunning",
-            "version": "0.8.3",
+            "version": "0.8.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/php-longrunning.git",
-                "reference": "51cffc3eb1e3059698cda4d8796bd432e266fc95"
+                "reference": "a60c8e2407eab5b2e4c8f36c40cd9c0eeb47d327"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/php-longrunning/zipball/51cffc3eb1e3059698cda4d8796bd432e266fc95",
-                "reference": "51cffc3eb1e3059698cda4d8796bd432e266fc95",
+                "url": "https://api.github.com/repos/googleapis/php-longrunning/zipball/a60c8e2407eab5b2e4c8f36c40cd9c0eeb47d327",
+                "reference": "a60c8e2407eab5b2e4c8f36c40cd9c0eeb47d327",
                 "shasum": ""
             },
             "require-dev": {
@@ -725,9 +735,9 @@
             ],
             "description": "Google LongRunning Client for PHP",
             "support": {
-                "source": "https://github.com/googleapis/php-longrunning/tree/v0.8.3"
+                "source": "https://github.com/googleapis/php-longrunning/tree/v0.8.4"
             },
-            "time": "2026-09-01T17:33:42+00:00"
+            "time": "2026-09-14T18:27:51+00:00"
         },
         {
             "name": "google/protobuf",
@@ -2271,20 +2281,20 @@
         },
         {
             "name": "ramsey/uuid",
-            "version": "4.9.3",
+            "version": "4.9.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ramsey/uuid.git",
-                "reference": "1df15849d00943a67d677dc9cfd80795f038c9f8"
+                "reference": "75d73f48d02797c2c285a7e9f348fadc0102ffe2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ramsey/uuid/zipball/1df15849d00943a67d677dc9cfd80795f038c9f8",
-                "reference": "1df15849d00943a67d677dc9cfd80795f038c9f8",
+                "url": "https://api.github.com/repos/ramsey/uuid/zipball/75d73f48d02797c2c285a7e9f348fadc0102ffe2",
+                "reference": "75d73f48d02797c2c285a7e9f348fadc0102ffe2",
                 "shasum": ""
             },
             "require": {
-                "brick/math": ">=0.8.16 <=0.18",
+                "brick/math": "^0.8.16 || ^0.9 || ^0.10 || ^0.11 || ^0.12 || ^0.13 || ^0.14 || ^0.15 || ^0.16 || ^0.17 || ^0.18 || ^0.19 || ^0.20 || ^1.0",
                 "php": "^8.0",
                 "ramsey/collection": "^1.2 || ^2.0"
             },
@@ -2343,9 +2353,9 @@
             ],
             "support": {
                 "issues": "https://github.com/ramsey/uuid/issues",
-                "source": "https://github.com/ramsey/uuid/tree/4.9.3"
+                "source": "https://github.com/ramsey/uuid/tree/4.9.4"
             },
-            "time": "2026-06-18T03:57:49+00:00"
+            "time": "2026-09-16T11:39:30+00:00"
         },
         {
             "name": "react/cache",
@@ -4297,7 +4307,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "8f64181f5cd79a5fb50fced2eaae3ef280347522"
+                "reference": "9694eb017c85d53ae1cbe69f7a3097fdb360ed61"
             },
             "require": {
                 "ext-gd": "*",
@@ -4305,6 +4315,7 @@
                 "php": "^8.3",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-flip": "dev-master",
                 "sugarcraft/candy-palette": "dev-master"
             },
             "require-dev": {
@@ -5019,10 +5030,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "f27ef7baf0c5bfe0894f4e90232d121da62a55e3"
+                "reference": "9adca140b53cec5d7850b19e1ff1991aeb47ec9b"
             },
             "require": {
                 "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-pty": "dev-master",
                 "symfony/console": "^6.4 || ^7.0",
@@ -5093,10 +5105,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vt",
-                "reference": "929803aa7a3076457f0be4cf7a46de81dcbf15bb"
+                "reference": "9f5ebcecd91af7e71162a254f1b9ce7a015633ff"
             },
             "require": {
                 "php": "^8.3",
+                "react/promise": "^3.3",
+                "react/stream": "^1.2",
                 "sugarcraft/candy-ansi": "dev-master",
                 "sugarcraft/candy-core": "dev-master"
             },
@@ -5875,7 +5889,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-gallery",
-                "reference": "a688b278ae04e1a054561d06ded84e891d464110"
+                "reference": "70dd773511e6e071ab1a8c96c92c7e56f4efcf64"
             },
             "require": {
                 "php": "^8.3",
@@ -5884,7 +5898,8 @@
                 "sugarcraft/candy-zone": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-mosaic": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -6792,16 +6807,16 @@
         },
         {
             "name": "symfony/console",
-            "version": "v7.4.18",
+            "version": "v7.4.19",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/console.git",
-                "reference": "23d6f88a29f6d0eac45bd77d70307adf83ba7ab0"
+                "reference": "3a1973458b153f566a8d7499bc06ece323d60063"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/console/zipball/23d6f88a29f6d0eac45bd77d70307adf83ba7ab0",
-                "reference": "23d6f88a29f6d0eac45bd77d70307adf83ba7ab0",
+                "url": "https://api.github.com/repos/symfony/console/zipball/3a1973458b153f566a8d7499bc06ece323d60063",
+                "reference": "3a1973458b153f566a8d7499bc06ece323d60063",
                 "shasum": ""
             },
             "require": {
@@ -6866,7 +6881,7 @@
                 "terminal"
             ],
             "support": {
-                "source": "https://github.com/symfony/console/tree/v7.4.18"
+                "source": "https://github.com/symfony/console/tree/v7.4.19"
             },
             "funding": [
                 {
@@ -6886,7 +6901,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-25T14:18:37+00:00"
+            "time": "2026-09-13T10:38:41+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
@@ -7450,16 +7465,16 @@
         },
         {
             "name": "symfony/process",
-            "version": "v7.4.18",
+            "version": "v7.4.19",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/process.git",
-                "reference": "058d17fc284cce14efb2385783b55014a461b176"
+                "reference": "ed0ae095b86994d370d5791612e55984f15aa30e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/process/zipball/058d17fc284cce14efb2385783b55014a461b176",
-                "reference": "058d17fc284cce14efb2385783b55014a461b176",
+                "url": "https://api.github.com/repos/symfony/process/zipball/ed0ae095b86994d370d5791612e55984f15aa30e",
+                "reference": "ed0ae095b86994d370d5791612e55984f15aa30e",
                 "shasum": ""
             },
             "require": {
@@ -7491,7 +7506,7 @@
             "description": "Executes commands in sub-processes",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/process/tree/v7.4.18"
+                "source": "https://github.com/symfony/process/tree/v7.4.19"
             },
             "funding": [
                 {
@@ -7511,7 +7526,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-21T17:40:08+00:00"
+            "time": "2026-09-02T12:38:34+00:00"
         },
         {
             "name": "symfony/service-contracts",
@@ -7602,16 +7617,16 @@
         },
         {
             "name": "symfony/string",
-            "version": "v7.4.15",
+            "version": "v7.4.19",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/string.git",
-                "reference": "e394af32256bf9e7bf80849d95e589167c10097b"
+                "reference": "02731ce2bd26514bec9efc0baef2cd0b0cf67f46"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/string/zipball/e394af32256bf9e7bf80849d95e589167c10097b",
-                "reference": "e394af32256bf9e7bf80849d95e589167c10097b",
+                "url": "https://api.github.com/repos/symfony/string/zipball/02731ce2bd26514bec9efc0baef2cd0b0cf67f46",
+                "reference": "02731ce2bd26514bec9efc0baef2cd0b0cf67f46",
                 "shasum": ""
             },
             "require": {
@@ -7669,7 +7684,7 @@
                 "utf8"
             ],
             "support": {
-                "source": "https://github.com/symfony/string/tree/v7.4.15"
+                "source": "https://github.com/symfony/string/tree/v7.4.19"
             },
             "funding": [
                 {
@@ -7689,7 +7704,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-07-28T07:33:02+00:00"
+            "time": "2026-09-11T14:46:58+00:00"
         },
         {
             "name": "symfony/yaml",
@@ -8000,11 +8015,11 @@
         },
         {
             "name": "phpstan/phpstan",
-            "version": "2.2.13",
+            "version": "2.2.14",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/9ba9ac76ee9c5cf5b56d58eb5deec6315b7a0260",
-                "reference": "9ba9ac76ee9c5cf5b56d58eb5deec6315b7a0260",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/9c672e7a8e791dfc3d30e55f683e73fc0b63a3ac",
+                "reference": "9c672e7a8e791dfc3d30e55f683e73fc0b63a3ac",
                 "shasum": ""
             },
             "require": {
@@ -8060,7 +8075,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-09-03T20:38:19+00:00"
+            "time": "2026-09-12T21:39:33+00:00"
         },
         {
             "name": "phpstan/phpstan-phpunit",
@@ -8128,7 +8143,6 @@
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
-        "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
@@ -8139,18 +8153,18 @@
         "sugarcraft/candy-lister": 20,
         "sugarcraft/candy-log": 20,
         "sugarcraft/candy-metrics": 20,
+        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-mines": 20,
         "sugarcraft/candy-mold": 20,
         "sugarcraft/candy-mosaic": 20,
-        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-query": 20,
         "sugarcraft/candy-serve": 20,
+        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-shell": 20,
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
-        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-vcr": 20,
         "sugarcraft/candy-vt": 20,
@@ -8179,13 +8193,14 @@
         "sugarcraft/sugar-tick": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-veil": 20,
-        "sugarcraft/sugar-wishlist": 20
+        "sugarcraft/sugar-wishlist": 20,
+        "sugarcraft/candy-files": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
-    "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
 }
