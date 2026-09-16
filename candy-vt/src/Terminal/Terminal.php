@@ -157,7 +157,12 @@ final class Terminal
      * `end` (truncated/aborted input) rejects too, because silently
      * resolving on half-read input would hide a real transport failure.
      * Listeners remove themselves once settled, so a late `data` on a
-     * closed pump cannot re-enter the parser.
+     * closed pump cannot re-enter the parser — and that holds even when
+     * the caller's `$respond` throws: the pump rejects its promise with
+     * the callback's error and detaches before the exception surfaces to
+     * the emitter (on the `data` route it re-throws for parity with the
+     * sync `feed($bytes, $respond)` contract, where a throwing callback
+     * bubbles to whoever wrote the bytes).
      *
      * @param (callable(string): void)|null $respond
      *
@@ -172,6 +177,7 @@ final class Terminal
         $deferred = new Deferred();
         /** @var array<string, callable> $listeners */
         $listeners = [];
+        /** @var bool $settled single-settlement latch, by-ref'd into every listener */
         $settled = false;
         $detach = static function () use ($input, &$listeners): void {
             foreach ($listeners as $event => $listener) {
@@ -179,16 +185,31 @@ final class Terminal
             }
             $listeners = [];
         };
-        $listeners['data'] = $onData = function (string $chunk) use ($respond): void {
+        $listeners['data'] = function (string $chunk) use ($respond, $deferred, $detach, &$settled): void {
+            if ($settled) {
+                return; // defense in depth: a settled pump never re-enters the parser.
+            }
             $this->parser->feed($chunk);
-            if ($respond !== null) {
-                foreach ($this->handler->replies as $reply) {
+            if ($respond === null) {
+                return;
+            }
+            // Clear-by-slice BEFORE delivering: a callback that throws
+            // mid-loop must not leave already-delivered replies queued
+            // for duplicate delivery on the next chunk (round-1 review n2).
+            $pending = $this->handler->replies;
+            $this->handler->replies = [];
+            try {
+                foreach ($pending as $reply) {
                     $respond($reply);
                 }
-                $this->handler->replies = [];
+            } catch (\Throwable $error) {
+                $settled = true;
+                $detach();
+                $deferred->reject($error);
+                throw $error; // sync-route parity: the emitter learns the pump died.
             }
         };
-        $listeners['error'] = $onError = function (\Throwable $error) use ($deferred, $detach, &$settled): void {
+        $listeners['error'] = function (\Throwable $error) use ($deferred, $detach, &$settled): void {
             if ($settled) {
                 return;
             }
@@ -196,23 +217,34 @@ final class Terminal
             $detach();
             $deferred->reject($error);
         };
-        $listeners['end'] = $onEnd = function () use ($respond, $deferred, $detach, &$settled): void {
+        $listeners['end'] = function () use ($respond, $deferred, $detach, &$settled): void {
             if ($settled) {
                 return;
             }
             $settled = true;
-            $this->parser->flush();
-            $tail = $this->drainReplyBytes();
-            if ($respond !== null && $tail !== '') {
-                $respond($tail);
-                $tail = '';
+            $tail = '';
+            try {
+                $this->parser->flush();
+                $tail = $this->drainReplyBytes();
+                if ($respond !== null && $tail !== '') {
+                    $respond($tail);
+                    $tail = '';
+                }
+            } catch (\Throwable $error) {
+                // A throwing $respond must still settle and detach: leaving
+                // the promise pending with live listeners on a dead pump
+                // would hang the caller forever (round-1 review M1).
+                $detach();
+                $deferred->reject($error);
+
+                return;
             }
             $detach();
             $deferred->resolve($tail);
         };
         // React emits `close` after every `end` and after an abort; only
         // the one that finds us unsettled matters (end wins when both come).
-        $listeners['close'] = $onClose = function () use ($deferred, $detach, &$settled): void {
+        $listeners['close'] = function () use ($deferred, $detach, &$settled): void {
             if ($settled) {
                 return;
             }

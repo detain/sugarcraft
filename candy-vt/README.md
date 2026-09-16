@@ -88,7 +88,7 @@ candy-vt ships **two** Terminal entry-points for distinct use cases:
 
 | Class | Use case | Methods |
 |-------|----------|---------|
-| `SugarCraft\Vt\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `create(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
+| `SugarCraft\Vt\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
 | `SugarCraft\Vt\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`. |
 
 ```php
@@ -411,7 +411,7 @@ retrospectively:
 
 ```php
 // Set at construction.
-$vt = Terminal::create(cols: 80, rows: 24, scrollbackSize: 5000);
+$vt = Terminal::new(cols: 80, rows: 24, scrollbackSize: 5000);
 
 // Retrospective change — existing scrollback is replaced.
 $vt = $vt->withScrollbackSize(5000);

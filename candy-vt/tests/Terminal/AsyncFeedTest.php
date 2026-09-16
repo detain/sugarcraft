@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Tests\Terminal;
 
+use LogicException;
 use PHPUnit\Framework\TestCase;
 use React\Stream\ThroughStream;
 use RuntimeException;
@@ -268,6 +269,75 @@ final class AsyncFeedTest extends TestCase
             $resolved = $bytes;
         });
         $this->assertSame('', $resolved);
+    }
+
+    // ─── caller failures (round-1 review M1) ───────────────────────────────
+
+    public function testThrowingRespondOnDataRejectsDetachesAndRethrows(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        $boom = new LogicException('respond exploded');
+        $promise = $t->feedStream($stream, static function (string $reply) use ($boom): void {
+            throw $boom;
+        });
+
+        $reason = null;
+        $promise->then(null, static function (Throwable $e) use (&$reason): void {
+            $reason = $e;
+        });
+
+        try {
+            $stream->write("\x1b[c"); // DA1 answers → $respond runs on the data route
+            $this->fail('a throwing respond must still bubble to the emitter on the data route');
+        } catch (LogicException $e) {
+            $this->assertSame($boom, $e);
+        }
+
+        $this->assertSame($boom, $reason, 'the pump must reject with the callback error, not hang unsettled');
+        $this->assertSame(0, count($stream->listeners('data')));
+        $this->assertSame(0, count($stream->listeners('end')));
+        $this->assertSame([], $t->replies(), 'clear-before-delivery must not leave the answer queued for duplicate delivery');
+
+        $settles = 0;
+        $promise->then(
+            static function () use (&$settles): void {
+                $settles++;
+            },
+            static function () use (&$settles): void {
+                $settles++;
+            },
+        );
+        $stream->end();
+        $stream->close();
+        $this->assertSame(1, $settles, 'the rejection was the single settlement; later events cannot re-settle');
+    }
+
+    public function testThrowingRespondOnEndRejectsWithoutHangingThePromise(): void
+    {
+        $t = Terminal::new(10, 3);
+        $stream = new ThroughStream();
+        // Queue the reply over the sync route so the `end` drain is the first
+        // $respond call — no write() happens, so `data` never delivers it.
+        $t->feed("\x1b[c");
+
+        $boom = new LogicException('respond exploded at end');
+        $promise = $t->feedStream($stream, static function (string $tail) use ($boom): void {
+            throw $boom;
+        });
+
+        $reason = null;
+        $promise->then(null, static function (Throwable $e) use (&$reason): void {
+            $reason = $e;
+        });
+
+        $stream->end();
+
+        $this->assertSame($boom, $reason);
+        $this->assertSame(0, count($stream->listeners('data')), 'a dead pump must not linger on the stream');
+        $this->assertSame(0, count($stream->listeners('end')));
+        $this->assertSame(0, count($stream->listeners('close')));
+        $this->assertSame([], $t->replies());
     }
 
     // ─── interop with the sync surface ─────────────────────────────────────
