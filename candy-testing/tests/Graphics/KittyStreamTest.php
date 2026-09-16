@@ -10,7 +10,6 @@ use SugarCraft\Testing\Graphics\KittyImage;
 use SugarCraft\Testing\Graphics\KittyStream;
 use SugarCraft\Testing\Graphics\Iterm2Stream;
 use SugarCraft\Testing\Graphics\MalformedGraphicsException;
-use SugarCraft\Testing\Graphics\SixelStream;
 
 /**
  * @covers \SugarCraft\Testing\Graphics\KittyStream
@@ -333,20 +332,19 @@ final class KittyStreamTest extends TestCase
 
     public function testSixelPathStaysIndependentOfChunkedApcStitching(): void
     {
-        // The mirror of the pin above: the same mixed stream is decodable by
-        // SixelStream (a Sixel DCS rides `\x1bP0;1;0q`, never the bare `\x1bPq`
-        // Kitty legacy introducer), so the two graphics transports coexist.
+        // A whole Sixel DCS may sit between two chunks of one Kitty transaction:
+        // it rides `\x1bP0;1;0q`, never the bare `\x1bPq` Kitty legacy introducer,
+        // so the scanner walks past it and the frames still belong together. The
+        // mirror pin (the same mixed stream decoding as a Sixel image) lives in
+        // SixelStreamTest::testDecodesSixelWrappedInChunkedKittyApcFrames().
         $b64 = base64_encode($this->redPng());
         $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . $b64 . "\x1b\\"
             . Fixture::bytes('sixel_red.six')
             . "\x1b_Gm=0;\x1b\\";
 
-        $sixel = SixelStream::decode($stream);
         $kitty = KittyStream::decode($stream);
 
-        self::assertSame(80, $sixel->width());
-        self::assertSame(40, $sixel->height());
-        self::assertSame(1, $kitty->count());
+        self::assertSame(1, $kitty->count(), 'the sixel DCS must not register as a Kitty transmit');
         self::assertSame($this->redPng(), $kitty->image()->png(), 'the sixel bytes must not leak into the Kitty payload');
     }
 

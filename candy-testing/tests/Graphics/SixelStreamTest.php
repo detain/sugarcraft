@@ -74,6 +74,24 @@ final class SixelStreamTest extends TestCase
         self::assertSame([255, 0, 0], $sixel->pixel(40, 20));
     }
 
+    public function testDecodesSixelWrappedInChunkedKittyApcFrames(): void
+    {
+        // Cross-protocol independence: a Kitty chunked transmission may surround
+        // a Sixel image, because a Sixel DCS rides `\x1bP0;1;0q` while the Kitty
+        // legacy introducer is the bare `\x1bPq`. The sixel raster must decode
+        // untouched no matter how much Kitty traffic brackets it.
+        $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;aGVsbG8=\x1b\\"
+            . Fixture::bytes('sixel_red.six')
+            . "\x1b_Gm=0;bG93bG8=\x1b\\";
+
+        $sixel = SixelStream::decode($stream);
+
+        self::assertSame(80, $sixel->width());
+        self::assertSame(40, $sixel->height());
+        self::assertSame([255, 0, 0], $sixel->pixel(0, 0));
+        self::assertSame([255, 0, 0], $sixel->grid()->uniformColor(), 'the surrounding Kitty bytes must not enter the raster');
+    }
+
     public function testToGdImageProducesMatchingCanvas(): void
     {
         if (!function_exists('imagecreatefromstring')) {
