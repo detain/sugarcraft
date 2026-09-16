@@ -176,14 +176,16 @@ final class ToastRenderingTest extends TestCase
 
     public function testAnsiColorToRgbBright(): void
     {
+        // Slot 8 = candy-core ANSI16_RGB[8] = [127,127,127] (xterm bright black).
         $rgb = $this->invokeAnsiColorToRgb(0, true);
-        $this->assertSame(0x606060, $rgb);
+        $this->assertSame(0x7f7f7f, $rgb);
     }
 
     public function testAnsiColorToRgbOutOfRange(): void
     {
+        // Out-of-range falls back to the canonical white slot 7 = [229,229,229].
         $rgb = $this->invokeAnsiColorToRgb(99, false);
-        $this->assertSame(0xc0c0c0, $rgb);
+        $this->assertSame(0xe5e5e5, $rgb);
     }
 
     public function testGraphemeWidthCombiningMark(): void
