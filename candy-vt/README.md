@@ -89,7 +89,7 @@ candy-vt ships **two** Terminal entry-points for distinct use cases:
 | Class | Use case | Methods |
 |-------|----------|---------|
 | `SugarCraft\Vt\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `create(cols, rows, ?scrollbackSize)`, `feed(bytes)`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
-| `SugarCraft\Vt\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): CellGrid`, `windowTitle(): string`. |
+| `SugarCraft\Vt\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`. |
 
 ```php
 use SugarCraft\Vt\Terminal;       // root — renderer path
@@ -112,8 +112,8 @@ The `SugarCraft\Vt` root namespace provides simplified value objects for the
 candy-vcr VHS renderer path — independent of the full VT parser stack:
 
 ```php
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
 use SugarCraft\Vt\Cursor;
 
 // Cell — char + fg (0-255) + bg (0-255) + attrs bitfield
@@ -122,14 +122,14 @@ $cell = $cell->withFg(34);            // green foreground
 $cell = $cell->withBg(226);           // yellow background
 $cell = $cell->withAttrs(Cell::ATTR_ITALIC | Cell::ATTR_UNDERLINE);
 
-// CellGrid — 2D grid with dirty-region tracking
-$grid = new CellGrid(cols: 80, rows: 24);
-$grid = $grid->set(0, 0, new Cell(char: 'H'));
-$grid = $grid->set(0, 1, new Cell(char: 'i'));
-echo $grid->get(0, 0)->char;          // 'H'
+// Buffer — the one 2D cell grid (emulator + renderer), mutable put(), dirty-region tracking
+$grid = new Buffer(cols: 80, rows: 24);
+$grid->put(0, 0, new Cell(char: 'H')); // in place
+$grid->put(0, 1, new Cell(char: 'i'));
+echo $grid->cell(0, 0)->char;         // 'H'
 echo implode(',', $grid->dirtyRegion()); // minRow, maxRow, minCol, maxCol
-$grid = $grid->clear();               // resets dirtyRegion
-$grid = $grid->resize(100, 40);     // grow/shrink preserving content
+$grid = $grid->clear();                // NEW empty grid, same size; dirty box resets
+$grid = $grid->resize(100, 40);        // NEW grid, content preserved; dirty box resets
 
 // Cursor — row + col + shape + visibility
 $cursor = new Cursor(row: 0, col: 0, shape: 0, visible: true);
@@ -160,7 +160,7 @@ Each handler translates parser actions into handler state mutations:
 use SugarCraft\Vt\Snapshot;
 
 $snap = Snapshot::of($terminal, time: 1.234);  // captures grid + cursor
-$snap->grid;     // CellGrid
+$snap->grid;     // Buffer
 $snap->cursor;   // Cursor
 $snap->time;     // float — virtual playback time
 

@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt;
 
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Parser\OscHandlerImpl;
 
 /**
  * Frozen frame from the terminal emulator.
  *
- * Immutable snapshot of CellGrid + Cursor at a point in time.
+ * Immutable snapshot of Buffer + Cursor at a point in time.
  */
 final readonly class Snapshot
 {
     public function __construct(
-        public CellGrid $grid,
+        public Buffer $grid,
         public Cursor $cursor,
         public float $time,
     ) {

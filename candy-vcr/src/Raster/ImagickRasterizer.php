@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Raster;
 
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
 use SugarCraft\Vt\Theme;
@@ -130,7 +130,7 @@ final class ImagickRasterizer implements Rasterizer
         for ($row = 0; $row < $rows; $row++) {
             $col = 0;
             while ($col < $cols) {
-                $cell = $grid->get($row, $col);
+                $cell = $grid->cell($row, $col);
 
                 $isWide = $this->isWideChar($cell->char);
 
@@ -268,7 +268,7 @@ final class ImagickRasterizer implements Rasterizer
     private function renderCursor(
         \Imagick $imagick,
         Cursor $cursor,
-        CellGrid $grid,
+        Buffer $grid,
         int $cellW,
         int $cellH,
     ): void {
@@ -279,7 +279,7 @@ final class ImagickRasterizer implements Rasterizer
             return;
         }
 
-        $cell = $grid->get($row, $col);
+        $cell = $grid->cell($row, $col);
         $x = $col * $cellW;
         $y = $row * $cellH;
 

@@ -83,13 +83,12 @@ final readonly class Cell
     /**
      * The shared empty cell — one memoised instance per process.
      *
-     * Emulator `Buffer` fills and blank-scrolling lean on this being identity
+     * Both grids — emulator and the unified {@see \SugarCraft\Vt\Buffer\Buffer}
+     * the vcr renderer path shares — lean on this being identity
      * stable (AllocationTest pins "all empty slots are one Cell" and the
      * resize/feed heap ceilings depend on it). The immutable value carries
      * default palette slots, no SGR, no truecolour and a {@see Rendition::None}
      * line state, so a single shared instance is safe to hand to every consumer.
-     * The vcr `CellGrid` deliberately does NOT use this for its pristine fill —
-     * it allocates one fresh value per slot (see {@see CellGrid::makeGrid()}).
      */
     public static function empty(): self
     {

@@ -116,7 +116,7 @@ final class FrameStreamExecTest extends TestCase
         for ($r = 0; $r < $grid->rows; $r++) {
             $text = '';
             for ($c = 0; $c < $grid->cols; $c++) {
-                $char = $grid->get($r, $c)->char;
+                $char = $grid->cell($r, $c)->char;
                 $text .= ($char === "\0" || $char === '') ? ' ' : $char;
             }
             $text = rtrim($text);

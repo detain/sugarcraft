@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Handler;
 
-use Closure;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell\Cell;
@@ -17,6 +16,7 @@ use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Rendition;
 use SugarCraft\Ansi\Parser\Handler;
+use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
@@ -33,7 +33,7 @@ use SugarCraft\Vt\Sgr\Sgr;
  * when alt mode is entered, the current Buffer/Cursor/Sgr move into the
  * `saved*` fields and a fresh blank Buffer takes the active slot.
  */
-final class ScreenHandler implements Handler
+final class ScreenHandler implements SubparamsAwareHandler
 {
     public Buffer $buffer;
     public Cursor $cursor;
@@ -83,41 +83,28 @@ final class ScreenHandler implements Handler
     public bool $wrapPending = false;
 
     /**
-     * Late-bound ECMA-48 colon-continuation flags for the CSI sequence
-     * currently being dispatched — wired by {@see
-     * \SugarCraft\Vt\Terminal\Terminal::new()} to the owning parser's
-     * {@see \SugarCraft\Ansi\Parser\Parser::subparams()}. SGR needs them to
-     * tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
-     * italic), because candy-ansi flattens both to [4, 3]. Unattached —
-     * direct construction — SGR keeps its historical next-slot peek.
+     * ECMA-48 colon-continuation flags the parser PUSHED for the sequence
+     * currently being dispatched, via {@see SubparamsAwareHandler::setSubparams()}
+     * immediately before each CSI/DCS dispatch. SGR needs them to tell
+     * `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
+     * italic), because candy-ansi flattens both to [4, 3]. Null — nothing
+     * ever pushed, e.g. direct construction with a manual dispatch loop —
+     * keeps SGR's historical next-slot peek.
      *
-     * @var (Closure(): list<bool>)|null
+     * Fresh per sequence by contract; never read outside a dispatch.
+     *
+     * @var list<bool>|null
      */
-    private ?Closure $subparamsProvider = null;
+    private ?array $subparams = null;
 
     /**
-     * Wire the parser's sub-parameter continuation flags for SGR colon
-     * handling. Called once at terminal construction; see
-     * {@see $subparamsProvider}.
+     * {@inheritDoc}
      *
-     * @param Closure(): list<bool> $provider
+     * @param list<bool> $subparams
      */
-    public function attachSubparamsProvider(Closure $provider): void
+    public function setSubparams(array $subparams): void
     {
-        $this->subparamsProvider = $provider;
-    }
-
-    /**
-     * Continuation flags for the in-flight dispatch, or null when no parser
-     * is attached. Safe to call only from inside a dispatch — the parser has
-     * not cleared its flags yet at that point.
-     *
-     * @return list<bool>|null
-     */
-    private function currentSubparams(): ?array
-    {
-        $provider = $this->subparamsProvider;
-        return $provider === null ? null : $provider();
+        $this->subparams = $subparams;
     }
 
     /**
@@ -415,7 +402,7 @@ final class ScreenHandler implements Handler
 
         switch ($finalChar) {
             case 'm':
-                $this->sgr = $this->sgrHandler->apply($params, $this->sgr, $this->currentSubparams());
+                $this->sgr = $this->sgrHandler->apply($params, $this->sgr, $this->subparams);
                 return;
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
             case 'H': case 'd': case 'f':

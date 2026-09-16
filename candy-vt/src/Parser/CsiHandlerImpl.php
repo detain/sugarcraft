@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
-use Closure;
 use SugarCraft\Ansi\Parser\CsiHandler;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Rendition;
 use SugarCraft\Vt\Theme;
@@ -16,7 +15,7 @@ use SugarCraft\Vt\Theme;
 /**
  * CSI handler for the vcr renderer path.
  *
- * Mutates CellGrid + Cursor directly in response to CSI dispatches.
+ * Mutates Buffer + Cursor directly in response to CSI dispatches.
  * Implements candy-ansi's {@see \SugarCraft\Ansi\Parser\CsiHandler} — the
  * shared parser dispatches completed sequences here via HandlerAdapter.
  *
@@ -75,20 +74,22 @@ final class CsiHandlerImpl implements CsiHandler
     private bool $wrapPending = false;
 
     /**
-     * Late-bound continuation flags ({@see \SugarCraft\Ansi\Parser\Parser::subparams()})
-     * for the CSI sequence currently being dispatched. Wired by
-     * {@see \SugarCraft\Vt\Terminal::new()} to the owning parser so SGR can
-     * tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
-     * italic). Unattached — direct construction in unit tests — SGR `4`
-     * treats every parameter as an independent SGR, the renderer's
+     * Colon-continuation flags PUSHED by the parser chain for the CSI sequence
+     * currently being dispatched. {@see \SugarCraft\Vt\Parser\RendererHandler}
+     * is the parser's sink in the supported wiring and forwards
+     * {@see \SugarCraft\Ansi\Parser\SubparamsAwareHandler::setSubparams()} here,
+     * so SGR can tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m`
+     * (underline + italic). Null — nothing ever pushed, e.g. direct
+     * construction or the raw candy-ansi HandlerAdapter — keeps SGR `4`
+     * treating every parameter as an independent SGR, the renderer's
      * long-standing flat-list behaviour.
      *
-     * @var (Closure(): list<bool>)|null
+     * @var list<bool>|null
      */
-    private ?Closure $subparamsProvider = null;
+    private ?array $subparams = null;
 
     public function __construct(
-        private CellGrid $grid,
+        private Buffer $grid,
         private Cursor $cursor,
         private Theme $theme,
     ) {
@@ -97,7 +98,7 @@ final class CsiHandlerImpl implements CsiHandler
         $this->scrollBottom = $grid->rows - 1;
     }
 
-    public function grid(): CellGrid
+    public function grid(): Buffer
     {
         return $this->grid;
     }
@@ -114,15 +115,19 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
-     * Wire the parser's sub-parameter continuation flags for SGR colon
-     * handling. Called once at terminal construction; see
-     * {@see $subparamsProvider}.
+     * Receive the ECMA-48 sub-parameter continuation flags for the parameter
+     * list about to be dispatched. {@see RendererHandler} — the renderer path's
+     * push-reachable {@see \SugarCraft\Ansi\Parser\SubparamsAwareHandler} sink —
+     * forwards the parser's push here so SGR can tell `CSI 4 : 3 m` (curly
+     * underline) from `CSI 4 ; 3 m` (underline + italic). Never pushed (direct
+     * construction, or the raw candy-ansi HandlerAdapter) leaves {@see $subparams}
+     * null and SGR keeps the flat-list behaviour.
      *
-     * @param Closure(): list<bool> $provider
+     * @param list<bool> $subparams
      */
-    public function attachSubparamsProvider(Closure $provider): void
+    public function setSubparams(array $subparams): void
     {
-        $this->subparamsProvider = $provider;
+        $this->subparams = $subparams;
     }
 
     public function printable(string $grapheme): void
@@ -144,7 +149,7 @@ final class CsiHandlerImpl implements CsiHandler
         if ($width <= 0) {
             $host = $this->wrapPending ? $col : $col - 1;
             if ($host >= 0) {
-                $prev = $this->grid->get($row, $host);
+                $prev = $this->grid->cell($row, $host);
                 $updated = new Cell(
                     char: $prev->char . $grapheme,
                     fg: $this->fg,
@@ -159,7 +164,7 @@ final class CsiHandlerImpl implements CsiHandler
                     // emulator appends in place and likewise keeps the link).
                     hyperlink: $prev->hyperlink,
                 );
-                $this->grid->set($row, $host, $updated);
+                $this->grid->put($row, $host, $updated);
             }
             return;
         }
@@ -201,7 +206,7 @@ final class CsiHandlerImpl implements CsiHandler
         // A graphic printed onto a line already carrying a DEC "hash" line
         // rendition inherits it: the stamp lives on the cells (so it scrolls
         // with the content), and re-writing one must not silently drop it.
-        $rendition = $this->grid->get($row, $col)->rendition;
+        $rendition = $this->grid->cell($row, $col)->rendition;
 
         // DECDWL (`ESC # 6`) draws this line double-width: while the rendition
         // is DoubleWidth a single-cell glyph claims one extra column (base +
@@ -219,17 +224,17 @@ final class CsiHandlerImpl implements CsiHandler
             bgTruecolor: $this->bgTruecolor,
             rendition: $rendition,
         );
-        $this->grid->set($row, $col, $cell);
+        $this->grid->put($row, $col, $cell);
 
         // Write continuation cells for wide characters (e.g. CJK, emoji) and
         // the DECDWL double-width bump. The natural-width tail blanks to the
         // shared empty cell (as the renderer always has); the extra DECDWL
         // column carries the line rendition so it stays observably wide.
         for ($i = 1; $i < $width; $i++) {
-            $this->grid->set($row, $col + $i, Cell::empty());
+            $this->grid->put($row, $col + $i, Cell::empty());
         }
         for ($i = 0; $i < $extra; $i++) {
-            $this->grid->set($row, $col + $width + $i, Cell::continuation($cell));
+            $this->grid->put($row, $col + $width + $i, Cell::continuation($cell));
         }
 
         // Park on the last column with the phantom flag set instead of
@@ -300,7 +305,7 @@ final class CsiHandlerImpl implements CsiHandler
             $params = [0];
         }
 
-        $subs = $this->currentSubparams();
+        $subs = $this->subparams;
         $i = 0;
         $paramCount = count($params);
         while ($i < $paramCount) {
@@ -361,18 +366,6 @@ final class CsiHandlerImpl implements CsiHandler
     private function packRgb(int $r, int $g, int $b): int
     {
         return ($r << 16) | ($g << 8) | $b;
-    }
-
-    /**
-     * Continuation flags for the CSI sequence being dispatched, or null
-     * when no parser is attached (flat-parameter behaviour).
-     *
-     * @return list<bool>|null
-     */
-    private function currentSubparams(): ?array
-    {
-        $provider = $this->subparamsProvider;
-        return $provider === null ? null : $provider();
     }
 
     /**
@@ -627,14 +620,14 @@ final class CsiHandlerImpl implements CsiHandler
         if ($mode === 0) {
             for ($r = $row; $r < $this->grid->rows; $r++) {
                 for ($c = ($r === $row ? $col : 0); $c < $this->grid->cols; $c++) {
-                    $this->grid->set($r, $c, Cell::empty());
+                    $this->grid->put($r, $c, Cell::empty());
                 }
             }
         } elseif ($mode === 1) {
             for ($r = 0; $r <= $row; $r++) {
                 $endCol = $r === $row ? $col + 1 : $this->grid->cols;
                 for ($c = 0; $c < $endCol; $c++) {
-                    $this->grid->set($r, $c, Cell::empty());
+                    $this->grid->put($r, $c, Cell::empty());
                 }
             }
         } elseif ($mode === 2) {
@@ -649,15 +642,15 @@ final class CsiHandlerImpl implements CsiHandler
 
         if ($mode === 0) {
             for ($c = $col; $c < $this->grid->cols; $c++) {
-                $this->grid->set($row, $c, Cell::empty());
+                $this->grid->put($row, $c, Cell::empty());
             }
         } elseif ($mode === 1) {
             for ($c = 0; $c <= $col; $c++) {
-                $this->grid->set($row, $c, Cell::empty());
+                $this->grid->put($row, $c, Cell::empty());
             }
         } elseif ($mode === 2) {
             for ($c = 0; $c < $this->grid->cols; $c++) {
-                $this->grid->set($row, $c, Cell::empty());
+                $this->grid->put($row, $c, Cell::empty());
             }
         }
     }
@@ -802,12 +795,12 @@ final class CsiHandlerImpl implements CsiHandler
 
         for ($r = $this->scrollBottom; $r >= $row + $count; $r--) {
             for ($c = 0; $c < $cols; $c++) {
-                $this->grid->set($r, $c, $this->grid->get($r - $count, $c));
+                $this->grid->put($r, $c, $this->grid->cell($r - $count, $c));
             }
         }
         for ($r = $row; $r < $row + $count; $r++) {
             for ($c = 0; $c < $cols; $c++) {
-                $this->grid->set($r, $c, Cell::empty());
+                $this->grid->put($r, $c, Cell::empty());
             }
         }
         $this->wrapPending = false;
@@ -833,12 +826,12 @@ final class CsiHandlerImpl implements CsiHandler
 
         for ($r = $row; $r <= $this->scrollBottom - $count; $r++) {
             for ($c = 0; $c < $cols; $c++) {
-                $this->grid->set($r, $c, $this->grid->get($r + $count, $c));
+                $this->grid->put($r, $c, $this->grid->cell($r + $count, $c));
             }
         }
         for ($r = $this->scrollBottom - $count + 1; $r <= $this->scrollBottom; $r++) {
             for ($c = 0; $c < $cols; $c++) {
-                $this->grid->set($r, $c, Cell::empty());
+                $this->grid->put($r, $c, Cell::empty());
             }
         }
         $this->wrapPending = false;
@@ -861,10 +854,10 @@ final class CsiHandlerImpl implements CsiHandler
         }
 
         for ($c = $cols - 1; $c >= $col + $count; $c--) {
-            $this->grid->set($row, $c, $this->grid->get($row, $c - $count));
+            $this->grid->put($row, $c, $this->grid->cell($row, $c - $count));
         }
         for ($c = $col; $c < $col + $count; $c++) {
-            $this->grid->set($row, $c, Cell::empty());
+            $this->grid->put($row, $c, Cell::empty());
         }
     }
 
@@ -884,10 +877,10 @@ final class CsiHandlerImpl implements CsiHandler
         }
 
         for ($c = $col; $c < $cols - $count; $c++) {
-            $this->grid->set($row, $c, $this->grid->get($row, $c + $count));
+            $this->grid->put($row, $c, $this->grid->cell($row, $c + $count));
         }
         for ($c = $cols - $count; $c < $cols; $c++) {
-            $this->grid->set($row, $c, Cell::empty());
+            $this->grid->put($row, $c, Cell::empty());
         }
     }
 
@@ -994,13 +987,13 @@ final class CsiHandlerImpl implements CsiHandler
 
         for ($r = $top; $r < $bottom; $r++) {
             for ($c = 0; $c < $cols; $c++) {
-                $next = $this->grid->get($r + 1, $c);
-                $this->grid->set($r, $c, $next);
+                $next = $this->grid->cell($r + 1, $c);
+                $this->grid->put($r, $c, $next);
             }
         }
 
         for ($c = 0; $c < $cols; $c++) {
-            $this->grid->set($bottom, $c, Cell::empty());
+            $this->grid->put($bottom, $c, Cell::empty());
         }
     }
 
@@ -1025,13 +1018,13 @@ final class CsiHandlerImpl implements CsiHandler
 
         for ($r = $bottom; $r > $top; $r--) {
             for ($c = 0; $c < $cols; $c++) {
-                $prev = $this->grid->get($r - 1, $c);
-                $this->grid->set($r, $c, $prev);
+                $prev = $this->grid->cell($r - 1, $c);
+                $this->grid->put($r, $c, $prev);
             }
         }
 
         for ($c = 0; $c < $cols; $c++) {
-            $this->grid->set($top, $c, Cell::empty());
+            $this->grid->put($top, $c, Cell::empty());
         }
     }
 
@@ -1173,7 +1166,7 @@ final class CsiHandlerImpl implements CsiHandler
         }
         $cols = $this->grid->cols;
         for ($c = 0; $c < $cols; $c++) {
-            $this->grid->set($row, $c, $this->grid->get($row, $c)->withRendition($rendition));
+            $this->grid->put($row, $c, $this->grid->cell($row, $c)->withRendition($rendition));
         }
     }
 }

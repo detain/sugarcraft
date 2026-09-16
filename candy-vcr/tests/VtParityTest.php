@@ -227,7 +227,7 @@ final class VtParityTest extends TestCase
     }
 
     #[DataProvider('curatedStreams')]
-    public function testCuratedStreamsProduceIdenticalCellGrids(string $bytes): void
+    public function testCuratedStreamsProduceIdenticalGrids(string $bytes): void
     {
         self::assertSame(
             self::normaliseEmulator(self::feedEmulator($bytes)),
@@ -236,7 +236,7 @@ final class VtParityTest extends TestCase
         );
     }
 
-    public function testSeededRandomStreamsProduceIdenticalCellGrids(): void
+    public function testSeededRandomStreamsProduceIdenticalGrids(): void
     {
         foreach ([0xC0FFEE, 0xBEEF, 0xDEAD, 1, 42] as $seed) {
             $bytes = self::randomStream($seed);
@@ -515,7 +515,7 @@ final class VtParityTest extends TestCase
                 ? 'emulator: BCE keeps only the background — fg is default'
                 : 'emulator: pre-w4 published vt bleeds the pen fg (stale Packagist dev-master)',
         );
-        self::assertSame('I0', 'I' . $renderer->grid()->get(0, 5)->bg, 'renderer: erase drops the pen background');
+        self::assertSame('I0', 'I' . $renderer->grid()->cell(0, 5)->bg, 'renderer: erase drops the pen background');
         self::assertSame('I8', self::emulatorBg($emulator, 0, 5), 'emulator: erase carries SGR 100 as the erase colour');
     }
 
@@ -643,7 +643,7 @@ final class VtParityTest extends TestCase
         for ($r = 0; $r < $grid->rows; $r++) {
             $line = [];
             for ($c = 0; $c < $grid->cols; $c++) {
-                $cell = $grid->get($r, $c);
+                $cell = $grid->cell($r, $c);
                 $line[] = sprintf(
                     '%s|%s|%s|%d|R%d',
                     $cell->char === '' ? ' ' : $cell->char,
@@ -811,7 +811,7 @@ final class VtParityTest extends TestCase
 
     private static function charAt(RendererTerminal $terminal, int $row, int $col): string
     {
-        return $terminal->grid()->get($row, $col)->char;
+        return $terminal->grid()->cell($row, $col)->char;
     }
 
     private static function emulatorCharAt(EmulatorTerminal $terminal, int $row, int $col): string
@@ -822,7 +822,7 @@ final class VtParityTest extends TestCase
 
     private static function rendererAttrs(RendererTerminal $terminal, int $row, int $col): int
     {
-        return $terminal->grid()->get($row, $col)->attrs;
+        return $terminal->grid()->cell($row, $col)->attrs;
     }
 
     private static function emulatorAttrs(EmulatorTerminal $terminal, int $row, int $col): int
@@ -832,7 +832,7 @@ final class VtParityTest extends TestCase
 
     private static function rendererFg(RendererTerminal $terminal, int $row, int $col): string
     {
-        $cell = $terminal->grid()->get($row, $col);
+        $cell = $terminal->grid()->cell($row, $col);
 
         return $cell->fgTruecolor !== null ? 'TC:' . $cell->fgTruecolor : 'I' . $cell->fg;
     }

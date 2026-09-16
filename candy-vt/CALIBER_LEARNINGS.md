@@ -456,8 +456,9 @@ to prevent CRLF normalization on checkout.
 ## Renderer value objects — Phase 1a patterns
 
 The `SugarCraft\Vt` root namespace holds simplified value objects
-(`Cell`, `CellGrid`, `Cursor`) for the vcr renderer path, distinct from
-the full VT parser stack in subdirectories.
+(`Cell`, `Cursor`) for the vcr renderer path, distinct from
+the full VT parser stack in subdirectories. (The old `CellGrid` was
+collapsed into `Buffer\Buffer` — one grid serves both pipelines.)
 
 ### Private mutate() helper for fluent with*() methods
 
@@ -492,17 +493,21 @@ model upstream. Constants are defined on `Cell`:
 Cell::ATTR_BOLD | Cell::ATTR_ITALIC | Cell::ATTR_UNDERLINE ...
 ```
 
-### CellGrid dirty-region tracking
+### Buffer dirty-region tracking (one grid since the CellGrid collapse)
 
-`CellGrid` tracks a minimal bounding box of dirty cells
-(`minRow`, `maxRow`, `minCol`, `maxCol`) as **private** properties,
-not constructor parameters. Constructor params are `cols` + `rows` only.
-The `dirtyRegion()` method exposes the bounds as a typed array return.
+`Buffer` is the single 2D cell grid for BOTH the emulator (`ScreenHandler`)
+and the vcr renderer path (`Terminal` → `Snapshot`) — the old root-namespace
+`CellGrid` was retired into it (decision 1B). It tracks a minimal bounding
+box of dirty cells (`minRow`, `maxRow`, `minCol`, `maxCol`) as **private**
+properties, not constructor parameters. Constructor params are `cols` +
+`rows` only. The `dirtyRegion()` method exposes the bounds as a typed array
+return.
 
-`clear()` creates a fresh grid (dirty region resets to zero/empty).
-`resize()` creates a fresh grid with content copied, also resetting
-dirty region. `set()` expands the bounding box to include the
-written cell and returns a new `CellGrid` instance.
+`clear()` creates a fresh grid (dirty region resets to the sentinels).
+`resize()` creates a fresh grid with content copied, also resetting the
+dirty region. `put()` writes in place and expands the bounding box to
+include the written cell — Buffer is deliberately MUTABLE; the immutable
+frame view is `Snapshot`, not the grid.
 
 ### Cursor shape values
 

@@ -31,7 +31,7 @@ final class CsiHandlerImplColonSgrTest extends TestCase
     {
         $t = Terminal::new(10, 2);
         $t->feed($csiWithPrintable . 'X');
-        return $t->grid()->get(0, 0);
+        return $t->grid()->cell(0, 0);
     }
 
     public function testColonTruecolourKeepsTheRestOfThePenLikeSemicolon(): void
@@ -58,6 +58,45 @@ final class CsiHandlerImplColonSgrTest extends TestCase
         $baseline = $this->cellAfter("\x1b[1;48;2;255;0;0m");
         $cell = $this->cellAfter("\x1b[1;48:2::255:0:0m");
         $this->assertSame([$baseline->bg, $baseline->attrs], [$cell->bg, $cell->attrs], '48:2::R:G:B equals 48;2;R;G;B');
+    }
+
+    public function testColonUnderlineStyleArrivesThroughTheFacadePush(): void
+    {
+        // `CSI 4 : 3 m` is ONE parameter (curly underline; the renderer's cell
+        // model folds every on-style to the single ATTR_UNDERLINE bit) while
+        // `CSI 4 ; 3 m` is TWO independent SGRs (underline + italic). Only the
+        // parser's pushed continuation flags tell the flattened [4, 3] lists
+        // apart, and the supported composer must deliver them with no extra
+        // wiring — the regression the retired provider used to patch.
+        $this->assertSame(
+            Cell::ATTR_UNDERLINE,
+            $this->cellAfter("\x1b[4:3m")->attrs,
+            '4:3 → underline only',
+        );
+        $this->assertSame(
+            Cell::ATTR_UNDERLINE | Cell::ATTR_ITALIC,
+            $this->cellAfter("\x1b[4;3m")->attrs,
+            '4;3 → underline + italic',
+        );
+    }
+
+    public function testFlagsAreFreshPerSequenceAcrossOneTerminal(): void
+    {
+        // One terminal, two SGRs, opposite grouping: the push must replace the
+        // flags on every dispatch. A handler that latched the first list (or
+        // the colon list) would mis-group whichever sequence came second.
+        $t = Terminal::new(10, 2);
+        $t->feed("\x1b[4:3mA\x1b[0m\x1b[4;3mB");
+        $this->assertSame(
+            Cell::ATTR_UNDERLINE,
+            $t->grid()->cell(0, 0)->attrs,
+            'first cell: colon group → underline only',
+        );
+        $this->assertSame(
+            Cell::ATTR_UNDERLINE | Cell::ATTR_ITALIC,
+            $t->grid()->cell(0, 1)->attrs,
+            'second cell: semicolon pair → underline + italic',
+        );
     }
 
     public function testColonIndexedSetsTheSamePaletteIndexAsSemicolon(): void

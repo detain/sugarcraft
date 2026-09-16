@@ -90,7 +90,7 @@ final class CellColorSgrTest extends TestCase
         $term = Terminal::new(10, 3);
         $term->feed("\x1b[38;2;200;100;50;48;2;10;20;30mZ");
 
-        $cell = $term->grid()->get(0, 0);
+        $cell = $term->grid()->cell(0, 0);
         $this->assertSame('Z', $cell->char);
         $this->assertSame("\x1b[38;2;200;100;50;48;2;10;20;30m", $cell->colorSgr());
     }

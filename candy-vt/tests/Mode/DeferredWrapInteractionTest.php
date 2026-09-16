@@ -173,13 +173,15 @@ final class DeferredWrapInteractionTest extends TestCase
         $this->assertSame('', $h->buffer->cell(0, 1)->combining);
     }
 
-    public function testCloneReattachesSubparamsProviderToOwnParser(): void
+    public function testCloneReadsSubparamsPushedByItsOwnParser(): void
     {
         // Emulator terminals are cloned by the with*() builders; the cloned
-        // handler must read colon continuation flags from the CLONE's own
-        // parser. Left bound to the original it serves stale flags (a prior
+        // handler must receive colon continuation flags from the CLONE's own
+        // parser. With the pull route these exact shapes went wrong — the
+        // inherited late-binding served stale flags from the original (a prior
         // `4:3` on the original leaking into the clone's `4;3`) or an empty
-        // list (a fresh original making the clone read `4:3` as `4;3`).
+        // list (a fresh original making the clone read `4:3` as `4;3`). With
+        // the push the clone simply cannot see the original's parser.
         $a = Terminal::new(8, 6);
         $a->feed("\x1b[4:3mA");
         $b = clone $a;

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\FrameStream;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
 use SugarCraft\Vt\Terminal;
@@ -64,9 +64,9 @@ final class FrameDedupTest extends TestCase
         $deduped = iterator_to_array(FrameDedup::dedup($stream));
 
         $this->assertCount(3, $deduped);
-        $this->assertSame('A', $deduped[0]->grid->get(0, 0)->char);
-        $this->assertSame('B', $deduped[1]->grid->get(0, 0)->char);
-        $this->assertSame('C', $deduped[2]->grid->get(0, 0)->char);
+        $this->assertSame('A', $deduped[0]->grid->cell(0, 0)->char);
+        $this->assertSame('B', $deduped[1]->grid->cell(0, 0)->char);
+        $this->assertSame('C', $deduped[2]->grid->cell(0, 0)->char);
     }
 
     public function testDedupWithTenIdenticalAndOneDifferent(): void
@@ -83,8 +83,8 @@ final class FrameDedupTest extends TestCase
         $deduped = iterator_to_array(FrameDedup::dedup($stream));
 
         $this->assertCount(2, $deduped);
-        $this->assertSame('X', $deduped[0]->grid->get(0, 0)->char);
-        $this->assertSame('Y', $deduped[1]->grid->get(0, 0)->char);
+        $this->assertSame('X', $deduped[0]->grid->cell(0, 0)->char);
+        $this->assertSame('Y', $deduped[1]->grid->cell(0, 0)->char);
     }
 
     public function testDedupHonorsHoldMax(): void
@@ -141,8 +141,8 @@ final class FrameDedupTest extends TestCase
 
     private function makeSnapshotWithChar(Terminal $terminal, int $row, int $col, string $char, float $time): Snapshot
     {
-        $grid = new CellGrid(80, 24);
-        $grid = $grid->set($row, $col, new Cell($char));
+        $grid = new Buffer(80, 24);
+        $grid->put($row, $col, new Cell($char));
         $cursor = new Cursor();
         return new Snapshot($grid, $cursor, $time);
     }

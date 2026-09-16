@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
 
@@ -14,7 +14,7 @@ final class SnapshotTest extends TestCase
 {
     public function testConstructorStoresValues(): void
     {
-        $grid = new CellGrid(80, 24);
+        $grid = new Buffer(80, 24);
         $cursor = new Cursor(row: 5, col: 10);
         $time = 1.5;
 
@@ -27,7 +27,7 @@ final class SnapshotTest extends TestCase
 
     public function testGridAndCursorAreAccessible(): void
     {
-        $grid = new CellGrid(80, 24);
+        $grid = new Buffer(80, 24);
         $cursor = new Cursor(row: 0, col: 0);
 
         $snap = new Snapshot($grid, $cursor, 0.0);
@@ -38,23 +38,23 @@ final class SnapshotTest extends TestCase
 
     public function testTimeCanBeZero(): void
     {
-        $snap = new Snapshot(new CellGrid(80, 24), new Cursor(), 0.0);
+        $snap = new Snapshot(new Buffer(80, 24), new Cursor(), 0.0);
 
         $this->assertSame(0.0, $snap->time);
     }
 
     public function testTimeCanBeLarge(): void
     {
-        $snap = new Snapshot(new CellGrid(80, 24), new Cursor(), 3600.123);
+        $snap = new Snapshot(new Buffer(80, 24), new Cursor(), 3600.123);
 
         $this->assertSame(3600.123, $snap->time);
     }
 
     public function testEqualsReturnsTrueForIdenticalSnapshots(): void
     {
-        $grid1 = new CellGrid(80, 24);
-        $grid1->get(0, 0); // populate
-        $grid2 = new CellGrid(80, 24);
+        $grid1 = new Buffer(80, 24);
+        $grid1->cell(0, 0); // populate
+        $grid2 = new Buffer(80, 24);
         $cursor1 = new Cursor(row: 5, col: 10);
         $cursor2 = new Cursor(row: 5, col: 10);
 
@@ -66,9 +66,9 @@ final class SnapshotTest extends TestCase
 
     public function testEqualsReturnsFalseForDifferentGrids(): void
     {
-        $grid1 = new CellGrid(80, 24);
-        $grid2 = new CellGrid(80, 24);
-        $grid1->set(0, 0, new Cell('X'));
+        $grid1 = new Buffer(80, 24);
+        $grid2 = new Buffer(80, 24);
+        $grid1->put(0, 0, new Cell('X'));
 
         $snap1 = new Snapshot($grid1, new Cursor(), 1.0);
         $snap2 = new Snapshot($grid2, new Cursor(), 1.0);
@@ -78,7 +78,7 @@ final class SnapshotTest extends TestCase
 
     public function testEqualsReturnsFalseForDifferentCursors(): void
     {
-        $grid = new CellGrid(80, 24);
+        $grid = new Buffer(80, 24);
         $cursor1 = new Cursor(row: 5, col: 10);
         $cursor2 = new Cursor(row: 5, col: 20);
 
@@ -90,7 +90,7 @@ final class SnapshotTest extends TestCase
 
     public function testEqualsWithTimeReturnsTrueOnlyWhenTimeMatches(): void
     {
-        $grid = new CellGrid(80, 24);
+        $grid = new Buffer(80, 24);
         $cursor = new Cursor(row: 5, col: 10);
 
         $snap1 = new Snapshot($grid, $cursor, 1.5);
@@ -103,9 +103,9 @@ final class SnapshotTest extends TestCase
 
     public function testEqualsWithTimeReturnsFalseForDifferentGrids(): void
     {
-        $grid1 = new CellGrid(80, 24);
-        $grid2 = new CellGrid(80, 24);
-        $grid1->set(0, 0, new Cell('X'));
+        $grid1 = new Buffer(80, 24);
+        $grid2 = new Buffer(80, 24);
+        $grid1->put(0, 0, new Cell('X'));
 
         $cursor = new Cursor();
         $time = 1.0;
@@ -118,7 +118,7 @@ final class SnapshotTest extends TestCase
 
     public function testEqualsWithTimeReturnsFalseForDifferentCursors(): void
     {
-        $grid = new CellGrid(80, 24);
+        $grid = new Buffer(80, 24);
         $cursor1 = new Cursor(row: 5, col: 10);
         $cursor2 = new Cursor(row: 10, col: 5);
 
@@ -135,7 +135,7 @@ final class SnapshotTest extends TestCase
 
         $snap = \SugarCraft\Vt\Snapshot::of($terminal, 3.5);
 
-        $this->assertSame('H', $snap->grid->get(0, 0)->char);
+        $this->assertSame('H', $snap->grid->cell(0, 0)->char);
         $this->assertSame(0, $snap->cursor->row);
         $this->assertSame(5, $snap->cursor->col);
         $this->assertSame(3.5, $snap->time);
