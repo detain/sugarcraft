@@ -13,10 +13,11 @@ use SugarCraft\Vt\Theme;
 /**
  * Alternative rasterizer using ext-imagick.
  *
- * Provides better anti-aliasing than gd for text rendering. Colors are
- * resolved through the configured {@see Theme} so user-selected themes
- * (TokyoNight, Dracula, etc.) reach the GIF instead of the default VGA
- * palette.
+ * Provides better anti-aliasing than gd for text rendering. Each cell paints
+ * with its exact 24-bit colour when SGR `38;2`/`48;2` supplied one, otherwise
+ * the cell's palette slot resolved through the configured {@see Theme} (via
+ * {@see CellColor}) so user-selected themes (TokyoNight, Dracula, etc.) reach
+ * the GIF instead of the default VGA palette.
  *
  * Tile cache lives on the rasterizer instance so per-cell `\Imagick`
  * allocations are amortised across a tape's many snapshots — keyed on
@@ -179,11 +180,15 @@ final class ImagickRasterizer implements Rasterizer
         $inverse = ($cell->attrs & Cell::ATTR_INVERSE) !== 0;
         $fgIdx = $inverse ? $cell->bg : $cell->fg;
         $bgIdx = $inverse ? $cell->fg : $cell->bg;
+        // Exact 24-bit pen when the cell carries SGR 38;2/48;2, swapped like the
+        // palette slots under inverse; null → theme palette (byte-identical old path).
+        $fgRgb = CellColor::pack($inverse ? $cell->bgRgb() : $cell->fgRgb());
+        $bgRgb = CellColor::pack($inverse ? $cell->fgRgb() : $cell->bgRgb());
         $bold = ($cell->attrs & Cell::ATTR_BOLD) !== 0;
         $italic = ($cell->attrs & Cell::ATTR_ITALIC) !== 0;
         $underline = ($cell->attrs & Cell::ATTR_UNDERLINE) !== 0;
 
-        $key = $this->cacheKey($cell->char, $fgIdx, $bgIdx, $bold, $italic, $underline, $isWide);
+        $key = $this->cacheKey($cell->char, $fgIdx, $bgIdx, $bold, $italic, $underline, $isWide, $fgRgb, $bgRgb);
 
         if (!$this->cacheDisabled && isset($this->tileCache[$key])) {
             $this->hits++;
@@ -191,7 +196,7 @@ final class ImagickRasterizer implements Rasterizer
         }
 
         $this->misses++;
-        $tile = $this->renderCellTile($cell->char, $fgIdx, $bgIdx, $bold, $italic, $underline, $cellW, $cellH, $fonts, $tileW);
+        $tile = $this->renderCellTile($cell->char, $fgIdx, $bgIdx, $bold, $italic, $underline, $cellW, $cellH, $fonts, $tileW, $fgRgb, $bgRgb);
 
         if (!$this->cacheDisabled) {
             $this->tileCache[$key] = $tile;
@@ -201,9 +206,25 @@ final class ImagickRasterizer implements Rasterizer
         return $tile;
     }
 
-    private function cacheKey(string $char, int $fg, int $bg, bool $bold, bool $italic, bool $underline, bool $wide): string
-    {
-        return $char . '|' . $fg . '|' . $bg . '|' . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0') . '|' . ($wide ? 'w' : 'n');
+    private function cacheKey(
+        string $char,
+        int $fg,
+        int $bg,
+        bool $bold,
+        bool $italic,
+        bool $underline,
+        bool $wide,
+        ?int $fgRgb = null,
+        ?int $bgRgb = null,
+    ): string {
+        $key = $char . '|' . $fg . '|' . $bg . '|' . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0') . '|' . ($wide ? 'w' : 'n');
+        // Palette-only cells append nothing, so their keys — and the cache
+        // hit/miss census — stay byte-identical to before truecolour support.
+        if ($fgRgb !== null || $bgRgb !== null) {
+            $key .= '|tc' . ($fgRgb ?? '-') . ',' . ($bgRgb ?? '-');
+        }
+
+        return $key;
     }
 
     private function renderCellTile(
@@ -217,13 +238,18 @@ final class ImagickRasterizer implements Rasterizer
         int $cellH,
         FontLoader $fonts,
         int $tileW,
+        ?int $fgRgb = null,
+        ?int $bgRgb = null,
     ): \Imagick {
+        $bgHex = $bgRgb !== null ? $this->hexFromRgb($bgRgb) : $this->indexToHex($bgIdx);
+        $fgHex = $fgRgb !== null ? $this->hexFromRgb($fgRgb) : $this->indexToHex($fgIdx);
+
         $tile = new \Imagick();
-        $tile->newImage($tileW, $cellH, new \ImagickPixel($this->indexToHex($bgIdx)));
+        $tile->newImage($tileW, $cellH, new \ImagickPixel($bgHex));
         $tile->setImageFormat('png');
 
         $draw = new \ImagickDraw();
-        $draw->setFillColor(new \ImagickPixel($this->indexToHex($fgIdx)));
+        $draw->setFillColor(new \ImagickPixel($fgHex));
 
         if ($bold) {
             $draw->setFontWeight(700);
@@ -255,7 +281,7 @@ final class ImagickRasterizer implements Rasterizer
         if ($underline) {
             $underlineY = (int) floor($cellH * 0.75);
             $draw2 = new \ImagickDraw();
-            $draw2->setFillColor(new \ImagickPixel($this->indexToHex($fgIdx)));
+            $draw2->setFillColor(new \ImagickPixel($fgHex));
             $draw2->line(0, $underlineY, $tileW - 1, $underlineY);
             $tile->drawImage($draw2);
         }
@@ -283,12 +309,8 @@ final class ImagickRasterizer implements Rasterizer
         $x = $col * $cellW;
         $y = $row * $cellH;
 
-        $cursorIdx = (($cell->attrs & Cell::ATTR_INVERSE) !== 0)
-            ? $cell->bg
-            : ($cell->fg === 0 ? $this->theme->defaultFg : $cell->fg);
-
         $draw = new \ImagickDraw();
-        $draw->setFillColor(new \ImagickPixel($this->indexToHex($cursorIdx)));
+        $draw->setFillColor(new \ImagickPixel($this->hexFromRgb($this->cursorRgb($cell))));
 
         match ($cursor->shape) {
             1 => $this->drawBlockCursor($draw, $x, $y, $cellW, $cellH),
@@ -298,6 +320,22 @@ final class ImagickRasterizer implements Rasterizer
         };
 
         $imagick->drawImage($draw);
+    }
+
+    /**
+     * On-screen cursor colour as an exact 24-bit value, honouring SGR 38;2 on the
+     * channel painted and preserving this rasterizer's own palette legacy: the
+     * inverse case paints the background slot (unlike GdRasterizer, which paints
+     * the foreground — a pre-existing cross-rasterizer difference kept intact).
+     */
+    private function cursorRgb(Cell $cell): int
+    {
+        if (($cell->attrs & Cell::ATTR_INVERSE) !== 0) {
+            return CellColor::background($cell, $this->theme);
+        }
+
+        return CellColor::pack($cell->fgRgb())
+            ?? $this->theme->color($cell->fg === 0 ? $this->theme->defaultFg : $cell->fg);
     }
 
     private function drawBlockCursor(\ImagickDraw $draw, int $x, int $y, int $w, int $h): void
@@ -324,7 +362,12 @@ final class ImagickRasterizer implements Rasterizer
 
     private function indexToHex(int $index): string
     {
-        $rgb = $this->theme->color($index);
+        return $this->hexFromRgb($this->theme->color($index));
+    }
+
+    /** Format an exact `0xRRGGBB` value as an Imagick `#rrggbb` colour string. */
+    private function hexFromRgb(int $rgb): string
+    {
         return sprintf('#%06x', $rgb & 0xffffff);
     }
 }

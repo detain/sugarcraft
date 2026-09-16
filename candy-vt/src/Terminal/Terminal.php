@@ -7,6 +7,8 @@ namespace SugarCraft\Vt\Terminal;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use React\Stream\ReadableStreamInterface;
+use SugarCraft\Async\CancellationToken;
+use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Ansi\Parser\Parser;
@@ -168,12 +170,39 @@ final class Terminal
      * intact for a later retry, a rejected promise is the caller's notice
      * and a resurrected answer on a dead stream would be a phantom.
      *
+     * Cancellation is cooperative and immediate: pass a candy-async
+     * {@see CancellationToken} (owned by the caller's
+     * {@see \SugarCraft\Async\CancellationSource}) as `$cancellation` and the
+     * caller can abort mid-stream — the moment `cancel()` is reached the pump
+     * detaches every stream listener and rejects the promise with
+     * {@see OperationCancelledException}, so a late `data` write can no longer
+     * re-enter the parser. This closes the reviewer-agreed gap where the only
+     * way to stop a pump was to end the promise's *consumer*, leaving the data
+     * listener attached until the stream itself ended or errored (n3, wave-6
+     * handoff §6.1). The race is single-shot: whichever of `end`/`error`/
+     * `close`/cancel arrives first owns the one settlement (the same
+     * settle-once latch the failure paths use), and cancellation is idempotent
+     * — a `cancel()` that arrives after the pump already settled is a no-op.
+     * The pump never closes or pauses `$input` (the stream belongs to the
+     * caller), it only stops listening. Mirrors the token-cooperative bridge the
+     * candy-async consumers use (`CancellableQuery::wrap()`): `null` leaves
+     * today's behaviour byte-identical (the pre-existing `end`/`error`/`close`
+     * settlement paths are untouched); a non-null token rejects promptly with an
+     * {@see OperationCancelledException} (a `\RuntimeException` subclass, so
+     * callers already catching stream rejections catch a cancel unchanged).
+     * Because {@see CancellationToken} offers no callback unregistration, a
+     * token reused across pumps accumulates one settled-guarded closure per
+     * pump — prefer one token per pump.
+     *
      * @param (callable(string): void)|null $respond
      *
      * @return PromiseInterface<string>
      */
-    public function feedStream(ReadableStreamInterface $input, ?callable $respond = null): PromiseInterface
-    {
+    public function feedStream(
+        ReadableStreamInterface $input,
+        ?callable $respond = null,
+        ?CancellationToken $cancellation = null,
+    ): PromiseInterface {
         if (!$input->isReadable()) {
             return reject(new \RuntimeException('Cannot pump a terminal input stream that is not readable (already ended or closed).'));
         }
@@ -266,6 +295,27 @@ final class Terminal
         };
         foreach ($listeners as $event => $listener) {
             $input->on($event, $listener);
+        }
+        if ($cancellation !== null) {
+            // Cooperative abort: on `cancel()` the pump detaches exactly as the
+            // natural settle paths do, then rejects with the candy-async
+            // cancellation signal, so a caller holding a CancellationSource can
+            // stop the pump mid-stream instead of only ending its consumer (n3).
+            // Registered AFTER the listeners attach so an already-cancelled token
+            // — whose onCancel fires synchronously — still has live listeners to
+            // remove. Guarded by the same $settled latch the failure paths use,
+            // so a cancel racing end/error/close loses cleanly: exactly one
+            // settlement, and a reject-after-settle is ignored regardless.
+            $cancellation->onCancel(static function () use ($deferred, $detach, &$settled): void {
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $detach();
+                $deferred->reject(new OperationCancelledException(
+                    'Terminal input stream pump cancelled by its CancellationToken.',
+                ));
+            });
         }
         return $deferred->promise();
     }
