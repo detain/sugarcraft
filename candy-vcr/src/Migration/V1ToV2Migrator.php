@@ -76,9 +76,9 @@ final class V1ToV2Migrator implements CassetteMigrator
 
     private function migrateHeader(CassetteHeader $header): CassetteHeader
     {
-        // Build v2 header. Numeric `v` is bumped; `formatVersion` carries the
-        // semantic version string. (No `migrationMeta` header slot exists in
-        // CassetteHeader v2 — the upgrade path is described by describe().)
+        // Build v2 header: the numeric `v` is bumped. CassetteHeader has no
+        // `formatVersion` string field and no `migrationMeta` slot — the
+        // upgrade path is described by describe().
         return new CassetteHeader(
             version: self::TARGET_VERSION,
             createdAt: $header->createdAt,
