@@ -18,13 +18,14 @@ namespace SugarCraft\Ansi\Parser;
  * (`attachSubparamsProvider()` in candy-vt, `bindParser()` in candy-freeze).
  *
  * That pull inverts the dependency the parser otherwise has — the handler ends
- * up holding a reference to the thing dispatching it — and the reference can
- * go stale in ways the type system cannot see: candy-vt's `Terminal::__clone()`
- * exists solely to re-attach a closure that would otherwise keep reading the
- * *original* terminal's parser flags, and a handler reused across two parsers
- * reads whichever one bound last. Pushing the flags at dispatch time removes
- * the back-reference entirely: the handler is told, in the same call chain that
- * shows it the parameters, how those parameters were grouped.
+ * up holding a reference to the thing dispatching it — and the reference can go
+ * stale in ways the type system cannot see: candy-vt's `Terminal::__clone()` has
+ * to re-attach the closure after cloning precisely because the inherited one
+ * still late-binds to the *original* terminal's parser, and a handler reused
+ * across two parsers reads whichever one bound last. Pushing the flags at
+ * dispatch time removes the back-reference entirely: the handler is told, in the
+ * same call chain that shows it the parameters, how those parameters were
+ * grouped.
  *
  * Deliberately a separate capability rather than a fifth parameter on
  * {@see Handler::csiDispatch()}, for two reasons:
@@ -51,17 +52,40 @@ namespace SugarCraft\Ansi\Parser;
  *
  * ## Retirement sequencing (both routes live for one wave)
  *
- * The pull-based late binding is NOT deleted by this interface's introduction,
- * because its call sites live in consuming libraries, not here:
- * `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()`,
- * `SugarCraft\Vt\Parser\CsiHandlerImpl::attachSubparamsProvider()` and
- * `SugarCraft\Freeze\SgrStateHandler::bindParser()`. {@see Parser::subparams()}
- * therefore remains public and byte-compatible for those handlers, and a
- * consuming class is free to implement this interface and ignore the pull
- * route. Once every consumer in-tree has migrated, the `attach…`/`bind…`
- * plumbing goes away and {@see Parser::subparams()} keeps only its
- * parser-owner meaning. Until then: implementors get the push, non-implementors
- * are dispatched with zero behaviour change.
+ * The pull-based late binding is NOT deleted by this interface's introduction:
+ * its call sites live in consuming libraries, and removing the pull route from
+ * here would fatally break their CI. The follow-up (wave-6 child "vt-B") must
+ * migrate the consumers, then tag the three plumbing symbols `@deprecated` —
+ * they are defined OUTSIDE this repository, which is why no `@deprecated` tag
+ * can accompany this interface:
+ *
+ *  - `SugarCraft\Vt\Handler\ScreenHandler::attachSubparamsProvider()`
+ *  - `SugarCraft\Vt\Parser\CsiHandlerImpl::attachSubparamsProvider()`
+ *  - `SugarCraft\Freeze\SgrStateHandler::bindParser()`
+ *
+ * ### Which of those the push can actually reach
+ *
+ * The parser consults exactly one object: the {@see Handler} passed to
+ * {@see Parser::__construct()}. A capable handler *nested behind* a plain
+ * wrapper therefore receives nothing, so the migration is not uniformly
+ * mechanical, and vt-B must check the wiring rather than assume it:
+ *
+ *  - **push-reachable** — `ScreenHandler` (given straight to `new Parser(...)`
+ *    by `candy-vt/src/Terminal/Terminal.php`, both the constructor and
+ *    `__clone()`) and `SgrStateHandler` (`candy-freeze/src/AnsiParser.php`).
+ *    Implementing this interface on those two classes is sufficient.
+ *  - **NOT push-reachable** — `CsiHandlerImpl` in the candy-vt *renderer* path,
+ *    where `candy-vt/src/Terminal.php` hands the parser a `RendererHandler`
+ *    wrapping a {@see HandlerAdapter}, both of which are plain. Either that
+ *    wrapper chain grows the capability and forwards `setSubparams()` down to
+ *    `CsiHandlerImpl`, or this path keeps the pull route. Deleting
+ *    `CsiHandlerImpl::attachSubparamsProvider()` without doing one of those two
+ *    would silently regress colon SGRs there — no fatal, no red test.
+ *
+ * Until every consumer has migrated, {@see Parser::subparams()} stays public and
+ * byte-compatible, and a class is free to implement this interface while
+ * ignoring the pull route. Non-implementors are dispatched with zero behaviour
+ * change.
  */
 interface SubparamsAwareHandler extends Handler
 {
@@ -69,15 +93,25 @@ interface SubparamsAwareHandler extends Handler
      * Receive the sub-parameter continuation flags for the parameter list that
      * is about to be dispatched.
      *
-     * The parser calls this immediately BEFORE {@see Handler::csiDispatch()}
-     * and immediately BEFORE {@see Handler::dcsDispatch()}, and never before
+     * The parser calls this immediately BEFORE {@see Handler::csiDispatch()} and
+     * immediately BEFORE {@see Handler::dcsDispatch()}, and never before
      * {@see Handler::escDispatch()}, {@see Handler::oscDispatch()} or
-     * {@see Handler::sosPmApcDispatch()}: those three carry no parameter string
-     * at all. An ESC sequence is `ESC` + intermediate bytes (0x20-0x2F) + one
-     * final byte (ECMA-48 §14.1, `escape-last` / `escape-intermediate` states),
-     * and OSC/SOS/PM/APC carry a *string* payload whose internal separators are
-     * defined by the registering application, not by the §14.1.1 parameter
-     * grammar — so there would be nothing true to report.
+     * {@see Handler::sosPmApcDispatch()}.
+     *
+     * CSI and DCS are wired because both carry a §14.1.1 *parameter string*
+     * before their final byte: the parser collects DCS prelude separators with
+     * the same `Action::Param` path as CSI, so `DCS 1 ; 2 : 3 q` reaches
+     * {@see Handler::dcsDispatch()} as the flat `[1, 2, 3]` with the grouping
+     * otherwise recoverable only by pulling — the same defect this interface
+     * closes for CSI. Sixel/ReGIS consumers sit behind that dispatch.
+     *
+     * The other three are deliberately excluded because none has a parameter
+     * string to describe. In the DEC VT500 grammar (the diagram linked from
+     * {@see Parser}) the `escape` and `escape intermediate` states accept only
+     * bytes in 0x20-0x2F before the final byte — no digits, no `;`, no `:` — and
+     * OSC/SOS/PM/APC buffer an opaque *string* whose internal separators belong
+     * to the registering application, not to §14.1.1. Pushing there would mean
+     * inventing a value.
      *
      * The contract on the list:
      *
@@ -92,6 +126,12 @@ interface SubparamsAwareHandler extends Handler
      *  - It describes only that one sequence. The parser pushes a fresh list on
      *    every dispatch, so a handler may keep the array across the call but
      *    must never assume it still describes the following sequence.
+     *  - Parallelism holds at the {@see Parser} parameter cap (32), but the
+     *    *grouping* stops being faithful past it: once 32 slots are full the
+     *    parser drops further separators, so a genuine `:` arriving there reads
+     *    `false` and the following digits merge into slot 32 (`…;7:8` becomes a
+     *    single `78`). A handler that must distinguish that case cannot rely on
+     *    the flags alone; it is a lossy input, not a mis-parse of one.
      *
      * @param list<bool> $subparams Continuation flags parallel to the dispatched params.
      */

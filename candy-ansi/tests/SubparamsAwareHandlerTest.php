@@ -6,7 +6,6 @@ namespace SugarCraft\Ansi\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Ansi\Parser\Handler;
-use SugarCraft\Ansi\Parser\HandlerAdapter;
 use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
 use SugarCraft\Ansi\Tests\Support\CapableDispatchRecorder;
@@ -27,6 +26,56 @@ use SugarCraft\Ansi\Tests\Support\PullSubparamsRecorder;
  */
 final class SubparamsAwareHandlerTest extends TestCase
 {
+    /**
+     * A corpus that touches every dispatch kind the parser knows, in one pass:
+     * colon/semicolon SGR, empty params, UTF-8 runs, ESC, OSC, a DCS prelude with
+     * a colon, SOS, and a prefixed multi-mode CSI.
+     */
+    private const DEGRADATION_CORPUS = [
+        "\x1b[38:2::148:199:255m",
+        "\x1b[38:2:7:255:128:0;4:3m",
+        "\x1b[4;3m",
+        "\x1b[m",
+        "\x1b[4:3m",
+        "plain \xC3\xA9 text",
+        "\x1bM",
+        "\x1b]0;window title\x07",
+        "\x1bP1;2:3qdata\x1b\\",
+        "\x1bXsos-payload\x1b\\",
+        "\x1b[?1000;1006h",
+        "\x1b[38;5;9m",
+    ];
+
+    /**
+     * The exact `Handler` call log `master` produces for
+     * {@see self::DEGRADATION_CORPUS} through a plain, non-capable handler.
+     *
+     * Captured by running the same corpus and the same normalisation against the
+     * parser as it stands before this capability, not by reading the new code —
+     * so it is an independent witness of "additive", and it is what makes the
+     * degradation test able to see a regression that hits every handler alike.
+     * Regenerate only by checking the diff against `git show master:...`.
+     *
+     * @var list<string>
+     */
+    private const MASTER_DISPATCH_LOG = [
+        'csi:m:[38,2,-1,148,199,255]:0:0',
+        'csi:m:[38,2,7,255,128,0,4,3]:0:0',
+        'csi:m:[4,3]:0:0',
+        'csi:m:[]:0:0',
+        'csi:m:[4,3]:0:0',
+        'print:70', 'print:6c', 'print:61', 'print:69', 'print:6e', 'print:20',
+        'print:c3a9', 'print:20', 'print:74', 'print:65', 'print:78', 'print:74',
+        'esc:M:0',
+        'osc:0;window title',
+        'dcs:q:[1,2,3]:0:0:data',
+        'esc:\\:0',
+        'sosPmApc:sos:sos-payload',
+        'esc:\\:0',
+        'csi:h:[1000,1006]:63:0',
+        'csi:m:[38,5,9]:0:0',
+    ];
+
     /**
      * `CSI 38 : 2 : : R : G : B m` — truecolour with the colourspace
      * sub-parameter left at its default (the leading-empty-colon form xterm
@@ -124,43 +173,70 @@ final class SubparamsAwareHandlerTest extends TestCase
     }
 
     /**
-     * Non-implementor exact-degradation: the same corpus, in the same order,
-     * through a plain {@see Handler} and a capable one, must produce identical
-     * `Handler` call logs. Nothing may leak into a handler that did not opt in.
+     * Non-implementor exact-degradation, pinned TWO ways:
+     *
+     *  - against `self::MASTER_DISPATCH_LOG` below, captured from the parser as
+     *    it stands on `master` (before this capability existed). Comparing only
+     *    "plain vs capable on the new parser" — which this test also does — is
+     *    blind to a regression that hits every handler uniformly, because both
+     *    sides move together. The literal cannot move: it is the pre-change wire
+     *    behaviour, written out by hand from `git show master` output.
+     *  - plain vs capable, which catches anything the parser leaks into a
+     *    handler that did not opt in.
      */
     public function testNonImplementorIsDispatchedBitIdentically(): void
     {
-        $corpus = [
-            "\x1b[38:2::148:199:255m",
-            "\x1b[38:2:7:255:128:0;4:3m",
-            "\x1b[4;3m",
-            "\x1b[m",
-            "\x1b[4:3m",
-            "plain \xC3\xA9 text",
-            "\x1bM",
-            "\x1b]0;window title\x07",
-            "\x1bP1;2:3qdata\x1b\\",
-            "\x1bXsos-payload\x1b\\",
-            "\x1b[?1000;1006h",
-            "\x1b[38;5;9m",
-        ];
-
         $plain = new DispatchRecorder();
         $capable = new CapableDispatchRecorder();
         $plainParser = new Parser($plain);
         $capableParser = new Parser($capable);
 
-        foreach ($corpus as $bytes) {
+        foreach (self::DEGRADATION_CORPUS as $bytes) {
             $plainParser->feed($bytes);
             $capableParser->feed($bytes);
         }
         $plainParser->flush();
         $capableParser->flush();
 
-        self::assertNotEmpty($plain->calls, 'the corpus must actually dispatch');
+        self::assertSame(self::MASTER_DISPATCH_LOG, $plain->calls, 'a plain Handler must still see exactly what master shows it');
         self::assertSame($plain->calls, $capable->calls);
         // And the capable side saw one push per parameterised dispatch.
         self::assertNotEmpty($capable->pushes);
+    }
+
+    /**
+     * The parser consults exactly ONE object — the {@see Handler} handed to
+     * {@see Parser::__construct()}. A capable handler nested behind a plain
+     * wrapper therefore receives no push at all.
+     *
+     * Pinned because candy-vt's renderer path is shaped like this (`Terminal.php`
+     * gives the parser a `RendererHandler` wrapping a {@see HandlerAdapter},
+     * both plain, with the colon-consuming `CsiHandlerImpl` behind them), so the
+     * consumer migration cannot be mechanical: either the wrapper chain grows the
+     * capability and forwards, or that path keeps the pull route. Discovering
+     * this from a silent colon-SGR regression instead of here is the failure mode
+     * this test exists to prevent.
+     */
+    public function testCapabilityIsOnlyConsultedOnTheHandlerGivenToTheParser(): void
+    {
+        $nested = new CapableDispatchRecorder();
+        $wrapper = new class ($nested) extends DispatchRecorder {
+            public function __construct(private readonly SubparamsAwareHandler $inner)
+            {
+            }
+
+            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
+            {
+                parent::csiDispatch($final, $params, $prefix, $intermediate);
+                $this->inner->csiDispatch($final, $params, $prefix, $intermediate);
+            }
+        };
+
+        (new Parser($wrapper))->feed("\x1b[4:3m");
+
+        self::assertSame(['csi:m:[4,3]:0:0'], $wrapper->calls, 'the wrapper was dispatched');
+        self::assertSame(['csi:m:[4,3]:0:0'], $nested->calls, 'and delegated the flat list');
+        self::assertSame([], $nested->pushes, 'a capable handler behind a plain wrapper is never pushed to');
     }
 
     /**
@@ -183,19 +259,6 @@ final class SubparamsAwareHandlerTest extends TestCase
         );
         self::assertCount(1, $own, 'the capability must add exactly one method');
         self::assertSame('setSubparams', array_values($own)[0]->getName());
-    }
-
-    /**
-     * candy-ansi's own adapter deliberately stays on the flat path: it forwards
-     * `sgr($params)` to {@see \SugarCraft\Ansi\Parser\CsiHandler}, which has no
-     * colon-aware signature. If it ever becomes capable, candy-vcr's replay
-     * semantics change — so this is a guard, not an accident.
-     */
-    public function testHandlerAdapterStaysANonImplementor(): void
-    {
-        self::assertFalse(
-            is_a(HandlerAdapter::class, SubparamsAwareHandler::class, true),
-        );
     }
 
     public function testSemicolonOnlySequencePushesAllFalseFlags(): void
@@ -233,6 +296,45 @@ final class SubparamsAwareHandlerTest extends TestCase
 
         self::assertSame([[false, true, false]], $capable->pushes);
         self::assertContains('dcs:q:[1,2,3]:0:0:data', $capable->calls);
+    }
+
+    /**
+     * The DCS push must also land BEFORE the dispatch, not merely exist. The
+     * interface publishes an ordering contract at two call sites; this pins the
+     * second one — without it, moving the DCS push after `dcsDispatch()` would
+     * leave the suite green while a handler that reads its stored flags during a
+     * sixel/ReGIS prelude saw the *previous* sequence's grouping.
+     */
+    public function testDcsPushPrecedesDcsDispatchInOneTimeline(): void
+    {
+        $capable = new CapableDispatchRecorder();
+        (new Parser($capable))->feed("\x1bP1;2:3qdata\x1b\\");
+
+        self::assertSame([
+            'push:[false,true,false]',
+            'dcs:q:[1,2,3]:0:0:data',
+            'esc:\\:0',
+        ], $capable->timeline);
+    }
+
+    /**
+     * A DCS left unterminated at end-of-stream is dispatched by `flush()`, which
+     * routes through the same `dispatch()` method — so the prelude grouping must
+     * survive to that callback too rather than arriving only on the tidy path.
+     */
+    public function testFlushedDcsStillReceivesItsPreludeGrouping(): void
+    {
+        $capable = new CapableDispatchRecorder();
+        $parser = new Parser($capable);
+
+        $parser->feed("\x1bP0;1:2qtruncated-without-terminator");
+        $parser->flush();
+
+        self::assertSame([[false, true, false]], $capable->pushes);
+        self::assertSame(
+            ['push:[false,true,false]', 'dcs:q:[0,1,2]:0:0:truncated-without-terminator'],
+            $capable->timeline,
+        );
     }
 
     /**
@@ -287,6 +389,29 @@ final class SubparamsAwareHandlerTest extends TestCase
 
         self::assertCount(32, $params, 'params must be capped');
         self::assertCount(count($params), $flags, 'flags must stay parallel with params');
+    }
+
+    /**
+     * What the parameter cap actually costs. Lengths stay parallel (the test
+     * above), but past slot 32 the parser drops the separator itself, so a real
+     * `:` is reported as an independent parameter AND its digits merge into the
+     * full slot. Pinning this as documented behaviour: the interface promises
+     * faithful grouping only below the cap, and a consumer that must know the
+     * difference cannot infer it from the flags alone.
+     */
+    public function testGroupingStopsBeingFaithfulOnceParamsAreCapped(): void
+    {
+        $capable = new CapableDispatchRecorder();
+        // 31 `7;` separators fill slots 0..31 with the 32nd `7`, then the genuine
+        // sub-parameter boundary `:8` arrives with the list already full.
+        (new Parser($capable))->feed("\x1b[" . str_repeat('7;', 31) . '7:8m');
+
+        $params = $capable->csiParams[0];
+        $flags = $capable->pushes[0];
+
+        self::assertCount(32, $params);
+        self::assertSame([7, 7, 78], array_slice($params, -3), 'the digits merged into the full slot');
+        self::assertFalse($flags[31], 'the colon at the cap is reported as an independent parameter');
     }
 
     /**
