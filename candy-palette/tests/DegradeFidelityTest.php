@@ -90,10 +90,10 @@ final class DegradeFidelityTest extends TestCase
         return [
             // 16=(0,0,0)        → black
             'cube black'    => [16, "\x1b[30m"],
-            // 20=(0,0,215)      → nearest is slot 4 (0,0,205), d=100 vs slot 12 d=1600
+            // 20=(0,0,215)      → nearest is slot 4 (0,0,238), d=529 vs slot 12 (92,92,255) d=18528
             'deep blue'     => [20, "\x1b[34m"],
-            // 21=(0,0,255)      → exactly slot 12
-            'pure blue'     => [21, "\x1b[94m"],
+            // 21=(0,0,255)      → nearest is slot 4 (0,0,238), d=289 vs slot 12 (92,92,255) d=16928
+            'pure blue'     => [21, "\x1b[34m"],
             // 30=(0,175,175)    → slot 6 (0,205,205) d=900 vs 14 d=12800
             'teal'          => [30, "\x1b[36m"],
             // 46=(0,255,0)      → exactly slot 10 (bright green, NOT 32 basic)
@@ -143,14 +143,14 @@ final class DegradeFidelityTest extends TestCase
      * entry. Documented, not a bug:
      *
      *  0 black  (0,0,0)   →16 · 1 red  (205,0,0)→160 · 2 green→40 · 3 yellow→184
-     *  4 blue   (0,0,205) →20 · 5 magenta→164        · 6 cyan→44
+     *  4 blue   (0,0,238) →21 · 5 magenta→164        · 6 cyan→44
      *  7 white  (229³)    →254 (grey ramp d=3 beats cube 231 d=2028)
      *  8 brblk  (127³)    →244 · 9 brred→196 · 10 brgrn→46 · 11 bryel→226
-     * 12 brblu (0,0,255)  →21  · 13 brmag→201        · 14 brcyn→51  · 15 brwht→231
+     * 12 brblu (92,92,255)→63 · 13 brmag→201        · 14 brcyn→51  · 15 brwht→231
      */
     public function testRoundTripCollapseOfThemeableSlotsIsDocumented(): void
     {
-        $expected = [16, 160, 40, 184, 20, 164, 44, 254, 244, 196, 46, 226, 21, 201, 51, 231];
+        $expected = [16, 160, 40, 184, 21, 164, 44, 254, 244, 196, 46, 226, 63, 201, 51, 231];
         foreach ($expected as $slot => $want) {
             $this->assertSame($want, Color::fromAnsi256Index($slot)->toAnsi256Index(), "basic slot {$slot}");
         }
@@ -206,9 +206,9 @@ final class DegradeFidelityTest extends TestCase
         // green degraded to blue and blue to black.
         $p = self::palette(Profile::ANSI);
         $this->assertSame("\x1b[32m", $p->degrade("\x1b[38;2;0;205;0m"));
-        $this->assertSame("\x1b[94m", $p->degrade("\x1b[38;2;0;0;255m"));
+        $this->assertSame("\x1b[34m", $p->degrade("\x1b[38;2;0;0;255m"));
         $this->assertSame("\x1b[91m", $p->degrade("\x1b[38;2;255;0;0m"));
-        $this->assertSame("\x1b[104m", $p->degrade("\x1b[48;2;0;0;255m"));
+        $this->assertSame("\x1b[44m", $p->degrade("\x1b[48;2;0;0;255m"));
     }
 
     // -------------------------------------------------------------------------

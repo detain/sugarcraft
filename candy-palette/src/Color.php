@@ -102,16 +102,49 @@ final class Color
     /**
      * The reference RGB this library uses for palette slots 0-15.
      *
-     * These slots are THEMEABLE — this library's own writers never emit them
-     * as literal colour bytes (degrade/ProfileWriter output only SGR codes);
-     * the values here serve distance maths and slot decoding — and they follow the
-     * VGA/common-terminal blues (#0000CD / #0000FF) this lib's palette has
-     * always shipped (they are what {@see StandardColors::$blue} etc. name),
-     * NOT xterm's built-in #0000EE / #5C5CFF, which candy-core's Util\Color
-     * table instead adopts. The two tables diverge only for slots 4 and 12;
-     * within this lib the SAME table feeds decode (fromAnsi256Index),
-     * quantise (toAnsi16Index) and render (toAnsi16), so every exact slot
-     * value round-trips to itself and no byte disagrees with another API.
+     * These are xterm's COMPILED-IN defaults for slots 0-15 — the very table
+     * {@see \SugarCraft\Core\Util\Color::ANSI16_RGB} publishes as the monorepo
+     * canon, kept element-wise identical by a cross-lib equality test
+     * (candy-palette/tests/Ansi16TableParityTest.php) so the two can never
+     * silently drift again. Slots 4 and 12 are xterm's `DEF_COLOR4 "blue2"`
+     * (#0000EE) and `DEF_COLOR12 "rgb:5c/5c/ff"` (#5C5CFF); xterm's shipped
+     * `XTerm-col.ad` records that these replaced the earlier
+     * `blue3`/`blue` (#0000CD / #0000FF) precisely because "blue3 is not
+     * readable on a black background".
+     *
+     * CORRECTION OF A PRIOR CLAIM. An earlier revision of this constant
+     * labelled those old blues "VGA/common-terminal", but that attribution was
+     * wrong at primary source: real VGA/EGA text-mode DAC blue is #0000AA with
+     * bright #5555FF, and #0000CD/#0000FF were never VGA at all — they were
+     * xterm's own abandoned pre-2009 defaults (X11 `blue3`/`blue`). The
+     * divergence from candy-core was thus justified by a myth; unifying both
+     * libs on the live xterm defaults removes it.
+     *
+     * The property this table always relied on is preserved: slots 0-15 are
+     * THEMEABLE (a terminal owner's config, not these bytes, decides what the
+     * user sees; the 16-colour writers emit only the SGR index for them — see
+     * the writer-scope note below), so these values serve distance maths and
+     * slot decoding alone. Within this
+     * lib the 16-COLOUR chain is exact — the SAME table feeds decode
+     * (fromAnsi256Index), quantise (toAnsi16Index) and render
+     * (toAnsi16Foreground/toAnsi16Background) — so every slot 0-15 round-trips
+     * back to its own index through it and no byte disagrees with another
+     * 16-colour API. Composing with the 256-COLOUR path is, however, LOSSY by
+     * construction for the slots that do not lie on the fixed 6×6×6 cube
+     * (indices 16-231 over {@see CUBE_LEVELS}): slots 1-8 and 12 are off-cube,
+     * e.g. slot 4 #0000EE → toAnsi256Index() 21 → fromAnsi256Index(21)
+     * #0000FF, and slot 12 #5C5CFF → 63 → #5F5FFF. Only slots 0,9,10,11,13,14,15
+     * — precisely those whose R,G,B are all members of CUBE_LEVELS — survive a
+     * 256 round-trip byte-exact; the move of slot 12 from #0000FF (exactly cube
+     * index 21) to xterm's #5C5CFF made that slot newly lossy on this path. It
+     * does not affect what a user sees FOR THE 16-COLOUR WRITERS: those emit
+     * the 4-bit SGR index ({@see toAnsi16Foreground()}/
+     * toAnsi16Background() — slot 4 renders as `ESC [ 34 m`), so the terminal
+     * supplies its own theme for slots 0-15. Use the wider writers knowing what
+     * they send: {@see toAnsiForeground()} emits the reference RGB itself
+     * (`ESC [ 38 ; 2 ; 0 ; 0 ; 238 m` for slot 4) and {@see
+     * toAnsi256Foreground()} emits the nearest cube index (21) rather than the
+     * themeable slot — both bypass the user's own slot-4 theme.
      *
      * @var array<int,array{int,int,int}>
      */
@@ -120,7 +153,7 @@ final class Color
         [0xcd, 0x00, 0x00], //  1 red
         [0x00, 0xcd, 0x00], //  2 green
         [0xcd, 0xcd, 0x00], //  3 yellow
-        [0x00, 0x00, 0xcd], //  4 blue
+        [0x00, 0x00, 0xee], //  4 blue  (xterm blue2)
         [0xcd, 0x00, 0xcd], //  5 magenta
         [0x00, 0xcd, 0xcd], //  6 cyan
         [0xe5, 0xe5, 0xe5], //  7 white
@@ -128,7 +161,7 @@ final class Color
         [0xff, 0x00, 0x00], //  9 bright red
         [0x00, 0xff, 0x00], // 10 bright green
         [0xff, 0xff, 0x00], // 11 bright yellow
-        [0x00, 0x00, 0xff], // 12 bright blue
+        [0x5c, 0x5c, 0xff], // 12 bright blue  (xterm rgb:5c/5c/ff)
         [0xff, 0x00, 0xff], // 13 bright magenta
         [0x00, 0xff, 0xff], // 14 bright cyan
         [0xff, 0xff, 0xff], // 15 bright white

@@ -11,7 +11,7 @@ use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Ansi\Parser\Parser;
 
 /**
- * Reset matrix: RIS (ESC c), DECSTR (CSI ! p), DECALN (CSI # 8).
+ * Reset matrix: RIS (ESC c), DECSTR (CSI ! p), DECALN (ESC # 8).
  *
  * RESET MATRIX (see also the ScreenHandler::hardReset()/softReset()
  * doc-blocks):
@@ -21,6 +21,7 @@ use SugarCraft\Ansi\Parser\Parser;
  * | screen contents    | cleared     | preserved       |
  * | scrollback ring    | preserved   | preserved       |
  * | cursor position    | home        | home            |
+ * | DECSCUSR shape     | 0           | 0               |
  * | saved cursor       | cleared     | preserved       |
  * | SGR pen            | default     | default         |
  * | DECAWM             | ON          | ON              |
@@ -37,10 +38,19 @@ use SugarCraft\Ansi\Parser\Parser;
  * RIS preserves the scrollback (charmbracelet/x/vt `Emulator.fullReset`
  * resets both Screen buffers but never the ring — only ED 3 clears it)
  * and clears the saved cursor (upstream `Screen.Reset` zeroes `saved`).
- * DECSTR is the soft variant: margins, tabs, charsets, saved cursor and
- * the ring all survive (xterm's ctlseqs records DECSTR in one line;
- * VT510 Table 5-9 lists DEC hardware, which resets more — we follow the
- * narrower xterm semantics the brief anchors).
+ * DECSTR is the soft variant. The margins, character sets and saved cursor
+ * that survive it do so as a DELIBERATE candy-vt subset, not because xterm
+ * agrees: xterm-411 `ReallyReset()` resets the scrolling region
+ * (`charproc.c:14398`) and the character sets (`charproc.c:14410`) above the
+ * RIS-only `if (full)` gate at `charproc.c:14432`, and the DECSTR branch
+ * itself overwrites the DECSC slot with home (`charproc.c:14559-14561`).
+ * Tab stops and the scrollback, by contrast, genuinely match xterm —
+ * `TabReset` sits inside `if (full)` (`charproc.c:14449`) and the ring is
+ * flushed on the separate `saved` argument (`charproc.c:14372-14375`), which
+ * DECSTR passes False. Cursor shape is reset by
+ * BOTH variants because xterm's shared cursor block at `charproc.c:14377-14387`
+ * runs for the soft reset too — see the CURSOR SHAPE paragraph on
+ * {@see ScreenHandler::softReset()} and CursorShapeAgreementTest.
  *
  * @see https://vt100.net/docs/vt510-rm/chapter4.html (RIS)
  * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR, DECALN)
@@ -192,10 +202,8 @@ final class ResetTest extends TestCase
 
     public function testDecalnFillsScreenWithEAndHomesCursor(): void
     {
-        // Wire-level `CSI # 8` cannot be dispatched by the shared
-        // candy-ansi VT500 parser ('8' is a param byte, not a final — the
-        // sequence drops to Ground), so DECALN is exercised through its
-        // programmatic entry point, like enableAltScreen().
+        // Programmatic entry point only — the wire form `ESC # 8` and its
+        // parser seam are pinned end-to-end in DecalnWireTest.
         // Designate non-default sets FIRST so the charsets assertion below
         // proves DECALN reset them (it would be vacuously true otherwise).
         $h = $this->handler(self::DIRTY . "\x1b(0\x1b)U", cols: 6, rows: 3);

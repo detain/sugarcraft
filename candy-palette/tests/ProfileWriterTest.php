@@ -52,8 +52,8 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        // 0,0,255 is exactly xterm slot 12 (bright blue).
-        $this->assertSame("\x1b[94mblue\x1b[0m", $out);
+        // 0,0,255 is nearest basic blue slot 4 (0,0,238), d=289 vs slot 12 d=16928.
+        $this->assertSame("\x1b[34mblue\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
     }
 
@@ -79,7 +79,7 @@ final class ProfileWriterTest extends TestCase
         $out = \stream_get_contents($mem);
         \fclose($mem);
 
-        $this->assertSame("\x1b[94mblue\x1b[0m", $out);
+        $this->assertSame("\x1b[34mblue\x1b[0m", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
     }
 

@@ -146,15 +146,29 @@ final class Store
      * Stored values are attacker-controlled: a raw `list` would let a
      * poisoned value smuggle terminal escape sequences (cursor moves, colour
      * resets, even window-title rewrites) straight onto the operator's screen.
-     * This collapses a value to a single, control-free line:
+     * This collapses a value to a single, C0-control-free line (the exact
+     * scope of that guarantee is in the bullets below):
      *
      *  - A non-UTF-8 (binary) payload becomes a `<binary N bytes>` placeholder
      *    (N = raw byte length) instead of dumping raw bytes at the terminal.
-     *  - C0 control bytes are stripped and \n / \r / \t fold to spaces via
-     *    {@see Sanitize::controlChars()} — a deliberate single-line preview.
-     *  - ESC (0x1b) and DEL (0x7f) are additionally removed here: Sanitize
-     *    preserves ESC for trusted SGR output, but a *stored* value must never
-     *    be trusted to emit escape sequences.
+     *  - C0 control bytes are stripped — ESC (0x1b) among them, `controlChars()`
+     *    is not SGR-preserving — and \n / \r / \t fold to spaces via
+     *    {@see Sanitize::controlChars()}: a deliberate single-line preview.
+     *  - DEL (0x7f) is removed here because it falls outside that C0 range. The
+     *    paired ESC sweep is belt-and-braces redundancy: `controlChars()` has
+     *    already deleted every 7-bit ESC (0x1b), so neither path can leave a
+     *    0x1b or 0x7f byte on the preview line — that is the precise, and only,
+     *    guarantee. This is NOT a general control sweep: a well-formed UTF-8
+     *    encoding of a C1 control (e.g. `\xC2\x9B` = U+009B, the 8-bit CSI
+     *    introducer) satisfies the `preg_match('//u')` binary gate above and
+     *    survives both this regex and `controlChars()` (C0-only), so it reaches
+     *    the terminal verbatim. A bare 0x80-0x9F byte cannot — it is invalid
+     *    UTF-8 and is routed to the `<binary N bytes>` placeholder. Extending
+     *    this preview to C1 is a separate risk class and deliberately not done
+     *    here. {@see Sanitize::untrusted()} is the stronger sink — it removes
+     *    whole ESC-introduced sequences rather than leaving their printable
+     *    residue — but it, too, passes a UTF-8-encoded C1 through untouched, so
+     *    neither policy here neutralises the 8-bit introducer itself.
      *
      * @param string $value Raw stored value (already base64-decoded for binary).
      */
