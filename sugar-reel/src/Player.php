@@ -1439,11 +1439,13 @@ final class Player implements Model
      * subprocess leaks across play → back.
      *
      * The stop latch is per object tree (round-2 NEW-4): it is copied forward by
-     * `mutate()`, so no instance derived from a stopped player will ever rebuild
-     * or respawn again — the resize arming path, the deferred debounce apply,
-     * and every playback tick all resolve to identity (round-3 R3-1). Hosts that
-     * want to play again must construct a FRESH Player (or `open()` a new one);
-     * reusing the stopped instance will not resurrect its decoder.
+     * `mutate()`, so the three paths that can self-reschedule work — the resize
+     * arming path, the deferred debounce apply, and every playback tick — all
+     * resolve to identity on a stopped instance (round-3 R3-1). Host-driven
+     * one-shot APIs (an explicit seek, a mode keypress) still act, exactly as
+     * before the latch existed; a host has no reason to keep feeding input to a
+     * torn-down player. To play again, construct a FRESH Player (or `open()` a
+     * new one) — reusing the stopped instance will not resurrect its decoder.
      */
     public function stop(): void
     {
