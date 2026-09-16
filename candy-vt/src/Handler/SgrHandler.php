@@ -87,11 +87,11 @@ final class SgrHandler
             $p === 29 => [$sgr->withStrikethrough(false), $i + 1],
 
             $p >= 30 && $p <= 37 => [$sgr->withForeground(Color::indexed16($p - 30)), $i + 1],
-            $p === 38 => $this->extended($i, $params, $sgr, fg: true),
+            $p === 38 => $this->extended($i, $params, $sgr, $subparams, fg: true),
             $p === 39 => [$sgr->withForeground(Color::default()), $i + 1],
 
             $p >= 40 && $p <= 47 => [$sgr->withBackground(Color::indexed16($p - 40)), $i + 1],
-            $p === 48 => $this->extended($i, $params, $sgr, fg: false),
+            $p === 48 => $this->extended($i, $params, $sgr, $subparams, fg: false),
             $p === 49 => [$sgr->withBackground(Color::default()), $i + 1],
 
             $p >= 90 && $p <= 97 => [$sgr->withForeground(Color::indexed16($p - 90 + 8)), $i + 1],
@@ -104,7 +104,7 @@ final class SgrHandler
             // default case as three independent SGRs and repainted the
             // foreground green (33 - 30). Guarded identically in
             // {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::sgrExtendedDiscard()}.
-            $p === 58 => [$sgr, $this->extendedLength($i, $params)],
+            $p === 58 => [$sgr, $this->extendedLength($i, $params, $subparams)],
             $p === 59 => [$sgr, $i + 1],
 
             default => [$sgr, $i + 1],
@@ -164,13 +164,20 @@ final class SgrHandler
     }
 
     /**
-     * Parse 38;5;N / 48;5;N (256-color) or 38;2;R;G;B / 48;2;R;G;B (truecolor).
+     * Parse 38;5;N / 48;5;N (256-color) or 38;2;R;G;B / 48;2;R;G;B (truecolor),
+     * plus the ECMA-48 colon forms `38:5:N`, `38:2:R:G:B`, `38:2::R:G:B`
+     * (colour space omitted) and `38:2:CS:R:G:B` (explicit colour space) —
+     * see {@see extendedColon()}.
      *
      * @param list<int> $params
+     * @param list<bool>|null $subparams
      * @return array{0: Sgr, 1: int}
      */
-    private function extended(int $i, array $params, Sgr $sgr, bool $fg): array
+    private function extended(int $i, array $params, Sgr $sgr, ?array $subparams, bool $fg): array
     {
+        if ($subparams !== null && ($subparams[$i] ?? false) === true) {
+            return $this->extendedColon($i, $params, $sgr, $subparams, $fg);
+        }
         $kind = $params[$i + 1] ?? -1;
         if ($kind === 5) {
             $idx = $this->resolveByte($params[$i + 2] ?? -1);
@@ -189,14 +196,81 @@ final class SgrHandler
     }
 
     /**
-     * How many slots an extended-colour form consumes starting at $i —
-     * marker + kind (+ index for ;5, + triple for ;2), defaulting to just
-     * the marker for unknown kinds. Used by the parse-and-discard 58 arm.
+     * ECMA-48 colon form of an extended colour: the whole specification rides
+     * in ONE parameter group (`38:2:16:255:0:0` flattens to six slots joined
+     * by continuation flags). The semicolon form cannot be mistaken for it —
+     * Parser::subparams() says which slots are continuations.
+     *
+     * Sub-parameter layout for kind 2 (direct colour): 5 group slots are
+     * 38:2:R:G:B; 6 are 38:2:CS:R:G:B, where CS — omitted-empty or given —
+     * selects the colour space and is accepted-then-ignored. Both references
+     * agree on exactly this offset rule: xterm `get_subparam(base, 2 + n +
+     * (have > 4))` (charproc.c:2142-2146, with parse_extended_colors' docblock
+     * at charproc.c:2100-2119 quoting ISO-8613-3's colon-parameter grammar)
+     * and tmux `if (n == 5) i = 2; else i = 3;`
+     * (input.c:2358-2369, input_csi_dispatch_sgr_colon). Kind 5 is 38:5:N.
      *
      * @param list<int> $params
+     * @param list<bool> $subparams
+     * @return array{0: Sgr, 1: int}
      */
-    private function extendedLength(int $i, array $params): int
+    private function extendedColon(int $i, array $params, Sgr $sgr, array $subparams, bool $fg): array
     {
+        $end = $this->colonGroupEnd($i, $params, $subparams);
+        $group = array_slice($params, $i, $end - $i + 1);
+        // A malformed group still consumes its slots — replaying them as
+        // independent SGRs is how `38:2::255:0:0` used to end in a stray
+        // reset (the trailing 0 re-parsed as SGR 0, wiping the pen).
+        $next = $end + 1;
+        $kind = $group[1] ?? -1;
+        if ($kind === 5) {
+            $idx = $this->resolveByte($group[2] ?? -1);
+            $color = Color::indexed256($idx);
+            return [$fg ? $sgr->withForeground($color) : $sgr->withBackground($color), $next];
+        }
+        if ($kind === 2 && count($group) >= 5) {
+            $o = count($group) === 5 ? 2 : 3;
+            $r = $this->resolveByte($group[$o] ?? -1);
+            $g = $this->resolveByte($group[$o + 1] ?? -1);
+            $b = $this->resolveByte($group[$o + 2] ?? -1);
+            $color = Color::truecolor($r, $g, $b);
+            return [$fg ? $sgr->withForeground($color) : $sgr->withBackground($color), $next];
+        }
+        return [$sgr, $next];
+    }
+
+    /**
+     * Last flat slot index of the colon group that starts at $i: while
+     * subparams[j] is true, params[j + 1] continues params[j]'s parameter
+     * ({@see \SugarCraft\Ansi\Parser\Parser::subparams()}).
+     *
+     * @param list<int> $params
+     * @param list<bool> $subparams
+     */
+    private function colonGroupEnd(int $i, array $params, array $subparams): int
+    {
+        $end = $i;
+        $n = count($params);
+        while ($end + 1 < $n && ($subparams[$end] ?? false) === true) {
+            $end++;
+        }
+        return $end;
+    }
+
+    /**
+     * How many slots an extended-colour form consumes starting at $i —
+     * marker + kind (+ index for ;5, + triple for ;2), defaulting to just
+     * the marker for unknown kinds; colon groups consume to their end.
+     * Used by the parse-and-discard 58 arm.
+     *
+     * @param list<int> $params
+     * @param list<bool>|null $subparams
+     */
+    private function extendedLength(int $i, array $params, ?array $subparams): int
+    {
+        if ($subparams !== null && ($subparams[$i] ?? false) === true) {
+            return $this->colonGroupEnd($i, $params, $subparams) + 1;
+        }
         return match ($params[$i + 1] ?? -1) {
             5 => $i + 3,
             2 => $i + 5,

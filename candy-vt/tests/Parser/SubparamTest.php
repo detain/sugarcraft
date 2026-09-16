@@ -91,8 +91,11 @@ final class SubparamTest extends TestCase
     {
         // \x1b[38::50m  — each ':' creates a new param slot (same as ';').
         // Slot 0: 38, Slot 1: -1 (default after first ':'), Slot 2: 50 (from '5','0')
-        // Extended-color handler reads kind=params[1]=(-1→0=2), R=params[2]=(-1→0),
-        // G=params[3]=(-1→0), B=params[4]=50 — RGB(0,0,50) = same as semicolon form.
+        // The subparam flags mark slot 0 as a colon-group head; the colon-aware
+        // SGR handler sees a three-slot group whose kind is the -1 default,
+        // recognises neither 5 nor 2, and consumes the whole group without
+        // resolving a colour (SgrHandler::extendedColon) — fail-quiet, as the
+        // group's slots must never replay as independent SGRs.
         $h = $this->parse("\x1b[38::50m");
         $this->assertSame([
             self::csi(ord('m'), [38, -1, 50]),
