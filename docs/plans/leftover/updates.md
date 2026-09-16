@@ -231,6 +231,7 @@ step 05.08 · PR#580 · sugar-stickers: add i18n infrastructure (Lang.php facade
 review for step 05.08 · clean · PR#580
 tests-ci for step 05.08 · clean
 docs for step 05.08 · clean
+step 06.01 · PR#581 · candy-core: Elm-style Subscription value object + Subscriptions fluent collection (withTick/withKey/withSignal/withCustom) + Cmd/SubscribeCmd + Program reconciliation after each update cycle + Model::subscriptions() (commit d5d9409cc; signal-cancel restore d94e92f49; --filter Subscription scope 14T/38A, class alone 12T/36A)
 review for step 06.01 · clean · PR#581
 tests-ci for step 06.01 · clean
 docs for step 06.01 · clean · PR#582
