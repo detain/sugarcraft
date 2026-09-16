@@ -56,11 +56,11 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
     }
 
     /**
-     * The pre-decode frame-count oracle that closes the NEW-1 bomb is only safe if it
-     * is EXACTLY what candy-flip will return. This pins that invariant against the real
-     * sibling decoder on well-formed GIFs: flip's own walk mis-skips image data, yet
-     * for a clean stream it re-synchronises on the next descriptor, so honest count,
-     * predicted count, and flip's actual return must all agree.
+     * Sanity anchor for the conservative cost bound: on a WELL-FORMED GIF the honest
+     * container count, the flip-walk predictor, and candy-flip's actual return all
+     * agree. (The predictor is a conservative upper bound used to size the aggregate
+     * budget — it is NOT required to equal flip exactly on adversarial streams, which
+     * is why the authoritative refusal is the post-decode reconcile, not this clone.)
      */
     public function testFlipWalkPredictorEqualsFlipActualReturnOnCleanGifs(): void
     {
@@ -84,17 +84,19 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
     }
 
     /**
-     * NEW-1 (High): flip's desynced walk materialises far more frames than the honest
-     * container count before the post-decode reconcile can fire — a few KiB buying a
-     * multi-second, multi-hundred-MB decode. fromAnimatedFile must now predict flip's
-     * return from the bytes ALONE and refuse BEFORE ever running it.
+     * round-1 C2-GIF / R3-3: candy-flip's mis-skipped walk silently returns FEWER
+     * frames than a valid multi-frame GIF carries (its documented sibling bug — a real
+     * 10-frame ffmpeg GIF decodes to ~2). fromAnimatedFile must NEVER emit that
+     * silently-short animation; the authoritative post-decode reconcile compares the
+     * honest container count against flip's actual return and refuses loudly.
      *
      * An 8-frame GIF is the honest-but-desyncing case: the container carries 8 image
-     * descriptors, flip's mis-skipped walk re-synchronises on only 4. The pre-decode
-     * guard sees declared(8) != predicted(4) and refuses; the sibling decoder is never
-     * handed the file.
+     * descriptors, flip re-synchronises on only a few. The container count (8) and the
+     * decoded count disagree, so the animation is refused rather than truncated. (The
+     * separate cheap cost bound in the aggregate guard stops the ADVERSARIAL over-count
+     * runaway before decode; see testGifAggregateCeilingIsCheckedBeforeDecode.)
      */
-    public function testGifDesyncRefusedBeforeDecode(): void
+    public function testGifDesyncRefusedNotSilentlyTruncated(): void
     {
         $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0]];
         $frames = [];
@@ -104,11 +106,35 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
         $gif = F::gif(2, 2, $colors, $frames);
 
         $predicted = ($this->gifCountProbe('countGifFramesAsFlipWalks'))($gif);
-        self::assertLessThan(8, $predicted, "flip's mis-skipped walk must find fewer than the honest 8 frames (got {$predicted})");
+        self::assertLessThan(8, $predicted, "flip's mis-skipped walk finds fewer than the honest 8 frames (got {$predicted})");
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/carries 8 frames but the frame decoder returned \d+/');
         ImageSource::fromAnimatedFile($this->write('desync8.gif', $gif));
+    }
+
+    /**
+     * R3-1: candy-flip's walk reads the descriptor's left/top/width/height (bytes
+     * i+1..i+8) UNGUARDED but the packed byte (i+9) with `?? ''`, so it RECORDS a
+     * descriptor truncated to exactly nine bytes before terminating. The clone must
+     * count that frame too — an earlier revision gated on i+9 and under-counted, which
+     * is precisely the direction that could let a real over-production slip past the
+     * cost bound. A GIF ending in one full descriptor plus a trailing nine-byte
+     * descriptor must therefore predict it as a frame. Isolated: a header followed by a
+     * single nine-byte truncated descriptor counts as 1 (matching flip), not 0.
+     */
+    public function testPredictorCountsTruncatedDescriptorLikeFlip(): void
+    {
+        // Header (6) + logical screen descriptor (7, no global colour table) = 13 bytes.
+        // Then one image descriptor truncated to nine bytes: 0x2C + 8 geometry bytes,
+        // with NO packed byte present (the stream ends at i+8).
+        $bytes = 'GIF89a'
+            . pack('v', 4) . pack('v', 4) . chr(0x00) . chr(0x00) . chr(0x00)
+            . chr(0x2C) . pack('v', 0) . pack('v', 0) . pack('v', 1) . pack('v', 1);
+        self::assertSame(22, strlen($bytes)); // i=13, descriptor spans 13..21 (nine bytes)
+
+        $predicted = ($this->gifCountProbe('countGifFramesAsFlipWalks'))($bytes);
+        self::assertSame(1, $predicted, 'flip records the nine-byte truncated descriptor; the bound must not under-shoot it');
     }
 
     /**
@@ -127,6 +153,37 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/Cannot read file/');
         ImageSource::fromAnimatedFile('/dev/null');
+    }
+
+    /**
+     * R3-2: the NEW-5 fix opened the file with @fopen() BEFORE its S_IFREG check, which
+     * re-introduced the exact hazard it closed — opening a FIFO that no writer holds
+     * blocks forever, so a plain fifo handed to fromAnimatedFile() HUNG instead of
+     * refusing in microseconds (round-1's is_file() rejected it without ever opening).
+     * The replacement stats the PATH first (stat() never opens, so it cannot block) and
+     * only opens a confirmed regular file.
+     *
+     * If this ever regresses to open-before-check it will block the runner and fail via
+     * CI's job timeout — the same convention the pty suites use for unbounded loops.
+     */
+    public function testFifoIsRefusedWithoutBlocking(): void
+    {
+        if (!function_exists('posix_mkfifo')) {
+            $this->markTestSkipped('posix_mkfifo unavailable — cannot stage a FIFO');
+        }
+
+        $fifo = sys_get_temp_dir() . '/mosaic-r32-' . bin2hex(random_bytes(6)) . '.fifo';
+        if (!@posix_mkfifo($fifo, 0600)) {
+            $this->markTestSkipped('posix_mkfifo failed on this platform');
+        }
+
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessageMatches('/Cannot read file/');
+            ImageSource::fromAnimatedFile($fifo);
+        } finally {
+            @unlink($fifo);
+        }
     }
 
     /**

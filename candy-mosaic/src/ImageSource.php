@@ -501,17 +501,33 @@ final class ImageSource
      */
     private static function readBoundedRegularFile(string $path): string
     {
+        // Reject anything that is not a regular file BEFORE opening. `stat()` never
+        // opens the object, so unlike `fopen()` it cannot block — opening a FIFO that
+        // no process has on the write end parks this reader indefinitely (the byte
+        // ceiling bounds size, not block time). This is the primary defence against a
+        // caller pointing `$path` straight at a fifo / device / socket / directory.
+        $preStat = @stat($path);
+        if ($preStat === false) {
+            throw new \InvalidArgumentException(Lang::t('image_source.file_not_found', ['path' => $path]));
+        }
+        if (($preStat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT) {
+            throw new \InvalidArgumentException(Lang::t('image_source.cannot_read', ['path' => $path]));
+        }
+
         $handle = @fopen($path, 'rb');
         if ($handle === false) {
+            // Vanished or became unreadable in the tiny window since stat().
             throw new \InvalidArgumentException(Lang::t('image_source.file_not_found', ['path' => $path]));
         }
 
         try {
             $stat = fstat($handle);
             if ($stat === false || (($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT)) {
-                // Not a regular file (fifo / device / socket / directory), or it was
-                // swapped into the path between open and stat. Reading could block
-                // forever, so refuse.
+                // Re-check on the SAME descriptor we are about to read. A swap that
+                // lands between the stat() above and fopen() is the residual POSIX
+                // race that no userspace check fully closes without O_NONBLOCK; this
+                // re-check defeats the size-based variant (swap to /dev/zero or an
+                // endless special file) before a single byte is slurped.
                 throw new \InvalidArgumentException(Lang::t('image_source.cannot_read', ['path' => $path]));
             }
             if ($stat['size'] > self::MAX_BYTES) {
@@ -577,18 +593,28 @@ final class ImageSource
 
         // Two independent, byte-only frame counts (no LZW decode):
         //   • $declared    — the spec-correct walk (skips the local colour table and
-        //                    the mandatory LZW minimum-code-size byte).
-        //   • $flipReturns — a faithful mirror of candy-flip's OWN header walk, which
-        //                    mis-skips image data (treats the LZW minimum-code-size
-        //                    byte as the first sub-block length) and, on any unexpected
-        //                    byte, steps forward instead of failing. On adversarial
-        //                    input that walk re-enters compressed data as phantom Image
-        //                    Descriptors and hands flip a runaway decode — hundreds of
-        //                    full-size frames materialised before any POST-decode
-        //                    reconcile could stop it (a few KiB → ~1 GB). Predicting it
-        //                    lets us refuse the desync cheaply and size the aggregate
-        //                    budget on the true worst case, never paying for the flip
-        //                    walk we are about to reject.
+        //                    the mandatory LZW minimum-code-size byte). This is the
+        //                    container's honest frame count.
+        //   • $flipReturns — a mirror of candy-flip's OWN header walk, which mis-skips
+        //                    image data (treats the LZW minimum-code-size byte as the
+        //                    first sub-block length) and, on an unexpected byte, steps
+        //                    forward instead of failing. On adversarial input that walk
+        //                    re-enters compressed data as phantom Image Descriptors and
+        //                    drives flip into a runaway decode (a few KiB → ~1 GB).
+        //
+        // $flipReturns is used ONLY as a conservative UPPER BOUND on how many frames
+        // flip will materialise, so the aggregate budget stops the bomb BEFORE the
+        // first frame is built. Across the probes it lands within [real, real + 1]
+        // frames of flip's true output — the +1 slack is one ≤ FLIP_MAX_CELLS frame,
+        // noise next to the hundreds-of-frames bomb this bounds — and it never
+        // under-shoots the bomb itself. It is NOT treated as an exact oracle: flip is
+        // also wrong on ORDINARY multi-frame GIFs (a 10-frame ffmpeg GIF decodes to
+        // ~2 frames), so equality against the honest count would reject real
+        // animation; the authoritative correctness gate is the POST-decode reconcile
+        // below, which never returns an animation whose frame count contradicts the
+        // container (round-1 C2). Refusing there is the loud, safe consequence of the
+        // candy-flip sibling bug recorded in CALIBER_LEARNINGS #18 — mosaic must not
+        // paper over it by emitting flip's silently-shortened frames.
         $declared    = self::countGifFrames($bytes);
         $flipReturns = self::countGifFramesAsFlipWalks($bytes);
         $worstFrames = max($declared, $flipReturns);
@@ -615,24 +641,12 @@ final class ImageSource
             ]));
         }
 
-        // Flip's output is untrustworthy the moment its walk disagrees with the
-        // container's honest count — refuse BEFORE materialising anything. (A
-        // legitimate GIF of more than flip's 256-frame slice trips this too: the
-        // honest count can never equal the capped return, so such GIFs are refused
-        // loudly rather than silently truncated. That is a candy-flip limitation, see
-        // CALIBER_LEARNINGS #18, not something mosaic can decode around.)
-        if ($declared !== $flipReturns) {
-            throw new \InvalidArgumentException(Lang::t('animation.gif_frame_count_mismatch', [
-                'expected' => $declared,
-                'got'      => $flipReturns,
-            ]));
-        }
-
         $flipFrames = self::decodeGifFramesSafely($path, $w, $h);
 
-        // Defence in depth: the predictor mirrors flip byte-for-byte, so this holds
-        // by construction — but never return an animation whose actual frame count
-        // contradicts the container.
+        // Authoritative correctness gate: never return an animation whose decoded
+        // frame count contradicts the container's honest count. For a well-formed
+        // multi-frame GIF that flip mis-walks (its known sibling bug), this refuses
+        // loudly rather than emitting a silently short/shuffled animation.
         if ($declared !== count($flipFrames)) {
             throw new \InvalidArgumentException(Lang::t('animation.gif_frame_count_mismatch', [
                 'expected' => $declared,
@@ -726,17 +740,21 @@ final class ImageSource
     }
 
     /**
-     * Predict how many image-descriptor frames candy-flip's header walk will record
-     * for this GIF — a byte-only clone of `SugarCraft\Flip\Decoder::parseHeader()`,
-     * reproduced EXACTLY (including its two quirks: image-data skipping begins at the
-     * LZW minimum-code-size byte rather than after it, and an unrecognised byte is
-     * skipped by advancing one byte instead of failing), and its 256-frame slice.
+     * Predict how many image-descriptor frames candy-flip's header walk could
+     * materialise for this GIF — a byte-only clone of `SugarCraft\Flip\Decoder::parseHeader()`,
+     * reproducing its two quirks (image-data skipping begins at the LZW
+     * minimum-code-size byte rather than after it, and an unrecognised byte advances
+     * one byte instead of failing) and its 256-frame slice.
      *
-     * This is not a second "correct" count — it deliberately shares flip's bug so it
-     * returns the same number flip does. Comparing it against the honest
-     * {@see self::countGifFrames()} turns flip's silent short/shuffled decode into a
-     * pre-decode refusal, and its value bounds the worst-case aggregate cost before a
-     * single frame is materialised. Keep in lock-step with the sibling's walk.
+     * This is NOT an exact oracle of flip's real output — on ordinary multi-frame GIFs
+     * flip drops frames in ways this cheap header clone does not model — and it is
+     * deliberately NOT compared against the honest count for a pre-decode refusal (that
+     * rejected legitimate animation; see {@see self::animatedFramesFromGif()}). It is
+     * used only as a CONSERVATIVE UPPER BOUND on the frame count to size the aggregate
+     * cost budget, so the phantom-descriptor runaway is refused before flip decodes
+     * anything. Across probes it lands within [real, real + 1] frames — the +1 is one
+     * ≤ FLIP_MAX_CELLS frame, immaterial against the hundreds-of-frames bomb it bounds.
+     * Keep the walk in lock-step with the sibling so the bound never under-shoots it.
      */
     private static function countGifFramesAsFlipWalks(string $bytes): int
     {
@@ -767,8 +785,13 @@ final class ImageSource
                 continue;
             }
             if ($blockType === 0x2C) {
-                if ($i + 10 > $len) {
-                    break; // truncated descriptor: flip's real decode throws, never over-produces
+                // flip reads the descriptor's left/top/width/height (bytes i+1..i+8)
+                // UNGUARDED but the packed byte (i+9) with `?? ''`, so it records a
+                // frame whenever i+8 is in range — including a descriptor truncated to
+                // exactly nine bytes, which an earlier revision of this predictor
+                // skipped, under-counting by one. Bound the loop on i+8, not i+9.
+                if ($i + 9 > $len) {
+                    break;
                 }
                 // flip records one frame per descriptor, then walks image data from
                 // $i+10 WITHOUT skipping the LCT or the LZW minimum-code-size byte.
