@@ -264,6 +264,28 @@ final class HandlerAdapterTest extends TestCase
         $this->parser->feed("\x1b[u");
     }
 
+    /**
+     * Marked `CSI ? s` / `CSI ? u` / `CSI > u` are NOT SCO save/restore:
+     * xterm switches to dec_table on `?` (VTPrsTbl.c:558 → charproc.c:3898-
+     * 3900) where 'u' is ignored (VTPrsTbl.c:4198) and 's' saves the DEC
+     * private MODE settings (CASE_XTERM_SAVE → savemodes(), VTPrsTbl.c:4195,
+     * charproc.c:6209-6210); tmux's table rows
+     * carry an empty interm marker for ('s',"")/('u',"") only (input.c:345,
+     * 347) so a marked query misses dispatch (input.c:1483-1487). Running
+     * `CSI ? u` (the kitty keyboard-capability QUERY) as SCORC teleports the
+     * render cursor — the emulator gates the same hole in candy-vt
+     * ScreenHandler::csiDispatch().
+     */
+    public function testCsiDispatchPrivateMarkerNeverReachesScopeCursor(): void
+    {
+        $this->csi->expects($this->never())->method('scosc');
+        $this->csi->expects($this->never())->method('scorc');
+
+        $this->parser->feed("\x1b[?s");
+        $this->parser->feed("\x1b[?u");
+        $this->parser->feed("\x1b[>u");
+    }
+
     // -------------------------------------------------------------------------
     // OSC 8 hyperlink dispatch (previously silently dropped).
     // -------------------------------------------------------------------------
