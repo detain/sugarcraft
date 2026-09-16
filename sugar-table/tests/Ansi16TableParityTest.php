@@ -155,7 +155,7 @@ final class Ansi16TableParityTest extends TestCase
     /**
      * The 38;5;n (n<16) path and its bare SGR spelling must agree slot for
      * slot — they share one decoder now that color256ToRgb()'s private copy of
-     * the cube table is gone.
+     * the cube table is deleted.
      */
     public function testIndexedPaletteAgreesWithStandardCodes(): void
     {
@@ -171,5 +171,20 @@ final class Ansi16TableParityTest extends TestCase
             $bare = $this->parse->invoke($this->table, (string) ($slot < 8 ? 30 + $slot : 90 + $slot - 8))->fg();
             self::assertSame($expected, $bare, "bare SGR for slot {$slot} diverged from the canon");
         }
+    }
+
+    /**
+     * Canon adoption must not disturb the malformed-input edge: a negative
+     * `38;5;-n` index is below the table, where the pre-canon decoder defaulted
+     * to black. Pin it so the shared decoder's defensive white slot cannot
+     * leak into this path.
+     */
+    public function testMalformedNegativeIndexKeepsBlackDefault(): void
+    {
+        $fg = $this->parse->invoke($this->table, '38;5;-5')->fg();
+        self::assertSame(0x000000, $fg, '38;5;-5 must keep the pre-canon black default');
+
+        $bg = $this->parse->invoke($this->table, '48;5;-1')->bg();
+        self::assertSame(0x000000, $bg, '48;5;-1 must keep the pre-canon black default');
     }
 }

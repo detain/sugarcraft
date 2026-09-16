@@ -2199,9 +2199,10 @@ final class Table
      * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
      * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
      * {@see Color::ANSI16_RGB} so this decode can never fork its own blues
-     * again. Indices that resolve outside the 16-slot table fall back to its
-     * white slot (7, or 15 for the bright half), preserving the old
-     * default-to-white.
+     * again. Both callers only ever supply 0-7, so the out-of-range guard is
+     * defensive: it lands on the table's white slot (7, or 15 for the bright
+     * half). Malformed negative `38;5;-n` input never reaches here — it keeps
+     * its own default-to-black in {@see color256ToRgb()}.
      */
     private function ansiColorToRgb(int $idx, bool $bright): int
     {
@@ -2216,6 +2217,12 @@ final class Table
     private function color256ToRgb(int $idx, bool $_isFg): int
     {
         if ($idx < 16) {
+            // Malformed negative index (e.g. "38;5;-5" off the wire) predates
+            // the canon and must keep the black default it always had rather
+            // than the decoder's defensive white slot.
+            if ($idx < 0) {
+                return 0x000000;
+            }
             // Standard colors — the same 16-slot canon the SGR 30-37/40-47
             // and 90-97/100-107 codes decode to; the old duplicated cube
             // table here is deleted so `38;5;n` (n<16) can never diverge
