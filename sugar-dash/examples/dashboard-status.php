@@ -2,7 +2,8 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions, Progress, ProgressRing, Gauge};
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Plot\Chart\{Progress, ProgressRing, Gauge};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card};
 use SugarCraft\Dash\Components\Feedback\{Spinner, Skeleton};
@@ -52,13 +53,13 @@ $grid->addItem(
 // ============================================
 // ROW 2: Progress Indicators (4 columns)
 // ============================================
-$progressBar = ProgressBar::new(80);
+$progressBar = ProgressBar::new(0.80);
 $progressBarFrame = Card::titled($progressBar, 'Progress Bar');
 
-$progressRing = ProgressRing::new(65);
+$progressRing = ProgressRing::new(0.65);
 $progressRingFrame = Card::titled($progressRing, 'Progress Ring');
 
-$gauge = Gauge::new(85);
+$gauge = Gauge::new(0.85);
 $gaugeFrame = Card::titled($gauge, 'Gauge');
 
 $grid->addItem(

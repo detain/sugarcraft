@@ -13,9 +13,24 @@ namespace SugarCraft\Dash\Components\Toast;
  * Uses two-slice semantics (not a true ring buffer) — appropriate for
  * the small max sizes. New items push onto items; dismissing moves the
  * head to history. Both rings evict oldest entries when full.
+ *
+ * The capacity invariant (`count(items) <= maxItems`,
+ * `count(history) <= maxHistory`) holds for every reachable instance:
+ * caps are clamped to >= 1 at the constructor boundary and the
+ * `with*()` setters trim the rings into any newly lowered cap.
  */
 final class NotificationQueue
 {
+    /**
+     * Maximum active notifications kept in the items ring (>= 1).
+     */
+    private readonly int $maxItems;
+
+    /**
+     * Maximum historical notifications kept in the history ring (>= 1).
+     */
+    private readonly int $maxHistory;
+
     /**
      * @var list<Notification>
      */
@@ -26,16 +41,10 @@ final class NotificationQueue
      */
     private array $history;
 
-    public function __construct(
-        /**
-         * Maximum active notifications kept in the items ring.
-         */
-        private readonly int $maxItems = 20,
-        /**
-         * Maximum historical notifications kept in the history ring.
-         */
-        private readonly int $maxHistory = 50,
-    ) {
+    public function __construct(int $maxItems = 20, int $maxHistory = 50)
+    {
+        $this->maxItems = max(1, $maxItems);
+        $this->maxHistory = max(1, $maxHistory);
         $this->items = [];
         $this->history = [];
     }
@@ -49,23 +58,13 @@ final class NotificationQueue
      * Push a notification onto the items ring.
      *
      * If items is at capacity, the oldest item is evicted to history
-     * before the new one is added.
+     * as the new one joins.
      */
     public function push(Notification $notification): self
     {
         $clone = $this->mutate();
-
-        if (count($clone->items) >= $this->maxItems) {
-            $evicted = array_shift($clone->items);
-            if ($evicted !== null) {
-                $clone->history[] = $evicted;
-                if (count($clone->history) > $clone->maxHistory) {
-                    array_shift($clone->history);
-                }
-            }
-        }
-
         $clone->items[] = $notification;
+        $clone->trimItemsToCap();
 
         return $clone;
     }
@@ -77,19 +76,15 @@ final class NotificationQueue
      */
     public function dismiss(): self
     {
-        if ($this->items === []) {
+        $dismissed = $this->current();
+        if ($dismissed === null) {
             return $this;
         }
 
         $clone = $this->mutate();
-        $dismissed = array_shift($clone->items);
-
-        if ($dismissed !== null) {
-            $clone->history[] = $dismissed;
-            if (count($clone->history) > $clone->maxHistory) {
-                array_shift($clone->history);
-            }
-        }
+        array_shift($clone->items);
+        $clone->history[] = $dismissed;
+        $clone->trimHistoryToCap();
 
         return $clone;
     }
@@ -170,37 +165,65 @@ final class NotificationQueue
     }
 
     /**
-     * Create a new instance with a different maxItems.
+     * New instance carrying both rings under a different items cap.
+     *
+     * Lowering the cap below the live count evicts the oldest active
+     * items into history — the same overflow route push() takes — so
+     * the capacity invariant survives the resize.
      */
     public function withMaxItems(int $maxItems): self
     {
-        $clone = $this->mutate();
-        return new self(
-            maxItems: $maxItems,
-            maxHistory: $clone->maxHistory,
-        );
+        $clone = $this->mutate(maxItems: $maxItems);
+        $clone->trimItemsToCap();
+
+        return $clone;
     }
 
     /**
-     * Create a new instance with a different maxHistory.
+     * New instance carrying both rings under a different history cap.
+     *
+     * Lowering the cap drops the oldest history entries (there is no
+     * third ring to demote them into).
      */
     public function withMaxHistory(int $maxHistory): self
     {
-        $clone = $this->mutate();
-        return new self(
-            maxItems: $clone->maxItems,
-            maxHistory: $maxHistory,
-        );
+        $clone = $this->mutate(maxHistory: $maxHistory);
+        $clone->trimHistoryToCap();
+
+        return $clone;
     }
 
-    private function mutate(): self
+    private function mutate(?int $maxItems = null, ?int $maxHistory = null): self
     {
         $clone = new self(
-            maxItems: $this->maxItems,
-            maxHistory: $this->maxHistory,
+            maxItems: $maxItems ?? $this->maxItems,
+            maxHistory: $maxHistory ?? $this->maxHistory,
         );
         $clone->items = $this->items;
         $clone->history = $this->history;
+
         return $clone;
+    }
+
+    /**
+     * Move oldest active items into history until the items cap holds.
+     */
+    private function trimItemsToCap(): void
+    {
+        while (count($this->items) > $this->maxItems) {
+            $this->history[] = array_shift($this->items);
+        }
+
+        $this->trimHistoryToCap();
+    }
+
+    /**
+     * Drop oldest history entries until the history cap holds.
+     */
+    private function trimHistoryToCap(): void
+    {
+        while (count($this->history) > $this->maxHistory) {
+            array_shift($this->history);
+        }
     }
 }
