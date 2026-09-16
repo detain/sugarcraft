@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Testing\Tests\Graphics;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Testing\Graphics\KittyImage;
 use SugarCraft\Testing\Graphics\KittyStream;
 use SugarCraft\Testing\Graphics\Iterm2Stream;
 use SugarCraft\Testing\Graphics\MalformedGraphicsException;
+use SugarCraft\Testing\Graphics\SixelStream;
 
 /**
  * @covers \SugarCraft\Testing\Graphics\KittyStream
@@ -267,6 +269,257 @@ final class KittyStreamTest extends TestCase
         KittyStream::decode("\x1b_Ga=T,c=8,r=4,m=1;\x1b\\" . "\x1b_Gm=1;aGVsbG8=\x1b\\");
     }
 
+    public function testStitchesFourFrameApcTransaction(): void
+    {
+        // The begin frame may carry the first payload slice, so a real mosaic
+        // stream is four frames deep: `m=1` begin + two `m=1` continuations +
+        // the `m=0` closer. All four must collapse into ONE image.
+        $frames = str_split(base64_encode($this->redPng()), 40);
+        $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . array_shift($frames) . "\x1b\\";
+        while (count($frames) > 1) {
+            $stream .= "\x1b_Gm=1;" . array_shift($frames) . "\x1b\\";
+        }
+        $stream .= "\x1b_Gm=0;" . array_shift($frames) . "\x1b\\";
+
+        $kitty = KittyStream::decode($stream);
+
+        self::assertSame(1, $kitty->count(), 'four APC frames are one transmission');
+        self::assertSame($this->redPng(), $kitty->image()->png(), 'the payload slices must concatenate in order');
+        self::assertSame(8, $kitty->image()->cols(), 'attributes are inherited from the begin frame');
+        self::assertSame('12', $kitty->image()->format());
+    }
+
+    public function testChunkFramesMergeAndOverrideTransactionAttributes(): void
+    {
+        // Per-chunk keys are legal in the protocol: a later frame overrides a
+        // shared key and adds new ones, while unmentioned begin-frame
+        // attributes survive to the decoded image.
+        $b64 = base64_encode($this->redPng());
+        $cut = intdiv(strlen($b64), 2);
+
+        $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . substr($b64, 0, $cut) . "\x1b\\"
+            . "\x1b_Gc=6,i=44,m=1;" . substr($b64, $cut) . "\x1b\\"
+            . "\x1b_Gm=0;\x1b\\";
+
+        $image = KittyStream::decode($stream)->image();
+
+        self::assertSame(6, $image->cols(), 'the later frame wins the shared key');
+        self::assertSame(44, $image->id(), 'a key introduced mid-transaction is additive');
+        self::assertSame('12', $image->format(), 'an unmentioned attribute survives');
+        self::assertSame($this->redPng(), $image->png());
+    }
+
+    public function testInterleavedTrafficDoesNotSplitAnApcTransaction(): void
+    {
+        // Chunk state lives on the decoder, not on frame adjacency, so a
+        // producer may spray unrelated traffic between chunks: printable text,
+        // SGR, a BEL-terminated OSC 1337, and a whole Sixel DCS image. None of
+        // those carries a Kitty introducer, so the transaction must still close
+        // into exactly one image.
+        $b64 = base64_encode($this->redPng());
+        $cut = intdiv(strlen($b64), 2);
+
+        $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . substr($b64, 0, $cut) . "\x1b\\"
+            . "hello \x1b[31mworld\x1b[0m"
+            . "\x1b]1337;File=inline=1:AAAA\x07"
+            . Fixture::bytes('sixel_red.six')
+            . "\x1b_Gm=0;" . substr($b64, $cut) . "\x1b\\";
+
+        $kitty = KittyStream::decode($stream);
+
+        self::assertSame(1, $kitty->count(), 'foreign traffic must not register as a Kitty transmit');
+        self::assertSame($this->redPng(), $kitty->image()->png(), 'the interleaved bytes must not enter the payload');
+    }
+
+    public function testSixelPathStaysIndependentOfChunkedApcStitching(): void
+    {
+        // The mirror of the pin above: the same mixed stream is decodable by
+        // SixelStream (a Sixel DCS rides `\x1bP0;1;0q`, never the bare `\x1bPq`
+        // Kitty legacy introducer), so the two graphics transports coexist.
+        $b64 = base64_encode($this->redPng());
+        $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . $b64 . "\x1b\\"
+            . Fixture::bytes('sixel_red.six')
+            . "\x1b_Gm=0;\x1b\\";
+
+        $sixel = SixelStream::decode($stream);
+        $kitty = KittyStream::decode($stream);
+
+        self::assertSame(80, $sixel->width());
+        self::assertSame(40, $sixel->height());
+        self::assertSame(1, $kitty->count());
+        self::assertSame($this->redPng(), $kitty->image()->png(), 'the sixel bytes must not leak into the Kitty payload');
+    }
+
+    public function testUnterminatedChunkedApcWithInterleavedTrafficStillFailsFast(): void
+    {
+        // Interleaving is not an escape hatch for truncation: a transaction
+        // closed only by end-of-input must still raise the missing-end marker.
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('missing its m=0 end marker');
+        KittyStream::decode(
+            "\x1b_Ga=T,c=8,r=4,m=1;aGVsbG8=\x1b\\"
+            . "trailing screen text\x1b[0m"
+            . "\x1b]1337;File=inline=1:AAAA\x07"
+        );
+    }
+
+    public function testStitchesBelTerminatedApcFrames(): void
+    {
+        // `findApcEnd` accepts either terminator; BEL-closed chunk frames are a
+        // real-world emitter quirk and must stitch like ST-closed ones.
+        $b64 = base64_encode($this->redPng());
+        $cut = intdiv(strlen($b64), 2);
+
+        $stream = "\x1b_Ga=T,c=8,r=4,f=12,m=1;" . substr($b64, 0, $cut) . "\x07"
+            . "\x1b_Gm=0;" . substr($b64, $cut) . "\x07";
+
+        self::assertSame($this->redPng(), KittyStream::decode($stream)->image()->png());
+    }
+
+    public function testMalformedDcsChunkFlagThrows(): void
+    {
+        // The legacy DCS path only admits `m=0`/`m=1` chunks; anything else is a
+        // framing error, not data to be guessed at.
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('chunk is malformed');
+        KittyStream::decode("\x1bPqa=T,c=8,r=4\x1b\\m=9,AAAA\x1b\\m=0\x1b\\");
+    }
+
+    public function testMalformedApcControlParameterThrows(): void
+    {
+        // The APC path validates its parameter block with the same strictness
+        // as the DCS path does.
+        $this->expectException(MalformedGraphicsException::class);
+        $this->expectExceptionMessage('key=value pair');
+        KittyStream::decode("\x1b_Ggarbage;" . base64_encode($this->redPng()) . "\x1b\\");
+    }
+
+    public function testPngPassthroughFormatTravelsUntransformed(): void
+    {
+        // `f=12` is PNG passthrough: the payload already IS the image, so the
+        // decoder must neither inflate it (a PNG is not a zlib stream — that
+        // would abort with decompress_failed) nor re-encode it.
+        $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '12', 'i' => '5']))->image();
+
+        self::assertSame('12', $image->format());
+        self::assertTrue($image->pngPassthrough());
+        self::assertFalse($image->compressed());
+        self::assertSame($this->redPng(), $image->rawPayload(), 'passthrough bytes must arrive byte for byte');
+        self::assertSame([8, 4], $image->pixelDimensions());
+    }
+
+    public function testPngPassthroughIsNotInflatedWhenZIsOne(): void
+    {
+        // `z` is the kitty z-index, NOT a transmission-compression flag — the
+        // format key alone decides that. candy-mosaic's
+        // `KittyOptions::withZIndex(1)` emits exactly this pair over a plain
+        // PNG, so inflating here would break its own wire output.
+        $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '12', 'z' => '1', 'i' => '9']))->image();
+
+        self::assertSame(1, $image->zIndex());
+        self::assertTrue($image->pngPassthrough());
+        self::assertFalse($image->compressed());
+        self::assertSame($this->redPng(), $image->rawPayload());
+    }
+
+    public function testZlibFormatInflatesWhateverTheZIndexSays(): void
+    {
+        // The converse pin: `f=1` still inflates when a z-index rides along.
+        $stream = $this->apcFrame(['a' => 'T', 'f' => '1', 'z' => '3', 'i' => '8'], base64_encode(gzcompress($this->redPng())));
+        $image = KittyStream::decode($stream)->image();
+
+        self::assertTrue($image->compressed());
+        self::assertSame(3, $image->zIndex());
+        self::assertFalse($image->pngPassthrough());
+        self::assertSame($this->redPng(), $image->png());
+    }
+
+    public function testLegacyF100IsAcceptedAsPngPassthroughAlias(): void
+    {
+        // No `f=100` exists in the kitty table; candy-mosaic declared PNG
+        // passthrough that way, so the decoder honours it as an alias of `12`.
+        $image = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '100', 'i' => '11']))->image();
+
+        self::assertSame('100', $image->format());
+        self::assertTrue($image->pngPassthrough());
+        self::assertFalse($image->compressed());
+        self::assertSame($this->redPng(), $image->rawPayload());
+    }
+
+    public function testLegacyF100AndCanonicalF12DecodeIdentically(): void
+    {
+        $png12 = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '12', 'i' => '3']))->image();
+        $png100 = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '100', 'i' => '3']))->image();
+
+        self::assertSame($png12->rawPayload(), $png100->rawPayload(), 'the alias must be behaviourally identical');
+        self::assertTrue($png12->pngPassthrough());
+        self::assertTrue($png100->pngPassthrough());
+    }
+
+    public function testLegacyF100SurvivesChunkedStitching(): void
+    {
+        $b64 = base64_encode($this->redPng());
+        $cut = intdiv(strlen($b64), 2);
+
+        $stream = "\x1b_Ga=T,c=8,r=4,f=100,m=1;" . substr($b64, 0, $cut) . "\x1b\\"
+            . "\x1b_Gm=0;" . substr($b64, $cut) . "\x1b\\";
+
+        $image = KittyStream::decode($stream)->image();
+
+        self::assertTrue($image->pngPassthrough());
+        self::assertSame($this->redPng(), $image->png());
+    }
+
+    public function testUnknownFormatTravelsUntransformed(): void
+    {
+        // Anything outside the zlib row of the format table (here a JPEG code)
+        // is documented as raw passthrough: no inflate, and no rejection either.
+        $jpegish = "\xff\xd8\xff\xe0not-a-real-jpeg";
+        $image = KittyStream::decode($this->apcFrame(['a' => 'T', 'f' => '24'], base64_encode($jpegish)))->image();
+
+        self::assertSame($jpegish, $image->rawPayload());
+        self::assertFalse($image->pngPassthrough());
+        self::assertFalse($image->compressed());
+    }
+
+    public function testNonNumericFormatNeverTriggersInflate(): void
+    {
+        // `f` is an enumerated key rather than a counter, so the numeric
+        // parameter gate does not police it — but it must never be read as a
+        // compression signal either.
+        $image = KittyStream::decode($this->apcFrame(['a' => 'T', 'f' => 'png'], base64_encode($this->redPng())))->image();
+
+        self::assertSame('png', $image->format());
+        self::assertFalse($image->compressed());
+        self::assertFalse($image->pngPassthrough());
+        self::assertSame($this->redPng(), $image->rawPayload());
+    }
+
+    public function testDecodesCandyCoreAnsiChunkedEmitterWithPngPassthrough(): void
+    {
+        // Producer/consumer interop: the frames `Ansi::kittyGraphicsBegin()` +
+        // `kittyGraphicsChunk()` emit (exactly what candy-mosaic renders) decode
+        // back into the sender's PNG with the chunking flag stripped.
+        $b64 = base64_encode($this->redPng());
+        $cut = intdiv(strlen($b64), 2);
+
+        $stream = Ansi::kittyGraphicsBegin(['a' => 'T', 'c' => 8, 'r' => 4, 'f' => 12])
+            . Ansi::kittyGraphicsChunk(substr($b64, 0, $cut), true)
+            . Ansi::kittyGraphicsChunk(substr($b64, $cut), false);
+
+        $image = KittyStream::decode($stream)->image();
+
+        self::assertSame($this->redPng(), $image->png());
+        self::assertTrue($image->pngPassthrough());
+        self::assertArrayNotHasKey('m', $image->params());
+    }
+
+    /** The real 8x4 red PNG the committed iTerm2 fixture carries. */
+    private function redPng(): string
+    {
+        return Iterm2Stream::decode(Fixture::bytes('iterm2_red.iterm2'))->png();
+    }
+
     /**
      * A minimal standard-APC transmit wrapping the real 8x4 red PNG.
      *
@@ -274,14 +527,23 @@ final class KittyStreamTest extends TestCase
      */
     private function apcTransmit(array $params): string
     {
+        // Reuse the PNG that the iTerm2 fixture carries so the APC path is tested
+        // against a genuine image rather than a hand-made header.
+        return $this->apcFrame($params, base64_encode($this->redPng()));
+    }
+
+    /**
+     * One self-framed standard-APC transmit with an explicit base64 payload.
+     *
+     * @param array<string, string> $params
+     */
+    private function apcFrame(array $params, string $payloadBase64): string
+    {
         $pairs = [];
         foreach ($params as $key => $value) {
             $pairs[] = $key . '=' . $value;
         }
-        // Reuse the PNG that the iTerm2 fixture carries so the APC path is tested
-        // against a genuine image rather than a hand-made header.
-        $png = Iterm2Stream::decode(Fixture::bytes('iterm2_red.iterm2'))->png();
 
-        return "\x1b_G" . implode(',', $pairs) . ';' . base64_encode($png) . "\x1b\\";
+        return "\x1b_G" . implode(',', $pairs) . ';' . $payloadBase64 . "\x1b\\";
     }
 }
