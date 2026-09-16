@@ -112,7 +112,17 @@ final class LspConnectionShutdownTest extends TestCase
 
     public function testDisconnectReturnsBoundedWhenTheServerIgnoresSigterm(): void
     {
-        $connection = $this->connectedOver(self::STUBBORN_SERVER);
+        // THE SHRUNK REQUEST TIMEOUT IS THE INSTRUMENT, NOT A CONCESSION. This
+        // row's wall is the teardown ladder: `requestTimeout` (the ignored
+        // `shutdown` round trip) + TERM_GRACE (~1.0s) + poll slop. At the file
+        // default of 2.0s that is ~3.1s against a 4.0s bound — under a second of
+        // headroom, so a few stalled loop wakes reddened a CORRECT bounded
+        // disconnect. Shrinking the input the ladder sums over (same technique
+        // as `EOF_EXIT_BOUND_SECONDS` above and `requestTimeout: 0.3` in the
+        // EOF row) drops the honest wall to ~1.5s under the very same 4.0s
+        // bound: 2.5s of slack, and the pre-fix signature the message names
+        // (the 7.77s proc_terminate+proc_close pair) is still caught twice over.
+        $connection = $this->connectedOver(self::STUBBORN_SERVER, requestTimeout: 0.4);
 
         $start = microtime(true);
         $connection->disconnect();

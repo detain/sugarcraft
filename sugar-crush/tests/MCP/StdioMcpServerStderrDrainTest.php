@@ -291,10 +291,12 @@ final class StdioMcpServerStderrDrainTest extends TestCase
     public function testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(): void
     {
         $probe = $this->tempDir . '/bigprobe.php';
+        $readyPath = $this->tempDir . '/big-server.flood-ready';
         file_put_contents($probe, sprintf(
             self::BIG_WRITE_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->writeBlockedServerScript(self::WEDGE_BYTES, 'big-server'), true),
+            var_export($this->writeBlockedServerScript(self::WEDGE_BYTES, 'big-server', $readyPath), true),
+            var_export($readyPath, true),
             self::OVERSIZED_ARGUMENT_BYTES,
         ));
 
@@ -347,10 +349,12 @@ final class StdioMcpServerStderrDrainTest extends TestCase
     public function testTheOversizedCallWasOnlyEverAtRiskBecauseOfTheStderrFlood(): void
     {
         $probe = $this->tempDir . '/bigquiet.php';
+        $readyPath = $this->tempDir . '/big-quiet-server.flood-ready';
         file_put_contents($probe, sprintf(
             self::BIG_WRITE_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->writeBlockedServerScript(self::SAFE_BYTES, 'big-quiet-server'), true),
+            var_export($this->writeBlockedServerScript(self::SAFE_BYTES, 'big-quiet-server', $readyPath), true),
+            var_export($readyPath, true),
             self::OVERSIZED_ARGUMENT_BYTES,
         ));
 
@@ -554,10 +558,17 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      * stdin back into blocking mode, both left them green. They are pinned by
      * this fixture instead, and by the mutations of those two exact lines.
      */
-    private function writeBlockedServerScript(int $bytes, string $name): string
+    private function writeBlockedServerScript(int $bytes, string $name, string $readyPath): string
     {
         $path = $this->tempDir . '/' . preg_replace('/[^a-z0-9_-]/i', '_', $name) . '-blocked.php';
-        file_put_contents($path, sprintf(self::BLOCKED_ON_STDERR_SERVER_TEMPLATE, $bytes));
+        if (is_file($readyPath)) {
+            unlink($readyPath);
+        }
+        file_put_contents($path, sprintf(
+            self::BLOCKED_ON_STDERR_SERVER_TEMPLATE,
+            $bytes,
+            var_export($readyPath, true),
+        ));
 
         return $path;
     }
@@ -712,11 +723,17 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      * %d bytes of stderr, written unprompted the moment the handshake is done.
      * Above the pipe capacity the child parks inside that `fwrite()` and stops
      * reading stdin, which is the state the oversized write has to meet.
+     *
+     * %s optional marker file: touched immediately BEFORE the flood's fwrite,
+     * so the probe can wait for the flood to have BEGUN instead of trusting a
+     * fixed settle. The touch must precede the write — for a wedged byte count
+     * that fwrite() never returns.
      */
     private const BLOCKED_ON_STDERR_SERVER_TEMPLATE = <<<'PHP'
         <?php
         $noise = str_repeat('e', %d);
         $flooded = false;
+        $ready = %s;
         while (($line = fgets(STDIN)) !== false) {
             $msg = json_decode($line, true);
             if (!is_array($msg) || !isset($msg['id'])) {
@@ -738,12 +755,15 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             flush();
             if ($method === 'tools/list' && !$flooded) {
                 $flooded = true;
+                if ($ready !== '') {
+                    file_put_contents($ready, '1');
+                }
                 fwrite(STDERR, $noise);
             }
         }
         PHP;
 
-    /** %s autoloader · %s server script · %d bytes of argument. */
+    /** %s autoloader · %s server script · %s flood-marker path · %d bytes of argument. */
     private const BIG_WRITE_PROBE_TEMPLATE = <<<'PHP'
         <?php
         require %s;
@@ -755,13 +775,27 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             startTimeoutSeconds: 5.0,
         );
         $server->start();
-        // Let the child reach its unprompted stderr flood and park in that
-        // write() — 300ms, the same settle used by the generator in
-        // StdioMcpServer::writeLine()'s doc-block.
-        usleep(300000);
+        // WAIT FOR THE CHILD TO REACH its unprompted stderr flood — the marker the
+        // fixture touches immediately before that fwrite() — instead of a fixed
+        // 300ms settle. A loaded box can deny the settle enough CPU for the flood
+        // to start only after the oversized write began, which would silently turn
+        // this row into the quiet control beside it; the poll ends the instant the
+        // flood has begun. The 5s is a hard bound on the FIXTURE, not a tolerance
+        // for the mechanism: past it the probe reports READY-TIMEOUT and exits 2
+        // rather than measuring a flood that never started.
+        $ready = %s;
+        $readyDeadline = microtime(true) + 5.0;
+        while (!is_file($ready)) {
+            if (microtime(true) > $readyDeadline) {
+                fwrite(STDERR, "READY-TIMEOUT: the fixture never began its stderr flood\n");
+                $server->stop();
+                exit(2);
+            }
+            usleep(2000);
+        }
         // HOW MANY STDERR BYTES THIS PARENT HAS ABSORBED, reported either side
         // of the oversized call. It is what lets the caller PROVE the child was
-        // blocked instead of trusting the settle above — see the assertions in
+        // blocked instead of trusting the marker wait above — see the assertions in
         // testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(). Read by
         // reflection, and read BEFORE stop(), which clears the buffer.
         $tail = new ReflectionProperty($server, 'stderrTail');

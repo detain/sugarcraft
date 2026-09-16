@@ -98,7 +98,11 @@ final class StdioMcpServerShutdownTest extends TestCase
 
     public function testStopReturnsBoundedWhenTheDirectChildIgnoresSigterm(): void
     {
-        $server = $this->serverOver("trap '' TERM; cat > /dev/null; sleep 8");
+        $ready = $this->readyFile('ignorer');
+        $server = $this->serverOver(
+            "trap '' TERM; touch " . escapeshellarg($ready) . '; cat > /dev/null; sleep 8',
+            $ready,
+        );
 
         $start = microtime(true);
         $server->stop();
@@ -122,7 +126,11 @@ final class StdioMcpServerShutdownTest extends TestCase
      */
     public function testStopReturnsPromptlyWhenTheChildHonoursSigterm(): void
     {
-        $server = $this->serverOver('cat > /dev/null');
+        $ready = $this->readyFile('honourer');
+        $server = $this->serverOver(
+            'touch ' . escapeshellarg($ready) . '; cat > /dev/null',
+            $ready,
+        );
 
         $start = microtime(true);
         $server->stop();
@@ -143,7 +151,11 @@ final class StdioMcpServerShutdownTest extends TestCase
      */
     public function testTheIgnoringChildIsDeadAfterStopReturns(): void
     {
-        $server = $this->serverOver("trap '' TERM; cat > /dev/null; sleep 8");
+        $ready = $this->readyFile('late-ignorer');
+        $server = $this->serverOver(
+            "trap '' TERM; touch " . escapeshellarg($ready) . '; cat > /dev/null; sleep 8',
+            $ready,
+        );
         $pid = $this->pidOf($server);
 
         $server->stop();
@@ -217,11 +229,26 @@ final class StdioMcpServerShutdownTest extends TestCase
         $server->stop();
         $server->stop();
 
-        $started = $this->serverOver('cat > /dev/null');
+        $ready = $this->readyFile('started-twice');
+        $started = $this->serverOver(
+            'touch ' . escapeshellarg($ready) . '; cat > /dev/null',
+            $ready,
+        );
         $started->stop();
         $started->stop();
 
         $this->assertSame([], $started->listTools());
+    }
+
+    /**
+     * Path of a readiness marker for one $serverOver() fixture: the child's own
+     * command touches it at the exact point the parent must not send a signal
+     * before (after `trap`, before the blocking `cat`). Lives under the test's
+     * own tempDir, so tearDown removes it with everything else.
+     */
+    private function readyFile(string $label): string
+    {
+        return $this->tempDir . '/' . $label . '.ready';
     }
 
     /**
@@ -230,19 +257,39 @@ final class StdioMcpServerShutdownTest extends TestCase
      * Injected through reflection because `start()` cannot produce this shape —
      * see the class docblock. The private property names are part of what is
      * being exercised: `stop()` reads exactly these.
+     *
+     * $readyFile must appear in the command $script itself (see
+     * {@see readyFile()}); this method POLLS it rather than sleeping a fixed
+     * 150 ms. The wait stood in for "the shell has executed `trap`", and
+     * `proc_get_status()` can indeed say nothing about how far a child has got
+     * — but that is an argument for a real readiness signal, not for a longer
+     * guess: on a starved shard 150 ms could expire before `trap` ran, and the
+     * SIGTERM-ignoring fixture would then die on the first signal, so the
+     * bounded row passed for the wrong reason. The poll's exit condition IS the
+     * precondition; its deadline exists only to fail loudly when the fixture
+     * never gets there.
      */
-    private function serverOver(string $script): StdioMcpServer
+    private function serverOver(string $script, string $readyFile): StdioMcpServer
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        // Cleared BEFORE the spawn, like every sibling poll: the child writes
+        // the marker as an early action, so an unlink racing behind proc_open
+        // could delete the very signal the poll waits for.
+        @unlink($readyFile);
         $proc = proc_open($script, $descriptors, $pipes);
         $this->assertIsResource($proc, 'the fixture child must have started');
         $this->spawned[] = [$proc, $pipes];
 
-        // The trap is installed by the shell before it reaches `cat`, and
-        // `proc_get_status()` says nothing about how far a child has got. One
-        // short wait, so a SIGTERM cannot arrive before `trap` has run and make
-        // the ignoring case pass for the wrong reason.
-        usleep(150_000);
+        $deadline = microtime(true) + 5.0;
+        while (!is_file($readyFile)) {
+            if (microtime(true) >= $deadline) {
+                $this->fail(
+                    'the fixture child never reached its ready marker — the shell died before it, '
+                    . 'so any timing bound taken from here measures the wrong process',
+                );
+            }
+            usleep(10_000);
+        }
 
         $server = new StdioMcpServer(name: 'fixture', command: 'unused', args: [], env: []);
 

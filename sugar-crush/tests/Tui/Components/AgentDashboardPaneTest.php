@@ -128,8 +128,15 @@ final class AgentDashboardPaneTest extends TestCase
     {
         $manager = $this->manager([$this->agent('alpha')]);
         $subAgent = $manager->createSubAgent('alpha', 'do the thing');
-        $subAgent->startedAt = new \DateTimeImmutable('@' . (time() - 90));
-        $subAgent->completedAt = new \DateTimeImmutable('@' . time());
+        // ONE clock read, not two. `AgentManager::elapsedSeconds()` subtracts
+        // these two timestamps whenever `completedAt` is set, so two separate
+        // `time()` calls let a one-second boundary land BETWEEN them and the
+        // exact-value assertion below reads 91 — a wall-clock race feeding an
+        // assertSame. Pinning both ends to one captured second makes the
+        // difference exactly 90 by construction, whatever second the test runs in.
+        $now = time();
+        $subAgent->startedAt = new \DateTimeImmutable('@' . ($now - 90));
+        $subAgent->completedAt = new \DateTimeImmutable('@' . $now);
         $subAgent->tokensUsed = 1234;
         $subAgent->costUsd = 0.42;
 

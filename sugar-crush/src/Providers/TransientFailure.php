@@ -315,13 +315,27 @@ final class TransientFailure
      * many clients retrying against one server; this is a single-user terminal
      * app making one completion at a time, so there is no herd to spread, and
      * a fixed schedule is worth more because it can be asserted exactly.
+     *
+     * @param callable(int):void|null $sleeper
+     *        Sleep seam (same family as {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow}'s
+     *        clock): the loop calls it with the microseconds owed instead of
+     *        `usleep()`. Production passes nothing and behaves exactly as
+     *        before; a test can count calls to prove the no-debt path never
+     *        sleeps at all, instead of bounding a zero-work return by wall
+     *        time a loaded scheduler can violate.
      */
-    public static function backoff(int $attempt): void
+    public static function backoff(int $attempt, ?callable $sleeper = null): void
     {
         $owed = self::backoffMicroseconds($attempt);
         if ($owed <= 0) {
             return;
         }
+
+        $nap = $sleeper !== null
+            ? \Closure::fromCallable($sleeper)
+            : static function (int $microseconds): void {
+                usleep($microseconds);
+            };
 
         // A DEADLINE RATHER THAN ONE `usleep()`, because one `usleep()` is not
         // a wait, it is a wait UNTIL THE NEXT SIGNAL — see the class docblock
@@ -332,7 +346,7 @@ final class TransientFailure
         $micros = $owed;
 
         while (true) {
-            usleep($micros);
+            $nap($micros);
 
             $remaining = $deadline - microtime(true);
             if ($remaining <= 0.0) {
