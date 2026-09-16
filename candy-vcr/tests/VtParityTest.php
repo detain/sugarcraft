@@ -73,8 +73,13 @@ final class VtParityTest extends TestCase
      *    Rendition and apply the DECDWL extra-column rule identically.
      *  - ESC 7/8 (DECSC/DECRC), ESC D/E/M (IND/NEL/RI), ESC c (RIS) — once
      *    dropped by candy-ansi's empty escDispatch, now routed to the renderer.
+     *    W8-F closed the surviving RIS tail: the renderer reset now restores
+     *    DECTCEM visibility (fresh power-on Cursor, like the emulator's
+     *    hardReset) and drops the REP memory, so post-RIS observables agree on
+     *    both engines ({@see testParityRisRestoresDectcemAndDropsRepMemory}).
      *  - REP (`CSI b`) — replays the last printable on the renderer path;
-     *    the emulator does not dispatch it at all.
+     *    the emulator does not dispatch it at all (until a RIS clears the
+     *    renderer's memory — then both print nothing; also pinned there).
      *  - BCE erases — the emulator fills ED/EL/ECH with the pen BACKGROUND
      *    (xterm BCE, w4-vt); the renderer blanks with default cells (pinned below).
      *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
@@ -153,6 +158,11 @@ final class VtParityTest extends TestCase
             'esc reverse index' => ["\x1b[2;1HA\x1bMB"],
             'esc save restore cursor' => ["\x1b[3;4H\x1b7\x1b[1;1Hwwww\x1b8Z"],
             'esc hard reset' => ["hello\x1bcW"],
+            'ris drops rep memory' => ["A\x1bc\x1b[3b"],
+            'ris restores region and decawm' => ["\x1b[2;4r\x1b[?7l" . str_repeat('z', 25) . "\x1bc" . str_repeat('w', 25)],
+            'ris then scroll fills full screen' => ["\x1b[2;4r" . str_repeat('a', 60) . "\x1bc" . str_repeat('b', 25)],
+            'ris then decrc lands at home' => ["AB\x1b7\x1bc\x1b8X"],
+            'ris drops pen before print' => ["\x1b[1;38;2;9;8;7mP\x1bcQ"],
         ];
     }
 
@@ -216,6 +226,7 @@ final class VtParityTest extends TestCase
             "\x1b[3;1HA\x1bMB" => 'RI',
             "\x1b[3;4H\x1b7Q\x1b8Z" => 'DECSC/DECRC',
             "junk\x1bcN" => 'RIS',
+            "junk\x1b[?25l\x1bcN" => 'RIS (after DECTCEM hide)',
         ];
         foreach ($cases as $bytes => $label) {
             self::assertSame(
@@ -224,6 +235,39 @@ final class VtParityTest extends TestCase
                 "ESC roster divergence: {$label}",
             );
         }
+    }
+
+    public function testParityRisRestoresDectcemAndDropsRepMemory(): void
+    {
+        // Audit finding #31 tail: on the renderer, RIS used to home the cursor
+        // with `Cursor::at(0, 0)` — which PRESERVES the hidden flag — and left
+        // the REP memory armed. The emulator's `hardReset()` builds a fresh
+        // `new Cursor()` (DECTCEM visible at power-on) and the renderer's
+        // post-RIS `CSI b` must replay nothing (xterm/VT510: after a full
+        // reset no graphic is the last printable). Both observables now agree.
+        $hiddenThenReset = self::feedRenderer("\x1b[?25l\x1bc");
+        self::assertTrue($hiddenThenReset->cursor()->visible, 'renderer: RIS restores the cursor to visible');
+        self::assertTrue($hiddenThenReset->cursor()->row === 0 && $hiddenThenReset->cursor()->col === 0, 'renderer: RIS homes');
+
+        $emuHiddenThenReset = self::feedEmulator("\x1b[?25l\x1bc");
+        self::assertTrue($emuHiddenThenReset->cursor()->visible, 'emulator: same, power-on visible');
+
+        // RIS then REP: the emulator never dispatches REP, so it prints
+        // nothing; the renderer must now match by having dropped the memory.
+        $bytes = "A\x1bc\x1b[3b";
+        self::assertSame(
+            self::normaliseEmulator(self::feedEmulator($bytes)),
+            self::normaliseRenderer(self::feedRenderer($bytes)),
+            'post-RIS REP must agree (renderer memory dropped)',
+        );
+        self::assertSame(' ', self::charAt(self::feedRenderer($bytes), 0, 1), 'renderer: nothing repeated');
+
+        // RIS also drops the DECSC slot: ESC 7 … ESC c … ESC 8 lands at home on
+        // both engines (the emulator restores its fresh default state, the
+        // renderer finds the null slot and stays put — at home after RIS).
+        $bytes = "AB\x1b7\x1bc\x1b8X";
+        self::assertSame('X', self::charAt(self::feedRenderer($bytes), 0, 0), 'renderer: DECRC after RIS → home');
+        self::assertSame('X', self::emulatorCharAt(self::feedEmulator($bytes), 0, 0), 'emulator: same');
     }
 
     #[DataProvider('curatedStreams')]

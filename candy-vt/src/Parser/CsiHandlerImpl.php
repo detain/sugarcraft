@@ -1101,16 +1101,24 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
-     * ESC c — RIS (hard reset). Clears the grid, homes the cursor, drops the
-     * pen (palette + truecolour + the DECSC slot), restores the full-page
-     * scroll region and re-enables DECAWM — the renderer's expressive-range
-     * match for the emulator's {@see \SugarCraft\Vt\Handler\ScreenHandler::hardReset()}.
-     * Scrollback/alt-screen/charsets have no renderer counterpart.
+     * ESC c — RIS (hard reset). Clears the grid, restores the cursor to its
+     * power-on value object (home + DECTCEM visible + default shape — the
+     * emulator's `hardReset()` builds a `new Cursor()`; homing with
+     * {@see Cursor::at()} kept a `CSI ? 25 l` hide across the reset), drops the
+     * pen (palette + truecolour + the DECSC slot) and the REP memory, restores
+     * the full-page scroll region and re-enables DECAWM — the renderer's
+     * expressive-range match for the emulator's
+     * {@see \SugarCraft\Vt\Handler\ScreenHandler::hardReset()}.
+     * Scrollback/alt-screen/charsets/tab-stops have no renderer counterpart.
+     * Clearing {@see $lastPrintable} is renderer-local hygiene: the emulator
+     * never dispatches REP at all, so post-RIS `CSI b` printing nothing is the
+     * agreement xterm/VT510 full-reset semantics demand ("no graphic was the
+     * last printable").
      */
     public function escResetToInitialState(): void
     {
         $this->grid = $this->grid->clear();
-        $this->cursor = $this->cursor->at(0, 0);
+        $this->cursor = new Cursor();
         $this->wrapPending = false;
         $this->autoWrap = true;
         $this->scrollTop = 0;
@@ -1120,6 +1128,7 @@ final class CsiHandlerImpl implements CsiHandler
         $this->attrs = 0;
         $this->fgTruecolor = null;
         $this->bgTruecolor = null;
+        $this->lastPrintable = '';
         $this->savedCursor = null;
         $this->savedFg = null;
         $this->savedBg = null;
