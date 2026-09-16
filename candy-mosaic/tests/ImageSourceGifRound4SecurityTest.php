@@ -186,6 +186,26 @@ final class ImageSourceGifRound4SecurityTest extends TestCase
     }
 
     /**
+     * Round-5 MINOR: a GIF truncated to 10..12 bytes (valid signature, incomplete
+     * header+LSD) must refuse cleanly, not trip a raw out-of-range read at byte 10 in
+     * either descriptor walker. Under the suite's failOnWarning=true an E_WARNING would
+     * surface as a test failure, so expecting the typed InvalidArgumentException here pins
+     * BOTH the absence of the warning AND the clean refusal (the honest/flip walkers now
+     * short-circuit below 13 bytes, matching the 13-byte header+LSD minimum).
+     */
+    public function testGifShorterThanLogicalScreenRefusesWithoutWarning(): void
+    {
+        // 10 bytes: GIF89a signature + 4 trailing bytes — no complete logical screen.
+        $path = $this->writeTemp('GIF89a' . "\x0a\x00\x0a\x00");
+        self::assertSame(10, strlen((string) file_get_contents($path)));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Unsupported image format|supports GIF and APNG/i');
+
+        ImageSource::fromAnimatedFile($path);
+    }
+
+    /**
      * @return list<int>
      */
     private function offsets(string $method, string $bytes): array

@@ -603,7 +603,9 @@ final class ImageSource
         // re-read a file an attacker can swap in the window after the bounded read,
         // defeating the single-descriptor ingress (round-4 HIGH). The GIF LSD is a
         // fixed-width LE pair at bytes 6..9; the signature was checked by the caller.
-        if (strlen($bytes) < 10) {
+        // A GIF needs the full 13-byte header + logical-screen descriptor before ANY
+        // structural walk (both walkers read byte 10), so demand 13, not 10.
+        if (strlen($bytes) < 13) {
             throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => $path]));
         }
         $dims = unpack('vwidth/vheight', substr($bytes, 6, 4));
@@ -655,7 +657,11 @@ final class ImageSource
         if ($honestOffsets !== $flipOffsets) {
             // Frame POSITIONS disagree → flip would decode a different (partial or
             // phantom-injected) sequence than the container describes, even when the
-            // counts happen to match (round-4 CRITICAL-2). Refuse, naming the positions.
+            // counts happen to match (round-4 CRITICAL-2). The message names the honest
+            // frame COUNT whose positions disagreed (not each offset, which would leak
+            // raw stream layout). A legitimately >256-frame GIF also lands here: flip
+            // slices at FLIP_FRAME_CAP so its list is shorter than the honest one — a
+            // conservative-but-correct refusal (flip could never emit those frames).
             throw new \InvalidArgumentException(Lang::t('animation.gif_frame_layout_mismatch', [
                 'expected' => count($honestOffsets),
             ]));
@@ -742,6 +748,12 @@ final class ImageSource
     private static function gifHonestDescriptorOffsets(string $bytes): array
     {
         $len = strlen($bytes);
+        // A stream shorter than the 13-byte header + LSD carries no descriptor to
+        // record; short-circuit before reading byte 10 (matches the flip-walk clone's
+        // own len<13 guard, so neither walker can emit a raw out-of-range warning).
+        if ($len < 13) {
+            return [];
+        }
         $i = 13; // past header (6) + logical screen descriptor (7)
         $gct = ord($bytes[10]);
         if (($gct & 0x80) !== 0) {
