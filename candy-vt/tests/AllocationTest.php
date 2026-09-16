@@ -11,7 +11,7 @@ use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Ansi\Parser\State;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell as RendererCell;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Parser\CsiHandlerImpl;
 use SugarCraft\Vt\Parser\OscHandlerImpl;

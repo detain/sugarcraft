@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Handler;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Charset\Charsets;
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Cursor\Cursor;

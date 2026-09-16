@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Terminal;
 
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use React\Stream\ReadableStreamInterface;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Ansi\Parser\Parser;
@@ -13,12 +16,18 @@ use SugarCraft\Vt\Screen\Screen;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
+use function React\Promise\reject;
+use function React\Promise\resolve;
+
 /**
  * Public terminal facade.
  *
  * Holds a {@see Parser} and a {@see ScreenHandler} that owns the
  * Buffer, Cursor, Sgr pen, and Mode. `feed()` drives bytes through the
  * parser; accessors return the handler's current state.
+ * `feedAsync()`/`feedStream()` are the ReactPHP entry points for the same
+ * machine — they deliver the terminal→host reply channel as promise
+ * values instead of requiring the caller to poll `replies()`.
  */
 final class Terminal
 {
@@ -108,6 +117,116 @@ final class Terminal
     }
 
     /**
+     * Async form of {@see feed()}: parse `$bytes` and resolve with the
+     * terminal→host answer bytes this feed produced (plus any earlier ones
+     * still queued), concatenated in request order — exactly the byte
+     * stream `$respond` would have received from {@see feed()}, delivered
+     * as the promise value instead of a callback.
+     *
+     * The parser is pure CPU work with no I/O wait, so the promise is
+     * already resolved on return; the async win is composability (the
+     * reply channel joins promise pipelines without a callback) and one
+     * honest type for callers that must handle replies either way.
+     * Mirrors charmbracelet/x/vt `Emulator.Read()` io.Pipe semantics in
+     * future form (x/vt emulator.go L265-281).
+     *
+     * @return PromiseInterface<string>
+     */
+    public function feedAsync(string $bytes): PromiseInterface
+    {
+        $this->parser->feed($bytes);
+        return resolve($this->drainReplyBytes());
+    }
+
+    /**
+     * Pump a stream of terminal input through the parser as it arrives.
+     *
+     * Each `data` event feeds the parser incrementally — no chunking or
+     * buffering is imposed, so a sequence split across two events parses
+     * exactly as one feed would. On `end` the parser is {@see flush()}ed
+     * so an unterminated trailing OSC/DCS still dispatches, then the
+     * promise settles. Reply-channel semantics follow {@see feed()}:
+     * with `$respond` given, every answer byte string is handed to it the
+     * moment its sequence dispatches and the promise resolves with the
+     * (empty) remainder; without it, answers queue normally and the
+     * promise resolves with all of them concatenated, the caller's
+     * single drain for the whole session.
+     *
+     * A stream that is already closed or ended when attached yields a
+     * rejected promise; a stream that `close`s without ever signalling
+     * `end` (truncated/aborted input) rejects too, because silently
+     * resolving on half-read input would hide a real transport failure.
+     * Listeners remove themselves once settled, so a late `data` on a
+     * closed pump cannot re-enter the parser.
+     *
+     * @param (callable(string): void)|null $respond
+     *
+     * @return PromiseInterface<string>
+     */
+    public function feedStream(ReadableStreamInterface $input, ?callable $respond = null): PromiseInterface
+    {
+        if (!$input->isReadable()) {
+            return reject(new \RuntimeException('Cannot pump a terminal input stream that is not readable (already ended or closed).'));
+        }
+        /** @var Deferred<string> $deferred */
+        $deferred = new Deferred();
+        /** @var array<string, callable> $listeners */
+        $listeners = [];
+        $settled = false;
+        $detach = static function () use ($input, &$listeners): void {
+            foreach ($listeners as $event => $listener) {
+                $input->removeListener($event, $listener);
+            }
+            $listeners = [];
+        };
+        $listeners['data'] = $onData = function (string $chunk) use ($respond): void {
+            $this->parser->feed($chunk);
+            if ($respond !== null) {
+                foreach ($this->handler->replies as $reply) {
+                    $respond($reply);
+                }
+                $this->handler->replies = [];
+            }
+        };
+        $listeners['error'] = $onError = function (\Throwable $error) use ($deferred, $detach, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $detach();
+            $deferred->reject($error);
+        };
+        $listeners['end'] = $onEnd = function () use ($respond, $deferred, $detach, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $this->parser->flush();
+            $tail = $this->drainReplyBytes();
+            if ($respond !== null && $tail !== '') {
+                $respond($tail);
+                $tail = '';
+            }
+            $detach();
+            $deferred->resolve($tail);
+        };
+        // React emits `close` after every `end` and after an abort; only
+        // the one that finds us unsettled matters (end wins when both come).
+        $listeners['close'] = $onClose = function () use ($deferred, $detach, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $detach();
+            $deferred->reject(new \RuntimeException('Terminal input stream closed before signalling end-of-stream.'));
+        };
+        foreach ($listeners as $event => $listener) {
+            $input->on($event, $listener);
+        }
+        return $deferred->promise();
+    }
+
+    /**
      * Force any in-flight string sequence (OSC/DCS/SOS/PM/APC) to
      * dispatch with its current payload and reset to ground. Useful at
      * end-of-stream when you can't wait for a real terminator byte.
@@ -115,6 +234,17 @@ final class Terminal
     public function flush(): void
     {
         $this->parser->flush();
+    }
+
+    /**
+     * Consume the whole reply queue as one concatenated byte string,
+     * in request order — the delivery shape shared by the async feeds.
+     */
+    private function drainReplyBytes(): string
+    {
+        $bytes = implode('', $this->handler->replies);
+        $this->handler->replies = [];
+        return $bytes;
     }
 
     public function screen(): Screen

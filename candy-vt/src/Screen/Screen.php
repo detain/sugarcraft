@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Screen;
 
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 
 /**
  * Readonly snapshot of the terminal grid.

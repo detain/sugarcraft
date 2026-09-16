@@ -26,6 +26,8 @@
     },
     "require": {
         "php": "^8.3",
+        "react/promise": "^3.3",
+        "react/stream": "^1.2",
         "sugarcraft/candy-ansi": "dev-master",
         "sugarcraft/candy-core": "dev-master"
     },

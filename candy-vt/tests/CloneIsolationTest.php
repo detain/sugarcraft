@@ -131,7 +131,7 @@ final class CloneIsolationTest extends TestCase
         return $s;
     }
 
-    /** @param array<int, \SugarCraft\Vt\Cell\Cell> $cells */
+    /** @param array<int, \SugarCraft\Vt\Cell> $cells */
     private function graphemes(array $cells): string
     {
         return implode('', array_map(static fn ($c): string => $c->grapheme, $cells));

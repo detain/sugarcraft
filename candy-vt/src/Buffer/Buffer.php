@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Buffer;
 
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Sgr\Sgr;
 use SugarCraft\Vt\Hyperlink\Hyperlink;
 
