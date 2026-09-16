@@ -1151,13 +1151,18 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**11,916 tests / 171,477 assertions, 0 failures, 1 skipped** — the whole of
+**11,916 tests / 169,124 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-9m19s. Measured 2026-09-16; the
-figure that stood here before, 11,899/171,108 in
-9m29s (2026-09-14), was current the day it landed, and this branch's eight
-`Tools/PtyShimAutoloadResolutionTest` tests are what moved it — and the figure before that, 7,276/76,239 in
+9m22s. Measured 2026-09-16; the
+figure that stood here before, 11,916/171,477 in
+9m19s (2026-09-16), was current the day it landed, and the wave-8 determinism
+tails are what moved it: the same test count, but `AssertionSwallowingCatchTest`'s
+scan now throws instead of recording an assertion per `try`/`catch` construct
+(−2,361 — the suite figure is no longer wired to how many blocks the tree
+happens to contain), and the two chain-budget `HookRegistryTest` cases count
+their pump on an injected clock instead of the wall (+4, with four more verified
+citations picked up by `SymbolCitationDriftTest`) — and the figure before that, 7,276/76,239 in
 2m38s (2026-08-19), was behind the suite by some four thousand tests — rounds
 44 through 61 each shipped guards — and the figure before that, 6,424/51,767
 in 1m52s, was behind the suite by 852 tests and 24,472 assertions. The

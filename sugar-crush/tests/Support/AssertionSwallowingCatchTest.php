@@ -208,7 +208,7 @@ final class AssertionSwallowingCatchTest extends TestCase
         // precisely what that guard exists to catch.
         foreach (self::everyTestFile() as $label => $path) {
             $source = self::readOrFail($path);
-            foreach ($this->swallowingCatchesIn($source) as $row) {
+            foreach ($this->swallowingCatchesIn($source, 'tests/' . $label) as $row) {
                 $found[] = ['file' => 'tests/' . $label] + $row;
             }
         }
@@ -232,9 +232,13 @@ final class AssertionSwallowingCatchTest extends TestCase
      * {@see self::$unresolvable}, not filed twice). Any future decision keyed
      * on the row's symbol must read `resolvedTypes`; `types` is for humans.
      *
+     * @param string $origin identity of the source for the fail-fast messages —
+     *        the `tests/…` label on the file walk, a fixture description in
+     *        tests; a malformed-source throw names what the reader can open.
+     *
      * @return list<array{line: int, types: list<string>, resolvedTypes: list<?string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
      */
-    private function swallowingCatchesIn(string $source): array
+    private function swallowingCatchesIn(string $source, string $origin = 'in-memory fixture'): array
     {
         $tokens = token_get_all($source);
         $count = \count($tokens);
@@ -246,7 +250,7 @@ final class AssertionSwallowingCatchTest extends TestCase
             if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_TRY) {
                 continue;
             }
-            [$tryStart, $tryEnd] = $this->braceRun($tokens, $i, $count);
+            [$tryStart, $tryEnd] = $this->braceRun($tokens, $i, $count, $origin);
             $tryAsserts = $this->assertsBetween($tokens, $tryStart, $tryEnd);
 
             $k = $tryEnd + 1;
@@ -262,7 +266,7 @@ final class AssertionSwallowingCatchTest extends TestCase
                 }
                 $line = $tokens[$k][2];
                 $types = $this->caughtTypes($tokens, $k, $count);
-                [$catchStart, $catchEnd] = $this->braceRun($tokens, $k, $count);
+                [$catchStart, $catchEnd] = $this->braceRun($tokens, $k, $count, $origin);
 
                 if ($tryAsserts && $this->swallowsAnAssertionFailure($types, $imports, $namespace)) {
                     $found[] = [
@@ -553,16 +557,31 @@ final class AssertionSwallowingCatchTest extends TestCase
      * The `{ … }` that follows token `$from`, as `[openIndex, closeIndex]`.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param string $origin source identity for the fail-fast message
      *
      * @return array{0: int, 1: int}
      */
-    private function braceRun(array $tokens, int $from, int $count): array
+    private function braceRun(array $tokens, int $from, int $count, string $origin): array
     {
         $i = $from;
         while ($i < $count && $tokens[$i] !== '{') {
             $i++;
         }
-        self::assertLessThan($count, $i, 'a try/catch with no block; this scan cannot answer for that source');
+        // A malformed source — a `try`/`catch` whose block opener is missing —
+        // is a PRECONDITION of this scanner, not a fact about the suite. It
+        // used to be asserted here, which wired the suite-wide assertion
+        // figure to the number of try/catch constructs on disk: every test
+        // file that adds a `try` moved the census by three, one per call of a
+        // guard that in green code never even fails. Fail fast like the
+        // malformed input it is; the red the author deserves arrives with a
+        // stack trace either way, but it no longer arrives as a suite-figure
+        // mystery for everyone else.
+        if ($i >= $count) {
+            $line = \is_array($tokens[$from]) ? $tokens[$from][2] : 0;
+            throw new \RuntimeException(
+                "{$origin}:{$line} — a try/catch with no block; this scan cannot answer for that source",
+            );
+        }
         $open = $i;
         $depth = 0;
         for (; $i < $count; $i++) {
