@@ -368,11 +368,11 @@ foreach ($libs as $manifestPath) {
         return $out;
     };
 
-    // $devDeps = production `require`; $testDeps = `require-dev`. The closure
-    // checker only walks production requires (that is the fresh-install path),
-    // but require-dev deps ALSO need their path-repo (+ their production
-    // closure), so --unused tracks them separately to avoid flagging a
-    // still-needed test harness like candy-testing as a dead entry.
+    // $devDeps = production `require`; $testDeps = `require-dev`. Both feed the
+    // closure as ROOTS (composer installs dev by default, so a root lib's
+    // require-dev siblings are on the fresh-install path — W8-F), but only
+    // production requires are followed as EDGES: a dependency's own
+    // require-dev is never installed.
     $devDeps = $collectDevDeps($manifest['require'] ?? []);
     $testDeps = $collectDevDeps($manifest['require-dev'] ?? []);
 
@@ -387,13 +387,22 @@ foreach ($libs as $manifestPath) {
 }
 
 /**
- * Resolve the full transitive set of dev-pinned sugarcraft/* siblings reachable
- * from $startSlug (excluding $startSlug itself). Returns depSlug => path-string,
- * where the path records the first chain that introduced the dep (e.g.
- * "sugar-bits -> candy-forms") for actionable reporting. Cycles (candy-core ⇄
+ * Resolve the full transitive set of dev-pinned sugarcraft/* siblings that a
+ * fresh `composer install` (which resolves dev) must resolve for $startSlug —
+ * excluding $startSlug itself. Roots: its production requires PLUS its
+ * require-dev siblings (W8-F: the CI "Link sibling libs" step runs --fix and
+ * nothing else, so a require-dev sibling left out of this graph resolved
+ * Packagist's dev-master in PRs — cross-lib tests pinning an unmerged sibling
+ * fix went red; scripts/refresh-deps.php carried a supplement loop for the
+ * same gap). Edges: production `require` only — a dependency's own require-dev
+ * is never installed transitively.
+ *
+ * Returns depSlug => path-string, where the path records the first chain that
+ * introduced the dep (e.g. "sugar-bits -> candy-forms", a root test edge is
+ * marked "[require-dev]") for actionable reporting. Cycles (candy-core ⇄
  * candy-pty) are handled via the visited set.
  *
- * @param array<string, array{devDeps:array<string,string>}> $libData
+ * @param array<string, array{devDeps:array<string,string>, testDeps:array<string,string>}> $libData
  * @return array<string, string>
  */
 $transitiveDeps = static function (string $startSlug, array $libData): array {
@@ -418,6 +427,20 @@ $transitiveDeps = static function (string $startSlug, array $libData): array {
             // either external or absent and reported separately on lookup.
             if (isset($libData[$depSlug])) {
                 $queue[] = [$depSlug, $childPath];
+            }
+        }
+        // Root-only: seed the require-dev siblings after the production loop so
+        // a dep reachable both ways keeps the production introducing-path.
+        if ($current === $startSlug) {
+            foreach ($libData[$current]['testDeps'] ?? [] as $depSlug => $_constraint) {
+                if ($depSlug === $startSlug || isset($deps[$depSlug]) || isset($found[$depSlug])) {
+                    continue;
+                }
+                $childPath = $path . ' [require-dev] -> ' . $depSlug;
+                $found[$depSlug] = $childPath;
+                if (isset($libData[$depSlug])) {
+                    $queue[] = [$depSlug, $childPath];
+                }
             }
         }
     }
