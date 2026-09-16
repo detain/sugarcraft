@@ -271,6 +271,22 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      * cap every time. (B is not stable in the control row — 1000, 0, 0 — because
      * a flood that fits in the pipe can be picked up by the handshake's own
      * trailing read; that row asserts only the post-call figure.)
+     *
+     * WHY THE POST-CALL FIGURE IS READ AFTER A pumpStderr() SWEEP, NOT RAW. The
+     * child parks in `fwrite()` the instant the pipe fills, and every byte the
+     * parent absorbs frees the pipe for the child to refill — so the WHOLE flood
+     * is drainable, but how much `callTool()`'s own `readLine()` had absorbed when
+     * the stdout reply LINE happened to complete is a scheduling race, not a
+     * property of the drain. Reading the tail at that raw instant reports the cap
+     * when the reply wins and 57344 (7 x 8192) when the last chunk loses, so the
+     * old raw read was a genuine 65536-vs-57344 flake under contention. The probe
+     * now runs {@see StdioMcpServer::pumpStderr()} — the documented between-
+     * exchanges drain seam — to saturation before reading, converting "did the
+     * drain chance to finish mid-write" into "run the drain to completion and
+     * assert it reached the cap." The assertion below is unchanged in every
+     * respect that carries teeth (expected = the class's own cap, actual = the
+     * tail); only the timing of the read moved, and it moved onto the API whose
+     * stated contract is exactly this completion.
      */
     public function testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(): void
     {
@@ -316,8 +332,9 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         $this->assertSame(
             $this->maxStderrBytes(),
             $this->reportedBytes($out, 'TAILAFTER'),
-            'the exchange did not absorb the whole flood, so the drain under test did not run '
-            . 'to completion during the oversized write. Output: ' . trim($out)
+            'the drain under test could not absorb the whole flood even after running '
+            . 'pumpStderr() to its bound, so a blocked child\'s stderr is not fully drainable. '
+            . 'Output: ' . trim($out)
         );
     }
 
@@ -750,6 +767,27 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         $tail = new ReflectionProperty($server, 'stderrTail');
         echo 'TAILBEFORE:', strlen((string) $tail->getValue($server)), "\n";
         $raw = $server->callTool('ping', ['blob' => str_repeat('x', %d)]);
+        // WHY PUMP TO COMPLETION BEFORE READING THE TAIL - THE RACE THIS CLOSES.
+        // callTool()'s own drain runs inside writeLine()/readLine(), but readLine()
+        // returns the instant the stdout reply LINE completes. How many of the
+        // child's 8192-byte stderr chunks happened to be absorbed by that moment is
+        // pure scheduling: the child parked in fwrite() refills whatever space the
+        // pipe frees, so the whole flood is absorbable, yet an un-pumped single read
+        // lands on 57344 (7 x 8192) instead of the 65536 cap whenever the reply line
+        // wins the race against the last chunk. pumpStderr() is this class's
+        // documented between-exchanges drain seam (StdioMcpServer::pumpStderr(),
+        // E537); running it to saturation turns "did the drain happen to finish" into
+        // "run the drain to completion, then assert it did." The 3s is a bound, never
+        // a sleep-and-hope: if the child never floods, the loop runs out its bound and
+        // the caller's assertSame(cap, TAILAFTER) goes RED on the short tail. The
+        // sub-cap control (SAFE_BYTES) can never reach the cap, so this loop simply
+        // runs to its bound and reports the flood's true, undisturbed size.
+        $cap = (int) (new ReflectionClass($server))->getConstant('MAX_STDERR_BYTES');
+        $drainDeadline = microtime(true) + 3.0;
+        while (strlen((string) $tail->getValue($server)) < $cap && microtime(true) < $drainDeadline) {
+            $server->pumpStderr();
+            usleep(2000);
+        }
         echo 'TAILAFTER:', strlen((string) $tail->getValue($server)), "\n";
         $server->stop();
         echo 'BIGCALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";

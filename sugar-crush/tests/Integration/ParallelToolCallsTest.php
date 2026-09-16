@@ -1057,15 +1057,36 @@ final class ParallelToolCallsTest extends TestCase
             'the detector must have had three payloads to be wrong about',
         );
 
-        // POSITIVE CONTROL: the two siblings' payloads are on disk right now,
-        // uncollected, and this scanner sees them. If this is empty the
-        // scanner is dead and the assertion below means nothing.
+        // POSITIVE CONTROL: the two siblings' payloads are on disk, uncollected,
+        // and this scanner sees them. If this is empty the scanner is dead and
+        // the assertion below means nothing.
+        //
+        // WHY A BOUNDED AWAIT INSTEAD OF AN IMMEDIATE READ. The fixture makes job
+        // 0 the slow one so both fast siblings exit — and so their payloads are
+        // stranded — by the time its release suspends the generator. On an idle
+        // box that is instant, but "job 0 sleeps 0.5s" is only a PROXY for "both
+        // fast children have been scheduled, written their payload, and been
+        // WNOHANG-reaped." Under shard contention a sibling can lose that race,
+        // the immediate read then sees one stranded (or none), and the control —
+        // correctly, on a perfectly healthy Runtime — redded. This waits for the
+        // EXACT condition the control is about (both siblings present) rather than
+        // trusting a sleep, bounded by this file's own RENDEZVOUS_WAIT and mirroring
+        // the poll in testTheAbandonmentCleanupNeverKillsAStillRunningChild(). It is
+        // a strengthening, not a widening: the count is now pinned to exactly 2, so
+        // a detector seeing one, or a bug leaving job 0's payload un-discarded for
+        // 3, still reds.
+        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        while (\count($this->strandedRuntimePayloads()) < 2 && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+
         $abandoned = $this->strandedRuntimePayloads();
-        $this->assertNotSame(
-            [],
+        $this->assertCount(
+            2,
             $abandoned,
-            'the sibling payloads should still be uncollected while the group is suspended at its first '
-                . 'release -- an empty list here means the leak detector, not the leak, is missing',
+            'the sibling payloads should both still be uncollected while the group is suspended at its '
+                . 'first release — fewer than 2 means the leak detector, not the leak, is missing; more than '
+                . '2 means job 0\'s own payload was never collected. Stranded: ' . implode(', ', $abandoned),
         );
 
         unset($generator);
@@ -1216,12 +1237,24 @@ final class ParallelToolCallsTest extends TestCase
             'the detector must have had three payloads to be wrong about',
         );
 
+        // POSITIVE CONTROL, and the same de-racing it needs as its neighbour:
+        // both siblings exit during job 0's slow release, but 0.5s is a PROXY for
+        // "both fast children landed a payload and were WNOHANG-reaped" that a
+        // contended shard can break, redding a healthy Runtime. Await the exact
+        // condition (both present), bounded by RENDEZVOUS_WAIT, then PIN the count
+        // at 2 — fewer means a dead detector, more means job 0 was never collected.
+        $deadline = microtime(true) + self::RENDEZVOUS_WAIT;
+        while (\count($this->strandedRuntimePayloads()) < 2 && microtime(true) < $deadline) {
+            usleep(2_000);
+        }
+
         $abandoned = $this->strandedRuntimePayloads();
-        $this->assertNotSame(
-            [],
+        $this->assertCount(
+            2,
             $abandoned,
-            'POSITIVE CONTROL: the two siblings\' payloads are uncollected right now and this scanner '
-                . 'must be able to see them -- an empty list here means the detector is dead',
+            'POSITIVE CONTROL: both siblings\' payloads are uncollected right now and this scanner '
+                . 'must be able to see them — fewer than 2 means the detector is dead, not that the '
+                . 'group is clean. Stranded: ' . implode(', ', $abandoned),
         );
 
         $caught = null;
