@@ -1,5 +1,7 @@
 # Code Review: candy-vt
 
+> **SUPERSEDED (2026-09-16, on master `aeb34bee4`) — `src/CellGrid.php` no longer exists.** The vcr renderer was unified onto the single `SugarCraft\Vt\Buffer\Buffer` grid: `CellGrid.php` was deleted by commit `40cfe4e3b` ("…collapse CellGrid into Buffer"), which reached master through **PR #1447 (merge `f7fe7c33b`)** (verified: `git ls-tree f7fe7c33b candy-vt/src/CellGrid.php` is empty; the file was still present at #1445 `45921a3db`). `candy-vt/src/Parser/CsiHandlerImpl.php:92` now holds `private Buffer $grid` and zero `CellGrid` references remain in `candy-vt/src/`. So the items below that treat `CellGrid` as a live file are **historical / resolved by the unification**: **#1** (`CellGrid::set()` immutability), **#22** (no `CellGrid::resize()`), **#28** (`CellGrid` vs `Buffer` duplication) — plus #24 and the summary-table rows for 1/22/28. The original wording is left intact so readers see the history in place. All other, still-live findings in this file are unaffected.
+
 ## Summary
 
 candy-vt is a well-structured in-memory VT500 terminal emulator that parses ANSI byte streams into a cell grid. The codebase follows the SugarCraft monorepo conventions (PSR-12, immutable+fluent patterns, `final` classes, `declare(strict_types=1)` throughout). The two Terminal entry-points (`SugarCraft\Vt\Terminal` for the vcr renderer path and `SugarCraft\Vt\Terminal\Terminal` for full emulation) are appropriately separated.
