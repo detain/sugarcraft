@@ -16,7 +16,7 @@ namespace SugarCraft\Ansi\Tests\Support;
  * push must not disturb the pull, because the consuming repositories migrate on a
  * later step (vt-B), not in this change.
  */
-class PullSubparamsRecorder extends DispatchRecorder
+final class PullSubparamsRecorder extends DispatchRecorder
 {
     /**
      * Late-bound flag source, deliberately nullable and untyped at the boundary

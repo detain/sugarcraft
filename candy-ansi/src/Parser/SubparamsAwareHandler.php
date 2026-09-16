@@ -10,12 +10,14 @@ namespace SugarCraft\Ansi\Parser;
  *
  * The parser flattens every parameter string into one list (ECMA-48 lets a
  * control sequence separate parameters with `;` and sub-parameters with `:`
- * inside that string), so `CSI 4 : 3 m` (curly underline) and `CSI 4 ; 3 m` (underline, then
- * italic) both arrive as `[4, 3]`. The continuation flags that distinguish them
+ * inside that string), so `CSI 4 : 3 m` (curly underline) and
+ * `CSI 4 ; 3 m` (underline, then italic) both arrive as `[4, 3]`. The continuation flags that distinguish them
  * live on the parser, and until this interface existed the only way a handler
- * could get them was to *pull*: the front-end that owns the Parser late-binds a
- * closure returning {@see Parser::subparams()} into the handler
- * (`attachSubparamsProvider()` in candy-vt, `bindParser()` in candy-freeze).
+ * could get them was to *pull*: the front-end that owns the Parser hands the
+ * handler a way back to it, and the handler calls {@see Parser::subparams()}
+ * from inside its own dispatch. Two shapes do this today — candy-vt injects a
+ * closure (`attachSubparamsProvider()`), candy-freeze injects the Parser object
+ * itself (`bindParser()`) — which is itself an argument for one pushed contract.
  *
  * That pull inverts the dependency the parser otherwise has — the handler ends
  * up holding a reference to the thing dispatching it — and the reference can go
@@ -75,7 +77,9 @@ namespace SugarCraft\Ansi\Parser;
  *    `__clone()`) and `SgrStateHandler` (`candy-freeze/src/AnsiParser.php`).
  *    Implementing this interface on those two classes is sufficient.
  *  - **NOT push-reachable** — `CsiHandlerImpl` in the candy-vt *renderer* path,
- *    where `Terminal::new()` hands the parser a plain {@see HandlerAdapter} and
+ *    where `candy-vt/src/Terminal.php::new()` (not the same class as the
+ *    `Terminal/Terminal.php` emulator above) hands the parser a plain
+ *    {@see HandlerAdapter} and
  *    keeps `CsiHandlerImpl` inside it as that adapter's constructor argument.
  *    Either the adapter grows the capability and forwards `setSubparams()` down
  *    to the wrapped handler, or this path keeps the pull route. Deleting

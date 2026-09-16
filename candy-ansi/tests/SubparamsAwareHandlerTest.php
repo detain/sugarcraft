@@ -318,6 +318,29 @@ final class SubparamsAwareHandlerTest extends TestCase
     }
 
     /**
+     * Flags must not bleed across the boundary between the two dispatched
+     * sequence kinds. A colon-rich CSI followed by a colon-free DCS followed by a
+     * colon-free CSI has to yield three independent pushes; if the parser ever
+     * cached the list per handler instead of per sequence, a sixel prelude would
+     * inherit the previous SGR's grouping and the failure would look like a
+     * colour bug far away from here.
+     */
+    public function testFlagsDoNotBleedAcrossDispatchKindBoundaries(): void
+    {
+        $capable = new CapableDispatchRecorder();
+        $parser = new Parser($capable);
+
+        $parser->feed("\x1b[4:3m");            // one parameter, colon continuation
+        $parser->feed("\x1bP1;2qdata\x1b\\");  // DCS prelude, NO colon at all
+        $parser->feed("\x1b[31m");             // plain CSI again
+
+        self::assertSame(
+            [[true, false], [false, false], [false]],
+            $capable->pushes,
+        );
+    }
+
+    /**
      * A DCS left unterminated at end-of-stream is dispatched by `flush()`, which
      * routes through the same `dispatch()` method — so the prelude grouping must
      * survive to that callback too rather than arriving only on the tidy path.
