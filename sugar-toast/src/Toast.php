@@ -784,23 +784,21 @@ final class Toast
         return new Style($fg, null, $attrs);
     }
 
+    /**
+     * Map an SGR colour index (0-7, bright variant when {@see $bright}) to a
+     * packed 24-bit RGB int. The triples come from candy-core's canonical
+     * xterm table — slot 4 = `#0000EE` (`main.h DEF_COLOR4 "blue2"`), slot 12
+     * = `#5C5CFF` (`DEF_COLOR12 "rgb:5c/5c/ff"`) — indexed from
+     * {@see Color::ANSI16_RGB} so this decode can never fork its own blues
+     * again. Indices that resolve outside the 16-slot table fall back to its
+     * white slot (7, or 15 for the bright half), preserving the old
+     * default-to-white.
+     */
     private function ansiColorToRgb(int $idx, bool $bright): int
     {
-        $colors = [
-            [0, 0, 0],       // black
-            [128, 0, 0],     // red
-            [0, 128, 0],     // green
-            [128, 128, 0],  // yellow
-            [0, 0, 128],     // blue
-            [128, 0, 128],  // magenta
-            [0, 128, 128],  // cyan
-            [192, 192, 192], // white
-        ];
-        $c = $colors[$idx] ?? [192, 192, 192];
-        if ($bright) {
-            $c = [\min(255, $c[0] + 96), \min(255, $c[1] + 96), \min(255, $c[2] + 96)];
-        }
-        return ($c[0] << 16) | ($c[1] << 8) | $c[2];
+        $offset = $bright ? 8 : 0;
+        [$r, $g, $b] = Color::ANSI16_RGB[$offset + $idx] ?? Color::ANSI16_RGB[$offset + 7];
+        return ($r << 16) | ($g << 8) | $b;
     }
 
     private function graphemeWidth(string $g): int

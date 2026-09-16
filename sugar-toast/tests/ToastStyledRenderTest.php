@@ -74,13 +74,14 @@ final class ToastStyledRenderTest extends TestCase
     {
         // Info icon renders red-free but coloured (SGR 34 → truecolor);
         // the icon must retain its own colour, not be overwritten by fg.
-        // candy-core ansiColorToRgb maps 34 (blue) → 0,0,128 → 38;2;0;0;128.
+        // Toast::ansiColorToRgb indexes candy-core Color::ANSI16_RGB, so
+        // 34 (slot 4) → #0000EE "blue2" → 38;2;0;0;238.
         $out = Toast::new(50)
             ->withPosition(Position::TopLeft)
             ->push($this->styledAlert())
             ->View($this->bg(), 80, 12);
 
-        $this->assertStringContainsString('38;2;0;0;128', $out);
+        $this->assertStringContainsString('38;2;0;0;238', $out);
     }
 
     // ─── Unstyled render stays byte-identical ───────────────────────────
