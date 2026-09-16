@@ -56,10 +56,29 @@ return [
     // Sixel
     'sixel.max_colors_out_of_range' => 'maxColors must be 1-256, got {maxColors}',
 
+    // tmux passthrough
+    'tmux.stream_not_sixel' => 'Band streaming is only available for the Sixel renderer, not {name}',
+
     // Animation
     'animation.empty'                 => 'Animation requires at least one frame',
     'animation.delay_count_mismatch'  => 'Frame count ({frameCount}) and delay count ({delayCount}) must match',
     'animation.index_out_of_range'    => 'Frame index {index} is out of range for this animation',
     'animation.too_many_frames'       => 'Animation exceeds the maximum of {max} frames (got {count})',
     'animation.frame_too_large'       => 'Animation frame {index} dimensions {width}×{height} exceed the maximum of {max} pixels',
+    'animation.too_many_pixels'       => 'Animated image declares {frames} frames of {width}×{height} = {total} pixels, exceeding the maximum of {max}',
+    'animation.unsupported_format'    => 'Animated loading supports GIF and APNG, not {format}',
+
+    // APNG (pure-PHP frame walk)
+    'apng.no_ihdr'           => 'APNG/PNG stream has no IHDR header',
+    'apng.truncated'         => 'APNG stream is truncated or malformed',
+    'apng.bad_acTL'          => 'APNG acTL chunk is malformed',
+    'apng.bad_fcTL'          => 'APNG fcTL chunk is malformed',
+    'apng.no_frames'         => 'APNG declares {frames} frames but none could be decoded',
+    'apng.sequence'          => 'APNG frame control/data sequence numbers are out of order',
+    'apng.unsupported_bit_depth'  => 'APNG bit depth {depth} is not supported (only 8)',
+    'apng.unsupported_color_type' => 'APNG colour type {type} is not supported',
+    'apng.unsupported_interlace'  => 'Interlaced (Adam7) APNG is not supported',
+    'apng.no_plte'           => 'APNG uses palette colour type but has no PLTE chunk',
+    'apng.inflate_failed'    => 'APNG frame data could not be inflated',
+    'apng.bad_chunk_crc'     => 'APNG chunk {type} failed its CRC check',
 ];

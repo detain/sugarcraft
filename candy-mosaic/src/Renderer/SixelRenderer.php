@@ -59,6 +59,58 @@ final class SixelRenderer implements Renderer
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
+        // Whole-buffer sink over the same streaming encoder, so the one-shot
+        // path and {@see encodeBandStream()} can never drift byte-for-byte.
+        $out = '';
+        $this->encodeInto($image, $width, $height, static function (string $chunk) use (&$out): void {
+            $out .= $chunk;
+        });
+
+        return $out;
+    }
+
+    /**
+     * Stream the Sixel encoding one 6-pixel-tall band at a time.
+     *
+     * Emits the DCS header + background register + palette ONCE on the first
+     * `$write`, then one `$write` per band body (the graphics-newline `-` that
+     * joins bands prefixes every band after the first), then the ST terminator
+     * on the final `$write`. The concatenation of every `$write` argument is
+     * byte-for-byte identical to {@see render()}'s return value — the two share
+     * {@see encodeInto()} and the same band emitter.
+     *
+     * Why this streams and the source decode does not: the median-cut palette
+     * must be sampled from the FULL image before any band is emitted (a
+     * per-band palette breaks colour consistency across bands), so the GD
+     * decode + resize stays whole-image. What previously cost O(pixelW×pixelH) —
+     * the fully-materialised index grid, the error-diffusion accumulator, and
+     * the complete output string — is now O(pixelW): {@see indexRows()} yields
+     * grid rows from a rolling one/two-row lookahead window and each band is
+     * handed to `$write` and released. A consumer can start pushing bytes to the
+     * TTY while later bands are still quantising.
+     *
+     * The API is the one recorded in CALIBER_LEARNINGS §Deferred (#17) so a
+     * later caller migrates mechanically; the optional `$height` (default null →
+     * aspect-derived, exactly like {@see render()}) is the one addition, so a
+     * fixed-height video frame need not fall back to `render()`.
+     *
+     * @param callable(string):void $write  Receives each encoded fragment in order.
+     * @param int|null              $height Target height in cells (null = from aspect).
+     */
+    public function encodeBandStream(ImageSource $image, int $width, callable $write, ?int $height = null): void
+    {
+        $this->encodeInto($image, $width, $height, $write);
+    }
+
+    /**
+     * Shared encode core: prepare, resize, quantise, then emit header + bands +
+     * terminator through `$write` in render order. Both {@see render()} and
+     * {@see encodeBandStream()} funnel here so the byte stream is defined once.
+     *
+     * @param callable(string):void $write
+     */
+    private function encodeInto(ImageSource $image, int $width, ?int $height, callable $write): void
+    {
         $cellH = $this->prepareRender($image, $width, $height);
 
         // The cell box maps to a PIXEL canvas (cells × terminal cell size) so the
@@ -107,34 +159,55 @@ final class SixelRenderer implements Renderer
             // onto the transparent background on tolerant decoders).
             $palette = $this->medianCut($this->samplePixels($resized, 4096, $offset), $this->maxColors - $offset);
 
-            // Apply error-diffusion dithering before building the index grid.
-            $grid = $this->dither === Dither::None
-                ? $this->buildIndexGrid($resized, $palette, $offset)
-                : $this->ditheredIndexGrid($resized, $palette, $this->dither, $offset);
-
-            $out = Ansi::sixelDcsHeader($pixelW, $pixelH);
+            // Header, optional transparent background, and the palette are a
+            // one-time prefix: a streaming consumer must see them before any band
+            // body so the decoder can allocate registers and set the raster.
+            $head = Ansi::sixelDcsHeader($pixelW, $pixelH);
             if ($offset === 1) {
-                $out .= self::TRANSPARENT_BACKGROUND;
+                $head .= self::TRANSPARENT_BACKGROUND;
             }
-            $out .= $this->emitPalette($palette, $offset);
+            $head .= $this->emitPalette($palette, $offset);
+            $write($head);
 
-            for ($bandTop = 0; $bandTop < $pixelH; $bandTop += 6) {
-                $bandBottom = min($bandTop + 6, $pixelH);
-                $out .= $this->emitBand($grid, $bandTop, $bandBottom, $pixelW, $palette, $offset);
-                // Graphics newline `-` advances to the next 6-row band (NOT "\n",
-                // which a terminal reads as a literal line feed and which breaks
-                // the image).
-                if ($bandBottom < $pixelH) {
-                    $out .= '-';
+            // Pull index rows lazily and emit a 6-row band per write. The
+            // graphics-newline `-` that separates bands PREFIXES every band
+            // after the first, so the last band (partial or full) carries no
+            // trailing `-` — byte-for-byte matching the original
+            // `if ($bandBottom < $pixelH)` join.
+            $rowsInBand = [];
+            $firstBand = true;
+            foreach ($this->indexRows($resized, $palette, $this->dither, $offset) as $gridRow) {
+                $rowsInBand[] = $gridRow;
+                if (count($rowsInBand) === 6) {
+                    $write($this->bandBytes($rowsInBand, $pixelW, $palette, $offset, $firstBand));
+                    $rowsInBand = [];
+                    $firstBand = false;
                 }
             }
+            if ($rowsInBand !== []) {
+                $write($this->bandBytes($rowsInBand, $pixelW, $palette, $offset, $firstBand));
+            }
 
-            $out .= Ansi::sixelTerminator();
-
-            return $out;
+            $write(Ansi::sixelTerminator());
         } finally {
             imagedestroy($resized);
         }
+    }
+
+    /**
+     * Encode one band's bytes, prefixing the graphics-newline separator unless
+     * it is the first band. The band grid is passed 0-based (its own local row
+     * indices) so {@see emitBand()} is agnostic to where the band sits in the
+     * full canvas.
+     *
+     * @param list<list<int>>          $bandRows
+     * @param list<array{int,int,int}> $palette
+     */
+    private function bandBytes(array $bandRows, int $pixelW, array $palette, int $offset, bool $firstBand): string
+    {
+        $body = $this->emitBand($bandRows, 0, count($bandRows), $pixelW, $palette, $offset);
+
+        return ($firstBand ? '' : '-') . $body;
     }
 
     public function name(): string
@@ -387,107 +460,95 @@ final class SixelRenderer implements Renderer
         ];
     }
 
-    // ─── Index grid (no dithering) ────────────────────────────────────────────
+    // ─── Index grid (lazy, rolling-window) ────────────────────────────────────
 
     /**
-     * Map each pixel to its nearest palette entry by Euclidean RGB distance.
+     * Yield the index grid one row at a time, keyed by absolute row index.
      *
-     * @param int $offset 1 when register 0 is the transparent background:
-     *                    opaque pixels index from $offset and fully-transparent
-     *                    pixels map to 0 (never painted); 0 preserves the
-     *                    plain 0-based encoding byte-for-byte.
-     * @return list<list<int>>  grid[row][col] = palette index
-     */
-    private function buildIndexGrid(\GdImage $img, array $palette, int $offset = 0): array
-    {
-        $w    = imagesx($img);
-        $h    = imagesy($img);
-        $grid = [];
-        $cache = []; // packed RGB → palette index; posters reuse few colours.
-        for ($y = 0; $y < $h; $y++) {
-            $row = [];
-            for ($x = 0; $x < $w; $x++) {
-                // Truecolor canvas → packed int; extract channels directly (no
-                // per-pixel imagecolorsforindex associative-array allocation).
-                $rgb = imagecolorat($img, $x, $y);
-                if ($offset === 1 && ($rgb >> 24) === 127) {
-                    $row[] = 0;
-                    continue;
-                }
-                $r = ($rgb >> 16) & 0xFF;
-                $g = ($rgb >> 8) & 0xFF;
-                $b = $rgb & 0xFF;
-                // Key the memo on a coarse 5-bit-per-channel cube so it caps at
-                // 32768 entries — nearestColor runs O(distinct cubes), not
-                // O(pixels), bounding cost regardless of image size.
-                $key = (($r >> 3) << 10) | (($g >> 3) << 5) | ($b >> 3);
-                $row[] = $offset + ($cache[$key] ??= $this->nearestColor($r, $g, $b, $palette));
-            }
-            $grid[] = $row;
-        }
-        return $grid;
-    }
-
-    // ─── Index grid (error-diffusion dithering) ───────────────────────────────
-
-    /**
-     * Build an index grid with error-diffusion dithering.
+     * The single source of truth for pixel→palette-index mapping, shared by the
+     * one-shot ({@see render()}) and streaming ({@see encodeBandStream()})
+     * paths so the two can never diverge. Every quantisation decision is
+     * reproduced exactly as the previous full-canvas grid builders did:
      *
-     * Each pixel is quantized to its nearest palette entry, the rounding
-     * error is accumulated, and that error is diffused to neighboring
-     * unprocessed pixels using Floyd–Steinberg, Stucki, or Atkinson
-     * coefficients before they are themselves quantized.
+     *   • Euclidean nearest-palette lookup, memoised on a coarse 5-bit RGB cube
+     *     (≤32768 entries) — identical key arithmetic to the old code.
+     *   • A fully-transparent pixel (GD alpha 127) maps to index 0 and diffuses
+     *     no error whenever a background register is reserved.
+     *   • Error-diffusion dithering quantises each pixel, clamps the accumulated
+     *     value to 0..255, and propagates the rounding error to unprocessed
+     *     neighbours.
+     *
+     * The rolling window is what makes it O(pixelW) not O(pixelW×pixelH): error
+     * diffusion is strictly causal (it only reaches rows ≥ the current one), so
+     * a row's final index is fixed once every earlier row has diffused into it.
+     * A row is read into the window only once no earlier row can still touch it,
+     * and released the instant it has pushed its own error downward — at most
+     * `reach + 1` accumulator rows are alive (1 for Floyd–Steinberg, 2 for
+     * Stucki/Atkinson). Loading row `y + reach + 1` right after processing `y`
+     * is provably early enough because the FIRST diffuser into that row is
+     * `y + 1`, so no contribution is ever written into a not-yet-loaded slot or
+     * clobbered by a late base read.
      *
      * @param list<array{int,int,int}> $palette
      * @param int $offset 1 when register 0 is the transparent background —
-     *                    fully-transparent pixels map to 0 and diffuse no
-     *                    error (a hole is not a colour decision).
+     *                    opaque pixels index from $offset and holes map to 0.
+     * @return \Generator<int, list<int>>  row index → grid[row][col] palette index
      */
-    private function ditheredIndexGrid(
-        \GdImage $img,
-        array $palette,
-        Dither $dither,
-        int $offset = 0,
-    ): array {
+    private function indexRows(\GdImage $img, array $palette, Dither $dither, int $offset): \Generator
+    {
         $w = imagesx($img);
         $h = imagesy($img);
+        $hasDiffusion = $dither !== Dither::None;
 
-        // Accumulated floating-point pixel values (RGB, may exceed [0,255]
-        // during error diffusion — clamped before quantization).
-        /** @var list<list<array{float,float,float}> $accum */
-        $accum = [];
-        // When a background register is reserved, holes must be remembered
-        // across the diffusion pass — accum holds colour, not transparency.
-        /** @var list<list<bool>> $hole */
-        $hole = [];
-        for ($y = 0; $y < $h; $y++) {
-            $accum[$y] = [];
+        // The lowest row a single pixel's error can still reach — the window
+        // must keep every row awaiting an inbound contribution.
+        $reach = match ($dither) {
+            Dither::FloydSteinberg => 1,
+            Dither::Stucki, Dither::Atkinson => 2,
+            default => 0,
+        };
+
+        /** @var array<int, list<array{float,float,float}>> $window  absolute row → RGB accumulators */
+        $window = [];
+        /** @var array<int, list<bool>> $holes  absolute row → transparent-pixel mask */
+        $holes = [];
+
+        // Read one row's raw pixels into floating-point accumulators; when a
+        // background register is reserved, remember which pixels are holes so
+        // the diffusion pass (which carries colour, not transparency) can skip
+        // them exactly as the old full-canvas builder did.
+        $loadBase = function (int $y) use ($img, $w, $offset, &$window, &$holes): void {
+            $row = [];
             for ($x = 0; $x < $w; $x++) {
-                // Truecolor canvas → packed int; extract channels directly.
                 $rgb = imagecolorat($img, $x, $y);
                 if ($offset === 1) {
-                    $hole[$y][$x] = ($rgb >> 24) === 127;
+                    $holes[$y][$x] = (($rgb >> 24) & 0xFF) === 127;
                 }
-                $accum[$y][$x] = [
+                $row[] = [
                     (float) (($rgb >> 16) & 0xFF),
                     (float) (($rgb >> 8) & 0xFF),
                     (float) ($rgb & 0xFF),
                 ];
             }
+            $window[$y] = $row;
+        };
+
+        // Prime the window: rows [0, reach] before any row is quantised.
+        for ($y = 0; $y <= $reach && $y < $h; $y++) {
+            $loadBase($y);
         }
 
-        $grid = [];
-        $cache = []; // packed rounded RGB → palette index, reused across pixels.
+        $cache = []; // coarse 5-bit RGB cube → palette index, reused across pixels.
 
         for ($y = 0; $y < $h; $y++) {
             $row = [];
             for ($x = 0; $x < $w; $x++) {
-                if ($offset === 1 && $hole[$y][$x]) {
+                if ($offset === 1 && $holes[$y][$x]) {
                     $row[] = 0;
                     continue;
                 }
-                // Quantize the accumulated (possibly error-diffused) value.
-                [$r, $g, $b] = $accum[$y][$x];
+                // Quantise the accumulated (possibly error-diffused) value.
+                [$r, $g, $b] = $window[$y][$x];
                 $clampedR = max(0.0, min(255.0, $r));
                 $clampedG = max(0.0, min(255.0, $g));
                 $clampedB = max(0.0, min(255.0, $b));
@@ -495,25 +556,37 @@ final class SixelRenderer implements Renderer
                 $ri = (int) round($clampedR);
                 $gi = (int) round($clampedG);
                 $bi = (int) round($clampedB);
-                // Coarse 5-bit cube key (see buildIndexGrid) caps the memo at
-                // 32768 nearest-colour computations across the whole image.
                 $key = (($ri >> 3) << 10) | (($gi >> 3) << 5) | ($bi >> 3);
                 $palIdx = $cache[$key] ??= $this->nearestColor($ri, $gi, $bi, $palette);
-                [$pr, $pg, $pb] = $palette[$palIdx];
 
-                // Quantization error (original − quantized).
-                $eR = $clampedR - (float) $pr;
-                $eG = $clampedG - (float) $pg;
-                $eB = $clampedB - (float) $pb;
-
-                $this->diffuseError($accum, $w, $h, $x, $y, $eR, $eG, $eB, $dither);
+                if ($hasDiffusion) {
+                    [$pr, $pg, $pb] = $palette[$palIdx];
+                    // Quantization error (original − quantized), diffused downward.
+                    $this->diffuseError(
+                        $window, $w, $h, $x, $y,
+                        $clampedR - (float) $pr,
+                        $clampedG - (float) $pg,
+                        $clampedB - (float) $pb,
+                        $dither,
+                    );
+                }
 
                 $row[] = $offset + $palIdx;
             }
-            $grid[] = $row;
-        }
+            yield $y => $row;
 
-        return $grid;
+            // Row $y is fully consumed — its error has propagated downward.
+            unset($window[$y], $holes[$y]);
+
+            // Pull the new far-edge row into the window. The first row whose
+            // error can reach $y + $reach + 1 is $y + 1, so loading it now —
+            // before $y + 1 is processed — never overwrites a received
+            // contribution.
+            $next = $y + $reach + 1;
+            if ($next < $h) {
+                $loadBase($next);
+            }
+        }
     }
 
     /**

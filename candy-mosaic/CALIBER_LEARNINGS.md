@@ -96,47 +96,58 @@ Accumulated patterns and gotchas specific to this library.
 
 ## Deferred (audited, specified, deliberately NOT implemented)
 
-- **#17 Streaming sixel encode (deferred).** `SixelRenderer::render()` currently
-  materialises the whole pixel canvas (`imagecreatetruecolor(pixelW×pixelH)`),
-  a full per-row index grid, and the complete output string in memory before
-  returning bytes. For video playback the plan was an incremental encoder:
-  `SixelRenderer::encodeBandStream(ImageSource $image, int $width, callable $write): void`
-  (or a `Generator<string>` variant) that quantizes ONE 6-row band at a time —
-  header once, palette once, then per-band `yield`/callback emission — so peak
-  memory is O(pixelW) instead of O(pixelW × pixelH) and a consumer can start
-  writing to the TTY while later bands are still quantizing.
-  Constraints found while auditing: (a) the median-cut palette must be computed
-  from a sample of the FULL image before any band is emitted (a per-band
-  palette would break colour consistency across bands) — so the source decode
-  pass stays whole-image, only the index grid + encoding stream; (b) dithering
-  error diffuses only downward/forward, so band N can finish diffusing into
-  band N+1's first row before N is emitted — the streaming loop must carry the
-  one-row lookahead, not slice accum blindly; (c) `ImageSource::bytes` must be
-  re-decodable per band (keep one `GdImage` open; do not re-run
-  `imagecreatefromstring` per band); (d) tmux passthrough wrapping decorates
-  the FINAL string, so `TmuxPassthroughDecorator` needs a streaming branch
-  (`\x1bPtm;...ST` envelope around the DCS) or streaming must be refused under
-  tmux — decide before building. API sketch above is the contract a later
-  phase should keep so callers can migrate mechanically.
+_None outstanding — #17 and #18 landed this session; the audit notes below are
+kept as design rationale for what shipped._
 
-- **#18 GIF/APNG multi-frame decode (deferred).** `ImageSource::fromFile()` /
-  `fromString()` collapse animated inputs to their FIRST frame (GD's
-  `imagecreatefromgif` does this implicitly; APNG decodes as the base PNG).
-  The ported `Animation` value object accepts caller-supplied frames + delays,
-  so nothing is broken — but a turnkey `ImageSource::fromAnimatedFile()` that
-  yields `list<ImageSource>` + per-frame delays was specced and NOT built.
-  Constraints: (a) GD 2.1 exposes no frame API — GIF frame extraction needs
-  ext-imagick (not a dependency of this lib and not installable in every CI
-  runner), a pure-PHP LZW/giflib bridge, or shelling out (`gifsicle`/ffmpeg);
-  any of these changes the lib's dependency posture, which is an
-  orchestrator-level decision, not an implementation detail. (b) APNG needs
-  fcTL/fdAT chunk walking over the PNG container (pure PHP is feasible: the
-  chunks are length-prefixed and zlib-inflatable) but frame compositing is
-  dispose-op stateful (none/background/previous) — budget a real state-machine,
-  not a decoder loop. (c) Whatever lands MUST thread `MAX_PIXELS` per frame
-  and across total decoded frames (an animation bomb can be small per-frame
-  and huge in aggregate) and respect the `DiskCache::FORMAT_VERSION` bump rule
-  if renderer-visible behaviour changes.
+- **#17 Streaming sixel encode (IMPLEMENTED).** `SixelRenderer::encodeBandStream(
+  ImageSource $image, int $width, callable $write, ?int $height = null): void`
+  emits the DCS header + full-image median-cut palette in ONE write, then one
+  write per 6-row band, then the ST terminator — so a consumer starts writing to
+  the TTY while later bands quantize. `render()` is now a thin sink that collects
+  the same callbacks and `implode`s them, so streaming and one-shot are provably
+  byte-identical (proven against the pre-existing snapshot suite and a 2304-config
+  differential harness vs. the old `render()`). Design constraints the audit
+  flagged and how they were honoured: (a) the palette is computed from the FULL
+  image before any band ships — a private `encodeInto()` decodes the source once,
+  keeps ONE `GdImage` open, and feeds a lazy `indexRows()` row generator; (b) the
+  generator is a ROLLING WINDOW (reach = 1 for Floyd–Steinberg, 2 for Stucki/
+  Atkinson, 0 for None) so band N's downward/forward error diffusion lands on
+  band N+1's still-unyielded rows — this replaces the old `buildIndexGrid` +
+  `ditheredIndexGrid` full-grid materialisation and drops peak memory ~34MB→24MB
+  on the 500×400 corpus while output stays identical; (c) the graphics-newline
+  `-` PREFIXES every band after the first and is folded into the band body (never
+  emitted as a lone write, never touches the header); (d) tmux passthrough DOES
+  have a streaming branch — `TmuxPassthroughDecorator::encodeBandStream()` opens
+  `\x1bPtmux;`, ESC-doubles each chunk as it streams, and closes `\x1b\\`,
+  byte-equal to `wrap(render())` because a sixel payload is one DCS whose only
+  ESC bytes are the introducer and the ST (all interior bytes are printable), so
+  per-chunk doubling composes exactly; it throws `LogicException`
+  (`tmux.stream_not_sixel`) if the inner renderer is not Sixel, mirroring the
+  one-shot `render()` refusal.
+
+- **#18 GIF/APNG multi-frame decode (IMPLEMENTED).** New
+  `ImageSource::fromAnimatedFile(string $path, int $maxPixels = self::MAX_PIXELS): Animation`
+  sniffs the container: GIF87a/89a → `SugarCraft\Flip\Decoder` (**added
+  `sugarcraft/candy-flip` as a `require` line ONLY — no `repositories[]` in the
+  committed manifest per the split-repo rule; CI injects the path-repo closure**);
+  animated PNG (acTL before IDAT/IEND) → the new `@internal ApngDecoder` (pure-PHP
+  fcTL/fdAT walk over the PNG container, zlib-inflate + per-row unfilter, a real
+  dispose-op state machine — none keeps the canvas, background clears the frame
+  rect, previous restores the pre-frame canvas — plus source/over blend and
+  palette+tRNS expansion); a still PNG/GIF/JPEG that is not animated degrades to a
+  single-frame `Animation` with delay `[0]`; anything else throws
+  `animation.unsupported_format`. GIF frame delays are centiseconds in the GCE so
+  they are ×10 to milliseconds. Audit constraint (c) honoured: `MAX_PIXELS` is
+  checked PER FRAME (`image_source.too_large`) AND in AGGREGATE
+  (`animation.too_many_pixels`, = canvasW×canvasH×frameCount) BEFORE inflating, so
+  a small-per-frame/huge-in-total bomb is refused cheaply. `DiskCache::FORMAT_VERSION`
+  was NOT bumped: #17 is byte-identical on every existing render path and #18 is
+  purely additive (a new method + a new class), so no already-cached bytes change
+  meaning. Gotcha found building GIF fixtures: flip's `parseHeader` image-data skip
+  starts at the LZW min-code-size byte (treats it as a sub-block length), so a
+  handcrafted LZW stream can decode wrong — generate GIF test fixtures from GD
+  `imagegif()` per frame (shared 4-slot GCT, `imagecreate` reserves index 0 as
+  black) rather than hand-rolling LZW. See `tests/Support/AnimatedImageFixtures.php`.
 
 ## This session's API additions (2026-09, upstream-track PR)
 
@@ -213,6 +224,10 @@ Accumulated patterns and gotchas specific to this library.
   short-circuit. Deliberate: the background register must be decided before
   median-cut, so folding the probe into the sampling/grid passes cannot
   remove the dependency, and gating on container alpha is blind here because
-  GD re-encodes every decoded source as colour-type-6 PNG. The deferred
-  streaming encode (#17) is the natural place to eliminate it (band-local
-  hole discovery).
+  GD re-encodes every decoded source as colour-type-6 PNG. The streaming encode
+  (#17, now implemented) did NOT eliminate it: the background register and the
+  median-cut palette are both header decisions that must be computed from the
+  FULL image before the first band ships, so `hasTransparentPixels` stays a
+  whole-canvas pre-pass in `encodeInto()`. Band-local hole discovery would
+  require deferring the header, which breaks the byte-identical-with-one-shot
+  guarantee that #17 is built on.

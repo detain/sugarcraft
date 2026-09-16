@@ -7,6 +7,8 @@ namespace SugarCraft\Mosaic;
 use React\Http\Browser;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Flip\Decoder as FlipDecoder;
+use SugarCraft\Flip\Frame as FlipFrame;
 
 use function React\Promise\reject;
 
@@ -366,6 +368,163 @@ final class ImageSource
         } finally {
             imagedestroy($img);
         }
+    }
+
+    /**
+     * Decode an animated file into an {@see Animation} of frames + per-frame delays.
+     *
+     * GD exposes no frame API — `imagecreatefromgif()` returns only the first
+     * frame and an APNG decodes as its base image — so animation is decoded by
+     * hand through the two container walks this library owns a dependency on:
+     *
+     *   • GIF  → candy-flip's pure-PHP LZW decoder ({@see \SugarCraft\Flip\Decoder}),
+     *     requested at the GIF's own pixel dimensions so a frame is 1:1 with the
+     *     source (no resample loss) and flip's disposal compositing already baked
+     *     in. flip speaks centiseconds; this converts to the milliseconds that
+     *     {@see Animation} stores.
+     *   • APNG → {@see ApngDecoder}, a pure-PHP `fcTL`/`fdAT` walk with the
+     *     dispose-op state machine, returning fully composited RGBA frames.
+     *
+     * A plain (non-animated) PNG is accepted as the degenerate one-frame
+     * animation with a zero delay, so callers can feed any still/animated image
+     * through one entry point. Any other format fails fast.
+     *
+     * MAX_PIXELS is enforced twice: per frame (each frame is ≤ the ceiling on its
+     * own pixel count) AND in aggregate (frames × total pixels), so an animation
+     * that is small per-frame but huge across frames — the classic decompression
+     * bomb — is refused before it can exhaust memory.
+     *
+     * Detection is about SOURCE decoding only: protocol/terminal selection
+     * (kitty → iterm2 → sixel → chafa → halfblock) is unchanged and every frame
+     * renders through the normal {@see Renderer\Renderer} pipeline.
+     *
+     * @param string $path      Filesystem path to a GIF or APNG (or still PNG).
+     * @param int    $maxPixels  Per-frame AND aggregate pixel ceiling; ≤ 0 disables.
+     * @throws \InvalidArgumentException  if the file is missing/unreadable, the
+     *                                    format is not GIF/APNG/still-PNG, the
+     *                                    stream is corrupt, or a declared pixel
+     *                                    count exceeds the ceiling
+     * @throws \RuntimeException          if ext-gd is not available
+     */
+    public static function fromAnimatedFile(string $path, int $maxPixels = self::MAX_PIXELS): Animation
+    {
+        if (!is_file($path)) {
+            throw new \InvalidArgumentException(Lang::t('image_source.file_not_found', ['path' => $path]));
+        }
+        if (!extension_loaded('gd')) {
+            throw new \RuntimeException(Lang::t('image_source.no_gd'));
+        }
+        $bytes = file_get_contents($path);
+        if ($bytes === false) {
+            throw new \InvalidArgumentException(Lang::t('image_source.cannot_read', ['path' => $path]));
+        }
+
+        if (str_starts_with($bytes, 'GIF87a') || str_starts_with($bytes, 'GIF89a')) {
+            return self::animatedFramesFromGif($path, $maxPixels);
+        }
+
+        if (ApngDecoder::isAnimatedPng($bytes)) {
+            return self::animatedFramesFromApng($bytes, $maxPixels);
+        }
+
+        // A still PNG is a valid one-frame animation — feed the normal ingress.
+        if (strlen($bytes) >= 8 && substr($bytes, 0, 8) === "\x89PNG\r\n\x1a\n") {
+            return new Animation([self::fromFile($path, $maxPixels)], [0]);
+        }
+
+        throw new \InvalidArgumentException(Lang::t('animation.unsupported_format', [
+            'format' => self::detectImageFormat($bytes),
+        ]));
+    }
+
+    /**
+     * Decode a GIF via candy-flip into a validated {@see Animation}.
+     *
+     * @throws \InvalidArgumentException  on an unreadable header or an over-ceiling
+     *                                    per-frame/aggregate pixel count
+     */
+    private static function animatedFramesFromGif(string $path, int $maxPixels): Animation
+    {
+        $info = @getimagesize($path);
+        if ($info === false) {
+            throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => $path]));
+        }
+        $w = (int) $info[0];
+        $h = (int) $info[1];
+
+        // Per-frame ceiling on the logical-screen size, before flip allocates.
+        self::guardPixelCount($w, $h, $maxPixels);
+
+        // flip decodes to a cell grid; requesting the GIF's pixel dimensions maps
+        // one cell to one pixel (no resample) and its LZW + disposal compositing
+        // produce fully-rendered frames. flip's own 100k-cell grid cap is a
+        // second, independent fail-fast against oversized input.
+        $flipFrames = FlipDecoder::decode($path, $w, $h);
+
+        $count = count($flipFrames);
+        // Aggregate ceiling: frames × pixels. Checked after decode (flip bounds
+        // its own memory), before we raster every frame into a PNG container.
+        if ($maxPixels > 0 && $w > 0 && $h > 0 && $w * $h * $count > $maxPixels) {
+            throw new \InvalidArgumentException(Lang::t('animation.too_many_pixels', [
+                'frames' => $count,
+                'width'  => $w,
+                'height' => $h,
+                'total'  => $w * $h * $count,
+                'max'    => $maxPixels,
+            ]));
+        }
+
+        $frames  = [];
+        $delays  = [];
+        foreach ($flipFrames as $frame) {
+            $frames[] = self::gifFrameToImageSource($frame, $w, $h, $maxPixels);
+            // flip carries the GCE delay in centiseconds; Animation speaks ms.
+            $delays[] = $frame->delay * 10;
+        }
+
+        return new Animation($frames, $delays);
+    }
+
+    /**
+     * Convert one candy-flip frame (a cell grid of RGB triples or null) to an
+     * RGBA PNG-backed {@see ImageSource}. Null cells become fully transparent.
+     */
+    private static function gifFrameToImageSource(FlipFrame $frame, int $w, int $h, int $maxPixels): self
+    {
+        $cells = $frame->cells;
+        $bytes = '';
+        for ($cy = 0; $cy < $h; $cy++) {
+            $row = $cells[$cy] ?? [];
+            for ($cx = 0; $cx < $w; $cx++) {
+                $cell = $row[$cx] ?? null;
+                if ($cell === null) {
+                    $bytes .= "\x00\x00\x00\x00";
+                } else {
+                    $bytes .= chr($cell[0]) . chr($cell[1]) . chr($cell[2]) . "\xff";
+                }
+            }
+        }
+
+        return self::fromRgb($bytes, $w, $h, true, $maxPixels);
+    }
+
+    /**
+     * Decode an APNG via {@see ApngDecoder} into a validated {@see Animation}.
+     */
+    private static function animatedFramesFromApng(string $bytes, int $maxPixels): Animation
+    {
+        // ApngDecoder::decode enforces per-frame AND aggregate MAX_PIXELS from
+        // the cheap headers before inflating any pixel data.
+        $decoded = ApngDecoder::decode($bytes, $maxPixels);
+
+        $frames = [];
+        $delays = [];
+        foreach ($decoded as $frame) {
+            $frames[] = self::fromRgb($frame['rgba'], $frame['width'], $frame['height'], true, $maxPixels);
+            $delays[] = $frame['delayMs'];
+        }
+
+        return new Animation($frames, $delays);
     }
 
     /**

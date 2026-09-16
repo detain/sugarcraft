@@ -6,6 +6,7 @@ namespace SugarCraft\Mosaic;
 
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Renderer\Renderer;
+use SugarCraft\Mosaic\Renderer\SixelRenderer;
 
 /**
  * Renderer decorator that wraps output in tmux's passthrough protocol.
@@ -41,6 +42,40 @@ final class TmuxPassthroughDecorator implements Renderer
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         return $this->wrap($this->inner->render($image, $width, $height));
+    }
+
+    /**
+     * Stream a Sixel render through the tmux passthrough envelope.
+     *
+     * A Sixel image is exactly ONE Device Control String
+     * (`\x1bP … \x1b\\`) with no lone ESC in its printable payload, so tmux's
+     * only requirement — double every inner ESC — is a context-free, per-byte
+     * transform. That lets the envelope be opened before the first band and
+     * closed after the last without ever buffering the image: the concatenation
+     * of `$write` calls is byte-for-byte identical to
+     * {@see render()}'s wrapped output. This is the streaming branch the
+     * Sixel encode (#17) needed, chosen over refusing to stream under tmux
+     * because it is both cheap (a per-chunk `str_replace`) and provably exact.
+     *
+     * @param callable(string):void $write
+     * @throws \LogicException  if the wrapped renderer is not Sixel (only Sixel
+     *                          exposes a band-stream encoder; other protocols
+     *                          are single-shot buffers with no banding to stream)
+     */
+    public function encodeBandStream(ImageSource $image, int $width, callable $write, ?int $height = null): void
+    {
+        $inner = $this->inner;
+        if (!$inner instanceof SixelRenderer) {
+            throw new \LogicException(
+                Lang::t('tmux.stream_not_sixel', ['name' => $inner->name()])
+            );
+        }
+
+        $write("\x1bPtmux;");
+        $inner->encodeBandStream($image, $width, static function (string $chunk) use ($write): void {
+            $write(str_replace("\x1b", "\x1b\x1b", $chunk));
+        }, $height);
+        $write("\x1b\\");
     }
 
     public function name(): string
