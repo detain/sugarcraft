@@ -121,24 +121,29 @@ final class DatePickerStyleTest extends TestCase
         $rgb = $this->invokeAnsiColorToRgb(0, false);
         $this->assertSame(0x000000, $rgb);
 
+        // Slot 7 = candy-core ANSI16_RGB[7] = [229,229,229] (xterm white).
         $rgb = $this->invokeAnsiColorToRgb(7, false);
-        $this->assertSame(0xc0c0c0, $rgb);
+        $this->assertSame(0xe5e5e5, $rgb);
     }
 
     public function testAnsiColorToRgbBright(): void
     {
+        // Slot 8 = ANSI16_RGB[8] = [127,127,127] (xterm bright black).
         $rgb = $this->invokeAnsiColorToRgb(0, true);
-        $this->assertSame(0x606060, $rgb);
+        $this->assertSame(0x7f7f7f, $rgb);
 
+        // Slot 15 = ANSI16_RGB[15] = [255,255,255]; equals the old +96-clamped value.
         $rgb = $this->invokeAnsiColorToRgb(7, true);
         $this->assertSame(0xffffff, $rgb);
     }
 
     public function testAnsiColorToRgbOutOfRange(): void
     {
+        // Out-of-range falls back to the canonical white slot 7 = [229,229,229].
         $rgb = $this->invokeAnsiColorToRgb(99, false);
-        $this->assertSame(0xc0c0c0, $rgb);
+        $this->assertSame(0xe5e5e5, $rgb);
 
+        // …and to slot 15 = [255,255,255] on the bright half, as before.
         $rgb = $this->invokeAnsiColorToRgb(99, true);
         $this->assertSame(0xffffff, $rgb);
     }
