@@ -33,8 +33,13 @@ Accumulated patterns and gotchas specific to this library.
 - **[Animated GIFs]** (step 11.04 / PR#660) Animation lives in
   `candy-mosaic` — not `candy-flip`. `Animation` is frame-source-agnostic:
   ctor takes `list<ImageSource>` (any grid-backed image, not just GIFs).
-  candy-mosaic does **not** depend on candy-flip. A future GIF→Mosaic bridge
-  (decoding GIF frames into `ImageSource[]`) lives in candy-flip if needed.
+  ~~candy-mosaic does **not** depend on candy-flip. A future GIF→Mosaic bridge
+  (decoding GIF frames into `ImageSource[]`) lives in candy-flip if needed.~~
+  **SUPERSEDED by #18:** `ImageSource::fromAnimatedFile()` now pulls candy-flip
+  in as a `require`-only sibling dep to bridge GIF frames into `ImageSource[]`
+  (no `repositories[]` in the lib manifest). See the #18 entry below for the
+  frame-layout (offset-list) reconcile / cost-bound hardening and the blocking candy-flip
+  multi-frame decode bug it works around.
 - **[pattern:animation-value-object]** `Animation` is an immutable
   readonly value object: `list<ImageSource> $frames` + `list<int> $delaysMs`.
   Construction validates via `Lang::t()` that frames is non-empty and
@@ -162,34 +167,52 @@ kept as design rationale for what shipped._
    with shuffled delays — this is also why GIF test fixtures are generated from GD
    `imagegif()` per frame (shared 4-slot GCT, `imagecreate` reserves index 0 as
    black) rather than hand-rolled LZW (see `tests/Support/AnimatedImageFixtures.php`).
-     mosaic counts GIF image descriptors with its OWN correct structural walk
-     (`ImageSource::countGifFrames`) — the authoritative container frame count — and
-     ALSO runs a byte-only clone of flip's buggy walk (`ImageSource::countGifFramesAsFlipWalks`
-     — same LZW mis-skip, same "step one byte on an unknown block", same 256-frame slice).
-     The clone is a **conservative upper bound, not an exact oracle**: measured against
-     the real sibling decoder it lands within `[real, real+1]` frames (over-predicting on
-     ordinary GIFs, at most one frame under on a descriptor truncated to nine bytes —
-     which is why the clone gates on `i+9` present, not `i+10`, to match flip reading the
-     packed byte with `?? ''`). It is used ONLY to size the aggregate cost budget
-     (`max($declared, $flipReturns)`) so the phantom-descriptor materialise-then-reject
-     runaway (a few KiB → a few hundred MB) is refused BEFORE flip runs. It is deliberately
-     NOT used as a pre-decode *equality* gate: round-3 (R3-3) showed that demanding the
-     clone equal the honest count rejects legitimate GIFs, because flip under-decodes
-     ordinary multi-frame GIFs. The authoritative correctness gate is the **post-decode
-     reconcile**: `$declared !== count($flipFrames)` → `animation.gif_frame_count_mismatch`,
-     so a silently-short/shuffled animation is never emitted (round-1 C2). flip stores one
-     PHP array per cell, so the RGBA-tuned `MAX_PIXELS` is NOT a memory bound for it — a
-     separate `FLIP_MAX_TOTAL_CELLS` caps the aggregate grid handed to the sibling, and
-     `FLIP_MAX_CELLS` (flip's 100k per-frame grid ceiling) is checked up front so a
-     ~316×316+ GIF gets a mosaic message, not flip's untranslated exception. flip also
-     emits raw GD warnings on corrupt GIFs, so `decodeGifFramesSafely()` wraps the call
-     in a throwing error handler and maps any failure to one translated fail-fast.
-     **Net product consequence (blocking sibling finding):** because candy-flip silently
-     mis-decodes real multi-frame GIFs (an ffmpeg 10-frame GIF arrives as ~2), and mosaic
-     refuses rather than emit corrupt frames, the animated-GIF path is currently
-     **safe-but-inert** for real-world GIFs; full support needs the one-byte candy-flip
-     header-walk fix, which is out of this lib's authority. The APNG path is fully
-     functional (pure-PHP decode, no sibling dependency).
+      mosaic walks GIF image descriptors TWICE with byte-only structural passes (no
+      LZW decode), each returning the ORDERED LIST of descriptor byte offsets:
+      `ImageSource::gifHonestDescriptorOffsets()` — the spec-correct walk (skips the
+      LCT AND the mandatory LZW min-code-size byte, throws on a truncated or unknown
+      block) — and `ImageSource::gifFlipWalkDescriptorOffsets()`, a byte-exact clone of
+      flip's own walk (same LZW mis-skip, same one-byte advance on an unknown block,
+      same 256-frame slice). `countGifFrames`/`countGifFramesAsFlipWalks` are now thin
+      `count()` wrappers kept only for tests that assert the count relationship; the
+      production loader reconciles the OFFSET LISTS. The clone records every descriptor
+      it reaches UNCONDITIONALLY at a `0x2C` (matching flip, which reads the packed byte
+      with `?? ''` and records even a nine-byte truncated tail) — an earlier clone gated
+      on `i+9` and thus under-counted (round-4 MED). **The authoritative gate is ORDERED
+      OFFSET-LIST EQUALITY run BEFORE flip (round-4 CRITICAL-2)**, not a count compare:
+      `$honestOffsets !== $flipOffsets` → `animation.gif_frame_layout_mismatch`. A phantom
+      descriptor forged into a GCE region can preserve the frame COUNT while replacing a
+      real frame's bytes (honest `{33,68,91}` vs flip `{33,56,91}`), which a count-only
+      check would wave through and emit as authentic; equality refuses it. This SUPERSEDES
+      the round-3 stance (count-only reconcile, clone as a loose `[real, real+1]` upper
+      bound): demanding equality of the full OFFSET list, not just the count, is sound
+      precisely because flip is only trustworthy when it lands on the exact positions a
+      correct walk does. When the lists DO agree, `$declared` is simultaneously the honest
+      count and flip's materialisation count, so the aggregate cost budget is EXACT, not a
+      bound — and the ceiling itself (not a mis-estimate) is what stops the cell-array
+      bomb. flip stores one PHP array per cell (~250 bytes, far heavier than a packed RGBA
+      buffer), so `MAX_PIXELS` is NOT a memory bound for it; `FLIP_MAX_TOTAL_CELLS` caps
+      the aggregate grid at ~100 MB and was recalibrated from 6 M down to 400 k cells in
+      round-4 (CRITICAL-1: a legitimately-structured 60-frame 316×316 GIF — 5.99 M cells —
+      materialised 1.5 GB / 20 s under the old ceiling). `FLIP_MAX_CELLS` (flip's 100k
+      per-frame grid ceiling) is still checked up front so a ~316×316+ GIF gets a mosaic
+      message, not flip's untranslated exception. **Decode runs over the ALREADY-VALIDATED
+      bytes, never a second open of `$path`** (round-4 HIGH): the logical screen size comes
+      from `unpack('vwidth/vheight', substr($bytes, 6, 4))` (not `getimagesize($path)`), and
+      flip — whose `Decoder::decode()` still insists on a path and does its own
+      `file_get_contents()` — is handed a private, `0600`, unlink-on-exit temp file of those
+      bytes via `decodeGifFramesFromBytesSafely()`, so a post-read swap of the original
+      path cannot be re-followed to bypass `MAX_BYTES`. That wrapper also arms a throwing
+      error handler (flip emits raw GD warnings on corrupt GIFs) and maps any failure to one
+      translated `animation.gif_decode_failed`. A post-decode `$declared !== count($flipFrames)`
+      reconcile is retained as defence in depth (`animation.gif_frame_count_mismatch`,
+      round-1 C2), though equality makes it unreachable in practice.
+      **Net product consequence (blocking sibling finding):** because candy-flip silently
+      mis-decodes most real multi-frame GIFs (an ffmpeg 10-frame GIF arrives as ~2), and
+      mosaic now refuses whenever flip's walk diverges from the honest one, the animated-GIF
+      path is **safe-but-inert** for real-world multi-frame GIFs; full support needs the
+      one-byte candy-flip header-walk fix, which is out of this lib's authority. The APNG
+      path is fully functional (pure-PHP decode, no sibling dependency).
 
     **Sixel DCS-state safety (rounds 1-2):** a sixel payload is exactly one DCS, so a
     half-written stream (a consumer `$write` throwing on a closed pipe, or a GD load

@@ -69,6 +69,8 @@ return [
     'animation.too_many_pixels'       => 'Animated image declares {frames} frames of {width}×{height} = {total} pixels, exceeding the maximum of {max}',
     'animation.unsupported_format'    => 'Animated loading supports GIF and APNG, not {format}',
     'animation.gif_frame_count_mismatch' => 'Animated GIF carries {expected} frames but the frame decoder returned {got}; refusing to emit a partial animation',
+    'animation.gif_frame_layout_mismatch' => 'Animated GIF frame decoder disagrees with the container on {expected} frame positions; refusing to emit possibly-phantom frames',
+
     'animation.gif_decode_failed'     => 'Animated GIF could not be decoded: {reason}',
     'animation.gif_too_large_for_flip' => 'Animated GIF {width}×{height} exceeds the {max}-pixel frame-grid limit of the GIF decoder',
     'animation.gif_too_many_cells' => 'Animated GIF of {frames} {width}×{height} frames exceeds the {max}-cell budget of the GIF decoder',

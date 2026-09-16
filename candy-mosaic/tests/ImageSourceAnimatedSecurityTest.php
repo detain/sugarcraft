@@ -56,11 +56,23 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
     }
 
     /**
-     * Sanity anchor for the conservative cost bound: on a WELL-FORMED GIF the honest
-     * container count, the flip-walk predictor, and candy-flip's actual return all
-     * agree. (The predictor is a conservative upper bound used to size the aggregate
-     * budget — it is NOT required to equal flip exactly on adversarial streams, which
-     * is why the authoritative refusal is the post-decode reconcile, not this clone.)
+     * Like {@see self::gifCountProbe()} but for the descriptor-offset-list walkers
+     * (which return `list<int>`, not an int).
+     */
+    private function gifOffsetsProbe(string $method): \Closure
+    {
+        $rm = new \ReflectionMethod(ImageSource::class, $method);
+        $rm->setAccessible(true);
+
+        return static fn(string $bytes): array => $rm->invoke(null, $bytes);
+    }
+
+    /**
+     * Sanity anchor for the clean-GIF case: on a WELL-FORMED GIF the honest container
+     * count, the flip-walk predictor, and candy-flip's actual return all agree. This is
+     * exactly the condition under which the offset-list reconcile PASSES and the loader
+     * proceeds — when flip lands on the honest descriptor positions its pixels are
+     * trustworthy, so the (now-equal) lists also make the aggregate cost bound exact.
      */
     public function testFlipWalkPredictorEqualsFlipActualReturnOnCleanGifs(): void
     {
@@ -87,14 +99,14 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
      * round-1 C2-GIF / R3-3: candy-flip's mis-skipped walk silently returns FEWER
      * frames than a valid multi-frame GIF carries (its documented sibling bug — a real
      * 10-frame ffmpeg GIF decodes to ~2). fromAnimatedFile must NEVER emit that
-     * silently-short animation; the authoritative post-decode reconcile compares the
-     * honest container count against flip's actual return and refuses loudly.
+     * silently-short animation. Since round-4 the refusal is structural and happens
+     * BEFORE flip runs: flip's descriptor offset list is shorter than (so ≠) the honest
+     * container walk, which the offset-list reconcile rejects as a frame-layout
+     * mismatch. The same 8-frame GIF that under round-3 relied on the post-decode count
+     * reconcile now trips the pre-decode layout gate, so nothing is ever materialised.
      *
      * An 8-frame GIF is the honest-but-desyncing case: the container carries 8 image
-     * descriptors, flip re-synchronises on only a few. The container count (8) and the
-     * decoded count disagree, so the animation is refused rather than truncated. (The
-     * separate cheap cost bound in the aggregate guard stops the ADVERSARIAL over-count
-     * runaway before decode; see testGifAggregateCeilingIsCheckedBeforeDecode.)
+     * descriptors, flip re-synchronises on only a few, so the two offset lists differ.
      */
     public function testGifDesyncRefusedNotSilentlyTruncated(): void
     {
@@ -109,8 +121,44 @@ final class ImageSourceAnimatedSecurityTest extends TestCase
         self::assertLessThan(8, $predicted, "flip's mis-skipped walk finds fewer than the honest 8 frames (got {$predicted})");
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/carries 8 frames but the frame decoder returned \d+/');
+        $this->expectExceptionMessageMatches('/disagrees with the container on 8 frame positions/');
         ImageSource::fromAnimatedFile($this->write('desync8.gif', $gif));
+    }
+
+    /**
+     * Round-4 CRITICAL-2: a phantom descriptor that preserves the frame COUNT while
+     * shifting a frame POSITION must be refused. candy-flip skips a Graphics Control
+     * Extension by a BLIND fixed 8 bytes regardless of its declared sub-block length, so
+     * a GCE whose data is longer than 8 lands flip's cursor INSIDE the extension body —
+     * onto a 0x2C that is NOT a real Image Descriptor. Here the honest walk lands on
+     * frame positions {25,51} and flip's walk on {25,47}: same count (2), different
+     * positions. A count-only reconcile would ACCEPT this and emit the phantom@47 bytes
+     * as an authentic frame; the offset-list reconcile refuses it.
+     */
+    public function testGifPhantomDescriptorSameCountDifferentPositionIsRefused(): void
+    {
+        // 2×2 logical screen, 4-entry global colour table.
+        $b  = 'GIF89a' . pack('v', 2) . pack('v', 2) . chr(0x81) . chr(0) . chr(0);
+        $b .= "\x00\x00\x00\xff\x00\x00\x00\xff\x00\x00\x00\xff"; // GCT (4 entries)
+        // Frame 1: real image descriptor @ offset 25, then a short LZW data run.
+        $b .= chr(0x2C) . pack('v', 0) . pack('v', 0) . pack('v', 2) . pack('v', 2) . chr(0x00);
+        $b .= chr(0x02) . chr(0x01) . chr(0x44) . chr(0x00);
+        // A Graphics Control Extension declared 8 bytes long; flip's blind +8 skip lands
+        // the cursor on data[5] = 0x2C, reading a phantom descriptor mid-extension.
+        $b .= chr(0x21) . chr(0xF9) . chr(0x08) . "\x04\x96\x00\x00\x00\x2C\x00\x00" . chr(0x00);
+        // Frame 2: the REAL second descriptor, right after the GCE block.
+        $b .= chr(0x2C) . pack('v', 0) . pack('v', 0) . pack('v', 2) . pack('v', 2) . chr(0x00);
+        $b .= chr(0x02) . chr(0x01) . chr(0x44) . chr(0x00);
+        $b .= chr(0x3B); // trailer
+
+        $honest = ($this->gifOffsetsProbe('gifHonestDescriptorOffsets'))($b);
+        $flip   = ($this->gifOffsetsProbe('gifFlipWalkDescriptorOffsets'))($b);
+        self::assertSame(count($honest), count($flip), 'the attack must preserve the frame COUNT');
+        self::assertNotEquals($honest, $flip, '...while shifting a frame POSITION');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/disagrees with the container on 2 frame positions/');
+        ImageSource::fromAnimatedFile($this->write('phantom.gif', $b));
     }
 
     /**

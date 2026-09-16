@@ -172,28 +172,33 @@ final class ImageSourceAnimatedFileTest extends TestCase
         $gif = F::gif(6, 4, $colors, $frames);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/carries 10 frames but the frame decoder returned \d+/');
+        $this->expectExceptionMessageMatches('/disagrees with the container on 10 frame positions/');
         ImageSource::fromAnimatedFile($this->write('desync.gif', $gif));
     }
 
     /**
-     * Round-1 review H1: the GIF aggregate budget is computed from a cheap
-     * structural count BEFORE flip decodes, so a large-frame-count GIF is refused
-     * without materialising every frame.
+     * Round-1 H1 / round-4 CRITICAL-1: the GIF aggregate budget is computed from the
+     * cheap structural frame count BEFORE flip decodes, so a large aggregate is refused
+     * without materialising every frame. Uses a 2-frame GIF whose descriptor offsets AGREE
+     * between the honest and flip-mirror walks (so control reaches the budget rather than
+     * the earlier offset-equality refuse), with a per-frame pixel count that passes the
+     * single-frame guard but whose aggregate trips it — proving the guard runs on the
+     * declared frame count, pre-decode.
      */
     public function testGifAggregateCeilingIsCheckedBeforeDecode(): void
     {
-        $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255], [200, 120, 40]];
-        $frames = [];
-        for ($i = 0; $i < 10; $i++) {
-            $frames[] = ['pixels' => array_fill(0, 24, ($i % 6) + 1), 'delay' => 10 + $i];
-        }
-        $gif = F::gif(6, 4, $colors, $frames);
+        $colors = [[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]];
+        $frames = [
+            ['pixels' => [0, 1, 1, 0, 2, 2, 3, 3, 0], 'delay' => 10],
+            ['pixels' => [1, 0, 0, 3, 3, 2, 0, 1, 2], 'delay' => 20],
+        ];
+        // 3×3 logical screen → per-frame 9 pixels; 2 frames → aggregate 18.
+        $gif = F::gif(3, 3, $colors, $frames);
 
-        // per-frame 24 ≤ 200 passes; structural aggregate 24 × 10 = 240 > 200 trips
-        // — and it must trip on the DECLARED frame count, before any decode.
+        // maxPixels = 9: per-frame guard 9 > 9 is false (passes); aggregate 9 × 2 = 18
+        // > 9 trips — and it must trip on the DECLARED frame count, before any decode.
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/declares 10 frames .*exceeding/i');
-        ImageSource::fromAnimatedFile($this->write('gifagg.gif', $gif), 200);
+        $this->expectExceptionMessageMatches('/declares 2 frames .*exceeding the maximum of 9/');
+        ImageSource::fromAnimatedFile($this->write('gifagg.gif', $gif), 9);
     }
 }
