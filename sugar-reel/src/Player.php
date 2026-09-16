@@ -26,6 +26,7 @@ use SugarCraft\Reel\Render\FrameRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
+use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\VideoSource;
 use SugarCraft\Reel\Subtitle\WebVtt;
 
@@ -128,6 +129,22 @@ final class Player implements Model
     }
 
     /**
+     * Teardown latch set by {@see stop()}.
+     *
+     * WHY a plain mutable property rather than a promoted readonly field: stopping is
+     * an event on the instance the host already holds, not a value the model is built
+     * with — and a 26th constructor parameter would shift the positional argument list
+     * every test helper assembles. mutate() copies it forward deliberately: a derived
+     * instance owns the SAME decoder and audio companion that stop() already closed, so
+     * nothing that happens after teardown may respawn them. That includes the debounce
+     * timer added for finding #52, which is armed before the resize lands and would
+     * otherwise spawn a fresh ffmpeg child onto a player the host has already torn down
+     * — a leak the static child-lifetime roster cannot see, since the spawn site itself
+     * is accounted for.
+     */
+    private bool $stopped = false;
+
+    /**
      * Open a video file and return a Player ready for Program::run().
      *
      * Probes the video to get FPS and dimensions, creates the appropriate
@@ -172,8 +189,7 @@ final class Player implements Model
         // audio track from the SAME remote URL as the video: a signed stream
         // whose token rides in the request headers is playable for video and
         // 403-silent for audio unless the headers are re-presented here too.
-        $audioFactory = static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
-            => new AudioPlayer($path, $startMs, null, $headers);
+        $audioFactory = self::defaultAudioFactory();
 
         // Audio companion is created when the source has audio but is NOT
         // started here — the Player starts it on first play (see updateKey)
@@ -267,8 +283,14 @@ final class Player implements Model
         array $headers = [],
         float $frameBudgetMs = 0.0,
     ): self {
-        $factory = $audioFactory ?? static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
-            => new AudioPlayer($path, $startMs, null, $headers);
+        // The header map is validated HERE, at this public boundary (finding #52
+        // review m6): every other entry point — Reel::open/openUrl, the ffmpeg
+        // decoder's open() — parses before trusting, and the deferred
+        // rebuildAudio() would otherwise let a malformed map throw mid-`update()`
+        // from deep inside the companion factory, escaping the TEA pipeline.
+        HttpHeaders::parse($headers);
+
+        $factory = $audioFactory ?? self::defaultAudioFactory();
 
         // The renderer follows the mode — including the direct-render image
         // protocols — so a host mounting a graphics stream gets the matching
@@ -501,15 +523,27 @@ final class Player implements Model
      * ran synchronously inside `update()`. SIGWINCH does not arrive once per resize,
      * it arrives once per reflow: dragging a terminal edge delivers a burst of
      * dozens, so a synchronous rebuild paid that cost dozens of times to display
-     * intermediate sizes nobody sees, while blocking the tick pipeline for the whole
-     * duration of every spawn. `update()` therefore does the cheap part only (stash
-     * the clamped geometry) and arms a one-shot timer; {@see applyPendingResize()}
+     * intermediate sizes nobody sees. `update()` therefore does the cheap part only
+     * (stash the clamped geometry) and arms a one-shot timer; {@see applyPendingResize()}
      * does the expensive part when the burst settles.
+     *
+     * WHAT THIS DOES NOT CHANGE: the rebuild is still synchronous work performed
+     * inside `update()` when the deferred message arrives, so the event loop still
+     * stalls for the length of one spawn. The win is cost, not concurrency — N reflows
+     * in a burst collapse to 1 stall instead of N. Off-loop decoding is the remaining
+     * half of finding #52 and is still open.
      *
      * @return array{0:Player, 1:?Closure}
      */
     private function updateResize(int $cols, int $rows): array
     {
+        if ($this->stopped) {
+            // Teardown already happened; arming a debounce timer for a decoder that
+            // must never reopen would only schedule the resurrection applyPendingResize()
+            // refuses.
+            return [$this, null];
+        }
+
         $cols = max(self::MIN_COLS, min($cols, self::MAX_COLS));
         $rows = max(self::MIN_ROWS, min($rows, self::MAX_ROWS));
 
@@ -519,9 +553,16 @@ final class Player implements Model
         // message that applies nothing.
         $pending = $this->pendingResize;
         if ($cols === $this->cellsW && $rows === $this->cellsH) {
-            // Already decoding at this size. Nothing pending, or a pending rebuild
-            // that has since been cancelled by the terminal snapping back.
-            return [$this, null];
+            // Already decoding at this size. Drop any deferred target: the terminal
+            // snapped back mid-burst, and the timer armed by the earlier event is
+            // still in flight. Cancelling here is what makes that timer harmless —
+            // otherwise it fires and rebuilds the decoder at a geometry the host no
+            // longer has, and nothing later corrects it.
+            if ($pending === null) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['pendingResize' => null]), null];
         }
 
         if ($pending !== null && $pending->cols === $cols && $pending->rows === $rows) {
@@ -550,6 +591,12 @@ final class Player implements Model
      */
     private function applyPendingResize(): array
     {
+        if ($this->stopped) {
+            // The host already tore this stream down; the decoder child this message
+            // would reopen no longer has an owner. Nothing to cancel — just refuse.
+            return [$this, null];
+        }
+
         $pending = $this->pendingResize;
         if ($pending === null) {
             // Superseded by a later resize that already landed, or the terminal
@@ -754,7 +801,7 @@ final class Player implements Model
             // geometry — the frames already in hand are exactly what an
             // equal-geometry mode renders, so re-spawning ffmpeg and decoding
             // forward to the current playhead (finding #13) would be pure churn.
-            if ($this->decodeGeometry($nextMode) === $this->decodeGeometry($this->mode)) {
+            if (self::decodeGeometry($nextMode) === self::decodeGeometry($this->mode)) {
                 return [$this->mutate([
                     'mode' => $nextMode,
                     'renderer' => RendererFactory::create($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
@@ -1360,6 +1407,24 @@ final class Player implements Model
     }
 
     /**
+     * The stock audio-companion factory: builds the real {@see AudioPlayer} for a
+     * path, seek offset and header map.
+     *
+     * One definition rather than three copies of the same closure (finding #44's
+     * duplication pattern applied to Player itself): `open()`, `fromDecoder()` and
+     * `rebuildAudio()` all defaulted to this exact shape, so the #52 header
+     * parameter had to be edited in three places at once — the precise drift the
+     * audit keeps flagging.
+     *
+     * @return \Closure(string,?int,array<array-key,string>):AudioPlayer
+     */
+    private static function defaultAudioFactory(): \Closure
+    {
+        return static fn (string $path, ?int $startMs = null, array $headers = []): AudioPlayer
+            => new AudioPlayer($path, $startMs, null, $headers);
+    }
+
+    /**
      * Tear down playback: stop the audio companion and close the decoder
      * (terminating its ffmpeg subprocess). Idempotent — safe to call more than
      * once. A host screen calls this when leaving the player so no audio/video
@@ -1367,6 +1432,7 @@ final class Player implements Model
      */
     public function stop(): void
     {
+        $this->stopped = true;
         $this->audioPlayer?->stop();
         $this->decoder->close();
     }
@@ -1442,8 +1508,7 @@ final class Player implements Model
             return null;
         }
         $this->audioPlayer->stop();
-        $factory = $this->audioFactory ?? static fn (string $path, ?int $ms, array $headers = []): AudioPlayer
-            => new AudioPlayer($path, $ms, null, $headers);
+        $factory = $this->audioFactory ?? self::defaultAudioFactory();
         // Re-present the source headers on the respawned companion (finding #52):
         // every seek/loop/mode rebuild used to drop them, so audio worked only
         // on an unauthenticated URL.
@@ -1507,7 +1572,7 @@ final class Player implements Model
      */
     private function mutate(array $changes): self
     {
-        return new self(
+        $next = new self(
             decoder: array_key_exists('decoder', $changes) ? $changes['decoder'] : $this->decoder,
             mode: array_key_exists('mode', $changes) ? $changes['mode'] : $this->mode,
             speed: array_key_exists('speed', $changes) ? $changes['speed'] : $this->speed,
@@ -1537,6 +1602,13 @@ final class Player implements Model
             // the player keeps decoding at the superseded geometry forever.
             pendingResize: array_key_exists('pendingResize', $changes) ? $changes['pendingResize'] : $this->pendingResize,
         );
+        // Teardown is not a value the model is built with, so it cannot ride the
+        // named-argument list — copy the latch forward instead. Every derived
+        // instance owns the very same decoder/audio child that stop() already
+        // closed, so it must be just as dead as its parent.
+        $next->stopped = $this->stopped;
+
+        return $next;
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

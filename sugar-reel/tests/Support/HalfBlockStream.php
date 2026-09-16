@@ -31,6 +31,16 @@ final class HalfBlockStream
     public const GLYPH = "\u{2580}";
 
     /**
+     * Byte-level alternation of BOTH half-block glyphs — ▀ (U+2580 = \xe2\x96\x80)
+     * and ▄ (U+2584 = \xe2\x96\x84) — with no `/u` modifier so every offset stays
+     * in bytes, like the substr()/strpos() arithmetic below. A ▄-based producer
+     * (a future mosaic that swaps fg/bg channels instead of rows) is therefore
+     * PARSED and RECORDED, not silently missed: the glyph column of `cells()` is
+     * the literal bytes found, so parity tests compare real values (round-1 m1).
+     */
+    private const GLYPH_PATTERN = "/\xe2\x96[\x80\x84]/";
+
+    /**
      * @return list<array{glyph: string, fg: ?string, bg: ?string}>
      */
     public static function cells(string $out): array
@@ -41,13 +51,14 @@ final class HalfBlockStream
         $offset = 0;
 
         while (true) {
-            // Byte offsets throughout: ▀ is a 3-byte UTF-8 sequence, so mixing a
+            // Byte offsets throughout: ▀/▄ are 3-byte UTF-8 sequences, so mixing a
             // character-based position (mb_strpos) with substr() would mis-locate
             // every cell after the first.
-            $glyphPos = strpos($out, self::GLYPH, $offset);
-            if (false === $glyphPos) {
+            if (1 !== preg_match(self::GLYPH_PATTERN, $out, $glyph, PREG_OFFSET_CAPTURE, $offset)) {
                 break;
             }
+            $glyphPos = (int) $glyph[0][1];
+            $glyphText = (string) $glyph[0][0];
 
             $esc = strpos($out, "\x1b[", $offset);
             while (false !== $esc && $esc < $glyphPos) {
@@ -60,8 +71,8 @@ final class HalfBlockStream
                 $esc = strpos($out, "\x1b[", $offset);
             }
 
-            $cells[] = ['glyph' => self::GLYPH, 'fg' => $fg, 'bg' => $bg];
-            $offset = $glyphPos + strlen(self::GLYPH);
+            $cells[] = ['glyph' => $glyphText, 'fg' => $fg, 'bg' => $bg];
+            $offset = $glyphPos + strlen($glyphText);
         }
 
         return $cells;

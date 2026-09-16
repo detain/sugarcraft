@@ -9,6 +9,10 @@ use SugarCraft\Reel\Source\HttpHeaders;
 /**
  * Shared argv assembly for every ffmpeg-family child sugar-reel spawns.
  *
+ * No single upstream — extracted from the ffmpeg/ffplay/mpv argv assembly in
+ * `Decode/FfmpegDecoder::buildCommand()` and `AudioPlayer::buildCommand()`
+ * (findings #45); the flags themselves mirror those binaries' own CLI docs.
+ *
  * WHY THIS CLASS EXISTS (findings #45). The library drives three separate
  * binaries — `ffmpeg` (decode), `ffplay` and `mpv` (audio companion) — and each
  * one used to build its own argument list inline. The pieces that are genuinely

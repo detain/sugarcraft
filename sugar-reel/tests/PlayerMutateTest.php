@@ -23,8 +23,12 @@ use SugarCraft\Reel\Subtitle\WebVtt;
  * value, an omitted key preserves the current value, an explicit null clears a
  * nullable field, and the three source-identity fields cannot be changed at all.
  *
- * Every assertion here is written so that flipping `array_key_exists()` back to
- * `??` (or dropping a field from the map) turns it RED and names the field.
+ * Reverting `array_key_exists()` to `??` turns exactly one of these RED:
+ * `testExplicitNullClearsNullableFields` — null is the only value `??` cannot
+ * pass through (proved: `false ?? x` === `false`, so the falsy legs stay green
+ * under either operator). What the falsy tests pin is the CONTRACT against a
+ * future truthiness-based rewrite (`?:`, `!empty()`), which would silently
+ * swallow `ended => false` / `frameIndex => 0` again.
  *
  * @covers \SugarCraft\Reel\Player
  */

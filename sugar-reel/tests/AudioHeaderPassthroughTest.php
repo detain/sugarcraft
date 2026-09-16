@@ -154,6 +154,68 @@ final class AudioHeaderPassthroughTest extends TestCase
         self::assertNotContains('-headers', $argv, 'a local source must not get -headers');
         self::assertNotContains('-user_agent', $argv);
         self::assertStringContainsString('/tmp/local-clip.mp4', $logged, 'the drop must be reported with the source');
+        // The security invariant, pinned in the NEGATIVE direction too (round-1 m4):
+        // the whole point of refusing to send credentials to a local path is that
+        // neither the values NOR any other bearer material reach stderr. A future
+        // "useful for debugging" edit that appends the header list to this notice
+        // must fail here, not in someone's log file.
+        self::assertStringNotContainsString('Bearer signed-token-9000', $logged, 'never log header VALUES');
+        self::assertStringNotContainsString('https://player.example.test/', $logged, 'never log header VALUES');
+    }
+
+    /**
+     * Round-1 review m5: `isNetworkSource()` only matches http(s), so an
+     * rtsp/ftp URL with embedded credentials takes the header-DROP branch and the
+     * notice used to interpolate the source verbatim — password included. The drop
+     * must name the stream WITHOUT leaking the userinfo it refused to authenticate with.
+     */
+    public function testDropNoticeRedactsCredentialsInNonHttpSourceUrl(): void
+    {
+        // Assembled, not literal: an email-shaped URL in source control invites
+        // editor/PII scrubbers to rewrite it (which would silently gut this very
+        // test), and concatenation keeps the runtime string byte-exact either way.
+        $source = 'rtsp://viewer:hunter2' . '@' . 'media.example.test/clip.mp4';
+        $audio = null;
+        $logged = $this->captureErrorLog(function () use (&$audio, $source): void {
+            $audio = new AudioPlayer(
+                $source,
+                null,
+                null,
+                self::signedHeaders(),
+            );
+        });
+
+        self::assertNotNull($audio);
+        self::assertStringNotContainsString('hunter2', $logged, 'never log the source password');
+        self::assertStringNotContainsString('viewer:', $logged, 'never log the source username either');
+        self::assertStringNotContainsString($source, $logged, 'the credential-bearing URL must never reach error_log whole');
+        self::assertStringNotContainsString('Bearer signed-token-9000', $logged, 'never log header VALUES');
+        self::assertStringContainsString(
+            'rtsp://***@media.example.test/clip.mp4',
+            $logged,
+            'the redacted source must still identify WHICH stream dropped its headers',
+        );
+        self::assertStringContainsString(
+            'audio companion',
+            $logged,
+            'the audio emitter must name itself, not send the operator hunting for a decoder that does not exist',
+        );
+    }
+
+    /**
+     * Round-1 review m6: `Player::fromDecoder()` is a public boundary like
+     * `Reel::openUrl()`, so a malformed header map must throw THERE — not survive
+     * construction and explode from inside `update()` when the seek/loop rebuild
+     * finally constructs the audio companion mid-tick.
+     */
+    public function testFromDecoderRejectsMalformedHeadersAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Player::fromDecoder(
+            new FakeDecoder([new RgbFrame("\x10\x20\x30", 1, 1)]),
+            videoPath: self::SOURCE,
+            headers: ['Authorization' => "Bearer x\r\nX-Evil: 1"],
+        );
     }
 
     public function testLineBreakInHeaderValueIsRejectedAtTheBoundary(): void

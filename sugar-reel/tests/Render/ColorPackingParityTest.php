@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Player;
+use SugarCraft\Reel\Render\AsciiRenderer;
 use SugarCraft\Reel\Render\Color;
 use SugarCraft\Reel\Render\Mode;
 
@@ -121,5 +122,47 @@ final class ColorPackingParityTest extends TestCase
         $method->setAccessible(true);
 
         self::assertNull($method->invoke(null, 255, 128, 0, Mode::Ascii));
+    }
+
+    /**
+     * Round-1 review M5: `AsciiRenderer` was the last site still re-inlining the
+     * packing expression (its TrueColor dedup sentinel `$fg`/`$lastFg`). The inputs
+     * come from `ord()` today, so masked and unmasked agree — but that is precisely
+     * the silent drift #44 exists to kill. This leg pins the sentinel against
+     * `Color::pack()` with an OUT-OF-BYTE CHANNEL: only the masked formula makes
+     * `emitColorCode()` recognise its own previous colour, so reverting the site to
+     * `($r << 16) | ($g << 8) | $b` turns this RED.
+     */
+    public function testAsciiRendererSentinelUsesSharedPack(): void
+    {
+        $emit = new ReflectionMethod(AsciiRenderer::class, 'emitColorCode');
+        $emit->setAccessible(true);
+        $renderer = new AsciiRenderer();
+
+        // In-range: dedup works under any formula — this is the contract, not the discriminator.
+        self::assertSame(
+            '',
+            $emit->invoke($renderer, 255, 128, 1, Color::pack(255, 128, 1)),
+            'the SGR must be suppressed when lastFg equals the packed colour',
+        );
+
+        // Out-of-byte channel: pack() masks (300 → 0x2C0000); an unmasked re-inline
+        // would compute 0x12C0000, miss the equality, and emit a redundant SGR.
+        self::assertSame(
+            Color::pack(300, 0, 0),
+            0x2C0000,
+            'the shared helper masks each channel to one byte',
+        );
+        self::assertSame(
+            '',
+            $emit->invoke($renderer, 300, 0, 0, Color::pack(300, 0, 0)),
+            'emitColorCode() must dedup on Color::pack() exactly, not on a private re-derivation',
+        );
+
+        // And a genuinely new colour still emits — the dedup is not a blanket ''.
+        self::assertSame(
+            "\x1b[38;2;10;20;30m",
+            $emit->invoke($renderer, 10, 20, 30, Color::pack(30, 20, 10)),
+        );
     }
 }

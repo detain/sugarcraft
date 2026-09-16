@@ -324,8 +324,8 @@ reinvented: [candy-mosaic](../candy-mosaic) (image → cell renderers),
   a per-request nonce, or a cookie the video side obtained by redirect — still
   will not reach audio. On a signed or 403-gated stream audio therefore now
   authenticates the same way video does; a local path drops the headers
-  altogether and logs `header.ignored_local_source` rather than sending
-  credentials to a file.
+  altogether and logs `header.ignored_local_source.audio` (with any credentials in
+  the URL redacted) rather than sending credentials to a file.
 
 - **Decode is synchronous with an optional per-tick budget.** `next()` reads the
   ffmpeg stdout pipe — non-blocking, behind a bounded `stream_select()` deadline —

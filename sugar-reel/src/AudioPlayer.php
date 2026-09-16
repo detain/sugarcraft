@@ -64,13 +64,28 @@ class AudioPlayer
         // settle the value before the write rather than overwrite it afterwards.
         $parsed = HttpHeaders::parse($headers);
         if (!$parsed->isEmpty() && !FfmpegCommandBuilder::isNetworkSource($videoPath)) {
-            error_log(Lang::t('header.ignored_local_source', [
+            error_log(Lang::t('header.ignored_local_source.audio', [
                 'count' => count($parsed->pairs()),
-                'source' => $videoPath,
+                'source' => self::redactCredentials($videoPath),
             ]));
             $parsed = HttpHeaders::none();
         }
         $this->headers = $parsed;
+    }
+
+    /**
+     * Strip userinfo (`scheme://user:[email protected]`) from a source before it is
+     * interpolated into a log line.
+     *
+     * WHY: `isNetworkSource()` only matches http(s), so an `rtsp` or `ftp` URL whose
+     * authority embeds credentials (a `user:password` pair before the host separator)
+     * takes the header-DROP branch — and the drop
+     * notice prints the source verbatim, password included, straight into error_log.
+     * Refusing to send credentials and then logging them is no refusal at all.
+     */
+    private static function redactCredentials(string $source): string
+    {
+        return (string) preg_replace('#^(\w+://)[^/@]*@#', '$1***@', $source);
     }
 
     /**

@@ -922,6 +922,84 @@ final class PlayerTest extends TestCase
     }
 
     /**
+     * Finding #52 (round-1 review M1) — the snap-back case the debounce comment
+     * promised but never implemented: play at A, burst to B (timer armed), then the
+     * terminal returns to A while the timer is still in flight. The second event
+     * must CANCEL the deferred target, or the armed timer fires and rebuilds the
+     * decoder at B — a geometry the host no longer has, uncorrected until the next
+     * resize. Drives the exact sequence A→B→A→(late timer) and asserts the player
+     * stays at A with no reopen.
+     */
+    public function testSnapbackResizeCancelsThePendingRebuild(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, 20, 80, 24, '/fake');
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(120, 40));
+        $this->assertNotNull($cmd, 'a new target arms the debounce timer');
+        $this->assertNotNull($this->getPlayerProperty($player, 'pendingResize'));
+
+        // Snap back to the APPLIED geometry while the armed timer is still in flight.
+        [$player2, $cmd2] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+        $this->assertNull($cmd2, 'a snap-back schedules nothing new');
+        $this->assertNull(
+            $this->getPlayerProperty($player2, 'pendingResize'),
+            'the snap-back must clear the deferred target, not leave it armed'
+        );
+
+        // The timer armed by the FIRST event fires late. It must find nothing pending.
+        $reopensBefore = $decoder->reopenCount();
+        [$player3, $cmd3] = $player2->update(ResizeRebuildMsg::instance());
+        $this->assertSame($player2, $player3, 'a cancelled debounce must be identity');
+        $this->assertNull($cmd3);
+        $this->assertSame(
+            $reopensBefore,
+            $decoder->reopenCount(),
+            'a cancelled debounce must not reopen the decoder at the stale geometry'
+        );
+        $this->assertSame(80, $this->getPlayerProperty($player3, 'cellsW'), 'the applied grid stays the snap-back size');
+        $this->assertSame(24, $this->getPlayerProperty($player3, 'cellsH'));
+    }
+
+    /**
+     * Finding #52 (round-1 review M2) — teardown must beat the debounce timer.
+     * stop() closes the decoder; an in-flight ResizeRebuildMsg armed BEFORE the stop
+     * must not resurrect it, or the deferred rebuild spawns a fresh ffmpeg child on
+     * a player the host already tore down — exactly the orphan the child-lifetime
+     * guarantee exists to prevent. Driven with a SpyDecoder (reopensInPlace() ===
+     * false) on a real .gif path so the factory respawn branch is the one refused.
+     */
+    public function testStopCancelsAnInFlightDebounceTimer(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gifPath = $this->createTempGif();
+        $spy = new SpyDecoder(array_fill(0, 20, $this->makeFrame("\x10\x20\x30")));
+        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
+
+        [$player, $cmd] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(16, 12));
+        $this->assertNotNull($cmd, 'the resize arms the debounce timer');
+
+        $player->stop(); // the host tears the stream down; the timer is still in flight
+        $this->assertSame(1, $spy->closeCount, 'stop() closes the decoder exactly once');
+
+        [$player2, $cmd2] = $player->update(ResizeRebuildMsg::instance());
+        $this->assertSame($player, $player2, 'a stopped player must not derive a rebuilt instance');
+        $this->assertNull($cmd2, 'a stopped player must not schedule further work');
+        $this->assertSame($spy, $this->getPlayerProperty($player2, 'decoder'), 'no replacement decoder may be built after stop()');
+        $this->assertSame(1, $spy->closeCount, 'the refused rebuild must close nothing further');
+        $this->assertSame(8, $this->getPlayerProperty($player2, 'cellsW'), 'geometry stays as it was at teardown');
+
+        // A late WindowSizeMsg on the stopped instance must arm nothing either.
+        [$player3, $cmd3] = $player->update(new \SugarCraft\Core\Msg\WindowSizeMsg(20, 14));
+        $this->assertSame($player, $player3);
+        $this->assertNull($cmd3, 'a stopped player must not arm new debounce timers');
+    }
+
+    /**
      * Regression for F10. Resize with the SAME size must be a no-op
      * (no decoder rebuild, no tick reschedule).
      */

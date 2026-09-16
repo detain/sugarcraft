@@ -102,19 +102,23 @@ contract made exact; the deletion the finding asked for was NOT performed).
   `--http-header-fields`, `-ss` seek, ms→`s.mmm`), with `FfmpegDecoder::buildCommand()`
   and `AudioPlayer::buildCommand()` both delegating. Byte-identity is proven against
   a golden captured from the **pre-refactor** code (`tests/Support/argv-golden-pre-refactor.json`,
-  18 cases, host binaries normalised), asserted by `tests/Support/ArgvGoldenTest.php`.
+  14 cases — 8 decoder + 3 ffplay + 3 mpv, host binaries normalised), asserted by `tests/Support/ArgvGoldenTest.php`.
 - **#52 (partial)** — two pieces closed:
   (a) *audio-header passthrough* — `HttpHeaders::toMpvHeaderFields()`/
   `toFfmpegHeaderString()` finally reach the audio players: `AudioPlayer` gained a
-  4th `$headers` ctor param and `Player`'s three audio-factory sites pass
-  `$this->headers`, so a signed media URL no longer plays video over an
+  4th `$headers` ctor param and `Player`'s audio-factory sites (now consolidated in
+  `Player::defaultAudioFactory()`) pass `$this->headers`, so a signed media URL no
+  longer plays video over an
   unauthenticated `ffplay`/`mpv`. A local path downgrades to no headers with a
-  logged note (`header.ignored_local_source`).
-  (b) *SIGWINCH* — the decoder rebuild is no longer synchronous inside `update()`.
+  logged note (`header.ignored_local_source.audio`, credential-redacted).
+  (b) *SIGWINCH* — the rebuild no longer runs once per event on the hot path.
   A `WindowSizeMsg` now clamps, records the target in the new `pendingResize` slot
   and returns a 50 ms one-shot timer; the spawn happens in `applyPendingResize()`
   when the burst settles, so a dragged resize costs one rebuild instead of one per
-  reflow, and a superseded timer applies nothing. No new `proc_open` site: the apply
+  reflow, a superseded or snapped-back timer applies nothing, and `stop()` latches
+  the player against a late rebuild. NOTE (round-1 review M4): the deferred apply is
+  still synchronous work inside `update()` — the win is the COLLAPSE (1 stall per burst
+  instead of N), not off-loop concurrency. No new `proc_open` site: the apply
   reuses `rebuildDecoderAt()`, which still closes the child it replaces (pinned by
   `testDeferredResizeClosesTheSupersededDecoder`).
   **Residual, still open (larger than this wave):** the decode loop itself remains
@@ -274,6 +278,20 @@ Extract this to `private function rebuildAudio(?int $startMs): ?AudioPlayer`.
 > clearing, omitted-key preservation, pinned fields, and the seek/loop paths that rely
 > on it. See the branch status block above. **Residual:** the wide signature itself
 > (all 18→25 fields in one map) is unchanged — that is finding #18's constructor problem.
+>
+> **MUTATION PROOF (round-1 review M3, actually run):** reverting the `renderer` leg
+> of `mutate()` from `array_key_exists('renderer', $changes) ? $changes['renderer'] :
+> $this->renderer` back to `$changes['renderer'] ?? $this->renderer` turns exactly the
+> discriminating test RED — `??` passes falsy values through, so the falsy legs cannot
+> discriminate the operators (they pin the contract against a future `?:`/`!empty()`
+> rewrite instead). Observed output:
+>
+> ```
+> 1) SugarCraft\Reel\Tests\PlayerMutateTest::testExplicitNullClearsNullableFields
+> the renderer key must apply as given
+> Failed asserting that SugarCraft\Reel\Render\AsciiRenderer Object #4692 (…) is null.
+> FAILURES!  Tests: 1, Assertions: 6, Failures: 1.
+> ```
 
 ```php
 private function mutate(array $changes): self
@@ -614,12 +632,17 @@ This `renderDirect` vs `frameToBuffer` branch is a dispatch on mode. This could 
 
 > **Resolved (branch `ai/reel-findings-closeout`).** `Render\Color::pack()` was already
 > the helper `RgbFrame::toGd()` and `Player::quarterCell()` used; `Player::rgbToStyleColor()`
-> was the last site still re-deriving the expression and now calls `Color::pack()` too, so
-> there is exactly one packing implementation in the lib. Parity is pinned three ways:
+> was the last site still re-deriving the expression and now calls `Color::pack()` too; the
+> round-1 review caught two more unmasked inlinings in `Render/AsciiRenderer.php` (the
+> TrueColor dedup sentinel `$lastFg` and `emitColorCode()`'s `$fg`) which are routed through
+> `Color::pack()` as well — so there is exactly one packing implementation in the lib, and
+> `grep -rn '<< 16' src/` now only hits `Color.php` itself. Parity is pinned three ways:
 > `ColorTest::testPackMatchesLegacyFormulaAcrossCornerAndEdgeLattice` (729-point lattice vs
 > the verbatim legacy expression), `testPackCoversFullRangeWithoutCollision` (stride walk of
-> the whole 24-bit space, unpack + collision-free) and the new `Render/ColorPackingParityTest.php`,
-> which asserts `rgbToStyleColor()` and `imagecolorat()` agree for 31 named/grey colours.
+> the whole 24-bit space, unpack + collision-free) and `Render/ColorPackingParityTest.php`,
+> which asserts `rgbToStyleColor()` and `imagecolorat()` agree for 31 named/grey colours,
+> plus an out-of-byte-channel leg pinning `AsciiRenderer::emitColorCode()`'s sentinel to
+> `Color::pack()` exactly (only the masked formula survives it).
 
 In `Player::rgbToStyleColor()` and `RgbFrame::toGd()`. Extract to `Color::pack()` or a shared utility.
 
@@ -636,9 +659,10 @@ In `Player::rgbToStyleColor()` and `RgbFrame::toGd()`. Extract to `Color::pack()
 > are decode-specific, not shared), `AudioPlayer::buildCommand()` keeps the `Probe`
 > resolution. Every value still passes through `escapeshellarg()` where it is used as a
 > shell word. The extraction is proven **byte-identical on argv** against a golden captured
-> from the pre-refactor code (`tests/Support/argv-golden-pre-refactor.json`, 12 decoder +
-> 6 audio cases, binary slot normalised to `/usr/bin/{ffmpeg,ffplay,mpv}`), asserted by
-> `tests/Support/ArgvGoldenTest.php`. That builder is also what made the #52 audio-header
+> from the pre-refactor code (`tests/Support/argv-golden-pre-refactor.json`, 8 decoder +
+> 3 ffplay + 3 mpv cases, binary slot normalised to `/usr/bin/{ffmpeg,ffplay,mpv}`), asserted by
+> `tests/Support/ArgvGoldenTest.php` — whose call-site legs run against stubbed PATH
+> binaries, so the pinning holds even on hosts without ffplay or mpv installed. That builder is also what made the #52 audio-header
 > passthrough a two-line change.
 
 Both build ffmpeg-family command arrays. The ffplay path in `AudioPlayer` is similar to the ffmpeg path in `FfmpegDecoder`. The reconnect options, the `-ss` input-seek approach, and the array-based command building are all similar. A shared `FfmpegCommandBuilder` utility could reduce duplication.
@@ -706,17 +730,25 @@ The minimum rows/cols (5, 10) and maximum (80, 200) are hardcoded. These magic n
 **Improvement**: Wrap the pipe read in a non-blocking `stream_select()` with a timeout, or use ReactPHP's `Loop::addReadStream()` for async I/O on the pipe.
 
 > **Second piece closed (branch `ai/reel-findings-closeout`).** The pipe read itself
-> was already bounded (previous branch); this branch removes the *synchronous spawn*
-> from the resize path, which was the other place the loop stalled for the length of an
-> external process. A `WindowSizeMsg` now only records the clamped target in
+> was already bounded (previous branch); this branch moves the *spawn* of the resize
+> rebuild out of the signal path: a `WindowSizeMsg` now only records the clamped target in
 > `Player::$pendingResize` and returns a 50 ms one-shot `Cmd::tick()`; the rebuild runs
 > in `applyPendingResize()` once the burst settles, so a drag-resize costs **one**
-> ffmpeg respawn instead of one per reflow, and a timer whose geometry already landed
-> applies nothing (`tests/PlayerTest::testResizeStormRebuildsTheDecoderOnce`,
+> ffmpeg respawn instead of one per reflow, a snap-back to the applied geometry
+> CANCELS the deferred target (`testSnapbackResizeCancelsThePendingRebuild`), and
+> `stop()` latches the instance so an in-flight debounce timer can never resurrect a
+> torn-down decoder (`testStopCancelsAnInFlightDebounceTimer`). A timer whose geometry
+> already landed applies nothing (`tests/PlayerTest::testResizeStormRebuildsTheDecoderOnce`,
 > `testStaleDebounceTimerAppliesNothing`, `testPendingResizeSurvivesAnInterleavedTick`,
 > `testResizeCommandDispatchesTheRebuildMessage`). No new `proc_open` site, so the
 > fail-closed child-lifetime roster is unchanged (`tools/check-child-lifetimes.php` rc=0),
 > and the apply still closes the child it replaces.
+>
+> **HONEST SCOPE (round-1 review M4):** this collapse is a COST win, not concurrency.
+> `applyPendingResize()` still performs `close()` + `DecoderFactory::create()` — the
+> `proc_open` and the forward decode to the playhead — synchronously inside `update()`
+> when the deferred message lands; the loop still stalls for exactly one spawn. What
+> changed is the count (one stall per burst instead of N), not the synchrony.
 >
 > **STILL OPEN — the remainder of this finding, deliberately out of scope for this
 > wave:** the decode loop is still blocking-synchronous. `Player::updateTick()` calls

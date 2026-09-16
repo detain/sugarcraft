@@ -11,6 +11,7 @@ use SugarCraft\Reel\Decode\FfmpegDecoder;
 use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\Probe;
 use SugarCraft\Reel\Support\FfmpegCommandBuilder;
+use SugarCraft\Reel\Tests\Concerns\StubbedPathBinaries;
 
 /**
  * Pins findings #45: extracting {@see FfmpegCommandBuilder} must not change one
@@ -35,6 +36,8 @@ use SugarCraft\Reel\Support\FfmpegCommandBuilder;
  */
 final class ArgvGoldenTest extends TestCase
 {
+    use StubbedPathBinaries;
+
     private const FIXTURE = __DIR__ . '/argv-golden-pre-refactor.json';
 
     /**
@@ -110,6 +113,14 @@ final class ArgvGoldenTest extends TestCase
             HttpHeaders::none(),
         );
 
+        // Slot pins (round-1 review m2): the builder tests alone would stay green if
+        // the CALL SITE transposed its two adjacent string arguments (binary/source
+        // are both `string`), because the builder faithfully emits whatever it is
+        // handed. Pinning slot 0 and the last slot here keeps the fixture honest about
+        // WHICH value belongs WHERE.
+        self::assertStringEndsWith('ffplay', $argv[0], 'slot 0 must be the ffplay binary');
+        self::assertSame($case['source'], $argv[count($argv) - 1], 'the source must stay the last argument');
+
         self::assertSame(
             $case['argv'],
             $argv,
@@ -127,11 +138,72 @@ final class ArgvGoldenTest extends TestCase
             HttpHeaders::none(),
         );
 
+        self::assertStringEndsWith('mpv', $argv[0], 'slot 0 must be the mpv binary');
+        self::assertSame($case['source'], $argv[count($argv) - 1], 'the source must stay the last argument');
+
         self::assertSame(
             $case['argv'],
             $argv,
             "the mpv audio argv drifted for case {$case['name']}",
         );
+    }
+
+    /**
+     * Call-site checks that NEVER skip (round-1 review m2): PATH points at a
+     * private directory of inert ffplay/mpv stubs, so `Probe` resolves
+     * deterministically on any host — including one without either binary, where
+     * `testAudioPlayerStillProducesTheGoldenArgv` would markTestSkipped and leave
+     * `AudioPlayer::buildCommand()`'s argv tied to nothing. The stub PATH lands in
+     * slot 0; the tail must equal the pre-refactor golden byte for byte.
+     */
+    #[DataProvider('ffplayCases')]
+    public function testAudioPlayerFfplayCallSiteProducesTheGoldenArgv(array $case): void
+    {
+        $this->withStubbedBinaries(['ffplay', 'mpv'], function (string $dir) use ($case): void {
+            $argv = self::audioArgvOf($case);
+
+            self::assertIsArray($argv, 'the stubbed ffplay must make the command buildable');
+            self::assertSame($dir . '/ffplay', $argv[0], 'slot 0 is the probed binary path');
+            self::assertSame(
+                array_slice($case['argv'], 1),
+                array_slice($argv, 1),
+                "AudioPlayer::buildCommand() ffplay tail drifted for case {$case['name']}",
+            );
+        });
+    }
+
+    #[DataProvider('mpvCases')]
+    public function testAudioPlayerMpvCallSiteProducesTheGoldenArgv(array $case): void
+    {
+        // Only mpv stubbed: Probe::ffplay() finds nothing, so the mpv fallback
+        // branch of buildCommand() — the one no host-independent test reached — runs.
+        $this->withStubbedBinaries(['mpv'], function (string $dir) use ($case): void {
+            $argv = self::audioArgvOf($case);
+
+            self::assertIsArray($argv, 'the stubbed mpv must make the command buildable');
+            self::assertSame($dir . '/mpv', $argv[0], 'slot 0 is the probed mpv path');
+            self::assertSame(
+                array_slice($case['argv'], 1),
+                array_slice($argv, 1),
+                "AudioPlayer::buildCommand() mpv tail drifted for case {$case['name']}",
+            );
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $case
+     *
+     * @return list<string>|null
+     */
+    private static function audioArgvOf(array $case): ?array
+    {
+        $invoke = new \ReflectionMethod(AudioPlayer::class, 'buildCommand');
+        $invoke->setAccessible(true);
+
+        /** @var list<string>|null $argv */
+        $argv = $invoke->invoke(new AudioPlayer($case['source'], $case['startMs']));
+
+        return $argv;
     }
 
     /**

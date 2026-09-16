@@ -4,7 +4,7 @@
         "captureHostFfmpeg": "/usr/bin/ffmpeg",
         "captureHostFfplay": "/usr/bin/ffplay",
         "captureHostMpv": null,
-        "note": "argv element 0 is the resolved binary path, normalised here to the literal /usr/bin/ffmpeg, /usr/bin/ffplay and /usr/bin/mpv so the fixture is host-independent. The ffmpegDecoder cases come from the real FfmpegDecoder::buildCommand(); the audioFfplay cases from the real AudioPlayer::buildCommand() on this host (where Probe::ffplay() resolves to /usr/bin/ffplay); the audioMpv cases from the verbatim mpv branch of that same method, evaluated directly because mpv is absent here. Header-bearing audio argv (added when findings #52 wired the passthrough) is not part of this pre-refactor fixture; it is pinned in tests/AudioPlayerHeadersTest.php."
+        "note": "argv element 0 is the resolved binary path, normalised here to the literal /usr/bin/ffmpeg, /usr/bin/ffplay and /usr/bin/mpv so the fixture is host-independent. The ffmpegDecoder cases come from the real FfmpegDecoder::buildCommand(); the audioFfplay cases from the real AudioPlayer::buildCommand() on this host (where Probe::ffplay() resolves to /usr/bin/ffplay); the audioMpv cases from the verbatim mpv branch of that same method, evaluated directly because mpv is absent here. Header-bearing audio argv (added when findings #52 wired the passthrough) is not part of this pre-refactor fixture; it is pinned in tests/AudioHeaderPassthroughTest.php."
     },
     "ffmpegDecoder": [
         {

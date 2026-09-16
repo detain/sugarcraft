@@ -133,6 +133,13 @@ final class ModeCycleTest extends TestCase
     {
         // Ascii → Ansi256 → TrueColor (0 reopens) → HalfBlock (1) → QuarterBlock (2)
         // → back to Ascii (3). Five presses, three rebuilds — pre-fix this was five.
+        //
+        // CAVEAT (round-1 review n3): the text-only window is exactly these five
+        // modes, so the assertion holds only while `Mosaic::diagnose()` on this host
+        // advertises no graphics protocol. On a graphics-capable runner the cycle
+        // continues past Ascii; the sixth press is the boundary where a reopen into
+        // graphics would land. The count below is pinned to the text-only segment,
+        // which both the first assertion (mode back at Ascii) and CI hosts guarantee.
         $decoder = new FakeDecoder(array_fill(0, 8, new RgbFrame("\x01\x02\x03", 20, 10)));
         $player = $this->player(Mode::Ascii, $decoder);
 
