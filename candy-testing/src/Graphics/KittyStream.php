@@ -19,8 +19,10 @@ use SugarCraft\Testing\Lang;
  *    fix moved the producer onto APC frames.
  *
  * Payload base64 is reassembled across `m=1` continuation chunks and — for a
- * `f=1` transmit — zlib-inflated back into a PNG. Multi-image streams yield one
- * {@see KittyImage} per transmit.
+ * `f=1` transmit — zlib-inflated back into a PNG. Every other format travels
+ * untransformed, so a PNG transmit (`f=100` in the upstream table, or the
+ * `f=12` synonym) yields the sender's bytes byte-for-byte. Multi-image streams
+ * yield one {@see KittyImage} per transmit.
  *
  * Mirrors charmbracelet/candy-mosaic KittyRenderer (inverse).
  */
@@ -204,11 +206,20 @@ final class KittyStream
      *
      * Frames with `m=1` open (or continue) a chunked transmission: the
      * attribute set merges from all frames (later frames may override shared
-     * keys); payloads concatenate in
-     * order, and the first `m=0` frame closes the transaction and yields the
-     * image — the exact mirror of `Ansi::kittyGraphicsBegin()` +
-     * `Ansi::kittyGraphicsChunk()` as candy-mosaic emits them (one self-
-     * framed APC sequence per chunk since the ANSI audit fix).
+     * keys), payloads concatenate in order, and the first `m=0` frame closes
+     * the transaction and yields the image — the exact mirror of
+     * `Ansi::kittyGraphicsBegin()` + `Ansi::kittyGraphicsChunk()` as
+     * candy-mosaic emits them (one self-framed APC sequence per chunk since the
+     * ANSI audit fix).
+     *
+     * The open transaction lives on the decoder rather than on frame adjacency,
+     * so this reader tolerates a capture that interleaves unrelated traffic
+     * between chunks: screen text, SGR, OSC 1337 or a Sixel image all sit
+     * outside the two Kitty introducers the scanner looks for (`\x1b_G` and the
+     * bare `\x1bPq`) and are skipped without splitting the frame stream. That is
+     * lenience for captures, not a licence to emit — upstream requires a client
+     * to finish every chunk of one image before sending any other
+     * graphics-related escape code.
      */
     private function consumeApc(string $stream, int $at): int
     {
@@ -317,13 +328,23 @@ final class KittyStream
     }
 
     /**
-     * Inflate a zlib-wrapped payload when `f=1` requested compression.
+     * Inflate a zlib-wrapped payload when — and only when — `f=1` declares one.
+     *
+     * A PNG transmit (`f=100` upstream, or the `f=12` synonym) already holds the
+     * whole image, so inflating it would turn a valid payload into a
+     * `decompress_failed` error. And `z` is the image z-index, never a
+     * compression hint: `KittyOptions::withZIndex(1)` emits an uncompressed PNG
+     * under exactly `f=100,z=1`. Upstream's real compression key is `o=z`, which
+     * this decoder deliberately does not act on — honouring it has to land
+     * together with the emitters that would use it, so today such a capture
+     * surfaces as an undecodable payload instead of a guessed inflate. Any
+     * other, or absent, `f` travels untouched.
      *
      * @param array<string, string> $params
      */
     private static function maybeInflate(string $bytes, array $params): string
     {
-        if (($params['f'] ?? null) !== '1' || $bytes === '') {
+        if (($params['f'] ?? null) !== KittyImage::FORMAT_ZLIB || $bytes === '') {
             return $bytes;
         }
 
