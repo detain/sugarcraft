@@ -842,6 +842,11 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
     public function testThatFixtureReallyDoesIgnoreSigtermWhileItsStdinStaysOpen(): void
     {
         $script = $this->eofExitingServerScript();
+        // Cleared BEFORE the spawn (see the same note in
+        // {@see startProcessWithoutHandshake()}): the fixture touches its marker
+        // as an early action, so an unlink racing behind proc_open can delete it.
+        $readyPath = $script . '.ready';
+        @unlink($readyPath);
         $process = proc_open(
             [PHP_BINARY, $script],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
@@ -849,8 +854,26 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         );
         $this->assertIsResource($process, 'could not spawn the control fixture');
 
-        // Wait for the trap to be installed, not merely for the process to exist.
-        usleep(300000);
+        // Wait for the trap to be installed, not merely for the process to
+        // exist — by POLLING the fixture's own marker, not by sleeping a guess.
+        // Sending TERM 300 ms after proc_open on a starved shard can still
+        // precede `pcntl_signal`, and the "exits on nothing, like any process"
+        // outcome this row exists to falsify would then look like the fixture's
+        // behaviour rather than the harness's race.
+        $bootDeadline = microtime(true) + 5.0;
+        while (!is_file($readyPath)) {
+            if (microtime(true) >= $bootDeadline) {
+                proc_terminate($process, 9);
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+                proc_close($process);
+                $this->fail('the control fixture never installed its SIGTERM trap within 5s');
+            }
+            usleep(5000);
+        }
 
         $started = microtime(true);
         proc_terminate($process);
@@ -940,6 +963,12 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         $env = new \ReflectionProperty($server, 'env');
         $env->setAccessible(true);
 
+        // The ready marker is cleared BEFORE the spawn, never after: the child
+        // writes it as its first action, so an unlink that follows proc_open can
+        // delete the very signal the poll below waits for.
+        $scriptPath = (string) array_values($args->getValue($server))[0];
+        @unlink($scriptPath . '.ready');
+
         $process = proc_open(
             [$command->getValue($server), ...array_values($args->getValue($server))],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
@@ -958,8 +987,39 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         $pipesProp->setValue($server, $pipes);
         $stderrOpenProp->setValue($server, true);
 
-        // Let the fixture reach its own read/sleep before anything is written.
-        usleep(200000);
+        // READY-FILE POLL, NOT A FIXED SETTLE. The old 200 ms blind wait had two
+        // failure directions, both observed shapes of this wave's class: a slow
+        // boot charged its remaining cost into the caller's elapsed<0.5 bound (a
+        // correct stop() reddening), and a TERM landing before the fixture's
+        // `trap` line made the fast path pass for the WRONG reason (a child that
+        // died on default TERM is indistinguishable from one that exited on
+        // EOF). The marker is emitted by every fixture this helper spawns, as
+        // late as the precondition it proves and never earlier.
+        $deadline = microtime(true) + 5.0;
+        while (!is_file($scriptPath . '.ready')) {
+            if (microtime(true) >= $deadline) {
+                // Full teardown on the RED path — the handles are already
+                // injected into the server, so a bare terminate would leave a
+                // zombie plus three live pipes for the rest of the shard, and a
+                // later stop() would reach for dead resources. Same ceremony
+                // as the control row's poll above.
+                proc_terminate($process, 9);
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+                proc_close($process);
+                $processProp->setValue($server, null);
+                $pipesProp->setValue($server, null);
+                $stderrOpenProp->setValue($server, false);
+                $this->fail(
+                    'the fixture child never reached its ready marker — boot failed, so every '
+                    . 'timing bound taken from here measures the wrong process',
+                );
+            }
+            usleep(5000);
+        }
     }
 
     /**
@@ -1070,7 +1130,9 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
     private function deafServerScript(): string
     {
         $path = $this->tempDir . '/deaf.php';
-        file_put_contents($path, "<?php\nsleep(" . self::DEAF_SERVER_LIFETIME_SECONDS . ");\n");
+        // The ready marker is this fixture's FIRST action; the helper that spawns
+        // it polls for it instead of sleeping a fixed guess at boot time.
+        file_put_contents($path, "<?php\n@touch(__FILE__ . '.ready');\nsleep(" . self::DEAF_SERVER_LIFETIME_SECONDS . ");\n");
 
         return $path;
     }
@@ -1204,6 +1266,14 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         <?php
         pcntl_async_signals(true);
         pcntl_signal(SIGTERM, static function (): void {});
+        // READY SIGNAL, positioned deliberately: the SIGTERM trap exists, the
+        // fixture is about to enter its read loop and never writes unsolicited
+        // bytes. Both this file's stop() row and its raw-proc_open control poll
+        // this marker instead of sleeping a fixed 200-300 ms guess at PHP boot —
+        // child boot is the slowest, most load-sensitive part of those rows, and
+        // a TERM sent before this line kills a trap-less child, which would make
+        // the bounded stop() time pass for the wrong reason.
+        @touch(__FILE__ . '.ready');
         stream_set_blocking(STDIN, false);
         // The 20s valve is a leak guard, not part of any test: every row using
         // this fixture finishes in well under a second. It exits NON-ZERO there

@@ -442,6 +442,7 @@ final class WorkflowResumptionTest extends TestCase
         }
 
         $pauseFile = $this->tempDir . '/.sugar-crush/workflows/.running/real-sigterm-test.json';
+        $stageTwoMarker = $this->tempDir . '/real-sigterm-stage2.mark';
 
         $pid = $this->forkTracked();
         if ($pid === -1) {
@@ -469,6 +470,8 @@ final class WorkflowResumptionTest extends TestCase
             $executor = new class implements ExecutorInterface {
                 private int $calls = 0;
 
+                public string $stageTwoMarker = '';
+
                 public function execute(SubAgent $agent, CompleteRequest $request): AgentResult
                 {
                     $this->calls++;
@@ -476,6 +479,14 @@ final class WorkflowResumptionTest extends TestCase
                     // sleeps long enough for the parent to deliver a real
                     // SIGTERM while this call is genuinely blocked.
                     if ($this->calls >= 2) {
+                        // The readiness signal the parent polls: written from
+                        // INSIDE the second execute() call, after the engine
+                        // has registered its handlers and entered the stage,
+                        // so a SIGTERM delivered after this file exists cannot
+                        // race the handler installation.
+                        if ($this->stageTwoMarker !== '') {
+                            file_put_contents($this->stageTwoMarker, (string) getmypid());
+                        }
                         sleep(10);
                     }
 
@@ -502,6 +513,7 @@ final class WorkflowResumptionTest extends TestCase
                 }
             };
 
+            $executor->stageTwoMarker = $stageTwoMarker;
             $pool = new AgentWorkerPool(5, $executor);
             $engine = new WorkflowEngine($registry, $pool);
 
@@ -515,9 +527,30 @@ final class WorkflowResumptionTest extends TestCase
         }
 
         // --- Parent process ---
-        // Give the child time to genuinely finish stage 1 and enter stage 2's
-        // blocking sleep(10), then deliver a real SIGTERM.
-        usleep(800_000);
+        // POLL the child's stage-2 marker, then deliver a real SIGTERM while it
+        // is genuinely blocked in sleep(10). The previous fixed 800 ms lead was
+        // a readiness proxy: the child still had to boot the registry, run stage
+        // 1 through the pool, register the engine's signal handlers and enter
+        // execute() #2 inside that window. On a starved shard it could miss —
+        // and the miss did not merely delay the kill, it landed BEFORE the
+        // handlers existed, so a default-TERM death reddened the exit-143
+        // assertions with a "handler didn't fire" message. The marker is written
+        // from inside execute() #2 itself: after it exists, the handler is live
+        // and the 10 s sleep window holds the child still blocked while the
+        // parent acts. The deadline only fails loudly when the child never
+        // reaches stage 2 at all.
+        $markerDeadline = microtime(true) + 5.0;
+        while (!is_file($stageTwoMarker)) {
+            if (microtime(true) >= $markerDeadline) {
+                posix_kill($pid, SIGKILL);
+                pcntl_waitpid($pid, $status);
+                $this->fail(
+                    'the forked workflow child never reached stage 2 within 5s — the interrupt '
+                    . 'window this test drives does not exist, so no timing below means anything',
+                );
+            }
+            usleep(20_000);
+        }
         posix_kill($pid, SIGTERM);
 
         $status = null;

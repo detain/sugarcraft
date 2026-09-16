@@ -353,14 +353,27 @@ final class MailboxTest extends TestCase
             sentAt: new \DateTimeImmutable(),
         ));
 
-        $start = microtime(true);
-        $message = $mailbox->waitForMessage('teammate-h', 2.0);
-        $elapsed = microtime(true) - $start;
+        $naps = 0;
+        $message = $mailbox->waitForMessage('teammate-h', 2.0, static function (int $microseconds) use (&$naps): void {
+            $naps++;
+        });
 
         $this->assertNotNull($message);
         $this->assertSame('msg-already-there', $message->id);
-        // Already-unread fast path — must not fall through to the poll loop.
-        $this->assertLessThan(0.5, $elapsed);
+        // Already-unread fast path — ASSERTED AS LOOP STATE, NOT AS A STOPWATCH
+        // READING. The earlier `assertLessThan(0.5, $elapsed)` reddened a correct
+        // Mailbox whenever the shard was descheduled past the bound between the
+        // two clock reads, and it proved little either way: a fast machine also
+        // passes a fallen-through poll (one 5 ms nap), while *any* wall bound on
+        // a path designed to return instantly is hostage to the scheduler. Zero
+        // sleeper calls is the exact statement of "the poll loop was never
+        // entered" — the seam resolves only after the fast-path return in
+        // `waitForMessage()`, so the count measures the loop, not the argument.
+        $this->assertSame(
+            0,
+            $naps,
+            'waitForMessage fell through the already-unread fast path into the poll loop',
+        );
     }
 
     public function testWaitForMessageReturnsNullAfterBoundedTimeoutWithNoMessage(): void

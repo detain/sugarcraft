@@ -40,17 +40,35 @@ final class McpClientDispatchPumpTest extends TestCase
 
     public function testDispatchingToOneServerDrainsAnIdleFloodingChildAtTheMountSite(): void
     {
-        $client = $this->clientWithTwoServers("'DISPATCH-MOUNT-' . \\str_repeat('m', 4096) . \"-END\\n\"");
+        // READY-FILE POLL, NOT A FIXED SETTLE. The child floods 4096 bytes
+        // 50 ms after flushing its tools/list reply; the old 300 ms sleep
+        // stood in for "those bytes are in the pipe" — a readiness proxy
+        // that reddened a CORRECT mounted pump when a starved shard kept
+        // the child from its write inside the window. The fixture touches
+        // $ready AFTER fwrite returns, and a sub-pipe-buffer write lands in
+        // the kernel buffer by the time fwrite returns, so the marker IS
+        // the precondition "bytes are queued, nothing has drained them".
+        $ready = $this->tempDir . '/noised.mark';
+        @unlink($ready);
+        $client = $this->clientWithTwoServers(
+            "'DISPATCH-MOUNT-' . \\str_repeat('m', 4096) . \"-END\\n\"",
+            $ready,
+        );
         $client->startServers();
 
         try {
             $chatter = $this->server($client, 'chatterbox');
 
-            // The child writes 50 ms after flushing its handshake reply; this
-            // window is WRITE TIME, never a synchronisation on the assertion —
-            // nothing reads the chatterbox pipe in here, which is the state
-            // under test (same discipline as StdioMcpServerPumpStderrTest).
-            \usleep(300000);
+            $deadline = \microtime(true) + 5.0;
+            while (!\is_file($ready)) {
+                if (\microtime(true) >= $deadline) {
+                    $this->fail(
+                        'the flooding child never wrote its stderr — the fixture, not the pump '
+                        . 'seam, failed to reach the precondition this row drives',
+                    );
+                }
+                \usleep(10000);
+            }
             $this->assertSame('', $this->tailOf($chatter), 'something drained the idle child before the dispatch under test');
 
             $start = \microtime(true);
@@ -84,7 +102,7 @@ final class McpClientDispatchPumpTest extends TestCase
         }
     }
 
-    private function clientWithTwoServers(string $noiseExpression): McpClient
+    private function clientWithTwoServers(string $noiseExpression, ?string $chatterReadyPath = null): McpClient
     {
         $configPath = $this->tempDir . '/mcp.json';
         \file_put_contents($configPath, \json_encode([
@@ -98,7 +116,7 @@ final class McpClientDispatchPumpTest extends TestCase
                 'chatterbox' => [
                     'type' => 'stdio',
                     'command' => \PHP_BINARY,
-                    'args' => [$this->script($noiseExpression)],
+                    'args' => [$this->script($noiseExpression, $chatterReadyPath)],
                     'env' => new \stdClass(),
                 ],
             ],
@@ -115,9 +133,12 @@ final class McpClientDispatchPumpTest extends TestCase
      * bytes written earlier are absorbed inside start()'s own read loop,
      * leaving the IDLE window empty (see StdioMcpServerPumpStderrTest).
      */
-    private function script(string $noiseExpression): string
+    private function script(string $noiseExpression, ?string $readyPath = null): string
     {
         $path = $this->tempDir . '/srv-' . \substr(\md5($noiseExpression . \microtime(true)), 0, 8) . '.php';
+        $readyWrite = $readyPath === null
+            ? ''
+            : "\n                    \\touch(" . \var_export($readyPath, true) . ');';
         \file_put_contents($path, <<<PHP
             <?php
             \$noise = {$noiseExpression};
@@ -144,7 +165,7 @@ final class McpClientDispatchPumpTest extends TestCase
                 if (\$method === 'tools/list' && !\$noised && \$noise !== '') {
                     \$noised = true;
                     usleep(50000);
-                    fwrite(STDERR, \$noise);
+                    fwrite(STDERR, \$noise);{$readyWrite}
                 }
             }
             PHP);

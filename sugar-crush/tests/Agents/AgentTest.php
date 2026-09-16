@@ -341,13 +341,23 @@ final class AgentTest extends TestCase
     {
         $agent = Agent::fromArray(['prompt' => 'Do the thing.', 'model' => 'minimax-m2.7']);
 
+        // The env block stamps `date('Y-m-d')` INSIDE systemPrompt(); reading the
+        // live date again after the call to compare would race the local midnight
+        // boundary between the two reads and redden a correct block once a day.
+        // Bracketing the call pins both admissible values, and the regex still
+        // requires the block to carry the day the call actually ran in.
+        $dayBefore = date('Y-m-d');
         $systemPrompt = $agent->systemPrompt();
+        $dayAfter = date('Y-m-d');
 
         $this->assertStringContainsString('<env>', $systemPrompt);
         $this->assertStringContainsString('</env>', $systemPrompt);
         $this->assertStringContainsString('Working directory: ' . getcwd(), $systemPrompt);
         $this->assertStringContainsString('Model: minimax-m2.7', $systemPrompt);
-        $this->assertStringContainsString('Current date: ' . date('Y-m-d'), $systemPrompt);
+        $this->assertMatchesRegularExpression(
+            '/Current date: (' . $dayBefore . '|' . $dayAfter . ')/',
+            $systemPrompt,
+        );
     }
 
     public function testSystemPromptPrefersTheCallerSuppliedEnvironmentBlock(): void

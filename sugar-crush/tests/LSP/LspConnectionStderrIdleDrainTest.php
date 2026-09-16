@@ -97,10 +97,12 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
      * its `fwrite()` at 100000 > 65536 bytes, so its DONE file can appear only
      * once ≥ 34464 bytes have been read out of fd 2. The negative control before
      * the tick pins the child really is blocked (DONE still absent after a
-     * settle); the tick after it is therefore the CAUSE. One pass absorbs up to
-     * 131072 bytes, so a single call must be enough — if it is not, the row goes
-     * red on the timeout naming the bytes consumed, which is the regression
-     * signal, not a fixture race.
+     * settle); the ticks after it are therefore the CAUSE. One pass absorbs up to
+     * 131072 bytes, so a single call must be enough once the flood is actually in
+     * the pipe — the pump re-ticks only while it has seen NOTHING, which waits out
+     * a descheduled child without excusing a drain gap; if one real pass is not
+     * enough, the row goes red on the timeout naming the bytes consumed, which is
+     * the regression signal, not a fixture race.
      */
     public function testOnePumpStderrCallConsumesAFloodWrittenWhileNoExchangeIsInFlight(): void
     {
@@ -134,6 +136,21 @@ final class LspConnectionStderrIdleDrainTest extends TestCase
             );
 
             $connection->pumpStderr();
+
+            // ONE tick is the claim, but the tick must MEET the flood: a child
+            // descheduled between touching STARTED and starting its fwrite
+            // would leave a single pass draining nothing, and the DONE wait
+            // below would then redden a correct implementation on pure
+            // scheduling. Keep ticking until the drain SEES BYTES - the
+            // observable that flood is in the pipe - bounded by the same
+            // handshake budget; a flood that never arrives still goes red on
+            // the tail-cap assert (0 bytes consumed, named there) rather than
+            // as a fixture race.
+            $floodDeadline = microtime(true) + self::HANDSHAKE_BOUND_SECONDS;
+            while ($connection->stderrTail() === '' && microtime(true) < $floodDeadline) {
+                $connection->pumpStderr();
+                usleep(5_000);
+            }
 
             $this->waitForFile($done, sprintf(
                 'one pumpStderr() pass did not release a child blocked after %d bytes of stderr — '

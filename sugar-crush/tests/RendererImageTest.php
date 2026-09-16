@@ -180,25 +180,61 @@ final class RendererImageTest extends TestCase
      * Program repaints on every keystroke, streaming chunk and spinner tick, so
      * the decode+encode has to be memoized - unmemoized, a single Sixel
      * screenshot in the transcript costs hundreds of milliseconds per keypress.
+     *
+     * PROVEN AS STATE, NOT AS A STOPWATCH RATIO. A warm/cold timing ratio is a
+     * coin flip on a loaded box (and needed a "too fast to tell" skip guard to
+     * avoid going vacuous the other way). `Renderer::$imageCache` is the
+     * memoization itself, so this pokes it directly: the cold frame must add
+     * EXACTLY ONE encoded entry for the picture, and a frame rendered after
+     * that entry is poisoned with a sentinel body must PUT THE SENTINEL ON
+     * SCREEN - which only a cache read can do. Deleting the `isset` fast path
+     * in renderToolImage() re-encodes over the sentinel and goes red here,
+     * at any machine speed.
      */
     public function testRepeatedRendersReuseTheEncodedImageInsteadOfReEncoding(): void
     {
-        $chat = $this->chatWithImage(Mosaic::sixel(), $this->pngBytes(120, 90));
+        $png = $this->pngBytes(120, 90);
+        $chat = $this->chatWithImage(Mosaic::sixel(), $png);
 
-        $start = hrtime(true);
-        $first = Renderer::renderView($chat);
-        $cold = hrtime(true) - $start;
+        $cache = new \ReflectionProperty(Renderer::class, 'imageCache');
+        $cache->setAccessible(true);
+        $before = $cache->getValue();
 
-        if ($cold < 20_000_000) {
-            $this->markTestSkipped('encode is too fast here to tell a cache hit from a miss');
+        try {
+            $first = Renderer::renderView($chat);
+            $afterCold = $cache->getValue();
+
+            $newKeys = array_diff(array_keys($afterCold), array_keys($before));
+            $this->assertCount(
+                1,
+                $newKeys,
+                'the cold frame must memoize exactly one encoded picture - none means the cache '
+                . 'never fills, more means the same picture encoded twice'
+            );
+
+            $key = (string) reset($newKeys);
+            if (!($afterCold[$key]['ok'] ?? false)) {
+                $this->markTestSkipped('this build cannot encode the fixture picture; the reuse path has nothing to memoize');
+            }
+
+            // Poison the memoized body. A frame that RE-ENCODES ignores the
+            // entry and paints the real sixel; only a frame that READS the
+            // cache can show this string.
+            $poisoned = $afterCold;
+            $poisoned[$key] = ['ok' => true, 'body' => 'SENTINEL-FROM-CACHE'];
+            $cache->setValue(null, $poisoned);
+
+            $second = Renderer::renderView($chat);
+
+            $this->assertSame(
+                'SENTINEL-FROM-CACHE',
+                array_values($second->images)[0]->bytes,
+                'the warm frame did not read the memoized picture - it re-encoded over the poisoned '
+                . 'cache entry, which is exactly the per-keypress re-encode this memoization exists to stop'
+            );
+        } finally {
+            $cache->setValue(null, $before);
         }
-
-        $start = hrtime(true);
-        $second = Renderer::renderView($chat);
-        $warm = hrtime(true) - $start;
-
-        $this->assertSame(array_values($first->images)[0]->bytes, array_values($second->images)[0]->bytes);
-        $this->assertLessThan($cold / 4, $warm, 'the second frame must not re-encode the picture');
     }
 
     /** A result with no image is untouched by any of this. */

@@ -49,15 +49,24 @@ final class StdioMcpServerPumpStderrTest extends TestCase
         $server->start();
 
         try {
-            // Give the child time to see the initialized notification and write;
-            // the parent reads NOTHING in this window — no exchange is in flight,
-            // which is precisely the state the pump exists for.
-            usleep(300000);
+            // PUMP-UNTIL-SEEN, NOT SLEEP-THEN-PUMP. The child posts its noise
+            // 50 ms after flushing the last reply `start()` waited for, so a
+            // fixed 300 ms sleep was a readiness proxy: on a starved child the
+            // single pump found an empty pipe and the marker assert below
+            // reddened a CORRECT pump. Repeating the pump instead is the same
+            // discipline the flood row a few methods down already states — each
+            // pass is individually bounded, the parent still reads nothing but
+            // through `pumpStderr()` itself (the idle window stays the state
+            // under test), and the deadline branch exists only to fail loudly
+            // when the pump absorbs nothing at all.
+            $deadline = microtime(true) + 3.0;
+            do {
+                $server->pumpStderr();
+                $tail = $this->tailOf($server);
+            } while (!str_contains($tail, '-END') && microtime(true) < $deadline);
 
-            $server->pumpStderr();
-
-            $this->assertStringContainsString('PUMPMARK-', $this->tailOf($server));
-            $this->assertStringEndsWith("-END\n", $this->tailOf($server));
+            $this->assertStringContainsString('PUMPMARK-', $tail);
+            $this->assertStringEndsWith("-END\n", $tail);
             // STDOUT SURVIVES THE PUMP: fd 2 only. A pump that grabbed the
             // response stream would fail HERE, not silently.
             $this->assertSame('pong', $server->callTool('ping', [])['content'][0]['text']);
@@ -165,14 +174,22 @@ final class StdioMcpServerPumpStderrTest extends TestCase
         $client->startServers();
 
         try {
-            usleep(300000);
-            $client->pumpStderr();
-
+            // Same pump-until-seen discipline as the idle-absorption row: the
+            // fixed 300 ms sleep reddened a correct forwarder when the child's
+            // post-reply write landed late; forwarding to every server is
+            // idempotent once the bytes are in the tail, so repeating it is
+            // bounded work, and the deadline only exists to name the silence.
             $servers = (new \ReflectionProperty(McpClient::class, 'servers'))->getValue($client);
             $this->assertCount(1, $servers);
             $server = array_values($servers)[0];
             $this->assertInstanceOf(StdioMcpServer::class, $server);
-            $this->assertStringContainsString('CLIENT-PUMPED', $this->tailOf($server));
+            $deadline = microtime(true) + 3.0;
+            do {
+                $client->pumpStderr();
+                $tail = $this->tailOf($server);
+            } while (!str_contains($tail, 'CLIENT-PUMPED') && microtime(true) < $deadline);
+
+            $this->assertStringContainsString('CLIENT-PUMPED', $tail);
         } finally {
             $client->stopServers();
         }

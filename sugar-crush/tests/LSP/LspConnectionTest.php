@@ -482,9 +482,17 @@ PHP;
 
         $conn->initialize();
 
-        // Wait a short time for the notification to arrive.
-        usleep(50000);
-
+        // NO WAIT HERE, AND THERE MUST NOT BE ONE. The notification is delivered by
+        // a PUMP, not by the passage of time: the fixture flushes the `initialize`
+        // RESPONSE before the notification and only then blocks on its next read,
+        // and `readResponse()` returns the instant an id matches — so the
+        // notification frame is still unread when `initialize()` returns. It is
+        // dispatched by the pump inside `disconnect()`'s `shutdown` round-trip,
+        // which reads frames in FIFO order and routes every id-less frame through
+        // `handleNotification()` before it settles on the shutdown reply. A fixed
+        // `usleep()` in between pumped nothing; it only made the row's duration
+        // depend on the wall clock and implied a readiness race that the frame
+        // ordering already settles.
         $conn->disconnect();
 
         $this->assertCount(1, $received);
