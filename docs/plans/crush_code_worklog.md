@@ -11598,6 +11598,66 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 83 (2026-09-16) — PHASE 5 (docs-minted hygiene + adjudication, E729–E740) ships CLOSED: twelve lanes r1–r11 + s1–s4 in three waves + two in-round upstream merges; floor 11,991 → 12,027 (one sugar-crush lane: E737); `failOnWarning` mandate COMPLETE repo-wide 58/58; census survivors 3 (E731/E735/E736)
+
+**Closed 2026-09-16 at the wave-3 weld (code tip `c9a0cafff`, docs atop); NEVER pushed.** The round opened
+from the operator's PHASE-5 MINT — E729–E737 minted at `c65e56c57` after the big upstream merge
+`61b28175c` (w4 review wave, re-pin `052025282`) — plus E738–E740 minted at the wave-1 weld. Every
+reviewed APPROVE-class; all twelve lanes shipped.
+
+### The wave ledger
+
+| wave | lanes → picks | closures | weld |
+|---|---|---|---|
+| W1 | r1 `5e979e696`→`141d5e227` (dash E733 2-of-3), r2 `c093c58bd`→`06cc8a7e9` (wish E734), r3 `5ea8bdc94`→`3acd2e76d` (vcr E732), r4 `8725ea5ec`→`5c815306c` (crush E737 test half, IN-LANE re-pin 12,009/172,461) | E732/E733(2/3)/E734 CLOSED-in-place, E737→PARTIAL, E738 MINTED | `9569e3e21` + EXACT-floor serial law re-proved; r5 completion `e4f6e7e23`→`76218c66e` + stamps `9f731a3d5` (E733 3/3, dash 5964/9823/1S) |
+| W2 | r6 `176a15725`→`40646bf86` (wish E730 single-settle), r7 `79abe8461`→`c1f618a04` (dash E731 RULING + ChartGridGeometry dedup), r8→`4545142c7` (E729 declined — vt unification DESIGN doc minted), r9 `c58168027`→`59ec5a6e3` (30 candy libs), r10 `14c73a0fb`→`d4e4df464` (20 sugar/honey libs), r11 `16249b740`→`30760dae6` (`/.mcp.json` gitignored) | E729 CLOSED-declined, E730 CLOSED, E731 PARTIAL-shipped-stays-open, E738 → 55/58 (residuals minted E739/E740), E737 housekeeping half | `16a5c56f7` |
+| upstream | PRs #1429–#1435 (candy-core canonical ANSI16 + sanitize contract pin, candy-palette ANSI16 unification, candy-vt DECALN-on-wire + DECSCUSR cursor-shape, candy-vcr DECALN pin) + operator config commit | ZERO sugar-crush files (verified negative control pre-weld) | W3 base `e2818fd15` |
+| W3 | s2 `056366f62`→`f45b52a21` (metrics E740 door), s3 `65bca70db`→`a04c947c5` (pty ReactPump socketpair root cause), s1 `e86525c4a`→`7d5b03f9d` (freeze E739 live-feature repair), s4 `12470eb32`→`757327bdd` (crush E737 MCP-disable ruling) + companion `99727c5f6` (pty learnings correction) | E737 CLOSED (behavior ruling shipped), E738 **58/58**, E739/E740 CLOSED | re-pin `c9a0cafff` + this closeout |
+
+### The floor
+
+| figure | value | domain |
+|---|---|---|
+| **ROUND-83 FINAL** | **12,027 / 172,610 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial 9m37s, plain pipe, linked, cwd=sugar-crush; K=8 conservation +0 tests) | assertions carry the cold/warm ±32 `ensureFixtureRepo()` rebuild wobble band — shard-sum 172,578 and the reviewer's s4-tip serial both same family |
+| wave-1 | 12,009 / 172,461 / 1S (r4's in-lane re-pin; weld read EXACT) | the +18 to FINAL = s4's 17 new `BootstrapMcpDisableEnvTest` pins + 1 derived Help.php file-scan provider row |
+| wave-2 | UNCHANGED 12,009 | zero sugar-crush code picks (docs, lib attrs, one ignore line) |
+| lib spots at weld | freeze **349/750/0W** · metrics **174/464** · pty **663/1862/17S** under the gate · dash 5964/9823/1S · wish 201/503 | lib-local |
+| durations | **532** rows (531→532; set-diff exactly +`BootstrapMcpDisableEnvTest.php`, verified) | regenerated from the weld junit |
+
+### Deaths, resumes, and process lessons of the round
+
+- **s1 builder: three blank resumes, work fully landed anyway** (commit `e86525c4a` at 20:32). The FIRST
+  forensic probe answered "nothing landed" at ~20:2x — a **probe-vs-commit timing race**, the third
+  campaign instance of trusting a negative probe too early. Re-probe before acting on a probe verdict.
+- **rv-trio (reviewers of s2/s3/s4) died repeatedly with stuck-garbage fragments and completed on later
+  resumes** — the r82 nuance held: garbage ≠ blank, but this time resume-to-success rather than supersede.
+- **The weld base moved under the brief.** The wave-3 brief pinned `master @ 16a5c56f7`; master had
+  advanced 19 commits (`e2818fd15`: PRs #1429–#1435 + operator config). Step-0 audit verified ZERO file
+  overlap between the upstream delta and the four picks before any cherry-pick (no `sugar-crush/` path
+  touched; pick libs untouched), the weld went onto the LIVE tip, all four picks landed stat-identical,
+  and ff-only into master was preserved. Deviation documented in the closeout REPORT.
+- **Config md5 law hit its first legitimate supersession**: the standing pin `05480c74…2210` was retired
+  by the OPERATOR's own commit `e2818fd15` (added `trustedProjectMcp` to tracked `.sugar-crush/config.json`,
+  +4/−1, benign). New at-rest truth `d96e124ee7967eb34ef479ef824231ad`, start==end verified in BOTH trees
+  across the whole weld. The law (start==end WITHIN a session) is what protects; the pinned VALUE is perishable.
+- **Census-prose errata pattern**: all three W3 pick messages stated failOnWarning census arithmetic that
+  only works for some merge order (base was 55; every single-lane tip reads 55→56). Picks NOT amended;
+  corrected per-tip chain lives in backlog §E738's stamp. Recount-by-command inside the stamp is mandatory
+  from now on — chained census prose is how these went wrong three-for-three.
+- **STOP-gate discipline paid**: s3's socketpair fix found the ReactPump base-carry's true root cause
+  (php://temp non-selectable stdio over-buffer) where two earlier rounds had carried it as ambient noise;
+  the companion learnings bullet retires the advice that CAUSED the pattern (`99727c5f6`).
+
+### Queue carried to round 84 (3 survivors)
+
+**E731** (MED, sugar-dash umbrella — r7 ruling landed: ChartGridGeometry dedup + big-bang DECLINED;
+COMP-2 `/proc` leg and per-family chart extraction remain), **E735** (MED, leftover-rollout — TRUE
+remaining: 4 builds 03.09 dash NotificationQueue / 10.06 stash ph4 / 10.16 spark / 10.25 glow, + 06.01
+verify-only; the 13 phase-12 steps are DELIBERATELY PAUSED by the user — never auto-resume — and 03.13 is
+not-actionable), **E736** (LOW, MATCHUPS — 7🟡 port-completions bits/charts/shine/vt/forms/layout/shell +
+1🔴 Windows blocked-by-pause; the mint-era "8🟡/2🔴" framing was a legend-line miscount, recorded as an
+erratum). Zero new mints at this close.
+
 ## ROUND 82 (2026-09-15) — PHASE 4 (sibling-lib audit sweep) ships COMPLETE: eighteen lanes q1–q18 across six waves + closeout mint, fourteen mints E711–E728 ALL CLOSED; sugar-crush floor UNCHANGED 11,991 / 172,291 — the first sibling-lib round that moved ZERO sugar-crush tests; ACTIONABLE = 0 BY ROW CENSUS — PHASE-4 COMPLETE
 
 **Closed 2026-09-15 at the FINAL weld `e765b1742`-base chain; NEVER pushed.** The round the campaign
