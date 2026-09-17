@@ -46,13 +46,15 @@ trait HasErrorHelp
 
     /**
      * The extra view rows this contributes — empty unless BOTH an error and
-     * help are set (the help rides the error, never floats alone).
+     * a non-blank help are set (the help rides the error, never floats
+     * alone; an empty help string is indistinguishable from none at render
+     * time, so it never prints a stray `  ? ` row).
      *
      * @return list<string>
      */
     protected function errorHelpLines(): array
     {
-        if ($this->error === null || $this->errorHelp === null) {
+        if ($this->error === null || ($this->errorHelp ?? '') === '') {
             return [];
         }
         return ['  ? ' . RenderSafe::clean($this->errorHelp)];

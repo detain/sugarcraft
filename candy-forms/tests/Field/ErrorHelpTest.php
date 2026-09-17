@@ -153,4 +153,14 @@ final class ErrorHelpTest extends TestCase
         $f = self::erroredInput()->withErrorHelp("bel\x07ling");
         self::assertStringContainsString('  ? belling', $f->view());
     }
+
+    public function testEmptyHelpStringRendersNoStrayRow(): void
+    {
+        // An errored field with withErrorHelp('') must NOT print a lone
+        // '  ? ' — blank help is indistinguishable from none at render time
+        // (early-exit guard), even though the accessor keeps the raw string.
+        $f = self::erroredInput()->withErrorHelp('');
+        self::assertSame('', $f->errorHelp());
+        self::assertStringNotContainsString('?', $f->view());
+    }
 }
