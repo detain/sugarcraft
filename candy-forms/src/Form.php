@@ -673,6 +673,88 @@ final class Form implements Model
     }
 
     /**
+     * Move focus to the field with the given key (E736 5.3, round 89).
+     *
+     * Fluent builder mirroring {@see nextGroup()}: performs the full
+     * blur-old / focus-new dance — including the cross-group jump when the
+     * key lives on another page — and discards the focus Cmd (cursor blink
+     * etc.), exactly like the group-jump verbs. Use {@see focusField()}
+     * instead when you need the Cmd, e.g. when driving focus from inside
+     * the host's own update() handler.
+     *
+     * Early-exit (same instance returned) when the key matches no field,
+     * when the match is already focused, or when the target is skippable —
+     * notes and separators do not take focus, and honouring the request
+     * would strand an un-focusable cursor. Hidden groups are deliberately
+     * NOT refused: this is the programmatic escape hatch, the host asked
+     * for it by name.
+     */
+    public function withFocus(string $key): self
+    {
+        [$next, ] = $this->focusField($key);
+        return $next;
+    }
+
+    /**
+     * Programmatic focus with the TEA-shaped return (E736 5.3, round 89).
+     * Same rules as {@see withFocus()}; additionally surfaces the focused
+     * field's focus Cmd (blink / preload) so the runtime can schedule it.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    public function focusField(string $key): array
+    {
+        $target = $this->locateField($key);
+        if ($target === null) {
+            return [$this, null];
+        }
+        [$group, $index] = $target;
+        if ($group === $this->groupIndex && $index === $this->focusedIndex) {
+            return [$this, null];
+        }
+        if ($this->fieldsByGroup[$group][$index]->skippable()) {
+            return [$this, null];
+        }
+
+        $fieldsByGroup = $this->fieldsByGroup;
+        // Blur the currently focused field (identity-safe on an empty page).
+        $cur = $fieldsByGroup[$this->groupIndex];
+        if (isset($cur[$this->focusedIndex])) {
+            $cur[$this->focusedIndex] = $cur[$this->focusedIndex]->blur();
+            $fieldsByGroup[$this->groupIndex] = $cur;
+        }
+        // Focus the target.
+        $targetFields      = $fieldsByGroup[$group];
+        [$focused, $cmd]   = $targetFields[$index]->focus();
+        $targetFields[$index] = $focused;
+        $fieldsByGroup[$group] = $targetFields;
+
+        return [
+            $this->mutate(fieldsByGroup: $fieldsByGroup, groupIndex: $group, focusedIndex: $index),
+            $cmd,
+        ];
+    }
+
+    /**
+     * Locate a field by key across all groups, returning its
+     * [group, field] indices or null when no field carries the key.
+     * Index-shaped sibling of the key lookup in {@see renderErrorSummary()}.
+     *
+     * @return ?array{0:int, 1:int}
+     */
+    private function locateField(string $key): ?array
+    {
+        foreach ($this->fieldsByGroup as $group => $fields) {
+            foreach ($fields as $index => $f) {
+                if ($f->key() === $key) {
+                    return [$group, $index];
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Validation errors keyed by field key. Hidden groups and skippable
      * fields (Note) are excluded. Empty when every visible field
      * validates cleanly. Mirrors huh's `Errors()`.
