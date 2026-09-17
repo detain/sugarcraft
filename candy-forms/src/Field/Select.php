@@ -60,12 +60,15 @@ final class Select implements \SugarCraft\Forms\Field
     private ?float $asyncSuggestionsFetchTimeoutSeconds = null;
 
     /**
-     * E736-F2/2.2 (round 85): ONE matcher for the widget's lifetime. The
-     * fuzzy filter path used to `new SmithWatermanMatcher()` on every
-     * filtering keystroke; the matcher is stateless apart from a lazily
-     * built fallback scorer, so a single instance is byte-identical output
-     * with zero per-keystroke construction (its lazy $fallback memo now
-     * also survives across keystrokes).
+     * E736-F2/2.2 (round 85): the fuzzy filter path used to scatter
+     * `new SmithWatermanMatcher()` across every apply site; the widget now
+     * instantiates it at exactly ONE site — this constructor. Select is
+     * immutable, so every mutate() rebuilds a sibling and the ctor seeds a
+     * fresh matcher; the matcher is stateless apart from a lazily built
+     * fallback scorer, so per-instance construction stays cheap and output
+     * byte-identical. The census pins the single SITE, not instance reuse
+     * across keystrokes (r85-rv-u4: the survives-keystrokes wording was
+     * measured false and the matcher was deliberately NOT made static).
      */
     private readonly SmithWatermanMatcher $matcher;
 

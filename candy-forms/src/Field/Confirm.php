@@ -210,6 +210,11 @@ final class Confirm implements \SugarCraft\Forms\Field
      * every `new self(...)` path must funnel through here or those
      * closures vanish (immutable-model property carry, per the trait
      * docblocks' "preserved across mutations" contract).
+     *
+     * SEAM (r85-rv-u4): this private carrier coexists with the shared
+     * `CarriesNonCtorState` trait because the validator leg is Confirm-only;
+     * fold the three label legs onto the trait if a shared validator carrier
+     * ever lands.
      */
     private function carryNonCtorState(self $next, bool $carryValidator = true): self
     {
