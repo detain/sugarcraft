@@ -15,8 +15,10 @@ namespace SugarCraft\Dash\Plot\Chart;
  * ChartGridGeometry (r7 `79abe8461`).
  *
  * NOT here on purpose: getWidth() fallbacks DIVERGE across the wider
- * family — Sparkline returns `$this->width ?? 40`, Gauge returns
- * `$this->width ?? 0`, Progress returns the literal 40, Bar derives its
+ * family — Sparkline falls back to `$this->widthConstraint ?? 40`
+ * (Sparkline.php:201) and Gauge to `$this->widthConstraint ?? 0`
+ * (Gauge.php:138), each after the same `$this->width` setSize check;
+ * Progress returns the literal 40, Bar derives its
  * width from rendered content — only the sparkline pair shares the
  * `widthConstraint ?? count(data)` leg. normalizeData() intentionally
  * shares its name with the static clamp helper in HeatmapColorScale:

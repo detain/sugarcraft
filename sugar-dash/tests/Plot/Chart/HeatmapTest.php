@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Plot\Chart;
 
 use SugarCraft\Dash\Plot\Chart\Heatmap;
+use SugarCraft\Dash\Plot\Chart\HeatMapChart;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\Ansi;
@@ -373,5 +374,33 @@ final class HeatmapTest extends TestCase
 
         $none = Heatmap::new([[0.5]])->withLowColor(null)->withHighColor(null);
         $this->assertNull($ramp->invoke($none, 0.5));
+    }
+
+    /**
+     * E731 STOP-record pin: the two literal-twin getHeatChar() bodies are
+     * DIVERGENT on purpose — Heatmap buckets at 0.25/0.5/0.75 over its
+     * HEAT_BLOCKS, HeatMapChart buckets at 0.2/0.4/0.6/0.8 with a blank
+     * cell below 0.2. Values here straddle the differing bands so any
+     * future "dedup" of getHeatChar into the shared trait reddens this pin.
+     */
+    public function testGetHeatCharBucketsDivergeBetweenTwinChartsE731(): void
+    {
+        $heatmapChar = new \ReflectionMethod(Heatmap::class, 'getHeatChar');
+        $chartChar = new \ReflectionMethod(HeatMapChart::class, 'getHeatChar');
+        $heatmap = Heatmap::new([[0.5]]);
+        $chart = HeatMapChart::new([[0.5]]);
+
+        // 0.1: below HeatMapChart's 0.2 floor — block glyph vs blank cell.
+        $this->assertSame('░', $heatmapChar->invoke($heatmap, 0.1));
+        $this->assertSame(' ', $chartChar->invoke($chart, 0.1));
+        // 0.3: straddles Heatmap's 0.25 threshold — second block vs first.
+        $this->assertSame('▒', $heatmapChar->invoke($heatmap, 0.3));
+        $this->assertSame('░', $chartChar->invoke($chart, 0.3));
+        // 0.55: straddles Heatmap's 0.5 threshold — third block vs second.
+        $this->assertSame('▓', $heatmapChar->invoke($heatmap, 0.55));
+        $this->assertSame('▒', $chartChar->invoke($chart, 0.55));
+        // 0.775: straddles Heatmap's 0.75 threshold — full block vs third.
+        $this->assertSame('█', $heatmapChar->invoke($heatmap, 0.775));
+        $this->assertSame('▓', $chartChar->invoke($chart, 0.775));
     }
 }
