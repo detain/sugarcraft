@@ -77,6 +77,44 @@ final class Terminal
         return $this;
     }
 
+    /**
+     * Force any in-flight string sequence (OSC/DCS) to dispatch with its
+     * current payload and reset the parser to ground.
+     *
+     * Mirrors {@see \SugarCraft\Vt\Terminal\Terminal::flush()} — lets vcr
+     * consumers feeding a partial stream capture the final window title (or
+     * any other OSC side effect) before {@see self::snapshot()} instead of
+     * waiting for a terminator byte that never arrives.
+     */
+    public function flush(): void
+    {
+        $this->parser->flush();
+        $this->syncState();
+    }
+
+    /**
+     * Alt screen (DEC 1049) belongs to the full emulator path; the vcr
+     * renderer has no screen-swap machinery. These parity stubs exist so
+     * consumers written against both entry points fail loudly rather than
+     * discovering the asymmetry via a silent method-not-found.
+     *
+     * @throws \LogicException always — use {@see \SugarCraft\Vt\Terminal\Terminal}
+     */
+    public function enableAltScreen(): never
+    {
+        throw new \LogicException('Alt screen requires the full Terminal\Terminal path');
+    }
+
+    /**
+     * Counterpart of {@see self::enableAltScreen()} — parity stub only.
+     *
+     * @throws \LogicException always — use {@see \SugarCraft\Vt\Terminal\Terminal}
+     */
+    public function disableAltScreen(): never
+    {
+        throw new \LogicException('Alt screen requires the full Terminal\Terminal path');
+    }
+
     public function snapshot(float $time = 0.0): Snapshot
     {
         return new Snapshot($this->grid, $this->cursor, $time);

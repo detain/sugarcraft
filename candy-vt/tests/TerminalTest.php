@@ -223,4 +223,54 @@ final class TerminalTest extends TestCase
         $this->assertSame(1, $t->grid()->cell(0, 0)->fg);
         $this->assertSame(Cell::ATTR_BOLD, $t->grid()->cell(0, 0)->attrs & Cell::ATTR_BOLD);
     }
+
+    // ─── flush() — E736 4.3 ────────────────────────────────────────────────
+
+    public function testFlushDispatchesInFlightOscTitle(): void
+    {
+        $t = Terminal::new();
+        $t->feed("\x1b]0;Partial Title");
+        $this->assertSame('', $t->windowTitle());
+
+        $t->flush();
+
+        $this->assertSame('Partial Title', $t->windowTitle());
+    }
+
+    public function testFlushAtGroundIsNoOpAndKeepsGridConsistent(): void
+    {
+        $t = Terminal::new();
+        $t->feed("AB");
+        $t->flush();
+
+        $this->assertSame('A', $t->grid()->cell(0, 0)->char);
+        $this->assertSame('B', $t->grid()->cell(0, 1)->char);
+        $this->assertSame('', $t->windowTitle());
+    }
+
+    public function testFlushThenFeedContinuesNormally(): void
+    {
+        $t = Terminal::new();
+        $t->feed("\x1b]0;First");
+        $t->flush();
+        $t->feed("\x1b]1;Second\x07");
+
+        $this->assertSame('Second', $t->windowTitle());
+    }
+
+    // ─── alt-screen parity stubs — E736 4.4 ────────────────────────────────
+
+    public function testEnableAltScreenThrowsLogicExceptionNamingFullPath(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('full Terminal\Terminal path');
+        Terminal::new()->enableAltScreen();
+    }
+
+    public function testDisableAltScreenThrowsLogicExceptionNamingFullPath(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('full Terminal\Terminal path');
+        Terminal::new()->disableAltScreen();
+    }
 }

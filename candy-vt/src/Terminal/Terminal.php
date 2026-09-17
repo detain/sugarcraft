@@ -14,6 +14,8 @@ use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Ansi\Parser\Parser;
 use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Msg\FocusInMsg;
+use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Screen\Screen;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
@@ -44,6 +46,7 @@ final class Terminal
         ?Cursor $cursor = null,
         ?Mode $mode = null,
         int $scrollbackSize = 1000,
+        ?\Closure $onFocusEvent = null,
     ) {
         $this->scrollbackSize = $scrollbackSize;
         $this->handler = new ScreenHandler(
@@ -52,6 +55,7 @@ final class Terminal
             sgr: Sgr::empty(),
             mode: $mode,
             scrollback: new Scrollback($scrollbackSize),
+            onFocusEvent: $onFocusEvent,
         );
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
@@ -389,6 +393,20 @@ final class Terminal
     public function clipboardEvents(): array
     {
         return $this->handler->clipboardEvents;
+    }
+
+    /**
+     * Focus events recorded while DECSET 1004 was active (CSI I / CSI O).
+     *
+     * Each entry is a {@see FocusInMsg} or {@see FocusOutMsg}, oldest first.
+     * Consumers wanting live notification instead of draining this list pass
+     * an `onFocusEvent` callback to the constructor (findings #30).
+     *
+     * @return list<FocusInMsg|FocusOutMsg>
+     */
+    public function focusEvents(): array
+    {
+        return $this->handler->focusEvents;
     }
 
     public function resize(int $cols, int $rows): void

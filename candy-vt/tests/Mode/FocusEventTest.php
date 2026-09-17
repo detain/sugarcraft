@@ -11,6 +11,7 @@ use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Msg\FocusInMsg;
 use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\Vt\Terminal\Terminal as FullTerminal;
 
 /**
  * Tests for focus event reporting — DECSET 1004 (CSI ? 1004 h/l) and
@@ -148,5 +149,68 @@ final class FocusEventTest extends TestCase
         $in = new FocusInMsg();
         $out = new FocusOutMsg();
         $this->assertNotEquals($in, $out);
+    }
+
+    // ─── onFocusEvent callback (E736 12.3, findings #30) ──────────────────
+
+    public function testOnFocusEventCallbackFiresWithSameInstanceAsArrayEntry(): void
+    {
+        $received = [];
+        $h = new ScreenHandler(new Buffer(20, 5), onFocusEvent: function (object $msg) use (&$received): void {
+            $received[] = $msg;
+        });
+        (new Parser($h))->feed("\x1b[?1004h\x1b[I\x1b[O");
+
+        $this->assertCount(2, $received);
+        // Identity — not merely equality — proves the append and the
+        // callback share one message (the plan snippet's double-new would
+        // red here).
+        $this->assertSame($h->focusEvents[0], $received[0]);
+        $this->assertSame($h->focusEvents[1], $received[1]);
+        $this->assertInstanceOf(FocusInMsg::class, $received[0]);
+        $this->assertInstanceOf(FocusOutMsg::class, $received[1]);
+    }
+
+    public function testOnFocusEventCallbackSilentWhileReportingDisabled(): void
+    {
+        $fired = 0;
+        $h = new ScreenHandler(new Buffer(20, 5), onFocusEvent: function (object $msg) use (&$fired): void {
+            $fired++;
+        });
+        (new Parser($h))->feed("\x1b[I\x1b[O");
+
+        $this->assertSame(0, $fired);
+        $this->assertCount(0, $h->focusEvents);
+    }
+
+    // ─── Terminal::focusEvents() accessor (E736 4.1) ──────────────────────
+
+    public function testTerminalFocusEventsEmptyByDefault(): void
+    {
+        $t = new FullTerminal(20, 5);
+        $this->assertSame([], $t->focusEvents());
+    }
+
+    public function testTerminalFocusEventsAccessorReturnsAccumulatedMsgs(): void
+    {
+        $t = new FullTerminal(20, 5);
+        $t->feed("\x1b[?1004h\x1b[I\x1b[O");
+
+        $events = $t->focusEvents();
+        $this->assertCount(2, $events);
+        $this->assertInstanceOf(FocusInMsg::class, $events[0]);
+        $this->assertInstanceOf(FocusOutMsg::class, $events[1]);
+    }
+
+    public function testTerminalConstructorThreadsCallbackToHandler(): void
+    {
+        $received = [];
+        $t = new FullTerminal(20, 5, onFocusEvent: function (object $msg) use (&$received): void {
+            $received[] = $msg;
+        });
+        $t->feed("\x1b[?1004h\x1b[I");
+
+        $this->assertCount(1, $received);
+        $this->assertSame($t->focusEvents()[0], $received[0]);
     }
 }

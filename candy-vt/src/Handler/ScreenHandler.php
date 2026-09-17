@@ -58,6 +58,14 @@ final class ScreenHandler implements SubparamsAwareHandler
     public array $focusEvents = [];
 
     /**
+     * Optional live-notification sink for focus events (findings #30) —
+     * invoked with the SAME message instance that was appended to
+     * {@see self::$focusEvents}, immediately after the append. Null by
+     * default, so array-polling consumers are untouched.
+     */
+    private readonly ?\Closure $onFocusEvent;
+
+    /**
      * DECAWM wrap-through ("phantom") flag — a glyph has landed in the
      * last column and the advance to (row+1, 0) is deferred until the
      * next graphic print consumes it.
@@ -249,7 +257,9 @@ final class ScreenHandler implements SubparamsAwareHandler
         ?Sgr $sgr = null,
         ?Mode $mode = null,
         ?Scrollback $scrollback = null,
+        ?\Closure $onFocusEvent = null,
     ) {
+        $this->onFocusEvent = $onFocusEvent;
         $this->buffer = $buffer;
         $this->cursor = $cursor ?? new Cursor();
         $this->sgr = $sgr ?? Sgr::empty();
@@ -392,11 +402,19 @@ final class ScreenHandler implements SubparamsAwareHandler
 
         // Handle focus events first (CSI I / CSI O) when DECSET 1004 is active.
         if ($finalChar === 'I' && $this->mode->reportFocusEvents) {
-            $this->focusEvents[] = new FocusInMsg();
+            $msg = new FocusInMsg();
+            $this->focusEvents[] = $msg;
+            if ($this->onFocusEvent !== null) {
+                ($this->onFocusEvent)($msg);
+            }
             return;
         }
         if ($finalChar === 'O' && $this->mode->reportFocusEvents) {
-            $this->focusEvents[] = new FocusOutMsg();
+            $msg = new FocusOutMsg();
+            $this->focusEvents[] = $msg;
+            if ($this->onFocusEvent !== null) {
+                ($this->onFocusEvent)($msg);
+            }
             return;
         }
 

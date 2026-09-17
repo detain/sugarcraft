@@ -347,7 +347,7 @@ $this->mode = $this->mode->withCursorVisible($this->cursor->visible); // ADD THI
 
 > **r86v5 re-derivation tally:** ❗3 (4.1, 4.3, 4.4) ✅1 (4.2 pre-stamped) — API-completeness batch survives.
 
-### 4.1 Add `Terminal::focusEvents()` accessor ❗ r86v5: STILL LIVE — `ScreenHandler.php:58` public `$focusEvents` (appended `:395`/`:399`) and `src/Terminal/Terminal.php` exposes `clipboardEvents()` (`:389`) but NO `focusEvents()` accessor (full method roster :344-532). If unbuildable: consumers keep breaking encapsulation via `$vt->handler->focusEvents` — API-completeness only.
+### 4.1 Add `Terminal::focusEvents()` accessor ✅ r87w1: shipped — list<FocusInMsg|FocusOutMsg> accessor beside clipboardEvents(); pinned by tests/Mode/FocusEventTest.php (default-empty, accumulated, ctor-thread). Original: ❗ r86v5: STILL LIVE — `ScreenHandler.php:58` public `$focusEvents` (appended `:395`/`:399`) and `src/Terminal/Terminal.php` exposes `clipboardEvents()` (`:389`) but NO `focusEvents()` accessor (full method roster :344-532). If unbuildable: consumers keep breaking encapsulation via `$vt->handler->focusEvents` — API-completeness only.
 
 **File:** `src/Terminal/Terminal.php`
 
@@ -423,7 +423,7 @@ public function clear(): void
 
 ---
 
-### 4.3 Add `flush()` method to root `Terminal` ❗ r86v5: STILL LIVE — `src/Terminal.php` (114 lines, roster new/feed/snapshot/cursor/grid/windowTitle/theme/isWrapPending) has no `flush()`; full path keeps it at `src/Terminal/Terminal.php:328`; candy-ansi `Parser::flush()` exists to delegate to. If unbuildable: vcr consumers cannot force dispatch of a partial OSC before `snapshot()`.
+### 4.3 Add `flush()` method to root `Terminal` ✅ r87w1: shipped — delegates candy-ansi Parser::flush() + syncState(); partial-OSC title capture pinned by tests/TerminalTest.php (3 pins). Original: ❗ r86v5: STILL LIVE — `src/Terminal.php` (114 lines, roster new/feed/snapshot/cursor/grid/windowTitle/theme/isWrapPending) has no `flush()`; full path keeps it at `src/Terminal/Terminal.php:328`; candy-ansi `Parser::flush()` exists to delegate to. If unbuildable: vcr consumers cannot force dispatch of a partial OSC before `snapshot()`.
 
 **File:** `src/Terminal.php`
 
@@ -461,7 +461,7 @@ public function flush(): void
 
 ---
 
-### 4.4 Add `enableAltScreen()` / `disableAltScreen()` to root `Terminal` ❗ r86v5: STILL LIVE — root `src/Terminal.php` has no alt-screen entry points; full path has `enableAltScreen()`/`disableAltScreen()` at `src/Terminal/Terminal.php:515`/`:524`. If unbuildable: only parity — vcr consumers have no stub to catch.
+### 4.4 Add `enableAltScreen()` / `disableAltScreen()` to root `Terminal` ✅ r87w1: shipped as `never`-throwing parity stubs (LogicException names full path) — vcr has no screen-swap machinery; implement-option declined. Pinned by tests/TerminalTest.php. Original: ❗ r86v5: STILL LIVE — root `src/Terminal.php` has no alt-screen entry points; full path has `enableAltScreen()`/`disableAltScreen()` at `src/Terminal/Terminal.php:515`/`:524`. If unbuildable: only parity — vcr consumers have no stub to catch.
 
 **File:** `src/Terminal.php`
 
@@ -1256,7 +1256,7 @@ public function reset(): void
 
 ---
 
-### 12.3 Add `focusEvents()` callback support to ScreenHandler ❗ r86v5: STILL LIVE — `src/Handler/ScreenHandler.php` has no `onFocusEvent` ctor param; focus events land in the public array only (`:58` decl, `:395`/`:399` appends). If unbuildable: consumers (crush TUI) poll — pairs with findings #30.
+### 12.3 Add `focusEvents()` callback support to ScreenHandler ✅ r87w1: shipped — trailing optional `?\Closure $onFocusEvent` on ScreenHandler + Terminal\Terminal ctors; callback receives the SAME instance appended (plan's double-new flaw rejected). Pinned by tests/Mode/FocusEventTest.php. Original: ❗ r86v5: STILL LIVE — `src/Handler/ScreenHandler.php` has no `onFocusEvent` ctor param; focus events land in the public array only (`:58` decl, `:395`/`:399` appends). If unbuildable: consumers (crush TUI) poll — pairs with findings #30.
 
 **File:** `src/Handler/ScreenHandler.php:54-55`
 
