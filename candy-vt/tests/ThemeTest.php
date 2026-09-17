@@ -318,5 +318,12 @@ final class ThemeTest extends TestCase
         // The memo is a VALUE copy (COW), not a shared mutable reference:
         // a defensive count check that the 216-entry cube never grew.
         $this->assertCount(216, $first);
+
+        // Source census: the memo must EXIST (a `static $cube` line inside
+        // the method slice). Kill the memo and compute-again-per-call stays
+        // behaviourally green — only this pin catches the regression.
+        $lines = file((string) $a->getFileName());
+        $body = implode('', array_slice($lines, $a->getStartLine() - 1, $a->getEndLine() - $a->getStartLine() + 1));
+        $this->assertSame(1, substr_count($body, 'static $cube'));
     }
 }

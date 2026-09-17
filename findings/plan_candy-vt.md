@@ -580,7 +580,7 @@ public function resize(int $cols, int $rows): void
 
 > **r86v5 re-derivation tally:** ❗4 (6.1-6.4) — perf cluster survives intact, one row moved file.
 
-### 6.1 Remove redundant `array_values(array_map('intval', ...))` in SgrHandler ❗ r86v5: STILL LIVE, moved — the shape now sits at `src/Parser/CsiHandlerImpl.php:319` inside `sgr()` (still `array_values(array_map('intval', $params))`); `Handler/SgrHandler.php` itself is clean — finding #8's ✅ landed there only. If unbuildable: nothing — per-frame allocation overhead.
+### 6.1 Remove redundant `array_values(array_map('intval', ...))` in SgrHandler ✅ r87w1: shipped — dead per-iteration rebuild dropped from `CsiHandlerImpl::sgr()` (passing parser `list<int>` verbatim to applySgrParam). Render-dump byte-identical; reflection source-slice census forbids reintroduction + positional 38;5;196 pin proves in-place reads. Original: ❗ (note: row header still says SgrHandler but the site is CsiHandlerImpl.php — findings #8 shape-relocation, see below). r86v5: STILL LIVE, moved — the shape now sits at `src/Parser/CsiHandlerImpl.php:319` inside `sgr()` (still `array_values(array_map('intval', $params))`); `Handler/SgrHandler.php` itself is clean — finding #8's ✅ landed there only. If unbuildable: nothing — per-frame allocation overhead.
 
 **File:** `src/Parser/CsiHandlerImpl.php:175`
 
@@ -613,7 +613,7 @@ Note: `applySgrParam()` at line 183 receives `$params` and passes `$params[$i]` 
 
 ---
 
-### 6.2 Optimize `Screen::diff()` iteration to overlapping region ❗ r86v5: STILL LIVE — `src/Screen/Screen.php:59-62` unchanged max-dimension iteration. Consumer caution: a min+extras restructure changes `diff()` emission ORDER for out-of-overlap cells — verify candy-vcr/crush consumers treat `changes[]` as a set.
+### 6.2 Optimize `Screen::diff()` iteration to overlapping region ⏭️ r87w1: gated+measured-no-build — consumer sweep read `candy-vcr/src/Assert/ScreenAssertion.php:41-60` (both screens ALWAYS same-dims → restructure identical there), `candy-vt/tests/ScreenTest.php:53-67` (array_filter — order-agnostic), `AllocationTest.php:403-405` (count-only); sugar-crush src imports zero `Vt\Screen`. Measurement: true double-empty waste is only (Δrows×Δcols) ≈4% of the row's own 100×30-vs-80×24 example, while the plan snippet's extra-loops drop the extra-rows×other-extra-cols rectangle = LOST-CHANGE risk. Cost/benefit rejected; row stays closed-by-decision. r86v5: STILL LIVE — `src/Screen/Screen.php:59-62` unchanged max-dimension iteration. Consumer caution: a min+extras restructure changes `diff()` emission ORDER for out-of-overlap cells — verify candy-vcr/crush consumers treat `changes[]` as a set.
 
 **File:** `src/Screen/Screen.php:56-73`
 
@@ -701,7 +701,7 @@ public function diff(self $other): array
 
 ---
 
-### 6.3 Fix `Theme::cubePalette()` computed twice per theme ❗ r86v5: STILL LIVE — `src/Theme.php:63-75` `cubePalette()` unmemoized; 6 call sites (`:57`/`:113`/`:145`/`:171`/`:200`/`:229` — every factory + defaultPalette). Trivial static memo.
+### 6.3 Fix `Theme::cubePalette()` computed twice per theme ✅ r87w1: shipped — process-lifetime `static $cube` memo; pins: independent cube re-derivation (stale-guard) + source-slice census (recompute-guard); render-dump byte-identical. Original: ❗ r86v5: STILL LIVE — `src/Theme.php:63-75` `cubePalette()` unmemoized; 6 call sites (`:57`/`:113`/`:145`/`:171`/`:200`/`:229` — every factory + defaultPalette). Trivial static memo.
 
 **File:** `src/Theme.php:51-57` + theme factory methods (lines 90-224)
 
