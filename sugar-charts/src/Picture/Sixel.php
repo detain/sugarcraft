@@ -54,15 +54,25 @@ final class Sixel
         // nearest-neighbour on the cube.
         [$palette, $paletteCount] = self::buildPalette($paletteSize);
 
-        // Quantise every pixel to a palette index.
+        // Quantise every pixel to a palette index. The nearest() answer is
+        // a pure function of (rgb, palette) and the palette is fixed for
+        // this call, so an RGB-keyed memo collapses repeated colours to one
+        // scan (E736/2.5 round 86 — real images are colour-heavy).
         $quant = [];
+        $nearestMemo = [];
         for ($r = 0; $r < $rows; $r++) {
             $rowQ = [];
             for ($c = 0; $c < $cols; $c++) {
                 $px = $pixels[$r][$c] ?? null;
-                $rowQ[] = $px === null
-                    ? 0
-                    : self::nearest($px, $palette, $paletteCount);
+                if ($px === null) {
+                    $rowQ[] = 0;
+                    continue;
+                }
+                $rgbKey = ($px->r << 16) | ($px->g << 8) | $px->b;
+                if (!isset($nearestMemo[$rgbKey])) {
+                    $nearestMemo[$rgbKey] = self::nearest($px, $palette, $paletteCount);
+                }
+                $rowQ[] = $nearestMemo[$rgbKey];
             }
             $quant[] = $rowQ;
         }

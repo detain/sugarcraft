@@ -163,23 +163,28 @@ final class Legend
     }
 
     /**
+     * Named-colour → SGR prefix table (E736/2.3 round 86): compile-time
+     * class constant instead of a method-local static — the values are
+     * fixed ANSI CSI sequences, identical to Ansi::fg16(n)/Ansi::sgr(39).
+     */
+    private const COLOR_MAP = [
+        'red'     => Ansi::CSI . '31m',
+        'green'   => Ansi::CSI . '32m',
+        'yellow'  => Ansi::CSI . '33m',
+        'blue'    => Ansi::CSI . '34m',
+        'magenta' => Ansi::CSI . '35m',
+        'cyan'    => Ansi::CSI . '36m',
+        'white'   => Ansi::CSI . '37m',
+        'default' => Ansi::CSI . '39m',
+    ];
+
+    /**
      * Wrap a block character with ANSI color codes.
      */
     private function coloredIndicator(string $color): string
     {
-        static $colorMap = [
-            'red'    => Ansi::fg16(31),   // red foreground
-            'green'  => Ansi::fg16(32),   // green foreground
-            'yellow' => Ansi::fg16(33),   // yellow foreground
-            'blue'   => Ansi::fg16(34),   // blue foreground
-            'magenta'=> Ansi::fg16(35),   // magenta foreground
-            'cyan'   => Ansi::fg16(36),   // cyan foreground
-            'white'  => Ansi::fg16(37),   // white foreground
-            'default'=> Ansi::sgr(39),    // default foreground
-        ];
-
-        if (isset($colorMap[$color])) {
-            $code = $colorMap[$color];
+        if (isset(self::COLOR_MAP[$color])) {
+            $code = self::COLOR_MAP[$color];
             return $code . $this->indicatorChar . Ansi::sgr(39);
         }
 

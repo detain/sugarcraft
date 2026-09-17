@@ -1,7 +1,7 @@
 ---
-status: not-started
-phase: 1
-updated: 2026-06-30
+status: r86-review (Phase-2/3/4 re-derived + built; Phase-1 4/5 landed, 1.3 premise-false)
+phase: 4
+updated: 2026-09-17
 ---
 
 # Implementation Plan: sugar-charts Code Review Findings
@@ -28,7 +28,7 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 
 - [ ] **1.2 Remove dead `candy-async` path-repo** — Delete `sugar-charts/composer.json:L78-84` path repository entry. Zero source files import from candy-async. Severity: **high**. Verify: `composer validate` passes, tests pass.
 
-- [ ] **1.3 Fix BarChart::copy() animation state loss** — Add `?float $animationProgress` and `?int $animationDuration` parameters to BarChart's private `copy()` method. BarChart inherits `withAnimationProgress()`/`withAnimationDuration()` from Chart but BarChart's copy() doesn't include them — animation state silently dropped. Severity: **high**. Verify: Animation state preserved after copy operations.
+- [ ] ❗ **1.3 premise-false at r86 verify (lane v4)** — BarChart is standalone (`src/BarChart/BarChart.php:33-34`: `final class BarChart` + `use ChartExtras`, no `extends Chart`); neither the class nor the trait exposes `withAnimation*`, so the flag-carry `copy()` at :560 drops no animation state. Animation lives only on `Chart` (:294-301) and `LineChart` (`lineChartCopy` carries `animationProgress` :769). (Historical prescription: add animation params to copy() because BarChart "inherits" the setters — the inheritance claim is what was false.) No fix needed.
 
 - [ ] **1.4 Unify empty-output behavior** — Change Scatter::view(), OHLCChart::view(), and Heatmap::view() to return `''` for empty input instead of `"\n\n"` (canvas view). BarChart already returns `''`. Scatter:L166-167, OHLCChart:L197-198, Heatmap:L204-205. Severity: **high**. Verify: All chart types return `''` for empty data.
 
@@ -38,37 +38,37 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 
 ## Phase 2: Performance & Memory Optimizations [PENDING]
 
-- [ ] **2.1 Cache Style objects in Heatmap::view()** — Add `$styleCache` array in `Heatmap::view()` to reuse Style objects by color value. Currently creates 10,000 Style allocations per 100×100 heatmap render (Heatmap:L248). Severity: **medium**. Verify: Performance benchmark improves.
+- [x] ✅ **[r86-v4 LANDED]** **2.1 Cache Style objects in Heatmap::view()** — `$styleCache` keyed on the sampled Color's (r,g,b); profile/cellStyle are loop-invariant so equal colours share one final Style. Render-dump byte-identical; pins + mutation-discriminated in `tests/Support/Phase2PerfPinsTest.php`. Original: — Add `$styleCache` array in `Heatmap::view()` to reuse Style objects by color value. Currently creates 10,000 Style allocations per 100×100 heatmap render (Heatmap:L248). Severity: **medium**. Verify: Performance benchmark improves.
 
-- [ ] **2.2 Replace in_array with hash-set in BufferHelper::isZeroWidth** — Convert `isZeroWidth()` (BufferHelper:L134-164) from `in_array()` O(n) to keyed array lookup `isset()` O(1) for the 100+ codepoint zero-width set. Severity: **medium**. Verify: All BufferHelper tests pass.
+- [x] ✅ **[r86-v4 LANDED]** **2.2 Replace in_array with hash-set in BufferHelper::isZeroWidth** — `private const ZERO_WIDTH` (124 keyed members, source order verbatim) + `isset(self::ZERO_WIDTH[$cp])`. Original: — Convert `isZeroWidth()` (BufferHelper:L134-164) from `in_array()` O(n) to keyed array lookup `isset()` O(1) for the 100+ codepoint zero-width set. Severity: **medium**. Verify: All BufferHelper tests pass.
 
-- [ ] **2.3 Make Legend::coloredIndicator colorMap a class constant** — Move `static $colorMap` from method body (Legend:L160) to `private const COLOR_MAP` class constant. PHP re-initializes static on every call. Severity: **medium**. Verify: Legend tests pass.
+- [x] ✅ **[r86-v4 LANDED]** **2.3 Make Legend::coloredIndicator colorMap a class constant** — now `private const COLOR_MAP` with `Ansi::CSI` literals, pinned equal to the former `Ansi::fg16()`/`Ansi::sgr(39)` strings. Premise note: PHP method-statics init ONCE, so the old cost was first-call only — the const is intent-correctness, not a hot-path win. Original: — Move `static $colorMap` from method body (Legend:L160) to `private const COLOR_MAP` class constant. PHP re-initializes static on every call. Severity: **medium**. Verify: Legend tests pass.
 
-- [ ] **2.4 Swap mb_ord to primary path in BufferHelper::firstCodepoint** — Reorder logic so `mb_ord()` is the primary path (available in PHP 8.3+) and manual byte extraction is the fallback. Currently reversed (BufferHelper:L112-116). Severity: **medium**. Verify: BufferHelper tests pass.
+- [x] ✅ **[PRE-R86 ALREADY LANDED, re-confirmed r86-v4]** **2.4 Swap mb_ord to primary path in BufferHelper::firstCodepoint** — `BufferHelper.php:112` leads with `mb_ord`, manual byte extraction is the fallback. Original: — Reorder logic so `mb_ord()` is the primary path (available in PHP 8.3+) and manual byte extraction is the fallback. Currently reversed (BufferHelper:L112-116). Severity: **medium**. Verify: BufferHelper tests pass.
 
-- [ ] **2.5 Optimize Sixel::nearest with spatial index** — Replace O(n) linear palette scan (Sixel:L165-180) with O(log n) k-d tree or grid-based spatial index. 256-color palette × 64,000 pixels = 16.4M calculations for 320×200 image. Severity: **low**. Verify: Encoding results identical, benchmark improves.
+- [x] ✅ **[r86-v4 LANDED, cheaper shape]** **2.5 Optimize Sixel::nearest with spatial index** — `nearest()` is pure in (rgb, fixed palette), so `encode()` carries an RGB-keyed memo scoped to the call (no cross-palette staleness — pinned); k-d tree unnecessary. Original: — Replace O(n) linear palette scan (Sixel:L165-180) with O(log n) k-d tree or grid-based spatial index. 256-color palette × 64,000 pixels = 16.4M calculations for 320×200 image. Severity: **low**. Verify: Encoding results identical, benchmark improves.
 
 ---
 
 ## Phase 3: Logic & Edge Case Fixes [PENDING]
 
-- [ ] **3.1 Rename withNoAutoMaxValue to withAutoMaxValue** — Rename `Sparkline::withNoAutoMaxValue(bool $disable = true)` (Sparkline:L89-98) to `withAutoMaxValue(bool $enable = true)`. Double-negative API is confusing. Severity: **medium**. Verify: Sparkline tests updated and passing.
+- [ ] ⏭️ **[r86 RULED OUT — STOP-class]** **3.1 Rename withNoAutoMaxValue to withAutoMaxValue** — public-API break; excluded from build scope by the round-86 mission ruling, zero touch (name lives `Sparkline.php:95`). Original: — Rename `Sparkline::withNoAutoMaxValue(bool $disable = true)` (Sparkline:L89-98) to `withAutoMaxValue(bool $enable = true)`. Double-negative API is confusing. Severity: **medium**. Verify: Sparkline tests updated and passing.
 
-- [ ] **3.2 Fix Sparkline::glyph discontinuity at minimum value** — Review `Sparkline::glyph()` special case (Sparkline:L214-228). When range=0 returns glyph[4] (mid-bar), but value just above min gets glyph[1]. Visual discontinuity. Severity: **medium**. Verify: Edge case tested.
+- [x] ✅ **[PRE-R86 ALREADY ADDRESSED, verified r86-v4]** **3.2 Fix Sparkline::glyph discontinuity at minimum value** — the floor guard `$idx < 1 && $v > $min → glyph[1]` (`Sparkline.php:227-229`) removes the just-above-min blanking; the `range == 0` steady mid-bar is an intentional product choice. Original: — Review `Sparkline::glyph()` special case (Sparkline:L214-228). When range=0 returns glyph[4] (mid-bar), but value just above min gets glyph[1]. Visual discontinuity. Severity: **medium**. Verify: Edge case tested.
 
-- [ ] **3.3 Add out-of-bounds clipping to Waveline::view()** — Add bounds checking before `setCell()` calls in `Waveline::view()` (Waveline:L155). Coordinates outside canvas are silently dropped. Severity: **medium**. Verify: Out-of-bounds tests.
+- [x] ✅ **[PRE-R86 ALREADY LANDED, verified r86-v4]** **3.3 Add out-of-bounds clipping to Waveline::view()** — `$project` clamps normalized tx/ty to [0,1] (`Waveline.php:161-162`) and `Canvas::setCell` hard-guards coordinates (`Canvas.php:41-43`). Original: — Add bounds checking before `setCell()` calls in `Waveline::view()` (Waveline:L155). Coordinates outside canvas are silently dropped. Severity: **medium**. Verify: Out-of-bounds tests.
 
-- [ ] **3.4 Add validation to BufferHelper::colorToInt** — Add type/structure validation before accessing `$color->r`, `$color->g`, `$color->b` (BufferHelper:L107). Currently trusts property names without validation. Severity: **medium**. Verify: Invalid Color input handled gracefully.
+- [x] ✅ **[r86-v4 LANDED as boundary typing]** **3.4 Add validation to BufferHelper::colorToInt** — narrowed `object` → `Color` (parse, don't validate; call sites already feed only Sprinkles `Style::getForeground()/getBackground()`). Original: — Add type/structure validation before accessing `$color->r`, `$color->g`, `$color->b` (BufferHelper:L107). Currently trusts property names without validation. Severity: **medium**. Verify: Invalid Color input handled gracefully.
 
-- [ ] **3.5 Fix LineChart animation to apply to all datasets** — Update `LineChart::renderChart()` (LineChart:L447-482) to apply animation progress to named datasets in addition to primary series. Currently only primary series is animated. Severity: **medium**. Verify: Animation tests with datasets.
+- [x] ✅ **[PRE-R86 ALREADY LANDED, verified r86-v4]** **3.5 Fix LineChart animation to apply to all datasets** — `renderChart()` animates `$allSeries = ['_primary' => data] + datasets` (`LineChart.php:521-537`). Original: — Update `LineChart::renderChart()` (LineChart:L447-482) to apply animation progress to named datasets in addition to primary series. Currently only primary series is animated. Severity: **medium**. Verify: Animation tests with datasets.
 
-- [ ] **3.6 Document Graph::niceNumbers zero-range edge case** — Add docblock note that `Graph::niceNumbers()` returns raw `$min` without rounding when `$min === $max` (Graph:L541-542). No code change needed. Severity: **low**. Verify: Docblock added.
+- [x] ✅ **[r86-v4 LANDED, docs-only]** **3.6 Document Graph::niceNumbers zero-range edge case** — docblock now states the `$min === $max` single-tick unrounded return. Original: — Add docblock note that `Graph::niceNumbers()` returns raw `$min` without rounding when `$min === $max` (Graph:L541-542). No code change needed. Severity: **low**. Verify: Docblock added.
 
 ---
 
 ## Phase 4: API Improvements [PENDING]
 
-- [ ] **4.1 Implement MarkLine rendering or remove class** — `MarkLine` (MarkLine:L1-95) computes min/max/average but rendering "not yet wired" (line 12-15). Either implement integration with charts or remove the incomplete feature. Severity: **medium**. Verify: MarkLine renders on charts OR class removed.
+- [x] ✅ **[LANDED — verified r86-v4]** **4.1 Implement MarkLine rendering or remove class** — rendering wired by 9065a2784 (ancestor of b26b9989f): `LineChart::withMarkLines()` :255 + alias :330, paint pass `drawMarkLines()` :613 called at :572 sharing the series row mapping; `[]` renders byte-identical. Original: — `MarkLine` (MarkLine:L1-95) computes min/max/average but rendering "not yet wired" (line 12-15). Either implement integration with charts or remove the incomplete feature. Severity: **medium**. Verify: MarkLine renders on charts OR class removed.
 
 - [ ] **4.2 Consider PHP 8.3 property hooks for copy() methods** — Research using property hooks to replace flag-parameter pattern (`$minSet = false`) in BarChart::copy(), Scatter::copy(), OHLCChart::copy(), LineChart::lineChartCopy(). Finding 6.1. Severity: **low**. Verify: Research complete, recommendation documented.
 

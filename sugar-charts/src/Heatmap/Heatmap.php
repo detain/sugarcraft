@@ -249,6 +249,11 @@ final class Heatmap
 
         $canvas = new Canvas($this->width, $this->height);
         $rowCount = count($this->grid);
+        // E736/2.1 round 86: Style objects are immutable value objects and
+        // the (r,g,b) triple fully determines the per-cell style for this
+        // render (profile/cellStyle are loop-invariant), so repeated cell
+        // colours reuse one allocation instead of ~width×height of them.
+        $styleCache = [];
         for ($y = 0; $y < $this->height; $y++) {
             if ($y >= $rowCount) {
                 break;
@@ -261,11 +266,15 @@ final class Heatmap
                 }
                 $v = (float) $row[$x];
                 $color = $this->sample((float) $min, (float) $max, $v);
-                $cell = Style::new()->foreground($color)->colorProfile($this->profile);
-                if ($this->cellStyle !== null) {
-                    $cell = $cell->inherit($this->cellStyle);
+                $rgb = ($color->r << 16) | ($color->g << 8) | $color->b;
+                if (!isset($styleCache[$rgb])) {
+                    $cell = Style::new()->foreground($color)->colorProfile($this->profile);
+                    if ($this->cellStyle !== null) {
+                        $cell = $cell->inherit($this->cellStyle);
+                    }
+                    $styleCache[$rgb] = $cell;
                 }
-                $canvas->setCell($x, $y, $this->rune, $cell);
+                $canvas->setCell($x, $y, $this->rune, $styleCache[$rgb]);
             }
         }
         $body = $canvas->view();

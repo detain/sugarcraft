@@ -546,6 +546,10 @@ final class Graph
      * Returns evenly-spaced round numbers that divide the given range
      * into readable intervals. Mirrors ntcharts' `niceNumbers` helper.
      *
+     * Zero-range edge case (E736/3.6 round 86): when `$min === $max`
+     * (after a swap of inverted bounds) the raw `$min` is returned
+     * unrounded as a single tick — there is no interval to make nice.
+     *
      * @return list<float>  ascending list of tick values
      */
     public static function niceNumbers(float $min, float $max, int $targetTicks = 5): array
