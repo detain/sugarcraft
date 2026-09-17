@@ -66,6 +66,9 @@ sugar-prompt is built on top of five shared foundation packages:
 | `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
 | `FilePicker`  | Filesystem picker (wraps `SugarBits\FileTree`)              | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
+| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withWidth`, `withValidator(\Closure)` |
+| `Slider`      | Numeric range slider (keyboard drag, snapping step)                | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
+| `Color`       | Hex color picker with swatch preview                           | `withValue(string $hex)`, `withTruecolor(bool)`, `withValidator` |
 
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats, `Enter` on the last interactive field

@@ -136,7 +136,7 @@ final class Buffer
      * verbatim from those walks: no-op when $from lies outside the region;
      * $count coerced to at least 1 and clamped to the rows from $from down
      * ($count <= 0 therefore shifts exactly ONE row — public CSI entry
-     * points reject explicit 0 earlier, at the dispatch layer). Blank fill
+     * points floor explicit 0 earlier, at the dispatch layer). Blank fill
      * is plain {@see Cell::empty()}, no pen.
      *
      * Buffer holds no cursor or DECSTBM state, so the region arrives as
