@@ -1158,13 +1158,18 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,027 tests / 172,610 assertions, 0 failures, 1 skipped** — the whole of
+**12,027 tests / 170,392 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-9m37s. Measured 2026-09-15 on the round-83 wave-3 weld — the E737 MCP-disable
-gate lane plus the three sibling fail-on-warning lanes, +18 pins over the
-wave-1 floor (12,009/172,461 the same day; 12,008/172,448 earlier still; 11,991/172,259 on 2026-09-14; the upstream branch's own
-11,916/171,304 re-pin rode the same merge); the
+9m34s. Measured 2026-09-16 on the r86u upstream absorption — the tests figure holds
+at the round-83/84 campaign floor (the E737 MCP-disable gate plus the sibling
+fail-on-warning lanes, +18 pins over 12,009/172,461 on 2026-09-15), while the
+assertions re-derive: upstream's wave-8 determinism tails rode the merge, so
+`AssertionSwallowingCatchTest`'s scan now throws instead of recording an assertion
+per `try`/`catch` construct (the suite figure is no longer wired to how many blocks
+the tree happens to contain) and the two chain-budget `HookRegistryTest` cases count
+their pump on an injected clock instead of the wall. The figures before this merge:
+12,027/172,610 (2026-09-16); the
 figure that stood here before, 7,276/76,239 in
 2m38s (2026-08-19), was behind the suite by some four thousand tests — rounds
 44 through 61 each shipped guards — and the figure before that, 6,424/51,767
