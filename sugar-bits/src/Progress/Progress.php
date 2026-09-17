@@ -236,15 +236,54 @@ final class Progress
         return $this->withPercent($percent)->view();
     }
 
+    /**
+     * Shared bar-layout geometry for the Line/Slim/Block branches of
+     * {@see view()} (E743): the formatted percent suffix, whether it
+     * fits inside the configured width, and the filled/empty cell split
+     * of the bar. One compute site so the rounding and fit rules can
+     * never drift between the render modes.
+     *
+     * `$withPercentSuffix` gates the suffix formatting itself — Line
+     * mode never renders percent text, so a caller-supplied malformed
+     * `percentFormat` must not throw there. `$reserveSuffix` decides
+     * whether the bar yields cells to the suffix: Slim always does
+     * when it fits; Block only when the suffix is the bare percent
+     * (value suffixes deliberately overflow past the configured width).
+     *
+     * @return array{pctText:string,percentFits:bool,filledCells:int,emptyCells:int}
+     */
+    private function computeBarLayout(bool $withPercentSuffix, bool $reserveSuffix): array
+    {
+        $pctText = '';
+        $suffixCells = 0;
+        $percentFits = false;
+        if ($withPercentSuffix && $this->showPercent) {
+            // The suffix " 100%" claims ~5+ cells; rather than guess its
+            // length, format it once and use its measured width.
+            $pctText = sprintf($this->percentFormat, (int) round($this->percent * 100));
+            $suffixCells = Width::string($pctText) + 1;
+            $percentFits = $this->width > $suffixCells;
+        }
+        $barWidth = $reserveSuffix && $percentFits
+            ? $this->width - $suffixCells
+            : $this->width;
+        $filledCells = (int) round($this->percent * $barWidth);
+        return [
+            'pctText'     => $pctText,
+            'percentFits' => $percentFits,
+            'filledCells' => $filledCells,
+            'emptyCells'  => $barWidth - $filledCells,
+        ];
+    }
+
     /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         // Handle Line render mode: filled ━ (U+2501), empty ─ (U+2500), no percent text.
         if ($this->renderMode === ProgressRenderMode::Line) {
-            $filledCells = (int) round($this->percent * $this->width);
-            $emptyCells = $this->width - $filledCells;
-            $full = str_repeat("\xe2\x94\x81", $filledCells); // ━ U+2501
-            $empty = str_repeat("\xe2\x94\x80", $emptyCells); // ─ U+2500
+            $layout = $this->computeBarLayout(withPercentSuffix: false, reserveSuffix: false);
+            $full = str_repeat("\xe2\x94\x81", $layout['filledCells']); // ━ U+2501
+            $empty = str_repeat("\xe2\x94\x80", $layout['emptyCells']); // ─ U+2500
             if ($this->fillColor !== null) {
                 $full = $this->fillColor->toFg($this->profile) . $full . Ansi::reset();
             }
@@ -256,18 +295,9 @@ final class Progress
 
         // Handle Slim render mode: filled ▌, empty ▒, with percent text.
         if ($this->renderMode === ProgressRenderMode::Slim) {
-            $pctText = $this->showPercent
-                ? sprintf($this->percentFormat, (int) round($this->percent * 100))
-                : '';
-            $suffixCells = $this->showPercent ? Width::string($pctText) + 1 : 0;
-            $showSuffix = $this->showPercent && $this->width > $suffixCells;
-            $barWidth = $showSuffix ? $this->width - $suffixCells : $this->width;
-
-            $filledCells = (int) round($this->percent * $barWidth);
-            $emptyCells = $barWidth - $filledCells;
-
-            $full = str_repeat("\xe2\x96\x8c", $filledCells); // ▌ U+258C
-            $empty = str_repeat("\xe2\x96\x92", $emptyCells); // ▒ U+2592
+            $layout = $this->computeBarLayout(withPercentSuffix: true, reserveSuffix: true);
+            $full = str_repeat("\xe2\x96\x8c", $layout['filledCells']); // ▌ U+258C
+            $empty = str_repeat("\xe2\x96\x92", $layout['emptyCells']); // ▒ U+2592
             if ($this->fillColor !== null) {
                 $full = $this->fillColor->toFg($this->profile) . $full . Ansi::reset();
             }
@@ -276,18 +306,22 @@ final class Progress
             }
 
             $bar = $full . $empty;
-            if (!$showSuffix) {
+            if (!$layout['percentFits']) {
                 return $bar;
             }
-            return $bar . ' ' . $pctText;
+            return $bar . ' ' . $layout['pctText'];
         }
 
-        // The percent suffix " 100%" needs ~5 cells. Rather than guess
-        // the formatted suffix length, render it once and use its
-        // measured width.
-        $pctText = $this->showPercent
-            ? sprintf($this->percentFormat, (int) round($this->percent * 100))
-            : '';
+        // Block mode: the bar yields cells to the percent suffix only when
+        // the suffix is the bare percent. When showValue is on, the bar
+        // stays at full width and the value suffix (with optional percent
+        // in parentheses) overflows past the configured width by design.
+        $layout = $this->computeBarLayout(
+            withPercentSuffix: true,
+            reserveSuffix: $this->showPercent && !$this->showValue,
+        );
+        $pctText = $layout['pctText'];
+        $showSuffix = $layout['percentFits'];
 
         // Calculate value text (current/total) when showValue is enabled.
         $valueText = '';
@@ -296,30 +330,21 @@ final class Progress
             $valueText = sprintf($this->showValueFormat, $current, $this->width);
         }
 
-        // Bar width is reduced only when showing percent without value.
-        // When showValue is true, the bar stays at full width and the
-        // value suffix (with optional percent in parentheses) appends after.
-        $suffixCells = $this->showPercent ? Width::string($pctText) + 1 : 0;
-        $showSuffix = $this->showPercent && $this->width > $suffixCells;
-        $barWidth = $this->width;
-
         // Build the full suffix text to display.
         $fullSuffixText = '';
         if ($this->showPercent && $this->showValue) {
             // Both shown: percent first, value in parentheses after.
             $fullSuffixText = $pctText . ' (' . $valueText . ')';
-            // Don't reduce bar width when value is shown
         } elseif ($this->showPercent) {
             $fullSuffixText = $pctText;
-            $barWidth = $showSuffix ? $this->width - $suffixCells : $this->width;
         } elseif ($this->showValue) {
             // Value only: bar stays at full width, suffix appends after.
             $fullSuffixText = $valueText;
             $showSuffix = true;
         }
 
-        $filledCells = (int) round($this->percent * $barWidth);
-        $emptyCells  = $barWidth - $filledCells;
+        $filledCells = $layout['filledCells'];
+        $emptyCells  = $layout['emptyCells'];
 
         // Precedence (highest first): colorFunc > multi-stop gradient
         // > 2-stop gradient > flat fillColor > no colour.
