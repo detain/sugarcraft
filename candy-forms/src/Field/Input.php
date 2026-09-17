@@ -214,6 +214,23 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     }
 
     /**
+     * E736 5.5 — the pattern-based upgrade of {@see withPassword()}: matched
+     * characters echo as `$echoChar`, the rest render verbatim (partial masks
+     * like `4111 **** **** 1111`). Mirrors huh's Password() in spirit; the
+     * pattern granularity is the SugarCraft extension. Null clears back to
+     * plain rendering. The pattern is compile-checked at this door (with the
+     * renderer's own `/u` flags) and throws loudly — it can never silently
+     * disable masking.
+     */
+    public function withPasswordMask(?string $pattern, string $echoChar = '*'): self
+    {
+        $next = $pattern === null
+            ? $this->input->clearMask()
+            : $this->input->withMask($pattern, $echoChar);
+        return $this->mutate(input: $next);
+    }
+
+    /**
      * Provide an autocomplete pool that the user can cycle with the
      * default TextInput suggestion bindings. Pass an empty list (or omit)
      * to disable. Mirrors huh's `Suggestions([]string)`.

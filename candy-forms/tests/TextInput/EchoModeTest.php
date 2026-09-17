@@ -31,17 +31,22 @@ final class EchoModeTest extends TestCase
         $this->assertSame('none', EchoMode::None->value);
     }
 
+    public function testMaskCaseExists(): void
+    {
+        $this->assertSame('mask', EchoMode::Mask->value);
+    }
+
     // =========================================================================
-    // All three cases are distinct
+    // All four cases are distinct
     // =========================================================================
 
     public function testAllCasesAreDistinct(): void
     {
         $cases = EchoMode::cases();
-        $this->assertCount(3, $cases);
+        $this->assertCount(4, $cases);
 
         $values = array_map(static fn(EchoMode $c): string => $c->value, $cases);
-        $this->assertCount(3, array_unique($values));
+        $this->assertCount(4, array_unique($values));
     }
 
     // =========================================================================
@@ -72,6 +77,7 @@ final class EchoModeTest extends TestCase
             $result = match (true) {
                 $case === EchoMode::Normal => 'normal-case',
                 $case === EchoMode::Password => 'password-case',
+                $case === EchoMode::Mask => 'mask-case',
                 $case === EchoMode::None => 'none-case',
             };
             $this->assertNotEmpty($result);

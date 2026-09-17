@@ -97,6 +97,15 @@ final class TextInput implements Model
          * @var array<string,string>
          */
         public readonly array $keyOverrides = [],
+        /**
+         * E736 5.5 — character-class pattern selecting which characters
+         * {@see EchoMode::Mask} replaces with `$echoChar` (no delimiters, same
+         * convention as {@see $restrict}). Empty outside Mask mode; built only
+         * through {@see withMask()} — the compile door runs with the very
+         * `/u` flags the renderer uses, so a broken pattern is refused at set
+         * time and never reaches displayValue().
+         */
+        public readonly string $maskPattern = '',
     ) {
         $this->length = mb_strlen($value, 'UTF-8');
     }
@@ -843,6 +852,46 @@ final class TextInput implements Model
         return $this->mutate(restrict: $pattern);
     }
 
+    /**
+     * E736 5.5 — pattern-based masking (upstream `charmbracelet/huh` has only
+     * the all-or-nothing Password mode; this is the SugarCraft partial-mask
+     * extension behind {@see EchoMode::Mask}). Characters matched by the
+     * pattern render as `$echoChar`; everything else stays visible, so a card
+     * field can echo `4111 **** **** 1111`.
+     *
+     * Door (same compile-probe discipline as {@see withRestrict()} — E736 1.8):
+     * the empty subject is a subject-independent compile check; it runs with
+     * the `/u` flags the renderer will use. An empty pattern is refused: Mask
+     * mode without a pattern is ambiguous — use {@see clearMask()} or Password
+     * mode instead (fail-loud, never a silently-degenerate mask).
+     *
+     * @param string $pattern PCRE character class, no delimiters (e.g. `'[0-9]'`)
+     */
+    public function withMask(string $pattern, string $echoChar = '*'): self
+    {
+        if ($pattern === '' || @preg_match('/' . $pattern . '/u', '') === false) {
+            throw new \InvalidArgumentException('Invalid mask pattern: ' . $pattern);
+        }
+        return $this->mutate(
+            echoMode: EchoMode::Mask,
+            echoChar: $echoChar === '' ? '*' : $echoChar,
+            maskPattern: $pattern,
+        );
+    }
+
+    /**
+     * Leave Mask mode: back to Normal rendering with the pattern forgotten.
+     * A no-op on unmasked widgets keeps withers composable.
+     */
+    public function clearMask(): self
+    {
+        if ($this->echoMode !== EchoMode::Mask) {
+            return $this;
+        }
+
+        return $this->mutate(echoMode: EchoMode::Normal, maskPattern: '');
+    }
+
     // Short-form aliases.
     public function placeholder(string $p): self  { return $this->withPlaceholder($p); }
     public function prompt(string $p): self       { return $this->withPrompt($p); }
@@ -1005,8 +1054,28 @@ final class TextInput implements Model
         return match ($this->echoMode) {
             EchoMode::Normal   => $this->value,
             EchoMode::Password => str_repeat($this->echoChar, $this->length()),
+            EchoMode::Mask     => $this->maskedValue(),
             EchoMode::None     => '',
         };
+    }
+
+    /**
+     * E736 5.5 — mask arm of {@see displayedValue()}: every run matched by the
+     * (door-compiled, `/u`) pattern becomes `strlen × $echoChar`; unmatched
+     * characters pass through verbatim. A null return means PCRE refused the
+     * SUBJECT (lone surrogates etc. — pattern validity was already proven at
+     * set time); masking EVERYTHING is the fail-closed answer for a secret
+     * field, so a hostile paste can never render unmasked.
+     */
+    private function maskedValue(): string
+    {
+        $masked = preg_replace_callback(
+            '/' . $this->maskPattern . '/u',
+            fn (array $m): string => str_repeat($this->echoChar, mb_strlen($m[0], 'UTF-8')),
+            $this->value,
+        );
+
+        return $masked ?? str_repeat($this->echoChar, $this->length());
     }
 
     private function withCursor(Cursor $c): self    { return $this->mutate(cursor: $c); }
@@ -1041,6 +1110,7 @@ final class TextInput implements Model
         ?ValidateOn $validateOn = null,
         ?string $restrict = null,
         ?array $keyOverrides = null,
+        ?string $maskPattern = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
@@ -1085,6 +1155,7 @@ final class TextInput implements Model
             validateOn:             $validateOn             ?? $this->validateOn,
             restrict:               $restrict               ?? $this->restrict,
             keyOverrides:           $keyOverrides           ?? $this->keyOverrides,
+            maskPattern:            $maskPattern            ?? $this->maskPattern,
         );
     }
 
