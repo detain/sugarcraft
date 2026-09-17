@@ -493,9 +493,9 @@ The `Mutable` trait expects a constructor with parameters to merge via `new stat
 
 ## Phase 7: Missing Features [PENDING]
 
-- [ ] 7.1 Missing glamour "Write" function parity — ⏭️ ruled — DECLINED (r86 product ruling: additive feature parity, zero demand; shine is consumed BY sugar-crush — highest guard friction — reinforcing no-demand-no-build)
+- [x] 7.1 Missing glamour "Write" function parity — ✅ SHIPPED (r89 lane y4; operator ruling "do them all" revokes the r86 DECLINED). `Renderer::write(string $markdown, mixed $output = STDOUT): int` stream sink + `Renderer::stream()` generator (x7 salvage, byte-identity pinned) + `StyleGuide` glamour-JSON decode: document block affixes/indent/margin, element styles, chroma token→style map with the exact-token-before-prefix ordering law. Vocabulary duplicated locally per the r88-rv-x7 cycle ruling — sugar-glow CONSUMES candy-shine, so a shine→glow require is a sibling cycle and is DENIED; `sugar-glow/src/.../GlamourTheme.php` was read as mirror, never imported; composer.json byte-untouched.
 - [ ] 7.2 Limited emoji shortcode map
-- [ ] 7.3 No streaming/rendering for very large documents — ⏭️ ruled — DECLINED (r86 product ruling: additive streaming parity, zero demand)
+- [x] 7.3 No streaming/rendering for very large documents — ✅ SHIPPED (r89 lane y4; revokes the r86 DECLINED and supersedes the original doc-only success condition). Section-scoped streaming via `Render\SectionScanner`: `Renderer::stream()` generator + `Writer`/`StreamSink` object channel — write-through flush law (every sink write flushes; probe-wrapper pinned 1:1 writes↔flushes), hard-close guard (feed-after-close throws LogicException, double-close idempotent), path doors (missing parent / unwritable / open-fail) THROW BEFORE any rendering, `defersStreaming()` single-source buffered fallback for document-scope themes. 573T/1075A shine suite; 6/6 discriminating mutations.
 
 ### 7.1 Missing glamour "Write" Function Parity
 
@@ -668,9 +668,9 @@ N/A — skipped
 | 4.1 | SyntaxHighlighter reference loop | LOW | PENDING |
 | 5.1 | Theme::fromJson path traversal | LOW | PENDING |
 | 6.1 | StyleSheet custom mutate() | MEDIUM | PENDING |
-| 7.1 | Missing Write function | MEDIUM | DECLINED (r86) |
+| 7.1 | Missing Write function | MEDIUM | SHIPPED (r89 lane y4) |
 | 7.2 | Limited emoji map | MEDIUM | PENDING |
-| 7.3 | No streaming | LOW | DECLINED (r86) |
+| 7.3 | No streaming | LOW | SHIPPED (r89 lane y4) |
 | 8.1 | Emoji regex compiled every call | LOW | PENDING |
 | 8.2 | StyleSheet::for() linear scan | LOW | SKIPPED |
 
