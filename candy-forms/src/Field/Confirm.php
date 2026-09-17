@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Forms\Validator\Validator;
 
@@ -22,6 +23,7 @@ final class Confirm implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
 
     /** @var ?\Closure(bool):?string */
     private ?\Closure $validator = null;
@@ -119,7 +121,7 @@ final class Confirm implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof KeyMsg || !$this->focused) {
+        if (!$msg instanceof KeyMsg || !$this->focused || $this->isReadonly()) {
             return [$this, null];
         }
         return match (true) {
@@ -154,7 +156,7 @@ final class Confirm implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
         $yes = $this->value ? Ansi::sgr(Ansi::REVERSE) . ' ' . RenderSafe::clean($this->affirmative) . ' ' . Ansi::reset()
@@ -224,6 +226,7 @@ final class Confirm implements \SugarCraft\Forms\Field
         $next->hideFunc        = $this->hideFunc;
         $next->titleFunc       = $this->titleFunc;
         $next->descriptionFunc = $this->descriptionFunc;
+        $next->readonly        = $this->readonly;
         return $next;
     }
 }

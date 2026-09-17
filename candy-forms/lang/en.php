@@ -51,4 +51,5 @@ return [
     'slider.width_positive' => 'Slider width must be at least 1',
     'color.invalid_hex' => 'Color must be a six-digit hex string like #rrggbb',
     'color.channel_range' => 'Color cube axis must be between 0 and 5',
+    'field.readonly' => '(read-only)',
 ];

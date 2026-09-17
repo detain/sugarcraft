@@ -24,21 +24,23 @@ namespace SugarCraft\Forms;
  * must NOT call it. The TraitStateCarryFamilyTest census fails if a class
  * adopts the label traits without adopting this carrier.
  *
- * Requires the using class to also use both {@see HasHideFunc} and
- * {@see HasDynamicLabels} (their private slots are written here — legal
- * because trait methods compose into the class scope).
+ * Requires the using class to also use {@see HasHideFunc},
+ * {@see HasDynamicLabels} and {@see HasReadonly} (their private slots are
+ * written here — legal because trait methods compose into the class scope).
  */
 trait CarriesNonCtorState
 {
     /**
      * @param static $next  a freshly `new self(...)`-built sibling instance
-     * @return static  $next with the hide/dynamic-label closures carried
+     * @return static  $next with the hide/dynamic-label closures and the
+     *                 read-only flag carried
      */
     private function carryNonCtorState(self $next): self
     {
         $next->hideFunc        = $this->hideFunc;
         $next->titleFunc       = $this->titleFunc;
         $next->descriptionFunc = $this->descriptionFunc;
+        $next->readonly        = $this->readonly;
         return $next;
     }
 }

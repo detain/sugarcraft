@@ -22,6 +22,7 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
 
@@ -33,6 +34,7 @@ final class Select implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     /** @var list<string> */
@@ -298,6 +300,10 @@ final class Select implements \SugarCraft\Forms\Field
             return [$next, null];
         }
 
+        if ($msg instanceof KeyMsg && $this->isReadonly() && !self::isReadonlyNavigationKey($msg)) {
+            return [$this, null];
+        }
+
         [$l, $cmd] = $this->list->update($msg);
 
         // Apply fuzzy filtering when we have fuzzy candidates and list is in filtering mode.
@@ -417,7 +423,7 @@ final class Select implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->list->view();
         return implode("\n", $lines);

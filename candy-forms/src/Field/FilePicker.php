@@ -10,6 +10,7 @@ use SugarCraft\Forms\FilePicker\FilePicker as PickerWidget;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 
 /**
  * File-system picker field. Wraps {@see PickerWidget}; the field's value
@@ -23,6 +24,7 @@ final class FilePicker implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     private function __construct(
@@ -75,6 +77,9 @@ final class FilePicker implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof \SugarCraft\Core\Msg\KeyMsg && $this->isReadonly()) {
+            return [$this, null];
+        }
         [$p, $cmd] = $this->picker->update($msg);
         return [$this->mutate(picker: $p), $cmd];
     }
@@ -84,7 +89,7 @@ final class FilePicker implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->picker->view();
         if ($this->picker->selected() !== null) {
@@ -107,6 +112,9 @@ final class FilePicker implements \SugarCraft\Forms\Field
      */
     public function consumes(Msg $msg): bool
     {
+        if ($this->isReadonly()) {
+            return false;
+        }
         if (!$this->picker->focused || !$msg instanceof \SugarCraft\Core\Msg\KeyMsg) {
             return false;
         }

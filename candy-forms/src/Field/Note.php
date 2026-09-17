@@ -11,6 +11,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\Util\RenderSafe;
 
 /**
@@ -24,6 +25,7 @@ final class Note implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     public function __construct(
@@ -100,7 +102,7 @@ final class Note implements \SugarCraft\Forms\Field
         $parts = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $parts[] = $title; }
+        if ($title !== '') { $parts[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $parts[] = $desc; }
         if ($this->next) {
             $marker = $this->focused ? '> ' : '  ';

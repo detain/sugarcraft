@@ -12,6 +12,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Util\RenderSafe;
 
@@ -27,6 +28,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     /**
@@ -147,6 +149,9 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         if (!$msg instanceof KeyMsg || !$this->focused) {
             return [$this, null];
         }
+        if ($this->isReadonly() && !self::isReadonlyNavigationKey($msg)) {
+            return [$this, null];
+        }
         return match (true) {
             $msg->type === KeyType::Up
                 || ($msg->type === KeyType::Char && $msg->rune === 'k')
@@ -171,7 +176,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
         foreach ($this->options as $i => $opt) {
             $box   = empty($this->selected[$i]) ? '[ ]' : '[x]';

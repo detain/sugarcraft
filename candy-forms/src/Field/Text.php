@@ -9,6 +9,7 @@ use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Forms\TextInput\ValidateOn;
 use SugarCraft\Forms\Util\RenderSafe;
@@ -22,6 +23,7 @@ final class Text implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     /** @var (\Closure(string):?string)|null */
@@ -126,6 +128,9 @@ final class Text implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof \SugarCraft\Core\Msg\KeyMsg && $this->isReadonly()) {
+            return [$this, null];
+        }
         [$a, $cmd] = $this->area->update($msg);
         $next = $this->mutate(area: $a);
         // Only validate per-keystroke for None/Change (default); Blur/Submit
@@ -141,7 +146,7 @@ final class Text implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->area->view();
         // Validator messages can echo user input — clean at the display site.
@@ -163,6 +168,9 @@ final class Text implements \SugarCraft\Forms\Field
      */
     public function consumes(Msg $msg): bool
     {
+        if ($this->isReadonly()) {
+            return false;
+        }
         if (!$this->area->focused || !$msg instanceof \SugarCraft\Core\Msg\KeyMsg) {
             return false;
         }

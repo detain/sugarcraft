@@ -11,6 +11,7 @@ use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Validator\Validator;
 
@@ -45,6 +46,7 @@ final class Slider implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     /** Normalised current value — written ONLY by the constructor. */
@@ -190,7 +192,7 @@ final class Slider implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof KeyMsg || !$this->focused) {
+        if (!$msg instanceof KeyMsg || !$this->focused || $this->isReadonly()) {
             return [$this, null];
         }
         $char = static fn (string $r): bool => $msg->type === KeyType::Char
@@ -218,7 +220,7 @@ final class Slider implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
         $cells  = $this->width - 1;

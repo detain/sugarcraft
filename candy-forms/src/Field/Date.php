@@ -12,6 +12,7 @@ use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Validator\Validator;
 
@@ -55,6 +56,7 @@ final class Date implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     /**
@@ -174,7 +176,7 @@ final class Date implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
-        if (!$msg instanceof KeyMsg || !$this->focused) {
+        if (!$msg instanceof KeyMsg || !$this->focused || $this->isReadonly()) {
             return [$this, null];
         }
 
@@ -221,7 +223,7 @@ final class Date implements \SugarCraft\Forms\Field
         $lines = [];
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
-        if ($title !== '') { $lines[] = $title; }
+        if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
         $day   = new \DateTimeImmutable($this->cursor);
@@ -274,6 +276,9 @@ final class Date implements \SugarCraft\Forms\Field
      */
     public function consumes(Msg $msg): bool
     {
+        if ($this->isReadonly()) {
+            return false;
+        }
         if (!$this->focused || !$msg instanceof KeyMsg) {
             return false;
         }

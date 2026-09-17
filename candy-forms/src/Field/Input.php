@@ -19,6 +19,7 @@ use SugarCraft\Forms\Fuzzy\FuzzyMatcher;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Forms\TextInput\ValidateOn;
 use SugarCraft\Forms\Util\RenderSafe;
@@ -32,6 +33,7 @@ final class Input implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use HasReadonly;
     use CarriesNonCtorState;
 
     /**
@@ -477,6 +479,10 @@ final class Input implements \SugarCraft\Forms\Field
             return [$next, null];
         }
 
+        if ($msg instanceof \SugarCraft\Core\Msg\KeyMsg && $this->isReadonly()) {
+            return [$this, null];
+        }
+
         [$ti, $cmd] = $this->input->update($msg);
         if ($this->suggestionsFunc !== null) {
             $candidates = ($this->suggestionsFunc)($ti->value);
@@ -594,7 +600,7 @@ final class Input implements \SugarCraft\Forms\Field
         $title = $this->resolveTitle($this->title);
         $desc  = $this->resolveDescription($this->description);
         if ($title !== '') {
-            $lines[] = $title;
+            $lines[] = $title . $this->readonlyTitleSuffix();
         }
         if ($desc !== '') {
             $lines[] = $desc;
