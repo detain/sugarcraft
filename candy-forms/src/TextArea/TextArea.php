@@ -12,6 +12,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Editor;
 
 /**
@@ -27,6 +29,16 @@ use SugarCraft\Core\Util\Editor;
  * Embeds a {@see Cursor} for the visual caret. The parent Model decides
  * what to do with `Enter` when no insertion is desired (this component
  * always inserts a newline on Enter).
+ *
+ * Clipboard (E736 5.13, round 88): {@see withSelect()} anchors one corner
+ * of a selection at the current cursor; the other corner tracks the caret.
+ * `Ctrl+C` copies the selection to the terminal clipboard through the Cmd
+ * channel (`Cmd::setClipboard` → OSC 52; never a direct write — TEA law),
+ * `Ctrl+X` copies then deletes it, and a `PasteMsg` replaces the selection
+ * and inserts at the caret. An empty selection makes copy/cut silent no-ops.
+ * Selection spans render as reverse-video. The anchor survives plain typing
+ * (deliberate: clearing it from every edit path would churn the keyboard
+ * behaviour this component has shipped with); `clearSelection()` resets it.
  */
 final class TextArea implements Model
 {
@@ -78,6 +90,16 @@ final class TextArea implements Model
          * JSON syntax highlighting, etc. Default `.txt`.
          */
         public readonly string $editorExtension = '.txt',
+        /**
+         * Selection anchor cell (E736 5.13, round 88). The ACTIVE end of the
+         * selection is always the current cursor (`row`,`col`); the anchor is
+         * the fixed end set via {@see withSelect()}. `null` anchor = no
+         * selection. Both ints move together — the paired `anchorSet`
+         * sentinel on {@see mutate()} keeps the nullable-field house law.
+         */
+        public readonly ?int $anchorRow = null,
+        /** Column of the {@see $anchorRow} anchor; null exactly when anchorRow is. */
+        public readonly ?int $anchorCol = null,
     ) {}
 
     /**
@@ -123,6 +145,16 @@ final class TextArea implements Model
         if ($msg instanceof TextAreaEditedMsg) {
             return [$this->setValue($msg->value), null];
         }
+        if ($msg instanceof PasteMsg) {
+            // E736 5.13: bracketed paste replaces the selection (when any) and
+            // inserts at the caret — the same insertString seam the host app
+            // routes its own paste through (sugar-crush E704 law: verbatim
+            // payload, cursor lands at the end of the inserted text).
+            if (!$this->focused) {
+                return [$this, null];
+            }
+            return [$this->deleteSelection()->insertString($msg->content), null];
+        }
         if (!$msg instanceof KeyMsg || !$this->focused) {
             return [$this, null];
         }
@@ -133,6 +165,8 @@ final class TextArea implements Model
                 'e'     => [$this->moveCursor($this->row, $this->lineLen($this->row)), null],
                 'u'     => [$this->deleteToLineStart(), null],
                 'k'     => [$this->deleteToLineEnd(), null],
+                'c'     => $this->copySelection(),
+                'x'     => $this->cutSelection(),
                 'o'     => [$this, $this->openInEditor()],
                 default => [$this, null],
             };
@@ -188,15 +222,20 @@ final class TextArea implements Model
             return implode("\n", $this->prefixWithGutter($rows, $start));
         }
 
-        // Render with the embedded cursor at (row, col).
+        // Render with the embedded cursor at (row, col). Selection spans
+        // (E736 5.13) paint reverse-video per row; rows with neither the
+        // caret nor a span keep the exact pre-clipboard render path.
         $relRow = $this->row - $start;
         $out = [];
         foreach ($rows as $i => $line) {
+            $span = $this->selectionSpanOn($start + $i);
             if ($i !== $relRow) {
-                $out[] = $line;
+                $out[] = $span === null ? $line : $this->paintSpan($line, $span);
                 continue;
             }
-            $out[] = $this->renderCursorLine($line);
+            $out[] = $span === null
+                ? $this->renderCursorLine($line)
+                : $this->renderCursorAndSpan($line, $span);
         }
         return implode("\n", $this->prefixWithGutter($out, $start));
     }
@@ -274,6 +313,9 @@ final class TextArea implements Model
             lines: $lines,
             row: $lastRow,
             col: mb_strlen($lines[$lastRow], 'UTF-8'),
+            anchorRow: null,
+            anchorCol: null,
+            anchorSet: true,
         );
     }
 
@@ -284,7 +326,10 @@ final class TextArea implements Model
 
     public function reset(): self
     {
-        return $this->mutate(lines: [''], row: 0, col: 0, rowOffset: 0);
+        return $this->mutate(
+            lines: [''], row: 0, col: 0, rowOffset: 0,
+            anchorRow: null, anchorCol: null, anchorSet: true,
+        );
     }
 
     public function withPlaceholder(string $p): self { return $this->mutate(placeholder: $p); }
@@ -420,6 +465,63 @@ final class TextArea implements Model
     public function setCursorColumn(int $col): self
     {
         return $this->moveCursor($this->row, $col);
+    }
+
+    // ---- selection + clipboard (E736 5.13) ----------------------------
+
+    /**
+     * Anchor a selection at (`$row`, `$col`); both clamp into the live
+     * buffer. The ACTIVE end follows the caret from now on, so a caller
+     * implementing shift-selection calls this on press, then lets arrows
+     * move the caret. Re-anchoring at the caret position clears the
+     * selection (empty span).
+     */
+    public function withSelect(int $row, int $col): self
+    {
+        $row = max(0, min(count($this->lines) - 1, $row));
+        return $this->mutate(
+            anchorRow: $row,
+            anchorCol: max(0, min($this->lineLen($row), $col)),
+            anchorSet: true,
+        );
+    }
+
+    /** Drop the selection anchor; the caret itself is untouched. Idempotent. */
+    public function clearSelection(): self
+    {
+        if ($this->anchorRow === null) {
+            return $this;
+        }
+        return $this->mutate(anchorRow: null, anchorCol: null, anchorSet: true);
+    }
+
+    /** True when anchor and caret delimit a non-empty span. */
+    public function hasSelection(): bool
+    {
+        return $this->normalizedSelection() !== null;
+    }
+
+    /**
+     * The selected text, lines joined with `"\n"`; `''` when there is no
+     * selection. Anchor/caret order is normalised — a backwards drag
+     * (anchor below the caret) selects the same span as a forwards one.
+     */
+    public function selectedText(): string
+    {
+        $span = $this->normalizedSelection();
+        if ($span === null) {
+            return '';
+        }
+        [$r0, $c0, $r1, $c1] = $span;
+        if ($r0 === $r1) {
+            return mb_substr($this->lines[$r0], $c0, $c1 - $c0, 'UTF-8');
+        }
+        $parts = [mb_substr($this->lines[$r0], $c0, null, 'UTF-8')];
+        for ($r = $r0 + 1; $r < $r1; $r++) {
+            $parts[] = $this->lines[$r];
+        }
+        $parts[] = mb_substr($this->lines[$r1], 0, $c1, 'UTF-8');
+        return implode("\n", $parts);
     }
 
     /**
@@ -695,6 +797,155 @@ final class TextArea implements Model
         return $this->mutate(lines: $newLines);
     }
 
+    /**
+     * Anchor/caret pair normalised to `[startRow, startCol, endRow, endCol]`
+     * (lexicographic order, so a backwards selection is identical to the
+     * forwards one), or null when empty. Ends clamp against the LIVE buffer:
+     * a dangling anchor left by an external shrink can only ever collapse
+     * the span, never index a missing line (fail-soft total function).
+     *
+     * @return ?array{0:int, 1:int, 2:int, 3:int}
+     */
+    private function normalizedSelection(): ?array
+    {
+        if ($this->anchorRow === null || $this->anchorCol === null) {
+            return null;
+        }
+        $lastRow = count($this->lines) - 1;
+        $ar = max(0, min($lastRow, $this->anchorRow));
+        $ac = max(0, min($this->lineLen($ar), $this->anchorCol));
+        $br = max(0, min($lastRow, $this->row));
+        $bc = max(0, min($this->lineLen($br), $this->col));
+        if ($ar === $br && $ac === $bc) {
+            return null;
+        }
+        if ($ar < $br || ($ar === $br && $ac < $bc)) {
+            return [$ar, $ac, $br, $bc];
+        }
+        return [$br, $bc, $ar, $ac];
+    }
+
+    /**
+     * The half-open cell window `[start, end)` this selection covers ON
+     * `$row` (codepoint indices), or null when the row holds no cells —
+     * fully-selected middle rows report `[0, lineLen)`, an empty middle row
+     * reports null (nothing to paint, the newline between rows is implicit).
+     *
+     * @return ?array{0:int, 1:int}
+     */
+    private function selectionSpanOn(int $row): ?array
+    {
+        $span = $this->normalizedSelection();
+        if ($span === null) {
+            return null;
+        }
+        [$r0, $c0, $r1, $c1] = $span;
+        if ($row < $r0 || $row > $r1) {
+            return null;
+        }
+        $start = $row === $r0 ? $c0 : 0;
+        $end   = $row === $r1 ? $c1 : $this->lineLen($row);
+        return $start >= $end ? null : [$start, $end];
+    }
+
+    /**
+     * Wrap `$text`'s overlap with `$span` in reverse video. `$base` is the
+     * cell offset `$text` starts at within its row, so the same painter
+     * handles whole rows and the before/after fragments of a caret row.
+     *
+     * @param array{0:int, 1:int} $span
+     */
+    private function paintSpan(string $text, array $span, int $base = 0): string
+    {
+        $len = mb_strlen($text, 'UTF-8');
+        $from = max(0, $span[0] - $base);
+        $to   = min($len, $span[1] - $base);
+        if ($from >= $to) {
+            return $text;
+        }
+        return mb_substr($text, 0, $from, 'UTF-8')
+            . Ansi::sgr(Ansi::REVERSE)
+            . mb_substr($text, $from, $to - $from, 'UTF-8')
+            . Ansi::reset()
+            . mb_substr($text, $to, null, 'UTF-8');
+    }
+
+    /**
+     * Caret row inside a selection: pre/caret/post fragments each painted
+     * through {@see paintSpan()}. The cursor cell itself stays delegated to
+     * the Cursor primitive (which already paints reverse video, same as
+     * renderCursorLine) — a caret sitting on a selected cell lands inside
+     * the same bar, so no extra wrap is emitted here. Adjacent runs render
+     * as one continuous selection.
+     *
+     * @param array{0:int, 1:int} $span
+     */
+    private function renderCursorAndSpan(string $line, array $span): string
+    {
+        $lineLen = mb_strlen($line, 'UTF-8');
+        $col     = max(0, min($lineLen, $this->col));
+        $before  = mb_substr($line, 0, $col, 'UTF-8');
+        $charAt  = $col < $lineLen ? mb_substr($line, $col, 1, 'UTF-8') : ' ';
+        $after   = $col < $lineLen ? mb_substr($line, $col + 1, null, 'UTF-8') : '';
+        return $this->paintSpan($before, $span, 0)
+            . $this->cursor->setChar($charAt)->view()
+            . $this->paintSpan($after, $span, $col + 1);
+    }
+
+    /**
+     * Delete the selected cells (joining lines across a multi-row span) and
+     * park the caret at the span start. No-op when the selection is empty.
+     */
+    private function deleteSelection(): self
+    {
+        $span = $this->normalizedSelection();
+        if ($span === null) {
+            return $this;
+        }
+        [$r0, $c0, $r1, $c1] = $span;
+        $lines = $this->lines;
+        if ($r0 === $r1) {
+            $lines[$r0] = mb_substr($lines[$r0], 0, $c0, 'UTF-8')
+                . mb_substr($lines[$r0], $c1, null, 'UTF-8');
+        } else {
+            $merged = mb_substr($lines[$r0], 0, $c0, 'UTF-8')
+                . mb_substr($lines[$r1], $c1, null, 'UTF-8');
+            array_splice($lines, $r0, $r1 - $r0 + 1, [$merged]);
+        }
+        return $this->mutate(
+            lines: $lines,
+            row: $r0,
+            col: $c0,
+            anchorRow: null,
+            anchorCol: null,
+            anchorSet: true,
+        );
+    }
+
+    /**
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function copySelection(): array
+    {
+        $text = $this->selectedText();
+        if ($text === '') {
+            return [$this, null];
+        }
+        return [$this, Cmd::setClipboard($text)];
+    }
+
+    /**
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function cutSelection(): array
+    {
+        $text = $this->selectedText();
+        if ($text === '') {
+            return [$this, null];
+        }
+        return [$this->deleteSelection(), Cmd::setClipboard($text)];
+    }
+
     private function moveLeft(): self
     {
         if ($this->col > 0) {
@@ -842,6 +1093,8 @@ final class TextArea implements Model
         ?\Closure $promptFunc = null, bool $promptFuncSet = false,
         ?bool $dynamic = null,
         ?string $editorExtension = null,
+        ?int $anchorRow = null, bool $anchorSet = false,
+        ?int $anchorCol = null,
     ): self {
         $newLines = $lines ?? $this->lines;
         $resolvedValidate = $validateSet ? $validate : $this->validate;
@@ -873,6 +1126,8 @@ final class TextArea implements Model
             promptFunc:            $promptFuncSet        ? $promptFunc : $this->promptFunc,
             dynamic:               $dynamic              ?? $this->dynamic,
             editorExtension:       $editorExtension      ?? $this->editorExtension,
+            anchorRow:             $anchorSet            ? $anchorRow : $this->anchorRow,
+            anchorCol:             $anchorSet            ? $anchorCol : $this->anchorCol,
         );
     }
 

@@ -99,6 +99,8 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 > These are feature requests, not bugs. Address in separate enhancement PRs as needed, in dependency order (foundation libs first).
 >
 > **ROUND-86 PRODUCT RULING (v6): phase DECLINED WHOLESALE — zero rows have a live consumer (the Form class is unconsumed; crush uses only TextArea/ItemList/FilePicker hosts, which do not exercise these gaps). 5.6/5.7/5.8/5.13 are net-new widgets (date/color pickers, slider, clipboard-without-selection-model); 5.16 is a browser concept N/A to TUI; 5.17 terminal drag-drop is non-portable. REOPEN TRIGGER: first real consumer demand. findings #3 (Form-level timeout, `findings/candy-forms.md:101`) was already dropped from this plan — runtime concern, not a forms defect. See backlog §E736 RULINGS paragraph.**
+>
+> **ROUND-88 UPDATE (x5): operator ruling 2026-09-17 "do them all" re-opened and BUILT the mouse+clipboard cluster — 5.13 and 5.14 now ✅ above with file:line evidence. Remaining rows keep the r86 decline until their own trigger.**
 
 ### High Priority Missing Features
 
@@ -117,8 +119,8 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 - [ ] **5.10** No readonly fields — Note is display-only but skip is separate from readonly; need fields that display but don't accept input — ⏭️ ruled — zero consumers (r86 product ruling)
 - [ ] **5.11** No help text per validation error — validators return single error string, not contextual help — ⏭️ ruled — zero consumers (r86 product ruling)
 - [ ] **5.12** No keyboard shortcut for numbered field navigation — no `1-9` jump-to-field — ⏭️ ruled — zero consumers (r86 product ruling)
-- [ ] **5.13** No clipboard/copy support in TextArea — Ctrl+C in TextArea doesn't copy selected text (no selection in current impl) — ⏭️ ruled — zero consumers (r86 product ruling)
-- [ ] **5.14** No mouse click selection in ItemList — update() only handles KeyMsg, not MouseMsg — ⏭️ ruled — zero consumers (r86 product ruling)
+- [x] **5.13** Clipboard/copy support in TextArea — ✅ BUILT r88 (operator "do them all" ruling): selection model = anchor (`TextArea.php:100-103` `anchorRow`/`anchorCol`, active end follows the caret) + `withSelect`/`clearSelection`/`hasSelection`/`selectedText` (`:479/:490/:499/:509`); Ctrl+C copy / Ctrl+X cut ride the Cmd channel via `Cmd::setClipboard` (OSC 52 → `RawMsg`; `:168-169` arms, `:928/:940` impls — no fwrite in model code); `PasteMsg` replaces selection + inserts (`:148-156`); spans render reverse-video (`:231-239` view loop, `paintSpan`/`renderCursorAndSpan` `:858/:883`). Tests: `tests/TextArea/TextAreaClipboardTest.php` (23T). ⚠ sub-scope: shift-selection is host-side (anchor API provided; no key auto-anchoring); anchor is inert across plain typing by design.
+- [x] **5.14** Mouse click selection in ItemList — ✅ BUILT r88: `update()` accepts `SugarCraft\Core\Msg\MouseMsg` (`ItemList.php:104-108`, keyboard guard byte-identical below); left press maps screen line → item via the layout walk mirroring bubbles `list.go handleMouse` (`handleMouse` `:529`, `itemIndexAtLine` `:555` — title/filter rows shifted, scroll offset included, description lines select their owner, out-of-bounds = identity); wheel moves the selection one row (viewport follows the existing `ViewportPan` math). ⚠ sub-scope: drag-select SKIPPED by design (upstream list has no drag range either; press-pair gesture state fights the immutable-Model contract). Tests: `tests/ItemList/ItemListMouseTest.php` (11T).
 - [ ] **5.15** No infinite scrolling / load-more callback for ItemList — `infiniteScrolling` flag exists but no callback fires at end — ⏭️ ruled — zero consumers (r86 product ruling)
 
 ### Low Priority Missing Features

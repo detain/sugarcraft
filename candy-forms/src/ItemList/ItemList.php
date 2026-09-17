@@ -7,8 +7,14 @@ namespace SugarCraft\Forms\ItemList;
 use SugarCraft\Forms\Lang;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseMotionMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseReleaseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
@@ -26,6 +32,10 @@ use SugarCraft\Forms\Util\ViewportPan;
  *   `Backspace` deletes the last char; `Esc` clears the filter and
  *   returns to normal mode; `Enter` exits filtering but keeps the
  *   results.
+ * - **Mouse** (E736 5.14) — while focused and not filtering, a left click
+ *   selects the row under the pointer and the wheel moves the selection one
+ *   row up/down; coordinates are list-relative (1-based), mirroring
+ *   charmbracelet/bubbles `list.go` `handleMouse`.
  *
  * The visible window is sized by {@see $height}; entries scroll under
  * the cursor automatically. Selection (`{@see selectedItem()}`) returns
@@ -91,6 +101,12 @@ final class ItemList implements Model
      */
     public function update(Msg $msg): array
     {
+        if ($msg instanceof MouseMsg) {
+            // E736 5.14 (round 88): mouse arrives BEFORE the keyboard guard so
+            // the KeyMsg arms below stay byte-identical; unfocused stays deaf.
+            return [$this->focused && !$this->filtering ? $this->handleMouse($msg) : $this, null];
+        }
+
         if (!$msg instanceof KeyMsg || !$this->focused) {
             return [$this, null];
         }
@@ -494,6 +510,76 @@ final class ItemList implements Model
                 ),
             default => $this,
         };
+    }
+
+    /**
+     * Mouse routing mirroring charmbracelet/bubbles `list.go` handleMouse:
+     * a left press selects the row under the pointer; the wheel scrolls the
+     * selection one row (the viewport follows through the same
+     * {@see ViewportPan} math the keyboard uses, so offset and cursor can
+     * never desync — in a single-cursor list the selection IS the scroll
+     * position). Releases and motions are dropped: drag-select is
+     * deliberately unimplemented (upstream Bubbles list has no drag range
+     * either, and a press-pair tracker would need gesture state the
+     * immutable Model contract makes awkward to carry). Coordinates are
+     * list-relative with a 1-based origin — the caller subtracts the pane's
+     * own row/col offset before dispatching, exactly as upstream assumes
+     * the widget owns its rendered rectangle.
+     */
+    private function handleMouse(MouseMsg $msg): self
+    {
+        if ($msg instanceof MouseWheelMsg) {
+            return match ($msg->button) {
+                MouseButton::WheelUp   => $this->moveCursor($this->cursor - 1),
+                MouseButton::WheelDown => $this->moveCursor($this->cursor + 1),
+                default                => $this,
+            };
+        }
+        if ($msg instanceof MouseReleaseMsg || $msg instanceof MouseMotionMsg) {
+            return $this;
+        }
+        if ($msg->action !== MouseAction::Press || $msg->button !== MouseButton::Left) {
+            return $this;
+        }
+        $index = $this->itemIndexAtLine($msg->y);
+        return $index === null ? $this : $this->moveCursor($index);
+    }
+
+    /**
+     * Map a 1-based screen line to the absolute (post-filter, offset-included)
+     * index of the item rendered there, or null when the line is outside the
+     * item body. Walks the SAME layout `view()` renders — title row, filter
+     * row, then per item one title line plus a description line when shown —
+     * so a click on an item's description line selects that item.
+     */
+    private function itemIndexAtLine(int $screenLine): ?int
+    {
+        $visible = $this->visibleItems();
+        if ($visible === []) {
+            return null;
+        }
+        $line = 1;
+        if ($this->title !== '') {
+            $line++;
+        }
+        if ($this->showFilter && ($this->filtering || $this->filterText !== '')) {
+            $line++;
+        }
+        $top    = max(0, $this->offset);
+        $window = array_slice($visible, $top, $this->height);
+        foreach ($window as $i => $item) {
+            if ($screenLine === $line) {
+                return $top + $i;
+            }
+            $line++;
+            if ($this->showDescription && $item->description() !== '') {
+                if ($screenLine === $line) {
+                    return $top + $i;
+                }
+                $line++;
+            }
+        }
+        return null;
     }
 
     private function moveCursor(int $idx): self
