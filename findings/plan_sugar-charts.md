@@ -1,6 +1,6 @@
 ---
-status: r86-review (Phase-2/3/4 re-derived + built; Phase-1 4/5 landed, 1.3 premise-false)
-phase: 4
+status: r87-w3 (Phase-5 disposition: 5.1 verified-landed, 5.2/5.3/5.4 ruled report-and-skip; Sixel key single-channel pins added)
+phase: 5
 updated: 2026-09-17
 ---
 
@@ -76,15 +76,15 @@ Address all 19 prioritized findings from the sugar-charts code review, organized
 
 ---
 
-## Phase 5: Missing Features & Tests [PENDING]
+## Phase 5: Missing Features & Tests [CLOSED — r87-w3 disposition]
 
-- [ ] **5.1 Add missing test coverage** — Add tests for: `Graph::niceNumbers`, `BufferHelper::graphemeWidth`, `Waveline`, `Streamline`, `OHLCChart`, `Heatmap`. Finding 11 identifies these as lacking coverage. Severity: **low**. Verify: Coverage improved.
+- [x] ✅ **[r87-w3 VERIFIED-LANDED]** **5.1 Add missing test coverage** — Add tests for: `Graph::niceNumbers`, `BufferHelper::graphemeWidth`, `Waveline`, `Streamline`, `OHLCChart`, `Heatmap`. Finding 11 identifies these as lacking coverage. Severity: **low**. Verify: Coverage improved. — r87-w3 evidence at cfb26f8f2: every named unit has dedicated suites: `Graph::niceNumbers` → tests/Canvas/GraphTest.php:172-196 (19 methods, normal/reversed/zero-range/single-interval legs); `BufferHelper::graphemeWidth` → tests/Buffer/BufferHelperTest.php (39 methods, @covers) + Phase2PerfPinsTest boundary set-membership pins; Waveline → tests/LineChart/WavelineTest.php (8) + LineChart integration; Streamline → tests/LineChart/StreamlineTest.php (10) + FiniteGuardTest; OHLCChart → tests/OHLC/OHLCChartTest.php (39); Heatmap → tests/Heatmap/HeatmapTest.php (20) + HeatPointTest + Phase2PerfPinsTest determinism. Finding 11 predates these suites; no gap remains.
 
-- [ ] **5.2 Add stacked bar, pie/donut, histogram chart types** — Implement common chart types absent from library. Finding 8.1. Severity: **low**. Verify: New chart classes implemented and tested.
+- [ ] ⏭️ **[r87-w3 RULED — report-and-skip]** **5.2 Add stacked bar, pie/donut, histogram chart types** — Implement common chart types absent from library. Finding 8.1. Severity: **low**. — Net-new public chart classes across four families is a feature build (multi-class public-API invention, needs MATCHUPS/upstream-parity ruling), not a verification-cheap remainder; escalated to orchestrator/product scope, zero touch.
 
-- [ ] **5.3 Add ReactPHP animation driver** — Implement animation loop that drives `LineChart::withAnimationProgress()` frame-by-frame using candy-async. Finding 8.2: animation exists but no driver. Severity: **low**. Verify: Driver class works with LineChart.
+- [ ] ⏭️ **[r87-w3 RULED — host concern]** **5.3 Add ReactPHP animation driver** — Implement animation loop that drives `LineChart::withAnimationProgress()` frame-by-frame using candy-async. Finding 8.2: animation exists but no driver. Severity: **low**. — A driver class adds a new public surface AND a candy-async event-loop dependency into a render-only lib (new-dependency STOP line per campaign rules). Frame stepping is already the host app's tick loop (sugar-crush drives animation via withAnimationProgress; r86-v4 3.5 stamped the $allSeries animation path at LineChart.php:521-537). Library stays loop-free by design; zero touch.
 
-- [ ] **5.4 Add export to plain text/CSV** — Add `toCsv()` or `toRawValues()` methods to chart classes. Finding 8.4: only ANSI string output exists. Severity: **low**. Verify: Export methods work.
+- [ ] ⏭️ **[r87-w3 RULED — API growth]** **5.4 Add export to plain text/CSV** — Add `toCsv()` or `toRawValues()` methods to chart classes. Finding 8.4: only ANSI string output exists. Severity: **low**. — `toCsv()` across the chart classes is public-API sprawl on ~10 renderers with no port-parity mandate; underlying series data is already fully reachable through existing public accessors (every test builds/reads it), so export is a one-liner in the consuming app. Report-and-skip; would need an orchestrator API-surface ruling to mint. Zero touch.
 
 ---
 

@@ -126,6 +126,38 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
+     * E736/2.5 (r87-w3 hardening): the former same-red/different-green-blue
+     * pair alone let a memo key that DROPS exactly one of g/b survive — the
+     * pair differs in both channels, so any two-channel key still separates
+     * it. Each leg here differs from its twin in exactly ONE channel and the
+     * two quantise apart, pinning all three key channels individually:
+     * a blue-only pair reddens a key missing blue, a green-only pair reddens
+     * a key missing green.
+     */
+    public function testSixelMemoKeyRequiresEveryChannel(): void
+    {
+        $blueOnlyPair = [Color::rgb(0, 0, 10), Color::rgb(0, 0, 200)];
+        $greenOnlyPair = [Color::rgb(0, 10, 0), Color::rgb(0, 200, 0)];
+        foreach ([$blueOnlyPair, $greenOnlyPair] as $i => [$a, $b]) {
+            $label = $i === 0 ? 'blue-only' : 'green-only';
+            $idxA = self::firstDataColour(Sixel::encode([[$a]], 64));
+            $idxB = self::firstDataColour(Sixel::encode([[$b]], 64));
+            $this->assertNotSame($idxA, $idxB, "the $label pair must quantise to different indices");
+            $refs = [];
+            foreach (self::dataColours(Sixel::encode([[$a, $b]], 64)) as $ref) {
+                $refs[$ref] = true;
+            }
+            $this->assertCount(
+                2,
+                $refs,
+                "same-everything-except-$label pair keeps two distinct indices through the memo",
+            );
+            $this->assertArrayHasKey($idxA, $refs);
+            $this->assertArrayHasKey($idxB, $refs);
+        }
+    }
+
+    /**
      * E736/2.5: the memo lives per encode() call — changing palette size
      * between calls must not read a stale index.
      */
