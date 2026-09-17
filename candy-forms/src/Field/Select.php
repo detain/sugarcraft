@@ -7,7 +7,9 @@ namespace SugarCraft\Forms\Field;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
@@ -54,6 +56,19 @@ final class Select implements \SugarCraft\Forms\Field
     /** @var string Current filter text at the time async was scheduled */
     private string $pendingAsyncFilterText = '';
 
+    /** @var float|null E736-F2/6.5 wall-clock ceiling in seconds per debounced async fetch; null = no added timeout */
+    private ?float $asyncSuggestionsFetchTimeoutSeconds = null;
+
+    /**
+     * E736-F2/2.2 (round 85): ONE matcher for the widget's lifetime. The
+     * fuzzy filter path used to `new SmithWatermanMatcher()` on every
+     * filtering keystroke; the matcher is stateless apart from a lazily
+     * built fallback scorer, so a single instance is byte-identical output
+     * with zero per-keystroke construction (its lazy $fallback memo now
+     * also survives across keystrokes).
+     */
+    private readonly SmithWatermanMatcher $matcher;
+
     private function __construct(
         public readonly string $key,
         public readonly ItemList $list,
@@ -66,13 +81,16 @@ final class Select implements \SugarCraft\Forms\Field
         ?CancellationSource $pendingAsyncCancellation = null,
         string $pendingAsyncFilterText = '',
         public readonly ?string $enumClass = null,
+        ?float $asyncSuggestionsFetchTimeoutSeconds = null,
     ) {
+        $this->matcher = new SmithWatermanMatcher();
         $this->fuzzyCandidates = $fuzzyCandidates;
         $this->asyncSuggestionsFetcher = $asyncSuggestionsFetcher;
         $this->asyncSuggestionsDebounceMs = $asyncSuggestionsDebounceMs;
         $this->pendingAsyncSeq = $pendingAsyncSeq;
         $this->pendingAsyncCancellation = $pendingAsyncCancellation;
         $this->pendingAsyncFilterText = $pendingAsyncFilterText;
+        $this->asyncSuggestionsFetchTimeoutSeconds = $asyncSuggestionsFetchTimeoutSeconds;
     }
 
     public static function new(string $key): self
@@ -133,8 +151,16 @@ final class Select implements \SugarCraft\Forms\Field
      * @param callable(string):PromiseInterface<list<string>> $fetcher Receives filter text, returns promise of suggestions
      * @param int $debounceMs Milliseconds to wait after last keystroke before fetching (default 150)
      * @param WorkerPool|null $workerPool RESERVED — accepted, never consulted; see WORKER POOL STATUS above
+     * @param float|null $fetchTimeoutSeconds E736-F2/6.5: when set, each in-flight
+     *   fetch is raced against this wall-clock ceiling (seconds) via
+     *   {@see AsyncOps::withTimeout()}; a breach rejects with
+     *   {@see TimeoutException}. Default null awaits with NO added timeout —
+     *   byte-identical to pre-E736 behaviour.
+     * ASYNC DESIGN: see Input::withAsyncSuggestions() for the E736-F2
+     * notes (single-resolve fetch, quiet supersession via null-resolution
+     * 6.6, opt-in $fetchTimeoutSeconds 6.5, acceptable debounce timers 6.4).
      */
-    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
+    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
@@ -147,15 +173,20 @@ final class Select implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
+            // E741-sibling: enumClass is ctor state these two rebuild sites used
+            // to drop back to null; thread it (measured: Select::async() on an
+            // enum Select silently erased the enum cast before this fix).
+            enumClass:                 $this->enumClass,
+            asyncSuggestionsFetchTimeoutSeconds: $fetchTimeoutSeconds,
         ));
     }
 
     /**
      * Short-form alias for withAsyncSuggestions.
      */
-    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
+    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
-        return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool);
+        return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool, $fetchTimeoutSeconds);
     }
 
     public function withTitle(string $t): self        { return $this->mutate(title: $t); }
@@ -225,6 +256,8 @@ final class Select implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $cancellationSource,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
+            enumClass:                 $this->enumClass, // E741-sibling carry (see withAsyncSuggestions)
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
     }
 
@@ -276,8 +309,7 @@ final class Select implements \SugarCraft\Forms\Field
                 $l = $l->setItems($items);
             } else {
                 // Apply fuzzy ranking via candy-fuzzy's SmithWatermanMatcher.
-                $matcher = new SmithWatermanMatcher();
-                $results = $matcher->matchAll($filterText, $this->fuzzyCandidates);
+                $results = $this->matcher->matchAll($filterText, $this->fuzzyCandidates);
                 if ($results !== []) {
                     $ranked = array_map(static fn($r) => $r->haystack, $results);
                     $items = array_map(static fn(string $o) => new StringItem($o), $ranked);
@@ -328,24 +360,26 @@ final class Select implements \SugarCraft\Forms\Field
         $cancellationSource = $field->pendingAsyncCancellation;
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
+        $timeoutSeconds = $this->asyncSuggestionsFetchTimeoutSeconds;
         $currentSeq = ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
 
         // Store the filter text at time of scheduling for sequence tracking
         $scheduledFilterText = $filterText;
 
-        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $currentSeq, $fieldKey, $field, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
-            // Register cancellation: if the user types again, this will fire
-            // and reject the deferred before the timer fires.
+            // E736-F2/6.6 (round 85): cancellation resolves with NULL (the
+            // consumer program discards null resolutions) instead of rejecting
+            // — see the identical fix in Input::scheduleAsyncSuggestions().
             $token->onCancel(static function () use ($deferred): void {
-                $deferred->reject(new \RuntimeException('Async suggestions cancelled'));
+                $deferred->resolve(null);
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $scheduledFilterText): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $scheduledFilterText, $timeoutSeconds): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
@@ -353,6 +387,11 @@ final class Select implements \SugarCraft\Forms\Field
 
                 // Call the fetcher to get a promise
                 $promise = $fetcher($scheduledFilterText);
+
+                // E736-F2/6.5: opt-in wall-clock ceiling per fetch (null = raw await).
+                if ($timeoutSeconds !== null) {
+                    $promise = AsyncOps::withTimeout(Loop::get(), $promise, $timeoutSeconds);
+                }
 
                 // Chain to resolve the deferred when the fetcher promise resolves
                 $promise->then(
@@ -435,6 +474,7 @@ final class Select implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
             enumClass:                 $enumClass  ?? $this->enumClass,
         ));
     }

@@ -391,4 +391,38 @@ final class FilePickerTest extends TestCase
         // selected stays null because dirAllowed is false
         $this->assertNull($p->selected());
     }
+
+    public function testUnreadableDirectorySurfacesAnErrorAndRecoveryClearsIt(): void
+    {
+        // E736-F2/2.7: a failed scandir used to masquerade as an empty
+        // directory. The read error now rides the error slot view() renders.
+        $dir = $this->root . DIRECTORY_SEPARATOR . 'f2locked';
+        mkdir($dir);
+        file_put_contents($dir . '/inner.txt', 'x');
+        chmod($dir, 0o000);
+        if (is_readable($dir)) {
+            chmod($dir, 0o755);
+            $this->markTestSkipped('cannot simulate an unreadable directory for this uid');
+        }
+        try {
+            $p = FilePicker::new($dir);
+            $this->assertSame('cannot read directory: ' . $p->cwd, $p->error());
+            $this->assertStringContainsString('! cannot read directory', $p->view());
+
+            chmod($dir, 0o755);
+            $p2 = $p->refresh();
+            $this->assertNull($p2->error(), 'a repaired directory clears the stale message');
+            $this->assertStringNotContainsString('cannot read directory', $p2->view());
+        } finally {
+            @chmod($dir, 0o755);
+        }
+
+        // The distinction the fix buys: genuinely empty ≠ unreadable.
+        $empty = $this->root . DIRECTORY_SEPARATOR . 'f2empty';
+        mkdir($empty);
+        $pe = FilePicker::new($empty);
+        $this->assertNull($pe->error());
+        $this->assertStringContainsString('(empty)', $pe->view());
+    }
+
 }

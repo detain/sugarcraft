@@ -551,4 +551,29 @@ final class InputValidationTest extends TestCase
         $rf = $field->revalidate();
         $this->assertNull($rf->getError());
     }
+
+    public function testMultipleValidatorsChainFlatInAttachOrder(): void
+    {
+        // E736-F2/2.3: withValidator appends to a flat list instead of
+        // re-wrapping the previous chain (was O(N^2) closure nesting per
+        // attach). First-error-wins in ATTACH ORDER is the pinned contract.
+        $field = $this->focusInput(Input::new('k'))
+            ->withValidator(static fn(string $v): ?string => str_contains($v, 'a') ? null : 'need a')
+            ->withValidator(static fn(string $v): ?string => str_contains($v, 'b') ? null : 'need b')
+            ->withValidator(static fn(string $v): ?string => str_contains($v, 'c') ? null : 'need c');
+
+        $prop = new \ReflectionProperty($field, 'validators');
+        $prop->setAccessible(true);
+        $this->assertCount(3, $prop->getValue($field), 'validators must be a flat list, one per attach');
+
+        [$f] = $field->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('need a', $f->getError());
+        [$f] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame('need b', $f->getError());
+        [$f] = $f->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertSame('need c', $f->getError());
+        [$f] = $f->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertNull($f->getError());
+    }
+
 }

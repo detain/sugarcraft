@@ -106,6 +106,12 @@ final class TraitStateCarryFamilyTest extends TestCase
         // kept because the campaign STOP list forbids removing dormant code.
         // The assignment census below fails closed if it ever becomes live.
         $dead = [Select::class => ['fuzzyFilterText']];
+        // Non-ctor slots that carry NO user state: deterministic machinery
+        // every rebuild re-seeds unconditionally from the constructor body,
+        // so there is nothing for the carrier to preserve. E736-F2/2.2 added
+        // Select::$matcher (stateless Smith-Waterman scorer); the seed
+        // assertion below fails closed if it ever stops being unconditional.
+        $internal = [Select::class => ['matcher']];
         $nonCtor = [];
         foreach ($ref->getProperties() as $prop) {
             if ($prop->isPublic() || $prop->isStatic()) {
@@ -120,6 +126,15 @@ final class TraitStateCarryFamilyTest extends TestCase
                     $src,
                     '$this->' . $prop->getName() . ' =',
                     $class . '::$' . $prop->getName() . ' was declared dead-non-ctor but is now assigned — carry it (E741) or re-judge the roster',
+                );
+                continue;
+            }
+            if (in_array($prop->getName(), $internal[$class] ?? [], true)) {
+                $src = (string) file_get_contents($ref->getFileName());
+                $this->assertStringContainsString(
+                    '$this->' . $prop->getName() . ' = new SmithWatermanMatcher();',
+                    $src,
+                    $class . '::$' . $prop->getName() . ' was allow-listed as unconditional ctor-body machinery but is no longer seeded that way — it became state worth carrying (E741)',
                 );
                 continue;
             }

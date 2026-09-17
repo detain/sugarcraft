@@ -31,6 +31,16 @@ final class Viewport implements Model
 {
     use \SugarCraft\Core\SubscriptionCapable;
 
+    /**
+     * E736-F2/2.6 (round 85): per-snapshot memo for maxXOffset()'s O(lines)
+     * Width scan (clamp() runs on every scroll/resize msg, scrollbar paint
+     * reads it too). Only the X leg needed caching — totalLineCount() is
+     * count($lines) so maxOffset() was already O(1); the plan's "both
+     * uncached" premise measured half-stale. Immutable view state ⇒ fresh
+     * copy() instance resets the memo structurally (Form::valuesMemo law).
+     */
+    private ?int $maxXOffsetMemo = null;
+
     private function __construct(
         public readonly int $width,
         public readonly int $height,
@@ -445,6 +455,9 @@ final class Viewport implements Model
 
     private function maxXOffset(): int
     {
+        if ($this->maxXOffsetMemo !== null) {
+            return $this->maxXOffsetMemo;
+        }
         $widest = 0;
         foreach ($this->lines as $line) {
             $w = Width::string($line);
@@ -452,7 +465,7 @@ final class Viewport implements Model
                 $widest = $w;
             }
         }
-        return max(0, $widest - $this->width);
+        return $this->maxXOffsetMemo = max(0, $widest - $this->width);
     }
 
     private function clamp(): self

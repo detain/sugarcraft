@@ -31,6 +31,15 @@ use SugarCraft\Core\Util\Editor;
 final class TextArea implements Model
 {
     use Mutable;
+
+    /**
+     * E736-F2/2.4 (round 85): per-snapshot memo for totalLength()'s O(lines)
+     * mb_strlen scan (charLimit guard + stats hit it every keystroke). The
+     * widget is immutable — every mutate() rebuilds a fresh instance so the
+     * memo is structurally snapshot-scoped, same convention as
+     * Form::valuesMemo (E736 3.3).
+     */
+    private ?int $totalLengthMemo = null;
     /**
      * @param list<string>             $lines
      * @param ?\Closure(string): ?string $validate
@@ -724,12 +733,15 @@ final class TextArea implements Model
 
     private function totalLength(): int
     {
+        if ($this->totalLengthMemo !== null) {
+            return $this->totalLengthMemo;
+        }
         $sum = 0;
         foreach ($this->lines as $l) {
             $sum += mb_strlen($l, 'UTF-8');
         }
         $sum += max(0, count($this->lines) - 1); // newlines
-        return $sum;
+        return $this->totalLengthMemo = $sum;
     }
 
     /**

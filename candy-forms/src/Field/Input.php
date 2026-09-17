@@ -7,7 +7,9 @@ namespace SugarCraft\Forms\Field;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\TimeoutException;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
@@ -76,6 +78,9 @@ final class Input implements \SugarCraft\Forms\Field
      */
     private $workerPool = null;
 
+    /** @var float|null E736-F2/6.5 wall-clock ceiling in seconds per debounced async fetch; null = no added timeout */
+    private ?float $asyncSuggestionsFetchTimeoutSeconds = null;
+
     private function __construct(
         public readonly string $key,
         public readonly TextInput $input,
@@ -91,6 +96,7 @@ final class Input implements \SugarCraft\Forms\Field
         ?CancellationSource $pendingAsyncCancellation = null,
         WorkerPool $workerPool = null,
         ValidateOn $validateOn = ValidateOn::None,
+        ?float $asyncSuggestionsFetchTimeoutSeconds = null,
     ) {
         $this->validators = $validators;
         $this->suggestionsFunc = $suggestionsFunc;
@@ -101,6 +107,7 @@ final class Input implements \SugarCraft\Forms\Field
         $this->pendingAsyncCancellation = $pendingAsyncCancellation;
         $this->workerPool = $workerPool;
         $this->validateOn = $validateOn;
+        $this->asyncSuggestionsFetchTimeoutSeconds = $asyncSuggestionsFetchTimeoutSeconds;
     }
 
     public static function new(string $key): self
@@ -168,6 +175,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $cancellationSource,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
     }
 
@@ -228,6 +236,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
     }
 
@@ -267,6 +276,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
     }
 
@@ -285,11 +295,35 @@ final class Input implements \SugarCraft\Forms\Field
      * Until then passing a pool has NO effect, and fetchers that block will
      * block the loop.
      *
+     * ASYNC DESIGN (E736-F2/6.1-6.2-6.4, round 85): the fetcher promise is
+     * single-resolve by contract — suggestions arrive whole via
+     * SuggestionsReadyMsg and only the newest keystroke's settlement is
+     * honoured (superseded fetches settle quietly with null, 6.6). Streaming
+     * partial suggestion lists (6.1) would need a public AsyncCmd extension
+     * in candy-core and stay out of scope for this library. A unified
+     * cross-field AsyncSuggestionRequest object (6.2) was judged
+     * unnecessary: Input and Select each own their debounce/cancel pair and
+     * share no state to reconcile today. Many short-lived debounce timers
+     * (6.4) are acceptable by design — each armed timer fires at most once
+     * into a cancellation check and neither timer nor fetch outlives its
+     * keystroke's replacement. Cold-start timing (6.9): the AsyncCmd
+     * promise settles only once the host Program is running the event
+     * loop, and its resolution is dispatched as an ordinary message, so a
+     * fetch scheduled from the very first update() cannot land before
+     * init() — pre-seed suggestions via the focus()/init Cmd chain when a
+     * cold list is wanted.
+     *
      * @param callable(string):PromiseInterface<list<string>> $fetcher Receives current input value, returns promise of suggestions
      * @param int $debounceMs Milliseconds to wait after last keystroke before fetching (default 150)
      * @param WorkerPool|null $workerPool RESERVED — stored, never consulted; see WORKER POOL STATUS above
+     * @param float|null $fetchTimeoutSeconds E736-F2/6.5: when set, each in-flight
+     *   fetch is raced against this wall-clock ceiling (seconds) via
+     *   {@see AsyncOps::withTimeout()}; a breach rejects with
+     *   {@see TimeoutException} (surfaced as the fetcher failing). Default null
+     *   awaits the fetcher promise with NO added timeout — byte-identical to
+     *   pre-E736 behaviour.
      */
-    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
+    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
@@ -306,21 +340,30 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $workerPool,
             validateOn:                $this->validateOn,
+            asyncSuggestionsFetchTimeoutSeconds: $fetchTimeoutSeconds,
         ));
     }
 
     /**
      * Short-form alias for withAsyncSuggestions.
      */
-    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
+    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
-        return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool);
+        return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool, $fetchTimeoutSeconds);
     }
 
     /**
      * Attach a validator. Accepts a Validator instance or a closure.
      * Multiple calls chain validators together — each runs in sequence
      * and the first error message is returned.
+     *
+     * E736-F2/2.3 (round 85): the chain is an append to the indexed list
+     * that {@see self::validate()} already walks. It used to RE-WRAP the
+     * whole accumulated chain into one fresh closure per attach, so the
+     * Nth `withValidator()` built an N-deep nested wrapper (O(N²) closure
+     * graph) while `validate()` meanwhile expected a flat list and only
+     * ever saw one element. Appending keeps attach O(1) and first-error-
+     * wins ordering byte-identical.
      *
      * @param Validator|\Closure(string):?string $validator
      */
@@ -335,14 +378,13 @@ final class Input implements \SugarCraft\Forms\Field
             $fn = $validator;
         }
 
-        $chained = $this->buildChainedValidator($fn);
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
             description:               $this->description,
             error:                     $this->error,
-            validators:                $chained,
+            validators:                [...$this->validators, $fn],
             suggestionsFunc:           $this->suggestionsFunc,
             fuzzyCandidates:           $this->fuzzyCandidates,
             asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
@@ -351,6 +393,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
     }
 
@@ -387,37 +430,8 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $timing,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
-    }
-
-    /**
-     * Build a new validator closure that runs $fn in sequence with
-     * the existing chained validator (first error wins).
-     *
-     * @param \Closure(string):?string $fn
-     * @return list<\Closure(string):?string>
-     */
-    private function buildChainedValidator(\Closure $fn): array
-    {
-        $existing = $this->validators;
-
-        // If no existing validators, just return the new one wrapped in array.
-        if ($existing === []) {
-            return [$fn];
-        }
-
-        // Chain: run existing first, then $fn.
-        $chained = static function (string $v) use ($existing, $fn): ?string {
-            foreach ($existing as $vfn) {
-                $err = $vfn($v);
-                if ($err !== null) {
-                    return $err;
-                }
-            }
-            return $fn($v);
-        };
-
-        return [$chained];
     }
 
     /**
@@ -502,7 +516,10 @@ final class Input implements \SugarCraft\Forms\Field
      * Schedule async suggestions fetch with debounce.
      * Returns a Cmd that will perform the debounce and return AsyncCmd.
      * Uses CancellationSource to cancel the previous pending operation when
-     * the user types again before the debounce window elapses.
+     * the user types again before the debounce window elapses. Cancellation
+     * resolves the previous AsyncCmd with null — Program discards null
+     * resolutions — so replaced keystrokes no longer surface as rejected
+     * promises / ExceptionMsg storms (E736-F2/6.6).
      *
      * @param self $field  The field instance to use for getting current input value
      * @return \Closure|null Returns a Cmd closure, or null if no async suggestions
@@ -515,22 +532,29 @@ final class Input implements \SugarCraft\Forms\Field
         $cancellationSource = $field->pendingAsyncCancellation;
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
+        $timeoutSeconds = $this->asyncSuggestionsFetchTimeoutSeconds;
         $currentSeq = ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
         $workerPool = $this->workerPool;
 
-        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $currentSeq, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
-            // Register cancellation: if the user types again, this will fire
-            // and reject the deferred before the timer fires.
+            // E736-F2/6.6 (round 85): cancellation resolves the deferred with
+            // NULL instead of rejecting. The consumer program discards a null
+            // resolution (candy-core Program only dispatches non-null msgs),
+            // while a rejection rides AsyncCmd's otherwise-arm as an
+            // ExceptionMsg + error log PER REPLACED KEYSTROKE — the old shape
+            // turned ordinary rapid typing into a spurious error storm. A
+            // genuine fetcher failure still rejects (kept below); only the
+            // superseded-by-typing path goes quiet.
             $token->onCancel(static function () use ($deferred): void {
-                $deferred->reject(new \RuntimeException('Async suggestions cancelled'));
+                $deferred->resolve(null);
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $cancellationSource): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $cancellationSource, $timeoutSeconds): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
@@ -541,6 +565,13 @@ final class Input implements \SugarCraft\Forms\Field
 
                 // Call the fetcher to get a promise
                 $promise = $fetcher($inputValue);
+
+                // E736-F2/6.5: opt-in wall-clock ceiling per fetch. Null
+                // (default) skips the wrapper entirely — byte-identical await
+                // of the raw fetcher promise.
+                if ($timeoutSeconds !== null) {
+                    $promise = AsyncOps::withTimeout(Loop::get(), $promise, $timeoutSeconds);
+                }
 
                 // Chain to resolve the deferred when the fetcher promise resolves
                 $promise->then(
@@ -611,6 +642,7 @@ final class Input implements \SugarCraft\Forms\Field
                     pendingAsyncCancellation:  $this->pendingAsyncCancellation,
                     workerPool:                $this->workerPool,
                     validateOn:                $this->validateOn,
+                    asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
                 ));
             }
         }
@@ -630,6 +662,7 @@ final class Input implements \SugarCraft\Forms\Field
                 pendingAsyncCancellation:  $this->pendingAsyncCancellation,
                 workerPool:                $this->workerPool,
                 validateOn:                $this->validateOn,
+                asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
             ));
         }
         return $this;
@@ -652,6 +685,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
+            asyncSuggestionsFetchTimeoutSeconds: $this->asyncSuggestionsFetchTimeoutSeconds,
         ));
     }
 }

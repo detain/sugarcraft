@@ -397,4 +397,28 @@ final class TextAreaTest extends TestCase
         $this->assertSame(8, $t->getHeight());
         $this->assertSame(0, $t->getRowOffset());
     }
+
+    public function testTotalLengthMemoIsFreshPerSnapshot(): void
+    {
+        // E736-F2/2.4: totalLength() was an O(lines) rescan on every
+        // keystroke (charLimit guard + lineInfo stats); it is now a lazy
+        // per-snapshot memo. Behaviour pins below: counts stay exact across
+        // accepted, rejected, and deleting edits.
+        $t = TextArea::new()->withCharLimit(3);
+        [$t] = $t->focus();
+        [$t] = $t->update(new KeyMsg(KeyType::Char, 'a'));
+        [$t] = $t->update(new KeyMsg(KeyType::Char, 'b'));
+        [$t] = $t->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame(3, $t->lineInfo()['totalChars']);
+        [$t] = $t->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(3, $t->lineInfo()['totalChars'], 'over-limit input must not advance the memo');
+        [$t] = $t->update(new KeyMsg(KeyType::Backspace));
+        $this->assertSame(2, $t->lineInfo()['totalChars'], 'deletion must see a fresh memo');
+        [$t] = $t->update(new KeyMsg(KeyType::Char, 'z'));
+        $this->assertSame(3, $t->lineInfo()['totalChars']);
+
+        $multi = TextArea::new()->setValue("ab\ncd");
+        $this->assertSame(5, $multi->lineInfo()['totalChars'], 'embedded newline counts once');
+    }
+
 }

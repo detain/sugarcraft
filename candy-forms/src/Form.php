@@ -313,6 +313,10 @@ final class Form implements Model
     public function update(Msg $msg): array
     {
         if ($this->submitted || $this->aborted) {
+            // E736-F2/6.8: every late-settling async suggestion (and any
+            // other message) is discarded at this door — the pending-async
+            // surface of all fields turns inert once the form resolves, so
+            // no explicit cancel-on-submit bookkeeping is required.
             return [$this, null];
         }
 
@@ -508,21 +512,40 @@ final class Form implements Model
         if ($this->valuesMemo !== null) {
             return $this->valuesMemo;
         }
-        $out = [];
+        // E736-F2/2.9 (round 85): the walk shape is shared with
+        // collectValues()/validateAll() through valueWalk().
+        return $this->valuesMemo = $this->valueWalk(stopBeforeGroup: null, respectHiddenGroups: true);
+    }
+
+    /**
+     * Shared group-walk used by {@see values()} and {@see collectValues()}
+     * (E736-F2/2.9). Collects non-skippable field values per group;
+     * optionally stops before a group index and optionally skips groups
+     * whose hideFunc fires against the progressively accumulated map —
+     * the progressive convention every consumer shares.
+     *
+     * @return array<string,mixed>
+     */
+    private function valueWalk(?int $stopBeforeGroup, bool $respectHiddenGroups): array
+    {
+        $out         = [];
         $accumulated = [];
         foreach ($this->groups as $i => $group) {
-            if ($group->isHidden($accumulated)) {
+            if ($stopBeforeGroup !== null && $i >= $stopBeforeGroup) {
+                break;
+            }
+            if ($respectHiddenGroups && $group->isHidden($accumulated)) {
                 continue;
             }
             foreach ($this->fieldsByGroup[$i] as $f) {
                 if ($f->skippable()) {
                     continue;
                 }
-                $out[$f->key()] = $f->value();
+                $out[$f->key()]         = $f->value();
                 $accumulated[$f->key()] = $f->value();
             }
         }
-        return $this->valuesMemo = $out;
+        return $out;
     }
 
     /**
@@ -694,11 +717,21 @@ final class Form implements Model
      * Returns `array<fieldKey, errorMessage>` for fields that fail.
      * Mirrors huh's `ValidateAll()`.
      *
+     * E736-F2/2.1 (round 85): single progressive pass. The old shape
+     * walked every group twice — once to build the FULL accumulated value
+     * map, once to revalidate while testing group visibility against it —
+     * i.e. O(2n) plus a convention mismatch: visibility was decided from
+     * values collected across ALL groups (including not-yet-visited ones),
+     * while {@see values()}/pagination decide it progressively. The pass
+     * now accumulates as it goes (the house progressive convention) and
+     * calls revalidate() inline; validators are self-contained per field,
+     * so first-error ordering and the error map are unchanged.
+     *
      * @return array<string, string>
      */
     public function validateAll(): array
     {
-        $out = [];
+        $out         = [];
         $accumulated = [];
         foreach ($this->groups as $i => $group) {
             if ($group->isHidden($accumulated)) {
@@ -709,21 +742,9 @@ final class Form implements Model
                     continue;
                 }
                 $accumulated[$f->key()] = $f->value();
-            }
-        }
-        // Re-validate all fields by calling revalidate() on each field
-        // (which forces validators/constraints to run even on untouched fields)
-        // then collect the recomputed errors.
-        foreach ($this->groups as $i => $group) {
-            if ($group->isHidden($accumulated)) {
-                continue;
-            }
-            foreach ($this->fieldsByGroup[$i] as $f) {
-                if ($f->skippable()) {
-                    continue;
-                }
-                $rf = $f->revalidate();
-                $err = $rf->getError();
+                // revalidate() forces validators/constraints to run even on
+                // untouched fields; the recomputed field is query-only.
+                $err = $f->revalidate()->getError();
                 if ($err !== null && $err !== '') {
                     $out[$f->key()] = $err;
                 }
@@ -861,18 +882,10 @@ final class Form implements Model
      */
     private function collectValues(): array
     {
-        $out = [];
-        foreach ($this->groups as $i => $group) {
-            if ($i >= $this->groupIndex) {
-                break;
-            }
-            foreach ($this->fieldsByGroup[$i] as $f) {
-                if (!$f->skippable()) {
-                    $out[$f->key()] = $f->value();
-                }
-            }
-        }
-        return $out;
+        // E736-F2/2.9: same walk as values(), stopped at the current group
+        // and raw (this map is the INPUT to isHidden(), so it must not
+        // pre-filter hidden groups).
+        return $this->valueWalk(stopBeforeGroup: $this->groupIndex, respectHiddenGroups: false);
     }
 
     /**

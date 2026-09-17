@@ -215,7 +215,14 @@ final class FilePicker implements Model
 
     public function refresh(): self
     {
-        return $this->mutate(entries: $this->readDir());
+        // E736-F2/2.7 (round 85): a failed scandir used to surface as a bare
+        // "(empty)" listing, indistinguishable from a genuinely empty
+        // directory. The read error now rides the existing (until-now
+        // never-written) error slot, which view() already renders as an
+        // '! …' line. errorSet is unconditional so a repaired directory
+        // clears the stale message on the next successful refresh.
+        [$entries, $error] = $this->readDir();
+        return $this->mutate(entries: $entries, error: $error, errorSet: true);
     }
 
     public function withShowHidden(bool $on): self
@@ -292,12 +299,15 @@ final class FilePicker implements Model
         )->refresh();
     }
 
-    /** @return list<Entry> */
+    /**
+     * @return array{0: list<Entry>, 1: ?string} entries plus a surfaced read
+     *         error (E736-F2/2.7): null on success, human-readable on failure
+     */
     private function readDir(): array
     {
         $names = @scandir($this->cwd);
         if ($names === false) {
-            return [];
+            return [[], 'cannot read directory: ' . $this->cwd];
         }
         $entries = [];
         foreach ($names as $name) {
@@ -336,7 +346,7 @@ final class FilePicker implements Model
             };
             return $cmp * $reverse;
         });
-        return $entries;
+        return [$entries, null];
     }
 
     private function moveCursor(int $idx): self

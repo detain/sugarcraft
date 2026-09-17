@@ -440,4 +440,18 @@ final class ViewportTest extends TestCase
             );
         }
     }
+
+    public function testMaxXOffsetMemoIsScopedToEachSnapshot(): void
+    {
+        // E736-F2/2.6: maxXOffset() is memoised per immutable snapshot (the
+        // Width scan was repeated per query). Fresh content ⇒ fresh memo.
+        $wide = Viewport::new(10, 3)->setContent(str_repeat('x', 40) . "\nshort");
+        $this->assertSame(30, $wide->scrollRight(9999)->xOffset());
+        $this->assertSame(30, $wide->scrollRight(9999)->scrollRight(9999)->xOffset(), 'repeat clamps stay at the bound');
+
+        $narrow = $wide->setContent('tiny');
+        $this->assertSame(0, $narrow->scrollRight(9999)->xOffset(), 'narrow snapshot must not inherit the wide memo');
+        $this->assertSame(30, $wide->scrollRight(9999)->xOffset(), 'the original snapshot is untouched');
+    }
+
 }

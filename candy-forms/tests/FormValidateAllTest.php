@@ -10,6 +10,7 @@ use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Form;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Forms\Group;
 
 final class FormValidateAllTest extends TestCase
 {
@@ -101,4 +102,55 @@ final class FormValidateAllTest extends TestCase
         $this->assertArrayHasKey('name', $allErrors);
         $this->assertSame('Value is required', $allErrors['name']);
     }
+
+    // ---------------------------------------------------------------------
+    // E736-F2 (round 85): single-pass validateAll + progressive visibility
+    // ---------------------------------------------------------------------
+
+    public function testValidateAllJudgesGroupVisibilityProgressively(): void
+    {
+        // The hidden-group decision now reads the ACCUMULATED-SO-FAR value
+        // map — the same convention values() uses (E736-F2/2.1). A hideFunc
+        // that reaches FORWARD to a field defined in a later group therefore
+        // sees that field's default, not its final value: the gated group
+        // stays visible and its validator runs. Under the retired two-pass
+        // walk the FULL map was consulted and this row was silently skipped.
+        $gated = Input::new('gated')
+            ->withValidator(static fn(string $v): ?string => 'always fails');
+        $late = Input::new('late')->withValue('trigger');
+        $form = Form::groups(
+            Group::new($gated)->hideIf(static fn(array $values): bool => ($values['late'] ?? '') === 'trigger'),
+            Group::new($late),
+        );
+        $this->assertArrayHasKey('gated', $form->validateAll(), 'progressive pass cannot see the forward value');
+        $this->assertArrayHasKey('gated', $form->values(), 'validateAll and values() agree on visibility');
+    }
+
+    public function testValidateAllSkipsGroupHiddenByEarlierValue(): void
+    {
+        // Backward dependency (the ordinary case): the switch is accumulated
+        // before the group is judged, so the hidden group is skipped — the
+        // single pass keeps the behaviour every prior test already relied on.
+        $inner = Input::new('inner')
+            ->withValidator(static fn(string $v): ?string => 'always fails');
+        $switch = Input::new('switch')->withValue('hide');
+        $form = Form::groups(
+            Group::new($switch),
+            Group::new($inner)->hideIf(static fn(array $values): bool => ($values['switch'] ?? '') === 'hide'),
+        );
+        $this->assertSame([], $form->validateAll());
+        $this->assertSame([], $form->errors());
+    }
+
+    public function testValidateAllCarriesEveryVisibleFieldErrorInOneWalk(): void
+    {
+        // Single O(n) pass: two erroring fields across two groups land in the
+        // map together, keyed and ordered by field attachment (no second
+        // pass could reorder or drop them).
+        $a = Input::new('a')->withValidator(static fn(string $v): ?string => 'A!');
+        $b = Input::new('b')->withValidator(static fn(string $v): ?string => 'B!');
+        $form = Form::new($a, $b);
+        $this->assertSame(['a' => 'A!', 'b' => 'B!'], $form->validateAll());
+    }
+
 }
