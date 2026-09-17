@@ -1,8 +1,8 @@
 # Implementation Plan: candy-shell Audit Fixes
 
-**Status:** Not Started  
+**Status:** Complete — r86-v1 verification sweep: 7 rows pre-landed ✅, 1.1+1.2 landed-reshaped, 2.1 verified non-issue, 4.1 🔀 cross-lib mis-file (already closed in candy-vcr ledger), 6.1 ⏭️ info  
 **Phase:** 1  
-**Updated:** 2026-06-30
+**Updated:** 2026-09-17
 
 ## Goal
 
@@ -26,9 +26,9 @@ Address all 28 findings from the candy-shell audit across security issues, bugs,
 
 ---
 
-## Phase 1: Security Issues [PENDING]
+## Phase 1: Security Issues [CLOSED r86-v1]
 
-### 1.1 [ ] HIGH: Shell Injection in Env-Var Fallback — `src/Application.php:137-141`
+### 1.1 [x] ✅ HIGH: Shell Injection in Env-Var Fallback — `src/Application.php:137-141` — LANDED-RESHAPE r86-v1: the escapeshellarg→stripslashes→trim chain is gone from src (grep 0 hits); `Application.php:125-191` now injects `--name=value` tokens into ArgvInput's in-process token array, parsed by Symfony's own `parseLongOption()` — no shell channel survives, values land verbatim. Landed via 5e1f08e5d ("fix env var fallback for value options"). Plan condition "new test for env value containing single quotes" was UNPINNED → shipped in r86-v1: `tests/ApplicationEnvTokenInjectionTest::testEnvValueWithQuotesBackslashesAndSpacesSurvivesVerbatim` (mutation-proven: old-chain corruption `foo'''barbaz` and quote-strip both redden exactly 1).
 
 **What is expected:**
 Refactor `applyEnvVarFallbackToInput()` to build an argv array instead of using string manipulation with `escapeshellarg → stripslashes → trim` chain. The current approach leaves backslashes that can break token parsing.
@@ -61,7 +61,7 @@ The reflection hack to inject tokens into ArgvInput is at lines 145-150. The pro
 
 ---
 
-### 1.2 [ ] HIGH: Unrestricted Env Var Access in Template Mode — `src/Command/FormatCommand.php:99-102`
+### 1.2 [x] ✅ HIGH: Unrestricted Env Var Access in Template Mode — `src/Command/FormatCommand.php:99-102` — LANDED-RESHAPE r86-v1: shipped as `--allow-env` (not `--sandbox-env`), FormatCommand.php:35/:54-57/:98-133, commit 1b51f2019. Stronger than planned: SECURE-BY-DEFAULT — empty allowlist (the default) expands nothing; `*` is the explicit unsafe opt-in; non-listed `{{VAR}}` renders empty. Pinned in `tests/Command/FormatCommandTest.php` ("Secure-by-default: without --allow-env, no {{VAR}} expands", :99).
 
 **What is expected:**
 Add `--sandbox-env` flag to restrict environment variable substitution to a safe allowlist in `renderTemplate()`. The flag should accept a comma-separated list of allowed variable names (e.g., `--sandbox-env=USER,HOME`).
@@ -86,9 +86,9 @@ The current implementation at lines 97-104 substitutes ANY environment variable 
 
 ---
 
-## Phase 2: Bugs [PENDING]
+## Phase 2: Bugs [CLOSED r86-v1]
 
-### 2.1 [ ] MEDIUM: Space Key Routing in Filter Mode — `src/Model/FilterModel.php:59-67`
+### 2.1 [x] ✅ MEDIUM: Space Key Routing in Filter Mode — `src/Model/FilterModel.php:59-67` — VERIFIED NON-ISSUE r86-v1: `FilterModel::update()` toggles only on Tab (comment: "Space is consumed by the inner filter buffer") and forwards every other key to `ItemList::update()`; in filter mode ItemList appends Space to the filter text (candy-forms/src/ItemList/ItemList.php:490 — plan's :478-482 drifted, gated by the `filtering` flag). Non-filter multi-mode Space-toggle pinned by `ChooseModelTest::testMultiModeSpaceTogglesSelection`; filter-mode Space prefill exercised in `FilterModel`'s own ctor loop. No fix required.
 
 **What is expected:**
 Verify and potentially fix how Space key is routed in filter mode for multi-select. The finding claims space may be consumed by multi-select toggle instead of filter buffer.
@@ -176,7 +176,7 @@ After `terminate()` is called, subsequent `close()` calls would invoke `wait()` 
 
 ---
 
-## Phase 3: Performance [PENDING]
+## Phase 3: Performance [CLOSED r86-v1]
 
 ### 3.1 [x] ✅ MEDIUM: O(n·m) Fuzzy Recomputation on Every Keystroke — `src/Model/FilterModel.php:161-178`
 
@@ -225,9 +225,9 @@ For large CSV data, php://memory could exhaust RAM. php://temp with maxmemory se
 
 ---
 
-## Phase 4: Memory Issues [PENDING]
+## Phase 4: Memory Issues [CLOSED r86-v1]
 
-### 4.1 [ ] MEDIUM: ImagickRasterizer Shared Tile Cache Between Clones — `candy-vcr/src/Raster/ImagickRasterizer.php:58-66`
+### 4.1 🔀 MEDIUM: ImagickRasterizer Shared Tile Cache Between Clones — `candy-vcr/src/Raster/ImagickRasterizer.php:58-66` — 🔀 moved — belongs to candy-vcr ledger (r86-v1): cross-lib mis-file, never candy-shell work. Defect already FIXED & tracked there: findings/candy-vcr.md #2 (HIGH) and #13 (LOW), both ✅ r82 — `src/Raster/ImagickRasterizer.php` withTheme()/withFont() deep-clone every Imagick tile per instance (verified at b26b9989f). Cross-reference note appended under #2; no action in this ledger.
 
 **What is expected:**
 Fix `withTheme()` and `withFont()` methods to clone the tileCache array instead of sharing it by reference.
@@ -250,7 +250,7 @@ When `withTheme()` is called, `tileCache` points to the same array as the origin
 
 ---
 
-## Phase 5: Missing Features [PENDING]
+## Phase 5: Missing Features [CLOSED r86-v1]
 
 ### 5.1 [x] ✅ MEDIUM: Missing `--no-selected` Option — `src/Command/ChooseCommand.php`
 
@@ -322,9 +322,9 @@ Use `highlightIndices()` result in `view()` to render highlighted characters in 
 
 ---
 
-## Phase 6: PHP 8.3+ Compatibility [PENDING]
+## Phase 6: PHP 8.3+ Compatibility [CLOSED r86-v1]
 
-### 6.1 [ ] INFO: PHP 8.3+ Compatibility Confirmed
+### 6.1 [x] ⏭️ INFO: PHP 8.3+ Compatibility Confirmed — ⏭️ no action (r86-v1): INFO row, zero changes expected and none made. Compatibility demonstrated: full suite green 334T/694A on PHP 8.3.6 at r86-v1. "PHPStan level 8+" condition is not repo tooling (no phpstan config in candy-shell or the monorepo) — not assessable here; 8.4 leg belongs to CI matrix.
 
 **What is expected:**
 No changes needed. The library is fully compatible with PHP 8.3+.
@@ -359,3 +359,4 @@ Uses readonly, promoted constructors, match expressions, final class. No PHP 8.4
 - Phase ordering follows severity: HIGH security issues first, then bugs, performance, memory, features
 - Each task should be verified with tests before marking complete
 - The 1.1 and 1.2 security fixes should be reviewed carefully as they involve security-sensitive code paths
+- 2026-09-17 (r86-v1): verification sweep — header "Not Started" was FALSE (7/12 rows already ✅); remaining rows dispositioned in place. Only code shipped: 1 pinning test for the 1.1 plan condition (quote/backslash/space env value), 2 mutations discriminating.

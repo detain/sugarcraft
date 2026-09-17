@@ -50,6 +50,8 @@ When withTheme() is called, clone shares same tileCache array. If either instanc
 
 Recommendation: Deep-clone the cache array or implement copy-on-write.
 
+- r86-v1: same defect appeared MISFILED in the candy-shell audit as `findings/plan_candy-shell.md` 4.1 — stamped 🔀 there (moved — belongs to this ledger); canonical record remains this section, closed ✅ at r82 (dup tracked in #13).
+
 ---
 
 ## 3. MEDIUM: FrameStream Mutation During Iteration ✅ r82: fixed by rewrite — src/Encode/TapeToGif.php:130-131 snapshots captureCursor before iteration

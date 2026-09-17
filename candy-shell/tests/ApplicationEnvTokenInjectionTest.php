@@ -43,6 +43,43 @@ final class ApplicationEnvTokenInjectionTest extends TestCase
     }
 
     /**
+     * SECURITY PIN (plan_candy-shell.md 1.1, condition "env value containing
+     * single quotes"). The env-backed value must survive the injection path
+     * VERBATIM. The pre-5e1f08e5d implementation routed the value through
+     * escapeshellarg → stripslashes → trim, which corrupted quote/backslash
+     * shapes (`foo'bar` came back with stray backslashes). The in-process
+     * ArgvInput token injection has no shell channel at all, so Symfony's
+     * own parseLongOption() splits `--prefix=<value>` at the first `=` and
+     * the value lands untouched. This pins that property.
+     */
+    public function testEnvValueWithQuotesBackslashesAndSpacesSurvivesVerbatim(): void
+    {
+        $original = getenv('CANDYSHELL_PREFIX');
+        $tricky = "foo'bar\\baz qux";
+        putenv('CANDYSHELL_PREFIX=' . $tricky);
+        try {
+            $app = new Application();
+            $out = new BufferedOutput();
+            $status = $app->run(new ArgvInput(['candyshell', 'log', 'hello']), $out);
+
+            $this->assertSame(0, $status);
+            $display = $out->fetch();
+            // Exact raw substring: quotes, backslash, and the embedded space
+            // all present, nothing escaped, stripped, or re-quoted.
+            $this->assertStringContainsString($tricky, $display);
+            // Measured old-chain corruption shape (escapeshellarg→stripslashes
+            // tripped the quote and ate the backslash): must never appear.
+            $this->assertStringNotContainsString("foo'''barbaz", $display);
+        } finally {
+            if ($original === false) {
+                putenv('CANDYSHELL_PREFIX');
+            } else {
+                putenv('CANDYSHELL_PREFIX=' . $original);
+            }
+        }
+    }
+
+    /**
      * Happy path: when $tokens exists (every current Symfony release), an
      * env-backed VALUE option is injected onto the token stream and survives
      * Command::run()'s second bind(), reaching the command's output. Regresses
