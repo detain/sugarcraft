@@ -11618,6 +11618,21 @@ Pick order u1(2) → u2 → u3, ZERO conflicts except the ONE predicted: `TextIn
 
 dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · sugar-prompt **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`.
 
+### ROUND-85 WAVE-2 + CLOSE (2026-09-17) — u4 (E741 + E736 F2) + u6 (E731 COMP-2 (b)) welded; two umbrellas CLOSED; census 3 → 1 (E736 sole survivor); OPERATOR DECISION POINT
+
+**Welded 2026-09-17 on `ccb86e5fa` (NEVER pushed).** Two lanes, file-DISJOINT (candy-forms vs sugar-dash), both reviewed APPROVE-class BEFORE merge, FIVE picks zero conflicts.
+
+| lane | lib | tip → picks | shipped | gate |
+|---|---|---|---|---|
+| u4 | candy-forms | `6029c8fb7`/`d16dd6c8f`/`2f1e145ca`/`7fb6a64be` → `ac82cf822`/`c1cebb634`/`5461ded56`/`2aba19b05` | **E741** shared-carrier family fix (`CarriesNonCtorState.php` into 6 Field classes, 25 `new self(...)` sites, fail-closed roster + 17-pin carrier-neuter proof) + **E736 F2**: Phase-2 perf (2.1 progressive-visibility DISCLOSED behavior change, single-pass validateAll, memoized caches) + Phase-6 async (opt-in `fetchTimeoutSeconds`, null⇒byte-identical wire; quiet-cancel; existence censuses) + rv fix-round (Select matcher docblock measured truth, Confirm fold seam note) | forms **1891T/3164A/0W** (1851→+40T exact) |
+| u6 | sugar-dash | `0eba02549` → `0f26082fe` | **E731(b)** COMP-2 ADOPTED-IMPLEMENTED: `ProcAvailability` probe-once memo + `'n/a'` sentinel render on /proc-absent hosts (System + Uptime), injected-probe pins, history-non-accumulation | dash **6006T/10076A/1S/0W** |
+
+**u4 death-mode evidence (10-resume law + salvage-first PROVEN):** the u4 builder died with TEN consecutive blank reports AFTER landing all four commits; the REFINED resume law (same task_id ≤10x, disk-probe between) plus salvage-first step 0 (porcelain/artifacts/tree audit before any redo) recovered a complete verified lane with ZERO redo — tip `7fb6a64be` matched the last known claim.
+
+**Decisions taken this round:** 1.5 + 6.3 workerPool DOCUMENT-RESERVED (removal = public-API STOP; wiring deferred to a Phase-6 successor lane); 2.5 DECLINED (sound per rv-u4); vim j/k inverted motion behavior PRESERVED, product-seam carried; COMP-2 option (b) ADOPTED at wave-1, IMPLEMENTED at wave-2. rv-u4 APPROVE-WITH-FIX 0C/0M/3MINOR (MINOR-1 fixed in `2aba19b05`; MINOR-2 fold-note recorded; MINOR-3 no action); rv-u6 APPROVE 0C/0M/2MINOR — race-leg non-latch UNPINNED + readMemLoad clamp kernel-invariant recorded as honest residuals, NOT minted.
+
+**Gates (weld tree, plain pipe, linked 19/19+8/8):** forms 1891/3164/0W · dash 6006/10076/1S · bits 493/1015 · prompt 158/310/2S · readline 336/1076 · shell window 78/163 · query window 111/204 · crush `Form|Input|Select|Cursor` **633/3943 EXACT** · five-guard **125/7362 EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end · ZERO sugar-crush files moved (`git diff --name-only ccb86e5fa..0f26082fe | grep -c '^sugar-crush/'` = 0) → NO crush serial, NO re-pin — floor stays **12,027 / 170,392 / 0F / 0E / 1S / EXIT 0**. Chain: `ccb86e5fa` → `ac82cf822` → `c1cebb634` → `5461ded56` → `2aba19b05` → `0f26082fe`. **ROUND 85 CLOSED** (5 lanes; forms complete modulo Phase 5). Census 3 → **1**: E731 + E741 CLOSED, E736 sole survivor — decision point (§0-NOW-88 §2): cut E736-sugar-bits after per-lib re-derivation probe / forms-Phase-5 product-scoping session / close campaign.
+
 ## ROUND 84 (2026-09-16) — E735 leftover tail CLOSED in a single six-lane weld; floor UNCHANGED 12,027 / 172,610 (zero sugar-crush test files moved — no re-pin); census survivors 3 to 2 (E731/E736); the 68d73f9ba downstream-goldens family FULLY swept
 
 **Closed 2026-09-16 at the W1 weld (code tip `7a3280759`, closeout docs atop; NEVER pushed).** The round

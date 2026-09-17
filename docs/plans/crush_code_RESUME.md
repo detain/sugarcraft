@@ -4,141 +4,56 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-87 BELOW. It carries the ROUND-85-WAVE-1-WELDED banner — u1 (E731 dash trait
-sweep + COMP-2 half), u2 (E736 candy-forms F1 incl. the Confirm trait-drop bugfix), u3 (E736 candy-forms
-F3) welded on r86u master `988696aea` with ONE keep-both docblock conflict; companion fold + E741 minted.
-FLOOR UNCHANGED 12,027 / 170,392 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0 — zero sugar-crush
-files moved, no re-pin. ACTIONABLE BY ROW CENSUS = **3**: E731 / E736 / E741(mint, owner u4). Wave-2 roster
-u4+u6 file-disjoint; then the §2(c) decision (next E736 lib vs close). HARNESS LAW IN FORCE: serials PLAIN
-BASH PIPE — NEVER tmux/setsid/PTY. failOnWarning UNIVERSAL (58/58) — ZERO Warnings expected at every gate.
-Durations.tsv sugar-crush-ONLY. Config-md5 at-rest truth `d96e124ee7967eb34ef479ef824231ad`. LINK CENSUS
-post-r86u: sugar-crush **19/19** + candy-pty **8/8** (the old 18/7 expectation is STALE).**
+🔴 **START AT §0-NOW-88 BELOW. It carries the ROUND-85-CLOSED banner — wave-2 welded u4 (E741 shared-carrier family fix + E736 candy-forms F2) and u6 (E731 COMP-2 (b) 'n/a' sentinel render); E731 and E741 CLOSED; candy-forms COMPLETE modulo Phase-5 product scoping. FLOOR UNCHANGED 12,027 / 170,392 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0 — both r85 waves moved ZERO sugar-crush files, no re-pin. ACTIONABLE BY ROW CENSUS = **1**: E736 (port-completion umbrella: 6 remaining 🟡 libs + forms-Ph5). OPERATOR DECISION POINT (§2): cut E736-sugar-bits ONLY after per-lib re-derivation probe / forms-Phase-5 product-scoping session / CLOSE campaign. HARNESS LAW IN FORCE: serials PLAIN BASH PIPE — NEVER tmux/setsid/PTY. failOnWarning UNIVERSAL (58/58) — ZERO Warnings at every gate. Durations.tsv sugar-crush-ONLY (532 rows HELD). Config-md5 at-rest truth `d96e124ee7967eb34ef479ef824231ad`. LINK CENSUS post-r86u: sugar-crush **19/19** + candy-pty **8/8** (the old 18/7 expectation is STALE).**
 
-## 0-NOW-87. ROUND 85 WAVE-1 WELDED — E731 SWEEP + E736 FORMS F1/F3 IN — QUEUE = 3 ROWS (E741 MINTED) — WAVE-2 ROSTER CUT — CURRENT
+## 0-NOW-88. ROUND 85 CLOSED — CANDY-FORMS COMPLETE, E731/E741 CLOSED, ACTIONABLE = 1 (E736) — OPERATOR DECISION POINT: WAVE-3 LIB / PH5 SCOPING / CLOSE — CURRENT
 
-**Written 2026-09-17 at the round-85 wave-1 weld closeout (code tip `1f92f70c8`). §0-NOW-86 is DELETED —
-every live claim it carried is re-stated here or retired with its closure; its machinery survives VERBATIM
-in the APPENDICES below: operating rules 1–10 (APPENDIX I), addenda -66…-73 (APPENDIX II — UNCHANGED this
-close), vendor & suite machinery (APPENDIX III), the K=8 standard gate (APPENDIX II §1b),
-environment/philosophy (APPENDIX IV), craft-rules digest (APPENDIX V).**
+**Written 2026-09-17 at the round-85 wave-2 weld closeout (code tip `0f26082fe`, master @ this closeout's docs commits). §0-NOW-87 is DELETED — every live claim it carried is re-stated here or retired with its closure; its machinery survives VERBATIM in the APPENDICES below: operating rules 1–10 (APPENDIX I), addenda -66…-73 (APPENDIX II — UNCHANGED this close), vendor & suite machinery (APPENDIX III), the K=8 standard gate (APPENDIX II §1b), environment/philosophy (APPENDIX IV), craft-rules digest (APPENDIX V).**
 
-**The headline: the §0-NOW-86 §2(c) decision was TAKEN — a port wave opened. ROUND 85 wave-1 ran three
-lanes (u1 sugar-dash E731 five-trait literal-twin sweep + COMP-2 door-probes/design; u2 candy-forms E736
-F1 — including a REAL data-loss fix: Confirm silently dropped its validator and both trait closures across
-`new self(...)` rebuilds, fixed via the `carryNonCtorState()` carrier; u3 candy-forms E736 F3), ALL
-reviewed APPROVE-class before merge, welded with exactly ONE conflict — u2's 4.7 note vs u3's 3.8
-paragraph on the same `TextInput::withValidator` docblock line, resolved KEEP-BOTH (zero code overlap,
-merged forms suite green as the proof). Floor EXACT-carried (zero crush files moved). E731's COMP-2
-option-(b) is ADOPTED per orchestrator ruling — implementation is wave-2 lane u6. E736's candy-forms
-Phases 1/3/4/7/8 are done; the Input trait-drop family from u2's seam is MINTED **E741** and folded into
-wave-2 lane u4 (F2). Census moved 2 → 3 by the E741 mint; both umbrellas STAY [OPEN].**
+**The headline: ROUND 85 ran two waves, five lanes (u1–u4, u6), ALL reviewed APPROVE-class before merge, ten code picks + one companion fold, ZERO unexpected conflicts.** Wave-1 (u1 sugar-dash E731 five-trait literal-twin sweep + COMP-2 design; u2 candy-forms E736 F1 incl. the REAL Confirm trait-drop data-loss fix; u3 E736 F3) closed at `ccb86e5fa` with E741 minted. Wave-2 welded u4 (**E741** family fixed at shared scale — `CarriesNonCtorState` trait wired into 6 Field classes / 25 rebuild sites, fail-closed roster + 17-pin mutation proof; **E736 F2** — Phase-2 perf + Phase-6 async, forms 1891T/3164A/0W) and u6 (**E731 COMP-2 (b)** implemented — ProcAvailability probe-once memo + `'n/a'` sentinel render, dash 6006T/10076A/1S/0W). E731 CLOSED (trait-extraction path exhausted; AbstractChart big-bang stays DECLINED per the r83 ruling), E741 CLOSED, and **candy-forms is COMPLETE modulo Phase-5 product scoping**. Census 3 → **1** — E736 is the sole survivor: the port-completion umbrella. Defect queue ZERO. The campaign stands at an OPERATOR DECISION POINT (§2).
 
 ### 1. THE FLOOR — THE ANCHOR, AND ITS DOMAIN
 
 | figure | value | domain |
 |---|---|---|
-| **ROUND-85 WELD / ANCHOR** | **12,027 / 170,392 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** (serial green x2 at r86u master `988696aea`, PLAIN PIPE, linked, cwd = sugar-crush; r85 weld moves ZERO sugar-crush files → carried EXACT, no re-pin; K=8 conservation +0) | **UNCHANGED since r86u absorption — link-domain; ±32A cold/warm `ensureFixtureRepo()` wobble band still the assertions truth** |
-| lib figures at the weld | sugar-dash **5,995 / 10,042 / 1S / 0W** (u1 tip 5994/10034 + companion pin +8A exact) - candy-forms **1,851 / 3,035 / 0W** (1823 base +7 u2 +21 u3 EXACT) - sugar-bits **493 / 1,015** - sugar-prompt **158 / 310 / 2S** - sugar-readline **336 / 1,076** - crush `Form\|Input\|Select\|Cursor` window **633 / 3,943** - five-guard **125 / 7,362** - shell window 78/163 + query 111/204 GREEN (u2's recorded 81/114 cite unrecorded filter strings — rv-u2 MINOR-2, honest seam) | lib-local; every touched lib gated FULL + both repo tools rc=0 (child-lifetimes 57 libs/24 sites/6 accounted; path-repos --no-lib-path-repos) |
-| chain | `988696aea` (r86u) → picks `b8b702618`(u1-a) `11992bf81`(u1-b) `23aea4386`(u2) `be0b010d6`(u3, keep-both docblock conflict) → companion `1f92f70c8` (rv-u1 MINORs: getHeatChar divergence pin + SparklineScaling property-name truth) → closeout docs + filemap = ROUND-85-TIP | NEVER pushed |
-| durations | **532 rows HELD** — no new sugar-crush test files this weld (sibling-lib files never belong in the tsv) | shared infra |
+| **ANCHOR (carried)** | **12,027 / 170,392 / 0F / 0E / 1 skipped (`McpClientTest` canary) / EXIT 0** — serial green x2 at r86u master `988696aea`, PLAIN PIPE, linked, cwd = sugar-crush; BOTH r85 waves moved ZERO sugar-crush files → carried EXACT through weld tip `0f26082fe`, no re-pin; K=8 conservation +0 | **UNCHANGED since r86u absorption — link-domain; ±32A cold/warm `ensureFixtureRepo()` wobble band still the assertions truth** |
+| lib figures at close | candy-forms **1,891 / 3,164 / 0W** (+40T wave-2 exact) - sugar-dash **6,006 / 10,076 / 1S / 0W** (+11T wave-2) - sugar-bits **493 / 1,015** - sugar-prompt **158 / 310 / 2S** - sugar-readline **336 / 1,076** - shell window **78 / 163** - query window **111 / 204** - crush `Form\|Input\|Select\|Cursor` window **633 / 3,943** - five-guard **125 / 7,362** | lib-local; every touched lib gated FULL + both repo tools rc=0 at the weld (child-lifetimes, path-repos) |
+| chain | `988696aea` (r86u) → r85 W1 `b8b702618` `11992bf81` `23aea4386` `be0b010d6` `1f92f70c8` → docs `a4a805306` `ccb86e5fa` → W2 picks `ac82cf822`(u4-e741) `c1cebb634`(u4-ph2/6) `5461ded56`(u4-censuses) `2aba19b05`(u4-rvfix) `0f26082fe`(u6) → closeout docs + filemap = ROUND-85-TIP | NEVER pushed |
+| durations | **532 rows HELD** — no new sugar-crush test files this round (sibling-lib files never belong in the tsv) | shared infra |
 | config | at-rest truth `d96e124ee7967eb34ef479ef824231ad`, start==end at the weld | linked-domain |
 
-### 2. ACTIONABLE QUEUE — 3 ROWS — WAVE-2 ROSTER CUT — DECISION POINT AFTER
+### 2. ACTIONABLE QUEUE — 1 ROW — OPERATOR DECISION POINT
 
-**(a) Row census = 3 survivors.** Command RE-RUN LIVE against `docs/plans/crush_code_backlog_triage.md` at
-this closeout (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status/evidence cells
-lead-scanned per the census rule — recount by re-running, never by chained arithmetic; pre-mint count was
-2, the E741 mint took it to 3):
+**(a) Row census = 1 survivor.** Command RE-RUN LIVE against `docs/plans/crush_code_backlog_triage.md` at this closeout (OPEN + PARTIAL + STALE-CITATION + UNCERTAIN section tables, status cells lead-scanned per the census rule — recount by re-running, never by chained arithmetic; wave-1 closed at 3, the E731+E741 closures took it to 1):
 
 ```
 $ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
     /^## `STALE-CITATION`/{sec="STALE"} /^## `UNCERTAIN`/{sec="UNCERTAIN"}
     /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
     if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
-OPEN  **E731** 
 OPEN  **E736** 
-OPEN  **E741** 
-$   # 3 survivors: E731 E736 E741 — the r85 mint (E741, owner u4) verified discriminating
+$   # 1 survivor: E736 — E731 (trait sweep + COMP-2 (b)) and E741 (shared-carrier family) CLOSED at the wave-2 weld
 ```
 
-**(b) THE ROSTER — wave-2 (file-disjoint) + survivors:**
+**(b) THE DECISION — wave-3 (or not) is an OPERATOR CALL. Three options, plainly:**
 
-| id | sev | home | shape of the work |
-|---|---|---|---|
-| **E741** | MED | candy-forms `Input` trait-drop family (withValidator :325 / mutate :636 drop HasHideFunc/HasDynamicLabels — Confirm-class data loss, probe-confirmed) | **lane u4 = E736 candy-forms F2**: Phase-2 perf + Phase-6 async-worker wiring + E741 folded (Input.php shared — that is why they bundle); carryNonCtorState recipe; BIG lane |
-| **E731** | MED | sugar-dash umbrella — r7 ChartGridGeometry + r85 five-trait sweep landed; COMP-2 option-(b) ADOPTED (orchestrator), structural duplicates remain | **lane u6**: SystemModule/UptimeModule `'n/a'` sentinel render per the §E731 COMP-2 CLOSURE design paragraph (memo-reset seam, injection pins, history-non-accumulation); file-disjoint with u4 |
-| **E736** | LOW | MATCHUPS ports — candy-forms F1+F3 DONE at this weld (Phases 1/3/4/7/8; 8.3 waits on 2.3→u4). Remainder of this lib: F2 (u4) + Phase-5 product scoping | after wave-2, per §2(c) |
+1. **CUT E736 → sugar-bits** — the next candidate port lib (§2(c) scoping lead), but MANDATORY per-lib re-derivation probe FIRST: re-derive `findings/sugar-bits.md` + `findings/plan_sugar-bits.md` against the tree before cutting any lane (zany-beige-roadrunner precedent — the candy-forms plan header said `status: not-started` while Phases 1–8 were largely landed; a stale plan file produced a misleading brief once already this campaign). Then enumerate the rest of the 🟡 queue before committing: sugar-charts, candy-shine, candy-vt, sugar-layout, candy-shell. ONE lib per wave, full AGENTS.md add-a-lib checklist per port.
+2. **forms Phase-5 product-scoping session** — candy-forms is done for code (Phases 1–4/6–8; 2.5 declined; 8.3 skip-recorded; 1.5/6.3 document-reserved); Phase 5 is a product ruling, not a lane.
+3. **CLOSE the campaign** — defect queue is zero; E736 is product completion; MATCHUPS re-marking and the per-port docs touchpoints ride whatever future wave the operator schedules.
 
-**(c) OPERATOR DECISION POINT (unchanged posture, refined by the forms outcome).** If the wave continues
-past u4/u6, the next E736 candidate is **sugar-bits** — but MANDATORY per-lib re-derivation first: the
-§0-NOW-86 claim "port plans are status not-started with 8 phases each" was STALE for candy-forms (its plan
-file still said `status: not-started` while Phases 1–8 were largely landed or verdicted by u2/u3 — see
-backlog §E736 errata). Re-derive the candidate's findings/plan_candy-bits.md against the tree before
-cutting lanes. Alternative remains: CLOSE the campaign at this tip — defect queue is zero; E731/E736 are
-product umbrellas; E741 is the one live bug-class row and it has an owner.
+**(c) TRIGGER-WATCH ROSTER (watches are NOT rows):** carried UNCHANGED from §0-NOW-87 (CallbackAuthoredRefusalTest in-shard flake; candy-freeze zsh asymmetry; JsonStreamBackend flush-door; wish stale README badge; q15 DECSCUSR re-verify; q10 carrier-list arm; pa paste-while-modal pin; ReadPathCensus backslash blind spot; pf maxOutputTokens threading seam + ClaudeCode ceiling no-op; E696-deny-residual; updateRegistration() redirect-churn; E309 DenialKind decision; E611 tripwire; E694 step-3 / E25 re-severity gate; E655 stays VOID; LspClientDispatchPumpTest ambient; Chat.php:8266 notice-drain seam) — r85 dispositions: **u2 seam trait-drop family RESOLVED at scale by u4** (shared carrier + roster; Confirm fold-when-possible note in backlog §E741); **Select/Input workerPool asymmetry DOCUMENT-RESERVED** (1.5/6.3); **vim j/k inverted motion product ruling carried**; **rv-u6 MINORs recorded not-minted** (dash memo race-leg non-latch UNPINNED; readMemLoad clamp kernel-invariant); progressRing example HEALED (u1), `generate-all.php` generator rot stays record-only in backlog §E731.
 
-**(d) TRIGGER-WATCH ROSTER (watches are NOT rows — carry list, unchanged from r84 except as noted):**
+**(d) Rules unchanged** — operating rules 1–10 + addenda -66…-73 in force, plus the carried laws: SwallowingCatchCensusTest in every src-touching lane's gate list; whole-tree censuses SERIAL-ONLY; sibling-lib lanes run FULL suite of every touched lib + both repo tools; serials PLAIN BASH PIPE (NEVER tmux/setsid/PTY — tests/bootstrap.php:325 stdin-repair guard); determinism law; re-probe negative probes; census stamps embed the recount COMMAND; audit live master before trusting brief-pinned SHAs; ledger-edit law (per-section split + assert-1 + numstat + far canary — held again this close: backlog +9/−2, triage +3/−3, worklog +15/−0, RESUME region swap, pointer 1/1); durations.tsv sugar-crush-ONLY; failOnWarning 58/58 ZERO-Warnings expectation; link census 19/19 + 8/8. **r85 law proofs added**: (1) REFINED resume law + salvage-first PROVEN on u4's ten-blank death after all work landed — resume the same task_id ≤10x with disk-probes, audit the tree before ANY redo, zero-redo recovery achieved; (2) keep-both docblock conflict = merged prose, proof is per-lane diffs with zero code lines + merged suite green; (3) unreproducible gate figures whose filter STRING was never recorded get re-derived with a named command and a disclosed seam (rv-u2 MINOR-2), never force-matched; (4) plan-file `status:` headers go stale across waves — record-only errata at weld, rewrite belongs to the next owning lane.
 
-- **r84 carry — `CallbackAuthoredRefusalTest` in-shard flake** (1-in-3 at :92 dataset "Refused"; serial +
-  re-run green). **r84 carry — progressRing example import: NOW HEALED by u1** (removed from watches; the
-  `generate-all.php` generator rot record-only note stays in backlog §E731).
-- **r83 carry — candy-freeze zsh asymmetry** (product call, un-minted); **JsonStreamBackend flush-door**
-  (optional-not-minted).
-- **r82 carry — wish stale README PHP badge**; **q15 DECSCUSR re-verify**; **q10 carrier-list arm**.
-- **r81 carry — pa paste-while-modal pin**; **ReadPathCensus backslash blind spot**; **pf maxOutputTokens
-  threading seam** (+ r81-rv MINOR: ClaudeCode ignores request ceiling).
-- **r77+ carry — E696-deny-residual**; **updateRegistration() redirect-churn**; **E309** DenialKind
-  decision; **E611 tripwire**; **E694 step-3 / E25 re-severity**; **E655 stays VOID**;
-  **LspClientDispatchPumpTest** ambient; **Chat.php:8266 notice-drain seam**.
-- **NEW r85 — u2 seam family beyond Input**: other forms fields may carry the same trait-drop pattern
-  (u2 probed Input only); u4 audit sweep should grep `new self(` across candy-forms/src/Field/.
-  **NEW r85 — Select discards its ctor workerPool entirely, Input stores-it-dead** (asymmetry disclosed;
-  removal = public-API STOP, wiring = F2 Phase-6, fold into u4's design note).
-  **NEW r85 — Vim j/k motion finding**: Cursor j→CursorLeft/k→Right is prev/next, INVERTED vs vim
-  convention (u3 3.2, behavior preserved deliberately; flip needs product ruling).
+### RESTART INSTRUCTIONS — the new-session startup recipe
 
-**(e) Rules unchanged** — operating rules 1–10 + addenda -66…-73 in force, plus the carried laws: every
-src-touching lane's brief gate list adds `SwallowingCatchCensusTest`; whole-tree censuses SERIAL-ONLY;
-sibling-lib lanes run FULL suite of every touched lib + both repo tools; serials PLAIN BASH PIPE;
-determinism law; re-probe negative probes; census stamps embed the recount COMMAND; audit live master
-before trusting brief-pinned SHAs; ledger-edit law (per-section split + assert-1 + numstat + far canary).
-r84 laws stand (durations sugar-crush-ONLY; docs figure fold via amend pre-ff; probe-between-resumes;
-failOnWarning 58/58 ZERO-Warnings expectation). **NEW r85 laws/process notes**: (1) keep-both docblock
-conflicts resolve as MERGED PROSE — verify by per-lane `git diff` showing zero code lines + the merged
-suite green; (2) when a lane's gate figure can't be reproduced because the filter STRING was never
-recorded, re-derive with a named command and disclose the seam (rv-u2 MINOR-2) — never force-match;
-(3) plan-file headers (`status:`) go stale across waves — record-only errata at weld, rewrite by the next
-owning lane.
+**Tip chain:** this closeout's docs commits (stamps/worklog/RESUME/pointer + filemap regen) sit atop code tip `0f26082fe`; master is fast-forwarded to the final closeout tip. NEVER pushed.
 
-### RESTART INSTRUCTIONS — the new-session startup recipe (round 85 wave-2 = u4/u6; close-decision after)
-
-**Tip chain:** this closeout's docs commits (worklog/stamps/RESUME/pointer + filemap regen) sit atop code
-tip `1f92f70c8`; master is fast-forwarded to the final closeout tip. NEVER pushed.
-
-1. Read this §0-NOW-87, the worklog `## ROUND 85` section, and `docs/plans/crush_code_filemap.md`
-   (3 rows = census). Cut wave-2 lanes u4/u6 ONLY if the operator keeps the wave open; phase-12 stays
-   PAUSED BY USER; never more than ONE E736 lib per wave.
-2. Pre-flight in the fresh sandbox: `php scripts/refresh-deps.php --mode=linked` FULL — verify the census
-   EXPLICIT **sugar-crush 19/19 + candy-pty 8/8** (POST-r86u figures — the pre-merge 18/18+7/7 expectation
-   is STALE; incomplete linking poisons 5 InteractivePromptContainmentTest env reds: verify BEFORE
-   briefing, r76 lesson); `git status` porcelain-clean at the tip. Floor gate if doubted: K=8
-   `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv --out <fresh>` (~85s)
-   or the plain-pipe serial (cwd=sugar-crush, NEVER tmux/setsid/PTY). Config at-rest truth
-   `d96e124ee7967eb34ef479ef824231ad`. Wave-1 worktrees/branches (`crush-lane-u1/u2/u3`, `lane/u*`,
-   `crush-r85-merge`, `r85/merge`) are removed at this closeout (cherry all '-');
-   `sugarcraft-cc` is foreign, leave it alone.
-3. THE QUEUE: 3 rows per §2(b) — NOTHING ELSE is actionable. Lane ids u4/u6 off this tip:
-   `git -C /home/sites/sugarcraft worktree add /home/sites/crush-lane-<id> -b lane/<id> <tip>` then
-   `php scripts/refresh-deps.php --mode=linked` inside (a targeted `--libs=` set is fine when the lane
-   touches few libs — verify the census anyway).
-4. Per-bundle loop unchanged: implement (task+coder) → verify claimed SHAs + worktree (git cat-file,
-   RE-PROBE negative probes) → review (task+coder, verdict-first, WITH the guard filters incl.
-   SwallowingCatch; sibling-lib lanes: lib full suite + both tools) → fix round → merge
-   (PIPE, not PTY) → commit (author `Joe Huss <[EMAIL]>`). Blank/fragment reports → RESUME same
-   task_id <=10x, disk-probe between. Never push.
-5. Close any future round exactly as r83/r84/r85 did: worklog entry + triage/backlog stamps +
-   `§0-NOW-<n+1>` + root pointer + filemap regen, each its own commit where sensible; sextet re-pin the
-   weld ONLY when sugar-crush figures move (r84/r85 both proved the zero-move shape: EXACT carry).
+1. Read this §0-NOW-88, the worklog `## ROUND 85` section (BOTH wave entries), and `docs/plans/crush_code_filemap.md` (1 row = census).
+2. Preflight in any fresh sandbox: `git -C /home/sites/sugarcraft status --porcelain` clean at the tip; `php scripts/refresh-deps.php --mode=linked` FULL then EXPLICIT census **sugar-crush 19/19 + candy-pty 8/8** (post-r86u — 18/7 is STALE; incomplete linking poisons 5 InteractivePromptContainmentTest env reds; verify BEFORE briefing); config at-rest truth `d96e124ee7967eb34ef479ef824231ad`; floor gate if doubted: K=8 `bash scripts/parallel-tests.sh --durations scripts/parallel-tests-durations.tsv --out <fresh>` (~85s) or plain-pipe serial (cwd=sugar-crush).
+3. AWAIT THE OPERATOR §2(b) DECISION: wave-3 lib (re-derivation probe is step zero), Phase-5 scoping session, or campaign close. Phase-12 stays PAUSED BY USER; never more than ONE E736 lib per wave; NEVER push; author `Joe Huss <[EMAIL]>`; no composer, no caliber, no touch of `.mcp.json`/`.sugar-crush/config*` operator files or foreign `sugarcraft-cc`.
+4. Per-lane loop unchanged (task+coder implement → SHA/worktree verify → task+coder review → fix round → weld; blank/fragment reports → RESUME same task_id ≤10x with disk-probes between, salvage-first before any redo).
+5. Close any future round as r83/r84/r85 did: worklog + stamps + `§0-NOW-<n+1>` + pointer + filemap regen; re-pin crush figures ONLY when sugar-crush figures move (r84/r85 proved the zero-move EXACT-carry shape).
 
 ## APPENDIX I — STANDING ORDERS (the surviving rule set, consolidated 2026-09-12)
 
