@@ -61,6 +61,8 @@ final class Text implements \SugarCraft\Forms\Field
     public function withTitle(string $t): self        { return $this->mutate(title: $t); }
     public function withDescription(string $d): self  { return $this->mutate(description: $d); }
     public function withPlaceholder(string $p): self  { return $this->mutate(area: $this->area->withPlaceholder($p)); }
+    /** Pre-fill the editable text (E736 5.9: the hydration setter). Pass an empty string to clear. */
+    public function withValue(string $value): self    { return $this->mutate(area: $this->area->setValue($value)); }
     public function withCharLimit(int $n): self       { return $this->mutate(area: $this->area->withCharLimit($n)); }
     public function withWidth(int $w): self           { return $this->mutate(area: $this->area->withWidth($w)); }
     public function withHeight(int $h): self          { return $this->mutate(area: $this->area->withHeight($h)); }

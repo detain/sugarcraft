@@ -549,6 +549,161 @@ final class Form implements Model
     }
 
     /**
+     * Restore values from a persisted snapshot (E736 5.9, round 89) — the
+     * symmetric counterpart of {@see values()}: `hydrate($form->values())`
+     * round-trips every hydratable field. Dispatch is on the CONCRETE final
+     * field classes (the {@see Field} interface stays un-widened): Input /
+     * Text / Color / Select take stringables, MultiSelect takes its option
+     * string list, Confirm takes a bool, Slider takes int|float, Date takes
+     * null|string.
+     *
+     * Fail loud, atomically: every key is located and type-checked BEFORE any
+     * field is touched, so a bad map cannot half-hydrate. An unknown key, a
+     * key belonging to a skippable field, a value whose type the field cannot
+     * accept, or a field with no hydration surface (FilePicker holds directory
+     * navigation state, not a persisted value; so do third-party {@see Field}
+     * implementations) all throw an {@see \InvalidArgumentException} naming the
+     * offending key.
+     *
+     * Hydration deliberately bypasses per-keystroke guards (Input char limits
+     * still clamp inside the {@see TextInput}, MultiSelect caps are surfaced as
+     * the constraint error instead of dropping picks) — the snapshot is the
+     * caller's trusted saved state; validation answers it via
+     * {@see validateAll()} / the submit gate afterwards.
+     *
+     * @param array<string,mixed> $values
+     */
+    public function hydrate(array $values): self
+    {
+        if ($values === []) {
+            return $this;
+        }
+
+        // Pass 1 — parse the whole map to trusted setter closures before
+        // mutating anything (Law: boundary parsing, atomic application).
+        $applies = [];
+        foreach ($values as $key => $raw) {
+            $key    = (string) $key;
+            $target = $this->locateField($key);
+            if ($target === null) {
+                throw new \InvalidArgumentException(Lang::t('form.hydrate_unknown_key', ['key' => $key]));
+            }
+            [$group, $index] = $target;
+            $field = $this->fieldsByGroup[$group][$index];
+            if ($field->skippable()) {
+                // Notes / separators never appear in values(); a key colliding
+                // with one is a caller mistake, not a silent no-op.
+                throw new \InvalidArgumentException(Lang::t('form.hydrate_skippable', ['key' => $key]));
+            }
+            $applies[] = [$group, $index, self::hydrateSetter($field, $key, $raw)];
+        }
+
+        // Pass 2 — apply onto one working copy so the fluent chain costs a
+        // single mutate() (each setter returns the new field instance).
+        $fieldsByGroup = $this->fieldsByGroup;
+        foreach ($applies as [$group, $index, $setter]) {
+            $fieldsByGroup[$group][$index] = $setter($fieldsByGroup[$group][$index]);
+        }
+
+        return $this->mutate(fieldsByGroup: $fieldsByGroup);
+    }
+
+    /**
+     * Resolve the per-class hydration setter after type-checking the raw
+     * snapshot value. Returns a closure Field→Field so application stays
+     * decoupled from resolution (pass 1 judges, pass 2 writes).
+     *
+     * @return \Closure(Field): Field
+     */
+    private static function hydrateSetter(Field $field, string $key, mixed $raw): \Closure
+    {
+        return match (true) {
+            $field instanceof Field\Input,
+            $field instanceof Field\Text,
+            $field instanceof Field\Color
+                => static function (Field $f) use ($key, $raw): Field {
+                    $v = self::hydrateString($key, $raw);
+                    \assert($f instanceof Field\Input || $f instanceof Field\Text || $f instanceof Field\Color);
+                    return $f->withValue($v);
+                },
+
+            $field instanceof Field\Select
+                => static function (Field $f) use ($key, $raw): Field {
+                    return $f->withSelected(self::hydrateString($key, $raw));
+                },
+
+            $field instanceof Field\MultiSelect
+                => static function (Field $f) use ($key, $raw): Field {
+                    if (!is_array($raw)) {
+                        throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
+                            'key' => $key, 'expected' => 'list<string>', 'actual' => get_debug_type($raw),
+                        ]));
+                    }
+                    return $f->withValue(array_map(static fn ($o): string => self::hydrateString($key, $o), array_values($raw)));
+                },
+
+            $field instanceof Field\Confirm
+                => static function (Field $f) use ($key, $raw): Field {
+                    if (!is_bool($raw)) {
+                        throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
+                            'key' => $key, 'expected' => 'bool', 'actual' => get_debug_type($raw),
+                        ]));
+                    }
+                    return $f->withDefault($raw);
+                },
+
+            $field instanceof Field\Slider
+                => static function (Field $f) use ($key, $raw): Field {
+                    if (!is_int($raw) && !is_float($raw)) {
+                        throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
+                            'key' => $key, 'expected' => 'int|float', 'actual' => get_debug_type($raw),
+                        ]));
+                    }
+                    return $f->withValue($raw);
+                },
+
+            $field instanceof Field\Date
+                => static function (Field $f) use ($key, $raw): Field {
+                    if ($raw !== null && !is_string($raw)) {
+                        throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
+                            'key' => $key, 'expected' => 'string|null', 'actual' => get_debug_type($raw),
+                        ]));
+                    }
+                    return $f->withValue($raw);
+                },
+
+            default => throw new \InvalidArgumentException(Lang::t('form.hydrate_not_hydratable', [
+                'key' => $key, 'type' => get_debug_type($field),
+            ])),
+        };
+    }
+
+    /**
+     * Stringable coercion for the text-shaped hydrate targets: strings,
+     * numbers, stringable objects and BackedEnum cases (Select in enum mode
+     * round-trips its own value()). Bools are refused — silently turning
+     * `true` into `'1'` in a name field is how persistence bugs are born.
+     */
+    private static function hydrateString(string $key, mixed $raw): string
+    {
+        if (is_string($raw)) {
+            return $raw;
+        }
+        if ($raw instanceof \BackedEnum) {
+            return (string) $raw->value;
+        }
+        if (is_int($raw) || is_float($raw)) {
+            return (string) $raw;
+        }
+        if (is_object($raw) && method_exists($raw, '__toString')) {
+            return (string) $raw;
+        }
+        throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
+            'key' => $key, 'expected' => 'string', 'actual' => get_debug_type($raw),
+        ]));
+    }
+
+    /**
      * Untyped value lookup by key. Returns the field's raw `value()`
      * for the given key, or `$default` when the key is unknown or the
      * containing group is hidden.

@@ -73,6 +73,35 @@ final class MultiSelect implements \SugarCraft\Forms\Field
     /** Force at least N selections (0 = no minimum). */
     public function withMin(int $n): self { return $this->mutate(min: max(0, $n)); }
 
+    /**
+     * Set the selection from option STRINGS (E736 5.9: the hydration setter —
+     * round-trips what {@see value()} returns). An option string the field does
+     * not offer fails loud, naming it: silence here would ship a "saved" form
+     * that quietly loses picks on restore. The min/max constraint error is
+     * recomputed so a restored selection that no longer fits the caps surfaces
+     * instead of masquerading as valid.
+     *
+     * Mirrors huh's pointer-write shape for multi-value fields.
+     *
+     * @param list<string> $selectedOptions
+     */
+    public function withValue(array $selectedOptions): self
+    {
+        $set = [];
+        foreach (array_values($selectedOptions) as $opt) {
+            $idx = array_search($opt, $this->options, true);
+            if ($idx === false) {
+                throw new \InvalidArgumentException(Lang::t('multiselect.unknown_option', ['option' => (string) $opt]));
+            }
+            $set[$idx] = true;
+        }
+        return $this->mutate(
+            selected: $set,
+            error: $this->computeConstraintError(self::countTrue($set)),
+            touchError: true,
+        );
+    }
+
     /** Cap selections at N (0 = no limit). */
     public function withMax(int $n): self { return $this->mutate(max: max(0, $n)); }
 
