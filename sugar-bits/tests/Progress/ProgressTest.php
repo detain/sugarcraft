@@ -293,4 +293,109 @@ final class ProgressTest extends TestCase
         $p = Progress::new()->withWidth(10)->withShowPercent(false)->withRunes('#', '.')->withPercent(0.5);
         $this->assertSame($p->view(), (string) $p);
     }
+
+    /**
+     * E743 capture-derived pins: exact Line-mode bytes. Line mode fills the
+     * raw configured width (no suffix reservation) with ━ (U+2501) / ─
+     * (U+2500), flat colours wrapping each run.
+     */
+    public function testLineModeExactBytesAcrossFitEdges(): void
+    {
+        $p = Progress::new()
+            ->withRenderMode(\SugarCraft\Bits\Progress\ProgressRenderMode::Line)
+            ->withWidth(7)
+            ->withPercent(0.5);
+        // round(0.5 * 7) = 4 filled, 3 empty — Line never yields cells to a suffix.
+        $this->assertSame("\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80", $p->view());
+
+        $c = $p
+            ->withFillColor(Color::hex('#ff0000'))
+            ->withEmptyColor(Color::hex('#0000ff'));
+        $this->assertSame(
+            "\x1b[38;2;255;0;0m\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\x1b[0m"
+            . "\x1b[38;2;0;0;255m\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\x1b[0m",
+            $c->view()
+        );
+    }
+
+    /**
+     * E743: Line mode never renders percent text, so computeBarLayout's
+     * withPercentSuffix=false gate must keep a caller-supplied malformed
+     * percentFormat from ever reaching sprintf() on this path.
+     */
+    public function testLineModeIgnoresMalformedPercentFormat(): void
+    {
+        $p = Progress::new()
+            ->withRenderMode(\SugarCraft\Bits\Progress\ProgressRenderMode::Line)
+            ->withWidth(7)
+            ->withPercent(0.5)
+            ->withPercentFormat('%d %d');
+        // Same bytes as the default-format Line render — the format is never applied.
+        $this->assertSame("\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80", $p->view());
+    }
+
+    /**
+     * E743 capture-derived pins: exact Slim-mode bytes, including the
+     * suffix-fit law — bar yields (measured pctText width + 1) cells to the
+     * percent suffix only while the suffix genuinely fits.
+     */
+    public function testSlimModeExactBytesAcrossFitEdges(): void
+    {
+        $slim = \SugarCraft\Bits\Progress\ProgressRenderMode::Slim;
+        // width 10, pct 0.5: suffix " 50%" is 4 cells + 1 space → bar keeps 5
+        // cells; round(0.5 * 5) = 3 filled ▌ + 2 empty ▒, then ' ' . pctText.
+        $p = Progress::new()->withRenderMode($slim)->withWidth(10)->withPercent(0.5);
+        $this->assertSame("\xe2\x96\x8c\xe2\x96\x8c\xe2\x96\x8c\xe2\x96\x92\xe2\x96\x92  50%", $p->view());
+
+        // width 4 cannot fit the 5-cell suffix reserve → suffix dropped, bar
+        // spans the raw width: round(0.5 * 4) = 2 filled + 2 empty.
+        $this->assertSame(
+            "\xe2\x96\x8c\xe2\x96\x8c\xe2\x96\x92\xe2\x96\x92",
+            $p->withWidth(4)->view()
+        );
+
+        // showPercent off: no suffix math at all, raw-width split.
+        $this->assertSame(
+            "\xe2\x96\x8c\xe2\x96\x8c\xe2\x96\x8c\xe2\x96\x8c\xe2\x96\x92\xe2\x96\x92\xe2\x96\x92",
+            $p->withWidth(7)->withShowPercent(false)->view()
+        );
+    }
+
+    /**
+     * E743 capture-derived pins: Block-mode value-suffix polarity at narrow
+     * widths. With percent AND value shown the bar never yields cells, and
+     * when the percent no longer fits the whole suffix (value included) is
+     * dropped; value-only mode ignores the percent fit and always appends.
+     */
+    public function testBlockValueSuffixPolarityAtNarrowWidths(): void
+    {
+        $p = Progress::new()->withWidth(4)->withShowValue(true)->withPercent(0.5);
+        // percent+value, width 4: suffix " 50%" needs 5 cells → percentFits
+        // false → bare bar, value text suppressed too.
+        $this->assertSame('██░░', $p->view());
+
+        // value-only at the same width: no percent suffix to fit, bar holds
+        // the raw width and the value text always appends.
+        $this->assertSame('██░░ 2/4', $p->withShowPercent(false)->view());
+    }
+
+    /**
+     * E743 structural pin: the Line/Slim/Block branches must share ONE
+     * geometry compute site. Rolling a branch back to inline math (or
+     * neutering the helper into dead code) drifts these counts red.
+     */
+    public function testGeometryMathLivesAtASingleComputeSite(): void
+    {
+        $src = (string) file_get_contents(
+            (new \ReflectionClass(Progress::class))->getFileName()
+        );
+        $this->assertSame(1, substr_count($src, 'function computeBarLayout('));
+        // 3 call sites (Line, Slim, Block) + the definition header.
+        $this->assertSame(4, substr_count($src, 'computeBarLayout('));
+        // Bar-width rounding exists only inside the helper; the Block branch
+        // keeps its own $current rounding for the value text, plus the
+        // helper's percent×100 rounding: three round($this->percent) in all.
+        $this->assertSame(3, substr_count($src, '(int) round($this->percent'));
+        $this->assertSame(1, substr_count($src, 'Width::string($pctText) + 1'));
+    }
 }
