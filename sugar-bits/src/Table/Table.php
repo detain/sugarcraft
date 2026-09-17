@@ -58,6 +58,18 @@ final class Table implements Model
     ) {}
 
     /**
+     * Memoized visibleRows() projection (sorted → filtered) for this
+     * immutable instance — E736/3.3. view(), selectedRow(), moveCursor()
+     * and getPaginator() each rebuild the projection on every call; the
+     * cache makes one render cycle do the sort+filter once. Every state
+     * change flows through mutate(), which constructs a fresh instance
+     * with a null cache, so the projection can never go stale.
+     *
+     * @var null|list<list<string>>
+     */
+    private ?array $visibleRowsCache = null;
+
+    /**
      * @param list<string>       $headers
      * @param list<list<string>> $rows
      */
@@ -162,8 +174,9 @@ final class Table implements Model
         }
 
         $top    = max(0, $this->offset);
-        $sortedRows = $this->sortedRows();
-        $filteredRows = $this->filteredRows($sortedRows);
+        // E736/3.3: go through the memoized projection instead of
+        // re-running sort+filter inline — same result, computed once.
+        $filteredRows = $this->visibleRows();
         // When pagination is active, derive the window offset and size from
         // the current page rather than the scroll offset.
         if ($this->pageSize > 0) {
@@ -577,7 +590,7 @@ final class Table implements Model
      */
     private function visibleRows(): array
     {
-        return $this->filteredRows($this->sortedRows());
+        return $this->visibleRowsCache ??= $this->filteredRows($this->sortedRows());
     }
 
     /** @return list<int> */
@@ -602,29 +615,32 @@ final class Table implements Model
                 $widths[$i] = $w;
             }
         }
-        // If a total width is constrained, shrink columns round-robin
-        // (right-to-left) so every line of output fits the budget. The
-        // earlier "always trim the rightmost column" rule could still
-        // overflow once that column hit zero.
+        // If a total width is constrained, shrink columns proportionally to
+        // their own widths so every line of output fits the budget.
+        // E736/2.3: the former round-robin loop cost O(excess × cols);
+        // this single O(cols) pass takes floor(excess × width / total) per
+        // column, then hands the (≤ cols−1) indivisible remainder cells out
+        // right-to-left — preserving the old loop's right-bias when it
+        // degrades the trailing columns first. A column can never be asked
+        // to shed more than it has: floor ≤ width always, and the remainder
+        // walk skips columns already at zero.
         if ($this->width > 0) {
             $gutter = $cols - 1;
             $budget = max(0, $this->width - $gutter);
             $total  = array_sum($widths);
-            while ($total > $budget) {
-                $shrunk = false;
-                for ($i = $cols - 1; $i >= 0; $i--) {
+            if ($total > $budget) {
+                $excess   = $total - $budget;
+                $assigned = 0;
+                foreach ($widths as $i => $w) {
+                    $shrink    = (int) floor($excess * $w / $total);
+                    $widths[$i] = $w - $shrink;
+                    $assigned  += $shrink;
+                }
+                for ($i = $cols - 1; $assigned < $excess && $i >= 0; $i--) {
                     if ($widths[$i] > 0) {
                         $widths[$i]--;
-                        $total--;
-                        $shrunk = true;
-                        if ($total <= $budget) {
-                            break;
-                        }
+                        $assigned++;
                     }
-                }
-                if (!$shrunk) {
-                    // Every column already at zero — nothing more to do.
-                    break;
                 }
             }
         }

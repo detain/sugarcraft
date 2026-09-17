@@ -72,6 +72,18 @@ final class Tree implements Model
     public readonly string $leafGlyph;
 
     /**
+     * Memoized visibleRows() for this immutable instance — E736/3.2.
+     * visibleRows() runs once per update/render cycle in five places
+     * (view, selectedNode, visibleCount, setExpandedAtCursor, clamp);
+     * the cache collapses that to one walk. Every state change flows
+     * through copy(), which constructs a fresh instance with a null
+     * cache, so the projection can never go stale.
+     *
+     * @var null|list<array{label:string, depth:int, leaf:bool, expanded:bool, node:Node, path:list<int>}>
+     */
+    private ?array $visibleRowsCache = null;
+
+    /**
      * @param list<Node> $roots
      */
     private function __construct(
@@ -232,18 +244,34 @@ final class Tree implements Model
      */
     public function visibleRows(): array
     {
+        return $this->visibleRowsCache ??= $this->collectVisibleRows();
+    }
+
+    /**
+     * Walk the expanded forest, snapshotting each node's row. The $path
+     * buffer is shared and mutated in place (push/pop) instead of being
+     * spread per recursion — E736/4.2: rows store $path by value, so
+     * PHP's copy-on-write gives every row its own snapshot for free.
+     *
+     * @return list<array{label:string, depth:int, leaf:bool, expanded:bool, node:Node, path:list<int>}>
+     */
+    private function collectVisibleRows(): array
+    {
         $rows = [];
+        $path = [];
         foreach ($this->roots as $i => $root) {
-            $this->collectVisible($root, 0, [$i], $rows);
+            $path[] = $i;
+            $this->collectVisible($root, 0, $path, $rows);
+            array_pop($path);
         }
         return $rows;
     }
 
     /**
-     * @param list<int> $path
+     * @param list<int> $path shared walking buffer (see collectVisibleRows)
      * @param list<array{label:string, depth:int, leaf:bool, expanded:bool, node:Node, path:list<int>}> $rows
      */
-    private function collectVisible(Node $node, int $depth, array $path, array &$rows): void
+    private function collectVisible(Node $node, int $depth, array &$path, array &$rows): void
     {
         $rows[] = [
             'label'    => $node->label,
@@ -257,7 +285,9 @@ final class Tree implements Model
             return;
         }
         foreach ($node->children as $i => $child) {
-            $this->collectVisible($child, $depth + 1, [...$path, $i], $rows);
+            $path[] = $i;
+            $this->collectVisible($child, $depth + 1, $path, $rows);
+            array_pop($path);
         }
     }
 
@@ -290,29 +320,36 @@ final class Tree implements Model
         if ($row['expanded'] === $on) {
             return $this;
         }
-        $newRoots = $this->roots;
-        $this->updateAt($newRoots, $row['path'], static fn(Node $n) => $n->withExpanded($on));
+        $newRoots = $this->updateAt($this->roots, $row['path'], static fn(Node $n) => $n->withExpanded($on));
         return $this->copy(roots: $newRoots)->clamp();
     }
 
     /**
-     * @param list<Node> $tree mutated in place
+     * Return a new tree list with the node at $path replaced by $mut(node).
+     * E736/4.1: formerly mutated &$tree by reference — the only in-place
+     * pattern in this immutable class.
+     *
+     * @param list<Node> $tree
      * @param list<int>  $path indices walking from $tree root → target node
      * @param \Closure(Node):Node $mut
+     * @return list<Node>
      */
-    private function updateAt(array &$tree, array $path, \Closure $mut): void
+    private function updateAt(array $tree, array $path, \Closure $mut): array
     {
-        if ($path === []) return;
+        if ($path === []) {
+            return $tree;
+        }
         $head = array_shift($path);
         $node = $tree[$head] ?? null;
-        if ($node === null) return;
+        if ($node === null) {
+            return $tree;
+        }
         if ($path === []) {
             $tree[$head] = $mut($node);
-            return;
+            return $tree;
         }
-        $children = $node->children;
-        $this->updateAt($children, $path, $mut);
-        $tree[$head] = $node->withChildren($children);
+        $tree[$head] = $node->withChildren($this->updateAt($node->children, $path, $mut));
+        return $tree;
     }
 
     private function clamp(): self
