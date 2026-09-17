@@ -187,12 +187,9 @@ final class Tabs implements Model
 
         // Build per-tab styled segments, optionally wrapped in zone markers.
         $segments = [];
-        $tabWidths = [];
         foreach ($this->labels as $i => $label) {
             $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
-            $label = Sanitize::controlChars($label);
-            $padded = ' ' . $label . ' ';
-            $tabWidths[$i] = Width::string($padded);
+            $padded = ' ' . Sanitize::controlChars($label) . ' ';
 
             if ($this->zoneManager !== null) {
                 $padded = $this->zoneManager->mark("tab-{$i}", $padded);
@@ -200,50 +197,27 @@ final class Tabs implements Model
             $segments[$i] = [$padded, $style];
         }
 
-        // Compute visible range respecting available width.
-        $available = $this->width > 0 ? $this->width : PHP_INT_MAX;
-        $dividerWidth = Width::string($this->divider);
-        $ellipsisWidth = 1; // Width::string('…')
-
+        // The stored scrollEnd IS the visible window's last index: it is
+        // computed once per state by computeScrollEnd() using this same bar's
+        // ellipsis reservation and sanitised widths (E736/bits-2.4), so view()
+        // consumes it instead of re-walking. scrollEnd >= visibleStart holds by
+        // construction — both derive from the same clamped start.
         $visibleStart = 0;
         $visibleEnd = $count - 1;
         $leftEllipsis = false;
         $rightEllipsis = false;
 
         if ($this->width > 0) {
-            // Find which tabs fit, starting from scrollOffset.
-            $cursor = 0;
             $visibleStart = min($this->scrollOffset, $count - 1);
-            $visibleEnd = $visibleStart;
+            $visibleEnd = $this->scrollEnd;
 
-            // Always show ellipsis on left if we've scrolled right.
-            $leftEllipsis = $this->scrollOffset > 0;
-
-            // Walk forward from visibleStart, adding tabs until we run out of space.
-            for ($i = $visibleStart; $i < $count; $i++) {
-                $tabWidth = $tabWidths[$i];
-                $nextCursor = $cursor + $tabWidth;
-                if ($i > $visibleStart) {
-                    $nextCursor += $dividerWidth;
-                }
-
-                $rightWillNeedEllipsis = ($i < $count - 1);
-                $ellipsisReserve = $rightWillNeedEllipsis ? $ellipsisWidth : 0;
-                if ($nextCursor + $ellipsisReserve > $available && $cursor > 0) {
-                    break;
-                }
-                $cursor = $nextCursor;
-                $visibleEnd = $i;
-            }
+            // Hidden tabs before the window get a left ellipsis — the very
+            // predicate computeScrollEnd() prices, shared via the helper so
+            // the walk and the draw can never disagree about its cost.
+            $leftEllipsis = $this->rendersLeftEllipsis();
 
             // Show right ellipsis if there are tabs after visibleEnd.
             $rightEllipsis = $visibleEnd < $count - 1;
-
-            // Adjust left ellipsis if we can't show tabs before visibleStart
-            // (i.e., visibleStart is already at the minimum).
-            if ($visibleStart === 0) {
-                $leftEllipsis = false;
-            }
         }
 
         // Build output: optional left ellipsis + visible tabs + optional right ellipsis.
@@ -427,8 +401,26 @@ final class Tabs implements Model
     }
 
     /**
-     * Compute the last visible tab index given the current scrollOffset
-     * and available width.
+     * Compute the last tab index the bar can render FULLY for the current
+     * scrollOffset and width — the single window truth shared by
+     * {@see view()} and {@see adjustScroll()} (E736/bits-2.4).
+     *
+     * The cursor walks to the cell where each candidate label ENDS, and a
+     * tab only enters the window if it survives rendering: the window's
+     * last tab needs to fit within the bar (`labelEnd <= width`), while
+     * any other candidate also owes a right `…` for the tabs it hides —
+     * when the line runs wide view()'s guard keeps `width - 1` cells
+     * before appending its own `…`, so a mid-list tail tab renders whole
+     * only while `labelEnd <= width - 1`. Pricing the left `…` is part of
+     * the same honesty: view() joins it with a divider, so it already
+     * occupies cells before the first label starts. Under-counting any
+     * of this (one bare cell for the right `…`, nothing for the left)
+     * let the stored window claim a tab view() then clipped away — the
+     * bold active tab could silently vanish (r87 review MAJOR). The
+     * first tab after the offset is included even if it alone overflows
+     * — an empty bar is worse than a clipped one. Widths ride the same
+     * control-char sanitisation view() renders, so the stored window and
+     * the drawn window cannot drift.
      */
     private function computeScrollEnd(): int
     {
@@ -437,25 +429,40 @@ final class Tabs implements Model
             return $count - 1;
         }
 
+        $start = min($this->scrollOffset, $count - 1);
         $dividerWidth = Width::string($this->divider);
-        $cursor = 0;
+        // The left `…` is never standalone: view() joins it to the first
+        // tab with a divider, so cells before the first label starts.
+        $cursor = $this->rendersLeftEllipsis() ? 1 + $dividerWidth : 0;
 
-        for ($i = $this->scrollOffset; $i < $count; $i++) {
-            $label = $this->labels[$i];
-            $tabWidth = Width::string(' ' . $label . ' ');
-            $nextCursor = $cursor + $tabWidth;
-            if ($i > $this->scrollOffset) {
-                $nextCursor += $dividerWidth;
-            }
-            if ($nextCursor > $this->width && $i > $this->scrollOffset) {
+        for ($i = $start; $i < $count; $i++) {
+            $labelEnd = $cursor + self::paddedWidth($this->labels[$i]);
+            // A right `…` follows every tab except the last; the clip
+            // guard preserves only width-1 cells once that line overflows.
+            $bound = $i < $count - 1 ? $this->width - 1 : $this->width;
+            if ($labelEnd > $bound && $i > $start) {
                 return $i - 1;
             }
-            $cursor = $nextCursor;
+            // The next tab joins after this label with a divider.
+            $cursor = $labelEnd + $dividerWidth;
         }
         return $count - 1;
     }
 
-    /**
+    /** Whether view() will prepend a left `…` for the current offset. */
+    private function rendersLeftEllipsis(): bool
+    {
+        return $this->width > 0
+            && $this->scrollOffset > 0
+            && min($this->scrollOffset, count($this->labels) - 1) > 0;
+    }
+
+    /** Rendered cell width of one tab: padded, control-chars stripped. */
+    private static function paddedWidth(string $label): int
+    {
+        return Width::string(' ' . Sanitize::controlChars($label) . ' ');
+    }
+
     /**
      * Internal copy-with-overrides helper — rebuilds the Tabs via the
      * constructor with the same pattern as Tree::copy() / Table::mutate().

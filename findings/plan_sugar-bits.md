@@ -52,7 +52,7 @@ Address all 25 findings from the sugar-bits code review, organized into phased i
   - **Severity:** high
   - **Notes:** Current loop: 100 cell excess × 10 columns = up to 1000 iterations. Proportional: `floor($excess * $width[$i] / $totalWidth)` per column.
 
-- [.] **2.4** `Tabs::view()` and `Tabs::computeScrollEnd()` — Duplicated Scroll Logic — Refactor `view()` to use stored `scrollEnd` instead of recomputing
+- [x] **2.4** `Tabs::view()` and `Tabs::computeScrollEnd()` — Duplicated Scroll Logic — Refactor `view()` to use stored `scrollEnd` instead of recomputing — DONE r87/w2 (E736 build ruling): computeScrollEnd() now IS view()'s reservation-aware walk (sanitised widths + right-ellipsis reserve); view() consumes the stored window + final width guard. Render-dump proof 0 byte diffs on shared keys; intended flush-width fixes pinned by 4 new tests
   - **r86-v3:** ⚠ UNBUILT — verified NOT landed: view() still self-walks (Tabs.php ~212-246, with ellipsis-variant logic) instead of consuming stored scrollEnd (:83). Outside v3 buildable set; reported to orchestrator for ruling.
   - **Files:** `src/Tabs/Tabs.php:82,212-246,432-455`, `tests/Tabs/TabsTest.php`
   - **Verification:** All tabs tests pass; rendered output identical

@@ -554,4 +554,84 @@ final class TabsTest extends TestCase
         $t = $this->tabs(['A', 'B']);
         $this->assertSame(['A', 'B'], $t->labels());
     }
+
+    // ── E736/bits-2.4: view() consumes the stored scrollEnd ─────────────────
+
+    /**
+     * The stored window must be the same reservation-aware cut view() renders:
+     * at the flush width 9, '│ …' does not fit after ' A ', so the window ends
+     * at index 0 — the pre-2.4 computeScrollEnd() over-claimed index 1.
+     */
+    public function testStoredScrollEndMatchesRenderedWindowAtFlushWidth(): void
+    {
+        $t = Tabs::new(['A', 'B', 'C'], 9);
+        $this->assertSame(0, $t->scrollEnd);
+        $this->assertSame("\x1b[1m A \x1b[0m \u{2502} \u{2026}", $t->view());
+    }
+
+    /**
+     * Tabbing to the tab that only fits past an exact-fit boundary must scroll
+     * it into view (pre-2.4 the over-claimed window kept offset=0 and the bold
+     * active tab rendered hidden behind the ellipsis). At offset 1 only B fits
+     * whole: C would end at cell 13 of a 9-cell bar, so the walk stops at B
+     * (r87 review fix — a tail tab before a right `…` must survive the guard).
+     */
+    public function testActiveTabAtFlushBoundaryScrollsIntoView(): void
+    {
+        $t = Tabs::new(['A', 'B', 'C'], 9)->withActive(1);
+        $this->assertSame(1, $t->scrollOffset);
+        $this->assertSame(1, $t->scrollEnd);
+        $this->assertStringContainsString("\x1b[1m B \x1b[0m", $t->view());
+        $this->assertSame("\u{2026} \u{2502} \x1b[1m B \x1b[0m \u{2026}", $t->view());
+        $this->assertLessThanOrEqual(9, Width::string($t->view()));
+    }
+
+    /**
+     * The r87 review-fix class, walked the way navigation actually reaches it
+     * (sweep key N|abcde|w9|s4|a4): once a left `…` plus its join lead the
+     * window, the walk must charge them before accepting tabs. Without that
+     * seed the stored window over-claimed D..E at offset 3, adjustScroll saw
+     * the active tab E "already visible" and skipped scrolling — view()'s
+     * guard clip to width then cut through E, leaving the measured stranded
+     * empty bold run `… │  D  <bold><reset>…` where the active should be.
+     * With the seed the walk stops each window short of the eat, E scrolls to
+     * its own offset, and the last tab (no right ellipsis owed) renders whole.
+     */
+    public function testActiveBeyondLeftEllipsizedWindowSurvivesGuard(): void
+    {
+        $t = Tabs::new(['A', 'B', 'C', 'D', 'E'], 9)->focus()[0];
+        for ($i = 0; $i < 4; $i++) {
+            [$t, ] = $t->update(new KeyMsg(KeyType::Tab));
+        }
+        $this->assertSame(4, $t->active());
+        $this->assertSame(4, $t->scrollOffset);
+        $this->assertSame(4, $t->scrollEnd);
+        $this->assertStringContainsString("\x1b[1m E \x1b[0m", $t->view());
+        $this->assertSame("\u{2026} \u{2502} \x1b[1m E \x1b[0m", $t->view());
+        $this->assertLessThanOrEqual(9, Width::string($t->view()));
+    }
+
+    /**
+     * The one-cell right-ellipsis reservation is part of the window: with 5
+     * equal tabs at width 15 a third tab plus separator plus ellipsis is 16
+     * cells, so the window ends at index 1 (the unreserved walk said 2).
+     */
+    public function testScrollEndReservesTheRightEllipsis(): void
+    {
+        $t = Tabs::new(['A', 'B', 'C', 'D', 'E'], 15);
+        $this->assertSame(1, $t->scrollEnd);
+        $this->assertSame("\x1b[1m A \x1b[0m \u{2502}  B  \u{2502} \u{2026}", $t->view());
+    }
+
+    /**
+     * The window walk must measure the sanitised label exactly as view()
+     * renders it: a raw tab inflates the control-char label, so the walk
+     * dropped tab 2 at width 11 while view() happily rendered it.
+     */
+    public function testScrollEndMeasuresControlCharsAsRendered(): void
+    {
+        $t = Tabs::new(["A\tB", 'C'], 11);
+        $this->assertSame(1, $t->scrollEnd);
+        $this->assertSame("\x1b[1m A B \x1b[0m \u{2502}  C ", $t->view());
+    }
 }
