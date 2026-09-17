@@ -8,6 +8,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
+use SugarCraft\Forms\HasErrorHelp;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -21,6 +22,7 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class Text implements \SugarCraft\Forms\Field
 {
+    use HasErrorHelp;
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -151,6 +153,9 @@ final class Text implements \SugarCraft\Forms\Field
         $lines[] = $this->area->view();
         // Validator messages can echo user input — clean at the display site.
         if ($this->error !== null)     { $lines[] = '! ' . RenderSafe::clean($this->error); }
+        foreach ($this->errorHelpLines() as $helpLine) {
+            $lines[] = $helpLine;
+        }
         return implode("\n", $lines);
     }
 

@@ -27,9 +27,21 @@ namespace SugarCraft\Forms;
  * Requires the using class to also use {@see HasHideFunc},
  * {@see HasDynamicLabels} and {@see HasReadonly} (their private slots are
  * written here — legal because trait methods compose into the class scope).
+ *
+ * The trait also OWNS the plan-5.11 per-error help slot ($errorHelp,
+ * storage only — the public API lives in {@see HasErrorHelp}): the render
+ * value must survive every rebuild exactly like the closures do, and this
+ * carrier is the single funnel that guarantees it.
  */
 trait CarriesNonCtorState
 {
+    /**
+     * Plan 5.11 storage: null = no help line. Declared here (not in
+     * HasErrorHelp) so one carrier leg serves every field; the three
+     * fields with the public setter use {@see HasErrorHelp}.
+     */
+    private ?string $errorHelp = null;
+
     /**
      * @param static $next  a freshly `new self(...)`-built sibling instance
      * @return static  $next with the hide/dynamic-label closures and the
@@ -41,6 +53,7 @@ trait CarriesNonCtorState
         $next->titleFunc       = $this->titleFunc;
         $next->descriptionFunc = $this->descriptionFunc;
         $next->readonly        = $this->readonly;
+        $next->errorHelp       = $this->errorHelp;
         return $next;
     }
 }

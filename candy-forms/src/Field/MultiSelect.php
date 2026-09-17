@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
+use SugarCraft\Forms\HasErrorHelp;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\HasReadonly;
 use SugarCraft\Forms\Lang;
@@ -26,6 +27,7 @@ use SugarCraft\Forms\Util\RenderSafe;
  */
 final class MultiSelect implements \SugarCraft\Forms\Field
 {
+    use HasErrorHelp;
     use HasHideFunc;
     use HasDynamicLabels;
     use HasReadonly;
@@ -197,6 +199,9 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             // Constraint/validator messages can echo user input — clean at the
             // display site (the stored $this->error / getError() stay raw).
             $lines[] = '! ' . RenderSafe::clean($this->error);
+            foreach ($this->errorHelpLines() as $helpLine) {
+                $lines[] = $helpLine;
+            }
         }
         return implode("\n", $lines);
     }
