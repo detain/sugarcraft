@@ -125,6 +125,83 @@ final class Buffer
     }
 
     /**
+     * Insert $count blank rows at row $from, pushing the rows below it DOWN
+     * within the region [$top, $bottom]; nothing above $from moves and
+     * content overflowing $bottom is dropped (region-internal edit — the
+     * callers that model scrollback own ring feeding, not the grid).
+     *
+     * Faithful extraction of the IL walk that {@see
+     * \SugarCraft\Vt\Handler\ScrollHandler::insertLines()} and the renderer's
+     * CsiHandlerImpl::il() each carried inline (E736/vt-6.4). Guards kept
+     * verbatim from those walks: no-op when $from lies outside the region;
+     * $count coerced to at least 1 and clamped to the rows from $from down
+     * ($count <= 0 therefore shifts exactly ONE row — public CSI entry
+     * points reject explicit 0 earlier, at the dispatch layer). Blank fill
+     * is plain {@see Cell::empty()}, no pen.
+     *
+     * Buffer holds no cursor or DECSTBM state, so the region arrives as
+     * parameters; the defaults ([0, rows-1] anchored at row 0) make the
+     * bare `insertRows($count)` call a full-grid down-scroll.
+     *
+     * Mirrors charmbracelet/x/vt `Screen.InsertLine` (handlers.go IL).
+     *
+     * @see ECMA-48 §8.4.15 (IL)
+     * @see https://vt100.net/docs/vt510-rm/IL.html
+     */
+    public function insertRows(int $count, int $from = 0, ?int $top = null, ?int $bottom = null): void
+    {
+        $top ??= 0;
+        $bottom ??= $this->rows - 1;
+        if ($from < $top || $from > $bottom) {
+            return;
+        }
+        $shift = min(max(1, $count), $bottom - $from + 1);
+        for ($r = $bottom; $r >= $from + $shift; $r--) {
+            for ($c = 0; $c < $this->cols; $c++) {
+                $this->put($r, $c, $this->cell($r - $shift, $c));
+            }
+        }
+        for ($r = $from; $r < $from + $shift; $r++) {
+            for ($c = 0; $c < $this->cols; $c++) {
+                $this->put($r, $c, Cell::empty());
+            }
+        }
+    }
+
+    /**
+     * Delete $count rows at row $from, pulling the rows below it UP within
+     * the region [$top, $bottom] and leaving blanks at the region bottom.
+     *
+     * Faithful extraction of the DL walk — same guard roster as {@see
+     * self::insertRows()} (region test, one-row floor on $count, region
+     * clamp). Rows above $from are never touched.
+     *
+     * Mirrors charmbracelet/x/vt `Screen.DeleteLine` (handlers.go DL).
+     *
+     * @see ECMA-48 §8.4.10 (DL)
+     * @see https://vt100.net/docs/vt510-rm/DL.html
+     */
+    public function deleteRows(int $count, int $from = 0, ?int $top = null, ?int $bottom = null): void
+    {
+        $top ??= 0;
+        $bottom ??= $this->rows - 1;
+        if ($from < $top || $from > $bottom) {
+            return;
+        }
+        $shift = min(max(1, $count), $bottom - $from + 1);
+        for ($r = $from; $r <= $bottom - $shift; $r++) {
+            for ($c = 0; $c < $this->cols; $c++) {
+                $this->put($r, $c, $this->cell($r + $shift, $c));
+            }
+        }
+        for ($r = $bottom - $shift + 1; $r <= $bottom; $r++) {
+            for ($c = 0; $c < $this->cols; $c++) {
+                $this->put($r, $c, Cell::empty());
+            }
+        }
+    }
+
+    /**
      * Iterate all cells in row-major order.
      *
      * @return \Generator<array{row:int, col:int, cell:Cell}>

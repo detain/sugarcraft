@@ -746,7 +746,7 @@ private static function computeCubePalette(): array
 
 ---
 
-### 6.4 Optimize `CsiHandlerImpl::scrollUpOne()` to O(cols) per row ❗ r86v5: STILL LIVE — `src/Parser/CsiHandlerImpl.php:982-997` still cell-by-cell copy via `Buffer::cell()`/`put()`; O(cols²)/row; efficient fix needs a row-shift API on `Buffer` (private grid).
+### 6.4 Optimize `CsiHandlerImpl::scrollUpOne()` to O(cols) per row ✅ r88x6 BUILT (operator ruled BUILD 2026-09-17, overriding the earlier "no demand" DEFER): row-shift API `Buffer::insertRows()`/`Buffer::deleteRows()` at `src/Buffer/Buffer.php:151/:184` — faithful extraction of the IL/DL walk (region guard, one-row floor, clamp; defaults make the bare `insertRows($count)` shape work). All 8 duplicated walk shapes routed through it: `Handler/ScrollHandler.php` insertLines/deleteLines (:86/:102 thin entry points) + scrollUp/scrollDown (:113/:130 — whole-region IL/DL with the SU/SD empty-movement guard kept local, divergent count<=0 semantics documented) and `Parser/CsiHandlerImpl.php` il()/dl() (:791/:813) + scrollUp/scrollDown (:961/:972, the N×scrollUpOne() loop form deleted — single bulk pass). Cell-by-cell `put()` writes deliberately retained (dirty-region bookkeeping parity; row-splice would desync incremental consumers — follow-up perf candidate, needs dirty-box widening). Census-pinned in `tests/RowShiftApiTest.php` (relative-row reads confined to Buffer.php, call-site roster 2+2, loop helpers stay deleted). Frame pins both façades + DECSTBM region clamps: +22T/+46A. Original: ❗ r86v5: STILL LIVE — `src/Parser/CsiHandlerImpl.php:982-997` cell-by-cell copy; efficient fix needs a row-shift API on `Buffer` (private grid).
 
 **File:** `src/Parser/CsiHandlerImpl.php:370-386`
 

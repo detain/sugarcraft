@@ -794,19 +794,10 @@ final class CsiHandlerImpl implements CsiHandler
         if ($row < $this->scrollTop || $row > $this->scrollBottom) {
             return;
         }
-        $count = min(max(1, $count), $this->scrollBottom - $row + 1);
-        $cols = $this->grid->cols;
-
-        for ($r = $this->scrollBottom; $r >= $row + $count; $r--) {
-            for ($c = 0; $c < $cols; $c++) {
-                $this->grid->put($r, $c, $this->grid->cell($r - $count, $c));
-            }
-        }
-        for ($r = $row; $r < $row + $count; $r++) {
-            for ($c = 0; $c < $cols; $c++) {
-                $this->grid->put($r, $c, Cell::empty());
-            }
-        }
+        // The walk (region clamp + blank fill) lives in Buffer::insertRows()
+        // since E736/vt-6.4; only the phantom-drop and column-home movement
+        // rules stay here.
+        $this->grid->insertRows($count, $row, $this->scrollTop, $this->scrollBottom);
         $this->wrapPending = false;
         $this->cursor = $this->cursor->at($row, 0);
     }
@@ -825,19 +816,8 @@ final class CsiHandlerImpl implements CsiHandler
         if ($row < $this->scrollTop || $row > $this->scrollBottom) {
             return;
         }
-        $count = min(max(1, $count), $this->scrollBottom - $row + 1);
-        $cols = $this->grid->cols;
-
-        for ($r = $row; $r <= $this->scrollBottom - $count; $r++) {
-            for ($c = 0; $c < $cols; $c++) {
-                $this->grid->put($r, $c, $this->grid->cell($r + $count, $c));
-            }
-        }
-        for ($r = $this->scrollBottom - $count + 1; $r <= $this->scrollBottom; $r++) {
-            for ($c = 0; $c < $cols; $c++) {
-                $this->grid->put($r, $c, Cell::empty());
-            }
-        }
+        // Walk extracted to Buffer::deleteRows() — see il().
+        $this->grid->deleteRows($count, $row, $this->scrollTop, $this->scrollBottom);
         $this->wrapPending = false;
         $this->cursor = $this->cursor->at($row, 0);
     }
@@ -970,6 +950,14 @@ final class CsiHandlerImpl implements CsiHandler
         $this->cursor = $this->cursor->at($this->cursor->row + 1, 0);
     }
 
+    /**
+     * Region scroll up (SU family). The per-row walk now lives in
+     * {@see Buffer::deleteRows()} with $from pinned to the region top — a
+     * single bulk pass replaces the old N x scrollUpOne() loop, final grid
+     * content identical (E736/vt-6.4). The empty-movement guard stays HERE:
+     * unlike the IL/DL one-row floor inside the Buffer walk, SU/SD treat
+     * $count <= 0 as a no-op.
+     */
     private function scrollUp(int $count): void
     {
         $height = $this->scrollBottom - $this->scrollTop + 1;
@@ -977,30 +965,10 @@ final class CsiHandlerImpl implements CsiHandler
         if ($count <= 0) {
             return;
         }
-
-        for ($i = 0; $i < $count; $i++) {
-            $this->scrollUpOne();
-        }
+        $this->grid->deleteRows($count, $this->scrollTop, $this->scrollTop, $this->scrollBottom);
     }
 
-    private function scrollUpOne(): void
-    {
-        $top = $this->scrollTop;
-        $bottom = $this->scrollBottom;
-        $cols = $this->grid->cols;
-
-        for ($r = $top; $r < $bottom; $r++) {
-            for ($c = 0; $c < $cols; $c++) {
-                $next = $this->grid->cell($r + 1, $c);
-                $this->grid->put($r, $c, $next);
-            }
-        }
-
-        for ($c = 0; $c < $cols; $c++) {
-            $this->grid->put($bottom, $c, Cell::empty());
-        }
-    }
-
+    /** Region scroll down (SD family) — see {@see self::scrollUp()}. */
     private function scrollDown(int $count): void
     {
         $height = $this->scrollBottom - $this->scrollTop + 1;
@@ -1008,28 +976,7 @@ final class CsiHandlerImpl implements CsiHandler
         if ($count <= 0) {
             return;
         }
-
-        for ($i = 0; $i < $count; $i++) {
-            $this->scrollDownOne();
-        }
-    }
-
-    private function scrollDownOne(): void
-    {
-        $top = $this->scrollTop;
-        $bottom = $this->scrollBottom;
-        $cols = $this->grid->cols;
-
-        for ($r = $bottom; $r > $top; $r--) {
-            for ($c = 0; $c < $cols; $c++) {
-                $prev = $this->grid->cell($r - 1, $c);
-                $this->grid->put($r, $c, $prev);
-            }
-        }
-
-        for ($c = 0; $c < $cols; $c++) {
-            $this->grid->put($top, $c, Cell::empty());
-        }
+        $this->grid->insertRows($count, $this->scrollTop, $this->scrollTop, $this->scrollBottom);
     }
 
     // ---------------------------------------------------------------------

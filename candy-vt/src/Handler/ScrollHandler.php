@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Handler;
 
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Cursor\Cursor;
 
 /**
@@ -78,26 +77,15 @@ final class ScrollHandler
      * upstream uses the pen's background only via its blankCell(); the
      * caller passes SGR when BCE matters, kept simple here).
      *
+     * The walk itself lives in {@see Buffer::insertRows()} (E736/vt-6.4);
+     * this method is its region-parameterised entry point.
+     *
      * @see ECMA-48 §8.4.15 (IL)
      * @see https://vt100.net/docs/vt510-rm/IL.html
      */
     public function insertLines(Buffer $buffer, int $scrollTop, int $scrollBottom, int $from, int $count): void
     {
-        if ($from < $scrollTop || $from > $scrollBottom) {
-            return;
-        }
-        $region = $scrollBottom - $from + 1;
-        $shift = min(max(1, $count), $region);
-        for ($r = $scrollBottom; $r >= $from + $shift; $r--) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, $buffer->cell($r - $shift, $c));
-            }
-        }
-        for ($r = $from; $r < $from + $shift; $r++) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, Cell::empty());
-            }
-        }
+        $buffer->insertRows($count, $from, $scrollTop, $scrollBottom);
     }
 
     /**
@@ -106,26 +94,14 @@ final class ScrollHandler
      *
      * Same region-guarding rules as {@see insertLines()}.
      *
+     * The walk itself lives in {@see Buffer::deleteRows()} (E736/vt-6.4).
+     *
      * @see ECMA-48 §8.4.10 (DL)
      * @see https://vt100.net/docs/vt510-rm/DL.html
      */
     public function deleteLines(Buffer $buffer, int $scrollTop, int $scrollBottom, int $from, int $count): void
     {
-        if ($from < $scrollTop || $from > $scrollBottom) {
-            return;
-        }
-        $region = $scrollBottom - $from + 1;
-        $shift = min(max(1, $count), $region);
-        for ($r = $from; $r <= $scrollBottom - $shift; $r++) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, $buffer->cell($r + $shift, $c));
-            }
-        }
-        for ($r = $scrollBottom - $shift + 1; $r <= $scrollBottom; $r++) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, Cell::empty());
-            }
-        }
+        $buffer->deleteRows($count, $from, $scrollTop, $scrollBottom);
     }
 
     /**
@@ -139,19 +115,10 @@ final class ScrollHandler
         $height = $scrollBottom - $scrollTop + 1;
         $count = min($count, $height);
         if ($count <= 0) {
-            return;
+            return; // SU/SD guard: no-op on empty movement — NOT the IL/DL one-row floor.
         }
-
-        for ($r = $scrollTop; $r <= $scrollBottom - $count; $r++) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, $buffer->cell($r + $count, $c));
-            }
-        }
-        for ($r = $scrollBottom - $count + 1; $r <= $scrollBottom; $r++) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, Cell::empty());
-            }
-        }
+        // Whole-region DL: the identical walk with $from pinned to the region top.
+        $buffer->deleteRows($count, $scrollTop, $scrollTop, $scrollBottom);
     }
 
     /**
@@ -165,18 +132,9 @@ final class ScrollHandler
         $height = $scrollBottom - $scrollTop + 1;
         $count = min($count, $height);
         if ($count <= 0) {
-            return;
+            return; // Same SU/SD empty-movement guard as scrollUp().
         }
-
-        for ($r = $scrollBottom; $r >= $scrollTop + $count; $r--) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, $buffer->cell($r - $count, $c));
-            }
-        }
-        for ($r = $scrollTop; $r < $scrollTop + $count; $r++) {
-            for ($c = 0; $c < $buffer->cols; $c++) {
-                $buffer->put($r, $c, Cell::empty());
-            }
-        }
+        // Whole-region IL: the identical walk with $from pinned to the region top.
+        $buffer->insertRows($count, $scrollTop, $scrollTop, $scrollBottom);
     }
 }
