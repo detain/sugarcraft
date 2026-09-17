@@ -4,9 +4,53 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-93 BELOW. It carries the ROUND-89 WAVE-1 CLOSED banner — the four r88 phantom scopes re-cut and ALL LANDED (y1 E742 canonical xterm palette per ruling m0519, y2 E743 computeBarLayout, y3 forms cluster-A, y4 shine 7.1+7.3): 20 picks, 4/4 rv-APPROVE 0C/0M, zero conflicts. E742/E743 CLOSED; E736 STAYS OPEN naming its single unbuilt row (shine 7.2 emoji map). FLOOR tests 12,027 EXACT-CARRY 6th round (zero crush files); serial assertions read 170,514 (+92 live-derivation wobble — figure system self-consistent, no re-pin per doctrine). ACTIONABLE BY ROW CENSUS = 2: E736 + E744. HARNESS LAW IN FORCE: serials PLAIN BASH PIPE — NEVER tmux/setsid/PTY. failOnWarning UNIVERSAL (58/58). Durations.tsv sugar-crush-ONLY (532 rows HELD). Config-md5 at-rest truth `d96e124ee7967eb34ef479ef824231ad`. LINK CENSUS: sugar-crush 19/19 + candy-pty 8/8. OPERATOR DIRECTIVE 2026-09-17: WAVE-2 AUTHORIZED — a fresh session must read §0-NOW-93 and IMMEDIATELY execute §3 dispatch (lanes y5+y6 parallel), then §4 review/weld, then §5 closeout = campaign complete.**
+🔴 **START AT §0-NOW-94 BELOW. PLAN COMPLETE — CAMPAIGN CLOSED, NO LANES AUTHORIZED. ROUND-89 WAVE-2 (the DEFINITION-OF-DONE wave) landed y6 (shine 7.2 emoji map — 1,837-code GithubEmoji, ' headphones' dead-key fixed, 8.1 already-landed) and y5 (E744 crush-host widget adoption — Cmd relay + OSC52 cap + Ctrl+C precedence + PasteMsg/MouseMsg routing + LoadMoreMsg + view-convergence ruling); both rv-APPROVE 0C/0M; floor RE-PINNED 12,061T/170,810A/0F/0E/1S exit0; K=8 +0/+0; durations 536; ACTIONABLE BY ROW CENSUS = 0 — the sugar-crush hardening plan is COMPLETE. HARNESS LAW IN FORCE: serials PLAIN BASH PIPE — NEVER tmux/setsid/PTY. failOnWarning UNIVERSAL (58/58). Config-md5 at-rest truth `d96e124ee7967eb34ef479ef824231ad`. LINK CENSUS: sugar-crush 19/19 + candy-pty 8/8. Any future work = fresh operator directive; §0-NOW-94 §2/§3 carries the seam/watch ledger.**
 
-## 0-NOW-93. ROUND 89 WAVE-1 CLOSED — FOUR RE-CUTS ALL LANDED (E742/E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT); E736 OPEN WITH ONE NAMED ROW; WAVE-2 = E744 CRUSH-HOST LANE — CURRENT
+## 0-NOW-94. ROUND 89 CLOSED — CENSUS 0 — SUGAR-CRUSH HARDENING PLAN COMPLETE — CURRENT
+
+**The headline: the campaign is DONE. Wave-2 executed the §0-NOW-93 §5 definition-of-done — y6 built E736's single unbuilt row (shine 7.2 emoji-shortcode parity: new `GithubEmoji::MAP`, 1,837 codes, house-39 left-wins over the 34 collisions, ' headphones' dead-key fixed, 8.1 measured already-landed) and y5 closed E744 (crush-host widget adoption, six workstreams: lazy Cmd relay + capped OSC52 writer with transcript notice, Ctrl+C copy-over-quit precedence, PasteMsg/MouseMsg routing into the focused widget/zone, LoadMoreMsg top-N paging, view-convergence ruling) — 2/2 rv-APPROVE 0C/0M, the row census now prints NOTHING, and the plan that began as a 13-angle audit 89 rounds ago closes at 12,061 green tests.**
+
+### 0. STATE TABLE (FINAL)
+
+| field | value |
+|---|---|
+| master | tip **`b89059713`** + this closeout's docs commits — chain atop `0c83384df`: y6 pick `82aec515c` → y5 picks `4e04ec035` `e25a8b564` → re-pin `cf456a306` → ledger stamps `b89059713`; wave-1 CLOSED @ `064430d85`; NEVER pushed |
+| floor | **12,061T / 170,810A / 0F / 0E / 1S (McpClientTest canary) / exit0** — serial plain-pipe linked cwd=sugar-crush; K=8 CONSERVATION +0/+0; re-pinned at `cf456a306` (first crush-move weld since r86u — +34T = relay 10 + widget 13 + mouse 6 + invariant 4 + guard-wheel 1) |
+| reviews | r89-rv-y5 APPROVE 0C/0M/3min (reviewer re-ran the full serial EXACT at tip; builder 5/5 + reviewer 4/4 mutations discriminating) · r89-rv-y6 APPROVE 0C/0M/3min (duplicate-key scan clean, 18/18 Unicode-exact spot-checks, 3/3 mutations) |
+| libs | shine **587/1,119** (7.2 map) · glow 122/313 · shell 334/694 · vt 949/12,773 + render-dump baseline `6f9dc048b4cbc2e321a18698e1069b7c` · forms 2,182/3,945 · bits 519/1,097 · prompt 158/314/2S · layout 157/882 · vcr 948/4,082/14S · pty 663/1,862/17S · stickers 221/476 |
+| crush windows | re-derived from `closeout-r89-w2/serial1.xml` by classname grep at this weld: `Form\|Input\|Select\|Cursor` **712/4,516** (633/3,943 was pre-y5); `Vt\|Terminal\|Buffer` **305/21,034** held; `Shine\|Glamour\|Style` **24/813** held |
+| guards | five-guard **45T/4,768A — ERA-CORRECTED** (the 125T/7,362A cited in §0-NOW-90/93 tables is stale era); DocFigure alone 83T/2,685A |
+| infra | durations **536** (4 y5 rows in-step); config at-rest truth `d96e124ee7967eb34ef479ef824231ad` start==end; links 19/19 + 8/8; child-lifetimes + path-repos rc=0 |
+
+### 1. CENSUS 0 — PLAN-COMPLETENESS DECLARATION (verbatim)
+
+```
+$ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
+    /^## `STALE-CITATION`/{sec="STALE"} /^## `UNCERTAIN`/{sec="UNCERTAIN"}
+    /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
+    if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
+$   # NOTHING printed — ACTIONABLE = 0. E736 CLOSED (y6 shipped the last row; 8.1 already-landed)
+    # and E744 CLOSED (y5 WS1-6). MATCHUPS 🟡/🔴 port-completion backlog rides the MATCHUPS board itself,
+    # NOT this ledger — the hardening plan's own scope is exhausted.
+```
+
+### 2. SEAMS FOR A FUTURE OPERATOR (none is a plan row — all discretionary)
+
+- **y5 seams:** `/keys` modal clips long descriptions (chat.quit copy-precedence nuance README-owned; KeyBindingRegistry description byte-unchanged by ruling); SessionPicker key table never forwards the forms `'/'`-filter (product ruling if wanted); painted chrome line keeps '↑↓ browse' for pixel stability (hint/README carry mouse); `InputProjection` view convergence DEFERRED BY RULING — renderer stays paint authority, invariant tripwire only; Chat.php:4231 E744 mis-cite erratum stamped in backlog §E744.
+- **y6 seams:** `: headphones:` passthrough pin is vacuous-vs-mutation (space token never reaches the callback — `:not_a_real_code:` is the real door); merge-census test re-derives its own union (precedence pinned independently by the house-wins mutation pin); HOUSE docblock ':phone:' "telephone" vs house "receiver" prose nuance only.
+- **MATCHUPS:** 🟡/🔴 port-completion is the board's business (add-a-lib checklist per lib, one lib per wave) — explicitly OUT of this ledger's definition-of-done.
+
+### 3. TRIGGER-WATCH ROSTER (watches are NOT rows; carried verbatim from §0-NOW-90 §2(c), E742 RETIRED — CLOSED by y1 at wave-1)
+
+CallbackAuthoredRefusalTest in-shard flake (~1-in-3; re-run before declaring); candy-freeze zsh asymmetry; JsonStreamBackend flush-door; wish stale README badge; q15 DECSCUSR re-verify; q10 carrier-list arm; pa paste-while-modal pin; ReadPathCensus backslash blind spot; pf maxOutputTokens threading seam + ClaudeCode ceiling no-op; E696-deny-residual; updateRegistration() redirect-churn; E309 DenialKind decision; E611 tripwire; E694 step-3 / E25 re-severity gate; E655 stays VOID; LspClientDispatchPumpTest ambient; Chat.php:8266 notice-drain seam; rv-v2 Expression mutable-`$terms` freeze-seam; rv-v3 Confirm shared-carrier fold-when-possible; rv-v3 Input::withValidator/mutate trait-drop family STILL LIVE (Phase-8/2-domain); rv-v5 render-dump arg shape; rv-v5 vim j/k product ruling; bits Select workerPool stores-dead asymmetry; w2 zone-cost ≈13 cells law (measure stripped rows for any Width::of geometry pin); **r89 adds: y5 picker-'/'-filter ruling, y5 painted-chrome pixel-stability, y5 InputProjection convergence-by-ruling, y5 chat.quit description clip, y6 headphones-pin vacuity, y6 :phone: prose nuance.**
+
+### RESTART INSTRUCTIONS — campaign closed
+
+**DO NOT auto-open any round.** The plan is complete (census 0). If the operator directs new work: `git -C /home/sites/sugarcraft log --oneline -1` for the live tip; preflight `php scripts/refresh-deps.php --mode=linked` + 19/19 + 8/8 link census + config md5 above; serials PLAIN PIPE cwd=sugar-crush; K=8 gate; five-guard 45T/4,768A (era-corrected); builders commit-EARLY; welds re-derive SHAs from `git log`; ledger law per-section re.split+assert-1+numstat+far-canary; NEVER push; author `Joe Huss <detain@interserver.net>`; no composer/caliber; foreign `sugarcraft-cc` untouched. All lane worktrees/branches removed at this closeout (`git cherry` verified every pick '-'). Full-sweep chronology: worklog `## ROUND 89` (both waves) + §0-NOW-90…93 below + the 89 rounds of ledger history in `docs/plans/`.
+
+
+
+## 0-NOW-93. ROUND 89 WAVE-1 CLOSED — FOUR RE-CUTS ALL LANDED (E742/E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT); E736 OPEN WITH ONE NAMED ROW; WAVE-2 = E744 CRUSH-HOST LANE — SUPERSEDED by §0-NOW-94 (campaign closed)
 
 **The headline: r88's four phantom'd scopes came back as wave-1 lanes and every one landed review-clean.** y1 shipped the canonical 0..255 xterm palette (operator ruling m0519 = correct-to-xterm; frozen pins re-blessed; the disclosed render-dump VALUE flip covers exactly 12 theme rows — new baseline `6f9dc048b4cbc2e321a18698e1069b7c`); y2 folded `Progress::view()`'s triplicated geometry into one private `computeBarLayout()` with a two-way capture proof (485,509 B / 4,424 configs); y3 built the forms cluster-A (5.2 async validation, 5.3 focus, 5.4 key overrides, 5.9 hydrate/values round-trip, 5.10 readonly, 5.11 error-help, 5.12 number-jump, 5.15 load-more) taking forms **2,037→2,182T/3,945A** with the E741 carrier census widened in-step and a sugar-prompt `AsyncValidatable` re-export; y4 consumed the salvaged x7 patch and built shine 7.1+7.3 (Writer/StreamSink/SectionScanner/renderStream/StyleGuide split under the no-glow-require ruling; shine **352/704→573T/1,075A**; the rv-x7 promised pins now pay — its M1 mutation reddens 59 tests). The commit-EARLY law adopted at the r88 closeout is vindicated: zero phantoms this round, 20/20 picks clean, zero sugar-crush files.
 
