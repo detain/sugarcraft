@@ -225,7 +225,7 @@ $t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);
 
 ---
 
-### 2.3 Fix duplicate color comparison logic ❗ r86v5: STILL LIVE — no `Color::equalsOrBothNull()` anywhere; `src/Sgr/Sgr.php:270-283` keeps two inline verbose null-compares; canonical `src/Cell.php:361-371` grew a private `colorEquals()` copy (duplication is now Sgr↔Cell, 2 sites). If unbuildable: nothing breaks — DRY-only refactor, zero behavior change.
+### 2.3 Fix duplicate color comparison logic ✅ r87w1: shipped — Color::equalsOrBothNull() (guard-clause shape) is now the sole null-compare home; Sgr::equals 2 inline blocks + Cell::colorEquals private folded, dead private deleted. Matrix pinned in tests/ColorTest.php; render-dump byte-identity across the fold. Original: ❗ r86v5: STILL LIVE — no `Color::equalsOrBothNull()` anywhere; `src/Sgr/Sgr.php:270-283` keeps two inline verbose null-compares; canonical `src/Cell.php:361-371` grew a private `colorEquals()` copy (duplication is now Sgr↔Cell, 2 sites). If unbuildable: nothing breaks — DRY-only refactor, zero behavior change.
 
 **File:** `src/Sgr/Sgr.php:267-288`, `src/Cell/Cell.php:96-114`
 

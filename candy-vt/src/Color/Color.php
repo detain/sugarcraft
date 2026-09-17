@@ -74,4 +74,20 @@ final readonly class Color
     {
         return $this->kind === $other->kind && $this->value === $other->value;
     }
+
+    /**
+     * Null-safe colour comparison: two colours match iff both are unset or
+     * both are set and equal. The single home for the pattern formerly
+     * copy-pasted across Sgr::equals() and Cell::sgrEquals() (E736 2.3,
+     * originally plan §2.3). `Color` is final readonly, so this static helper
+     * adds no inheritance surface.
+     */
+    public static function equalsOrBothNull(?self $a, ?self $b): bool
+    {
+        if ($a === null || $b === null) {
+            return $a === null && $b === null;
+        }
+
+        return $a->equals($b);
+    }
 }

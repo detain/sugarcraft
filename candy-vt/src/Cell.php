@@ -344,8 +344,8 @@ final readonly class Cell
         $a = $this->sgr();
         $b = $other->sgr();
 
-        return self::colorEquals($a->foreground, $b->foreground)
-            && self::colorEquals($a->background, $b->background)
+        return Color::equalsOrBothNull($a->foreground, $b->foreground)
+            && Color::equalsOrBothNull($a->background, $b->background)
             && $a->bold === $b->bold
             && $a->italic === $b->italic
             && $a->underline === $b->underline
@@ -356,17 +356,5 @@ final readonly class Cell
             && $a->dim === $b->dim
             && $a->hidden === $b->hidden
             && $a->invisible === $b->invisible;
-    }
-
-    private static function colorEquals(?Color $a, ?Color $b): bool
-    {
-        if ($a === null && $b === null) {
-            return true;
-        }
-        if ($a === null || $b === null) {
-            return false;
-        }
-
-        return $a->equals($b);
     }
 }

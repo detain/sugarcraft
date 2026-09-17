@@ -265,26 +265,7 @@ final readonly class Sgr
             return false;
         }
 
-        $thisFg = $this->foreground;
-        $otherFg = $other->foreground;
-        if ($thisFg === null && $otherFg === null) {
-            $fgEqual = true;
-        } elseif ($thisFg === null || $otherFg === null) {
-            $fgEqual = false;
-        } else {
-            $fgEqual = $thisFg->equals($otherFg);
-        }
-
-        $thisBg = $this->background;
-        $otherBg = $other->background;
-        if ($thisBg === null && $otherBg === null) {
-            $bgEqual = true;
-        } elseif ($thisBg === null || $otherBg === null) {
-            $bgEqual = false;
-        } else {
-            $bgEqual = $thisBg->equals($otherBg);
-        }
-
-        return $fgEqual && $bgEqual;
+        return Color::equalsOrBothNull($this->foreground, $other->foreground)
+            && Color::equalsOrBothNull($this->background, $other->background);
     }
 }

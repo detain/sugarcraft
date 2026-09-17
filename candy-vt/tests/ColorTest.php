@@ -66,4 +66,23 @@ final class ColorTest extends TestCase
         $this->assertTrue($a->equals($b));
         $this->assertFalse($a->equals($c));
     }
+
+    // ─── E736 2.3: equalsOrBothNull is the sole null-safe home ───
+
+    public function testEqualsOrBothNullMatrix(): void
+    {
+        $red = Color::indexed16(1);
+        $red2 = Color::indexed16(1);
+        $blue = Color::indexed16(4);
+        $bgRed = Color::indexed256(1);
+
+        $this->assertTrue(Color::equalsOrBothNull(null, null));
+        $this->assertFalse(Color::equalsOrBothNull(null, $red));
+        $this->assertFalse(Color::equalsOrBothNull($red, null));
+        $this->assertTrue(Color::equalsOrBothNull($red, $red2));
+        $this->assertFalse(Color::equalsOrBothNull($red, $blue));
+        // kind is part of identity — same value, different kind, not equal.
+        $this->assertFalse(Color::equalsOrBothNull($red, $bgRed));
+        $this->assertTrue(Color::equalsOrBothNull(Color::default(), Color::default()));
+    }
 }
