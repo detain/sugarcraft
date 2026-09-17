@@ -192,6 +192,11 @@ new Renderer($theme)
     ->withEmoji(true);               // expand `:smile:` shortcodes
 ```
 
+With emoji on, 1,842 codes resolve: the full 1,837-entry GitHub
+cheat-sheet corpus (`GithubEmoji::MAP`, the table glamour's `WithEmoji`
+consults upstream) merged under the 39 curated house codes — house bytes
+win every collision — and unknown `:codes:` pass through verbatim.
+
 `Renderer::renderMarkdown($md, ?Theme)` is a one-shot static
 convenience for ad-hoc rendering. For repeated renders with the same
 theme, build a Renderer and reuse it (the parser is cached per

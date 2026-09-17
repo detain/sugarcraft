@@ -494,7 +494,7 @@ The `Mutable` trait expects a constructor with parameters to merge via `new stat
 ## Phase 7: Missing Features [PENDING]
 
 - [x] 7.1 Missing glamour "Write" function parity — ✅ SHIPPED (r89 lane y4; operator ruling "do them all" revokes the r86 DECLINED). `Renderer::write(string $markdown, mixed $output = STDOUT): int` stream sink + `Renderer::stream()` generator (x7 salvage, byte-identity pinned) + `StyleGuide` glamour-JSON decode: document block affixes/indent/margin, element styles, chroma token→style map with the exact-token-before-prefix ordering law. Vocabulary duplicated locally per the r88-rv-x7 cycle ruling — sugar-glow CONSUMES candy-shine, so a shine→glow require is a sibling cycle and is DENIED; `sugar-glow/src/.../GlamourTheme.php` was read as mirror, never imported; composer.json byte-untouched.
-- [ ] 7.2 Limited emoji shortcode map
+- [x] 7.2 Limited emoji shortcode map — ✅ SHIPPED (r89 lane y6; E736). New `src/GithubEmoji.php` carries the full GitHub cheat-sheet corpus glamour's `WithEmoji` consults upstream (1,837 codes, kyokomi/emoji GitHubEmoji parity); `Renderer`'s inline table became `private const HOUSE_EMOJI` (39 curated codes) merged HOUSE-WINS over the corpus, so every shipped byte is preserved (probe: 39/39 vs base map) while all GitHub codes now resolve. Latent defect fixed: the leading-space key `' headphones'` could never match the capture class — now `'headphones'`. Fail-closed census in `tests/EmojiParityTest.php` (14T) rejects any key unreachable by `EMOJI_SHORTCODE_PATTERN`, so dead keys cannot return. Was: original text preserved — checklist row read `Limited emoji shortcode map` PENDING against a 15-entry premise; the map had already grown to 39 (still 1/47 of upstream parity) before this lane.
 - [x] 7.3 No streaming/rendering for very large documents — ✅ SHIPPED (r89 lane y4; revokes the r86 DECLINED and supersedes the original doc-only success condition). Section-scoped streaming via `Render\SectionScanner`: `Renderer::stream()` generator + `Writer`/`StreamSink` object channel — write-through flush law (every sink write flushes; probe-wrapper pinned 1:1 writes↔flushes), hard-close guard (feed-after-close throws LogicException, double-close idempotent), path doors (missing parent / unwritable / open-fail) THROW BEFORE any rendering, `defersStreaming()` single-source buffered fallback for document-scope themes. 573T/1075A shine suite; 6/6 discriminating mutations.
 
 ### 7.1 Missing glamour "Write" Function Parity
@@ -592,7 +592,7 @@ The entire output string is built in memory before returning. For very large doc
 
 ## Phase 8: Additional Performance Items [PENDING]
 
-- [ ] 8.1 Emoji shortcode regex compiled every call
+- [x] 8.1 Emoji shortcode regex compiled every call — ✅ CLOSED-ALREADY-LANDED (measured r89 lane y6; E736). `private const EMOJI_SHORTCODE_PATTERN` exists at `src/Renderer.php:66` and is the sole pattern source — the prescription of this row landed in a prior round unnoticed by the row file. Honest caveat: PHP caches compiled PCREs per-process anyway, so the const form is hygiene/intent, not a measurable win; benchmarked at tip: 200k expansions over the merged 1,842-key map = 0.39s (1.96µs/call), so the 47× map growth adds no per-call regex or lookup concern. Was: original text preserved — checklist row read `Emoji shortcode regex compiled every call` PENDING; zero code changed by this lane for 8.1.
 - [ ] 8.2 StyleSheet::for() linear scan (SKIPPED — not warranted)
 
 ### 8.1 Emoji Shortcode Regex Compiled Every Call
@@ -669,9 +669,9 @@ N/A — skipped
 | 5.1 | Theme::fromJson path traversal | LOW | PENDING |
 | 6.1 | StyleSheet custom mutate() | MEDIUM | PENDING |
 | 7.1 | Missing Write function | MEDIUM | SHIPPED (r89 lane y4) |
-| 7.2 | Limited emoji map | MEDIUM | PENDING |
+| 7.2 | Limited emoji map | MEDIUM | SHIPPED (r89 lane y6) |
 | 7.3 | No streaming | LOW | SHIPPED (r89 lane y4) |
-| 8.1 | Emoji regex compiled every call | LOW | PENDING |
+| 8.1 | Emoji regex compiled every call | LOW | CLOSED-ALREADY-LANDED (measured r89 y6) |
 | 8.2 | StyleSheet::for() linear scan | LOW | SKIPPED |
 
 **Total: 16 findings, 15 to address, 1 skipped**

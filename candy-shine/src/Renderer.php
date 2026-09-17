@@ -65,6 +65,40 @@ final class Renderer
 {
     private const EMOJI_SHORTCODE_PATTERN = '/:([a-z0-9_+-]+):/i';
 
+    /**
+     * Curated emoji layer — merged OVER {@see GithubEmoji::MAP} in
+     * {@see expandEmojiShortcodes()}, so these bytes stay whatever they
+     * have always been even where GitHub maps the same code differently
+     * (:email:/:phone: here are receiver glyphs, GitHub's are envelopes
+     * and telephones; :heart:/:warning: carry the emoji presentation
+     * selector U+FE0F). Every key MUST match EMOJI_SHORTCODE_PATTERN's
+     * capture class — a key with stray whitespace is dead code (the
+     * leading-space ` headphones` defect of earlier rounds proved it;
+     * EmojiParityTest censuses the shape so it cannot return).
+     */
+    private const HOUSE_EMOJI = [
+        'smile'      => '😄', 'grin'       => '😁',
+        'heart'      => '❤️', 'fire'       => '🔥',
+        'rocket'     => '🚀', 'star'       => '⭐',
+        'thumbsup'   => '👍', 'thumbsdown' => '👎',
+        'check'      => '✅', 'x'          => '❌',
+        'warning'    => '⚠️', 'info'       => 'ℹ️',
+        'tada'       => '🎉', 'sparkles'   => '✨',
+        'candy'      => '🍬', 'sugar'      => '🍭',
+        'honey'      => '🍯',
+        'clap'       => '👏', 'eyes'       => '👀',
+        'tongue'     => '👅', 'wink'       => '😉',
+        'sob'        => '😭', 'sleeping'   => '😴',
+        'zzz'        => '💤', 'headphones' => '🎧',
+        'mail'       => '📧', 'email'      => '📧',
+        'phone'      => '📞', 'camera'     => '📷',
+        'gift'       => '🎁', 'pencil'     => '📝',
+        'hammer'     => '🔨', 'wrench'     => '🔧',
+        'bug'        => '🐛', 'dragon'     => '🐉',
+        'koala'      => '🐨', 'tiger'      => '🐯',
+        'rabbit'     => '🐰', 'snake'      => '🐍',
+    ];
+
     public readonly Theme $theme;
     /**
      * CommonMark parser, built lazily on first {@see render()} and cached
@@ -638,34 +672,15 @@ final class Renderer
 
     /**
      * Replace `:shortcode:` tokens with their Unicode equivalent
-     * before parsing. Mirrors glamour's `WithEmoji` expansion. Unknown
-     * shortcodes pass through verbatim. Map matches the gum format
-     * subcommand's emoji selector for consistency.
+     * before parsing. Mirrors glamour's `WithEmoji` expansion
+     * (charmbracelet/glamour consults the kyokomi/emoji GitHub table):
+     * every GitHub code resolves, with {@see self::HOUSE_EMOJI} winning
+     * on collisions. Unknown shortcodes pass through verbatim.
      */
     private static function expandEmojiShortcodes(string $markdown): string
     {
-        static $map = [
-            'smile'    => '😄', 'grin'    => '😁',
-            'heart'    => '❤️', 'fire'    => '🔥',
-            'rocket'   => '🚀', 'star'    => '⭐',
-            'thumbsup' => '👍', 'thumbsdown' => '👎',
-            'check'    => '✅', 'x'       => '❌',
-            'warning'  => '⚠️',  'info'    => 'ℹ️',
-            'tada'     => '🎉', 'sparkles' => '✨',
-            'candy'    => '🍬', 'sugar'   => '🍭',
-            'honey'    => '🍯',
-            'clap'     => '👏', 'eyes'    => '👀',
-            'tongue'   => '👅', 'wink'   => '😉',
-            'sob'      => '😭', 'sleeping' => '😴',
-            'zzz'      => '💤', ' headphones' => '🎧',
-            'mail'     => '📧', 'email'  => '📧',
-            'phone'    => '📞', 'camera' => '📷',
-            'gift'     => '🎁', 'pencil' => '📝',
-            'hammer'   => '🔨', 'wrench' => '🔧',
-            'bug'      => '🐛', 'dragon' => '🐉',
-            'koala'    => '🐨', 'tiger'  => '🐯',
-            'rabbit'   => '🐰', 'snake'  => '🐍',
-        ];
+        static $map = self::HOUSE_EMOJI + GithubEmoji::MAP;
+
         return (string) preg_replace_callback(
             self::EMOJI_SHORTCODE_PATTERN,
             static fn (array $m): string => $map[strtolower($m[1])] ?? $m[0],
