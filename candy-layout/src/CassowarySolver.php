@@ -73,8 +73,8 @@ final class CassowarySolver implements LayoutSolver
     }
 }
 
-// ─── Supporting value class ─────────────────────────────────────────────────
-// Expression is a standalone linear-expression value object still covered by
+// ─── Supporting helper class ────────────────────────────────────────────────
+// Expression is a standalone linear-expression helper still covered by
 // ExpressionTest; it is retained even though the simplex that consumed it is
 // gone. The other former simplex helpers (Variable, Relation, ConstraintDef,
 // EditInfo, Tableau) were internal to the removed pivot loop and have been
@@ -83,8 +83,15 @@ final class CassowarySolver implements LayoutSolver
 /**
  * Linear expression: sum(a_i * x_i) + c.
  *
- * Immutable value object left over from the retired simplex prototype; kept as
- * a general-purpose linear-expression helper (see ExpressionTest).
+ * MUTABLE builder left over from the retired simplex prototype — NOT an
+ * immutable value object: $terms and $constant are public and writable, and
+ * plus()/times() themselves seed a fresh instance by assigning through those
+ * fields. The arithmetic methods are copy-style (they never touch the
+ * receiver), which is likely what the old "Immutable" claim meant, but the
+ * type does not enforce it. Freezing the fields would break the public API,
+ * so under the pre-1.0 API freeze the round-86 ruling keeps behaviour as-is
+ * and states the measured truth here instead (findings/plan_candy-layout.md
+ * row 3.2).
  */
 final class Expression
 {

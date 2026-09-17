@@ -317,7 +317,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 ## Phase 3: Low Severity Issues [PENDING]
 
 - [x] ✅ **3.1 Min/Max — Document Min(0) and Max(0) Semantics** (shipped r86-v2: intent notes on Min/Max class docblocks)
-- [ ] ⏭️ 3.2 Expression — Add `__toString()` Debug Method — blocked at r86-v2 by the lane's public-API freeze (additive method not taken)
+- [ ] ⏭ 3.2 Expression — Add `__toString()` Debug Method — blocked at r86-v2 by the lane's public-API freeze (additive method not taken). Docblock-truth-landed at r89-y2: class docblock + banner in `candy-layout/src/CassowarySolver.php` rewritten to the measured MUTABLE-builder reality (public writable `$terms`/`$constant`; copy-style methods, no type enforcement) — the "Immutable value object" claim was false; freezing stays out of scope under the API freeze.
 - [ ] ❗ 3.3 CassowarySolver — Review BIG_M Numerical Stability — premise-dead at r86-v2: BIG_M retired with the simplex
 
 ### 3.1: Min/Max — Document Min(0) and Max(0) Semantics

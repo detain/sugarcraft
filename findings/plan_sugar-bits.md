@@ -61,8 +61,9 @@ Address all 25 findings from the sugar-bits code review, organized into phased i
 
 ## Phase 3: Medium Priority Issues [PENDING]
 
-- [.] **3.1** `Progress::view()` — Duplicated Width/Percent Calculations — Extract common calculations to `private function computeBarLayout(): array`; all three render modes call helper
+- [x] ✅ **3.1** `Progress::view()` — Duplicated Width/Percent Calculations — Extract common calculations to `private function computeBarLayout(): array`; all three render modes call helper
   - **r86-v3:** ⚠ UNBUILT — verified NOT landed: no `computeBarLayout` in Progress.php. Structural refactor outside v3 scope; reported for ruling.
+  - **r89-y2:** ✅ BUILT — `computeBarLayout()` at `src/Progress/Progress.php:255`, consumed by all three branches (Line :284, Slim :298, Block :319); geometry census + capture-derived content pins in `tests/Progress/ProgressTest.php`; view() byte-identical to pre-refactor capture (17,666-config cmp).
   - **Files:** `src/Progress/Progress.php:210-319`, `tests/Progress/ProgressTest.php`
   - **Verification:** All progress tests pass; output byte-identical
   - **Severity:** medium
