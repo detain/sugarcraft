@@ -1,6 +1,7 @@
 # Code Review: candy-vt
 
 > **SUPERSEDED (2026-09-16, on master `aeb34bee4`) — `src/CellGrid.php` no longer exists.** The vcr renderer was unified onto the single `SugarCraft\Vt\Buffer\Buffer` grid: `CellGrid.php` was deleted by commit `40cfe4e3b` ("…collapse CellGrid into Buffer"), which reached master through **PR #1447 (merge `f7fe7c33b`)** (verified: `git ls-tree f7fe7c33b candy-vt/src/CellGrid.php` is empty; the file was still present at #1445 `45921a3db`). `candy-vt/src/Parser/CsiHandlerImpl.php:92` now holds `private Buffer $grid` and zero `CellGrid` references remain in `candy-vt/src/`. So the items below that treat `CellGrid` as a live file are **historical / resolved by the unification**: **#1** (`CellGrid::set()` immutability), **#22** (no `CellGrid::resize()`), **#28** (`CellGrid` vs `Buffer` duplication) — plus #24 and the summary-table rows for 1/22/28. The original wording is left intact so readers see the history in place. All other, still-live findings in this file are unaffected.
+> **RE-DERIVED (2026-09-17, on master `b26b9989f`) — lane r86v5 second banner.** The parser-side rows are moot in this lib: `src/Parser/{Parser,Transitions,HandlerAdapter}.php` no longer exist here (de-fork `9952e3f5c`; the vcr path imports candy-ansi's parser, `candy-vt/src/Terminal.php:7-8`). The w4-vt `61b28175c` + r86u `3514c2d59` waves also overtook several r82 ❗ stamps — corrected per-row below (#1/#22/#28 CellGrid-gone; #2/#5/#18 E725/w4-vt landed; #20 clear() shipped; #24/#25 ruled; #27 unified via `Cell/Cell.php:24` alias; #8 shape moved to `CsiHandlerImpl.php:319`). Still-live after re-derivation: **#6 #10 #11 #13 #14 #19 #21 #30** (+ moved-#8).
 
 ## Summary
 
@@ -18,7 +19,7 @@ Overall code quality is high. The VT500 state machine port (Transitions), SGR ha
 
 ## High Severity Issues
 
-### 1. `CellGrid::set()` is NOT immutable despite returning `$this` ❗ r82: STILL LIVE — src/CellGrid.php:67-79 (set() still returns $self after in-place mutation; API-break decision — flagged)
+### 1. `CellGrid::set()` is NOT immutable despite returning `$this` ❗ r82: STILL LIVE — src/CellGrid.php:67-79 (set() still returns $self after in-place mutation; API-break decision — flagged) → r86v5: ⏭ superseded — file deleted (`40cfe4e3b` via PR #1447 `f7fe7c33b`); vcr path on `Buffer` (`CsiHandlerImpl.php:92`). r82 STILL-LIVE stamp overtaken.
 
 **File:** `src/CellGrid.php:66-78`
 
@@ -42,7 +43,7 @@ This is misleading. `CellGrid` is **not** an immutable value object — it is a 
 
 ---
 
-### 2. `ScreenHandler` cursor visibility has two sources of truth ❗ r82: STILL LIVE — src/Handler/ModeHandler.php:72-74 (still dual write mode+cursor)
+### 2. `ScreenHandler` cursor visibility has two sources of truth ❗ r82: STILL LIVE — src/Handler/ModeHandler.php:72-74 (still dual write mode+cursor) → r86v5: ✅ landed (E725) — sole write path `ScreenHandler::setCursorVisible()` `src/Handler/ScreenHandler.php:1658-1662`; `ModeHandler.php:52` routes DEC 25 through it; alt-leave re-points the mode mirror `:1736`.
 
 **File:** `src/Handler/ScreenHandler.php:36-37` and `src/Handler/ModeHandler.php:71-74`
 
@@ -81,7 +82,7 @@ If two threads call `get()` simultaneously before `$table` is initialized, both 
 
 ---
 
-### 4. `Theme::$fgIndexMap` / `Theme::$bgIndexMap` same thread-safety concern ✅ r82: fixed by rewrite — maps are eager literals src/Theme.php:33-36, buildAnsiMaps gone
+### 4. `Theme::$fgIndexMap` / `Theme::$bgIndexMap` same thread-safety concern ✅ r82: fixed by rewrite — maps are eager literals src/Theme.php:33-36, buildAnsiMaps gone → r86v5: ✅ confirmed — eager literals `src/Theme.php:33`/`:36`.
 
 **File:** `src/Theme.php:31-35` and `src/Theme.php:295-307`
 
@@ -102,7 +103,7 @@ Same double-checked locking issue as `Transitions::$table`. The maps are current
 
 ---
 
-### 5. `Terminal\Terminal::resize()` does not resize the saved alt buffer ❗ r82: STILL LIVE — src/Terminal/Terminal.php:120-127 resize() still touches only active buffer
+### 5. `Terminal\Terminal::resize()` does not resize the saved alt buffer ❗ r82: STILL LIVE — src/Terminal/Terminal.php:120-127 resize() still touches only active buffer → r86v5: ✅ landed (E725) — `Terminal.php:394-402` → `ScreenHandler::resizeBuffers()` `:1606-1621` resizes `savedBuffer` too.
 
 **File:** `src/Terminal/Terminal.php:118-124` + `src/Handler/ScreenHandler.php:463-475`
 
@@ -114,7 +115,7 @@ Real terminals resize both buffers. A downstream consumer exercising resize whil
 
 ---
 
-### 6. Root `Terminal` lacks `enableAltScreen()`/`disableAltScreen()` API ❗ r82: STILL LIVE — src/Terminal.php has no alt-screen API (roster: new/feed/snapshot/cursor/grid/windowTitle)
+### 6. Root `Terminal` lacks `enableAltScreen()`/`disableAltScreen()` API ❗ r82: STILL LIVE — src/Terminal.php has no alt-screen API (roster: new/feed/snapshot/cursor/grid/windowTitle) → r86v5: ❗ confirmed still-live — `src/Terminal.php` roster has no alt-screen API; full path `Terminal/Terminal.php:515`/`:524`.
 
 **File:** `src/Terminal.php:1-97`
 
@@ -144,7 +145,7 @@ public function reset(): void
 
 ---
 
-### 8. `SgrHandler::apply()` uses `array_values(array_map('intval', $params))` unnecessarily ✅ r82: fixed by rewrite — no array_map/array_values left in src/Handler/SgrHandler.php
+### 8. `SgrHandler::apply()` uses `array_values(array_map('intval', $params))` unnecessarily ✅ r82: fixed by rewrite — no array_map/array_values left in src/Handler/SgrHandler.php → r86v5: ❗ same shape MOVED to `src/Parser/CsiHandlerImpl.php:319` (`sgr()`); `SgrHandler.php` itself stays clean.
 
 **File:** `src/Handler/SgrHandler.php:175`
 
@@ -173,7 +174,7 @@ $t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);
 
 ---
 
-### 10. Color comparison logic is duplicated across `Sgr::equals()`, `Cell::equals()`, and `Color::equals()` ❗ r82: STILL LIVE — no equalsOrBothNull utility; 4 null-compare sites each in src/Sgr/Sgr.php + src/Cell/Cell.php
+### 10. Color comparison logic is duplicated across `Sgr::equals()`, `Cell::equals()`, and `Color::equals()` ❗ r82: STILL LIVE — no equalsOrBothNull utility; 4 null-compare sites each in src/Sgr/Sgr.php + src/Cell/Cell.php → r86v5: ❗ confirmed — no `Color::equalsOrBothNull()`; `Sgr.php:270-283` ×2 inline; canonical `Cell.php:361-371` private `colorEquals()` copy (dup narrowed 3→2 sites).
 
 **Files:** `src/Sgr/Sgr.php:267-288`, `src/Cell/Cell.php:96-114`
 
@@ -196,7 +197,7 @@ This is verbose and repeated. A `Color::equalsOrBothNull(Color|null $a, Color|nu
 
 ---
 
-### 11. `Screen::diff()` iterates to max dimension, not actual dimensions ❗ r82: STILL LIVE — src/Screen/Screen.php:59-62 still max-dimension iteration
+### 11. `Screen::diff()` iterates to max dimension, not actual dimensions ❗ r82: STILL LIVE — src/Screen/Screen.php:59-62 still max-dimension iteration → r86v5: ❗ confirmed — `src/Screen/Screen.php:59-62` unchanged.
 
 **File:** `src/Screen/Screen.php:56-73`
 
@@ -234,7 +235,7 @@ The root `HandlerAdapter` only handles `OSC 0`, `OSC 1`, and `OSC 2` for window 
 
 ## Low Severity Issues
 
-### 13. `Theme::cubePalette()` is computed twice per theme instance ❗ r82: STILL LIVE — src/Theme.php:63+ cubePalette() still unmemoized, called by every factory
+### 13. `Theme::cubePalette()` is computed twice per theme instance ❗ r82: STILL LIVE — src/Theme.php:63+ cubePalette() still unmemoized, called by every factory → r86v5: ❗ confirmed — `Theme.php:63-75` unmemoized, 6 call sites (`:57`/`:113`/`:145`/`:171`/`:200`/`:229`).
 
 **File:** `src/Theme.php:53-57`
 
@@ -261,7 +262,7 @@ The 216-element cube palette is generated twice per theme instance. Since themes
 
 ---
 
-### 14. `CsiHandlerImpl::scrollUpOne()` is O(cols²) per row scrolled ❗ r82: STILL LIVE — src/Parser/CsiHandlerImpl.php:548+ cell-by-cell scroll still
+### 14. `CsiHandlerImpl::scrollUpOne()` is O(cols²) per row scrolled ❗ r82: STILL LIVE — src/Parser/CsiHandlerImpl.php:548+ cell-by-cell scroll still → r86v5: ❗ confirmed — `CsiHandlerImpl.php:982-997` still cell-by-cell on `Buffer::cell()`/`put()`.
 
 **File:** `src/Parser/CsiHandlerImpl.php:370-386`
 
@@ -318,7 +319,7 @@ C0 controls (0x00-0x1F) are rejected here because `printChar` is only called for
 
 ---
 
-### 17. Inconsistent factory method naming: `Terminal::new()` vs `Terminal::create()` ✅ r82: fixed by rewrite — root Terminal::new() only; full path @deprecated create() at src/Terminal/Terminal.php:59-61
+### 17. Inconsistent factory method naming: `Terminal::new()` vs `Terminal::create()` ✅ r82: fixed by rewrite — root Terminal::new() only; full path @deprecated create() at src/Terminal/Terminal.php:59-61 → r86v5: ✅ confirmed — root `new()`-only `src/Terminal.php:48`; `@deprecated create()` `Terminal/Terminal.php:73-75`.
 
 **Files:** `src/Terminal.php:45`, `src/Terminal/Terminal.php:51-62`
 
@@ -331,7 +332,7 @@ The root `Terminal` does not have a `create()` alias, while `Terminal\Terminal` 
 
 ---
 
-### 18. `Terminal\Terminal::__clone()` re-creates a new `Parser` with the cloned handler ❗ r82: STILL LIVE — src/Terminal/Terminal.php:129 __clone has no docblock note yet
+### 18. `Terminal\Terminal::__clone()` re-creates a new `Parser` with the cloned handler ❗ r82: STILL LIVE — src/Terminal/Terminal.php:129 __clone has no docblock note yet → r86v5: ✅ landed — `__clone()` docblock present `src/Terminal/Terminal.php:404-424` (committed-state + deep-copy note); r82 stamp stale vs the body's w4-vt ✅.
 
 **File:** `src/Terminal/Terminal.php:126-130`
 
@@ -353,7 +354,7 @@ After cloning, the new `Terminal` has a fresh `Parser` in Ground state. Any in-f
 
 ## Missing Features
 
-### 19. `ScreenHandler::$focusEvents` has no `Terminal` accessor ❗ r82: STILL LIVE — ScreenHandler.php:55 public focusEvents, no Terminal\Terminal::focusEvents() accessor
+### 19. `ScreenHandler::$focusEvents` has no `Terminal` accessor ❗ r82: STILL LIVE — ScreenHandler.php:55 public focusEvents, no Terminal\Terminal::focusEvents() accessor → r86v5: ❗ confirmed — `ScreenHandler.php:58` public array; no `focusEvents()` accessor in `src/Terminal/Terminal.php` (cf. `clipboardEvents()` `:389`).
 
 **File:** `src/Handler/ScreenHandler.php:54-55`
 
@@ -363,7 +364,7 @@ The full `Terminal\Terminal` class has no `focusEvents()` method. Consumers who 
 
 ---
 
-### 20. No public API to clear the scrollback buffer ❗ r82: STILL LIVE — src/Screen/Scrollback.php has no clear() (push/all/at/count/maxSize only)
+### 20. No public API to clear the scrollback buffer ❗ r82: STILL LIVE — src/Screen/Scrollback.php has no clear() (push/all/at/count/maxSize only) → r86v5: ✅ landed — `clear()` present `src/Screen/Scrollback.php:130`; r82 stamp stale vs the body's w4-vt ✅.
 
 **File:** `src/Screen/Scrollback.php`
 
@@ -375,7 +376,7 @@ The full `Terminal\Terminal` class has no `focusEvents()` method. Consumers who 
 
 ---
 
-### 21. `Terminal` (root) has no `flush()` method ❗ r82: STILL LIVE — src/Terminal.php still lacks flush()
+### 21. `Terminal` (root) has no `flush()` method ❗ r82: STILL LIVE — src/Terminal.php still lacks flush() → r86v5: ❗ confirmed — `src/Terminal.php` still lacks `flush()`.
 
 **File:** `src/Terminal.php`
 
@@ -385,7 +386,7 @@ The full `Terminal\Terminal` has `flush()` to dispatch in-flight string sequence
 
 ---
 
-### 22. No `CellGrid::resize()` — inconsistent with `Buffer::resize()` ❗ r82: STILL LIVE — same as #1 (src/CellGrid.php:67)
+### 22. No `CellGrid::resize()` — inconsistent with `Buffer::resize()` ❗ r82: STILL LIVE — same as #1 (src/CellGrid.php:67) → r86v5: ⏭ superseded — CellGrid deleted (see #1).
 
 **File:** `src/CellGrid.php`
 
@@ -420,7 +421,7 @@ DCS (Device Control String) dispatch is a no-op in both handler paths. While doc
 
 ## Duplicated Logic
 
-### 24. Three nearly identical `with*()` builders across `Sgr`, `Mode`, `CellGrid` ❗ r82: STILL LIVE — mutate() still unused in Sgr/Mode/Cell (grep 0; only root Cursor.php uses it)
+### 24. Three nearly identical `with*()` builders across `Sgr`, `Mode`, `CellGrid` ❗ r82: STILL LIVE — mutate() still unused in Sgr/Mode/Cell (grep 0; only root Cursor.php uses it) → r86v5: ⏭️ ruled — plan 9.1 Won't-fix stands; `mutate()` only in root `src/Cursor.php:27`.
 
 Each `with*()` method follows this exact pattern across `Sgr`, `Mode`, and `Cursor`:
 
@@ -441,7 +442,7 @@ All 10+ `Sgr::with*()` methods repeat the same 12-line constructor call block. A
 
 ---
 
-### 25. `Theme` and `Cell` both define identical attribute constants ✅ r82: fixed by rewrite — src/Cell/Cell.php no longer defines ATTR_* constants
+### 25. `Theme` and `Cell` both define identical attribute constants ✅ r82: fixed by rewrite — src/Cell/Cell.php no longer defines ATTR_* constants → r86v5: ⏭️ ruled-not-applicable — CORRECTION: duplication persists 2-file (`src/Theme.php:19-23` ↔ `src/Cell.php:40-44`; `Cell/Cell.php:24` is alias shim); r82 ✅ over-claimed. CALIBER parity intentional.
 
 **Files:** `src/Theme.php:18-22`, `src/Cell/Cell.php:17-21`
 
@@ -463,7 +464,7 @@ The library is part of a ReactPHP-based ecosystem (`candy-async` is in the monor
 
 ---
 
-### 27. Two `Cell` classes: `SugarCraft\Vt\Cell` and `SugarCraft\Vt\Cell\Cell` ❗ r82: STILL LIVE — dual Cell classes both present (src/Cell.php + src/Cell/Cell.php); rename breaks public API — FLAGGED, not decided
+### 27. Two `Cell` classes: `SugarCraft\Vt\Cell` and `SugarCraft\Vt\Cell\Cell` ❗ r82: STILL LIVE — dual Cell classes both present (src/Cell.php + src/Cell/Cell.php); rename breaks public API — FLAGGED, not decided → r86v5: ✅ landed — Cell unified into canonical `src/Cell.php`; `src/Cell/Cell.php:24` `class_alias` shim (façade rule). r82 "FLAGGED, not decided" decided upstream.
 
 **Files:** `src/Cell.php` (vcr renderer path), `src/Cell/Cell.php` (full path)
 
@@ -473,7 +474,7 @@ The root `Cell` uses a simple bitfield attrs and stores `char/fg/bg/attrs`. The 
 
 ---
 
-### 28. `CellGrid` and `Buffer` have overlapping responsibilities ❗ r82: STILL LIVE — CellGrid + Buffer both present; unification is public-API-breaking — FLAGGED, not decided
+### 28. `CellGrid` and `Buffer` have overlapping responsibilities ❗ r82: STILL LIVE — CellGrid + Buffer both present; unification is public-API-breaking — FLAGGED, not decided → r86v5: ⏭ superseded — CellGrid deleted; single Buffer grid (header banner governs).
 
 **Files:** `src/CellGrid.php`, `src/Buffer/Buffer.php`
 
@@ -522,7 +523,7 @@ public static function fromAsyncStream(ReadableStreamInterface $stream): \Genera
 
 ---
 
-### 30. `ScreenHandler::$focusEvents` accumulates but has no async notification ❗ r82: STILL LIVE — focus events still polling-only (ScreenHandler.php:55)
+### 30. `ScreenHandler::$focusEvents` accumulates but has no async notification ❗ r82: STILL LIVE — focus events still polling-only (ScreenHandler.php:55) → r86v5: ❗ confirmed — no `onFocusEvent`; array-only `:58`/`:395`/`:399`. Pairs with plan 12.3.
 
 **File:** `src/Handler/ScreenHandler.php:54-55`
 

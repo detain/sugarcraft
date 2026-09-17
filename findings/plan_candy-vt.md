@@ -7,6 +7,7 @@ updated: 2026-06-30
 # Implementation Plan: candy-vt
 
 > **SUPERSEDED (2026-09-16, on master `aeb34bee4`) — the `CellGrid` tasks are moot; `src/CellGrid.php` was deleted.** **§2.1** (and its §12.1 / §12.6 follow-ons and the phase-summary table row) target `CellGrid::set()`/`resize()` in `src/CellGrid.php`. That class was collapsed into `src/Buffer/Buffer.php` by commit `40cfe4e3b`, landed via **PR #1447 (merge `f7fe7c33b`)**; `CsiHandlerImpl` now uses `Buffer` directly (`candy-vt/src/Parser/CsiHandlerImpl.php:92`). There is no `CellGrid` left to change. Original prose is preserved for history; see the matching note atop `findings/candy-vt.md`.
+> **RE-DERIVED (2026-09-17, on master `b26b9989f`) — lane r86v5 walked all 31 rows against the post-merge tree.** Parser-era rows (Phases 1.1/2.2/7.1/7.3/8.1/12.2/12.4) target files that now live only in candy-ansi (de-fork `9952e3f5c`; `candy-vt/src/Terminal.php:7-8` imports `SugarCraft\Ansi\Parser\{Parser,HandlerAdapter}`); upstream waves `61b28175c` (w4-vt) + `3514c2d59` (r86u) landed 8 more rows outright. SURVIVING actionable set = 9 rows: **2.3, 4.1, 4.3, 4.4, 6.1, 6.2, 6.3, 6.4, 12.3**. Per-row evidence: `/home/sites/crush-r61-artifacts/v5/verdicts.md`.
 
 ## Goal
 
@@ -26,7 +27,9 @@ Address all 31 findings from the candy-vt code review, organized into phases by 
 
 ## Phase 1: Critical Thread-Safety Fixes [PENDING]
 
-### 1.1 Fix `Transitions::$table` thread-safe lazy init
+> **r86v5 re-derivation tally:** ⏭1 ✅1 — both thread-safety rows dead in candy-vt shape (de-fork / eager literals). No work.
+
+### 1.1 Fix `Transitions::$table` thread-safe lazy init ⏭ r86v5: superseded-by-upstream — `src/Parser/Transitions.php` no longer exists in candy-vt (parser de-fork `9952e3f5c`); lazy `??=` table now `candy-ansi/src/Parser/Transitions.php:37`, ruled ⏭️ obsolete there (no userland shared-memory threads, pure build()) — see findings/candy-vt.md #3/q18.
 
 **File:** `src/Parser/Transitions.php:27-37`
 
@@ -74,7 +77,7 @@ private static function buildInternal(): string
 
 ---
 
-### 1.2 Fix `Theme::$fgIndexMap` / `Theme::$bgIndexMap` thread-safe lazy init
+### 1.2 Fix `Theme::$fgIndexMap` / `Theme::$bgIndexMap` thread-safe lazy init ✅ r86v5: landed — maps are eager literals `src/Theme.php:33`/`:36`; `buildAnsiMaps()` gone.
 
 **File:** `src/Theme.php:31-35` + `src/Theme.php:295-307`
 
@@ -123,7 +126,9 @@ private static array $bgIndexMap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
 
 ## Phase 2: Immutability Contract Repairs [PENDING]
 
-### 2.1 Make `CellGrid::set()` return `void` instead of `self`
+> **r86v5 re-derivation tally:** ⏭2 ❗1 (2.3) — one surviving DRY row.
+
+### 2.1 Make `CellGrid::set()` return `void` instead of `self` ⏭ r86v5: superseded-by-upstream — `src/CellGrid.php` deleted (commit `40cfe4e3b`, PR #1447 merge `f7fe7c33b`); vcr path runs on `Buffer` (`src/Parser/CsiHandlerImpl.php:92`). Header banner governs.
 
 **File:** `src/CellGrid.php:66-79`
 
@@ -179,7 +184,7 @@ public function set(int $row, int $col, Cell $cell): void
 
 ---
 
-### 2.2 Fix `Transitions::build()` unused `$g` variable
+### 2.2 Fix `Transitions::build()` unused `$g` variable ⏭ r86v5: superseded-by-upstream — Transitions de-forked to candy-ansi (see 1.1); there `$g` is used at its definition line — ruled ⏭️ obsolete, findings #9/q18.
 
 **File:** `src/Parser/Transitions.php:52-53`
 
@@ -220,7 +225,7 @@ $t = str_repeat(self::pack(Action::None->value, $g), self::SIZE);
 
 ---
 
-### 2.3 Fix duplicate color comparison logic
+### 2.3 Fix duplicate color comparison logic ❗ r86v5: STILL LIVE — no `Color::equalsOrBothNull()` anywhere; `src/Sgr/Sgr.php:270-283` keeps two inline verbose null-compares; canonical `src/Cell.php:361-371` grew a private `colorEquals()` copy (duplication is now Sgr↔Cell, 2 sites). If unbuildable: nothing breaks — DRY-only refactor, zero behavior change.
 
 **File:** `src/Sgr/Sgr.php:267-288`, `src/Cell/Cell.php:96-114`
 
@@ -282,7 +287,9 @@ $bgEqual = Color::equalsOrBothNull($this->background(), $other->background());
 
 ## Phase 3: State Divergence Fixes [PENDING]
 
-### 3.1 Fix dual cursor visibility sources of truth in ScreenHandler
+> **r86v5 re-derivation tally:** ✅1 — closed upstream (E725 sole write path).
+
+### 3.1 Fix dual cursor visibility sources of truth in ScreenHandler ✅ r86v5: landed (E725 invariant, upstream wave via `3514c2d59`) — sole write path `ScreenHandler::setCursorVisible()` at `src/Handler/ScreenHandler.php:1658-1662` (docblock: "the ONLY write path for this bit (E725)"); `ModeHandler.php:13`/`:52` route DEC 25 through it; alt-swap carries `Cursor::$visible` (`:1700`) and leave re-points the Mode mirror (`:1736` "E725 invariant"; `:1819` cursorOnly).
 
 **File:** `src/Handler/ScreenHandler.php:36-37`, `src/Handler/ModeHandler.php:71-74`
 
@@ -338,7 +345,9 @@ $this->mode = $this->mode->withCursorVisible($this->cursor->visible); // ADD THI
 
 ## Phase 4: API Completeness Additions [PENDING]
 
-### 4.1 Add `Terminal::focusEvents()` accessor
+> **r86v5 re-derivation tally:** ❗3 (4.1, 4.3, 4.4) ✅1 (4.2 pre-stamped) — API-completeness batch survives.
+
+### 4.1 Add `Terminal::focusEvents()` accessor ❗ r86v5: STILL LIVE — `ScreenHandler.php:58` public `$focusEvents` (appended `:395`/`:399`) and `src/Terminal/Terminal.php` exposes `clipboardEvents()` (`:389`) but NO `focusEvents()` accessor (full method roster :344-532). If unbuildable: consumers keep breaking encapsulation via `$vt->handler->focusEvents` — API-completeness only.
 
 **File:** `src/Terminal/Terminal.php`
 
@@ -414,7 +423,7 @@ public function clear(): void
 
 ---
 
-### 4.3 Add `flush()` method to root `Terminal`
+### 4.3 Add `flush()` method to root `Terminal` ❗ r86v5: STILL LIVE — `src/Terminal.php` (114 lines, roster new/feed/snapshot/cursor/grid/windowTitle/theme/isWrapPending) has no `flush()`; full path keeps it at `src/Terminal/Terminal.php:328`; candy-ansi `Parser::flush()` exists to delegate to. If unbuildable: vcr consumers cannot force dispatch of a partial OSC before `snapshot()`.
 
 **File:** `src/Terminal.php`
 
@@ -452,7 +461,7 @@ public function flush(): void
 
 ---
 
-### 4.4 Add `enableAltScreen()` / `disableAltScreen()` to root `Terminal`
+### 4.4 Add `enableAltScreen()` / `disableAltScreen()` to root `Terminal` ❗ r86v5: STILL LIVE — root `src/Terminal.php` has no alt-screen entry points; full path has `enableAltScreen()`/`disableAltScreen()` at `src/Terminal/Terminal.php:515`/`:524`. If unbuildable: only parity — vcr consumers have no stub to catch.
 
 **File:** `src/Terminal.php`
 
@@ -517,7 +526,9 @@ public function disableAltScreen(): self
 
 ## Phase 5: Incomplete Feature Fixes [PENDING]
 
-### 5.1 Fix `Terminal::resize()` to also resize saved alt buffer
+> **r86v5 re-derivation tally:** ✅1 — closed upstream (E725 resizeBuffers).
+
+### 5.1 Fix `Terminal::resize()` to also resize saved alt buffer ✅ r86v5: landed (E725, upstream wave via `3514c2d59`) — `resize()` at `src/Terminal/Terminal.php:394-402` delegates to `ScreenHandler::resizeBuffers()` `src/Handler/ScreenHandler.php:1606-1621`, which resizes the saved buffer (comment: "real terminals resize both; E725").
 
 **File:** `src/Terminal/Terminal.php:118-124`
 
@@ -567,7 +578,9 @@ public function resize(int $cols, int $rows): void
 
 ## Phase 6: Dead Code & Performance [PENDING]
 
-### 6.1 Remove redundant `array_values(array_map('intval', ...))` in SgrHandler
+> **r86v5 re-derivation tally:** ❗4 (6.1-6.4) — perf cluster survives intact, one row moved file.
+
+### 6.1 Remove redundant `array_values(array_map('intval', ...))` in SgrHandler ❗ r86v5: STILL LIVE, moved — the shape now sits at `src/Parser/CsiHandlerImpl.php:319` inside `sgr()` (still `array_values(array_map('intval', $params))`); `Handler/SgrHandler.php` itself is clean — finding #8's ✅ landed there only. If unbuildable: nothing — per-frame allocation overhead.
 
 **File:** `src/Parser/CsiHandlerImpl.php:175`
 
@@ -600,7 +613,7 @@ Note: `applySgrParam()` at line 183 receives `$params` and passes `$params[$i]` 
 
 ---
 
-### 6.2 Optimize `Screen::diff()` iteration to overlapping region
+### 6.2 Optimize `Screen::diff()` iteration to overlapping region ❗ r86v5: STILL LIVE — `src/Screen/Screen.php:59-62` unchanged max-dimension iteration. Consumer caution: a min+extras restructure changes `diff()` emission ORDER for out-of-overlap cells — verify candy-vcr/crush consumers treat `changes[]` as a set.
 
 **File:** `src/Screen/Screen.php:56-73`
 
@@ -688,7 +701,7 @@ public function diff(self $other): array
 
 ---
 
-### 6.3 Fix `Theme::cubePalette()` computed twice per theme
+### 6.3 Fix `Theme::cubePalette()` computed twice per theme ❗ r86v5: STILL LIVE — `src/Theme.php:63-75` `cubePalette()` unmemoized; 6 call sites (`:57`/`:113`/`:145`/`:171`/`:200`/`:229` — every factory + defaultPalette). Trivial static memo.
 
 **File:** `src/Theme.php:51-57` + theme factory methods (lines 90-224)
 
@@ -733,7 +746,7 @@ private static function computeCubePalette(): array
 
 ---
 
-### 6.4 Optimize `CsiHandlerImpl::scrollUpOne()` to O(cols) per row
+### 6.4 Optimize `CsiHandlerImpl::scrollUpOne()` to O(cols) per row ❗ r86v5: STILL LIVE — `src/Parser/CsiHandlerImpl.php:982-997` still cell-by-cell copy via `Buffer::cell()`/`put()`; O(cols²)/row; efficient fix needs a row-shift API on `Buffer` (private grid).
 
 **File:** `src/Parser/CsiHandlerImpl.php:370-386`
 
@@ -828,7 +841,9 @@ private function scrollUpOne(): void
 
 ## Phase 7: Documentation & Comments [PENDING]
 
-### 7.1 Clarify `HandlerAdapter::printChar()` comment
+> **r86v5 re-derivation tally:** ⏭2 (7.1, 7.3 de-fork) ✅1 (7.4) — plus pre-stamped 7.2 ✅; phase closed.
+
+### 7.1 Clarify `HandlerAdapter::printChar()` comment ⏭ r86v5: superseded-by-upstream — `HandlerAdapter.php` lives only in candy-ansi now (de-fork); pass-through rationale documented there — findings #16/q18 ✅.
 
 **File:** `src/Parser/HandlerAdapter.php:23-30`
 
@@ -902,7 +917,7 @@ public function __clone(): void
 
 ---
 
-### 7.3 Document `HandlerAdapter::oscDispatch()` scope limitation
+### 7.3 Document `HandlerAdapter::oscDispatch()` scope limitation ⏭ r86v5: superseded-by-upstream — candy-ansi `HandlerAdapter::oscDispatch()` (`candy-ansi/src/Parser/HandlerAdapter.php:132`) now dispatches OSC 8 with id parsing; recorded-scope fixed there — findings #12/q18 ✅.
 
 **File:** `src/Parser/HandlerAdapter.php:79-84`
 
@@ -935,7 +950,7 @@ public function oscDispatch(string $data): void
 
 ---
 
-### 7.4 Standardize factory method naming
+### 7.4 Standardize factory method naming ✅ r86v5: landed — root `new()`-only (`src/Terminal.php:48`); full path retains the `@deprecated create()` BC shim (`src/Terminal/Terminal.php:73-75`) — accepted shape per findings #17.
 
 **File:** `src/Terminal.php:45` vs `src/Terminal/Terminal.php:51-62`
 
@@ -970,7 +985,9 @@ Both classes now have consistent `new()` factory — the only factory method.
 
 ## Phase 8: Missing Features — Async Design [PENDING]
 
-### 8.1 Document DCS dispatch as deferred to v2
+> **r86v5 re-derivation tally:** ⏭2 (DCS implemented; async premise dead) — phase closed upstream.
+
+### 8.1 Document DCS dispatch as deferred to v2 ⏭ r86v5: superseded-by-upstream — DCS dispatch is IMPLEMENTED in candy-ansi (`HandlerAdapter::dcsDispatch` at `candy-ansi/src/Parser/HandlerAdapter.php:168`; findings #23 ✅ de-fork). Nothing left to document as deferred.
 
 **File:** `src/Parser/HandlerAdapter.php:86-88`, `src/Parser/OscHandlerImpl.php:21-23`
 
@@ -999,7 +1016,7 @@ public function dcsDispatch(int $final, array $params, int $prefix, int $interme
 
 ---
 
-### 8.2 Document async streaming limitation
+### 8.2 Document async streaming limitation ⏭ r86v5: superseded-by-upstream — async surface shipped: `feedAsync()` `src/Terminal/Terminal.php:137` + `feedStream()` `:201` (upstream `26ee0fa97`, r86u merge `3514c2d59`); the "document as sync-only, async = future consideration" premise is dead. Root vcr path stays sync by design (findings #29 ⏭️ stands).
 
 **File:** `src/Parser/Parser.php` (feed method) and `src/Terminal.php`
 
@@ -1032,7 +1049,9 @@ public function feed(string $bytes): void
 
 ## Phase 9: Duplication & Maintenance Burden [PENDING]
 
-### 9.1 Extract `mutate()` helper for `Sgr`, `Mode`, `Cursor`
+> **r86v5 re-derivation tally:** ⏭️2 rulings (won't-fix stands; narrowed-not-erased) — phase closed.
+
+### 9.1 Extract `mutate()` helper for `Sgr`, `Mode`, `Cursor` ⏭️ r86v5: ruled-not-applicable — the row's own Won't-fix decision stands; `mutate()` remains only in root `src/Cursor.php:27`; `Sgr`/`Mode` subdirectory classes keep explicit `with*()` per CALIBER_LEARNINGS.
 
 **File:** `src/Sgr/Sgr.php`, `src/Mode/Mode.php`, `src/Cursor/Cursor.php`
 
@@ -1061,7 +1080,7 @@ This pattern, applied to `Sgr`, would reduce each `with*()` method from 12 lines
 
 ---
 
-### 9.2 Extract shared attribute constants class
+### 9.2 Extract shared attribute constants class ⏭️ r86v5: ruled-not-applicable — CALIBER API-parity intentional; duplication narrowed 3→2 files (`src/Theme.php:19-23` ↔ `src/Cell.php:40-44`; `src/Cell/Cell.php` is now a pure alias shim). Corrects findings #25's r82 "fixed" over-claim (the constants still exist, in the canonical Cell).
 
 **File:** `src/Theme.php:18-22`, `src/Cell/Cell.php:17-21`, `src/Cell.php:17-21`
 
@@ -1104,7 +1123,9 @@ Then in `Theme.php` and `Cell.php`, remove the duplicate definitions and referen
 
 ## Phase 10: Compatibility Issues [PENDING]
 
-### 10.1 Add `candy-async` dependency to `candy-vt`
+> **r86v5 re-derivation tally:** ✅1 — upstream added the candy-async require; phase closed.
+
+### 10.1 Add `candy-async` dependency to `candy-vt` ✅ r86v5: landed — `candy-vt/composer.json:32` requires `"sugarcraft/candy-async": "dev-master"` (added upstream; rides r86u merge `3514c2d59`). No per-lib repositories[] entry (path-repo policy).
 
 **File:** `candy-vt/composer.json`
 
@@ -1145,7 +1166,9 @@ But it's not in `require`, so `candy-async` is only available for development/te
 
 ## Phase 11: Silent No-ops & Edge Cases [PENDING]
 
-### 11.1 Add optional debug-mode warning for unknown SGR params
+> **r86v5 re-derivation tally:** ⏭️1 ruling — phase closed.
+
+### 11.1 Add optional debug-mode warning for unknown SGR params ⏭️ r86v5: ruled-not-applicable — spec-correct silent skip (findings #15 ⏭️ stands); `Handler/SgrHandler.php:110`/`:277` still `default =>` silent.
 
 **File:** `src/Handler/SgrHandler.php:92`
 
@@ -1191,13 +1214,15 @@ default => [
 
 ## Phase 12: Remaining Items [PENDING]
 
-### 12.1 No `CellGrid::resize()` inconsistency (see 2.1)
+> **r86v5 re-derivation tally:** ⏭4 ✅1 (12.5) ❗1 (12.3) — one surviving callback row.
+
+### 12.1 No `CellGrid::resize()` inconsistency (see 2.1) ⏭ r86v5: superseded-by-upstream — CellGrid deleted (see 2.1).
 
 **Related to:** Issue #22 — `CellGrid::resize()` creates a new instance but `CellGrid::set()` mutates in place. Already addressed in Phase 2.
 
 ---
 
-### 12.2 Document `Parser::reset()` OSC discard behavior
+### 12.2 Document `Parser::reset()` OSC discard behavior ⏭ r86v5: superseded-by-upstream — `Parser` lives in candy-ansi; `reset()=flush()+clear()` dispatches in-flight payloads there — findings #7/q18 ✅.
 
 **File:** `src/Parser/Parser.php:82-86`
 
@@ -1231,7 +1256,7 @@ public function reset(): void
 
 ---
 
-### 12.3 Add `focusEvents()` callback support to ScreenHandler
+### 12.3 Add `focusEvents()` callback support to ScreenHandler ❗ r86v5: STILL LIVE — `src/Handler/ScreenHandler.php` has no `onFocusEvent` ctor param; focus events land in the public array only (`:58` decl, `:395`/`:399` appends). If unbuildable: consumers (crush TUI) poll — pairs with findings #30.
 
 **File:** `src/Handler/ScreenHandler.php:54-55`
 
@@ -1273,7 +1298,7 @@ if ($this->mode->reportFocusEvents) {
 
 ---
 
-### 12.4 Pre-compute `Transitions` table at autoload time
+### 12.4 Pre-compute `Transitions` table at autoload time ⏭ r86v5: superseded-by-upstream — parser de-forked (see 1.1); the row's own won't-fix decision stands (findings #31 q18: feature-idea, lazy build retained in candy-ansi).
 
 **File:** `src/Parser/Transitions.php`
 
@@ -1306,7 +1331,7 @@ The key improvement is using a static boolean guard in `build()` as shown in Pha
 
 ---
 
-### 12.5 Document dual Cell classes
+### 12.5 Document dual Cell classes ✅ r86v5: landed — the dual Cell problem is GONE: both vocabularies unified into canonical `src/Cell.php` ("constructor accepts BOTH vocabularies", docblock :19); `src/Cell/Cell.php:24` is a `class_alias` shim per the AGENTS façade rule. Resolves findings #27.
 
 **File:** `src/Cell.php` (root), `src/Cell/Cell.php` (subdirectory)
 
@@ -1339,7 +1364,7 @@ The key improvement is using a static boolean guard in `build()` as shown in Pha
 
 ---
 
-### 12.6 Document `CellGrid` vs `Buffer` when-to-use
+### 12.6 Document `CellGrid` vs `Buffer` when-to-use ⏭ r86v5: superseded-by-upstream — `src/CellGrid.php` deleted; single `Buffer` grid on both paths. Header banner governs.
 
 **File:** `src/CellGrid.php`, `src/Buffer/Buffer.php`
 
@@ -1387,3 +1412,4 @@ The key improvement is using a static boolean guard in `build()` as shown in Pha
 - Immutability repairs (Phase 2) must be completed before API additions that depend on accurate contracts.
 - The async streaming improvements (Phase 8) are documented as future work — not implementing in this plan since they require broader architectural decisions.
 - The `mutate()` helper extraction (Phase 9.1) is explicitly declined — current explicit pattern is documented as intentional per CALIBER_LEARNINGS.
+- **2026-09-17 (r86v5):** full re-derivation of every row vs `b26b9989f` (post `61b28175c` + `3514c2d59`). Verdicts — ✅ landed 8 · ❗ still-live 9 · ⏭ superseded-by-upstream 11 · ⏭️ ruled-not-applicable 3 (= 31). The r87 cut list carries the 9 still-live rows; all are candy-vt-lib-local (no sugar-crush suite figures move).
