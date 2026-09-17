@@ -14,7 +14,7 @@ Nothing here depends on a prior conversation's context.
 
 | field | value |
 |---|---|
-| master | `5c5c65f2f` + filemap regen @ /home/sites/sugarcraft — NEVER pushed |
+| master | `9c1b79b82` (closeout docs) → filemap regen @ /home/sites/sugarcraft — NEVER pushed |
 | chain | `f22353b2e` (r87) → `48846c8d9`(x6 vt) → `871107869`(x4 forms B) → `6e83c1675`(x5 forms C) → `e2ac4fc7e` companion (NIT folds + prompt README rows + §E743/§E744 mints) → `b475df971` re-pin → closeout docs |
 | FLOOR | **12,027T / 170,422A / 0F / 0E / 1S (McpClientTest) / EXIT 0** — linked, cwd=sugar-crush, plain pipe; tests EXACT-CARRY 5th round; assertions re-pinned (serials 170,454/170,422, ±50 census wobble band, refresh-suite-figure from saved junit); K=8 CONSERVATION +0/+0; five-guard 125T/7362A; windows 633/3943 + 305/21034 HELD; `Shine|Style|Renderer|Glamour|Stream` 921/59,234 recorded; tools rc0/rc0; config md5 `d96e124ee7967eb34ef479ef824231ad`; durations 532 HELD |
 | libs | vt 948/12,735 ×2 + render-dump `dccc5c4857103432105e314a0fcc1209` (9,728 lines); forms 2037/3526 ×2 0W; bits 514/1,085; layout 157/882; shine 352/704 (TRUTH — brief stale); glow 122/313; vcr 948/4,082/14S; pty 663/1,862/17S; shell 334/694; query 1,483/4,203; prompt 158/313/2S |

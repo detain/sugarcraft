@@ -1,58 +1,60 @@
 # crush_code backlog — actionable file-map (lane-scheduling aid)
 
-Derived 2026-09-17 @ code tip `7988f2305` (round-87 weld chain: base `cfb26f8f2` (r86 closeout) →
-picks `f48537daf`/`c37486747`/`848f1fbb0`/`232686276` (w1 candy-vt)/`66debe01c` (w2 sugar-bits)/
-`971c0fa96` (w3 sugar-charts) → `7988f2305` (companion: §E742 MINT + folds)) — **FULL REGEN at the
-round-87 close** (supersedes the round-86 `cfb26f8f2`-base cut); regenerate this file at every
+Derived 2026-09-17 @ code tip `b475df971` (round-88 weld chain: base `f22353b2e` (r87 closeout) →
+picks `48846c8d9` (x6 candy-vt row-shift API)/`871107869` (x4 candy-forms Date/Slider/Color)/
+`6e83c1675` (x5 candy-forms mouse+clipboard) → `e2ac4fc7e` (companion: rv folds + prompt README rows +
+§E743/§E744 MINTS) → `b475df971` (suite-figure re-pin)) — **FULL REGEN at the
+round-88 close** (supersedes the round-87 `7988f2305`-base cut); regenerate this file at every
 round-close.
 Purpose: map every actionable backlog id to the files it touches so the supervisor can schedule
-file-disjoint lanes. **Actionable set (one row per id — 2 rows below): ACTIONABLE = 2 BY ROW CENSUS**
-(OPEN-table 2 / PARTIAL-table 0 / STALE-CITATION 0 / UNCERTAIN 0) — re-derived from the four triage
+file-disjoint lanes. **Actionable set (one row per id — 4 rows below): ACTIONABLE = 4 BY ROW CENSUS**
+(OPEN-table 4 / PARTIAL-table 0 / STALE-CITATION 0 / UNCERTAIN 0) — re-derived from the four triage
 section tables (awk strict-prefix survivor recount, exact command + output pasted below and at
-`crush_code_RESUME.md` §0-NOW-90 §2(a); r86 left 1 survivor — the round-87 weld dispositioned the ENTIRE
-E736 tail (w1 built 7 vt rows + gated 6.2 + deferred 6.4-with-trigger; w2 CLOSED bits 2.4; w3 dispositioned
-charts P5 4/4) and MINTED §E742 from the rv-w1 seam → post-census **2**: **E736** + **E742**) and
-cross-confirmed against the picks. **One mint at this close (§E742), zero closes of whole rows.** The
-survivor recount returns exactly 2, never chained.
+`crush_code_RESUME.md` §0-NOW-92 §1; r87 left 2 survivors — the round-88 weld promoted bits 3.1 to
+**§E743** after lane x2 phantom'd and minted **§E744** from rv-x5 MINOR-1 (crush cannot reach the shipped
+widget features), while **§E742 STAYS OPEN** (its fix lane x1 phantom'd — the weld refused the incoming
+brief's [CLOSED] stamp) → post-census **4**) and
+cross-confirmed against the picks. **Two mints at this close (§E743, §E744), zero whole-row closes
+(vt 6.4's DEFERRED-with-trigger resolved BUILT via x6 inside the E736 umbrella).** The
+survivor recount returns exactly 4, never chained.
 
-CLOSED rows are PRUNED (none at this regen — the two survivors pre-date it). Round-87 lane letters
-**w1 w2 w3** are RETIRED at this close (their files land inside E736's still-actionable umbrella — the `⚠`
-marks carry them). U retired sets: w (r87), v (r86), u (r85), t (r84), r/s (r83), q1–q18 (r82),
-pa–pg (r81), ob/oc (r80), na (r79), ma/mb (r78), la/lc/lb (r77).
+CLOSED rows are PRUNED (none at this regen). Round-88 lane letters **x1 x2 x3 x4 x5 x6 x7** —
+x4/x5/x6 RETIRED (files landed, umbrella row stays actionable); x1/x2/x3/x7 were PHANTOM at weld time
+(no branch/commit/object — reviewer + weld disk audits agree), their design intents ride the re-cut
+candidates below. U retired sets: x-partial (r88), w (r87), v (r86), u (r85), t (r84), r/s (r83),
+q1–q18 (r82), pa–pg (r81), ob/oc (r80), na (r79), ma/mb (r78), la/lc/lb (r77).
 
-**Scheduling warnings (the round-88 point):** BOTH survivors are decision-shaped, not defect work —
-§E742 needs an orchestrator RULING (correct-to-xterm vs document-fallback) BEFORE any build; §E736's
-residual tails are ALL trigger-gated (forms Ph5 on real consumer demand; vt 6.4 on a Buffer row-shift-API
-demand; MATCHUPS port completions per the full add-a-lib checklist, one lib per wave, only when scheduled).
-The campaign is MECHANICALLY COMPLETE per the operator (m0225) — round 88 ONLY on operator direction;
-Phase-12 stays PAUSED (never auto-resume). Re-derive row anchors at lane base before building
-(zany-beige-roadrunner law — held again at r87: w1's 6.2 consumer sweep, w3's 5.1 verified-landed stamp,
-w2's P2 honest re-measure 2→1 were all probe-first).
+**Scheduling warnings (the round-89 point):** ALL FOUR survivors are decision/feature-shaped, not
+defect work — §E742 needs the orchestrator RULING (correct-to-xterm vs document-fallback) BEFORE any
+re-cut; §E743/§E744 are standalone builds (capture-proof / Chat.php-touching respectively); §E736's
+residual tails are trigger-gated (forms cluster A + shine streaming re-cuts only on direction; MATCHUPS
+port completions per the full add-a-lib checklist). The campaign remains MECHANICALLY COMPLETE per the
+operator unless re-directed. Re-derive row anchors at lane base before building (zany-beige-roadrunner
+law — held again at r88: the WELD's salvage-first disk audit is the same law applied to the brief itself:
+this brief carried four phantom SHAs and a stale shine baseline; disk over paper, always).
+NEW PROCESS CANDIDATE (r88): builders commit EARLY (WIP acceptable) so mid-death work survives; weld
+briefs must enumerate lane commits via `git log` at authoring time, never pre-baked SHAs.
 **No lane may touch `sugar-crush/src/Cli/Bootstrap.php`, `sugar-crush/src/Chat.php`,
-`scripts/parallel-tests.sh`, or the figure files without re-arming the census family** (s4's lesson: three
-of four W3 files there are census-guarded in-step).
+`scripts/parallel-tests.sh`, or the figure files without re-arming the census family** (s4's lesson;
+§E744's scope hits Chat.php — census trio + DocFigure re-arms mandatory in-brief).
 
 **Seam dispositions verified at this regen:** the SwallowingCatch gate law (r77) stays in every
-src-touching brief's gate list (including sibling-lib briefs touching lib src). The serial-only census law
-stands — the r85 BOTH waves, the r86 weld AND the r87 weld moved ZERO sugar-crush files, so the r86u serial
-(12,027/170,392/1S/exit0 @ `988696aea`) is carried EXACT through `971c0fa96` — **FOUR** rounds running the
-welds moved zero crush files — and each weld gates the touched libs FULL + the targeted family + five-guard
+src-touching brief's gate list. The serial census law: r88 moved ZERO crush test files — tests figure
+EXACT-CARRY 5th round (12,027) — but sibling builds retreed the tree-scan censuses, so the assertions
+figure was REFRESHED from the green serial (170,392 → 170,422; serial pair 170,454/170,422 inside the
+documented ±50 wobble band; K=8 conservation +0/+0 vs re-pinned figure). Durations 532 rows HELD
+(zero new crush test files). Each weld gates the touched libs FULL + targeted families + five-guard
 125T/7362A + both repo tools. SHARD GATE (s4/E737): shards launch with
-`SUGARCRUSH_MCP_DISABLE=1`; launch-asserting tests arm via `tests/Support/McpLaunchEnabledTrait.php` — any
-new MCP-launch test MUST use the trait or it reddens only in-shard. `scripts/parallel-tests-durations.tsv`
-is SUGAR-CRUSH-ONLY — **532 rows HELD** (zero new crush test files this round, set-diff empty by
-construction); `failOnWarning` is UNIVERSAL (58/58) — every lane gate expects ZERO Warnings (vt/bits/charts
-0W at this weld). Harness law UNCHANGED: serials run through the PLAIN BASH-TOOL PIPE — NEVER tmux/PTY.
-Determinism law (r82-q9) unchanged. NEW PIN LAW (r87-w2): pins for ADJUST-GATING defects must be
-WALK-FORM (replay the interaction) — the withActive-jump form demonstrably missed the seed-neuter mutation.
-NEW MEASUREMENT LAW (r87-w2/rv): a `Mark::zone` span costs ≈13 cells to `Width::of` — geometry pins measure
-STRIPPED rows. The per-section ledger-edit law (r77 lc wipe) governed this closeout's flips (backlog:
-scoped per-section split + assert-1, numstat 6/0 total across companion+stamps; triage: two anchored row
-edits, +2/−1; worklog: one inserted section, 9/0; RESUME: whole-region replace + banner swap, verbatim awk
-block re-executed → `E736` + `E742`; root pointer: single-paragraph 1/1; far canaries intact — `### E741`,
-`### E475`, ROUND-80…85 headings, APPENDIX I–V all present). Config-md5 at-rest truth
-**`d96e124ee7967eb34ef479ef824231ad`** (start==end at the weld). **LINK CENSUS POST-r86u: sugar-crush
-19/19 + candy-pty 8/8** — fresh sandboxes verify the census BEFORE briefing (r76 lesson).
+`SUGARCRUSH_MCP_DISABLE=1`; launch-asserting tests arm via `tests/Support/McpLaunchEnabledTrait.php`.
+`scripts/parallel-tests-durations.tsv` is SUGAR-CRUSH-ONLY. `failOnWarning` UNIVERSAL (58/58) —
+forms/vt/bits/layout/shine/glow all 0W at this weld. Harness law UNCHANGED: serials run through the
+PLAIN BASH-TOOL PIPE — NEVER tmux/PTY. Determinism law (r82-q9) unchanged. WALK-FORM pin law (r87-w2)
+and STRIPPED-geometry law (r87-w2/rv) unchanged. The per-section ledger-edit law (r77 lc) governed
+this closeout (backlog: scoped per-section insert, 3/0; triage: companion added two anchored rows,
++2/−0, verified at pick base; worklog: one appended section 45/0; RESUME: banner swap + region insert
+40/2 + pointer 1/1; far canaries intact — `### E741`, `### E475`, ROUND-80…87 headings, APPENDIX I–V).
+Config-md5 at-rest truth **`d96e124ee7967eb34ef479ef824231ad`** (start==end at the weld).
+**LINK CENSUS: sugar-crush 19/19 + candy-pty 8/8** — fresh sandboxes verify the census BEFORE briefing.
 
 Tier/lane analysis lives in `docs/plans/crush_code_concurrency.md` — NOT duplicated here; the `domain`
 column below is a file-cluster bucket.
@@ -60,10 +62,10 @@ column below is a file-cluster bucket.
 ## Path normalization
 
 Rows are derived from the ledger's evidence/note citations (`docs/plans/crush_code_backlog_triage.md`) and
-the §0-NOW-90 roster, normalized to repo-root paths:
+the §0-NOW-92 roster, normalized to repo-root paths:
 
-- Bare `src/…`, `tests/…`, `docs/…` (lib docs), `bin/…`, `README.md`, `phpunit.xml` as cited → **`sugar-crush/`-prefixed** — EXCEPT where the citation names a sibling lib (`candy-…`, `sugar-dash`, `sugar-bits`, …), in which case the bare paths belong to that lib's directory.
-- Citations already written monorepo-root (`sugar-crush/…`, `docs/plans/…`, `tools/…`, `.github/…`, `scripts/…`, `crush_code.md`, `docs/MATCHUPS.md`) stay as-is.
+- Bare `src/…`, `tests/…`, `docs/…` (lib docs), `bin/…`, `README.md`, `phpunit.xml` as cited → **`sugar-crush/`-prefixed** — EXCEPT where the citation names a sibling lib.
+- Citations already written monorepo-root (`sugar-crush/…`, `docs/plans/…`, `tools/…`, `.github/…`, `scripts/…`, `crush_code.md`, `docs/MATCHUPS.md`) kept as-is.
 - Sibling libs (`candy-…`, `sugar-dash`, `sugar-bits`, …) → kept as-is.
 - Bare-directory citations kept with trailing `/` (e.g. `docs/plans/leftover/`).
 - `files = UNKNOWN(re-derive)` when the row cites no resolvable path.
@@ -78,11 +80,15 @@ $ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
     if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
 OPEN  **E736** 
 OPEN  **E742** 
+OPEN  **E743** 
+OPEN  **E744** 
 ```
 
 ## Table (one row per actionable id, ledger order)
 
 | id | status | files touched | domain |
 |---|---|---|---|
-| E736 | OPEN ⚠u2 ⚠u3 ⚠u4 ⚠v1 ⚠v2 ⚠v3 ⚠v4 ⚠v5 ⚠w1 ⚠w2 ⚠w3 | umbrella — remaining shape ALL trigger/ruling-gated: forms Phase-5 `candy-forms/` (DECLINED r86-v6, reopen on demand); vt 6.4 `candy-vt/src/Parser/CsiHandlerImpl.php` + a NEW `candy-vt/src/Buffer/Buffer.php` row-shift API (DEFERRED-WITH-TRIGGER post-w1); MATCHUPS 🟡/🔴 ports `docs/MATCHUPS.md` + per-lib `candy-*/`/`sugar-*/` skeletons on operator schedule (one lib per wave, full add-a-lib checklist); shine/layout/bits/charts declines ride here. See backlog §E736 + `findings/plan_candy-vt.md` (tail fully stamped at r87). | port-queue umbrella |
-| E742 | OPEN (MINTED r87 weld, from rv-w1 seam) | `candy-vt/src/Theme.php` (cubePalette() + base-colors union), `candy-vt/src/Color.php`, vt goldens + any consumer snapshot carrying 256-color SGR (`candy-vcr/tests/`, `candy-pty/tests/`, crush `Vt\|Terminal\|Buffer` window); pre-requisite: orchestrator RULING correct-to-xterm vs document-fallback — NOT auto-built (behavior-change STOP). | candy-vt palette |
+| E736 | OPEN ⚠x4 ⚠x5 ⚠x6 (umbrella tails; ⚠x1 ⚠x2 ⚠x3 ⚠x7 = PHANTOM re-cut intents, nothing landed) | umbrella — remaining shape ALL trigger/ruling-gated: forms cluster A re-cut `candy-forms/src/Form/Form.php`, `src/Field/Input.php`, `src/Field/TextArea/TextArea.php`, `src/ItemList/ItemList.php`, `tests/Field/TraitStateCarryFamilyTest.php`, `lang/en.php` (x3 scope, 5.9–5.12/5.15); shine streaming re-cut `candy-shine/src/Renderer.php` + Writer/StreamSink NEW + `lang/en.php` (x7 scope, 7.1/7.3, salvage patch in artifacts); layout docblock fold `candy-layout/src/CassowarySolver.php`; MATCHUPS 8 🟡 + 2 🔴 ports per add-a-lib checklist. Landed this round INSIDE the umbrella: forms 5.6/5.7/5.8 (`src/Field/{Date,Slider,Color}.php` + tests + shims), 5.13/5.14 (TextArea/ItemList + tests), vt 6.4 (`candy-vt/src/Buffer/Buffer.php` + handlers + `tests/RowShiftApiTest.php`) | sibling-lib umbrella |
+| E742 | OPEN (RULING required — fix lane x1 phantom'd, NOT closed) | `candy-vt/src/Theme/Theme.php` (cubePalette() + `[16 base]∪cube` union, slots 0..15/196/216..231), `candy-vt/src/Color/Color.php`, vt goldens + ansi-index census consumers (`candy-pty` 663/1862/17S, `candy-vcr` 948/4082/14S, crush `Vt\|Terminal\|Buffer` 305/21034) | candy-vt palette |
+| E743 | OPEN (minted r88 weld — bits 3.1 promote after x2 phantom) | `sugar-bits/src/Progress/Progress.php:210-319` (Line/Slim/Block width/percent math), `sugar-bits/tests/Progress/ProgressTest.php` (+capture pins) | sugar-bits refactor |
+| E744 | OPEN (minted r88 weld — rv-x5 MINOR-1) | `sugar-crush/src/Chat.php` (`delegateToInput` ~:12123 Cmd drop, Ctrl+C pre-empt, `insertString` ~:1586 PasteMsg, input paint ~:4231), zone/mouse forwarding, OSC52 writer — census family (StderrEmitter/NoRawAnsi) re-arms in-step | crush host-seam |
