@@ -412,7 +412,7 @@ After `foreach` with `&$line`, the variable `$line` still holds a reference to t
 
 ## Phase 5: Security [PENDING]
 
-- [ ] 5.1 Theme::fromJson path traversal documentation
+- [ ] 5.1 Theme::fromJson path traversal documentation — r86-v6 note: doc row — leave for a shine lane IF ever scheduled (record only, not ruled)
 
 ### 5.1 Theme::fromJson Path Traversal
 
@@ -493,9 +493,9 @@ The `Mutable` trait expects a constructor with parameters to merge via `new stat
 
 ## Phase 7: Missing Features [PENDING]
 
-- [ ] 7.1 Missing glamour "Write" function parity
+- [ ] 7.1 Missing glamour "Write" function parity — ⏭️ ruled — DECLINED (r86 product ruling: additive feature parity, zero demand; shine is consumed BY sugar-crush — highest guard friction — reinforcing no-demand-no-build)
 - [ ] 7.2 Limited emoji shortcode map
-- [ ] 7.3 No streaming/rendering for very large documents
+- [ ] 7.3 No streaming/rendering for very large documents — ⏭️ ruled — DECLINED (r86 product ruling: additive streaming parity, zero demand)
 
 ### 7.1 Missing glamour "Write" Function Parity
 
@@ -668,9 +668,9 @@ N/A — skipped
 | 4.1 | SyntaxHighlighter reference loop | LOW | PENDING |
 | 5.1 | Theme::fromJson path traversal | LOW | PENDING |
 | 6.1 | StyleSheet custom mutate() | MEDIUM | PENDING |
-| 7.1 | Missing Write function | MEDIUM | PENDING |
+| 7.1 | Missing Write function | MEDIUM | DECLINED (r86) |
 | 7.2 | Limited emoji map | MEDIUM | PENDING |
-| 7.3 | No streaming | LOW | PENDING |
+| 7.3 | No streaming | LOW | DECLINED (r86) |
 | 8.1 | Emoji regex compiled every call | LOW | PENDING |
 | 8.2 | StyleSheet::for() linear scan | LOW | SKIPPED |
 

@@ -94,35 +94,37 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 
 ---
 
-## Phase 5: Missing Features [PENDING]
+## Phase 5: Missing Features [DECLINED — r86 product ruling]
 
 > These are feature requests, not bugs. Address in separate enhancement PRs as needed, in dependency order (foundation libs first).
+>
+> **ROUND-86 PRODUCT RULING (v6): phase DECLINED WHOLESALE — zero rows have a live consumer (the Form class is unconsumed; crush uses only TextArea/ItemList/FilePicker hosts, which do not exercise these gaps). 5.6/5.7/5.8/5.13 are net-new widgets (date/color pickers, slider, clipboard-without-selection-model); 5.16 is a browser concept N/A to TUI; 5.17 terminal drag-drop is non-portable. REOPEN TRIGGER: first real consumer demand. findings #3 (Form-level timeout, `findings/candy-forms.md:101`) was already dropped from this plan — runtime concern, not a forms defect. See backlog §E736 RULINGS paragraph.**
 
 ### High Priority Missing Features
 
-- [ ] **5.1** No per-field blur validation forwarding — `Field::update()` doesn't receive blur message → Design and implement blur message forwarding from Form to field for `ValidateOn::Blur` support
-- [ ] **5.2** No async `Form::validateAll()` — always synchronous blocking → Add `validateAllAsync(): AsyncCmd` variant that returns async command for slow validators (network lookup, etc.)
-- [ ] **5.3** No `Form::focusField(string $key)` for programmatic focus management → Add method to programmatically move focus to specific field by key
-- [ ] **5.4** No per-field keybinding overrides — KeyMap applies to Form navigation only → Add per-field `withKeyMap()` override so individual fields can customize their key handling
+- [ ] **5.1** No per-field blur validation forwarding — `Field::update()` doesn't receive blur message → Design and implement blur message forwarding from Form to field for `ValidateOn::Blur` support — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.2** No async `Form::validateAll()` — always synchronous blocking → Add `validateAllAsync(): AsyncCmd` variant that returns async command for slow validators (network lookup, etc.) — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.3** No `Form::focusField(string $key)` for programmatic focus management → Add method to programmatically move focus to specific field by key — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.4** No per-field keybinding overrides — KeyMap applies to Form navigation only → Add per-field `withKeyMap()` override so individual fields can customize their key handling — ⏭️ ruled — zero consumers (r86 product ruling)
 
 ### Medium Priority Missing Features
 
-- [ ] **5.5** No input masking for credit cards/phone numbers/SSN (password field withEchoMode exists, but pattern-based masking like showing only last 4 digits doesn't)
-- [ ] **5.6** No date/time/datetime-local picker fields — common form inputs not available
-- [ ] **5.7** No range/slider numeric field — 1-10 slider input common in forms
-- [ ] **5.8** No color picker field — color selection not implemented
-- [ ] **5.9** No form state persistence — no mechanism to serialize form state to JSON and restore
-- [ ] **5.10** No readonly fields — Note is display-only but skip is separate from readonly; need fields that display but don't accept input
-- [ ] **5.11** No help text per validation error — validators return single error string, not contextual help
-- [ ] **5.12** No keyboard shortcut for numbered field navigation — no `1-9` jump-to-field
-- [ ] **5.13** No clipboard/copy support in TextArea — Ctrl+C in TextArea doesn't copy selected text (no selection in current impl)
-- [ ] **5.14** No mouse click selection in ItemList — update() only handles KeyMsg, not MouseMsg
-- [ ] **5.15** No infinite scrolling / load-more callback for ItemList — `infiniteScrolling` flag exists but no callback fires at end
+- [ ] **5.5** No input masking for credit cards/phone numbers/SSN (password field withEchoMode exists, but pattern-based masking like showing only last 4 digits doesn't) — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.6** No date/time/datetime-local picker fields — common form inputs not available — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.7** No range/slider numeric field — 1-10 slider input common in forms — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.8** No color picker field — color selection not implemented — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.9** No form state persistence — no mechanism to serialize form state to JSON and restore — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.10** No readonly fields — Note is display-only but skip is separate from readonly; need fields that display but don't accept input — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.11** No help text per validation error — validators return single error string, not contextual help — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.12** No keyboard shortcut for numbered field navigation — no `1-9` jump-to-field — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.13** No clipboard/copy support in TextArea — Ctrl+C in TextArea doesn't copy selected text (no selection in current impl) — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.14** No mouse click selection in ItemList — update() only handles KeyMsg, not MouseMsg — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.15** No infinite scrolling / load-more callback for ItemList — `infiniteScrolling` flag exists but no callback fires at end — ⏭️ ruled — zero consumers (r86 product ruling)
 
 ### Low Priority Missing Features
 
-- [ ] **5.16** No autocomplete="off" equivalent — browser-like autocomplete attribute for username/password fields not supported
-- [ ] **5.17** No drag-and-drop support for FilePicker — only keyboard navigation
+- [ ] **5.16** No autocomplete="off" equivalent — browser-like autocomplete attribute for username/password fields not supported — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.17** No drag-and-drop support for FilePicker — only keyboard navigation — ⏭️ ruled — zero consumers (r86 product ruling)
 
 ---
 
