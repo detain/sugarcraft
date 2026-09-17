@@ -154,6 +154,13 @@ final class SystemModule extends BaseModule
         static $lastIdle = null;
         static $lastTotal = null;
 
+        // COMP-2 door-probe (E731): /proc is Linux-only — probe before reading so
+        // non-Linux hosts never enter the error path; the @ + ===false below stays
+        // as the probe→read race net (r83 s2 idiom). Degraded value unchanged.
+        if (!is_readable('/proc/stat')) {
+            return 0.0;
+        }
+
         $stat = @file_get_contents('/proc/stat');
         if ($stat === false) {
             return 0.0;
@@ -199,6 +206,11 @@ final class SystemModule extends BaseModule
 
     private function readMemLoad(): float
     {
+        // COMP-2 door-probe (E731) — see readCpuLoad(); degraded value unchanged.
+        if (!is_readable('/proc/meminfo')) {
+            return 0.0;
+        }
+
         $meminfo = @file_get_contents('/proc/meminfo');
         if ($meminfo === false) {
             return 0.0;
@@ -249,6 +261,11 @@ final class SystemModule extends BaseModule
 
     private function readUptime(): string
     {
+        // COMP-2 door-probe (E731) — see readCpuLoad(); degraded value unchanged.
+        if (!is_readable('/proc/uptime')) {
+            return 'unknown';
+        }
+
         $uptimeData = @file_get_contents('/proc/uptime');
         if ($uptimeData === false) {
             return 'unknown';

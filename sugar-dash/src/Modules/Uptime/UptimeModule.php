@@ -58,6 +58,13 @@ final class UptimeModule extends BaseModule
 
     private function readUptimeFromProc(): string
     {
+        // COMP-2 door-probe (E731): /proc is Linux-only — probe before reading so
+        // non-Linux hosts never enter the error path; @ + ===false stays as the
+        // probe→read race net (r83 s2 idiom). Degraded 'N/A' unchanged.
+        if (!is_readable('/proc/uptime')) {
+            return 'N/A';
+        }
+
         $uptimeData = @file_get_contents('/proc/uptime');
         if ($uptimeData === false) {
             return 'N/A';
