@@ -64,6 +64,15 @@ use SugarCraft\Layout\Region;
 final class GreedySolver implements LayoutSolver
 {
     /**
+     * Upper bound on the slack a floor-rounding reclamation may distribute
+     * (E736/5.2). `floor()` over a Percentage/Ratio chain loses at most one
+     * cell per segment beyond two before a genuine shortfall is more likely,
+     * so only a leftover of 0..2 cells is treated as rounding noise; anything
+     * larger is intentional slack and stays undistributed.
+     */
+    private const MAX_FLOOR_RECLAIM = 2;
+
+    /**
      * @param bool $roundSplit        round() (not floor()) Percentage/Ratio sizes — sugar-boxer distribute().
      * @param bool $remainderToLast   hand the rounding remainder to the LAST region/Fill/Max, not the first.
      * @param bool $truncateOverflow  proportionally shrink regions when demand exceeds the area (default);
@@ -346,7 +355,7 @@ final class GreedySolver implements LayoutSolver
                             $lastIdx = $totalCount - 1;
                             $rawSizes[$lastIdx] = max(0, $rawSizes[$lastIdx] + $diff);
                         }
-                    } elseif ($diff > 0 && $diff <= 2) {
+                    } elseif ($diff > 0 && $diff <= self::MAX_FLOOR_RECLAIM) {
                         // Rounding reclamation: pure Percentage/Ratio layouts lose
                         // pixels to floor(). Distribute leftover round-robin to
                         // Percentage/Ratio entries only (ratatui "give remainder to

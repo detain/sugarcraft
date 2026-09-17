@@ -1,6 +1,6 @@
 # Implementation Plan: candy-layout
 
-**Status:** not-started | **Phase:** 1 | **Updated:** 2026-06-30
+**Status:** Phase-5/6 sweep closed (r86-v2) — 1.2 ruled STOP-class; P4 gaps remain | **Updated:** 2026-09-17
 
 ## Goal
 
@@ -22,8 +22,8 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 
 ## Phase 1: Critical Issues [PENDING]
 
-- [ ] **1.1 CassowarySolver Cycling Bug — Deprecate Simplex Path** ← CURRENT
-- [ ] 1.2 LayoutSolver Interface — Remove Factory Methods
+- [x] ✅ **1.1 CassowarySolver Cycling Bug — Deprecate Simplex Path** (landed pre-r86: solve() emits E_USER_DEPRECATED and delegates wholly to GreedySolver; pinned by CassowarySolverTest)
+- [ ] ⏭️ 1.2 LayoutSolver Interface — Remove Factory Methods — ruled: STOP-class public-API change (4 consumers incl candy-forms/candy-sprinkles → crush chain), orchestrator decision (r86-v2)
 
 ### 1.1: CassowarySolver Cycling Bug
 
@@ -110,11 +110,11 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 
 ## Phase 2: Medium Severity Issues [PENDING]
 
-- [ ] **2.1 GreedySolver — Resolve Static/Instance Redundancy** ← CURRENT
-- [ ] 2.2 Expression — Clean Zero-Coefficient Terms
-- [ ] 2.3 Tableau — Make Properties Private
-- [ ] 2.4 CassowarySolver — Add Division-by-Zero Protection
-- [ ] 2.5 GreedySolver — Fix Comment/Implementation Mismatch
+- [x] ✅ **2.1 GreedySolver — Resolve Static/Instance Redundancy** (resolved by documentation: instance holds compat/min-share config, solveStatic pinned to the default path; both contracts pinned by GreedySolverTest/CompatTest)
+- [ ] ❗ 2.2 Expression — Clean Zero-Coefficient Terms — premise-dead at r86-v2: the consuming simplex is gone (Expression survives as a standalone helper); zero-term cleanup no longer guards any solver invariant
+- [ ] ❗ 2.3 Tableau — Make Properties Private — premise-dead at r86-v2: Tableau.php was deleted with the simplex at 138b3d7e5
+- [x] ✅ 2.4 CassowarySolver — Add Division-by-Zero Protection (superseded: getVariableValue() retired with the simplex; the surviving GreedySolver divide paths carry explicit zero-weight guards, pinned by testMinZeroSlack…/testMaxWithAllZeroWeightFills…/solveMinShare totalWeight===0)
+- [x] ✅ 2.5 GreedySolver — Fix Comment/Implementation Mismatch (landed: flip comment now says “the flip-back below”, no stale line reference)
 
 ### 2.1: GreedySolver — Resolve Static/Instance Redundancy
 
@@ -316,9 +316,9 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 
 ## Phase 3: Low Severity Issues [PENDING]
 
-- [ ] **3.1 Min/Max — Document Min(0) and Max(0) Semantics** ← CURRENT
-- [ ] 3.2 Expression — Add `__toString()` Debug Method
-- [ ] 3.3 CassowarySolver — Review BIG_M Numerical Stability
+- [x] ✅ **3.1 Min/Max — Document Min(0) and Max(0) Semantics** (shipped r86-v2: intent notes on Min/Max class docblocks)
+- [ ] ⏭️ 3.2 Expression — Add `__toString()` Debug Method — blocked at r86-v2 by the lane's public-API freeze (additive method not taken)
+- [ ] ❗ 3.3 CassowarySolver — Review BIG_M Numerical Stability — premise-dead at r86-v2: BIG_M retired with the simplex
 
 ### 3.1: Min/Max — Document Min(0) and Max(0) Semantics
 
@@ -557,9 +557,9 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 
 ## Phase 5: Code Quality Improvements [PENDING]
 
-- [ ] **5.1 Extract Constraint Handler Interface (Refactoring)** ← CURRENT
-- [ ] 5.2 Consolidate Magic Numbers into Named Constants
-- [ ] 5.3 Consistent Error Handling Strategy
+- [ ] ⏭️ 5.1 Extract Constraint Handler Interface — re-derived r86-v2: the 60-line chain this row cited in CassowarySolver is gone (wholesale delegation); the surviving GreedySolver dispatch is production-hot and the row itself says “may warrant its own PR” — out of quality-sweep scope
+- [x] ✅ 5.2 Consolidate Magic Numbers (shipped r86-v2: MAX_FLOOR_RECLAIM replaces the bare `2` reclaim bound — the only remaining solver magic number; 1000-cap/1e-10/BIG_M all retired with the simplex)
+- [x] ✅ 5.3 Consistent Error Handling Strategy (audited r86-v2: every throw site — Region, all 6 constraints, GreedySolver ctor/dispatch/min-share — is \InvalidArgumentException on invalid input; no solver-failure path exists post-delegation, so no RuntimeException class is warranted)
 
 ### 5.1: Extract Constraint Handler Interface
 
@@ -654,7 +654,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 
 ## Phase 6: Test Coverage Gaps [PENDING]
 
-- [ ] **6.1 Add Tests for Untested Scenarios** ← CURRENT
+- [x] ✅ **6.1 Add Tests for Untested Scenarios** (shipped r86-v2: SolverEdgeCaseTest 10T/35A — Max-at-span boundary alone + vs Fill, PHP_INT_MAX Fill weights, Percentage+Min mixed H/V, overflow never-negative, Length-only gap honesty pin, interface/direct-ctor back-compat; pivot-edge row premise-dead with the simplex, replaced by the delegation equivalence pins already in CassowarySolverTest)
 
 ### 6.1: Add Tests for Untested Scenarios
 
@@ -701,3 +701,4 @@ public function testPivotEdgeCases(): void
 - **Factory method removal from interface is a breaking change** for any call-sites using `LayoutSolver::greedy()` / `LayoutSolver::cassowary()`.
 - Async support requires checking `candy-async` library for CancellationToken and async patterns.
 - The library is suitable for production use with `GreedySolver`, but `CassowarySolver` should be clearly marked as experimental or deprecated until the simplex implementation is fixed.
+- 2026-09-17 (r86-v2): Phase-5/6 sweep — coverage re-derived against current 12-class tree (147→157 tests, +10 edge pins); no behavior bugs found (divide-zero/clamp guards from prior rounds already pinned); 1.2 ruled STOP-class; 2.2/2.3/3.3 premise-dead with the deleted simplex.
