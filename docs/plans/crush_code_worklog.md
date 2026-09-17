@@ -11598,6 +11598,26 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 85 (2026-09-17) — E731 trait sweep + E736 candy-forms F1/F3 welded; one keep-both docblock conflict; floor UNCHANGED 12,027 / 170,392 (zero sugar-crush files moved); census survivors 2 to 3 (E731/E736/E741-mint)
+
+**Welded 2026-09-17 on `988696aea` (r86u post-upstream master; NEVER pushed).** Twin-run context: r86u proved the twin independent-merge protocol on the upstream absorption; r85 resumes the lane model — three lanes (u1/u2/u3), ALL reviewed BEFORE merge (r85-rv-{u1,u2,u3} APPROVE-class), base `988696aea` for all three.
+
+### The lane ledger
+
+| lane | lib | tip → picks | shipped | gate |
+|---|---|---|---|---|
+| u1 `a6adc27f6`+`70d0a5e53` | sugar-dash | → `b8b702618`+`11992bf81` | E731 per-family literal-twin sweep (five traits, 17 content pins, 65-fixture render byte-identity) + COMP-2 closure half: `/proc` door-probes x4, option-(b) design paragraph, progressRing example + 2 goldens repaired | dash 5994T/10034A/1S/0W |
+| u2 `ef54fafb0` | candy-forms | → `23aea4386` | E736 F1: **Confirm trait-drop bugfix** (validator + HideFunc/DynamicLabels closures died across `new self(...)`; fix = `carryNonCtorState()` sole carrier) + workerPool reserved-docs + 1.3/1.7/1.8 + Phase-4 docs | forms 1830T (+7T) |
+| u3 `2fc82e0c5` | candy-forms | → `be0b010d6` | E736 F3: Cursor id re-key (spl_object_id REJECTED — handle recycling collides live lineages), Form valuesMemo, ViewportPan twin-law extraction, TextInput length cache, 8.4 implicit-nullable compat test | forms +21T → 1851 |
+
+### Weld mechanics
+
+Pick order u1(2) → u2 → u3, ZERO conflicts except the ONE predicted: `TextInput::withValidator` docblock where u2's 4.7 note and u3's 3.8 paragraph inserted after the same base line — resolved KEEP-BOTH (u2 then u3, complementary prose, zero code overlap; verified `php -l` + per-lane diffs touching only doc comments + merged forms suite green). Companion fold `1f92f70c8` (rv-u1 MINORs): getHeatChar bucket-divergence pin (straddles all four differing bands; 8A) + SparklineScaling docblock property-name truth (`$widthConstraint ?? 40`/`?? 0` at Sparkline.php:201/Gauge.php:138). Mint **E741** (Input trait-drop family, MED/HIGH, owner lane u4). E731 row gained the weld note (COMP-2 (b) ADOPTED per orchestrator ruling; render impl pending u6; row STAYS OPEN). E736 renoted (candy-forms Phases 1/3/4/7/8 landed; F2=Ph2+6+E741; Ph5 scoping; STAYS OPEN; plan-header `not-started` staleness + anchor drifts 1.7→:77-78/1.8→:769-at-weld recorded).
+
+### Gates (all plain-pipe, linked vendors via refresh-deps --mode=linked, weld tree)
+
+dash **5995T/10042A/1S/0W** (5994+companion pin, +8A exact) · forms **1851T/3035A/0W** (1823 base +7 u2 +21 u3, EXACT) · sugar-bits **493/1015** · sugar-prompt **158/310/2S** · sugar-readline **336/1076** (façade trio UNMOVED) · crush `Form|Input|Select|Cursor` **633T/3943A EXACT** · five-guard **125T/7362A EXACT** · child-lifetimes rc0 · path-repos rc0 · config md5 d96e124ee… start==end. Disclosed: u2's shell/query filter counts (81/114) cite unrecorded filter strings (rv-u2 MINOR-2); weld window `Form|Input|Select|Cursor` answers shell 78T/163A query 111T/204A — both GREEN. Zero sugar-crush files moved → NO crush serial/re-pin (r84 precedent). Master ff-only to `1f92f70c8`.
+
 ## ROUND 84 (2026-09-16) — E735 leftover tail CLOSED in a single six-lane weld; floor UNCHANGED 12,027 / 172,610 (zero sugar-crush test files moved — no re-pin); census survivors 3 to 2 (E731/E736); the 68d73f9ba downstream-goldens family FULLY swept
 
 **Closed 2026-09-16 at the W1 weld (code tip `7a3280759`, closeout docs atop; NEVER pushed).** The round
