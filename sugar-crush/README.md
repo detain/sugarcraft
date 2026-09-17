@@ -1158,10 +1158,10 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,027 tests / 170,392 assertions, 0 failures, 1 skipped** — the whole of
+**12,027 tests / 170,422 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-9m34s. Measured 2026-09-16 on the r86u upstream absorption — the tests figure holds
+10m30s — the r88 sibling builds (candy-forms Date/Slider/Color + mouse/clipboard, candy-vt row-shift) moved zero crush tests and retree the tree-scan censuses into a few-dozen-assertion re-count. Measured 2026-09-17 on the round-88 weld — the tests figure holds
 at the round-83/84 campaign floor (the E737 MCP-disable gate plus the sibling
 fail-on-warning lanes, +18 pins over 12,009/172,461 on 2026-09-15), while the
 assertions re-derive: upstream's wave-8 determinism tails rode the merge, so
