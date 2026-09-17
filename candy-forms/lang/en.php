@@ -52,4 +52,6 @@ return [
     'color.invalid_hex' => 'Color must be a six-digit hex string like #rrggbb',
     'color.channel_range' => 'Color cube axis must be between 0 and 5',
     'field.readonly' => '(read-only)',
+    'validation.async_return_type' => 'Async validator for field "{key}" must return a promise, got {type}',
+    'validation.async_result_type' => 'Async validation of field "{key}" must resolve to an error string or null, got {type}',
 ];

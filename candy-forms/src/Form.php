@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -988,6 +989,64 @@ final class Form implements Model
             }
         }
         return $out;
+    }
+
+    /**
+     * Async counterpart to {@see validateAll()} (plan 5.2, round 89 lane y3):
+     * walks the SAME progressive pass (hidden groups skipped, skippable
+     * fields skipped, values accumulated as it goes) but resolves through
+     * the event loop instead of returning inline. Fields implementing
+     * {@see AsyncValidatable} answer with a promise; every other field is
+     * resolved immediately from its synchronous revalidate() — so a form of
+     * purely synchronous fields settles in one microtask with EXACTLY the
+     * map `validateAll()` returns (parity pinned in FormAsyncValidateTest).
+     *
+     * The library adds no timeout around the caller's promise (E646: a
+     * hanging validator hangs only its own promise; bounding it is the
+     * consumer's product decision, e.g. via candy-async AsyncOps).
+     * A rejected field promise rejects the aggregate map: "could not
+     * answer" never masquerades as "valid" or "invalid".
+     *
+     * Mirrors no upstream symbol: charmbracelet/huh validates synchronously
+     * only; this is the SugarCraft async extension of `ValidateAll()`.
+     *
+     * @return PromiseInterface<array<string,string>>
+     */
+    public function validateAsync(): PromiseInterface
+    {
+        $promises    = [];
+        $accumulated = [];
+        foreach ($this->groups as $i => $group) {
+            if ($group->isHidden($accumulated)) {
+                continue;
+            }
+            foreach ($this->fieldsByGroup[$i] as $f) {
+                if ($f->skippable()) {
+                    continue;
+                }
+                $accumulated[$f->key()] = $f->value();
+                if ($f instanceof AsyncValidatable) {
+                    $promises[$f->key()] = $f->validateAsync();
+                    continue;
+                }
+                // Synchronous field: identical recompute to validateAll(); a
+                // throwing validator propagates synchronously, never swallowed.
+                $err       = $f->revalidate()->getError();
+                $promises[$f->key()] = \React\Promise\resolve($err !== null && $err !== '' ? $err : null);
+            }
+        }
+        return \React\Promise\all($promises)->then(
+            /** @param array<string,?string> $errors */
+            static function (array $errors): array {
+                $out = [];
+                foreach ($errors as $key => $err) {
+                    if ($err !== null && $err !== '') {
+                        $out[$key] = $err;
+                    }
+                }
+                return $out;
+            }
+        );
     }
 
     /**

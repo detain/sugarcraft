@@ -43,9 +43,19 @@ trait CarriesNonCtorState
     private ?string $errorHelp = null;
 
     /**
+     * Plan 5.2 storage: the async validator closure, null = field is
+     * synchronous-only. Declared here (not in HasAsyncValidation) for the
+     * same single-funnel reason as $errorHelp; the two async-capable
+     * fields (Input, Text) use {@see HasAsyncValidation}.
+     *
+     * @var (\Closure(mixed):\React\Promise\PromiseInterface<?string>)|null
+     */
+    private $asyncValidator = null;
+
+    /**
      * @param static $next  a freshly `new self(...)`-built sibling instance
-     * @return static  $next with the hide/dynamic-label closures and the
-     *                 read-only flag carried
+     * @return static  $next with the hide/dynamic-label closures, the
+     *                 read-only flag and the two post-ctor feature slots carried
      */
     private function carryNonCtorState(self $next): self
     {
@@ -54,6 +64,7 @@ trait CarriesNonCtorState
         $next->descriptionFunc = $this->descriptionFunc;
         $next->readonly        = $this->readonly;
         $next->errorHelp       = $this->errorHelp;
+        $next->asyncValidator  = $this->asyncValidator;
         return $next;
     }
 }

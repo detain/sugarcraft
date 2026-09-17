@@ -14,9 +14,11 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
+use SugarCraft\Forms\AsyncValidatable;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Fuzzy\FuzzyMatcher;
 use SugarCraft\Forms\CarriesNonCtorState;
+use SugarCraft\Forms\HasAsyncValidation;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasErrorHelp;
 use SugarCraft\Forms\HasHideFunc;
@@ -30,8 +32,9 @@ use SugarCraft\Forms\Validator\Validator;
  * Single-line text field. Wraps a {@see TextInput} and exposes an
  * optional validator that runs on every keystroke.
  */
-final class Input implements \SugarCraft\Forms\Field
+final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
 {
+    use HasAsyncValidation;
     use HasErrorHelp;
     use HasHideFunc;
     use HasDynamicLabels;

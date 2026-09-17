@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\AsyncValidatable;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\CarriesNonCtorState;
+use SugarCraft\Forms\HasAsyncValidation;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasErrorHelp;
 use SugarCraft\Forms\HasHideFunc;
@@ -20,8 +22,9 @@ use SugarCraft\Forms\Util\RenderSafe;
  * inside the field rather than advancing the form, so the field declares
  * itself a consumer of Enter via {@see consumes()}.
  */
-final class Text implements \SugarCraft\Forms\Field
+final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncValidatable
 {
+    use HasAsyncValidation;
     use HasErrorHelp;
     use HasHideFunc;
     use HasDynamicLabels;

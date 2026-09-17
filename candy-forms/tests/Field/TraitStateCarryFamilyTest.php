@@ -101,11 +101,12 @@ final class TraitStateCarryFamilyTest extends TestCase
     /**
      * The non-ctor surface of every label-trait Field is EXACTLY the three
      * trait-declared closures plus the E736 5.10 read-only flag plus the
-     * plan-5.11 per-error help slot (round 89 lane y3: HasReadonly and then
-     * CarriesNonCtorState's own $errorHelp joined the sanctioned
-     * clone-and-carry family). Any further such slot (new trait or new
-     * private non-ctor property) must land here too — this census reddens
-     * first so a drop can never ship silently again.
+     * plan-5.11 per-error help slot plus the plan-5.2 async-validator
+     * closure (round 89 lane y3: HasReadonly, then CarriesNonCtorState's own
+     * $errorHelp and $asyncValidator joined the sanctioned clone-and-carry
+     * family). Any further such slot (new trait or new private non-ctor
+     * property) must land here too — this census reddens first so a drop
+     * can never ship silently again.
      */
     #[\PHPUnit\Framework\Attributes\DataProvider('carryProbeClasses')]
     public function testNonCtorStateIsExactlyTheThreeLabelClosures(string $class): void
@@ -167,7 +168,7 @@ final class TraitStateCarryFamilyTest extends TestCase
             $nonCtor[] = $prop->getName();
         }
         sort($nonCtor);
-        $this->assertSame(['descriptionFunc', 'errorHelp', 'hideFunc', 'readonly', 'titleFunc'], $nonCtor);
+        $this->assertSame(['asyncValidator', 'descriptionFunc', 'errorHelp', 'hideFunc', 'readonly', 'titleFunc'], $nonCtor);
     }
 
     /**
@@ -212,12 +213,12 @@ final class TraitStateCarryFamilyTest extends TestCase
      * census reads the carrier TRAIT source — Confirm's private carrier is
      * deliberately not in scope: it has no $errorHelp slot to copy.
      */
-    public function testTheSharedCarrierCopiesAllFiveSlots(): void
+    public function testTheSharedCarrierCopiesAllSixSlots(): void
     {
         $src = (string) file_get_contents(
             (new \ReflectionClass(\SugarCraft\Forms\CarriesNonCtorState::class))->getFileName()
         );
-        foreach (['hideFunc', 'titleFunc', 'descriptionFunc', 'readonly', 'errorHelp'] as $slot) {
+        foreach (['hideFunc', 'titleFunc', 'descriptionFunc', 'readonly', 'errorHelp', 'asyncValidator'] as $slot) {
             $this->assertMatchesRegularExpression('/\$next->' . $slot . '\s*=\s*\$this->' . $slot . ';/', $src);
         }
     }
