@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\ItemList;
 
 use SugarCraft\Forms\Lang;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\MouseButton;
@@ -36,6 +37,12 @@ use SugarCraft\Forms\Util\ViewportPan;
  *   selects the row under the pointer and the wheel moves the selection one
  *   row up/down; coordinates are list-relative (1-based), mirroring
  *   charmbracelet/bubbles `list.go` `handleMouse`.
+ * - **Load-more** (E736 5.15) — with {@see withHasMore()} on, navigation
+ *   that ARRIVES the cursor on the last item emits a {@see LoadMoreMsg}
+ *   through update()'s Cmd slot so the host can fetch the next page.
+ *   Resting on the last item stays quiet (edge-triggered, once per
+ *   arrival); upstream Bubbles `list.go` has no pagination cursor, so
+ *   this is a SugarCraft extension the host opts into.
  *
  * The visible window is sized by {@see $height}; entries scroll under
  * the cursor automatically. Selection (`{@see selectedItem()}`) returns
@@ -65,6 +72,7 @@ final class ItemList implements Model
         public readonly string $cursorPrefix     = '> ',
         public readonly string $unselectedPrefix = '  ',
         public readonly bool $keepFilter = false,
+        public readonly bool $hasMore = false,
     ) {}
 
     /**
@@ -87,6 +95,7 @@ final class ItemList implements Model
             filterText: '',
             showDescription: true,
             keepFilter: false,
+            hasMore: false,
         );
     }
 
@@ -104,7 +113,7 @@ final class ItemList implements Model
         if ($msg instanceof MouseMsg) {
             // E736 5.14 (round 88): mouse arrives BEFORE the keyboard guard so
             // the KeyMsg arms below stay byte-identical; unfocused stays deaf.
-            return [$this->focused && !$this->filtering ? $this->handleMouse($msg) : $this, null];
+            return $this->loadMoreEdge($this->focused && !$this->filtering ? $this->handleMouse($msg) : $this);
         }
 
         if (!$msg instanceof KeyMsg || !$this->focused) {
@@ -112,30 +121,63 @@ final class ItemList implements Model
         }
 
         if ($this->filtering) {
+            // Filter keystrokes RESET the cursor to the top of the results
+            // (updateFilter parks it at 0) — an arrival on the last item is a
+            // navigation event, never a typing one. E736 5.15.
             return [$this->updateFilter($msg), null];
         }
 
-        return match (true) {
+        return $this->loadMoreEdge(match (true) {
             $msg->type === KeyType::Up
                 || ($msg->type === KeyType::Char && $msg->rune === 'k')
-                => [$this->moveCursor($this->cursor - 1), null],
+                => $this->moveCursor($this->cursor - 1),
             $msg->type === KeyType::Down
                 || ($msg->type === KeyType::Char && $msg->rune === 'j')
-                => [$this->moveCursor($this->cursor + 1), null],
+                => $this->moveCursor($this->cursor + 1),
             $msg->type === KeyType::Home
                 || ($msg->type === KeyType::Char && $msg->rune === 'g')
-                => [$this->moveCursor(0), null],
+                => $this->moveCursor(0),
             $msg->type === KeyType::End
                 || ($msg->type === KeyType::Char && $msg->rune === 'G')
-                => [$this->moveCursor(PHP_INT_MAX), null],
+                => $this->moveCursor(PHP_INT_MAX),
             $msg->type === KeyType::PageUp
-                => [$this->moveCursor($this->cursor - max(1, $this->height)), null],
+                => $this->moveCursor($this->cursor - max(1, $this->height)),
             $msg->type === KeyType::PageDown
-                => [$this->moveCursor($this->cursor + max(1, $this->height)), null],
+                => $this->moveCursor($this->cursor + max(1, $this->height)),
             $msg->type === KeyType::Char && $msg->rune === '/'
-                => [$this->mutate(filtering: true, filterText: ''), null],
-            default => [$this, null],
-        };
+                => $this->mutate(filtering: true, filterText: ''),
+            default => $this,
+        });
+    }
+
+    /**
+     * E736 5.15 load-more trigger, the single epilogue every navigation
+     * result passes through — keyboard steps, `g`/`G` jumps, paging, the
+     * infinite-scroll wrap and the E736 5.14 mouse arm all funnel here, so
+     * the arrival edge can never collide with (or be duplicated across)
+     * individual arms.
+     *
+     * Fires when the cursor MOVED and now sits on the last visible item
+     * while the host flagged {@see hasMore()}: edge-triggered, once per
+     * arrival — resting on the last item stays quiet, and leaving and
+     * returning fires again. With hasMore=false (the default) the first
+     * guard returns immediately and update() behaves exactly as it did
+     * before 5.15.
+     *
+     * @param self $next the post-navigation list (this when nothing moved)
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function loadMoreEdge(self $next): array
+    {
+        if (!$next->hasMore) {
+            return [$next, null];
+        }
+        $last = count($next->visibleItems()) - 1;
+        if ($last < 0 || $next->cursor !== $last || $next->cursor === $this->cursor) {
+            return [$next, null];
+        }
+        return [$next, Cmd::send(new LoadMoreMsg())];
     }
 
     /** Render the component as a multi-line ANSI string. */
@@ -402,6 +444,24 @@ final class ItemList implements Model
     public function withKeepFilter(bool $on): self       { return $this->mutate(keepFilter: $on); }
 
     /**
+     * Opt into the E736 5.15 load-more trigger: true declares the host has
+     * more pages beyond what is loaded. Each navigation that ARRIVES the
+     * cursor on the last visible item then yields a {@see LoadMoreMsg}
+     * through update()'s Cmd slot (see {@see loadMoreEdge()}). Default
+     * false — every pre-5.15 host behaves byte-identically.
+     */
+    public function withHasMore(bool $on = true): self
+    {
+        return $this->mutate(hasMore: $on);
+    }
+
+    /** Whether the host declared more pages beyond the loaded ones. */
+    public function hasMore(): bool
+    {
+        return $this->hasMore;
+    }
+
+    /**
      * Glyph rendered before the highlighted (cursor) item. Default '> '
      * (two cells: arrow + space). The string is taken verbatim — pass
      * the trailing space yourself if you want one.
@@ -624,6 +684,7 @@ final class ItemList implements Model
         ?string $cursorPrefix = null,
         ?string $unselectedPrefix = null,
         ?bool $keepFilter = null,
+        ?bool $hasMore = null,
     ): self {
         return new self(
             items:                  $items                  ?? $this->items,
@@ -646,6 +707,7 @@ final class ItemList implements Model
             cursorPrefix:           $cursorPrefix           ?? $this->cursorPrefix,
             unselectedPrefix:       $unselectedPrefix       ?? $this->unselectedPrefix,
             keepFilter:             $keepFilter             ?? $this->keepFilter,
+            hasMore:                $hasMore                ?? $this->hasMore,
         );
     }
 
