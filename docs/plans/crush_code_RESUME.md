@@ -4,9 +4,47 @@
 first, then `docs/plans/crush_code_worklog.md` for the round-by-round record.
 Nothing here depends on a prior conversation's context.
 
-🔴 **START AT §0-NOW-90 BELOW. It carries the ROUND-87 CLOSED banner — the r87 cut (w1 candy-vt tail / w2 sugar-bits 2.4 / w3 sugar-charts P5) welded via six zero-conflict picks + E742 mint companion; every E736 tail row is now dispositioned (built / gated-no-build / deferred-with-trigger / ruled-skip). FLOOR UNCHANGED 12,027 / 170,392 / 0F / 0E / 1 skipped (McpClientTest canary) / EXIT 0 — the weld moved ZERO sugar-crush files, exact-carry 4th consecutive round, no re-pin. ACTIONABLE BY ROW CENSUS = **2**: E736 (umbrella tails — ALL ruling/feature-shaped, no defect work left inside it) + E742 (candy-vt cube palette — needs RULING). CAMPAIGN MECHANICALLY COMPLETE per the operator (m0225): round-88 ONLY on operator direction. HARNESS LAW IN FORCE: serials PLAIN BASH PIPE — NEVER tmux/setsid/PTY. failOnWarning UNIVERSAL (58/58) — ZERO Warnings at every gate. Durations.tsv sugar-crush-ONLY (532 rows HELD). Config-md5 at-rest truth `d96e124ee7967eb34ef479ef824231ad`. LINK CENSUS post-r86u: sugar-crush **19/19** + candy-pty **8/8**.**
+🔴 **START AT §0-NOW-92 BELOW. It carries the ROUND-88 CLOSED banner — operator-directed forms Ph5 / vt 6.4 / shine / bits build-out: 3 of 7 lanes landed review-clean (x4 forms Date-Slider-Color, x5 forms mouse+clipboard, x6 vt row-shift API closing 6.4), 4 phantom'd and were NOT merged (x1 E742 fix — E742 STAYS OPEN; x2 bits 3.1 → minted §E743; x3 forms cluster A; x7 shine streaming). FLOOR tests 12,027 EXACT-CARRY 5th round; assertions RE-PINNED 170,422 (sibling-build tree-scan recount, serial-refresh cadence). ACTIONABLE BY ROW CENSUS = 4: E736 + E742 + E743 + E744. HARNESS LAW IN FORCE: serials PLAIN BASH PIPE — NEVER tmux/setsid/PTY. failOnWarning UNIVERSAL (58/58). Durations.tsv sugar-crush-ONLY (532 rows HELD). Config-md5 at-rest truth `d96e124ee7967eb34ef479ef824231ad`. LINK CENSUS: sugar-crush 19/19 + candy-pty 8/8.**
 
-## 0-NOW-90. ROUND 87 CLOSED — VT TAIL / BITS 2.4 / CHARTS P5 ALL DISPOSITIONED, E742 MINTED — CAMPAIGN MECHANICALLY COMPLETE, NEXT ROUND ONLY ON OPERATOR DIRECTION — CURRENT
+## 0-NOW-92. ROUND 88 CLOSED — FORMS PH5 BUILT (3 LANES) THROUGH A 4-LANE FABRICATION STORM; E742 STILL OPEN; E743/E744 MINTED — CURRENT
+
+**The headline: ROUND 88 was operator-directed (overriding the r87 mechanically-complete pause) as a 7-lane build-out; salvage-first disk audit at weld time found only THREE lanes real.** x6 built the candy-vt row-shift API (closing vt 6.4, render-dump byte-identical, RowShiftApiTest +22T/46A); x4 built the forms Date/Slider/Color trio with sugar-prompt alias shims (operator override of the r86 blanket product-decline); x5 built TextArea selection/OSC52 clipboard + ItemList mouse — all three rv-APPROVE and picked `-x` with a single benign plan-file auto-merge. x1/x2/x3/x7 NEVER LANDED: phantom tips (`a8bce13e3`, `2e9878e77`, `d55b40f72`, `28f840672`+re-cut chain) verified absent by reviewers and by the weld's fsck/for-each-ref/worktree sweep; x3 died mid-exploration, x7 left only a 2/7 uncommitted partial (salvaged to `/home/sites/crush-r61-artifacts/x7/x7-salvage-uncommitted.patch`). Consequently **E742 STAYS OPEN** (the palette fix never happened — the weld refused the brief's [CLOSED] stamp), bits 3.1 was **promoted to §E743**, and the x5 crush-host routing gap was **minted §E744**. The brief itself proved untrustworthy (four phantom SHAs, a stale shine baseline 534/1588 vs measured 352/704 with zero shine diff) — LAW: welds re-derive lane state from disk, never from the incoming brief.
+
+### 0. STATE TABLE
+
+| field | value |
+|---|---|
+| master | `5c5c65f2f` + filemap regen @ /home/sites/sugarcraft — NEVER pushed |
+| chain | `f22353b2e` (r87) → `48846c8d9`(x6 vt) → `871107869`(x4 forms B) → `6e83c1675`(x5 forms C) → `e2ac4fc7e` companion (NIT folds + prompt README rows + §E743/§E744 mints) → `b475df971` re-pin → closeout docs |
+| FLOOR | **12,027T / 170,422A / 0F / 0E / 1S (McpClientTest) / EXIT 0** — linked, cwd=sugar-crush, plain pipe; tests EXACT-CARRY 5th round; assertions re-pinned (serials 170,454/170,422, ±50 census wobble band, refresh-suite-figure from saved junit); K=8 CONSERVATION +0/+0; five-guard 125T/7362A; windows 633/3943 + 305/21034 HELD; `Shine|Style|Renderer|Glamour|Stream` 921/59,234 recorded; tools rc0/rc0; config md5 `d96e124ee7967eb34ef479ef824231ad`; durations 532 HELD |
+| libs | vt 948/12,735 ×2 + render-dump `dccc5c4857103432105e314a0fcc1209` (9,728 lines); forms 2037/3526 ×2 0W; bits 514/1,085; layout 157/882; shine 352/704 (TRUTH — brief stale); glow 122/313; vcr 948/4,082/14S; pty 663/1,862/17S; shell 334/694; query 1,483/4,203; prompt 158/313/2S |
+
+### 1. CENSUS RECOUNT (verbatim)
+
+```
+$ awk -F'|' '/^## `OPEN`/{sec="OPEN"} /^## `PARTIAL`/{sec="PARTIAL"}
+    /^## `STALE-CITATION`/{sec="STALE"} /^## `UNCERTAIN`/{sec="UNCERTAIN"}
+    /^## `SUPERSEDED`/{sec=""} /^\| \*\*E/{gsub(/^ +| +$/,"",$4);
+    if (sec!="" && $4 !~ /^\*\*CLOSED/) print sec" "$2}' docs/plans/crush_code_backlog_triage.md
+OPEN  **E736** 
+OPEN  **E742** 
+OPEN  **E743** 
+OPEN  **E744** 
+```
+
+### 2. ROUND-89 MENU (only on operator direction — NEVER auto-open)
+
+1. **§E742 REDO (x1 scope):** orchestrator RULING correct-to-xterm vs document-fallback, then build + goldens — design intent lives in `r88-rv-x1/REVIEW.md` + backlog §E742.
+2. **§E743 BUILD (x2 bits half):** `Progress::view()` 3-site `computeBarLayout()` extraction + byte-capture pins (plan row 3.1).
+3. **§E744 PRODUCT LANE:** crush-side adoption of the shipped widget features (key-routing precedence, Cmd plumbing/OSC52 writer, mouse forwarding, view convergence) — touches Chat.php/Renderer.php, census family re-arms.
+4. **E736 trigger tails:** forms cluster A RE-CUT (x3 scope), shine streaming RE-CUT (x7 scope — tests mandatory), layout CassowarySolver docblock fold; MATCHUPS port completions per add-a-lib checklist.
+5. **Process fix for the next cut:** builders commit EARLY (WIP allowed) so mid-death work survives; weld briefs list lane tips FROM `git log`, never pre-baked SHAs (this brief carried four phantoms + one stale baseline).
+
+### 3. RESTART RECIPE
+
+Fresh lanes off this closeout tip: `git -C /home/sites/sugarcraft worktree add /home/sites/crush-lane-<id> -b lane/<id> <tip>` + `php scripts/refresh-deps.php --mode=linked` + verify 19/19 + 8/8 BEFORE briefing. Serials SYNCHRONOUS plain pipe `-u LINES -u COLUMNS`; NEVER tmux/setsid. Rules 1–10 + addenda in force; ledger per-section law; resume ≤10 + salvage-first; NEVER push; author Joe Huss <detain@interserver.net>; foreign /home/sites/sugarcraft-cc untouched.
+
+## 0-NOW-90. ROUND 87 CLOSED — VT TAIL / BITS 2.4 / CHARTS P5 ALL DISPOSITIONED, E742 MINTED — CAMPAIGN MECHANICALLY COMPLETE, NEXT ROUND ONLY ON OPERATOR DIRECTION
 
 **Written 2026-09-17 at the round-87 weld closeout (code tip = six picks `f48537daf`/`c37486747`/`848f1fbb0`/`232686276`/`66debe01c`/`971c0fa96` + companion `7988f2305` atop `cfb26f8f2`; master @ this closeout's docs commits). §0-NOW-89 is SUPERSEDED — every live claim it carried is re-stated here or retired with its closure; its machinery survives VERBATIM in the APPENDICES below: operating rules 1–10 (APPENDIX I), addenda -66…-73 (APPENDIX II — UNCHANGED this close), vendor & suite machinery (APPENDIX III), the K=8 standard gate (APPENDIX II §1b), environment/philosophy (APPENDIX IV), craft-rules digest (APPENDIX V).**
 
