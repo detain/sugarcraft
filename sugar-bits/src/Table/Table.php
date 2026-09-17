@@ -60,8 +60,9 @@ final class Table implements Model
     /**
      * Memoized visibleRows() projection (sorted → filtered) for this
      * immutable instance — E736/3.3. view(), selectedRow(), moveCursor()
-     * and getPaginator() each rebuild the projection on every call; the
-     * cache makes one render cycle do the sort+filter once. Every state
+     * rebuild the projection through this cache so one render cycle does the
+     * sort+filter once; getPaginator() still rebuilds it inline (not
+     * memo-served - r86 weld docblock truth; routing it would be behavior change). Every state
      * change flows through mutate(), which constructs a fresh instance
      * with a null cache, so the projection can never go stale.
      *

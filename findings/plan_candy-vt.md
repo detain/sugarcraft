@@ -1016,7 +1016,7 @@ public function dcsDispatch(int $final, array $params, int $prefix, int $interme
 
 ---
 
-### 8.2 Document async streaming limitation ⏭ r86v5: superseded-by-upstream — async surface shipped: `feedAsync()` `src/Terminal/Terminal.php:137` + `feedStream()` `:201` (upstream `26ee0fa97`, r86u merge `3514c2d59`); the "document as sync-only, async = future consideration" premise is dead. Root vcr path stays sync by design (findings #29 ⏭️ stands).
+### 8.2 Document async streaming limitation ⏭ r86v5: superseded-by-upstream — async surface shipped: `feedAsync()` `src/Terminal/Terminal.php:137` (upstream `a45666b08`) + `feedStream()` `:201` (upstream `26ee0fa97` = cancellation, r86u merge `3514c2d59`; attrition corrected r86 weld); the "document as sync-only, async = future consideration" premise is dead. Root vcr path stays sync by design (findings #29 ⏭️ stands).
 
 **File:** `src/Parser/Parser.php` (feed method) and `src/Terminal.php`
 
@@ -1051,7 +1051,7 @@ public function feed(string $bytes): void
 
 > **r86v5 re-derivation tally:** ⏭️2 rulings (won't-fix stands; narrowed-not-erased) — phase closed.
 
-### 9.1 Extract `mutate()` helper for `Sgr`, `Mode`, `Cursor` ⏭️ r86v5: ruled-not-applicable — the row's own Won't-fix decision stands; `mutate()` remains only in root `src/Cursor.php:27`; `Sgr`/`Mode` subdirectory classes keep explicit `with*()` per CALIBER_LEARNINGS.
+### 9.1 Extract `mutate()` helper for `Sgr`, `Mode`, `Cursor` ⏭️ r86v5: ruled-not-applicable — the row's own Won't-fix decision stands; `mutate()` remains only in root `src/Cursor.php:27` (and `src/Cell.php:126` since r86 weld re-check); `Sgr`/`Mode` subdirectory classes keep explicit `with*()` per CALIBER_LEARNINGS.
 
 **File:** `src/Sgr/Sgr.php`, `src/Mode/Mode.php`, `src/Cursor/Cursor.php`
 

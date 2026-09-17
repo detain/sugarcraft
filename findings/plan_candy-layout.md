@@ -112,7 +112,7 @@ Address all 13 findings from the candy-layout code review including the Cassowar
 
 - [x] ✅ **2.1 GreedySolver — Resolve Static/Instance Redundancy** (resolved by documentation: instance holds compat/min-share config, solveStatic pinned to the default path; both contracts pinned by GreedySolverTest/CompatTest)
 - [ ] ❗ 2.2 Expression — Clean Zero-Coefficient Terms — premise-dead at r86-v2: the consuming simplex is gone (Expression survives as a standalone helper); zero-term cleanup no longer guards any solver invariant
-- [ ] ❗ 2.3 Tableau — Make Properties Private — premise-dead at r86-v2: Tableau.php was deleted with the simplex at 138b3d7e5
+- [ ] ❗ 2.3 Tableau — Make Properties Private — premise-dead at r86-v2: Tableau.php was deleted with the simplex at 138b3d7e5 (SHA corrected r86 weld: 5a232f565)
 - [x] ✅ 2.4 CassowarySolver — Add Division-by-Zero Protection (superseded: getVariableValue() retired with the simplex; the surviving GreedySolver divide paths carry explicit zero-weight guards, pinned by testMinZeroSlack…/testMaxWithAllZeroWeightFills…/solveMinShare totalWeight===0)
 - [x] ✅ 2.5 GreedySolver — Fix Comment/Implementation Mismatch (landed: flip comment now says “the flip-back below”, no stale line reference)
 

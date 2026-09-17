@@ -171,7 +171,7 @@ Address all 25 findings from the sugar-bits code review, organized into phased i
 ## Phase 7: Improvements [PENDING]
 
 - [.] **7.1** Consider `array_multisort()` for Multi-Column Sort — After Phase 2.2, evaluate whether `array_multisort()` (C implementation) could improve performance
-  - **r86-v3:** ⏭ ruled DECLINED (correctness): PHP 8.3.6 has no SORT_FLAG_CASE_INSENSITIVE (measured) and SORT_NATURAL is case-sensitive — array_multisort cannot reproduce the pinned strnatcasecmp order (alpha,Beta,beta vs Beta,alpha,beta on [Beta,alpha,beta]). Recorded in CALIBER_LEARNINGS.md.
+  - **r86-v3:** ⏭ ruled DECLINED (correctness): PHP 8.3.6 has no SORT_FLAG_CASE_INSENSITIVE (measured) and SORT_NATURAL is case-sensitive — bare SORT_NATURAL reverses the pinned strnatcasecmp order (alpha,Beta,beta vs Beta,alpha,beta on [Beta,alpha,beta]); SORT_NATURAL|SORT_FLAG_CASE matched in probes but the named constant SORT_FLAG_CASE_INSENSITIVE does not exist on this PHP — verdict DECLINED unchanged (r86 weld: categorical "cannot reproduce" softened to measured truth). Recorded in CALIBER_LEARNINGS.md.
   - **Severity:** improvement
   - **Notes:** Performance improvement for large tables with many sort criteria.
 

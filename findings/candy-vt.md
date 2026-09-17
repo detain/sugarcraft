@@ -421,7 +421,7 @@ DCS (Device Control String) dispatch is a no-op in both handler paths. While doc
 
 ## Duplicated Logic
 
-### 24. Three nearly identical `with*()` builders across `Sgr`, `Mode`, `CellGrid` ❗ r82: STILL LIVE — mutate() still unused in Sgr/Mode/Cell (grep 0; only root Cursor.php uses it) → r86v5: ⏭️ ruled — plan 9.1 Won't-fix stands; `mutate()` only in root `src/Cursor.php:27`.
+### 24. Three nearly identical `with*()` builders across `Sgr`, `Mode`, `CellGrid` ❗ r82: STILL LIVE — mutate() still unused in Sgr/Mode/Cell (grep 0; only root Cursor.php uses it) → r86v5: ⏭️ ruled — plan 9.1 Won't-fix stands; `mutate()` only in root `src/Cursor.php:27` (and `src/Cell.php:126` since r86 weld re-check).
 
 Each `with*()` method follows this exact pattern across `Sgr`, `Mode`, and `Cursor`:
 
