@@ -47,6 +47,13 @@ final class Theme
     }
 
     /**
+     * Canonical 0..255 xterm default palette (E742): the sixteen hand-tuned
+     * base colours followed by the shared 16..255 extension. The extension is
+     * keyed by ABSOLUTE index, so the `+` union lands every cube and grayscale
+     * slot at its true xterm position — a positional (0..215) cube would shift
+     * the whole region by −16 and shadow its first sixteen entries under the
+     * base block.
+     *
      * @return array<int, int>
      */
     public static function defaultPalette(): array
@@ -54,32 +61,45 @@ final class Theme
         return [
             0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xc0c0c0,
             0x808080, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
-        ] + self::cubePalette();
+        ] + self::extendedPalette();
     }
 
     /**
+     * The canonical 16..255 colour extension (E742 — mirrors the xterm-256
+     * table candy-core's Color::ansi256() parses): the 6×6×6 cube at indices
+     * CUBE_OFFSET..231 with idx = 16 + 36r + 6g + b and component levels
+     * 0 | 55+40·L, then the 24-step grayscale ramp at GRAYSCALE_OFFSET..255
+     * with value 8 + 10·(i − 232). Keyed by absolute index so it unions
+     * cleanly beneath any sixteen-entry manual base.
+     *
+     * Process-lifetime memo (E736 6.3): the region is a pure constant yet was
+     * rebuilt six times per request — once by defaultPalette() and once by
+     * each factory's spread. PHP arrays are copy-on-write values, so handing
+     * every caller the cached array cannot corrupt it.
+     *
      * @return array<int, int>
      */
-    private static function cubePalette(): array
+    private static function extendedPalette(): array
     {
-        // Process-lifetime memo (E736 6.3): the 6×6×6 cube is a pure constant
-        // yet was rebuilt twice per theme — once by defaultPalette() and once
-        // by each factory's spread. PHP arrays are copy-on-write values, so
-        // handing every caller the cached array cannot corrupt it.
-        static $cube = null;
-        if ($cube !== null) {
-            return $cube;
+        static $extended = null;
+        if ($extended !== null) {
+            return $extended;
         }
 
-        $cube = [];
+        $extended = [];
         for ($r = 0; $r < 6; $r++) {
             for ($g = 0; $g < 6; $g++) {
                 for ($b = 0; $b < 6; $b++) {
-                    $cube[] = (($r ? $r * 40 + 55 : 0) << 16) | (($g ? $g * 40 + 55 : 0) << 8) | ($b ? $b * 40 + 55 : 0);
+                    $extended[self::CUBE_OFFSET + 36 * $r + 6 * $g + $b] =
+                        (($r ? 55 + 40 * $r : 0) << 16) | (($g ? 55 + 40 * $g : 0) << 8) | ($b ? 55 + 40 * $b : 0);
                 }
             }
         }
-        return $cube;
+        for ($i = 0; $i < 24; $i++) {
+            $gray = 8 + 10 * $i;
+            $extended[self::GRAYSCALE_OFFSET + $i] = ($gray << 16) | ($gray << 8) | $gray;
+        }
+        return $extended;
     }
 
     public function color(int $index): int
@@ -90,9 +110,10 @@ final class Theme
         if (isset($this->palette[$index])) {
             return $this->palette[$index];
         }
-        // Palette only carries 0..15 + 6x6x6 cube (16..231). For the
-        // grayscale ramp (232..255) — and any unset slot — fall back
-        // to the standard xterm 256 mapping computed by self::rgb().
+        // The lib's own palettes carry the full 0..255 table (E742); this
+        // fallback serves custom palettes that omit slots — a caller-supplied
+        // base-only sixteen, say — by computing the standard xterm mapping
+        // for the index via self::rgb().
         [$r, $g, $b] = self::rgb($index);
         return ($r << 16) | ($g << 8) | $b;
     }
@@ -119,7 +140,7 @@ final class Theme
                 0xbb9af7,
                 0x7dcfff,
                 0xc0caf5,
-            ] + self::cubePalette(),
+            ] + self::extendedPalette(),
         );
     }
 
@@ -151,7 +172,7 @@ final class Theme
                 0xff92df,
                 0xa4ffff,
                 0xffffff,
-            ] + self::cubePalette(),
+            ] + self::extendedPalette(),
         );
     }
 
@@ -177,7 +198,7 @@ final class Theme
                 0xcb4b16,
                 0x2aa198,
                 0xfdf6e3,
-            ] + self::cubePalette(),
+            ] + self::extendedPalette(),
         );
     }
 
@@ -206,7 +227,7 @@ final class Theme
                 0xbb9af7,
                 0x7dcfff,
                 0xc0caf5,
-            ] + self::cubePalette(),
+            ] + self::extendedPalette(),
         );
     }
 
@@ -235,7 +256,7 @@ final class Theme
                 0xbb9af7,
                 0x7dcfff,
                 0xc0caf5,
-            ] + self::cubePalette(),
+            ] + self::extendedPalette(),
         );
     }
 

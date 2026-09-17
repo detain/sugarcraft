@@ -261,27 +261,51 @@ final class ThemeTest extends TestCase
         $this->assertSame('TokyoNight', $keys[0]);
     }
 
-    // ─── E736 6.3: cubePalette memo ───
+    // ─── E736 6.3 memo + E742 canonical xterm palette ───
 
-    public function testCubePaletteIsStableAcrossMultipleThemeFactories(): void
+    /**
+     * Independent xterm-256 ground truth for slots 16..255: cube at
+     * idx = 16 + 36r + 6g + b with component levels 0 | 55+40L, then the
+     * grayscale ramp 8 + 10(i−232). Computed here from the spec, never from
+     * Theme's own builder, so a regression in extendedPalette() cannot
+     * self-certify.
+     *
+     * @return array<int, int>
+     */
+    private static function canonicalExtension(): array
     {
-        // The memo hands the same computed cube to EVERY factory spread and to
-        // defaultPalette(). Pin the cube region (indices 16..231) against a
-        // SECOND independent computation, and cross-check it is identical on
-        // all factories that call cubePalette(). This catches any stale-memo
-        // regression (a cached array mutated mid-process) or a key-collapse.
-        $recomputed = [];
+        $canonical = [];
         for ($r = 0; $r < 6; $r++) {
             for ($g = 0; $g < 6; $g++) {
                 for ($b = 0; $b < 6; $b++) {
-                    $recomputed[] = (($r ? $r * 40 + 55 : 0) << 16)
-                        | (($g ? $g * 40 + 55 : 0) << 8)
-                        | ($b ? $b * 40 + 55 : 0);
+                    $canonical[16 + 36 * $r + 6 * $g + $b] =
+                        (($r ? 55 + 40 * $r : 0) << 16)
+                        | (($g ? 55 + 40 * $g : 0) << 8)
+                        | ($b ? 55 + 40 * $b : 0);
                 }
             }
         }
+        for ($i = 0; $i < 24; $i++) {
+            $gray = 8 + 10 * $i;
+            $canonical[232 + $i] = ($gray << 16) | ($gray << 8) | $gray;
+        }
+        return $canonical;
+    }
 
-        $factories = [
+    public function testExtensionIsCanonicalXtermRegionAcrossEveryPalette(): void
+    {
+        // E742 bless-correct replacement for the r87 "refuses to bless"
+        // freeze pin: every palette (default + all five factories) must now
+        // ship the full 256-slot table with the 16..255 extension at TRUE
+        // xterm indices — no −16 shift, no shadowed cube rows, grayscale in
+        // the table rather than only via the rgb() fallback. The shared memo
+        // hands the identical region to all six builders; base 0..15 stays
+        // each palette's own manual sixteen (pinned per-factory above).
+        $canonical = self::canonicalExtension();
+        $paletteRef = new \ReflectionProperty(Theme::class, 'palette');
+
+        $themes = [
+            'default' => new Theme(),
             'tokyoNight' => Theme::tokyoNight(),
             'dracula' => Theme::dracula(),
             'solarizedDark' => Theme::solarizedDark(),
@@ -289,41 +313,72 @@ final class ThemeTest extends TestCase
             'tokyoNightStorm' => Theme::tokyoNightStorm(),
         ];
 
-        foreach ($factories as $name => $theme) {
-            // The cube rides the tail of every palette (16 base + 216 cube).
-            $ref = new \ReflectionProperty(Theme::class, 'palette');
-            $palette = $ref->getValue($theme);
-            // NOTE: array `+` keeps LEFT keys, so the union ships base 0..15
-            // plus cube POSITIONS 16..215 — cube slots 0..15 are shadowed and
-            // 216..231 never enter the array (color() falls back to rgb()
-            // there). That mis-alignment is PRE-EXISTING (captured in the
-            // r87w1 dump baseline); this pin freezes current behaviour, it
-            // does not bless it — realignment is a separate ruling.
-            $this->assertCount(216, $palette, $name);
-            $this->assertSame(
-                array_slice($recomputed, 16, 200),
-                array_slice($palette, 16, 200),
-                $name,
-            );
+        foreach ($themes as $name => $theme) {
+            $palette = $paletteRef->getValue($theme);
+            $this->assertCount(256, $palette, $name);
+            $this->assertSame(range(0, 255), array_keys($palette), $name);
+            $this->assertSame($canonical, array_slice($palette, 16, 240, true), $name);
         }
     }
 
-    public function testCubePaletteMemoReturnsIdenticalArrayEveryCall(): void
+    public function testDefaultPaletteCarriesXtermValuesAtTheirTrueIndices(): void
     {
-        $a = new \ReflectionMethod(Theme::class, 'cubePalette');
+        $theme = new Theme();
+        $palette = Theme::defaultPalette();
+
+        // The table is 0..255 contiguous (the pre-fix union ended at 215).
+        $this->assertCount(256, $palette);
+
+        // Base sixteen byte-identical to the historical manual row.
+        $base = [
+            0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xc0c0c0,
+            0x808080, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
+        ];
+        foreach ($base as $index => $rgb) {
+            $this->assertSame($rgb, $theme->color($index), "base slot $index");
+        }
+
+        // xterm truth at the measured-defect slots (E742 ruling: colour 196
+        // IS red 0xff0000, not the shifted cube leak that produced 0xff87d7).
+        $this->assertSame(0x000000, $theme->color(16));
+        $this->assertSame(0x875f87, $theme->color(96));
+        $this->assertSame(0xff0000, $theme->color(196));
+        $this->assertSame(0xffffff, $theme->color(231));
+        $this->assertSame(0x080808, $theme->color(232));
+        $this->assertSame(0xeeeeee, $theme->color(255));
+
+        // Off-by-16 IMPOSSIBILITY: the old table's answer at 196 was the
+        // canonical value of index 212; after the fix that value must live at
+        // 212 only, the two slots must be distinct, and none of the three
+        // historical shifted outputs may reappear at its old position.
+        $this->assertSame(0xff87d7, $theme->color(212));
+        $this->assertNotSame($theme->color(196), $theme->color(212));
+        $this->assertNotSame(0xff87d7, $theme->color(196));
+        $this->assertNotSame(0x0087d7, $theme->color(16));
+        $this->assertNotSame(0x87d700, $theme->color(96));
+
+        // Grayscale rides the TABLE, not the fallback (pre-fix, 216..255 were
+        // absent from the array and every read fell through to rgb()).
+        $this->assertSame(0x080808, $palette[232]);
+        $this->assertSame(0xeeeeee, $palette[255]);
+    }
+
+    public function testExtendedPaletteMemoReturnsIdenticalArrayEveryCall(): void
+    {
+        $a = new \ReflectionMethod(Theme::class, 'extendedPalette');
         $first = $a->invoke(null);
         $second = $a->invoke(null);
 
         $this->assertSame($first, $second);
         // The memo is a VALUE copy (COW), not a shared mutable reference:
-        // a defensive count check that the 216-entry cube never grew.
-        $this->assertCount(216, $first);
+        // a defensive count check that the 240-entry extension never grew.
+        $this->assertCount(240, $first);
 
-        // Source census: the memo must EXIST (a `static $cube` line inside
-        // the method slice). Kill the memo and compute-again-per-call stays
-        // behaviourally green — only this pin catches the regression.
+        // Source census: the memo must EXIST (a `static $extended` line
+        // inside the method slice). Kill the memo and compute-again-per-call
+        // stays behaviourally green — only this pin catches the regression.
         $lines = file((string) $a->getFileName());
         $body = implode('', array_slice($lines, $a->getStartLine() - 1, $a->getEndLine() - $a->getStartLine() + 1));
-        $this->assertSame(1, substr_count($body, 'static $cube'));
+        $this->assertSame(1, substr_count($body, 'static $extended'));
     }
 }
