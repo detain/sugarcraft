@@ -167,6 +167,12 @@ final class MultiSelect implements \SugarCraft\Forms\Field
                 => [$this->moveCursor(count($this->options) - 1), null],
             $msg->type === KeyType::Space
                 => [$this->toggle($this->cursor), null],
+            // Number-jump 1-9 (plan 5.12): toggle the option at that slot
+            // directly, Mirrors charmbracelet/bubbles multi-select number
+            // selection. Out-of-range digits are inert (toggle() bounds-
+            // guards), and modified digits stay free for host bindings.
+            $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt && self::isJumpRune($msg->rune)
+                => [$this->toggle((int) $msg->rune - 1), null],
             default => [$this, null],
         };
     }
@@ -232,6 +238,15 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             return $this->mutate(cursor: 0);
         }
         return $this->mutate(cursor: max(0, min($count - 1, $idx)));
+    }
+
+    /**
+     * A bare digit 1-9 (Char rune, no modifier) is a slot jump. '0' is not —
+     * there is no option zero to reach.
+     */
+    private static function isJumpRune(string $rune): bool
+    {
+        return $rune !== '0' && ctype_digit($rune);
     }
 
     private function toggle(int $idx): self

@@ -51,6 +51,7 @@ final class ReadonlyModeTest extends TestCase
             'FilePicker up'   => [FilePicker::new('k'), new KeyMsg(KeyType::Up)],
             'Select slash'    => [Select::new('k')->withOptions('a', 'b'), new KeyMsg(KeyType::Char, '/')],
             'MultiSelect sp'  => [MultiSelect::new('k')->withOptions('a', 'b'), new KeyMsg(KeyType::Space)],
+            'MultiSelect dig' => [MultiSelect::new('k')->withOptions('a', 'b'), new KeyMsg(KeyType::Char, '1')],
         ];
     }
 
