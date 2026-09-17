@@ -7,11 +7,14 @@ namespace SugarCraft\Forms\Tests\Field;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Forms\Field\Color;
+use SugarCraft\Forms\Field\Date;
 use SugarCraft\Forms\Field\FilePicker;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Field\Slider;
 use SugarCraft\Forms\Field\Text;
 
 /**
@@ -47,6 +50,15 @@ final class TraitStateCarryFamilyTest extends TestCase
             'Note focus/blur'     => [Note::class, 'focusBlur'],
             'FilePicker mutate'   => [FilePicker::class, 'mutate'],
             'FilePicker focus/blur' => [FilePicker::class, 'focusBlur'],
+            // r88-x4 Phase-5 widgets (5.6/5.7/5.8): every state rides the
+            // ctor, so only the label-trait slots need carrying; the
+            // keystroke paths are pinned in each widget's own test file.
+            'Date mutate'         => [Date::class, 'mutate'],
+            'Date focus/blur'     => [Date::class, 'focusBlur'],
+            'Slider mutate'       => [Slider::class, 'mutate'],
+            'Slider focus/blur'   => [Slider::class, 'focusBlur'],
+            'Color mutate'        => [Color::class, 'mutate'],
+            'Color focus/blur'    => [Color::class, 'focusBlur'],
         ];
     }
 
@@ -80,6 +92,9 @@ final class TraitStateCarryFamilyTest extends TestCase
             MultiSelect::class  => [MultiSelect::class],
             Note::class         => [Note::class],
             FilePicker::class   => [FilePicker::class],
+            Date::class         => [Date::class],
+            Slider::class       => [Slider::class],
+            Color::class        => [Color::class],
         ];
     }
 
@@ -183,7 +198,9 @@ final class TraitStateCarryFamilyTest extends TestCase
                 basename($file) . ' adopts the label traits but rebuilds without a carrier (E741)',
             );
         }
-        $this->assertSame(7, $adopters, 'label-trait adopter roster changed — re-judge the carrier census');
+        // 10 = the original seven + the r88-x4 Phase-5 widgets (Date,
+        // Slider, Color), each adopting the traits AND the shared carrier.
+        $this->assertSame(10, $adopters, 'label-trait adopter roster changed — re-judge the carrier census');
     }
 
     /**

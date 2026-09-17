@@ -110,9 +110,9 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 ### Medium Priority Missing Features
 
 - [ ] **5.5** No input masking for credit cards/phone numbers/SSN (password field withEchoMode exists, but pattern-based masking like showing only last 4 digits doesn't) — ⏭️ ruled — zero consumers (r86 product ruling)
-- [ ] **5.6** No date/time/datetime-local picker fields — common form inputs not available — ⏭️ ruled — zero consumers (r86 product ruling)
-- [ ] **5.7** No range/slider numeric field — 1-10 slider input common in forms — ⏭️ ruled — zero consumers (r86 product ruling)
-- [ ] **5.8** No color picker field — color selection not implemented — ⏭️ ruled — zero consumers (r86 product ruling)
+- [x] **5.6** No date/time/datetime-local picker fields — common form inputs not available — ✅ built r88-x4 (operator ruling 2026-09-17 supersedes r86 ruling): `candy-forms/src/Field/Date.php:54` calendar grid, strict `Y-m-d` boundary parse (:296), month-clamped nav (:322), tests/Field/DateTest.php
+- [x] **5.7** No range/slider numeric field — 1-10 slider input common in forms — ✅ built r88-x4 (operator ruling 2026-09-17 supersedes r86 ruling): `candy-forms/src/Field/Slider.php:44` handle track, single-site clamp/lattice normalise (:80, token-census-pinned), tests/Field/SliderTest.php
+- [x] **5.8** No color picker field — color selection not implemented — ✅ built r88-x4 (operator ruling 2026-09-17 supersedes r86 ruling): `candy-forms/src/Field/Color.php:49` xterm-256 cube swatch grid (table computed locally — no candy-vt dep), hex boundary snap (:106), tests/Field/ColorTest.php
 - [ ] **5.9** No form state persistence — no mechanism to serialize form state to JSON and restore — ⏭️ ruled — zero consumers (r86 product ruling)
 - [ ] **5.10** No readonly fields — Note is display-only but skip is separate from readonly; need fields that display but don't accept input — ⏭️ ruled — zero consumers (r86 product ruling)
 - [ ] **5.11** No help text per validation error — validators return single error string, not contextual help — ⏭️ ruled — zero consumers (r86 product ruling)
