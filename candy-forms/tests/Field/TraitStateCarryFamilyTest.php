@@ -136,6 +136,14 @@ final class TraitStateCarryFamilyTest extends TestCase
                     $src,
                     $class . '::$' . $prop->getName() . ' was allow-listed as unconditional ctor-body machinery but is no longer seeded that way — it became state worth carrying (E741)',
                 );
+                // E736-F2/2.2: the whole point is ONE instantiation. A second
+                // assignment-shaped `new SmithWatermanMatcher()` in this file
+                // is a per-keystroke rebuild creeping back in.
+                $this->assertSame(
+                    1,
+                    substr_count($src, '= new SmithWatermanMatcher();'),
+                    $class . ' must instantiate its matcher exactly once (ctor seed); a second site re-introduces the per-keystroke build',
+                );
                 continue;
             }
             $nonCtor[] = $prop->getName();

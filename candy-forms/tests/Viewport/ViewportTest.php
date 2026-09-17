@@ -454,4 +454,15 @@ final class ViewportTest extends TestCase
         $this->assertSame(30, $wide->scrollRight(9999)->xOffset(), 'the original snapshot is untouched');
     }
 
+
+    public function testMaxXOffsetCacheIsLazyPerSnapshotMemo(): void
+    {
+        // E736-F2/2.6 existence census (behavior-invisible cache): the O(lines)
+        // Width scan must stay memoised per immutable snapshot — guard + slot
+        // + write-on-compute pinned in source.
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Viewport/Viewport.php');
+        $this->assertStringContainsString('private ?int $maxXOffsetMemo = null;', $src);
+        $this->assertStringContainsString('if ($this->maxXOffsetMemo !== null) {', $src);
+        $this->assertStringContainsString('return $this->maxXOffsetMemo =', $src);
+    }
 }

@@ -421,4 +421,16 @@ final class TextAreaTest extends TestCase
         $this->assertSame(5, $multi->lineInfo()['totalChars'], 'embedded newline counts once');
     }
 
+
+    public function testTotalLengthCacheIsLazyPerSnapshotMemo(): void
+    {
+        // E736-F2/2.4 existence census: totalLength() is behavior-invisible
+        // (the scan and the memo agree), so the CACHE itself is what must not
+        // regress into a per-call rescan. Pin the lazy-memo shape in source:
+        // a nullable per-instance slot + null-guard + write-on-compute.
+        $src = (string) file_get_contents(dirname(__DIR__, 2) . '/src/TextArea/TextArea.php');
+        $this->assertStringContainsString('private ?int $totalLengthMemo = null;', $src);
+        $this->assertStringContainsString('if ($this->totalLengthMemo !== null) {', $src);
+        $this->assertStringContainsString('return $this->totalLengthMemo = $sum;', $src);
+    }
 }
