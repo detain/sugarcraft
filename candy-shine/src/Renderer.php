@@ -163,6 +163,267 @@ final class Renderer
     public static function ascii(): self { return new self(Theme::ascii()); }
 
     /**
+     * Render Markdown and write the ANSI output straight to a stream
+     * (default {@see STDOUT}). Mirrors charmbracelet/glamour's package-level
+     * `Write` function.
+     *
+     * Returns the number of bytes written — equal to the rendered length on
+     * success. Fails loud: a non-resource or read-only stream throws before
+     * any rendering work happens, and a failed or short write throws once
+     * the write is attempted.
+     *
+     * @param resource|mixed $output Writable stream resource; default STDOUT.
+     * @return int Bytes written.
+     */
+    public function write(string $markdown, mixed $output = STDOUT): int
+    {
+        if (!is_resource($output)) {
+            throw new \InvalidArgumentException(Lang::t('renderer.stream_invalid'));
+        }
+        $mode = (string) (stream_get_meta_data($output)['mode'] ?? '');
+        if (!preg_match('/[waxc#]|\\+/', $mode)) {
+            throw new \InvalidArgumentException(Lang::t('renderer.stream_not_writable', ['mode' => $mode]));
+        }
+        $rendered = $this->render($markdown);
+        $written  = @fwrite($output, $rendered);
+        if ($written === false || $written < strlen($rendered)) {
+            throw new \RuntimeException(Lang::t('renderer.write_failed', ['bytes' => strlen($rendered)]));
+        }
+        return $written;
+    }
+
+    /**
+     * Incremental render channel (E736 7.3): consumes Markdown input as a
+     * stream of string chunks and yields styled ANSI chunks as complete
+     * top-level block sections finish — the sugar-ecosystem port of
+     * glamour's render-then-print block-by-block intent, so a caller can
+     * forward bytes while the tail of the document is still arriving.
+     *
+     * Lawful invariant, pinned by tests: chunk boundaries never influence
+     * output. For every split of the same input bytes,
+     *   implode('', iterator_to_array($r->stream($chunks))) === $r->render($bytes)
+     * holds byte-for-byte.
+     *
+     * Input is buffered only until the next PROVABLE top-level boundary:
+     * a column-0 ATX heading preceded by a blank line, outside fenced and
+     * raw-HTML blocks, and not directly following a blockquote, list-item,
+     * indented-code, or table row (defensive refusals — such a heading can
+     * never be absorbed across the cut, but the hold keeps the contract
+     * airtight against parser subtleties). Documents without such a
+     * boundary, and renderers whose document-scope post-processing is
+     * global by nature (block prefix/suffix, indent, margin,
+     * preservedNewLines), emit a single final chunk — still byte-identical
+     * to {@see render()}.
+     *
+     * Pure channel: no timers, no I/O handles, no ReactPHP (E646). Each
+     * yielded chunk is a plain string of composed SGR bytes; consuming the
+     * generator lazily also makes the input iterable pull-on-demand, so a
+     * caller feeding an unbounded source is never forced to materialise it.
+     *
+     * @param iterable<string> $chunks
+     * @return \Generator<int, string>
+     */
+    public function stream(iterable $chunks): \Generator
+    {
+        $theme = $this->theme;
+        if (
+            $theme->documentBlockPrefix !== ''
+            || $theme->documentBlockSuffix !== ''
+            || $theme->documentIndent > 0
+            || $theme->documentMargin > 0
+            || $this->preservedNewLines
+        ) {
+            $whole = '';
+            foreach ($chunks as $chunk) {
+                $whole .= self::requireChunk($chunk);
+            }
+            yield $this->render($whole);
+            return;
+        }
+
+        $started  = false;
+        $carryRun = '';
+        foreach ($this->sections($chunks) as $section) {
+            $body  = $this->renderSectionBody($section);
+            $tail  = strlen(rtrim($body, "\n"));
+            $head  = substr($body, 0, $tail);
+            if ($started && $carryRun !== '') {
+                yield $carryRun;
+            }
+            $started  = true;
+            $carryRun = $tail < strlen($body) ? substr($body, $tail) : '';
+            if ($head !== '') {
+                yield $head;
+            }
+        }
+        // The last carried newline run is deliberately dropped: render()
+        // rtrims trailing "\n" once at document end, and this reproduces
+        // that exactly — every interior run is re-emitted with the next
+        // section's head, so the concatenation equals render() byte for byte.
+    }
+
+    /**
+     * Split the input chunk stream into source sections at provable
+     * top-level boundaries (see {@see stream()}). The scanner is line
+     * driven and its state depends only on the assembled bytes, never on
+     * where a chunk ended — which is what makes chunk-split invariance a
+     * structural property rather than a hopeful one.
+     *
+     * @param iterable<string> $chunks
+     * @return \Generator<string> non-blank sections, source bytes, in order
+     */
+    private function sections(iterable $chunks): \Generator
+    {
+        $buffer       = '';
+        $section      = '';
+        $fenceChar    = null;
+        $fenceLen     = 0;
+        $rawTag       = null;
+        $lastNonBlank = null;
+        $sawBlank     = false;
+
+        foreach ($chunks as $chunk) {
+            $buffer .= self::requireChunk($chunk);
+            while (($nl = strpos($buffer, "\n")) !== false) {
+                $line   = substr($buffer, 0, $nl);
+                $buffer = substr($buffer, $nl + 1);
+                $closed = $this->scanSectionLine($line, $section, $fenceChar, $fenceLen, $rawTag, $lastNonBlank, $sawBlank);
+                if ($closed !== null && trim($closed) !== '') {
+                    yield $closed;
+                }
+            }
+        }
+        if ($buffer !== '') {
+            $this->scanSectionLine($buffer, $section, $fenceChar, $fenceLen, $rawTag, $lastNonBlank, $sawBlank);
+        }
+        if (trim($section) !== '') {
+            yield $section;
+        }
+    }
+
+    /**
+     * Feed one assembled line to the section state machine. Returns the
+     * section text closed by this line (the line itself becomes the head of
+     * a new section), or null when no boundary was reached.
+     *
+     * @param string      $line         Line without its trailing newline.
+     * @param string      $section      Accumulator for the open section.
+     * @param string|null $fenceChar    '`' or '~' while inside a fence, else null.
+     * @param int         $fenceLen     Opening fence run length.
+     * @param string|null $rawTag       Lower-case tag while inside an unclosed
+     *                                  CommonMark HTML block type 1 (pre/script/style/textarea).
+     * @param string|null $lastNonBlank Last content line seen before any blanks.
+     * @param bool        $sawBlank     True when at least one blank line sits
+     *                                  between $lastNonBlank and the current line.
+     */
+    private function scanSectionLine(
+        string $line,
+        string &$section,
+        ?string &$fenceChar,
+        int &$fenceLen,
+        ?string &$rawTag,
+        ?string &$lastNonBlank,
+        bool &$sawBlank,
+    ): ?string {
+        $open = $line . "\n";
+
+        if ($fenceChar !== null) {
+            $section .= $open;
+            if (preg_match('/^ {0,3}' . preg_quote($fenceChar, '/') . '{' . $fenceLen . ',}[ \t]*$/', $line) === 1) {
+                $fenceChar = null;
+                $fenceLen  = 0;
+            }
+            $lastNonBlank = trim($line) === '' ? $lastNonBlank : $line;
+            return null;
+        }
+        if ($rawTag !== null) {
+            $section .= $open;
+            if (stripos($line, '</' . $rawTag . '>') !== false) {
+                $rawTag = null;
+            }
+            $lastNonBlank = trim($line) === '' ? $lastNonBlank : $line;
+            return null;
+        }
+        if (trim($line) === '') {
+            $section  .= $open;
+            $sawBlank  = true;
+            return null;
+        }
+
+        $isHeadingBoundary = $sawBlank
+            && preg_match('/^#{1,6}([ \t]|$)/', $line) === 1
+            && (
+                $lastNonBlank === null
+                || !(
+                    preg_match('/^ {0,3}>/', $lastNonBlank) === 1
+                    || preg_match('/^ {0,3}([-*+]|\d{1,9}[.)])([ \t]|$)/', $lastNonBlank) === 1
+                    || preg_match('/^(?: {4}|\t)/', $lastNonBlank) === 1
+                    || str_starts_with(ltrim($lastNonBlank), '|')
+                )
+            );
+        if ($isHeadingBoundary) {
+            $closed       = $section;
+            $section      = $open;
+            $sawBlank     = false;
+            $lastNonBlank = null;
+            return $closed;
+        }
+
+        if (preg_match('/^ {0,3}(`{3,}|~{3,})/', $line, $fence) === 1) {
+            $fenceChar = $fence[1][0];
+            $fenceLen  = strlen($fence[1]);
+        } elseif (preg_match('/^ {0,3}<(script|pre|style|textarea)\b/i', $line, $html) === 1) {
+            $rawTag = strtolower($html[1]);
+            if (stripos($line, '</' . $rawTag . '>') !== false) {
+                $rawTag = null; // self-contained on one line
+            }
+        }
+        $section     .= $open;
+        $lastNonBlank = $line;
+        $sawBlank     = false;
+        return null;
+    }
+
+    /**
+     * Render one section to its raw ANSI body WITHOUT the document-scope
+     * post-processing of {@see render()}: no rtrim, block prefix/suffix,
+     * indent, or margin — those wrap the assembled stream exactly once (and
+     * when they are configured at all, stream() falls back to buffering).
+     *
+     * A throwaway copy renders each section so every section starts from a
+     * fresh Document block context; the shared per-instance lazy stack (the
+     * plan-1.1 pending trap) is never touched by the stream channel.
+     */
+    private function renderSectionBody(string $section): string
+    {
+        if ($this->expandEmoji) {
+            $section = self::expandEmojiShortcodes($section);
+            if ($this->sanitize) {
+                $section = self::stripControls($section);
+            }
+        }
+        $sub = $this->copy();
+        $sub->blockStack = new BlockStack();
+        $sub->styleSheet = StyleSheet::base();
+        $sub->blockStack->push(new BlockContext(
+            BlockKind::Document,
+            depth: 0,
+            accumulatedIndent: 0,
+            cascadedStyle: $sub->theme->paragraph ?? Style::new(),
+        ));
+
+        return $sub->renderChildren($sub->parser()->parse($section));
+    }
+
+    private static function requireChunk(mixed $chunk): string
+    {
+        if (!is_string($chunk)) {
+            throw new \InvalidArgumentException(Lang::t('renderer.chunk_invalid'));
+        }
+        return $chunk;
+    }
+
+    /**
      * Build a Renderer whose theme is selected by the `GLAMOUR_STYLE`
      * environment variable. Falls back to {@see Theme::ansi()} when the
      * env var is unset / unrecognised. Mirrors glamour's
