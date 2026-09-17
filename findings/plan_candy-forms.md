@@ -3,7 +3,7 @@
 ---
 status: not-started
 phase: 1
-updated: 2026-06-30
+updated: 2026-09-17
 ---
 
 ## Goal
@@ -101,17 +101,19 @@ Address all findings from `findings/candy-forms.md` through systematic, severity
 > **ROUND-86 PRODUCT RULING (v6): phase DECLINED WHOLESALE — zero rows have a live consumer (the Form class is unconsumed; crush uses only TextArea/ItemList/FilePicker hosts, which do not exercise these gaps). 5.6/5.7/5.8/5.13 are net-new widgets (date/color pickers, slider, clipboard-without-selection-model); 5.16 is a browser concept N/A to TUI; 5.17 terminal drag-drop is non-portable. REOPEN TRIGGER: first real consumer demand. findings #3 (Form-level timeout, `findings/candy-forms.md:101`) was already dropped from this plan — runtime concern, not a forms defect. See backlog §E736 RULINGS paragraph.**
 >
 > **ROUND-88 UPDATE (x5): operator ruling 2026-09-17 "do them all" re-opened and BUILT the mouse+clipboard cluster — 5.13 and 5.14 now ✅ above with file:line evidence. Remaining rows keep the r86 decline until their own trigger.**
+>
+> **ROUND-89 UPDATE (y3): the r86 decline is REVOKED for cluster A by the operator ruling — 5.2/5.3/5.4/5.5/5.9/5.10/5.11/5.12/5.15 are being built in lane y3 (design: /home/sites/crush-r61-artifacts/y3/design.md). 5.16/5.17 stay ⏭ fact-ruled (browser concept N/A to TUI; drag-drop non-portable), not declined-for-consumers.**
 
 ### High Priority Missing Features
 
-- [ ] **5.1** No per-field blur validation forwarding — `Field::update()` doesn't receive blur message → Design and implement blur message forwarding from Form to field for `ValidateOn::Blur` support — ⏭️ ruled — zero consumers (r86 product ruling)
+- [x] **5.1** No per-field blur validation forwarding — `Field::update()` doesn't receive blur message → Design and implement blur message forwarding from Form to field for `ValidateOn::Blur` support — ✅ LANDED (r89-y3 fact correction: the row's premise was already stale at the tip). Blur forwarding exists as the `Field::blur()` contract the Form fires on every advance/submit-gate/group-jump (`Form.php` advance() :833, advanceGroup() :858, submitOrGateLastGroup() :406); `Input::blur()` runs the deferred chain when timing is `ValidateOn::Blur` (`Input.php:458-466`), `Text::blur()` mirrors it (`Text.php:116-123`). Stamped by r88 verification; sentence corrected here.
 - [ ] **5.2** No async `Form::validateAll()` — always synchronous blocking → Add `validateAllAsync(): AsyncCmd` variant that returns async command for slow validators (network lookup, etc.) — ⏭️ ruled — zero consumers (r86 product ruling)
 - [ ] **5.3** No `Form::focusField(string $key)` for programmatic focus management → Add method to programmatically move focus to specific field by key — ⏭️ ruled — zero consumers (r86 product ruling)
 - [ ] **5.4** No per-field keybinding overrides — KeyMap applies to Form navigation only → Add per-field `withKeyMap()` override so individual fields can customize their key handling — ⏭️ ruled — zero consumers (r86 product ruling)
 
 ### Medium Priority Missing Features
 
-- [ ] **5.5** No input masking for credit cards/phone numbers/SSN (password field withEchoMode exists, but pattern-based masking like showing only last 4 digits doesn't) — ⏭️ ruled — zero consumers (r86 product ruling)
+- [ ] **5.5** No input masking for credit cards/phone numbers/SSN — ⏭️ ruled — zero consumers (r86 product ruling) — r89-y3 fact correction: what exists today is a FIXED-echo password mask, `Input::withPassword()` (`Input.php:187-197`) repeating one echo char over the whole value via `EchoMode::Password` (`TextInput.php:945`); pattern-based masking (last-4 style) does not exist yet. Row goes to y3 (reopened cluster A).
 - [x] **5.6** No date/time/datetime-local picker fields — common form inputs not available — ✅ built r88-x4 (operator ruling 2026-09-17 supersedes r86 ruling): `candy-forms/src/Field/Date.php:54` calendar grid, strict `Y-m-d` boundary parse (:296), month-clamped nav (:322), tests/Field/DateTest.php
 - [x] **5.7** No range/slider numeric field — 1-10 slider input common in forms — ✅ built r88-x4 (operator ruling 2026-09-17 supersedes r86 ruling): `candy-forms/src/Field/Slider.php:44` handle track, single-site clamp/lattice normalise (:80, token-census-pinned), tests/Field/SliderTest.php
 - [x] **5.8** No color picker field — color selection not implemented — ✅ built r88-x4 (operator ruling 2026-09-17 supersedes r86 ruling): `candy-forms/src/Field/Color.php:49` xterm-256 cube swatch grid (table computed locally — no candy-vt dep), hex boundary snap (:106), tests/Field/ColorTest.php
