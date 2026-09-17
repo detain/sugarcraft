@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\TextArea;
 
 use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
+use SugarCraft\Forms\HasKeyOverrides;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
@@ -43,6 +44,7 @@ use SugarCraft\Core\Util\Editor;
 final class TextArea implements Model
 {
     use Mutable;
+    use HasKeyOverrides;
 
     /**
      * E736-F2/2.4 (round 85): per-snapshot memo for totalLength()'s O(lines)
@@ -100,6 +102,15 @@ final class TextArea implements Model
         public readonly ?int $anchorRow = null,
         /** Column of the {@see $anchorRow} anchor; null exactly when anchorRow is. */
         public readonly ?int $anchorCol = null,
+        /**
+         * E736 5.4 — canonical parsed key-override map (`'ctrl+u' => action`).
+         * Built only through {@see withKeyOverrides()}; empty = pure built-in
+         * handling. Row-relative semantics: move_start/move_end/delete_to_*
+         * operate on the caret's line, not the whole buffer.
+         *
+         * @var array<string,string>
+         */
+        public readonly array $keyOverrides = [],
     ) {}
 
     /**
@@ -159,6 +170,12 @@ final class TextArea implements Model
             return [$this, null];
         }
 
+        // E736 5.4 — host bindings win over the built-in arms below.
+        $override = $this->keyOverrideAction($msg);
+        if ($override !== null) {
+            return $this->applyKeyOverride($override);
+        }
+
         if ($msg->ctrl) {
             return match ($msg->rune) {
                 'a'     => [$this->moveCursor($this->row, 0), null],
@@ -186,6 +203,49 @@ final class TextArea implements Model
             KeyType::Space     => [$this->insert(' '), null],
             KeyType::Char      => [$this->insert($msg->rune), null],
             default            => [$this, null],
+        };
+    }
+
+    /**
+     * {@see HasKeyOverrides} registry for this widget. Row-relative: caret
+     * start/end and delete-to-start/end act on the caret's LINE (the multi-line
+     * analogue of the built-in Home/End/ctrl-u/ctrl-k). history_* is
+     * deliberately absent — TextArea carries no history model, so the door
+     * rejects those actions here rather than silently doing nothing.
+     *
+     * @return list<string>
+     */
+    protected static function keyOverrideActions(): array
+    {
+        return [
+            self::OVERRIDE_MOVE_START,
+            self::OVERRIDE_MOVE_END,
+            self::OVERRIDE_MOVE_LEFT,
+            self::OVERRIDE_MOVE_RIGHT,
+            self::OVERRIDE_BACKSPACE,
+            self::OVERRIDE_DELETE_FORWARD,
+            self::OVERRIDE_DELETE_TO_START,
+            self::OVERRIDE_DELETE_TO_END,
+            self::OVERRIDE_NOOP,
+        ];
+    }
+
+    /**
+     * @return array{0:Model, 1:?\Closure}
+     */
+    protected function applyKeyOverride(string $action): array
+    {
+        return match ($action) {
+            self::OVERRIDE_MOVE_START      => [$this->moveCursor($this->row, 0), null],
+            self::OVERRIDE_MOVE_END        => [$this->moveCursor($this->row, $this->lineLen($this->row)), null],
+            self::OVERRIDE_MOVE_LEFT       => [$this->moveLeft(), null],
+            self::OVERRIDE_MOVE_RIGHT      => [$this->moveRight(), null],
+            self::OVERRIDE_BACKSPACE       => [$this->backspace(), null],
+            self::OVERRIDE_DELETE_FORWARD  => [$this->deleteForward(), null],
+            self::OVERRIDE_DELETE_TO_START => [$this->deleteToLineStart(), null],
+            self::OVERRIDE_DELETE_TO_END   => [$this->deleteToLineEnd(), null],
+            self::OVERRIDE_NOOP            => [$this, null],
+            default                        => throw new \InvalidArgumentException("unreachable override action: {$action}"),
         };
     }
 
@@ -1095,6 +1155,7 @@ final class TextArea implements Model
         ?string $editorExtension = null,
         ?int $anchorRow = null, bool $anchorSet = false,
         ?int $anchorCol = null,
+        ?array $keyOverrides = null,
     ): self {
         $newLines = $lines ?? $this->lines;
         $resolvedValidate = $validateSet ? $validate : $this->validate;
@@ -1127,7 +1188,8 @@ final class TextArea implements Model
             dynamic:               $dynamic              ?? $this->dynamic,
             editorExtension:       $editorExtension      ?? $this->editorExtension,
             anchorRow:             $anchorSet            ? $anchorRow : $this->anchorRow,
-            anchorCol:             $anchorSet            ? $anchorCol : $this->anchorCol,
+            anchorCol:             $anchorSet           ? $anchorCol : $this->anchorCol,
+            keyOverrides:          $keyOverrides        ?? $this->keyOverrides,
         );
     }
 

@@ -142,6 +142,16 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function withPrompt(string $p): self      { return $this->mutate(input: $this->input->withPrompt($p)); }
     public function withCharLimit(int $n): self      { return $this->mutate(input: $this->input->withCharLimit($n)); }
     public function withWidth(int $w): self          { return $this->mutate(input: $this->input->withWidth($w)); }
+    /**
+     * E736 5.4 — rebind keys inside this field's input domain. The map lives on
+     * the inner TextInput (single owner of the edit primitives); spellings +
+     * actions are validated at set time — see {@see \SugarCraft\Forms\HasKeyOverrides}.
+     *
+     * @param array<string,string> $map e.g. ['ctrl+u' => 'move_end']
+     */
+    public function withKeyOverrides(array $map): self { return $this->mutate(input: $this->input->withKeyOverrides($map)); }
+    /** The parsed override map carried by the inner widget. @return array<string,string> */
+    public function keyOverrides(): array             { return $this->input->keyOverrides(); }
 
     // Short-form aliases: same behavior, less typing.
     public function title(string $t): self        { return $this->withTitle($t); }

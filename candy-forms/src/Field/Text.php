@@ -73,6 +73,15 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
     public function withCharLimit(int $n): self       { return $this->mutate(area: $this->area->withCharLimit($n)); }
     public function withWidth(int $w): self           { return $this->mutate(area: $this->area->withWidth($w)); }
     public function withHeight(int $h): self          { return $this->mutate(area: $this->area->withHeight($h)); }
+    /**
+     * E736 5.4 — rebind keys inside this field's input domain (row-relative
+     * semantics — see {@see \SugarCraft\Forms\TextArea\TextArea::keyOverrideActions()}).
+     *
+     * @param array<string,string> $map e.g. ['ctrl+u' => 'move_end']
+     */
+    public function withKeyOverrides(array $map): self { return $this->mutate(area: $this->area->withKeyOverrides($map)); }
+    /** The parsed override map carried by the inner widget. @return array<string,string> */
+    public function keyOverrides(): array              { return $this->area->keyOverrides(); }
 
     /** @param \Closure(string):?string $fn */
     public function withValidator(\Closure $fn): self

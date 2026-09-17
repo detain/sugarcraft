@@ -54,4 +54,8 @@ return [
     'field.readonly' => '(read-only)',
     'validation.async_return_type' => 'Async validator for field "{key}" must return a promise, got {type}',
     'validation.async_result_type' => 'Async validation of field "{key}" must resolve to an error string or null, got {type}',
+    'keys.override_shape' => 'Key overrides must be a map of string spellings to string actions',
+    'keys.override_unknown_key' => 'Unknown key override spelling "{key}"',
+    'keys.override_unknown_action' => 'Unknown key override action "{action}"',
+    'keys.override_duplicate' => 'Duplicate key override "{key}" — two spellings collapse to the same binding',
 ];

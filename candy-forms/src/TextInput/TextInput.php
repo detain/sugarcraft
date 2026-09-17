@@ -8,6 +8,7 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
+use SugarCraft\Forms\HasKeyOverrides;
 use SugarCraft\Forms\Vim\VimAction;
 use SugarCraft\Forms\Vim\VimKeyHandler;
 use SugarCraft\Forms\Vim\VimState;
@@ -40,6 +41,8 @@ use SugarCraft\Sprinkles\Style;
  */
 final class TextInput implements Model
 {
+    use HasKeyOverrides;
+
     /**
      * Character count of {@see $value} as measured by mb_strlen (UTF-8
      * codepoints — the same unit cursorPos uses), derived once in the
@@ -87,6 +90,13 @@ final class TextInput implements Model
         public readonly ValidateOn $validateOn = ValidateOn::None,
         /** Regex pattern; only matching characters are accepted. */
         public readonly string $restrict = '',
+        /**
+         * E736 5.4 — canonical parsed key-override map (`'ctrl+u' => action`).
+         * Built only through {@see withKeyOverrides()}; empty = pure built-in handling.
+         *
+         * @var array<string,string>
+         */
+        public readonly array $keyOverrides = [],
     ) {
         $this->length = mb_strlen($value, 'UTF-8');
     }
@@ -146,6 +156,13 @@ final class TextInput implements Model
             return [$this, null];
         }
 
+        // E736 5.4 — host bindings win over vim mode and over every built-in
+        // arm below (parse door guarantees the action is implementable).
+        $override = $this->keyOverrideAction($msg);
+        if ($override !== null) {
+            return $this->applyKeyOverride($override);
+        }
+
         // Vim mode handling
         if ($this->vimMode) {
             return $this->vimUpdate($msg);
@@ -176,6 +193,51 @@ final class TextInput implements Model
             KeyType::Escape    => [$this, null],
             KeyType::Enter     => $this->handleEnter(),
             default            => [$this, null],
+        };
+    }
+
+    /**
+     * {@see HasKeyOverrides} registry for this widget — every constant here is
+     * backed by a primitive below; history_* is TextInput-only (TextArea has
+     * no history model).
+     *
+     * @return list<string>
+     */
+    protected static function keyOverrideActions(): array
+    {
+        return [
+            self::OVERRIDE_MOVE_START,
+            self::OVERRIDE_MOVE_END,
+            self::OVERRIDE_MOVE_LEFT,
+            self::OVERRIDE_MOVE_RIGHT,
+            self::OVERRIDE_BACKSPACE,
+            self::OVERRIDE_DELETE_FORWARD,
+            self::OVERRIDE_DELETE_TO_START,
+            self::OVERRIDE_DELETE_TO_END,
+            self::OVERRIDE_HISTORY_UP,
+            self::OVERRIDE_HISTORY_DOWN,
+            self::OVERRIDE_NOOP,
+        ];
+    }
+
+    /**
+     * @return array{0:Model, 1:?\Closure}
+     */
+    protected function applyKeyOverride(string $action): array
+    {
+        return match ($action) {
+            self::OVERRIDE_MOVE_START      => [$this->moveCursor(0), null],
+            self::OVERRIDE_MOVE_END        => [$this->moveCursor($this->length()), null],
+            self::OVERRIDE_MOVE_LEFT       => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
+            self::OVERRIDE_MOVE_RIGHT      => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+            self::OVERRIDE_BACKSPACE       => [$this->backspace(), null],
+            self::OVERRIDE_DELETE_FORWARD  => [$this->deleteForward(), null],
+            self::OVERRIDE_DELETE_TO_START => [$this->deleteToStart(), null],
+            self::OVERRIDE_DELETE_TO_END   => [$this->deleteToEnd(), null],
+            self::OVERRIDE_HISTORY_UP      => $this->historyNavigateUp(),
+            self::OVERRIDE_HISTORY_DOWN    => $this->historyNavigateDown(),
+            self::OVERRIDE_NOOP            => [$this, null],
+            default                        => throw new \InvalidArgumentException("unreachable override action: {$action}"),
         };
     }
 
@@ -978,6 +1040,7 @@ final class TextInput implements Model
         ?int $historyLimit = null,
         ?ValidateOn $validateOn = null,
         ?string $restrict = null,
+        ?array $keyOverrides = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
@@ -1021,6 +1084,7 @@ final class TextInput implements Model
             historyLimit:           $historyLimit           ?? $this->historyLimit,
             validateOn:             $validateOn             ?? $this->validateOn,
             restrict:               $restrict               ?? $this->restrict,
+            keyOverrides:           $keyOverrides           ?? $this->keyOverrides,
         );
     }
 
