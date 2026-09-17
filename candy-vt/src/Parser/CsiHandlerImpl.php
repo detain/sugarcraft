@@ -314,9 +314,13 @@ final class CsiHandlerImpl implements CsiHandler
                 $p = 0;
             }
 
+            // The parser's contract is `list<int>` (candy-ansi `Parser::$params`,
+            // -1 default slots included), so the former per-iteration
+            // intval-normalisation ran on provably-integer input — dead
+            // allocation (E736 6.1).
             [$this->fg, $this->bg, $this->attrs, $i] = $this->applySgrParam(
                 $p,
-                array_values(array_map('intval', $params)),
+                $params,
                 $i,
                 $subs,
             );

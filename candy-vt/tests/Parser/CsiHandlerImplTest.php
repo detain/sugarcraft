@@ -983,4 +983,25 @@ final class CsiHandlerImplTest extends TestCase
         $this->assertSame(3, $csi->cursor()->col);
         $this->assertFalse($csi->wrapPending());
     }
+
+    // ─── E736 6.1: sgr() consumes the parser list<int> verbatim ──────────
+
+    public function testSgrBodyCarriesNoParamRewriteAndIndexedChainStillReadsInPlace(): void
+    {
+        // Guard 1 (E736 6.1 regression lock): the sgr() source slice must not
+        // reintroduce a per-iteration rebuild — the candy-ansi parser already
+        // guarantees `list<int>` params, so any array_map/array_values there
+        // is the dead allocation this row removed.
+        $ref = new \ReflectionMethod(CsiHandlerImpl::class, 'sgr');
+        $lines = file((string) $ref->getFileName());
+        $body = implode('', array_slice($lines, $ref->getStartLine() - 1, $ref->getEndLine() - $ref->getStartLine() + 1));
+        $this->assertStringNotContainsString('array_map(', $body);
+        $this->assertStringNotContainsString('array_values(', $body);
+
+        // Guard 2 (behaviour): positional slots of a list<int> are consumed
+        // verbatim — a shifted read would land 5/196 instead of 196.
+        $this->csi->sgr([38, 5, 196]);
+        $this->csi->printable('X');
+        $this->assertSame(196, $this->csi->grid()->cell(0, 0)->fg);
+    }
 }

@@ -260,4 +260,63 @@ final class ThemeTest extends TestCase
         $keys = array_keys($v1);
         $this->assertSame('TokyoNight', $keys[0]);
     }
+
+    // ─── E736 6.3: cubePalette memo ───
+
+    public function testCubePaletteIsStableAcrossMultipleThemeFactories(): void
+    {
+        // The memo hands the same computed cube to EVERY factory spread and to
+        // defaultPalette(). Pin the cube region (indices 16..231) against a
+        // SECOND independent computation, and cross-check it is identical on
+        // all factories that call cubePalette(). This catches any stale-memo
+        // regression (a cached array mutated mid-process) or a key-collapse.
+        $recomputed = [];
+        for ($r = 0; $r < 6; $r++) {
+            for ($g = 0; $g < 6; $g++) {
+                for ($b = 0; $b < 6; $b++) {
+                    $recomputed[] = (($r ? $r * 40 + 55 : 0) << 16)
+                        | (($g ? $g * 40 + 55 : 0) << 8)
+                        | ($b ? $b * 40 + 55 : 0);
+                }
+            }
+        }
+
+        $factories = [
+            'tokyoNight' => Theme::tokyoNight(),
+            'dracula' => Theme::dracula(),
+            'solarizedDark' => Theme::solarizedDark(),
+            'tokyoNightLight' => Theme::tokyoNightLight(),
+            'tokyoNightStorm' => Theme::tokyoNightStorm(),
+        ];
+
+        foreach ($factories as $name => $theme) {
+            // The cube rides the tail of every palette (16 base + 216 cube).
+            $ref = new \ReflectionProperty(Theme::class, 'palette');
+            $palette = $ref->getValue($theme);
+            // NOTE: array `+` keeps LEFT keys, so the union ships base 0..15
+            // plus cube POSITIONS 16..215 — cube slots 0..15 are shadowed and
+            // 216..231 never enter the array (color() falls back to rgb()
+            // there). That mis-alignment is PRE-EXISTING (captured in the
+            // r87w1 dump baseline); this pin freezes current behaviour, it
+            // does not bless it — realignment is a separate ruling.
+            $this->assertCount(216, $palette, $name);
+            $this->assertSame(
+                array_slice($recomputed, 16, 200),
+                array_slice($palette, 16, 200),
+                $name,
+            );
+        }
+    }
+
+    public function testCubePaletteMemoReturnsIdenticalArrayEveryCall(): void
+    {
+        $a = new \ReflectionMethod(Theme::class, 'cubePalette');
+        $first = $a->invoke(null);
+        $second = $a->invoke(null);
+
+        $this->assertSame($first, $second);
+        // The memo is a VALUE copy (COW), not a shared mutable reference:
+        // a defensive count check that the 216-entry cube never grew.
+        $this->assertCount(216, $first);
+    }
 }

@@ -62,6 +62,15 @@ final class Theme
      */
     private static function cubePalette(): array
     {
+        // Process-lifetime memo (E736 6.3): the 6×6×6 cube is a pure constant
+        // yet was rebuilt twice per theme — once by defaultPalette() and once
+        // by each factory's spread. PHP arrays are copy-on-write values, so
+        // handing every caller the cached array cannot corrupt it.
+        static $cube = null;
+        if ($cube !== null) {
+            return $cube;
+        }
+
         $cube = [];
         for ($r = 0; $r < 6; $r++) {
             for ($g = 0; $g < 6; $g++) {
