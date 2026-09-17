@@ -8,6 +8,7 @@ use SugarCraft\Shine\Lang;
 use SugarCraft\Shine\Render\BlockContext;
 use SugarCraft\Shine\Render\BlockKind;
 use SugarCraft\Shine\Render\BlockStack;
+use SugarCraft\Shine\Render\SectionScanner;
 use SugarCraft\Shine\Style\StyleCascade;
 use SugarCraft\Shine\Style\StyleSheet;
 use SugarCraft\Core\Util\Ansi;
@@ -225,14 +226,7 @@ final class Renderer
      */
     public function stream(iterable $chunks): \Generator
     {
-        $theme = $this->theme;
-        if (
-            $theme->documentBlockPrefix !== ''
-            || $theme->documentBlockSuffix !== ''
-            || $theme->documentIndent > 0
-            || $theme->documentMargin > 0
-            || $this->preservedNewLines
-        ) {
+        if ($this->defersStreaming()) {
             $whole = '';
             foreach ($chunks as $chunk) {
                 $whole .= self::requireChunk($chunk);
@@ -244,7 +238,7 @@ final class Renderer
         $started  = false;
         $carryRun = '';
         foreach ($this->sections($chunks) as $section) {
-            $body  = $this->renderSectionBody($section);
+            $body  = $this->renderSection($section);
             $tail  = strlen(rtrim($body, "\n"));
             $head  = substr($body, 0, $tail);
             if ($started && $carryRun !== '') {
@@ -263,6 +257,35 @@ final class Renderer
     }
 
     /**
+     * True when this renderer's document-scope post-processing (block
+     * prefix/suffix, indent, margin, preservedNewLines) is global by nature,
+     * forcing the streaming family ({@see stream()}, {@see Writer}) to
+     * buffer the whole document into its final chunk. Single source of the
+     * law so both channels can never diverge on the predicate.
+     */
+    public function defersStreaming(): bool
+    {
+        return $this->theme->documentBlockPrefix !== ''
+            || $this->theme->documentBlockSuffix !== ''
+            || $this->theme->documentIndent > 0
+            || $this->theme->documentMargin > 0
+            || $this->preservedNewLines;
+    }
+
+    /**
+     * Write-side counterpart of {@see stream()}: an object channel that
+     * accepts Markdown chunks through {@see Writer::feed()} and pushes every
+     * newly proven section into the sink immediately (write-through flush
+     * law, E736 7.3). Shares the section scanner and deferral predicate with
+     * this channel, so feed()/close() output equals stream() output for the
+     * same bytes.
+     */
+    public function writer(StreamSink $sink): Writer
+    {
+        return new Writer($this, $sink);
+    }
+
+    /**
      * Split the input chunk stream into source sections at provable
      * top-level boundaries (see {@see stream()}). The scanner is line
      * driven and its state depends only on the assembled bytes, never on
@@ -274,114 +297,16 @@ final class Renderer
      */
     private function sections(iterable $chunks): \Generator
     {
-        $buffer       = '';
-        $section      = '';
-        $fenceChar    = null;
-        $fenceLen     = 0;
-        $rawTag       = null;
-        $lastNonBlank = null;
-        $sawBlank     = false;
-
+        $scanner = new SectionScanner();
         foreach ($chunks as $chunk) {
-            $buffer .= self::requireChunk($chunk);
-            while (($nl = strpos($buffer, "\n")) !== false) {
-                $line   = substr($buffer, 0, $nl);
-                $buffer = substr($buffer, $nl + 1);
-                $closed = $this->scanSectionLine($line, $section, $fenceChar, $fenceLen, $rawTag, $lastNonBlank, $sawBlank);
-                if ($closed !== null && trim($closed) !== '') {
-                    yield $closed;
-                }
+            foreach ($scanner->push(self::requireChunk($chunk)) as $closed) {
+                yield $closed;
             }
         }
-        if ($buffer !== '') {
-            $this->scanSectionLine($buffer, $section, $fenceChar, $fenceLen, $rawTag, $lastNonBlank, $sawBlank);
+        $final = $scanner->finish();
+        if ($final !== null) {
+            yield $final;
         }
-        if (trim($section) !== '') {
-            yield $section;
-        }
-    }
-
-    /**
-     * Feed one assembled line to the section state machine. Returns the
-     * section text closed by this line (the line itself becomes the head of
-     * a new section), or null when no boundary was reached.
-     *
-     * @param string      $line         Line without its trailing newline.
-     * @param string      $section      Accumulator for the open section.
-     * @param string|null $fenceChar    '`' or '~' while inside a fence, else null.
-     * @param int         $fenceLen     Opening fence run length.
-     * @param string|null $rawTag       Lower-case tag while inside an unclosed
-     *                                  CommonMark HTML block type 1 (pre/script/style/textarea).
-     * @param string|null $lastNonBlank Last content line seen before any blanks.
-     * @param bool        $sawBlank     True when at least one blank line sits
-     *                                  between $lastNonBlank and the current line.
-     */
-    private function scanSectionLine(
-        string $line,
-        string &$section,
-        ?string &$fenceChar,
-        int &$fenceLen,
-        ?string &$rawTag,
-        ?string &$lastNonBlank,
-        bool &$sawBlank,
-    ): ?string {
-        $open = $line . "\n";
-
-        if ($fenceChar !== null) {
-            $section .= $open;
-            if (preg_match('/^ {0,3}' . preg_quote($fenceChar, '/') . '{' . $fenceLen . ',}[ \t]*$/', $line) === 1) {
-                $fenceChar = null;
-                $fenceLen  = 0;
-            }
-            $lastNonBlank = trim($line) === '' ? $lastNonBlank : $line;
-            return null;
-        }
-        if ($rawTag !== null) {
-            $section .= $open;
-            if (stripos($line, '</' . $rawTag . '>') !== false) {
-                $rawTag = null;
-            }
-            $lastNonBlank = trim($line) === '' ? $lastNonBlank : $line;
-            return null;
-        }
-        if (trim($line) === '') {
-            $section  .= $open;
-            $sawBlank  = true;
-            return null;
-        }
-
-        $isHeadingBoundary = $sawBlank
-            && preg_match('/^#{1,6}([ \t]|$)/', $line) === 1
-            && (
-                $lastNonBlank === null
-                || !(
-                    preg_match('/^ {0,3}>/', $lastNonBlank) === 1
-                    || preg_match('/^ {0,3}([-*+]|\d{1,9}[.)])([ \t]|$)/', $lastNonBlank) === 1
-                    || preg_match('/^(?: {4}|\t)/', $lastNonBlank) === 1
-                    || str_starts_with(ltrim($lastNonBlank), '|')
-                )
-            );
-        if ($isHeadingBoundary) {
-            $closed       = $section;
-            $section      = $open;
-            $sawBlank     = false;
-            $lastNonBlank = null;
-            return $closed;
-        }
-
-        if (preg_match('/^ {0,3}(`{3,}|~{3,})/', $line, $fence) === 1) {
-            $fenceChar = $fence[1][0];
-            $fenceLen  = strlen($fence[1]);
-        } elseif (preg_match('/^ {0,3}<(script|pre|style|textarea)\b/i', $line, $html) === 1) {
-            $rawTag = strtolower($html[1]);
-            if (stripos($line, '</' . $rawTag . '>') !== false) {
-                $rawTag = null; // self-contained on one line
-            }
-        }
-        $section     .= $open;
-        $lastNonBlank = $line;
-        $sawBlank     = false;
-        return null;
     }
 
     /**
@@ -394,7 +319,7 @@ final class Renderer
      * fresh Document block context; the shared per-instance lazy stack (the
      * plan-1.1 pending trap) is never touched by the stream channel.
      */
-    private function renderSectionBody(string $section): string
+    public function renderSection(string $section): string
     {
         if ($this->expandEmoji) {
             $section = self::expandEmojiShortcodes($section);

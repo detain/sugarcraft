@@ -18,4 +18,10 @@ return [
     'renderer.stream_not_writable'  => 'write() requires a writable stream, got mode "{mode}"',
     'renderer.write_failed'         => 'failed to write {bytes} bytes to the output stream',
     'renderer.chunk_invalid'      => 'stream() chunks must be strings',
+    'sink.closed'                 => 'the sink is closed',
+    'sink.parent_missing'         => 'output directory does not exist: {dir}',
+    'sink.path_unwritable'        => 'output path is not writable: {path}',
+    'sink.open_failed'            => 'failed to open output path: {path}',
+    'sink.flush_failed'           => 'flushing the output stream failed',
+    'writer.feed_after_close'     => 'feed() called after close() — the writer is finished',
 ];
