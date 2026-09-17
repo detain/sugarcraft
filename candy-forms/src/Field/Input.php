@@ -64,7 +64,14 @@ final class Input implements \SugarCraft\Forms\Field
     /** @var CancellationSource|null Cancellation source for the pending async operation */
     private ?CancellationSource $pendingAsyncCancellation = null;
 
-    /** @var WorkerPool|null */
+    /**
+     * @var WorkerPool|null RESERVED (E736 1.5): stored by
+     * {@see withAsyncSuggestions()} and carried by every mutation path, but
+     * {@see scheduleAsyncSuggestions()} never dispatches through it — the
+     * debounced fetch always runs on the main loop. Kept as the landing
+     * point for the Phase-6 offload wiring; see the method's
+     * WORKER POOL STATUS note.
+     */
     private $workerPool = null;
 
     private function __construct(
@@ -264,12 +271,21 @@ final class Input implements \SugarCraft\Forms\Field
     /**
      * Async suggestions via a callable that returns a Promise.
      * Debounces for $debounceMs after each keystroke, then calls the fetcher.
-     * Uses WorkerPool to run the fetch off the main event loop.
      * Mirrors huh's async suggestion pattern.
+     *
+     * WORKER POOL STATUS (E736 1.5): the fetch runs on the MAIN event loop —
+     * {@see scheduleAsyncSuggestions()} debounces via {@see Loop::addTimer()}
+     * and invokes the fetcher in-loop; the stored {@see WorkerPool} is
+     * captured into the scheduling closure but never consulted (see the
+     * property docblock). The parameter is accepted for signature parity
+     * with the planned offload path — wiring real offloading is deferred to
+     * the follow-up async lane (findings/plan_candy-forms.md Phase 6.3).
+     * Until then passing a pool has NO effect, and fetchers that block will
+     * block the loop.
      *
      * @param callable(string):PromiseInterface<list<string>> $fetcher Receives current input value, returns promise of suggestions
      * @param int $debounceMs Milliseconds to wait after last keystroke before fetching (default 150)
-     * @param WorkerPool|null $workerPool Optional worker pool for offloading; uses Loop::get() if not provided
+     * @param WorkerPool|null $workerPool RESERVED — stored, never consulted; see WORKER POOL STATUS above
      */
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
     {

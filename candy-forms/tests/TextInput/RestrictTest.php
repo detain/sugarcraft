@@ -205,4 +205,34 @@ final class RestrictTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         TextInput::new()->withRestrict('[');
     }
+
+    /**
+     * E736 1.8: the validation call probes PCRE with an EMPTY subject — it
+     * tests compilation, never matching. A pattern that compiles but cannot
+     * match '' (like `.+`, which requires one character) must therefore be
+     * ACCEPTED and still filter keystrokes. Mutation: turning the guard into
+     * a match test (`!== 1`) or re-pointing the probe at a real subject with
+     * match-time semantics would falsely reject these rows.
+     *
+     * @dataProvider compileOnlyProbePatterns
+     */
+    public function testWithRestrictAcceptsPatternsThatCannotMatchEmptySubject(string $pattern, string $accepted, string $rejected): void
+    {
+        $t = $this->focused()->withRestrict($pattern);
+        $t = $t->withRestrict($pattern); // idempotent re-attach must not throw
+        [$t] = $t->update(new KeyMsg(KeyType::Char, $accepted));
+        $this->assertSame($accepted, $t->value);
+        [$t] = $t->update(new KeyMsg(KeyType::Char, $rejected));
+        $this->assertSame($accepted, $t->value, "pattern '{$pattern}' must reject '{$rejected}'");
+    }
+
+    /** @return array<string, array{0:string,1:string,2:string}> */
+    public static function compileOnlyProbePatterns(): array
+    {
+        return [
+            'word-required' => ['\w+', 'x', '!'],        // does not match ''
+            'anchors-out-of-reach' => ['^x$', 'x', 'y'], // '^x$' vs '' -> no match
+            'digits' => ['[0-9]', '5', 'a'],
+        ];
+    }
 }

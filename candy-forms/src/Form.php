@@ -195,6 +195,12 @@ final class Form implements Model
      * Mirrors upstream charmbracelet/huh #272 ("Overriding KeyMaps and
      * KeyBinds"). Use to rebind nav keys without forking the runtime —
      * e.g. swap Tab for `j` / `k`, or add Ctrl-Enter as a submit shortcut.
+     *
+     * @param KeyMap|null $keyMap pass null to reset to the default key map
+     *                            (E736 4.6: null-to-reset is the contract —
+     *                            the set-sentinel distinguishes "cleared"
+     *                            from "never configured", both resolving to
+     *                            {@see KeyMap::default()} via {@see activeKeyMap()})
      */
     public function withKeyMap(?KeyMap $keyMap): self
     {

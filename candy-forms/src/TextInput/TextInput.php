@@ -106,7 +106,16 @@ final class TextInput implements Model
         );
     }
 
-    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
+    /**
+     * Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null.
+     *
+     * Always null by design (E736 4.3): the cursor blink command is produced
+     * by {@see focus()}, and {@see Form::init()} hands the runtime exactly
+     * that focus-Cmd for the initially focused field. A TextInput therefore
+     * blinks whenever it is shown inside a Form — there is nothing for init()
+     * to schedule itself. The asymmetry only shows when a bare TextInput is
+     * driven stand-alone: its blink starts at focus(), not at construction.
+     */
     public function init(): ?\Closure
     {
         return null;
@@ -473,6 +482,12 @@ final class TextInput implements Model
             $v = mb_substr($v, 0, $this->charLimit, 'UTF-8');
         }
         // Skip mutation if value unchanged to avoid spurious re-validation.
+        // The asymmetry with withValidator() is intentional (E736 4.7):
+        // setValue() is a PROGRAMMATIC write — re-judging a value the field
+        // already holds (and already judged against the same rule) is pure
+        // noise. withValidator() instead evaluates on attach even when the
+        // value never moves, because a NEW rule must classify the CURRENT
+        // value immediately (the user may never type again).
         if ($v === $this->value) {
             return $this;
         }
@@ -688,6 +703,11 @@ final class TextInput implements Model
      * message (string) for invalid input or null for valid. The
      * latest message is exposed via {@see err()} after every edit.
      *
+     * The rule is evaluated against the current value AT ATTACH (unless
+     * {@see withValidateOn()} defers to Blur/Submit) — see the E736 4.7
+     * note in {@see setValue()} for why attach validates but an unchanged
+     * programmatic write does not.
+     *
      * @param ?\Closure(string): ?string $fn  pass null to clear
      */
     public function withValidator(?\Closure $fn): self
@@ -726,6 +746,15 @@ final class TextInput implements Model
      */
     public function withRestrict(string $pattern): self
     {
+        // The empty subject is deliberate (E736 1.8): this call is a COMPILE
+        // probe, not a match — preg_match() returns false iff PCRE refuses to
+        // compile the pattern, which is subject-independent (a well-formed
+        // pattern that simply cannot match '' returns 0, not false, and is
+        // accepted below). Probing against '' additionally cannot trip
+        // match-time failures (backtrack/recursion limits return false too),
+        // so a valid-but-expensive pattern is never falsely rejected here.
+        // The @-suppression only hides the compile E_WARNING we already
+        // branch on via === false.
         if ($pattern !== '' && @preg_match('/' . $pattern . '/', '') === false) {
             throw new \InvalidArgumentException('Invalid restrict pattern: ' . $pattern);
         }

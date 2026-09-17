@@ -49,7 +49,16 @@ final class FilePicker implements Model
         public readonly ?string $error    = null,
     ) {}
 
-    /** Construct a fresh instance with default state. */
+    /**
+     * Construct a fresh instance with default state.
+     *
+     * `getcwd()` is deliberately snapshotted ONCE here when no $cwd is
+     * given (E736 4.4): a TUI session never chdirs the process behind the
+     * widget's back, so binding the directory at construction keeps every
+     * later {@see refresh()} — and the value() emitted on submit — pointed
+     * at the same tree the user browsed. Re-resolving per render would let
+     * an embedding app's own chdir silently relocate the picker mid-session.
+     */
     public static function new(?string $cwd = null, int $height = 10): self
     {
         $cwd = self::normalizeCwd($cwd ?? (string) getcwd());

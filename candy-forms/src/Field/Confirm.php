@@ -74,9 +74,14 @@ final class Confirm implements \SugarCraft\Forms\Field
             $fn = $validator;
         }
 
-        $clone = clone $this;
-        $clone->validator = $fn;
-        return $clone->revalidate();
+        // Canonical immutable path (E736 1.7): the validator swap rides
+        // mutate() with its set-sentinel — no clone + direct property write.
+        // mutate() is also the only carrier for the HasHideFunc /
+        // HasDynamicLabels trait state, so routing here keeps withValidator
+        // consistent with every other setter. revalidate() still runs
+        // immediately: attaching a rule must judge the CURRENT value against
+        // it (mirrors Input::withValidator, which validates on attach).
+        return $this->mutate(validator: $fn, validatorSet: true)->revalidate();
     }
 
     // Short-form aliases.
@@ -93,12 +98,17 @@ final class Confirm implements \SugarCraft\Forms\Field
         if ($err === $this->error) {
             return $this;
         }
-        $clone = clone $this;
-        // Bypass mutate() because $error is readonly on a fresh ctor.
-        return new self(
+        // mutate() cannot produce this instance: $error is readonly, so only
+        // the ctor may write it. The non-readonly state that new self() would
+        // silently reset to null — validator plus the HasHideFunc /
+        // HasDynamicLabels closures — is carried over explicitly (E736 1.7:
+        // before this, recomputing an error dropped the validator, so a field
+        // that started invalid stopped validating after the first toggle).
+        $next = new self(
             $this->key, $this->value, $this->focused, $this->title,
             $this->description, $this->affirmative, $this->negative, $err,
         );
+        return $this->carryNonCtorState($next);
     }
 
     public function key(): string  { return $this->key; }
@@ -157,6 +167,8 @@ final class Confirm implements \SugarCraft\Forms\Field
         ?string $description = null,
         ?string $affirmative = null,
         ?string $negative = null,
+        ?\Closure $validator = null,
+        bool $validatorSet = false,
     ): self {
         $next = new self(
             key:         $this->key,
@@ -168,11 +180,33 @@ final class Confirm implements \SugarCraft\Forms\Field
             negative:    $negative    ?? $this->negative,
             error:       $this->error,
         );
-        $next->validator = $this->validator;
+        $next->validator = $validatorSet ? $validator : $this->validator;
+        // The validator/trait closures are not ctor args; carry them so no
+        // mutation path silently drops them (E736 1.7).
+        $next = $this->carryNonCtorState($next, carryValidator: false);
         // Re-run validator when the value changed.
         if ($value !== null && $value !== $this->value) {
             return $next->revalidate();
         }
+        return $next;
+    }
+
+    /**
+     * Copy the state that lives outside the private ctor — the validator
+     * closure and the HasHideFunc / HasDynamicLabels closures — onto a
+     * freshly constructed instance. The ctor initialises each to null, so
+     * every `new self(...)` path must funnel through here or those
+     * closures vanish (immutable-model property carry, per the trait
+     * docblocks' "preserved across mutations" contract).
+     */
+    private function carryNonCtorState(self $next, bool $carryValidator = true): self
+    {
+        if ($carryValidator) {
+            $next->validator = $this->validator;
+        }
+        $next->hideFunc        = $this->hideFunc;
+        $next->titleFunc       = $this->titleFunc;
+        $next->descriptionFunc = $this->descriptionFunc;
         return $next;
     }
 }

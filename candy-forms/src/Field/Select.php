@@ -116,12 +116,21 @@ final class Select implements \SugarCraft\Forms\Field
      * Async suggestions via a callable that returns a Promise.
      * Debounces for $debounceMs after each filter keystroke, then calls the fetcher.
      * The fetcher receives the current filter text and returns a promise of suggestions.
-     * Uses WorkerPool to run the fetch off the main event loop.
      * Mirrors huh's async suggestion pattern.
+     *
+     * WORKER POOL STATUS (E736 1.5): the fetch runs on the MAIN event loop —
+     * {@see scheduleAsyncSuggestions()} debounces via {@see Loop::addTimer()}
+     * and invokes the fetcher in-loop; nothing is offloaded. The
+     * {@see WorkerPool} parameter is accepted for signature parity with the
+     * planned offload path and is DISCARDED here (Select does not even store
+     * it; Input stores the same dead parameter). Wiring real offloading is
+     * deferred to the follow-up async lane (findings/plan_candy-forms.md
+     * Phase 6.3) — until then passing a pool has NO effect, and fetchers
+     * that block will block the loop.
      *
      * @param callable(string):PromiseInterface<list<string>> $fetcher Receives filter text, returns promise of suggestions
      * @param int $debounceMs Milliseconds to wait after last keystroke before fetching (default 150)
-     * @param WorkerPool|null $workerPool Optional worker pool for offloading; uses Loop::get() if not provided
+     * @param WorkerPool|null $workerPool RESERVED — accepted, never consulted; see WORKER POOL STATUS above
      */
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
     {
@@ -373,6 +382,19 @@ final class Select implements \SugarCraft\Forms\Field
     public function isFocused(): bool         { return $this->list->focused; }
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
     public function getDescription(): string  { return $this->resolveDescription($this->description); }
+
+    /**
+     * Select carries no validator surface, so it can never hold an error:
+     * its value is by construction the highlighted {@see ItemList} entry
+     * (or null when empty), which is always a legal choice. These two are
+     * the correct no-op of the Field contract (E736 1.3) —
+     * {@see \SugarCraft\Forms\Field::revalidate()} degenerates to
+     * "re-run validators" over an empty validator set, returning `$this`
+     * unchanged, exactly as the contract's idempotence clause demands.
+     * Any future change that gives Select a validator/constraint MUST
+     * replace both — until then Form::validateAll() passing a Select
+     * through untouched is intended, not a silent skip.
+     */
     public function getError(): ?string       { return null; }
     public function revalidate(): Field       { return $this; }
     public function skippable(): bool         { return false; }

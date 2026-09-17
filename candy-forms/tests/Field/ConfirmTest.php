@@ -132,4 +132,66 @@ final class ConfirmTest extends TestCase
         $f = Confirm::new('agree', false)->validator(new Required());
         $this->assertNotNull($f->getError());
     }
+
+    /**
+     * E736 1.7 keystone: attaching a validator to an ALREADY-INVALID value
+     * takes the revalidate() fresh-ctor branch — which used to rebuild the
+     * instance without the private $validator closure, so the field stopped
+     * validating after its first error. The rule must keep re-firing on
+     * every later toggle (mutation: drop carryNonCtorState() in revalidate()).
+     */
+    public function testValidatorSurvivesErrorRecomputeRoundTrip(): void
+    {
+        $f = Confirm::new('agree', false)
+            ->withValidator(static fn (bool $v): ?string => $v ? null : 'must agree');
+        $this->assertSame('must agree', $f->getError());
+
+        [$f] = $f->focus();
+        [$f] = $f->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($f->getError(), 'checking clears the error');
+
+        [$f] = $f->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertSame('must agree', $f->getError(), 'the validator must still exist after the recompute');
+        $this->assertTrue($f->isFocused(), 'revalidate() rebuild preserves focus');
+    }
+
+    /**
+     * E736 1.7: withValidator() now rides the canonical mutate() path, so
+     * it must preserve the HasHideFunc / HasDynamicLabels closures exactly
+     * as the old clone-based bypass did (mutation: route withValidator
+     * through a mutate() that forgot the trait carry).
+     */
+    public function testWithValidatorPreservesTraitClosures(): void
+    {
+        $f = Confirm::new('q')
+            ->withTitleFunc(static fn (): string => 'DYN')
+            ->withDescriptionFunc(static fn (): string => 'DSCF')
+            ->withHideFunc(static fn (array $v): bool => true)
+            ->withValidator(static fn (bool $v): ?string => null);
+
+        $this->assertSame('DYN', $f->getTitle());
+        $this->assertSame('DSCF', $f->getDescription());
+        $this->assertTrue($f->isHidden([]));
+    }
+
+    /**
+     * E736 1.7 companion pin: the trait closures document themselves as
+     * "preserved across mutations" — Confirm::mutate() rebuilt via new self()
+     * and used to drop them (e.g. withTitleFunc set, then any later
+     * withTitle()/focus() silently lost the dynamic title). Pin the contract
+     * on the two representative mutate paths.
+     */
+    public function testTraitClosuresSurviveMutatePaths(): void
+    {
+        $titled = Confirm::new('q')
+            ->withTitleFunc(static fn (): string => 'DYN')
+            ->withTitle('ignored-while-func-set');
+        $this->assertSame('DYN', $titled->getTitle());
+
+        $hidden = Confirm::new('q')
+            ->withHideFunc(static fn (array $v): bool => true)
+            ->withDefault(true);
+        $this->assertTrue($hidden->isHidden([]));
+        $this->assertTrue($hidden->value());
+    }
 }

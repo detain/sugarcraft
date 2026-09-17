@@ -218,6 +218,25 @@ final class SelectTest extends TestCase
         );
         $this->assertSame('C', $form->getString('k'));
     }
+
+    /**
+     * E736 1.3: Select has no validator surface — its value is by
+     * construction the highlighted option — so the Field-contract no-ops are
+     * IDENTITY no-ops: revalidate() returns the same instance (the contract's
+     * idempotence clause) and getError() is permanently null. Pin the shape
+     * the "correct no-op" docblock promises; a future Select with real
+     * constraints must consciously flip this test.
+     */
+    public function testRevalidateAndGetErrorAreIdentityNoOps(): void
+    {
+        $f = Select::new('lang')->withOptions('PHP', 'Go');
+        $this->assertNull($f->getError());
+        $this->assertSame($f, $f->revalidate());
+
+        [$f] = $f->focus();
+        $this->assertNull($f->getError());
+        $this->assertSame($f, $f->revalidate(), 'revalidate must not even clone on a focused Select');
+    }
 }
 
 enum DummyBackedEnum: string
