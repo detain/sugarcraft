@@ -44,6 +44,9 @@ final readonly class FunnelStage
  */
 final class Funnel implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use ChartBorderStyle;
+    use AxisLabelFormatter;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -373,7 +376,7 @@ final class Funnel implements \SugarCraft\Dash\Foundation\Sizer
 
             // Add value if enabled
             if ($this->showValues) {
-                $valueStr = $this->formatValue($stage->value);
+                $valueStr = $this->formatYLabel($stage->value);
                 if ($this->showPercentages) {
                     $total = $this->stages[0]->value ?: 1;
                     $pct = intval(($stage->value / $total) * 100);
@@ -489,40 +492,6 @@ final class Funnel implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return $result;
-    }
-
-    /**
-     * Format a value for display.
-     */
-    private function formatValue(float $value): string
-    {
-        if (abs($value) >= 1000000) {
-            return sprintf('%.1fM', $value / 1000000);
-        }
-        if (abs($value) >= 1000) {
-            return sprintf('%.1fK', $value / 1000);
-        }
-        if ($value === floor($value)) {
-            return sprintf('%.0f', $value);
-        }
-        return sprintf('%.1f', $value);
-    }
-
-    /**
-     * Get the style characters for the border.
-     *
-     * @return array{0:string, 1:string, 2:string, 3:string, 4:string, 5:string}
-     */
-    private function getStyleChars(): array
-    {
-        return match ($this->style) {
-            'double' => ['╔', '╗', '╚', '╝', '═', '║'],
-            'rounded' => ['╭', '╮', '╰', '╯', '─', '│'],
-            'single' => ['┌', '┐', '└', '┘', '─', '│'],
-            'bold' => ['┏', '┓', '┗', '┛', '━', '┃'],
-            'empty' => [' ', ' ', ' ', ' ', ' ', ' '],
-            default => ['╭', '╮', '╰', '╯', '─', '│'],
-        };
     }
 
     /**

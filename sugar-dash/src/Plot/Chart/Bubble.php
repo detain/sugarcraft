@@ -27,6 +27,8 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use AxisLabelFormatter;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -309,7 +311,7 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
         // Y-axis labels and grid
         for ($y = 0; $y < $chartHeight; $y++) {
             $yValue = $this->maxY - ($y / ($chartHeight - 1)) * ($this->maxY - $this->minY);
-            $label = $this->formatValue($yValue);
+            $label = $this->formatYLabel($yValue);
 
             if ($gridColor !== null) {
                 $result .= $gridColor->toFg(ColorProfile::TrueColor);
@@ -331,7 +333,7 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
         for ($x = 0; $x < $chartWidth; $x++) {
             $xValue = $this->minX + ($x / ($chartWidth - 1)) * ($this->maxX - $this->minX);
             if ($x % max(1, intval($chartWidth / 5)) === 0) {
-                $result .= $this->formatValue($xValue)[0];
+                $result .= $this->formatYLabel($xValue)[0];
             } else {
                 $result .= '─';
             }
@@ -495,23 +497,6 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
             : ($size - $this->minSize) / ($this->maxSize - $this->minSize);
 
         return max(1, min(3, intval(1 + $ratio * 3)));
-    }
-
-    /**
-     * Format a value for display.
-     */
-    private function formatValue(float $value): string
-    {
-        if (abs($value) >= 1000000) {
-            return sprintf('%.1fM', $value / 1000000);
-        }
-        if (abs($value) >= 1000) {
-            return sprintf('%.1fK', $value / 1000);
-        }
-        if ($value === floor($value)) {
-            return sprintf('%.0f', $value);
-        }
-        return sprintf('%.1f', $value);
     }
 
     /**

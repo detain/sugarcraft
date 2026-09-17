@@ -23,6 +23,8 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use ChartBorderStyle;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -274,23 +276,6 @@ final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
         $result .= $bl . str_repeat($h, $useWidth - 2) . $br;
 
         return $result;
-    }
-
-    /**
-     * Get the style characters for the border.
-     *
-     * @return array{0:string, 1:string, 2:string, 3:string, 4:string, 5:string}
-     */
-    private function getStyleChars(): array
-    {
-        return match ($this->style) {
-            'double' => ['╔', '╗', '╚', '╝', '═', '║'],
-            'rounded' => ['╭', '╮', '╰', '╯', '─', '│'],
-            'single' => ['┌', '┐', '└', '┘', '─', '│'],
-            'bold' => ['┏', '┓', '┗', '┛', '━', '┃'],
-            'empty' => [' ', ' ', ' ', ' ', ' ', ' '],
-            default => ['╭', '╮', '╰', '╯', '─', '│'],
-        };
     }
 
     /**

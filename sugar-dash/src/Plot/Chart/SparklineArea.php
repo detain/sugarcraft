@@ -20,6 +20,8 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class SparklineArea implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use SparklineScaling;
+
     private ?int $width = null;
     private ?int $sizerHeight = null;
 
@@ -109,55 +111,6 @@ final class SparklineArea implements \SugarCraft\Dash\Foundation\Sizer
         $normalizedData = $this->normalizeData($displayWidth);
 
         return $this->renderArea($normalizedData);
-    }
-
-    /**
-     * Normalize data points to fit the display width.
-     *
-     * @return list<float>
-     */
-    private function normalizeData(int $width): array
-    {
-        $dataCount = count($this->data);
-
-        if ($dataCount === 0) {
-            return [];
-        }
-
-        if ($dataCount === $width) {
-            return $this->data;
-        }
-
-        if ($dataCount < $width) {
-            // Upscale: interpolate between points
-            $result = [];
-            for ($i = 0; $i < $width; $i++) {
-                $pos = ($i / ($width - 1)) * ($dataCount - 1);
-                $index = (int) floor($pos);
-                $fraction = $pos - $index;
-
-                if ($index >= $dataCount - 1) {
-                    $result[] = $this->data[$dataCount - 1];
-                } else {
-                    $v1 = $this->data[$index];
-                    $v2 = $this->data[$index + 1];
-                    $result[] = $v1 + ($v2 - $v1) * $fraction;
-                }
-            }
-            return $result;
-        }
-
-        // Downscale: sample at regular intervals
-        $result = [];
-        $step = $dataCount / $width;
-        for ($i = 0; $i < $width; $i++) {
-            $index = (int) floor($i * $step);
-            if ($index >= $dataCount) {
-                $index = $dataCount - 1;
-            }
-            $result[] = $this->data[$index];
-        }
-        return $result;
     }
 
     /**
@@ -271,17 +224,6 @@ final class SparklineArea implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return $this->lineColor;
-    }
-
-    /**
-     * Get the width to use for the sparkline.
-     */
-    private function getWidth(): int
-    {
-        if ($this->width !== null && $this->width > 0) {
-            return $this->width;
-        }
-        return $this->widthConstraint ?? count($this->data);
     }
 
     /**

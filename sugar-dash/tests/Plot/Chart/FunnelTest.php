@@ -485,4 +485,54 @@ final class FunnelTest extends TestCase
 
         $this->assertNotSame('', $rendered);
     }
+
+    public function testFunnelBorderCharacterArmsThroughChartBorderStyle(): void
+    {
+$stages = [
+            new FunnelStage('Visitors', 10000.0),
+            new FunnelStage('Leads', 2500.0),
+        ];
+        $render = fn(string $style): string => Funnel::new($stages)->withStyle($style)->render();
+
+        $double = $render('double');
+        $this->assertStringContainsString('╔', $double);
+        $this->assertStringNotContainsString('╭', $double);
+        
+        $this->assertStringNotContainsString('┏', $double);
+
+        $bold = $render('bold');
+        $this->assertStringContainsString('┏', $bold);
+        $this->assertStringNotContainsString('╔', $bold);
+        $this->assertStringNotContainsString('╭', $bold);
+
+        $single = $render('single');
+        
+        $this->assertStringNotContainsString('╭', $single);
+        $this->assertStringNotContainsString('╔', $single);
+        $this->assertStringNotContainsString('┏', $single);
+
+        $rounded = $render('rounded');
+        $this->assertStringContainsString('╭', $rounded);
+        $this->assertStringNotContainsString('╔', $rounded);
+
+        $empty = $render('empty');
+        foreach (['╔', '╭',  '┏'] as $corner) {
+            $this->assertStringNotContainsString($corner, $empty, "empty style must not draw $corner");
+        }
+    }
+    public function testFunnelLabelBranchesThroughAxisLabelFormatter(): void
+    {
+        $format = new \ReflectionMethod(Funnel::class, 'formatYLabel');
+        $funnel = Funnel::new();
+
+        $this->assertSame('2.5M', $format->invoke($funnel, 2500000.0));
+        $this->assertSame('-2.5M', $format->invoke($funnel, -2500000.0));
+        $this->assertSame('10.0K', $format->invoke($funnel, 10000.0));
+        $this->assertSame('-1.5K', $format->invoke($funnel, -1500.0));
+        $this->assertSame('999', $format->invoke($funnel, 999.0));
+        $this->assertSame('120.5', $format->invoke($funnel, 120.5));
+
+        $rendered = Funnel::new([new FunnelStage('Visitors', 10000.0)])->render();
+        $this->assertStringContainsString('10.0K', $rendered, 'the branch pins ride the live call site');
+    }
 }

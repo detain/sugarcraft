@@ -22,6 +22,8 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class HeatMapChart implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use HeatmapColorScale;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -92,21 +94,6 @@ final class HeatMapChart implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Normalize data to ensure all values are between 0 and 1.
-     *
-     * @param list<list<float>> $data
-     * @return list<list<float>>
-     */
-    private static function normalizeData(array $data): array
-    {
-        return array_map(function (array $row): array {
-            return array_map(function (float $value): float {
-                return max(0.0, min(1.0, $value));
-            }, $row);
-        }, $data);
-    }
-
-    /**
      * Set the allocated dimensions for this heatmap.
      */
     public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
@@ -115,39 +102,6 @@ final class HeatMapChart implements \SugarCraft\Dash\Foundation\Sizer
         $clone->width = $width;
         $clone->height = $height;
         return $clone;
-    }
-
-    /**
-     * Interpolate between two colors based on a ratio.
-     */
-    private function interpolateColor(float $ratio): ?Color
-    {
-        if ($this->lowColor === null && $this->highColor === null) {
-            return null;
-        }
-
-        if ($this->lowColor === null) {
-            return $this->highColor;
-        }
-
-        if ($this->highColor === null) {
-            return $this->lowColor;
-        }
-
-        // Simple linear interpolation between colors
-        $r1 = $this->lowColor->r;
-        $g1 = $this->lowColor->g;
-        $b1 = $this->lowColor->b;
-
-        $r2 = $this->highColor->r;
-        $g2 = $this->highColor->g;
-        $b2 = $this->highColor->b;
-
-        $r = (int) ($r1 + ($r2 - $r1) * $ratio);
-        $g = (int) ($g1 + ($g2 - $g1) * $ratio);
-        $b = (int) ($b1 + ($b2 - $b1) * $ratio);
-
-        return Color::rgb($r, $g, $b);
     }
 
     /**

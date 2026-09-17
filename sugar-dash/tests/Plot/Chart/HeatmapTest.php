@@ -342,4 +342,36 @@ final class HeatmapTest extends TestCase
 
         $this->assertNotSame('', $rendered);
     }
+
+    public function testHeatmapNormalizeDataArmsThroughTraitCopy(): void
+    {
+        $clamp = new \ReflectionMethod(Heatmap::class, 'normalizeData');
+        $this->assertSame(
+            [[1.0, 0.0], [0.5, 1.0]],
+            $clamp->invoke(null, [[1.5, -2.0], [0.5, 1.0]])
+        );
+        $this->assertSame([], $clamp->invoke(null, []));
+    }
+
+    public function testHeatmapInterpolateColorArmsThroughTraitCopy(): void
+    {
+        $ramp = new \ReflectionMethod(Heatmap::class, 'interpolateColor');
+        $chart = Heatmap::new([[0.5]])
+            ->withLowColor(Color::hex('#000000'))
+            ->withHighColor(Color::hex('#FFFFFF'));
+        $mid = $ramp->invoke($chart, 0.5);
+        $this->assertNotNull($mid);
+        $this->assertSame(127, $mid->r);
+        $this->assertSame(127, $mid->g);
+        $this->assertSame(127, $mid->b);
+        $this->assertSame(0, $ramp->invoke($chart, 0.0)->r);
+        $this->assertSame(255, $ramp->invoke($chart, 1.0)->r);
+
+        $low = Color::hex('#102030');
+        $onlyLow = Heatmap::new([[0.5]])->withLowColor($low)->withHighColor(null);
+        $this->assertSame($low, $ramp->invoke($onlyLow, 0.9));
+
+        $none = Heatmap::new([[0.5]])->withLowColor(null)->withHighColor(null);
+        $this->assertNull($ramp->invoke($none, 0.5));
+    }
 }

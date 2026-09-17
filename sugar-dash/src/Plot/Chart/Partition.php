@@ -23,6 +23,8 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Partition implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use ChartBorderStyle;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -498,23 +500,6 @@ final class Partition implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return $chars;
-    }
-
-    /**
-     * Get the style characters for the border.
-     *
-     * @return array{0:string, 1:string, 2:string, 3:string, 4:string, 5:string}
-     */
-    private function getStyleChars(): array
-    {
-        return match ($this->style) {
-            'double' => ['╔', '╗', '╚', '╝', '═', '║'],
-            'rounded' => ['╭', '╮', '╰', '╯', '─', '│'],
-            'single' => ['┌', '┐', '└', '┘', '─', '│'],
-            'bold' => ['┏', '┓', '┗', '┛', '━', '┃'],
-            'empty' => [' ', ' ', ' ', ' ', ' ', ' '],
-            default => ['╭', '╮', '╰', '╯', '─', '│'],
-        };
     }
 
     /**

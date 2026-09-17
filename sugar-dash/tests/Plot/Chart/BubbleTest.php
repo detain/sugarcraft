@@ -632,4 +632,23 @@ final class BubbleTest extends TestCase
         $this->assertNotSame('', $stripped);
         $this->assertSame(self::RENDER_PURITY_SHA1, sha1($stripped));
     }
+
+    public function testBubbleLabelBranchesThroughAxisLabelFormatter(): void
+    {
+        $format = new ReflectionMethod(Bubble::class, 'formatYLabel');
+        $chart = Bubble::new();
+
+        $this->assertSame('1.0M', $format->invoke($chart, 1000000.0));
+        $this->assertSame('1.0K', $format->invoke($chart, 1000.0));
+        $this->assertSame('-1.0K', $format->invoke($chart, -1000.0));
+        $this->assertSame('0', $format->invoke($chart, 0.0));
+        $this->assertSame('7', $format->invoke($chart, 7.0));
+        $this->assertSame('2.5', $format->invoke($chart, 2.5));
+
+        $rendered = Bubble::new([
+            new BubblePoint('a', 0.0, 0.5, 4.0),
+            new BubblePoint('b', 2.0, 2500000.0, 6.0),
+        ])->render();
+        $this->assertStringContainsString('2.5M', $rendered, 'the formatter rides the live y-axis labels');
+    }
 }

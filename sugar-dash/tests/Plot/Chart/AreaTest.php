@@ -501,6 +501,14 @@ final class AreaTest extends TestCase
         $this->assertSame('1.4M    ', substr($millions[5], 0, 8));
         $this->assertSame('0       ', substr($millions[11], 0, 8));
 
+        // K branch (%.1fK) — grid at 0..1000 labels its top row through the
+        // thousands leg of the shared formatter.
+        $thousands = explode("\n", $this->plainArea([
+            new AreaPoint('a', 0.0),
+            new AreaPoint('b', 1000.0),
+        ])->render());
+        $this->assertSame('1.0K    ', substr($thousands[0], 0, 8));
+
         // Decimal branch (%.1f)
         $tiny = explode("\n", $this->plainArea([
             new AreaPoint('a', 0.0),

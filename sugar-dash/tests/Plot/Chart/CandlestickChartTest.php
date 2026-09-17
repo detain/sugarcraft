@@ -186,4 +186,57 @@ final class CandlestickChartTest extends TestCase
         $rendered = $modified->render();
         $this->assertNotEmpty($rendered);
     }
+
+    public function testCandlestickBorderCharacterArmsThroughChartBorderStyle(): void
+    {
+$candles = [
+            Candlestick::bullish('Mon', 100.0, 110.0, 95.0, 108.0),
+            Candlestick::bearish('Tue', 108.0, 112.0, 101.0, 103.0),
+        ];
+        $render = fn(string $style): string => (new CandlestickChart())->withCandles($candles)->withStyle($style)->render();
+
+        $double = $render('double');
+        $this->assertStringContainsString('╔', $double);
+        $this->assertStringNotContainsString('╭', $double);
+                $this->assertStringNotContainsString('┌', $double);
+
+        $this->assertStringNotContainsString('┏', $double);
+
+        $bold = $render('bold');
+        $this->assertStringContainsString('┏', $bold);
+        $this->assertStringNotContainsString('╔', $bold);
+        $this->assertStringNotContainsString('╭', $bold);
+
+        $single = $render('single');
+                $this->assertStringContainsString('┌', $single);
+
+        $this->assertStringNotContainsString('╭', $single);
+        $this->assertStringNotContainsString('╔', $single);
+        $this->assertStringNotContainsString('┏', $single);
+
+        $rounded = $render('rounded');
+        $this->assertStringContainsString('╭', $rounded);
+        $this->assertStringNotContainsString('╔', $rounded);
+
+        $empty = $render('empty');
+        foreach (['╔', '╭', '┌',  '┏'] as $corner) {
+            $this->assertStringNotContainsString($corner, $empty, "empty style must not draw $corner");
+        }
+
+        $this->assertSame($rounded, $render('bogus'), 'unknown style falls through to rounded');
+    }
+    public function testCandlestickPriceToYArmsThroughPriceAxisProjection(): void
+    {
+        $chart = (new CandlestickChart())->withPriceRange(100.0, 200.0);
+        $project = new \ReflectionMethod(CandlestickChart::class, 'priceToY');
+
+        $this->assertSame(0, $project->invoke($chart, 100.0, 11));
+        $this->assertSame(10, $project->invoke($chart, 200.0, 11));
+        $this->assertSame(5, $project->invoke($chart, 150.0, 11));
+        $this->assertSame(3, $project->invoke($chart, 130.0, 11));
+
+        $flat = (new CandlestickChart())->withPriceRange(50.0, 50.0);
+        $this->assertSame(5, $project->invoke($flat, 50.0, 11), 'zero range centers on intval(height/2)');
+        $this->assertSame(5, $project->invoke($flat, 999.0, 11));
+    }
 }

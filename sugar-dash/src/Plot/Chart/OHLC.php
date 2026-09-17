@@ -25,6 +25,9 @@ use SugarCraft\Core\Util\Width;
  */
 final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
 {
+    use ChartBorderStyle;
+    use PriceAxisProjection;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -308,36 +311,6 @@ final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
         $result .= $bl . str_repeat($h, $useWidth - 2) . $br;
 
         return $result;
-    }
-
-    /**
-     * Convert a price to Y coordinate.
-     */
-    private function priceToY(float $price, int $height): int
-    {
-        $range = $this->maxPrice - $this->minPrice;
-        if ($range == 0) {
-            return intval($height / 2);
-        }
-        $normalized = ($price - $this->minPrice) / $range;
-        return intval($normalized * ($height - 1));
-    }
-
-    /**
-     * Get the style characters for the border.
-     *
-     * @return array{0:string, 1:string, 2:string, 3:string, 4:string, 5:string}
-     */
-    private function getStyleChars(): array
-    {
-        return match ($this->style) {
-            'double' => ['╔', '╗', '╚', '╝', '═', '║'],
-            'rounded' => ['╭', '╮', '╰', '╯', '─', '│'],
-            'single' => ['┌', '┐', '└', '┘', '─', '│'],
-            'bold' => ['┏', '┓', '┗', '┛', '━', '┃'],
-            'empty' => [' ', ' ', ' ', ' ', ' ', ' '],
-            default => ['╭', '╮', '╰', '╯', '─', '│'],
-        };
     }
 
     /**

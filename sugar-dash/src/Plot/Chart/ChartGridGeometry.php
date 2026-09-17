@@ -14,6 +14,11 @@ namespace SugarCraft\Dash\Plot\Chart;
  * classes final unless extension is contract) and share NO state — both
  * helpers are pure functions of their arguments.
  *
+ * The label formatter moved to its own AxisLabelFormatter trait in the
+ * round-85 follow-through (Bubble and Funnel turned out to carry the
+ * same copy); it is composed here so Chart and Area keep resolving
+ * formatYLabel through this trait exactly as before.
+ *
  * The sibling helpers named in the E731 survey are NOT here on purpose:
  * getChartWidth() diverges in its unallocated fallback (explicit width
  * constraint vs a data-count heuristic) and getChartHeight() is a
@@ -22,6 +27,8 @@ namespace SugarCraft\Dash\Plot\Chart;
  */
 trait ChartGridGeometry
 {
+    use AxisLabelFormatter;
+
     /**
      * Generate grid line values.
      *
@@ -37,22 +44,5 @@ trait ChartGridGeometry
         }
 
         return $lines;
-    }
-
-    /**
-     * Format a Y-axis label.
-     */
-    private function formatYLabel(float $value): string
-    {
-        if (abs($value) >= 1000000) {
-            return sprintf('%.1fM', $value / 1000000);
-        }
-        if (abs($value) >= 1000) {
-            return sprintf('%.1fK', $value / 1000);
-        }
-        if ($value === floor($value)) {
-            return sprintf('%.0f', $value);
-        }
-        return sprintf('%.1f', $value);
     }
 }

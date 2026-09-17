@@ -376,4 +376,42 @@ final class PartitionTest extends TestCase
         $rendered = $partition->render();
         $this->assertNotSame('', $rendered);
     }
+
+    public function testPartitionBorderCharacterArmsThroughChartBorderStyle(): void
+    {
+$root = new PartitionSegment('root', 'Root', 100.0);
+        $root->children[] = new PartitionSegment('a', 'Alpha', 60.0);
+        $root->children[] = new PartitionSegment('b', 'Beta', 40.0);
+        $render = fn(string $style): string => Partition::new()->withRoot($root)->withStyle($style)->render();
+
+        $double = $render('double');
+        $this->assertStringContainsString('╔', $double);
+        $this->assertStringNotContainsString('╭', $double);
+                $this->assertStringNotContainsString('┌', $double);
+
+        $this->assertStringNotContainsString('┏', $double);
+
+        $bold = $render('bold');
+        $this->assertStringContainsString('┏', $bold);
+        $this->assertStringNotContainsString('╔', $bold);
+        $this->assertStringNotContainsString('╭', $bold);
+
+        $single = $render('single');
+                $this->assertStringContainsString('┌', $single);
+
+        $this->assertStringNotContainsString('╭', $single);
+        $this->assertStringNotContainsString('╔', $single);
+        $this->assertStringNotContainsString('┏', $single);
+
+        $rounded = $render('rounded');
+        $this->assertStringContainsString('╭', $rounded);
+        $this->assertStringNotContainsString('╔', $rounded);
+
+        $empty = $render('empty');
+        foreach (['╔', '╭', '┌',  '┏'] as $corner) {
+            $this->assertStringNotContainsString($corner, $empty, "empty style must not draw $corner");
+        }
+
+        $this->assertSame($rounded, $render('bogus'), 'unknown style falls through to rounded');
+    }
 }
