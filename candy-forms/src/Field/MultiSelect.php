@@ -230,6 +230,13 @@ final class MultiSelect implements \SugarCraft\Forms\Field
      * Compute the min/max constraint error for a given selection count.
      * Used by both toggle() (for immediate user feedback) and revalidate()
      * (for submit-time / validateAll enforcement).
+     *
+     * Called on every Space keypress — E736 plan 3.4 asked whether the
+     * Lang::t() lookup merits caching. Measured ~1 µs per call (flat array
+     * lookup + strtr); the surrounding mutate()+view() pass costs orders of
+     * magnitude more, so no memo is kept: caching resolved strings per
+     * (min,max) pair would add an invalidation surface for no perceptible
+     * gain.
      */
     private function computeConstraintError(int $count): ?string
     {

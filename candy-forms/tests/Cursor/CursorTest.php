@@ -132,4 +132,54 @@ final class CursorTest extends TestCase
         [$c, ] = $c->update(new BlinkMsg($c->id));
         $this->assertTrue($c->isBlinked());
     }
+
+    public function testDistinctCursorsNeverShareAnId(): void
+    {
+        $ids = [];
+        for ($i = 0; $i < 50; $i++) {
+            $ids[] = Cursor::new('A')->id;
+        }
+        // Lineage ids are minted by a monotonic counter, so fresh cursors
+        // are pairwise distinct (the property BlinkMsg routing relies on).
+        $this->assertCount(50, array_unique($ids));
+    }
+
+    public function testIdIsStableAcrossEveryMutationSite(): void
+    {
+        [$c, ] = Cursor::new('A')->focus();
+        $origin = $c->id;
+        [$c, ] = $c->update(new BlinkMsg($c->id));
+        $c = $c->blur();
+        $c = $c->setChar('B');
+        $c = $c->setMode(Mode::Static);
+        $c = $c->withStyle(Style::new()->bold());
+        $c = $c->withTextStyle(Style::new()->faint());
+        $this->assertSame($origin, $c->id);
+        // And a re-focused snapshot still answers its own lineage's tick.
+        [$live, ] = $c->setMode(Mode::Blink)->focus();
+        $this->assertSame($origin, $live->id);
+        [$toggled, $cmd] = $live->update(new BlinkMsg($origin));
+        $this->assertNotNull($cmd);
+        $this->assertNotSame($live, $toggled);
+    }
+
+    public function testCloneRekeysToAFreshLineage(): void
+    {
+        $original = Cursor::new('A');
+        $clone = clone $original;
+        $this->assertNotSame($original->id, $clone->id);
+        // Cross-wired blinks are inert after re-keying: each lineage ignores
+        // the other's messages, and a clone is never a second owner of the
+        // original's pending tick.
+        [$same, $cmd] = $original->update(new BlinkMsg($clone->id));
+        $this->assertSame($original, $same);
+        $this->assertNull($cmd);
+        [, $cmd] = $clone->update(new BlinkMsg($original->id));
+        $this->assertNull($cmd);
+        // The clone is a live cursor in its own right.
+        [$focused, $blinkCmd] = $clone->focus();
+        $this->assertNotNull($blinkCmd);
+        [, $toggled] = $focused->update(new BlinkMsg($focused->id));
+        $this->assertNotNull($toggled);
+    }
 }

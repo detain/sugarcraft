@@ -117,6 +117,16 @@ with no behavioural divergence.
 - `sugarcraft/candy-core` — Elm-architecture TUI runtime
 - `sugarcraft/candy-sprinkles` — Declarative styling
 
+### Versioning
+
+Sibling `sugarcraft/*` requirements are pinned to `dev-master` and the
+manifest carries `minimum-stability: dev`. That is intentional while the
+monorepo pre-dates 1.0: every port moves together and published installs
+resolve siblings from Packagist `dev-master` (path repositories are
+injected by CI at build time, never committed). At the stable release the
+pins become proper `^1.0` constraints — track this in the release plan
+(E736 plan 7.4).
+
 ## Snapshot tests
 
 Render output is covered by golden-file snapshot tests. Fixture files live

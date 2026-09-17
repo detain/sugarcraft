@@ -23,6 +23,21 @@ use SugarCraft\Sprinkles\Style;
  */
 final class Cursor implements Model
 {
+    /**
+     * Process-wide lineage counter. An id identifies a cursor LINEAGE, not
+     * the latest immutable snapshot: every mutation site carries the id
+     * forward so blink ticks scheduled before a mutation still match after
+     * it (E736 plan 3.1 review).
+     *
+     * Why a counter and not spl_object_id() as the audit suggested: object
+     * handles are recycled by the engine once an object dies, and the
+     * lineage's first snapshot usually IS dead after the first mutation —
+     * a later Cursor::new() could inherit the recycled handle and share an
+     * id with a still-live lineage, cross-wiring their blink loops.
+     * Monotonic uniqueness among live lineages is the correctness property
+     * BlinkMsg routing depends on; the counter's growth is harmless (63-bit
+     * space, ids never persisted or sent on the wire).
+     */
     private static int $nextId = 0;
 
     public readonly int $id;
@@ -38,6 +53,20 @@ final class Cursor implements Model
         public readonly ?Style $textStyle = null,
     ) {
         $this->id = $id ?? ++self::$nextId;
+    }
+
+    /**
+     * A direct clone is a NEW lineage: without re-keying, the copy would
+     * share the original's id and a BlinkMsg aimed at either one would
+     * toggle both (clone-collision case, E736 plan 3.1). PHP 8.3 permits
+     * re-initialising a readonly property inside __clone() precisely for
+     * this situation. Note this does NOT fire for shallow field clones —
+     * cloning a field copies the cursor REFERENCE, preserving the lineage,
+     * which is the intended TEA semantics.
+     */
+    public function __clone(): void
+    {
+        $this->id = ++self::$nextId;
     }
 
     /** Construct a fresh instance with default state. */
@@ -137,7 +166,11 @@ final class Cursor implements Model
         return new self($this->char, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $this->style, $s);
     }
 
-    /** Stable per-instance ID. Mirror upstream Bubbles `ID()`. */
+    /**
+     * Stable per-lineage ID — identical across every immutable snapshot of
+     * one cursor; a direct clone re-keys to a fresh lineage. Mirror upstream
+     * Bubbles `ID()`.
+     */
     public function id(): int { return $this->id; }
 
     /** Current cursor mode. */

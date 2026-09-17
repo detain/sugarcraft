@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Util\RenderSafe;
+use SugarCraft\Forms\Util\ViewportPan;
 
 /**
  * Directory browser. Lists the entries under {@see $cwd}, lets the user
@@ -345,14 +346,7 @@ final class FilePicker implements Model
             return $this->mutate(cursor: 0, offset: 0);
         }
         $cursor = max(0, min($count - 1, $idx));
-        $offset = $this->offset;
-        if ($cursor < $offset) {
-            $offset = $cursor;
-        }
-        if ($this->height > 0 && $cursor >= $offset + $this->height) {
-            $offset = $cursor - $this->height + 1;
-        }
-        return $this->mutate(cursor: $cursor, offset: max(0, $offset));
+        return $this->mutate(cursor: $cursor, offset: ViewportPan::offsetFor($cursor, $this->offset, $this->height));
     }
 
     private function reclamp(): self

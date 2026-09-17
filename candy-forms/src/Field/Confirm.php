@@ -137,6 +137,18 @@ final class Confirm implements \SugarCraft\Forms\Field
         };
     }
 
+    /**
+     * Render the prompt with the affirm/deny pills, the selected one in
+     * reverse video.
+     *
+     * The highlight uses raw Ansi::sgr(REVERSE) rather than a Style
+     * (E736 plan 3.9, kept deliberately): upstream huh hardcodes reverse
+     * video for the Confirm pill — Confirm has no themeable style slots
+     * the way TextInput's Styles or Cursor's withStyle do — so migrating
+     * to Style would first have to invent that public API, a product
+     * decision beyond a correctness pass. Pill text stays behind
+     * RenderSafe::clean() so user-supplied labels cannot inject escapes.
+     */
     public function view(): string
     {
         $lines = [];

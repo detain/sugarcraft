@@ -13,6 +13,14 @@ namespace SugarCraft\Forms;
  * The closure is preserved across mutations because each Field's
  * `mutate()` (or per-class clone helper) carries the trait property
  * forward via the immutable-with-pattern.
+ *
+ * Why `clone` + direct write here instead of threading through mutate()
+ * (E736 plan 3.6): the concrete Field classes' `mutate()` signatures know
+ * only their own constructor state — trait slots deliberately stay outside
+ * that contract so mixing a trait in costs zero edits. The write lands on
+ * the fresh clone before it is returned, so no other reference can observe
+ * a half-mutated object; the pattern is the trait's one sanctioned
+ * direct-write and behaves exactly like a `with*()` copy.
  */
 trait HasHideFunc
 {

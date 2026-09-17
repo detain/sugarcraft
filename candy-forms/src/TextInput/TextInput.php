@@ -41,6 +41,16 @@ use SugarCraft\Sprinkles\Style;
 final class TextInput implements Model
 {
     /**
+     * Character count of {@see $value} as measured by mb_strlen (UTF-8
+     * codepoints — the same unit cursorPos uses), derived once in the
+     * constructor (E736 plan 8.5). Sound for the life of the instance:
+     * `value` is a promoted readonly property, every mutation path
+     * rebuilds through the constructor, and a shallow clone copies value
+     * and length together.
+     */
+    private readonly int $length;
+
+    /**
      * @param list<string>            $suggestions     full set of completion candidates
      * @param ?\Closure(string): ?string $validate    null = valid; non-null = error message
      */
@@ -77,7 +87,9 @@ final class TextInput implements Model
         public readonly ValidateOn $validateOn = ValidateOn::None,
         /** Regex pattern; only matching characters are accepted. */
         public readonly string $restrict = '',
-    ) {}
+    ) {
+        $this->length = mb_strlen($value, 'UTF-8');
+    }
 
     /**
      * Construct a fresh instance with default state.
@@ -708,6 +720,14 @@ final class TextInput implements Model
      * note in {@see setValue()} for why attach validates but an unchanged
      * programmatic write does not.
      *
+     * Interaction with {@see withValidateOn()} (E736 plan 3.8): on Blur or
+     * Submit the initial error is DEFERRED — attaching a validator never
+     * paints err() itself; the first blur/submit pass surfaces it. On
+     * None or Change the error is immediate on first attach. The timing
+     * is read at attach time, so set validateOn BEFORE withValidator()
+     * when deferral is wanted (attaching first with the None default has
+     * already evaluated the validator by then).
+     *
      * @param ?\Closure(string): ?string $fn  pass null to clear
      */
     public function withValidator(?\Closure $fn): self
@@ -837,9 +857,14 @@ final class TextInput implements Model
         return $s !== null ? $this->setValue($s) : $this;
     }
 
+    /**
+     * Buffer length in codepoints — O(1) via the constructor-derived
+     * cache; the public contract is unchanged from the old live
+     * `mb_strlen($this->value)` (E736 plan 8.5).
+     */
     public function length(): int
     {
-        return mb_strlen($this->value, 'UTF-8');
+        return $this->length;
     }
 
     // ---- internal mutations -------------------------------------------

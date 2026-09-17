@@ -786,6 +786,17 @@ final class TextArea implements Model
         );
     }
 
+    /**
+     * Render one physical line with the cursor cell spliced in.
+     *
+     * Cursor::view() renders exactly ONE cell (the char handed via
+     * setChar), so the before/after split around that cell is inherently
+     * the buffer renderer's job — moving it into Cursor would invert the
+     * layering (primitive learning about lines). The apparent "manual
+     * ANSI" is only line composition; the cell itself already delegates
+     * to the cursor primitive (E736 plan 3.10). Past the line end the
+     * cursor paints a space so an empty-line caret still shows.
+     */
     private function renderCursorLine(string $line): string
     {
         $lineLen = mb_strlen($line, 'UTF-8');

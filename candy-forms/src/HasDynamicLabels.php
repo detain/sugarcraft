@@ -19,6 +19,18 @@ use SugarCraft\Forms\Util\RenderSafe;
  *
  * The funcs are preserved across mutations via `clone $this` so a
  * field's `mutate()` helper doesn't need to thread them through.
+ *
+ * Two sanctioned patterns are deliberate here (E736 plan 3.6/8.7):
+ *
+ * - `clone` + direct write: like {@see HasHideFunc}, the concrete Field
+ *   `mutate()` signatures don't know trait slots; the write lands on the
+ *   fresh clone before anything else can observe it, so it behaves
+ *   exactly like a `with*()` copy.
+ * - `withTitleFunc()` and `withDescriptionFunc()` stay as separate named
+ *   setters rather than one `withLabelFunc(string $type, ...)` switch:
+ *   the two slots are structurally similar but semantically distinct, and
+ *   a type-string parameter would trade intention-revealing API for a
+ *   trivial shape dedup.
  */
 trait HasDynamicLabels
 {

@@ -226,11 +226,16 @@ final class VimKeyHandler
             return VimAction::EnterNormalMode;
         }
 
-        // Movement keys in visual-line mode
+        // Movement keys in visual-line mode. The port's action vocabulary
+        // is horizontal — VimAction has no CursorUp/CursorDown — and the
+        // consumers interpret Left/Right as previous/next entry (ItemList
+        // semantics). The old "up/down one line" comments named actions
+        // that do not exist in this enum; behaviour is unchanged here,
+        // only the description was false (E736 plan 3.2).
         if (!$ctrl) {
             return match ($keyLower) {
-                'j' => VimAction::CursorLeft,   // down one line
-                'k' => VimAction::CursorRight,  // up one line
+                'j' => VimAction::CursorLeft,   // previous entry
+                'k' => VimAction::CursorRight,  // next entry
                 '0' => VimAction::CursorLineStart,
                 '$' => VimAction::CursorLineEnd,
                 default => VimAction::NoOp,

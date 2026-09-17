@@ -30,6 +30,15 @@ final class Entry
     /**
      * Suggest a single-character icon for this entry — directory,
      * common file-type extensions, or a generic file glyph.
+     *
+     * Compatibility note (E736 plan 7.3): every glyph here is a
+     * non-BMP / emoji-block codepoint (e.g. 📁 U+1F4C1). Rendering
+     * requires a terminal font with emoji coverage, and most emulators
+     * report these cells as DOUBLE-width, so icon columns should budget
+     * two cells. Terminals without the font show blanks or tofu boxes.
+     * An ASCII fallback option ([D]/[F]) was considered and deferred:
+     * it changes the picker's public surface and visual contract, so it
+     * needs its own design pass rather than an audit fix.
      */
     public function icon(): string
     {

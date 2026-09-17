@@ -28,6 +28,17 @@ use SugarCraft\Layout\Region;
 final class Form implements Model
 {
     /**
+     * Lazy memo of {@see values()} (E736 plan 3.3). Sound because every
+     * Form snapshot is immutable — all state changes flow through
+     * mutate(), which builds a fresh instance with a fresh (empty) memo.
+     * The hide predicates it walks are contractually pure over the
+     * accumulated values, so re-deriving could only repeat work.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $valuesMemo = null;
+
+    /**
      * @param list<Group>     $groups
      * @param array<int,list<Field>> $fieldsByGroup  cached for re-render
      */
@@ -494,6 +505,9 @@ final class Form implements Model
      */
     public function values(): array
     {
+        if ($this->valuesMemo !== null) {
+            return $this->valuesMemo;
+        }
         $out = [];
         $accumulated = [];
         foreach ($this->groups as $i => $group) {
@@ -508,7 +522,7 @@ final class Form implements Model
                 $accumulated[$f->key()] = $f->value();
             }
         }
-        return $out;
+        return $this->valuesMemo = $out;
     }
 
     /**

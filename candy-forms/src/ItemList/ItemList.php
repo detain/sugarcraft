@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Util\RenderSafe;
+use SugarCraft\Forms\Util\ViewportPan;
 
 /**
  * Selectable, scrollable, filterable list of {@see Item}s.
@@ -507,14 +508,7 @@ final class ItemList implements Model
         } else {
             $cursor = max(0, min($count - 1, $idx));
         }
-        $offset = $this->offset;
-        if ($cursor < $offset) {
-            $offset = $cursor;
-        }
-        if ($this->height > 0 && $cursor >= $offset + $this->height) {
-            $offset = $cursor - $this->height + 1;
-        }
-        return $this->mutate(cursor: $cursor, offset: max(0, $offset));
+        return $this->mutate(cursor: $cursor, offset: ViewportPan::offsetFor($cursor, $this->offset, $this->height));
     }
 
     private function reclamp(): self

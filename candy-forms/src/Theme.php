@@ -180,6 +180,12 @@ final class Theme
     /**
      * Returns a list of all available theme names.
      *
+     * Hand-maintained by design (E736 plan 3.5): themes are frozen value
+     * objects and the catalog is a contract with callers, not a registry.
+     * Adding a theme means writing its static factory AND appending its
+     * name here — reflection over `self::` methods was rejected because a
+     * stray public static method would silently join the catalog.
+     *
      * @return list<string>
      */
     public static function catalog(): array
