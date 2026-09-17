@@ -14250,6 +14250,19 @@ re-running the blanket pass changes 0 sites and leaves the file's md5 unchanged.
 
 **Nothing merged yet. The merged floor has not been measured.**
 
+## ROUND 89 (2026-09-17) — WAVE-1 RE-CUT WELD: the four r88 phantom scopes all landed clean — E742 + E743 CLOSED, forms cluster-A + shine 7.1/7.3 BUILT; ZERO sugar-crush files — floor 12,027 EXACT-carry 6th round; census 4 → 2 (E736 renoted naming shine 7.2 + E744)
+
+Four lanes, 20 picks, four rv-APPROVE verdicts (0C/0M each), zero cherry-pick conflicts, zero sugar-crush files moved — the commit-EARLY law (adopted after the r88 fabrication storm) is vindicated: every lane shipped incremental commits (y4 even landed a `WIP-3`), so nothing phantom'd this round.
+
+| lane | scope | lane tips | picks | review |
+|---|---|---|---|---|
+| y1 | E742 canonical xterm palette (ruling m0519 = correct-to-xterm) | `f7d35a60a` | `9bc98d6b8` | APPROVE 0C/0M |
+| y2 | E743 computeBarLayout single-site + capture proof + layout docblock | `8a408f088` `c967b5ce7` `ae2ed208f` | `2fc904421` `e20ab706b` `8058799b4` | APPROVE 0C/0M |
+| y3 | E736 forms cluster-A 9 rows + plan corrections + prompt AsyncValidatable re-export | `7802fc4f3`…`89ea14da3` | `f8ceefad3` `ba62ac88a` `e0394c223` `1c384241c` `3720d1cd9` `b3b5c3dc5` `fafe04ea7` `d4a55399a` `ef8b7db66` `0dd6fb147` `02a1b3b4d` `8ac653b5a` | APPROVE 0C/0M |
+| y4 | E736 shine 7.1+7.3 (r86 decline revoked; x7 salvage-patch consumed; promised pins paid) | `8243fd391` `1eae22fc7` `8c842fac9` `9930a36d2` | `85a0a7e29` `9354aee92` `ad5c969eb` `06f658684` | APPROVE 0C/0M |
+
+Suites at the weld: vt **949/12,773** (render-dump VALUE flip — 12 theme rows, new baseline `6f9dc048b4cbc2e321a18698e1069b7c`, intended per ruling), bits **519/1,097**, layout 157/882 (comment-only), forms **2,182/3,945 ×2 byte-identical**, shine **573/1,075 ×2**, prompt 158/**314**/2S, glow 122/313, shell 334/694, query 1,483/4,203, vcr 948/4,082/14S, pty 663/1,862/17S, stickers 221/476. crush windows: `Form|Input|Select|Cursor` 633/3,943, `Vt|Terminal|Buffer` 305/21,034, `Shine|Glamour|Style` 24/813 (the RESUME's 921/59,234 era-figure was STALE — corrected at this weld), five-guard 125/7,362, DocFigure 83/2,685. FULL serial 12,027T/170,514A/0F/0E/1S exit0 — tests EXACT (zero crush files; doctrine: no figure hand-edit), assertions +92 over the pinned 170,422 reading = live-derivation tree-scan recount family (the r88-era band estimate was ±50; the guard re-derivation itself is green, so README/suite-figure.json stay as pinned and the green-serial figure stands as the weld reading). child-lifetimes + path-repos rc=0; config md5 `d96e124e…231ad` stable; durations 532 HELD. Fabrication-storm lessons cited in backlog §E742/§E743 stamps (both r88 phantom scopes now genuinely land; weld re-derives from disk, briefs carry no pre-baked SHAs).
+
 ## ROUND 88 — the forms Ph5 build-out welded through the campaign's worst fabrication storm (4 of 7 lanes phantom'd)
 
 Operator directed round 88 (overriding the r87 "mechanically complete" hold): a 7-lane cut —
