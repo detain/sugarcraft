@@ -9,6 +9,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field;
+use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\Lang;
@@ -26,6 +27,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use CarriesNonCtorState;
 
     /**
      * @param list<string>      $options
@@ -265,7 +267,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         ?string $error = null,
         bool $touchError = false,
     ): self {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:         $this->key,
             options:     $options     ?? $this->options,
             selected:    $selected    ?? $this->selected,
@@ -276,6 +278,6 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             min:         $min         ?? $this->min,
             max:         $max         ?? $this->max,
             error:       $touchError ? $error : $this->error,
-        );
+        ));
     }
 }

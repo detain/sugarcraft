@@ -17,6 +17,7 @@ use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Forms\Field;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\ItemList\ItemList;
@@ -30,6 +31,7 @@ final class Select implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use CarriesNonCtorState;
 
     /** @var list<string> */
     private array $fuzzyCandidates = [];
@@ -134,7 +136,7 @@ final class Select implements \SugarCraft\Forms\Field
      */
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             list:                      $this->list,
             title:                     $this->title,
@@ -145,7 +147,7 @@ final class Select implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
-        );
+        ));
     }
 
     /**
@@ -212,7 +214,7 @@ final class Select implements \SugarCraft\Forms\Field
      */
     public function withPendingAsyncCancellation(CancellationSource $cancellationSource): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             list:                      $this->list,
             title:                     $this->title,
@@ -223,7 +225,7 @@ final class Select implements \SugarCraft\Forms\Field
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncCancellation:  $cancellationSource,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
-        );
+        ));
     }
 
     public function key(): string  { return $this->key; }
@@ -422,7 +424,7 @@ final class Select implements \SugarCraft\Forms\Field
 
     private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null, ?string $enumClass = null, ?array $fuzzyCandidates = null, bool $fuzzyCandidatesSet = false): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             list:                      $list        ?? $this->list,
             title:                     $title       ?? $this->title,
@@ -434,6 +436,6 @@ final class Select implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
             enumClass:                 $enumClass  ?? $this->enumClass,
-        );
+        ));
     }
 }

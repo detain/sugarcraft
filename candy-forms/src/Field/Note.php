@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field;
+use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\Util\RenderSafe;
@@ -23,6 +24,7 @@ final class Note implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use CarriesNonCtorState;
 
     public function __construct(
         public readonly string $key,
@@ -39,8 +41,8 @@ final class Note implements \SugarCraft\Forms\Field
         return new self($key);
     }
 
-    public function withTitle(string $t): self       { return new self($this->key, $t, $this->description, $this->height, $this->next, $this->nextLabel, $this->focused); }
-    public function withDescription(string $d): self { return new self($this->key, $this->title, $d, $this->height, $this->next, $this->nextLabel, $this->focused); }
+    public function withTitle(string $t): self       { return $this->carryNonCtorState(new self($this->key, $t, $this->description, $this->height, $this->next, $this->nextLabel, $this->focused)); }
+    public function withDescription(string $d): self { return $this->carryNonCtorState(new self($this->key, $this->title, $d, $this->height, $this->next, $this->nextLabel, $this->focused)); }
 
     /**
      * Pin the rendered note to a fixed row count. Padding-only — short
@@ -50,7 +52,7 @@ final class Note implements \SugarCraft\Forms\Field
      */
     public function withHeight(int $rows): self
     {
-        return new self($this->key, $this->title, $this->description, max(0, $rows), $this->next, $this->nextLabel, $this->focused);
+        return $this->carryNonCtorState(new self($this->key, $this->title, $this->description, max(0, $rows), $this->next, $this->nextLabel, $this->focused));
     }
 
     /**
@@ -61,7 +63,7 @@ final class Note implements \SugarCraft\Forms\Field
      */
     public function withNext(bool $on = true): self
     {
-        return new self($this->key, $this->title, $this->description, $this->height, $on, $this->nextLabel, $this->focused);
+        return $this->carryNonCtorState(new self($this->key, $this->title, $this->description, $this->height, $on, $this->nextLabel, $this->focused));
     }
 
     /**
@@ -70,7 +72,7 @@ final class Note implements \SugarCraft\Forms\Field
      */
     public function withNextLabel(string $label): self
     {
-        return new self($this->key, $this->title, $this->description, $this->height, $this->next, $label, $this->focused);
+        return $this->carryNonCtorState(new self($this->key, $this->title, $this->description, $this->height, $this->next, $label, $this->focused));
     }
 
     // Short-form aliases.
@@ -89,8 +91,8 @@ final class Note implements \SugarCraft\Forms\Field
 
     public function key(): string         { return $this->key; }
     public function value(): mixed        { return null; }
-    public function focus(): array        { return [new self($this->key, $this->title, $this->description, $this->height, $this->next, $this->nextLabel, true), null]; }
-    public function blur(): Field         { return new self($this->key, $this->title, $this->description, $this->height, $this->next, $this->nextLabel, false); }
+    public function focus(): array        { $next = new self($this->key, $this->title, $this->description, $this->height, $this->next, $this->nextLabel, true); return [$this->carryNonCtorState($next), null]; }
+    public function blur(): Field         { return $this->carryNonCtorState(new self($this->key, $this->title, $this->description, $this->height, $this->next, $this->nextLabel, false)); }
     public function update(Msg $msg): array { return [$this, null]; }
 
     public function view(): string

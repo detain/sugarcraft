@@ -14,6 +14,7 @@ use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\Fuzzy\FuzzyMatcher;
+use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\TextInput\TextInput;
@@ -29,6 +30,7 @@ final class Input implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use CarriesNonCtorState;
 
     /**
      * @var list<\Closure(string):?string>
@@ -151,7 +153,7 @@ final class Input implements \SugarCraft\Forms\Field
      */
     public function withPendingAsyncCancellation(CancellationSource $cancellationSource): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
@@ -166,7 +168,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $cancellationSource,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
-        );
+        ));
     }
 
     /**
@@ -211,7 +213,7 @@ final class Input implements \SugarCraft\Forms\Field
      */
     public function withSuggestionsFunc(\Closure $fn): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
@@ -226,7 +228,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
-        );
+        ));
     }
 
     /**
@@ -250,7 +252,7 @@ final class Input implements \SugarCraft\Forms\Field
             return array_column($scored, 0);
         };
 
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
@@ -265,7 +267,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
-        );
+        ));
     }
 
     /**
@@ -289,7 +291,7 @@ final class Input implements \SugarCraft\Forms\Field
      */
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
@@ -304,7 +306,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $workerPool,
             validateOn:                $this->validateOn,
-        );
+        ));
     }
 
     /**
@@ -334,7 +336,7 @@ final class Input implements \SugarCraft\Forms\Field
         }
 
         $chained = $this->buildChainedValidator($fn);
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
@@ -349,7 +351,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
-        );
+        ));
     }
 
     /**
@@ -370,7 +372,7 @@ final class Input implements \SugarCraft\Forms\Field
      */
     public function withValidateOn(ValidateOn $timing): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $this->input,
             title:                     $this->title,
@@ -385,7 +387,7 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $timing,
-        );
+        ));
     }
 
     /**
@@ -594,7 +596,7 @@ final class Input implements \SugarCraft\Forms\Field
                 if ($err === $this->error) {
                     return $this;
                 }
-                return new self(
+                return $this->carryNonCtorState(new self(
                     key:                       $this->key,
                     input:                     $this->input,
                     title:                     $this->title,
@@ -609,11 +611,11 @@ final class Input implements \SugarCraft\Forms\Field
                     pendingAsyncCancellation:  $this->pendingAsyncCancellation,
                     workerPool:                $this->workerPool,
                     validateOn:                $this->validateOn,
-                );
+                ));
             }
         }
         if ($this->error !== null) {
-            return new self(
+            return $this->carryNonCtorState(new self(
                 key:                       $this->key,
                 input:                     $this->input,
                 title:                     $this->title,
@@ -628,14 +630,14 @@ final class Input implements \SugarCraft\Forms\Field
                 pendingAsyncCancellation:  $this->pendingAsyncCancellation,
                 workerPool:                $this->workerPool,
                 validateOn:                $this->validateOn,
-            );
+            ));
         }
         return $this;
     }
 
     private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null, bool $errorSet = false): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:                       $this->key,
             input:                     $input       ?? $this->input,
             title:                     $title       ?? $this->title,
@@ -650,6 +652,6 @@ final class Input implements \SugarCraft\Forms\Field
             pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
             validateOn:                $this->validateOn,
-        );
+        ));
     }
 }

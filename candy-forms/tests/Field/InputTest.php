@@ -152,4 +152,77 @@ final class InputTest extends TestCase
         $f = Input::new('k')->withValue('seed')->withValue('');
         $this->assertSame('', $f->value());
     }
+
+    /**
+     * E741 keystone (mirrors E736 1.7 ConfirmTest:143 recipe shape): the
+     * validator chain must keep re-firing across the error-set and
+     * error-clear rebuilds — validate() returns fresh `new self(...)`
+     * instances on both branches, and every such path now funnels through
+     * carryNonCtorState(). (mutation: drop the carrier in Input.php → this
+     * and the trait-closure pins below go red.)
+     */
+    public function testValidatorSurvivesErrorRecomputeRoundTrip(): void
+    {
+        $f = Input::new('email')->withValidator(
+            static fn(string $v): ?string => str_contains($v, '@') ? null : 'must contain @',
+        );
+        [$f, ] = $f->focus();
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('must contain @', $f->getError());
+
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, '@'));
+        $this->assertNull($f->getError(), 'validating clears the error');
+
+        [$f, ] = $f->update(new KeyMsg(KeyType::Backspace));
+        $this->assertSame(
+            'must contain @',
+            $f->getError(),
+            'the validator must still exist after both error recomputes',
+        );
+    }
+
+    /**
+     * E741: withValidator() rebuilt via `new self(...)` and silently dropped
+     * the HasHideFunc / HasDynamicLabels closures (the ctor never touches
+     * them). The trait slots must survive the attach.
+     */
+    public function testWithValidatorPreservesTraitClosures(): void
+    {
+        $f = Input::new('k')
+            ->withTitleFunc(static fn (): string => 'DYN')
+            ->withDescriptionFunc(static fn (): string => 'DSCF')
+            ->withHideFunc(static fn (array $v): bool => true)
+            ->withValidator(static fn (string $v): ?string => null);
+
+        $this->assertSame('DYN', $f->getTitle());
+        $this->assertSame('DSCF', $f->getDescription());
+        $this->assertTrue($f->isHidden([]));
+    }
+
+    /**
+     * E741: focus/blur/keystroke/validate all rebuild through mutate() or
+     * new self() — none of them may drop the dynamic-label or hide closures.
+     * This was user-visible before the fix: a withTitleFunc'd field lost its
+     * dynamic title on the very first focus.
+     */
+    public function testTraitClosuresSurviveFocusBlurAndUpdate(): void
+    {
+        $f = Input::new('k')
+            ->withTitleFunc(static fn (): string => 'DYN')
+            ->withDescriptionFunc(static fn (): string => 'DSCF')
+            ->withHideFunc(static fn (array $v): bool => true)
+            ->withValidator(static fn (string $v): ?string => $v === '' ? 'req' : null);
+
+        [$f, ] = $f->focus();
+        $f = $f->blur();
+        [$f, ] = $f->withValue('a')->focus();
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'b'));
+        [$f, ] = $f->update(new KeyMsg(KeyType::Backspace));
+        [$f, ] = $f->update(new KeyMsg(KeyType::Backspace)); // empties → error path
+
+        $this->assertSame('DYN', $f->getTitle());
+        $this->assertSame('DSCF', $f->getDescription());
+        $this->assertTrue($f->isHidden([]));
+        $this->assertSame('req', $f->getError(), 'validator rode the same rebuilds');
+    }
 }

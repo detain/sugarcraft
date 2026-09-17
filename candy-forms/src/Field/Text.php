@@ -6,6 +6,7 @@ namespace SugarCraft\Forms\Field;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\Field;
+use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -21,6 +22,7 @@ final class Text implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use CarriesNonCtorState;
 
     /** @var (\Closure(string):?string)|null */
     private $validator;
@@ -66,7 +68,7 @@ final class Text implements \SugarCraft\Forms\Field
     /** @param \Closure(string):?string $fn */
     public function withValidator(\Closure $fn): self
     {
-        return new self($this->key, $this->area, $this->title, $this->description, $this->error, $fn, $this->validateOn);
+        return $this->carryNonCtorState(new self($this->key, $this->area, $this->title, $this->description, $this->error, $fn, $this->validateOn));
     }
 
     /**
@@ -77,7 +79,7 @@ final class Text implements \SugarCraft\Forms\Field
      */
     public function withValidateOn(ValidateOn $timing): self
     {
-        return new self($this->key, $this->area, $this->title, $this->description, $this->error, $this->validator, $timing);
+        return $this->carryNonCtorState(new self($this->key, $this->area, $this->title, $this->description, $this->error, $this->validator, $timing));
     }
 
     /**
@@ -176,12 +178,12 @@ final class Text implements \SugarCraft\Forms\Field
         if ($err === $this->error) {
             return $this;
         }
-        return new self($this->key, $this->area, $this->title, $this->description, $err, $this->validator, $this->validateOn);
+        return $this->carryNonCtorState(new self($this->key, $this->area, $this->title, $this->description, $err, $this->validator, $this->validateOn));
     }
 
     private function mutate(?TextArea $area = null, ?string $title = null, ?string $description = null): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:         $this->key,
             area:        $area        ?? $this->area,
             title:       $title       ?? $this->title,
@@ -189,6 +191,6 @@ final class Text implements \SugarCraft\Forms\Field
             error:       $this->error,
             validator:   $this->validator,
             validateOn:  $this->validateOn,
-        );
+        ));
     }
 }

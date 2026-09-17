@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\FilePicker\FilePicker as PickerWidget;
+use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 
@@ -22,6 +23,7 @@ final class FilePicker implements \SugarCraft\Forms\Field
 {
     use HasHideFunc;
     use HasDynamicLabels;
+    use CarriesNonCtorState;
 
     private function __construct(
         public readonly string $key,
@@ -116,11 +118,11 @@ final class FilePicker implements \SugarCraft\Forms\Field
 
     private function mutate(?PickerWidget $picker = null, ?string $title = null, ?string $description = null): self
     {
-        return new self(
+        return $this->carryNonCtorState(new self(
             key:         $this->key,
             picker:      $picker      ?? $this->picker,
             title:       $title       ?? $this->title,
             description: $description ?? $this->description,
-        );
+        ));
     }
 }
