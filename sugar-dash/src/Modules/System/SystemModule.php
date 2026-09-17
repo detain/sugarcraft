@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Modules\System;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
+use SugarCraft\Dash\Module\ProcAvailability;
 
 /**
  * System module that displays CPU, memory, and uptime statistics.
@@ -25,9 +26,12 @@ final class SystemModule extends BaseModule
     /** @var array<int> */
     private array $memHistory = [];
 
+    // Percentages carry ProcAvailability::UNMEASURED (-1.0) once a /proc door
+    // has proven itself unreadable (COMP-2 option b); the 0.0 initial value is
+    // the pre-first-tick placeholder on EVERY platform and stays as-is.
     private float $cpuLoad = 0.0;
     private float $memLoad = 0.0;
-    private float $gpuLoad = -1.0;
+    private float $gpuLoad = -1.0; // -1.0 = "no GPU present" (hides the row)
     private string $uptime = 'unknown';
 
     public function name(): string
@@ -58,17 +62,13 @@ final class SystemModule extends BaseModule
         $gpu = $this->gpuLoad;
         $uptime = $this->uptime;
 
-        $cpuBar = $this->renderBar($cpu, 70);
-        $memBar = $this->renderBar($mem, 70);
+        $lines = $this->renderLoadRow('CPU', $cpu) . "\n" . $this->renderLoadRow('MEM', $mem);
 
-        $lines = sprintf("CPU %3.0f%% %s\nMEM %3.0f%% %s",
-            $cpu, $cpuBar,
-            $mem, $memBar
-        );
-
-        if ($gpu >= 0) {
-            $gpuBar = $this->renderBar($gpu, 70);
-            $lines .= sprintf("\nGPU %3.0f%% %s", $gpu, $gpuBar);
+        // GPU keeps the older COMP-2 stance the class invented: an absent GPU
+        // (-1.0) HIDES the row entirely; CPU/MEM render the visible 'n/a'
+        // sentinel instead (E731 option (b) adoption ruling).
+        if ($gpu >= 0.0) {
+            $lines .= "\n" . $this->renderLoadRow('GPU', $gpu);
         }
 
         $lines .= sprintf("\nUPTIME %s", $uptime);
@@ -101,8 +101,14 @@ final class SystemModule extends BaseModule
         // Accumulate history without mutating $this
         $cpuHistory = $this->cpuHistory;
         $memHistory = $this->memHistory;
-        $cpuHistory[] = (int) $cpuLoad;
-        $memHistory[] = (int) $memLoad;
+        // COMP-2 (E731 option b): history must not accumulate unmeasured
+        // samples — a sentinel entry would poison trend data with fake idle.
+        if ($cpuLoad >= 0.0) {
+            $cpuHistory[] = (int) $cpuLoad;
+        }
+        if ($memLoad >= 0.0) {
+            $memHistory[] = (int) $memLoad;
+        }
         if (count($cpuHistory) > self::HISTORY_SIZE) {
             array_shift($cpuHistory);
         }
@@ -139,8 +145,15 @@ final class SystemModule extends BaseModule
         $this->gpuLoad = $this->readGpuLoad();
         $this->uptime = $this->readUptime();
 
-        $this->cpuHistory[] = (int) $this->cpuLoad;
-        $this->memHistory[] = (int) $this->memLoad;
+        // Dormant orphan (zero callers; removal STOP-listed per E731 record) —
+        // mirrors the withSystemState no-accumulate law so any revival inherits
+        // the correct sentinel shape.
+        if ($this->cpuLoad >= 0.0) {
+            $this->cpuHistory[] = (int) $this->cpuLoad;
+        }
+        if ($this->memLoad >= 0.0) {
+            $this->memHistory[] = (int) $this->memLoad;
+        }
         if (count($this->cpuHistory) > self::HISTORY_SIZE) {
             array_shift($this->cpuHistory);
         }
@@ -154,20 +167,25 @@ final class SystemModule extends BaseModule
         static $lastIdle = null;
         static $lastTotal = null;
 
-        // COMP-2 door-probe (E731): /proc is Linux-only — probe before reading so
-        // non-Linux hosts never enter the error path; the @ + ===false below stays
-        // as the probe→read race net (r83 s2 idiom). Degraded value unchanged.
-        if (!is_readable('/proc/stat')) {
-            return 0.0;
+        // COMP-2 door-probe (E731 option b): /proc is Linux-only — the door is
+        // probed once per process via ProcAvailability and the answer memoized;
+        // absence carries the UNMEASURED sentinel through the model so view()
+        // renders 'n/a' instead of a fabricated 0% bar. The @ + ===false race
+        // net (r83 s2 idiom) degrades the same way WITHOUT latching: a transient
+        // probe→read failure self-heals on the next tick.
+        if (!ProcAvailability::has('/proc/stat')) {
+            return ProcAvailability::UNMEASURED;
         }
 
         $stat = @file_get_contents('/proc/stat');
         if ($stat === false) {
-            return 0.0;
+            return ProcAvailability::UNMEASURED;
         }
 
         preg_match('/^cpu\s+(.*)$/m', $stat, $matches);
         if (!isset($matches[1])) {
+            // Malformed proc content is not "absent" — keep the historical 0.0
+            // answer for a parse miss (only the doors gained the sentinel).
             return 0.0;
         }
 
@@ -206,14 +224,15 @@ final class SystemModule extends BaseModule
 
     private function readMemLoad(): float
     {
-        // COMP-2 door-probe (E731) — see readCpuLoad(); degraded value unchanged.
-        if (!is_readable('/proc/meminfo')) {
-            return 0.0;
+        // COMP-2 door-probe (E731 option b) — see readCpuLoad() for the
+        // probe-once/sentinel/race-net posture.
+        if (!ProcAvailability::has('/proc/meminfo')) {
+            return ProcAvailability::UNMEASURED;
         }
 
         $meminfo = @file_get_contents('/proc/meminfo');
         if ($meminfo === false) {
-            return 0.0;
+            return ProcAvailability::UNMEASURED;
         }
 
         preg_match('/^MemTotal:\s+(\d+)/m', $meminfo, $totalMatches);
@@ -223,6 +242,8 @@ final class SystemModule extends BaseModule
         $available = (int) ($availMatches[1] ?? 0);
 
         if ($total === 0) {
+            // Parse miss on present-but-unexpected content — historical 0.0
+            // answer kept; only the availability legs carry the sentinel.
             return 0.0;
         }
 
@@ -261,14 +282,17 @@ final class SystemModule extends BaseModule
 
     private function readUptime(): string
     {
-        // COMP-2 door-probe (E731) — see readCpuLoad(); degraded value unchanged.
-        if (!is_readable('/proc/uptime')) {
-            return 'unknown';
+        // COMP-2 door-probe (E731 option b) — see readCpuLoad(); the degraded
+        // answer is now the shared visible 'n/a' sentinel (was 'unknown'). The
+        // pre-first-tick property default 'unknown' stays: "not yet sampled"
+        // and "never measurable here" are different facts.
+        if (!ProcAvailability::has('/proc/uptime')) {
+            return ProcAvailability::UNAVAILABLE_SENTINEL;
         }
 
         $uptimeData = @file_get_contents('/proc/uptime');
         if ($uptimeData === false) {
-            return 'unknown';
+            return ProcAvailability::UNAVAILABLE_SENTINEL;
         }
 
         $seconds = (float) trim(explode(' ', $uptimeData)[0]);
@@ -304,5 +328,20 @@ final class SystemModule extends BaseModule
         $empty = $width - $filled;
 
         return str_repeat('█', $filled) . str_repeat('░', $empty);
+    }
+
+    /**
+     * The pure COMP-2 render decision for one percentage row (E731 option b):
+     * a measured value renders "<LABEL> <pct>% <bar>" exactly as before; the
+     * UNMEASURED sentinel renders "<LABEL> n/a" — visible, honest, no fake
+     * zero-length bar. Same inputs always produce the same row (no I/O).
+     */
+    private function renderLoadRow(string $label, float $percent): string
+    {
+        if ($percent < 0.0) {
+            return $label . ' ' . ProcAvailability::UNAVAILABLE_SENTINEL;
+        }
+
+        return sprintf('%s %3.0f%% %s', $label, $percent, $this->renderBar($percent, 70));
     }
 }

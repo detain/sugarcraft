@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Modules\Uptime;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
+use SugarCraft\Dash\Module\ProcAvailability;
 
 /**
  * Uptime module that displays system uptime.
@@ -58,16 +59,19 @@ final class UptimeModule extends BaseModule
 
     private function readUptimeFromProc(): string
     {
-        // COMP-2 door-probe (E731): /proc is Linux-only — probe before reading so
-        // non-Linux hosts never enter the error path; @ + ===false stays as the
-        // probe→read race net (r83 s2 idiom). Degraded 'N/A' unchanged.
-        if (!is_readable('/proc/uptime')) {
-            return 'N/A';
+        // COMP-2 door-probe (E731 option b): the door is probed once per
+        // process via ProcAvailability; absence carries the visible 'n/a'
+        // sentinel (was 'N/A'). @ + ===false stays as the probe→read race net
+        // (r83 s2 idiom), degrading the same way without latching. The
+        // pre-first-tick property default 'N/A' stays: "not yet sampled" is a
+        // different fact from "never measurable here".
+        if (!ProcAvailability::has('/proc/uptime')) {
+            return ProcAvailability::UNAVAILABLE_SENTINEL;
         }
 
         $uptimeData = @file_get_contents('/proc/uptime');
         if ($uptimeData === false) {
-            return 'N/A';
+            return ProcAvailability::UNAVAILABLE_SENTINEL;
         }
 
         $seconds = (float) trim(explode(' ', $uptimeData)[0]);
