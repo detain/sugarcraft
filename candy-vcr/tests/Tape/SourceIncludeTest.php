@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Tape;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Tape\Compiler;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for Source directive depth/cycle guards and base-dir confinement.
@@ -29,7 +30,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($selfTape, "Type \"A\"\nSource self.tape\nType \"B\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($selfTape));
+            $result = Compiler::parseSource(Stream::read($selfTape));
             // Should not hang — cycle is detected and skipped
             $cassette = $this->compiler->compile($result['ast'], $selfTape);
 
@@ -57,7 +58,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/b.tape', "Type \"B\"\nSource a.tape\nType \"afterB\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/a.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/a.tape'));
             $cassette = $this->compiler->compile($result['ast'], $tmpDir . '/a.tape');
 
             $inputEvents = array_filter(
@@ -90,7 +91,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/level12.tape', "Type \"deep\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/level0.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/level0.tape'));
 
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('Source include depth exceeded');
@@ -115,7 +116,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource ../subdir/escape.tape\nType \"END\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/main.tape'));
             $cassette = $this->compiler->compile($result['ast'], $tmpDir . '/main.tape');
 
             $inputEvents = array_filter(
@@ -142,7 +143,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource ok.tape\nType \"END\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/main.tape'));
             $cassette = $this->compiler->compile($result['ast'], $tmpDir . '/main.tape');
 
             $inputEvents = array_filter(
@@ -167,7 +168,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource /etc/hostname\nType \"END\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/main.tape'));
             $cassette = $this->compiler->compile($result['ast'], $tmpDir . '/main.tape');
 
             $inputEvents = array_filter(
@@ -195,7 +196,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource {$rel}\nType \"END\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/main.tape'));
             $cassette = $this->compiler->compile($result['ast'], $tmpDir . '/main.tape');
 
             // Still skipped (no ESCAPED events) ...
@@ -224,7 +225,7 @@ final class SourceIncludeTest extends TestCase
         file_put_contents($tmpDir . '/main.tape', "Type \"START\"\nSource {$rel}\nType \"END\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/main.tape'));
 
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('escapes the tape directory');

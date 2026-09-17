@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel;
 
+use SugarCraft\Reel\Source\HttpHeaders;
 use SugarCraft\Reel\Source\Probe;
 use SugarCraft\Reel\Support\BoundedReaper;
+use SugarCraft\Reel\Support\FfmpegCommandBuilder;
 
 /**
  * Audio playback subprocess wrapper for video files.
@@ -41,13 +43,53 @@ class AudioPlayer
      *                            drop `-ss` and respawn from 0). Accepted as a
      *                            Closure because PHP forbids the `callable`
      *                            keyword as a property type.
+     * @param array<array-key, string> $headers HTTP request headers for a remote
+     *                            http(s) source — the same credentials the video
+     *                            decoder presents (findings #52: a signed stream
+     *                            used to play video with audio muted-by-401).
+     *                            Validated here, at the boundary, exactly as
+     *                            {@see \SugarCraft\Reel\Decode\FfmpegDecoder::open()}
+     *                            validates them, and dropped (with a log line) for
+     *                            a local path, where there is no request to ride on.
      */
     public function __construct(
         private readonly string $videoPath,
         private readonly ?int $startMs = null,
         private readonly ?\Closure $clock = null,
+        array $headers = [],
     ) {
         $this->seekMs = $startMs ?? 0;
+
+        // Assign once: `$headers` is readonly, so the local-source bail-out has to
+        // settle the value before the write rather than overwrite it afterwards.
+        $parsed = HttpHeaders::parse($headers);
+        if (!$parsed->isEmpty() && !FfmpegCommandBuilder::isNetworkSource($videoPath)) {
+            error_log(Lang::t('header.ignored_local_source.audio', [
+                'count' => count($parsed->pairs()),
+                'source' => self::redactCredentials($videoPath),
+            ]));
+            $parsed = HttpHeaders::none();
+        }
+        $this->headers = $parsed;
+    }
+
+    /**
+     * Strip the userinfo segment — everything from `scheme://` up to the LAST `@`
+     * before the first path separator — from a source before it is
+     * interpolated into a log line.
+     *
+     * WHY: `isNetworkSource()` only matches http(s), so an `rtsp` or `ftp` URL whose
+     * authority embeds credentials (a username/password pair before the host separator)
+     * takes the header-DROP branch — and the drop
+     * notice prints the source verbatim, password included, straight into error_log.
+     * Refusing to send credentials and then logging them is no refusal at all.
+     */
+    private static function redactCredentials(string $source): string
+    {
+        // Greedy within the authority (the class excludes `/`, so it cannot cross
+        // into the path): a non-conforming URL with several `@` signs masks ALL of
+        // the userinfo, not just the run before the first `@`.
+        return (string) preg_replace('#^(\w+://)[^/]*@#', '$1***@', $source);
     }
 
     /**
@@ -274,6 +316,11 @@ class AudioPlayer
      * Prefers ffplay (via Probe::ffplay()) over mpv.
      * Returns null when neither binary is available.
      *
+     * The argv shape (flags, order, `-ss`/`--start` formatting, and now the
+     * header passthrough) comes from {@see FfmpegCommandBuilder}, shared with the
+     * video decoder so one fix cannot land on one child and be forgotten on the
+     * other. Pinioned by `tests/Support/ArgvGoldenTest`.
+     *
      * @return list<string>|null Command array for proc_open(), or null
      */
     protected function buildCommand(): ?array
@@ -281,39 +328,17 @@ class AudioPlayer
         // Prefer ffplay.
         $ffplayPath = Probe::ffplay();
         if ($ffplayPath !== null) {
-            $cmd = [$ffplayPath, '-nodisp', '-autoexit'];
-            if ($this->seekMs > 0) {
-                $cmd[] = '-ss';
-                $cmd[] = self::secondsArg($this->seekMs);
-            }
-            $cmd[] = $this->videoPath;
-            return $cmd;
+            return FfmpegCommandBuilder::ffplayAudioCommand($ffplayPath, $this->videoPath, $this->seekMs, $this->headers);
         }
 
         // Fall back to mpv. --no-video keeps it audio-only (no window);
         // --really-quiet suppresses its status output on our discarded pipes.
         $mpvPath = Probe::mpv();
         if ($mpvPath !== null) {
-            $cmd = [$mpvPath, '--no-video', '--really-quiet'];
-            if ($this->seekMs > 0) {
-                $cmd[] = '--start=' . self::secondsArg($this->seekMs) . 's';
-            }
-            $cmd[] = $this->videoPath;
-            return $cmd;
+            return FfmpegCommandBuilder::mpvAudioCommand($mpvPath, $this->videoPath, $this->seekMs, $this->headers);
         }
 
         return null;
-    }
-
-    /**
-     * Milliseconds as a fixed `S.mmm` seconds string built from integer math.
-     * Deliberately not a float cast/sprintf %f: the explicit split is immune to
-     * float→string precision ini changes and would stay correct even in a
-     * hypothetical locale-comma formatter, and ffmpeg/mpv accept it verbatim.
-     */
-    private static function secondsArg(int $ms): string
-    {
-        return sprintf('%d.%03d', intdiv($ms, 1000), $ms % 1000);
     }
 
     /** @var resource|null */
@@ -332,6 +357,14 @@ class AudioPlayer
 
     /** Monotonic time the running subprocess started, or null when not playing. */
     private ?float $runningSince = null;
+
+    /**
+     * Validated request headers for a network source, empty otherwise — parsed
+     * once in the constructor so every (re)spawn presents them without re-checking
+     * (a pause/resume respawn that forgot the credentials would fail the signed
+     * stream's second request, exactly like the decoder rebuild did).
+     */
+    private readonly HttpHeaders $headers;
 
     /** Exit code from the last process termination, or null if still running. */
     private ?int $exitCode = null;

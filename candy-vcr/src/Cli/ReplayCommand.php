@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Cli;
 
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * `candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim=N]`
@@ -92,7 +93,7 @@ final class ReplayCommand implements Command
             // matches the original wallclock. Default replay (no flag)
             // uses `t` (compressed) which matches existing behaviour.
             $effectiveT = ($noTrim && isset($event->payload['tRaw']))
-                ? (float) $event->payload['tRaw']
+                ? Scalars::float($event->payload['tRaw'], 'replay tRaw timestamp')
                 : $event->t;
             if ($speed === 'realtime') {
                 $delta = $effectiveT - $previousT;
@@ -107,7 +108,7 @@ final class ReplayCommand implements Command
                 }
             }
             if ($event->kind === EventKind::Output) {
-                fwrite($stdout, (string) ($event->payload['b'] ?? ''));
+                fwrite($stdout, Scalars::string($event->payload['b'] ?? '', 'replay output bytes'));
             }
             $previousT = $effectiveT;
         }

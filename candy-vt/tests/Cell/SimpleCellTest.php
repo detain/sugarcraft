@@ -10,7 +10,11 @@ use SugarCraft\Vt\Cell;
 /**
  * Tests for {@see SugarCraft\Vt\Cell} (root-level, renderer path cell).
  *
- * This is distinct from SugarCraft\Vt\Cell\Cell which is the full Cell with SGR.
+ * `SugarCraft\Vt\Cell\Cell` (the historical emulator FQN exercised by
+ * {@see \SugarCraft\Vt\Tests\CellTest}) is now a `class_alias` to this same
+ * unified class, so both suites drive one implementation from two facets —
+ * the palette/attr renderer view here and the SGR/grapheme emulator view
+ * there. {@see \SugarCraft\Vt\Tests\CellAliasTest} pins the alias identity.
  */
 final class SimpleCellTest extends TestCase
 {

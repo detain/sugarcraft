@@ -21,6 +21,7 @@ final readonly class Event
     public function __construct(
         public float $t,
         public EventKind $kind,
+        /** @var array<string, mixed> string-keyed map, keys determined by kind. */
         public array $payload,
     ) {
         if ($t < 0.0) {

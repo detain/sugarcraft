@@ -53,20 +53,33 @@ final class VtParityTest extends TestCase
 
     /**
      * Representation limits — not tested for equality on either side:
-     *  - truecolor SGR 38;2 / 48;2 — both engines now CONSUME the triplet
-     *    cleanly, but the renderer pen has no RGB slot, so the stored
-     *    colour VALUE diverges (pinned below; asserted as a value-only gap
-     *    since candy-core emits truecolor at those profiles).
      *  - blink / dim / hidden SGR — the renderer cell has no such bits.
      *  - SGR 58/59 underline colour — both engines consume the
      *    specification without corrupting the pen, but neither pen STORES
      *    the colour (no slot in Sgr or the renderer Cell).
      *  - HT / CHT / CBT tab stops — renderer moves by $count, emulator
-     *    advances to stops.
+     *    advances to stops. ESC H (HTS) sets a stop the emulator keeps and
+     *    the renderer models no table for — see the HTS parity pin.
      *  - combining marks — attached into the char by the renderer, a
      *    dedicated field by the emulator.
+     *
+     * GRADUATED to agreement by the unified Cell + renderer ESC dispatch
+     * ({@see \SugarCraft\Vt\Parser\RendererHandler}) — no longer a gap:
+     *  - truecolor SGR 38;2 / 48;2 — the renderer now keeps an exact RGB slot
+     *    (Cell::$fgTruecolor/$bgTruecolor), matching the emulator value-for-
+     *    value ({@see testParityTruecolorAgreesOnBothPaths}).
+     *  - the DEC `ESC # 3`/`# 4`/`# 5`/`# 6` line renditions (DECDHL/DECSWL/
+     *    DECDWL) — both engines stamp the cursor line's cells with the same
+     *    Rendition and apply the DECDWL extra-column rule identically.
+     *  - ESC 7/8 (DECSC/DECRC), ESC D/E/M (IND/NEL/RI), ESC c (RIS) — once
+     *    dropped by candy-ansi's empty escDispatch, now routed to the renderer.
+     *    W8-F closed the surviving RIS tail: the renderer reset now restores
+     *    DECTCEM visibility (fresh power-on Cursor, like the emulator's
+     *    hardReset) and drops the REP memory, so post-RIS observables agree on
+     *    both engines ({@see testParityRisRestoresDectcemAndDropsRepMemory}).
      *  - REP (`CSI b`) — replays the last printable on the renderer path;
-     *    the emulator does not dispatch it at all.
+     *    the emulator does not dispatch it at all (until a RIS clears the
+     *    renderer's memory — then both print nothing; also pinned there).
      *  - BCE erases — the emulator fills ED/EL/ECH with the pen BACKGROUND
      *    (xterm BCE, w4-vt); the renderer blanks with default cells (pinned below).
      *  - `CSI 0 L` / `CSI 0 M` — no-op on the emulator; candy-ansi's
@@ -102,6 +115,7 @@ final class VtParityTest extends TestCase
             'sgr colors' => ["\x1b[31mred\x1b[32mgreen\x1b[34mblue\x1b[39mdefg\x1b[0mfin"],
             'sgr bright colors' => ["\x1b[91mbright-red\x1b[100mz\x1b[39;49mplain"],
             'sgr 256 indexed' => ["\x1b[38;5;178mX\x1b[0mY\x1b[48;5;21mZ\x1b[49m!"],
+            'sgr 256 out-of-range index clamps' => ["\x1b[38;5;300mA\x1b[0m\x1b[48;5;999mB\x1b[0mC"],
             'sgr attrs on/off' => ["\x1b[1mB\x1b[22mN\x1b[3mI\x1b[23mN\x1b[4mU\x1b[24mN\x1b[7mR\x1b[27mN"],
             'sgr 58 does not corrupt grid' => ["\x1b[58;5;178mU\x1b[59mN"],
             'sgr 58 truecolour form does not corrupt grid' => ["\x1b[58;2;148;199;255mU\x1b[59mN"],
@@ -135,11 +149,129 @@ final class VtParityTest extends TestCase
             'mouse modes multi set reset' => ["\x1b[?1000;1002;1006h\x1b[?1006lreport-on\x1b[0m!"],
             'mixed output' => ["\x1b[2J\x1b[H\x1b[1;1HHeader\r\n\x1b[36mvalue:\x1b[39m 42\x1b[K\r\nfooter\x1b[s\x1b[99;99H\x1b[u!"],
             'wide sgr runs in one dispatch' => ["\x1b[1;31;42mx\x1b[m\x1b[0my"],
+            'truecolor foreground and background' => ["\x1b[38;2;10;20;30mR\x1b[48;2;200;100;50mG\x1b[39;49mB"],
+            'truecolor then palette overrides' => ["\x1b[38;2;1;2;3mA\x1b[31mB\x1b[0mC"],
+            'decdwl double-width line' => ["\x1b#6abcd"],
+            'decdhl top half then print' => ["\x1b[3;1H\x1b#3AB"],
+            'decdhl bottom then decswl clears' => ["\x1b#4\x1b#5XY"],
+            'esc index and next line' => ["A\x1bDB\x1bEC"],
+            'esc reverse index' => ["\x1b[2;1HA\x1bMB"],
+            'esc save restore cursor' => ["\x1b[3;4H\x1b7\x1b[1;1Hwwww\x1b8Z"],
+            'esc hard reset' => ["hello\x1bcW"],
+            'ris drops rep memory' => ["A\x1bc\x1b[3b"],
+            'ris restores region and decawm' => ["\x1b[2;4r\x1b[?7l" . str_repeat('z', 25) . "\x1bc" . str_repeat('w', 25)],
+            'ris then scroll fills full screen' => ["\x1b[2;4r" . str_repeat('a', 60) . "\x1bc" . str_repeat('b', 25)],
+            'ris then decrc lands at home' => ["AB\x1b7\x1bc\x1b8X"],
+            'ris drops pen before print' => ["\x1b[1;38;2;9;8;7mP\x1bcQ"],
         ];
     }
 
+    // ------------------------------------------------------------------
+    // Per-escape emulator↔renderer parity. Each DEC line rendition and
+    // each two-byte ESC the renderer now handles (via
+    // {@see \SugarCraft\Vt\Parser\RendererHandler}) is pinned individually
+    // so a divergence names its own escape instead of hiding in a
+    // full-grid diff. The sequences also appear in {@see curatedStreams}.
+    // ------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: string, 1: int}>
+     */
+    public static function lineRenditionStreams(): array
+    {
+        return [
+            'DECDHL top `ESC # 3`' => ["\x1b[2;1H\x1b#3AB", 1],
+            'DECDHL bottom `ESC # 4`' => ["\x1b[3;1H\x1b#4Z", 2],
+            'DECSWL single `ESC # 5`' => ["\x1b#3\x1b#5Q", 0],
+            'DECDWL double `ESC # 6`' => ["\x1b#6ab", 3],
+        ];
+    }
+
+    #[DataProvider('lineRenditionStreams')]
+    public function testLineRenditionParity(string $bytes, int $expectedRendition): void
+    {
+        $emulator = self::normaliseEmulator(self::feedEmulator($bytes));
+        $renderer = self::normaliseRenderer(self::feedRenderer($bytes));
+
+        self::assertSame($emulator, $renderer, 'line rendition must agree for: ' . self::describe($bytes));
+
+        // And the stamped row really carries the rendition (not silently lost).
+        $row = $expectedRendition === 1 ? 1 : ($expectedRendition === 2 ? 2 : 0);
+        $cell = self::feedEmulator($bytes)->screen()->cell($row, 0);
+        self::assertSame($expectedRendition, $cell->rendition->value);
+    }
+
+    public function testDecdwlDoubleWidthOccupiesTwoColumns(): void
+    {
+        // DECDWL (`ESC # 6`) then 'a' must claim TWO columns on BOTH engines —
+        // the observable consequence of the double-width line rendition.
+        $emulator = self::feedEmulator("\x1b#6aZ");
+        $renderer = self::feedRenderer("\x1b#6aZ");
+
+        self::assertSame('a', self::emulatorCharAt($emulator, 0, 0));
+        self::assertSame('Z', self::emulatorCharAt($emulator, 0, 2), 'DECDWL: glyph advanced two columns');
+        self::assertSame('a', self::charAt($renderer, 0, 0));
+        self::assertSame('Z', self::charAt($renderer, 0, 2), 'renderer: same two-column advance');
+    }
+
+    public function testEscRosterParityOnRendererAndEmulator(): void
+    {
+        // The two-byte ESC roster candy-ansi's HandlerAdapter used to swallow
+        // on the renderer. IND/NEL/RI move the cursor; DECSC/DECRC park and
+        // restore it; RIS clears the grid. All now reach the renderer, so a
+        // printed marker lands identically on both engines.
+        $cases = [
+            "A\x1bDB" => 'IND',
+            "A\x1bEB" => 'NEL',
+            "\x1b[3;1HA\x1bMB" => 'RI',
+            "\x1b[3;4H\x1b7Q\x1b8Z" => 'DECSC/DECRC',
+            "junk\x1bcN" => 'RIS',
+            "junk\x1b[?25l\x1bcN" => 'RIS (after DECTCEM hide)',
+        ];
+        foreach ($cases as $bytes => $label) {
+            self::assertSame(
+                self::normaliseEmulator(self::feedEmulator($bytes)),
+                self::normaliseRenderer(self::feedRenderer($bytes)),
+                "ESC roster divergence: {$label} — " . self::DIVERGENCE_NOTE,
+            );
+        }
+    }
+
+    public function testParityRisRestoresDectcemAndDropsRepMemory(): void
+    {
+        // Audit finding #31 tail: on the renderer, RIS used to home the cursor
+        // with `Cursor::at(0, 0)` — which PRESERVES the hidden flag — and left
+        // the REP memory armed. The emulator's `hardReset()` builds a fresh
+        // `new Cursor()` (DECTCEM visible at power-on) and the renderer's
+        // post-RIS `CSI b` must replay nothing (xterm/VT510: after a full
+        // reset no graphic is the last printable). Both observables now agree.
+        $hiddenThenReset = self::feedRenderer("\x1b[?25l\x1bc");
+        self::assertTrue($hiddenThenReset->cursor()->visible, 'renderer: RIS restores the cursor to visible');
+        self::assertTrue($hiddenThenReset->cursor()->row === 0 && $hiddenThenReset->cursor()->col === 0, 'renderer: RIS homes');
+
+        $emuHiddenThenReset = self::feedEmulator("\x1b[?25l\x1bc");
+        self::assertTrue($emuHiddenThenReset->cursor()->visible, 'emulator: same, power-on visible');
+
+        // RIS then REP: the emulator never dispatches REP, so it prints
+        // nothing; the renderer must now match by having dropped the memory.
+        $bytes = "A\x1bc\x1b[3b";
+        self::assertSame(
+            self::normaliseEmulator(self::feedEmulator($bytes)),
+            self::normaliseRenderer(self::feedRenderer($bytes)),
+            'post-RIS REP must agree (renderer memory dropped)',
+        );
+        self::assertSame(' ', self::charAt(self::feedRenderer($bytes), 0, 1), 'renderer: nothing repeated');
+
+        // RIS also drops the DECSC slot: ESC 7 … ESC c … ESC 8 lands at home on
+        // both engines (the emulator restores its fresh default state, the
+        // renderer finds the null slot and stays put — at home after RIS).
+        $bytes = "AB\x1b7\x1bc\x1b8X";
+        self::assertSame('X', self::charAt(self::feedRenderer($bytes), 0, 0), 'renderer: DECRC after RIS → home');
+        self::assertSame('X', self::emulatorCharAt(self::feedEmulator($bytes), 0, 0), 'emulator: same');
+    }
+
     #[DataProvider('curatedStreams')]
-    public function testCuratedStreamsProduceIdenticalCellGrids(string $bytes): void
+    public function testCuratedStreamsProduceIdenticalGrids(string $bytes): void
     {
         self::assertSame(
             self::normaliseEmulator(self::feedEmulator($bytes)),
@@ -148,7 +280,7 @@ final class VtParityTest extends TestCase
         );
     }
 
-    public function testSeededRandomStreamsProduceIdenticalCellGrids(): void
+    public function testSeededRandomStreamsProduceIdenticalGrids(): void
     {
         foreach ([0xC0FFEE, 0xBEEF, 0xDEAD, 1, 42] as $seed) {
             $bytes = self::randomStream($seed);
@@ -336,28 +468,32 @@ final class VtParityTest extends TestCase
     // fails; graduate the sequence then.
     // ------------------------------------------------------------------
 
-    public function testCataloguedDivergenceTruecolorDroppedByRendererPath(): void
+    public function testParityTruecolorAgreesOnBothPaths(): void
     {
-        // candy-core emits `38;2;R;G;B` at truecolor profiles
-        // (Util/Color::toSgr). The renderer now CONSUMES the triplet
-        // cleanly (this PR fixed the misparse), but its Cell has no RGB
-        // slot — so the grids differ in the colour VALUE only: identical
-        // chars and attributes, default palette versus stored truecolor.
-        // Closing this needs an RGB field in SugarCraft\Vt\Cell, not a
-        // handler change.
-        $bytes = "\x1b[38;2;255;0;0mX\x1b[0mY";
+        // candy-core EMITS `38;2;R;G;B` / `48;2;R;G;B` at truecolor profiles
+        // (Util/Color::toSgr). Both engines now STORE the exact value — the
+        // emulator in its Sgr {@see Color}, the renderer in
+        // {@see \SugarCraft\Vt\Cell::$fgTruecolor}/$bgTruecolor — so the grids
+        // agree VALUE-FOR-VALUE, not merely on "some truecolour". The former
+        // "renderer has no RGB slot" catalogue divergence is closed by the
+        // unified Cell (it used to pin the renderer at the default pen 'I7').
+        $bytes = "\x1b[38;2;255;0;0;48;2;0;128;255mX\x1b[0mY";
         $renderer = self::feedRenderer($bytes);
         $emulator = self::feedEmulator($bytes);
 
-        self::assertSame('I7', self::rendererFg($renderer, 0, 0), 'renderer keeps the default pen');
-        self::assertSame('TC', self::emulatorFg($emulator, 0, 0), 'emulator stores truecolor');
-        // The triplet must not leak into anything the grid models:
+        self::assertSame('TC:' . 0xFF0000, self::rendererFg($renderer, 0, 0), 'renderer stores the exact fg RGB');
+        self::assertSame(self::emulatorFg($emulator, 0, 0), self::rendererFg($renderer, 0, 0), 'fg RGB agrees');
+        // The triplet must not leak into attributes or shift the grid:
         self::assertSame('X', self::charAt($renderer, 0, 0));
         self::assertSame('Y', self::charAt($renderer, 0, 1));
-        self::assertSame(0, self::rendererAttrs($renderer, 0, 0), 'no stray attributes from 38;2');
-        self::assertSame(0, self::rendererAttrs($renderer, 0, 1));
-        self::assertSame(0, self::emulatorAttrs($emulator, 0, 1));
+        self::assertSame(0, self::rendererAttrs($renderer, 0, 0), 'no stray attributes from 38;2/48;2');
         self::assertSame('Y', self::emulatorCharAt($emulator, 0, 1), 'chars agree on both engines');
+        // Whole-grid parity now holds for a truecolour stream (incl. the bg RGB).
+        self::assertSame(
+            self::normaliseEmulator($emulator),
+            self::normaliseRenderer($renderer),
+            'a truecolour run renders an identical normalised grid on both engines',
+        );
     }
 
     public function testCataloguedDivergenceExplicitZeroIlDlCountsDiffer(): void
@@ -423,7 +559,7 @@ final class VtParityTest extends TestCase
                 ? 'emulator: BCE keeps only the background — fg is default'
                 : 'emulator: pre-w4 published vt bleeds the pen fg (stale Packagist dev-master)',
         );
-        self::assertSame('I0', 'I' . $renderer->grid()->get(0, 5)->bg, 'renderer: erase drops the pen background');
+        self::assertSame('I0', 'I' . $renderer->grid()->cell(0, 5)->bg, 'renderer: erase drops the pen background');
         self::assertSame('I8', self::emulatorBg($emulator, 0, 5), 'emulator: erase carries SGR 100 as the erase colour');
     }
 
@@ -517,7 +653,7 @@ final class VtParityTest extends TestCase
     private static function feedInChunksRenderer(string $bytes, int $size): RendererTerminal
     {
         $terminal = RendererTerminal::new(self::COLS, self::ROWS);
-        foreach (str_split($bytes, $size) as $chunk) {
+        foreach (str_split($bytes, max(1, $size)) as $chunk) {
             $terminal->feed($chunk);
         }
         return $terminal;
@@ -533,14 +669,14 @@ final class VtParityTest extends TestCase
     private static function feedInChunks(string $bytes, int $size): EmulatorTerminal
     {
         $terminal = EmulatorTerminal::new(self::COLS, self::ROWS);
-        foreach (str_split($bytes, $size) as $chunk) {
+        foreach (str_split($bytes, max(1, $size)) as $chunk) {
             $terminal->feed($chunk);
         }
         return $terminal;
     }
 
     /**
-     * Normalised renderer grid: rows of `char|fg|bg|attrs` tuples.
+     * Normalised renderer grid: rows of `char|fg|bg|attrs|rendition` tokens.
      *
      * @return list<list<string>>
      */
@@ -551,13 +687,14 @@ final class VtParityTest extends TestCase
         for ($r = 0; $r < $grid->rows; $r++) {
             $line = [];
             for ($c = 0; $c < $grid->cols; $c++) {
-                $cell = $grid->get($r, $c);
+                $cell = $grid->cell($r, $c);
                 $line[] = sprintf(
-                    '%s|I%d|I%d|%d',
+                    '%s|%s|%s|%d|R%d',
                     $cell->char === '' ? ' ' : $cell->char,
-                    $cell->fg,
-                    $cell->bg,
+                    $cell->fgTruecolor !== null ? 'TC:' . $cell->fgTruecolor : 'I' . $cell->fg,
+                    $cell->bgTruecolor !== null ? 'TC:' . $cell->bgTruecolor : 'I' . $cell->bg,
                     $cell->attrs & 0x1F,
+                    $cell->rendition->value,
                 );
             }
             $rows[] = $line;
@@ -568,7 +705,8 @@ final class VtParityTest extends TestCase
     /**
      * Normalised emulator grid, reduced to the renderer's expressive range:
      * default colour -> theme default slot (7/0), indexed colour -> palette
-     * index, truecolor -> its own token (and excluded from parity streams).
+     * index, truecolor -> `TC:<packed>` (the same 24-bit value the renderer
+     * stores in its fg/bgTruecolor slot), plus the DEC line rendition.
      *
      * @return list<list<string>>
      */
@@ -583,11 +721,12 @@ final class VtParityTest extends TestCase
                 $sgr = $cell->sgr();
                 $char = $cell->continuation || $cell->grapheme === '' ? ' ' : $cell->grapheme;
                 $line[] = sprintf(
-                    '%s|%s|%s|%d',
+                    '%s|%s|%s|%d|R%d',
                     $char,
                     self::normaliseColour($sgr->foreground, 7),
                     self::normaliseColour($sgr->background, 0),
                     self::normaliseAttrs($sgr),
+                    $cell->rendition->value,
                 );
             }
             $rows[] = $line;
@@ -601,7 +740,7 @@ final class VtParityTest extends TestCase
             return 'I' . $themeDefault;
         }
         if ($color->kind === 3) {
-            return 'TC';
+            return 'TC:' . $color->value;
         }
         return 'I' . $color->value;
     }
@@ -716,7 +855,7 @@ final class VtParityTest extends TestCase
 
     private static function charAt(RendererTerminal $terminal, int $row, int $col): string
     {
-        return $terminal->grid()->get($row, $col)->char;
+        return $terminal->grid()->cell($row, $col)->char;
     }
 
     private static function emulatorCharAt(EmulatorTerminal $terminal, int $row, int $col): string
@@ -727,7 +866,7 @@ final class VtParityTest extends TestCase
 
     private static function rendererAttrs(RendererTerminal $terminal, int $row, int $col): int
     {
-        return $terminal->grid()->get($row, $col)->attrs;
+        return $terminal->grid()->cell($row, $col)->attrs;
     }
 
     private static function emulatorAttrs(EmulatorTerminal $terminal, int $row, int $col): int
@@ -737,7 +876,9 @@ final class VtParityTest extends TestCase
 
     private static function rendererFg(RendererTerminal $terminal, int $row, int $col): string
     {
-        return 'I' . $terminal->grid()->get($row, $col)->fg;
+        $cell = $terminal->grid()->cell($row, $col);
+
+        return $cell->fgTruecolor !== null ? 'TC:' . $cell->fgTruecolor : 'I' . $cell->fg;
     }
 
     private static function emulatorFg(EmulatorTerminal $terminal, int $row, int $col): string

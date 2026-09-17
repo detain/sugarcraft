@@ -80,6 +80,7 @@ final class PlayerMouseReplayTest extends TestCase
     }
 
     /**
+     * @param ArrayObject<int, \SugarCraft\Core\Msg> $sink
      * @param list<Event> $events
      */
     private function replay(ArrayObject $sink, array $events): \SugarCraft\Vcr\ReplayResult
@@ -117,6 +118,7 @@ final class PlayerMouseReplayTest extends TestCase
     }
 
     /**
+     * @param ArrayObject<int, \SugarCraft\Core\Msg> $sink
      * @return list<MouseMsg>
      */
     private function mouseMsgs(ArrayObject $sink): array
@@ -139,6 +141,9 @@ final class PlayerMouseReplayTest extends TestCase
  */
 final class MouseSpyModel implements Model
 {
+    /**
+     * @param ArrayObject<int, \SugarCraft\Core\Msg> $sink
+     */
     public function __construct(public readonly ArrayObject $sink)
     {
     }

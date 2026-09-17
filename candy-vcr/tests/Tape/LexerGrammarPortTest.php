@@ -38,8 +38,10 @@ final class LexerGrammarPortTest extends TestCase
 
     public function testTheNewTokenKindsExist(): void
     {
-        self::assertSame('JSON', Lexer::TOKEN_JSON);
-        self::assertSame('REGEX', Lexer::TOKEN_REGEX);
+        $json = (new \ReflectionClassConstant(Lexer::class, 'TOKEN_JSON'))->getValue();
+        $regex = (new \ReflectionClassConstant(Lexer::class, 'TOKEN_REGEX'))->getValue();
+        self::assertSame('JSON', $json);
+        self::assertSame('REGEX', $regex);
     }
 
     // ---------------------------------------------------------------- JSON

@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Encode;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\FfmpegGifEncoder;
 use SugarCraft\Vcr\Encode\GifEncoder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Tests for FfmpegGifEncoder.
@@ -136,7 +137,7 @@ final class FfmpegGifEncoderTest extends TestCase
 
         $encoder->encode([$pngPath], $outputPath, 30);
 
-        $content = file_get_contents($outputPath);
+        $content = Stream::read($outputPath);
         $this->assertNotEmpty($content);
         $this->assertStringStartsWith('GIF89a', $content);
     }

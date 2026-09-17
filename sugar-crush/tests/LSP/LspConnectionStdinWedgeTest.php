@@ -357,9 +357,7 @@ final class LspConnectionStdinWedgeTest extends TestCase
                 'text' => str_repeat('x', self::OVERSIZED_BYTES),
             ]);
 
-            $started = microtime(true);
             $next = $connection->sendRequest('textDocument/hover', []);
-            $elapsed = microtime(true) - $started;
 
             $this->assertTrue(
                 $next->isError,
@@ -367,14 +365,30 @@ final class LspConnectionStdinWedgeTest extends TestCase
                 . 'its reply would be parsed against the abandoned fragment',
             );
             $this->assertStringContainsString('Failed to write message', (string) $next->errorMessage);
-            $this->assertLessThan(
-                0.5,
-                $elapsed,
-                sprintf(
-                    'the later request took %.2fs, so it went to the wire and waited rather than '
-                    . 'failing fast on the latch',
-                    $elapsed,
-                ),
+            // FAILED FAST, ASSERTED AS A STATE AND NOT AS A DURATION. The property
+            // this row wants is "the latch answered it, the wire never saw it."
+            // `LspResponse` already encodes that distinction: the latch returns an
+            // `ioError('Failed to write message…')` while a request that reached
+            // the wire and waited comes back as `timeout()`, and `isTimeout()`
+            // tells the two apart. Bounding the call by 0.5 s of real time measured
+            // the same thing through a stopwatch, so a scheduling pause between the
+            // two `sendRequest()` calls could redden a correct latch — and the
+            // bound could not even distinguish "slow" from "went to the wire."
+            $this->assertFalse(
+                $next->isTimeout(),
+                'the later request timed out on the wire instead of failing fast on the '
+                . 'desynchronised-framing latch',
+            );
+            // `isTimeout()` alone has no teeth HERE: a deaf server leaves the pipe
+            // full, so even UNLATCHED the second send fails in `writeMessage()` with
+            // the same `ioError`. What only the latch changes is the session's own
+            // answer to "usable?" — `isConnected()` consults `framingBroken` before
+            // the process resource, so this assertion (and nothing stopwatch-shaped)
+            // reddens the day the latch stops latching.
+            $this->assertFalse(
+                $connection->isConnected(),
+                'the poisoned session still reported itself connected — the framing latch '
+                . 'is not consulted by the predicate',
             );
         } finally {
             $connection->disconnect();
@@ -777,12 +791,15 @@ final class LspConnectionStdinWedgeTest extends TestCase
     /** @return array{0: int, 1: string, 2: float} rc, stdout+stderr, elapsed */
     private function runProbe(int $floodBytes, int $requestBytes): array
     {
+        $readyPath = $this->tempDir . '/flood-ready_' . $floodBytes . '_' . $requestBytes . '.mark';
+        @unlink($readyPath);
         $probe = $this->tempDir . '/probe_' . $floodBytes . '_' . $requestBytes . '.php';
         file_put_contents($probe, sprintf(
             self::PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->blockedServerScript($floodBytes), true),
+            var_export($this->blockedServerScript($floodBytes, $readyPath), true),
             self::REQUEST_TIMEOUT_SECONDS,
+            var_export($readyPath, true),
             $requestBytes,
         ));
 
@@ -818,10 +835,13 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * The flood therefore lands after message two — the last thing `initialize()`
      * sends — so nothing runs between it and the request under test.
      */
-    private function blockedServerScript(int $floodBytes): string
+    private function blockedServerScript(int $floodBytes, string $readyPath): string
     {
         $path = $this->tempDir . '/blocked_' . $floodBytes . '.php';
-        file_put_contents($path, $this->withFraming(sprintf(self::BLOCKED_SERVER_TEMPLATE, $floodBytes)));
+        file_put_contents(
+            $path,
+            $this->withFraming(sprintf(self::BLOCKED_SERVER_TEMPLATE, $floodBytes, var_export($readyPath, true))),
+        );
 
         return $path;
     }
@@ -1198,6 +1218,7 @@ final class LspConnectionStdinWedgeTest extends TestCase
         <?php
         SC_FRAMING_HELPERS
         $noise = str_repeat('e', %d);
+        $ready = %s;
         $seen = 0;
         while (($msg = sc_read_framed()) !== null) {
             $seen++;
@@ -1205,6 +1226,13 @@ final class LspConnectionStdinWedgeTest extends TestCase
                 sc_write_framed(['jsonrpc' => '2.0', 'id' => $msg['id'], 'result' => sc_reply($msg)]);
             }
             if ($seen === 2) {
+                // SIGNAL FIRST, THEN FLOOD. The parent of the probe polls this
+                // file before it reads TAILBEFORE, so the byte accounting starts
+                // from the moment the flood begins rather than from a fixed
+                // sleep that only PROBABLY covered the child's wake-up. Writing
+                // to the pipe right after guarantees that once the parent moves,
+                // the child is at (or microseconds into) its 400 KB write.
+                file_put_contents($ready, '1');
                 fwrite(STDERR, $noise);
             }
         }
@@ -1242,8 +1270,8 @@ final class LspConnectionStdinWedgeTest extends TestCase
         PHP;
 
     /**
-     * %s autoloader path · %s server script path · %f request timeout ·
-     * %d bytes of request payload.
+     * %s autoloader path · %s server script path · %F request timeout ·
+     * %s flood-ready marker path · %d bytes of request payload.
      *
      * Reports the absorbed stderr either side of the exchange, because the byte
      * accounting is what tells the parent whether the child was still blocked
@@ -1255,10 +1283,27 @@ final class LspConnectionStdinWedgeTest extends TestCase
         $c = new SugarCraft\Crush\LSP\LspConnection('unused', [%s]);
         $c->connect(PHP_BINARY, [], null, %F);
         $c->initialize();
-        // Let the child reach its unprompted stderr write and PARK in it. Nothing
-        // in this class drains outside a write loop or a refill, so the sleep
-        // cannot itself absorb the flood — TAILBEFORE stays honest.
-        usleep(200000);
+        // READY-FILE HANDSHAKE, NOT A STOPWATCH. `initialize()` ends by sending
+        // the `initialized` notification — the child's second framed message —
+        // and the fixture touches its marker immediately before starting the
+        // flood. Polling for that file gates the byte accounting on the EVENT
+        // the old fixed 200 ms sleep merely hoped to cover: on a starved shard
+        // the child could still have been pre-wake when TAILBEFORE was read,
+        // so the pair of byte assertions measured a fixture that never raced
+        // rather than a child demonstrably parked in write(2). rc 2 here is
+        // that: a fixture that never got to the flood, named as such, instead
+        // of a misleading byte-count failure downstream.
+        $ready = %s;
+        $deadline = microtime(true) + 5.0;
+        while (!is_file($ready)) {
+            if (microtime(true) >= $deadline) {
+                echo "READY-TIMEOUT: the flood child never reached its marker\n";
+                exit(2);
+            }
+            usleep(5000);
+        }
+        // Nothing in this class drains outside a write loop or a refill, so
+        // waiting here cannot itself absorb the flood — TAILBEFORE stays honest.
         echo 'TAILBEFORE:', strlen($c->stderrTail()), "\n";
         $r = $c->sendRequest('echoLength', ['text' => str_repeat('x', %d)]);
         echo 'TAILAFTER:', strlen($c->stderrTail()), "\n";

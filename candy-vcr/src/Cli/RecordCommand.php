@@ -547,8 +547,10 @@ final class RecordCommand implements Command
         }
 
         $kept = [];
+        // Both feeding branches above yield array<string,string>, so only the
+        // empty-name edge can skip an entry here.
         foreach ($env as $k => $v) {
-            if (!\is_string($k) || $k === '' || !\is_string($v)) {
+            if ($k === '') {
                 continue;
             }
             // @ kept: the pattern is validated above, so a false here would

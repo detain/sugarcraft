@@ -81,7 +81,12 @@ final class TimingTolerantMatcherTest extends TestCase
     public function testZeroToleranceIsValid(): void
     {
         $matcher = new TimingTolerantMatcher(timingTolerance: 0.0);
-        $this->assertInstanceOf(TimingTolerantMatcher::class, $matcher);
+
+        // Zero tolerance is legal construction, and identical timestamps still
+        // match at it (|1.0 - 1.0| <= 0.0).
+        $recorded = new Event(1.0, EventKind::Output, ['b' => 'x']);
+        $actual = new Event(1.0, EventKind::Output, ['b' => 'x']);
+        $this->assertTrue($matcher->matches($recorded, $actual));
     }
 
     public function testPayloadDifferenceIgnoredWithinTimingTolerance(): void

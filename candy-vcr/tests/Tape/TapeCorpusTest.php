@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Tape\Compiler;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Smoke-test: walk the monorepo's .tape files and confirm they parse

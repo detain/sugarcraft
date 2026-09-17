@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Encode;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\FfmpegGifEncoder;
 use Symfony\Component\Process\Process;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Regression: FfmpegGifEncoder honors per-frame VFR durations.
@@ -52,7 +53,7 @@ final class FfmpegGifEncoderVfrTest extends TestCase
             $encoder->encode($pngPaths, $gifPath, 30, [100, 1000, 100]);
             $this->assertFileExists($gifPath);
 
-            $gif = file_get_contents($gifPath);
+            $gif = Stream::read($gifPath);
             $this->assertIsString($gif);
             $delays = $this->extractGceDelays($gif);
             $this->assertGreaterThanOrEqual(2, count($delays), 'Should have multiple GCEs (one per frame)');

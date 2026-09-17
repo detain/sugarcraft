@@ -4,128 +4,21 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Cell;
 
-use SugarCraft\Vt\Color\Color;
-use SugarCraft\Vt\Hyperlink\Hyperlink;
-use SugarCraft\Vt\Sgr\Sgr;
-
-/**
- * A single cell in the terminal grid.
+/*
+ * Backwards-compatible shim.
  *
- * Readonly snapshot — instances are always newly constructed by Buffer.
- * `combining` holds trailing Unicode combining marks (U+0300–U+036F) that
- * attach to the base `grapheme` — stored separately so the grid width
- * logic (each cell = one column) stays correct and renderers can opt in
- * to full grapheme-cluster composition.
+ * The emulator's full Cell class and the renderer's palette Cell class were
+ * unified into the single canonical {@see \SugarCraft\Vt\Cell} (see that file).
+ * Every consumer that wrote `use SugarCraft\Vt\Cell\Cell;` keeps resolving to
+ * the same class through this alias — the two names are literally the same
+ * FQN after autoload, per AGENTS.md's façade rule (alias smoke-test only; the
+ * real behaviour is exercised by the canonical class's tests).
+ *
+ * The alias target is spelled with its fully-qualified name (not relative to
+ * this namespace) because a class called `SugarCraft\Vt\Cell` and a namespace
+ * `SugarCraft\Vt\Cell\` share a name prefix — class_alias must be handed the
+ * absolute target to avoid colliding with the canonical class's own name.
  *
  * Mirrors charmbracelet/x/vt Cell.
  */
-final readonly class Cell
-{
-    public function __construct(
-        public string $grapheme = ' ',
-        public ?Sgr $sgr = null,
-        public bool $continuation = false,
-        public ?Hyperlink $hyperlink = null,
-        /** Non-empty string when one or more combining marks (U+0300–U+036F) follow the base grapheme in the same cell. */
-        public string $combining = '',
-    ) {
-    }
-
-    public static function empty(): self
-    {
-        static $empty = null;
-        return $empty ??= new self(grapheme: ' ', combining: '');
-    }
-
-    /**
-     * Return a new Cell with additional combining marks appended.
-     * Mirrors charmbracelet/x/vt Cell::WithCombining.
-     */
-    public function withCombining(string $combining): self
-    {
-        return new self(
-            grapheme: $this->grapheme,
-            sgr: $this->sgr,
-            continuation: $this->continuation,
-            hyperlink: $this->hyperlink,
-            combining: $this->combining . $combining,
-        );
-    }
-
-    /** Second cell of a wide character — carries no grapheme, marks continuation. */
-    public static function continuation(self $prev): self
-    {
-        return new self(
-            grapheme: '',
-            sgr: $prev->sgr,
-            continuation: true,
-            hyperlink: $prev->hyperlink,
-        );
-    }
-
-    public function sgr(): Sgr
-    {
-        return $this->sgr ?? Sgr::empty();
-    }
-
-    public function foreground(): ?Color
-    {
-        return $this->sgr()?->foreground;
-    }
-
-    public function background(): ?Color
-    {
-        return $this->sgr()?->background;
-    }
-
-    public function equals(self $other): bool
-    {
-        if ($this->grapheme !== $other->grapheme) {
-            return false;
-        }
-        if ($this->continuation !== $other->continuation) {
-            return false;
-        }
-        if ((string)($this->hyperlink?->id ?? '') !== (string)($other->hyperlink?->id ?? '')) {
-            return false;
-        }
-        if ($this->combining !== $other->combining) {
-            return false;
-        }
-
-        $thisFg = $this->foreground();
-        $otherFg = $other->foreground();
-        if ($thisFg === null && $otherFg === null) {
-            $fgEqual = true;
-        } elseif ($thisFg === null || $otherFg === null) {
-            $fgEqual = false;
-        } else {
-            $fgEqual = $thisFg->equals($otherFg);
-        }
-
-        $thisBg = $this->background();
-        $otherBg = $other->background();
-        if ($thisBg === null && $otherBg === null) {
-            $bgEqual = true;
-        } elseif ($thisBg === null || $otherBg === null) {
-            $bgEqual = false;
-        } else {
-            $bgEqual = $thisBg->equals($otherBg);
-        }
-
-        $thisSgr = $this->sgr();
-        $otherSgr = $other->sgr();
-        $sgrEqual = $thisSgr->bold === $otherSgr->bold
-            && $thisSgr->italic === $otherSgr->italic
-            && $thisSgr->underline === $otherSgr->underline
-            && $thisSgr->underlineStyle === $otherSgr->underlineStyle
-            && $thisSgr->strikethrough === $otherSgr->strikethrough
-            && $thisSgr->blink === $otherSgr->blink
-            && $thisSgr->reverse === $otherSgr->reverse
-            && $thisSgr->dim === $otherSgr->dim
-            && $thisSgr->hidden === $otherSgr->hidden
-            && $thisSgr->invisible === $otherSgr->invisible;
-
-        return $fgEqual && $bgEqual && $sgrEqual;
-    }
-}
+class_alias(\SugarCraft\Vt\Cell::class, 'SugarCraft\\Vt\\Cell\\Cell');

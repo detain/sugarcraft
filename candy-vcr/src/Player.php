@@ -18,6 +18,7 @@ use SugarCraft\Vcr\Input\MouseModeTracker;
 use SugarCraft\Vcr\Input\MouseReplayDecoder;
 use SugarCraft\Vcr\Matcher\EventMatcher;
 use SugarCraft\Vcr\Msg\Registry;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * Drive a candy-core {@see Program} through a recorded {@see Cassette},
@@ -228,7 +229,6 @@ final class Player
             $events,
             $eventCount,
             $program,
-            $inputWrite,
             $registry,
             $loop,
             $speed,
@@ -247,7 +247,6 @@ final class Player
             ($this->dispatchEvent(
                 $event,
                 $program,
-                $inputWrite,
                 $registry,
                 $tally,
                 $expectedOutput,
@@ -340,19 +339,17 @@ final class Player
      * by reference so the closure mutates the outer aggregate state.
      *
      * @param array{input:int,resize:int,output:int,quit:int} $tally
-     * @param resource $inputWrite
      */
     private function dispatchEvent(
         Event $event,
         Program $program,
-        $inputWrite,
         Registry $registry,
         array &$tally,
         string &$expectedOutput,
         bool &$programQuitCleanly,
         bool &$firstResizeSkipped,
     ): \Closure {
-        return function () use ($event, $program, $inputWrite, $registry, &$tally, &$expectedOutput, &$programQuitCleanly, &$firstResizeSkipped): void {
+        return function () use ($event, $program, $registry, &$tally, &$expectedOutput, &$programQuitCleanly, &$firstResizeSkipped): void {
             switch ($event->kind) {
                 case EventKind::Resize:
                     $tally['resize']++;
@@ -364,8 +361,8 @@ final class Player
                         $firstResizeSkipped = true;
                         break;
                     }
-                    $cols = (int) ($event->payload['cols'] ?? 0);
-                    $rows = (int) ($event->payload['rows'] ?? 0);
+                    $cols = Scalars::int($event->payload['cols'] ?? 0, 'Player resize cols');
+                    $rows = Scalars::int($event->payload['rows'] ?? 0, 'Player resize rows');
                     if ($cols > 0 && $rows > 0) {
                         $program->send(new WindowSizeMsg($cols, $rows));
                     }
@@ -373,8 +370,10 @@ final class Player
 
                 case EventKind::Input:
                     $tally['input']++;
-                    if (isset($event->payload['msg']) && is_array($event->payload['msg'])) {
-                        $msg = $registry->decode($event->payload['msg']);
+                    /** @var array<string, mixed>|null $envelope — a JSON-object envelope is string-keyed by construction. */
+                    $envelope = $event->payload['msg'] ?? null;
+                    if (is_array($envelope)) {
+                        $msg = $registry->decode($envelope);
                         if ($msg !== null) {
                             $program->send($msg);
                         }
@@ -400,7 +399,7 @@ final class Player
 
                 case EventKind::Output:
                     $tally['output']++;
-                    $outputBytes = (string) ($event->payload['b'] ?? '');
+                    $outputBytes = Scalars::string($event->payload['b'] ?? '', 'Player output bytes');
                     $this->mouseModes->observe($outputBytes);
                     $expectedOutput .= $outputBytes;
                     break;

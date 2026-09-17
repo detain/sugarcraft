@@ -162,11 +162,14 @@ final class StreamingWiringTest extends TestCase
      * closure is useless — a delta has to become a frame on the existing
      * length-prefixed channel or it dies with the child.
      *
-     * Timing IS the assertion here, deliberately: with the child streaming
-     * over ~90ms, "the first delta was in hand well before the promise
-     * settled" is exactly the property under test, and it is the one thing an
-     * ordering-only check could not distinguish from a batch of token frames
-     * flushed alongside the result.
+     * Timing IS the property here, but it is asserted CAUSALLY, not with a
+     * stopwatch: the child streams over ~90ms, and "no delta was in hand after
+     * the promise settled" observes exactly the old end-of-turn batch failure
+     * — a settle that lands BEFORE a delta callback fires can only mean
+     * batching. A wall-clock gap assertion caught the same regression only
+     * when the parent loop also happened not to stall between frames; under
+     * load a correct parent delivers every frame in one burst and the gap
+     * collapses without any mechanism being broken.
      */
     public function testCompleteAsyncDeliversTokensAcrossTheForkBeforeTheTurnSettles(): void
     {
@@ -180,26 +183,36 @@ final class StreamingWiringTest extends TestCase
         );
 
         $deltas = [];
-        $firstDeltaAt = null;
+        $settled = false;
+        $deltaAfterSettle = false;
         $promise = $backend->completeAsync(
             [Message::user('go')],
-            static function (string $delta) use (&$deltas, &$firstDeltaAt): void {
-                $firstDeltaAt ??= \microtime(true);
+            static function (string $delta) use (&$deltas, &$settled, &$deltaAfterSettle): void {
+                if ($settled) {
+                    $deltaAfterSettle = true;
+                }
                 $deltas[] = $delta;
             },
         );
 
-        $reply = $this->awaitPromise($promise);
-        $resolvedAt = \microtime(true);
+        // Registered BEFORE awaitPromise()'s own then(), so this flag flips at
+        // the instant the promise settles, and any delta callback that runs
+        // afterwards sees it.
+        $observed = $promise->then(static function (mixed $reply) use (&$settled): mixed {
+            $settled = true;
+
+            return $reply;
+        });
+
+        $reply = $this->awaitPromise($observed);
 
         $this->assertSame(['a', 'b', 'c', 'd'], $deltas, 'token frames must cross the socket individually');
-        $this->assertNotNull($firstDeltaAt);
-        $this->assertGreaterThan(
-            self::FORK_CHUNK_DELAY_SECONDS,
-            $resolvedAt - $firstDeltaAt,
-            'the first token reached the parent at essentially the same instant as the result — '
-            . 'the child batched instead of streaming',
+        $this->assertFalse(
+            $deltaAfterSettle,
+            'a token frame arrived only after the turn had settled - the child batched instead of '
+            . 'streaming, which is the exact regression this row exists to catch'
         );
+        $this->assertTrue($settled, 'the ordering proof above is vacuous unless the promise did settle');
         // Streamed deltas suppress the result frame's one-shot, so the caller
         // is handed the reply exactly once.
         $this->assertSame('abcd', $reply->content);

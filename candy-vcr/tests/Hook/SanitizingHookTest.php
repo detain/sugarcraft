@@ -23,10 +23,12 @@ final class SanitizingHookTest extends TestCase
         );
 
         $result = $hook->beforeSave($event);
+        $msg = $result->payload['msg'];
+        $this->assertIsArray($msg);
 
-        $this->assertArrayNotHasKey('API_KEY', $result->payload['msg']);
-        $this->assertArrayNotHasKey('SECRET', $result->payload['msg']);
-        $this->assertSame('ok', $result->payload['msg']['data']);
+        $this->assertArrayNotHasKey('API_KEY', $msg);
+        $this->assertArrayNotHasKey('SECRET', $msg);
+        $this->assertSame('ok', $msg['data']);
     }
 
     public function testReplacePatterns(): void
@@ -58,9 +60,11 @@ final class SanitizingHookTest extends TestCase
         $event = new Event(t: 0.1, kind: EventKind::Input, payload: $payload);
 
         $result = $hook->beforeSave($event);
+        $nested = $result->payload['nested'];
+        $this->assertIsArray($nested);
 
-        $this->assertSame('TOKEN: [HIDDEN]', $result->payload['nested']['first']);
-        $this->assertSame('TOKEN: [HIDDEN]', $result->payload['nested']['other']);
+        $this->assertSame('TOKEN: [HIDDEN]', $nested['first']);
+        $this->assertSame('TOKEN: [HIDDEN]', $nested['other']);
         $this->assertSame('TOKEN: [HIDDEN]', $result->payload['top']);
     }
 
@@ -82,7 +86,8 @@ final class SanitizingHookTest extends TestCase
         $event = new Event(t: 0.1, kind: EventKind::Output, payload: ['b' => 'hello']);
 
         $hook->afterCapture($event);
-        $this->assertTrue(true);
+        // afterCapture is a no-op sink for this hook — not throwing is the point.
+        $this->addToAssertionCount(1);
     }
 
     /**

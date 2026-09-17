@@ -705,10 +705,38 @@ final class TransientFailureTest extends TestCase
 
     public function testTheLastAttemptCostsNoWait(): void
     {
-        $started = microtime(true);
-        TransientFailure::backoff(TransientFailure::MAX_ATTEMPTS);
+        // WHY THIS ROW EXISTS WHEN THE SCHEDULE ROW ALREADY READS THE FIGURE:
+        // {@see testTheBackoffScheduleDoublesAndStopsWhenNoAttemptsRemain()} pins
+        // the pure `backoffMicroseconds()` value. This one drives the WRAPPER
+        // production calls, so an inverted `$owed <= 0` guard or an
+        // unconditional sleep inside {@see TransientFailure::backoff()} cannot
+        // pass unnoticed.
+        //
+        // ASSERTED AS A SLEEPER CALL COUNT, NOT AS A DURATION. The earlier form
+        // bounded the call by a stopwatch (`assertLessThan(0.05, …)`, then a
+        // derived BASE/2 ceiling) — but a path designed to return instantly has
+        // no honest wall number: a shard descheduled between the two clock reads
+        // reddens a healthy retry policy whatever the bound, and a bound loose
+        // enough to survive the jitter starts being loose about detection too.
+        // The sleep seam collapses the question to the state that actually
+        // matters: `backoff()` on a debt-free attempt must never touch the
+        // sleeper. A guard inversion reaches `usleep(0)` → one recorded call →
+        // RED naming exactly that regression; the production default stays
+        // byte-identical because the parameter is null in every `src/` call.
+        $naps = 0;
+        TransientFailure::backoff(
+            TransientFailure::MAX_ATTEMPTS,
+            static function (int $microseconds) use (&$naps): void {
+                $naps++;
+            },
+        );
 
-        $this->assertLessThan(0.05, microtime(true) - $started);
+        $this->assertSame(
+            0,
+            $naps,
+            'the last attempt slept despite owing nothing — backoff() no longer takes the '
+            . '$owed <= 0 early return before the sleep loop',
+        );
     }
 
     public function testTheAttemptCeilingLeavesRoomForAtLeastOneRetry(): void

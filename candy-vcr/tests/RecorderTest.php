@@ -5,22 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Core\Recorder as RecorderInterface;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\Stream;
+use SugarCraft\Vcr\Support\ObjectMap;
 
 final class RecorderTest extends TestCase
 {
-    public function testImplementsCoreInterface(): void
-    {
-        $this->assertInstanceOf(
-            RecorderInterface::class,
-            new Recorder($this->memory(), $this->stubHeader()),
-        );
-    }
-
     public function testHeaderWrittenAtConstruction(): void
     {
         $fh = $this->memory();
@@ -97,7 +90,8 @@ final class RecorderTest extends TestCase
         $r = new Recorder($this->memory(), $this->stubHeader());
         $r->close();
         $r->close();
-        $this->assertTrue(true);
+        // Surviving the second close() without throwing is the assertion.
+        $this->addToAssertionCount(1);
     }
 
     public function testWriteAfterCloseIsNoOp(): void
@@ -200,7 +194,7 @@ final class RecorderTest extends TestCase
     /** @return resource */
     private function memory()
     {
-        $fh = fopen('php://memory', 'w+b');
+        $fh = Stream::memory('w+b');
         $this->assertNotFalse($fh);
         return $fh;
     }
@@ -227,7 +221,8 @@ final class RecorderTest extends TestCase
         $this->assertNotFalse($line);
         $data = json_decode(trim($line), true);
         $this->assertIsArray($data);
-        return $data;
+
+        return ObjectMap::of($data, 'recorded header line');
     }
 
     /**
@@ -246,7 +241,7 @@ final class RecorderTest extends TestCase
             }
             $data = json_decode($line, true);
             $this->assertIsArray($data);
-            $events[] = $data;
+            $events[] = ObjectMap::of($data, 'recorded event line');
         }
         return $events;
     }

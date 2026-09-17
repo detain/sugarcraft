@@ -30,7 +30,7 @@ final class DiffWriter
      * @param string $path Output file path
      * @param string $expected Expected output (from cassette)
      * @param string $actual Actual output (from program)
-     * @param string $context Number of context lines around changes (default: 3)
+     * @param int $context Number of context lines around changes (default: 3)
      * @return int Number of bytes written, or false on failure
      */
     public function writeUnifiedDiff(
@@ -132,6 +132,8 @@ final class DiffWriter
     /**
      * Generate the raw diff lines for a unified diff.
      *
+     * @param list<string> $expected
+     * @param list<string> $actual
      * @return array{haves: list<string>, lacks: list<string>, changes: list<array{type: string, line: int, exp: string, act: string}>}
      */
     private function generateUnifiedDiffLines(array $expected, array $actual, int $_context): array
@@ -204,6 +206,7 @@ final class DiffWriter
 
         $hunkLines = [];
         $hunkStart = null;
+        /** @var list<array{type: string, line: int, content: string}> $hunkContents */
         $hunkContents = [];
 
         foreach ($changes as $_i => $change) {
@@ -245,7 +248,7 @@ final class DiffWriter
     /**
      * Add context lines around a change.
      *
-     * @param array &$hunkContents
+     * @param list<array{type: string, line: int, content: string}> &$hunkContents
      * @param list<string> $lines
      * @param int $startLine
      * @param int $context
@@ -264,6 +267,8 @@ final class DiffWriter
 
     /**
      * Format a single hunk in unified diff format.
+     *
+     * @param list<array{type: string, line: int, content: string}> $contents
      */
     private function formatHunk(int $_start, array $contents, int $expCount, int $actCount): string
     {

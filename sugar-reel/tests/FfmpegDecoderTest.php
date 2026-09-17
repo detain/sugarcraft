@@ -66,6 +66,10 @@ final class FfmpegDecoderTest extends TestCase
         });
 
         $this->assertStringContainsString('ignoring 1 HTTP request header', $logged);
+        // Round-1 review m4, decoder leg: the notice must not echo the credential
+        // it just refused to send — negative direction, same invariant as the
+        // audio companion's drop test.
+        $this->assertStringNotContainsString('Bearer x', $logged, 'never log header VALUES');
     }
 
     // -------------------------------------------------------------------------

@@ -174,8 +174,16 @@ final class Mailbox
      * sitting in the inbox when called. Does NOT mark the returned message
      * read — call markRead() explicitly. Returns null if timeoutSeconds
      * elapses with no unread message appearing.
+     *
+     * @param callable(int):void|null $sleeper
+     *        Sleep seam (same family as {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow}'s
+     *        clock): the poll loop calls it with the microseconds owed instead
+     *        of `usleep()`. Production passes nothing and behaves exactly as
+     *        before; a test can count naps to assert the already-unread fast
+     *        path never entered this loop, instead of bounding the call by
+     *        wall time a loaded scheduler can violate.
      */
-    public function waitForMessage(string $teammateId, float $timeoutSeconds = 5.0): ?TeamMessage
+    public function waitForMessage(string $teammateId, float $timeoutSeconds = 5.0, ?callable $sleeper = null): ?TeamMessage
     {
         // Capture the wake token BEFORE the initial inbox check (mirroring the
         // loop body's read-token-then-check-inbox order below). If the token
@@ -190,6 +198,15 @@ final class Mailbox
             return $message;
         }
 
+        // Resolved AFTER the fast-path return, so a zero-nap count means
+        // "the loop was never reached" and not "the loop ran on a no-op
+        // sleeper".
+        $nap = $sleeper !== null
+            ? \Closure::fromCallable($sleeper)
+            : static function (int $microseconds): void {
+                usleep($microseconds);
+            };
+
         $deadline = microtime(true) + $timeoutSeconds;
         $pollIntervalSeconds = 0.005;
         $maxPollIntervalSeconds = 0.1;
@@ -200,7 +217,7 @@ final class Mailbox
                 return null;
             }
 
-            usleep((int) round(min($pollIntervalSeconds, $remaining) * 1_000_000));
+            $nap((int) round(min($pollIntervalSeconds, $remaining) * 1_000_000));
             $pollIntervalSeconds = min($pollIntervalSeconds * 2, $maxPollIntervalSeconds);
 
             $currentWakeToken = $this->wakeMarkerToken($teammateId);

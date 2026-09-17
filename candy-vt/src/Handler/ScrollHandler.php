@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vt\Handler;
 
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Cursor\Cursor;
 
 /**

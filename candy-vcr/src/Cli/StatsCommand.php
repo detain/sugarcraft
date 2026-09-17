@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * `candy-vcr stats <cassette>`
@@ -123,8 +124,9 @@ final class StatsCommand implements Command
             if ($event->kind !== EventKind::Input) {
                 continue;
             }
-            if (isset($event->payload['msg']['@type'])) {
-                $type = (string) $event->payload['msg']['@type'];
+            $msg = $event->payload['msg'] ?? null;
+            if (is_array($msg) && isset($msg['@type'])) {
+                $type = Scalars::string($msg['@type'], 'stats msg @type');
                 $msgCounts[$type] = ($msgCounts[$type] ?? 0) + 1;
             } elseif (isset($event->payload['b'])) {
                 $rawByteCount++;

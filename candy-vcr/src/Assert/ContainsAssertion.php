@@ -67,7 +67,9 @@ final class ContainsAssertion implements Assertion
      */
     private function buildDiffMessage(string $expected, string $actual): string
     {
-        $escaped = preg_replace('/[^\x20-\x7e]/', '.', $actual);
+        // preg_replace returns null only on a PCRE error (invalid UTF-8 in
+        // $actual); the raw string is then the best possible display value.
+        $escaped = preg_replace('/[^\x20-\x7e]/', '.', $actual) ?? $actual;
         $truncated = strlen($escaped) > 100
             ? substr($escaped, 0, 100) . '…'
             : $escaped;

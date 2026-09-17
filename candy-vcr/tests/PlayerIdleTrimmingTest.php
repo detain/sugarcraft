@@ -54,7 +54,6 @@ final class PlayerIdleTrimmingTest extends TestCase
             );
 
             // Just check that it runs without error
-            $this->assertNotNull($result);
         } finally {
             @unlink($path);
         }
@@ -91,12 +90,16 @@ final class PlayerIdleTrimmingTest extends TestCase
                 idleThresholdSeconds: null,
             );
 
-            $this->assertNotNull($result);
         } finally {
             @unlink($path);
         }
     }
 
+    /**
+     * @param resource $input
+     * @param resource $output
+     * @param \React\EventLoop\LoopInterface $loop
+     */
     private function createEchoProgram($input, $output, $loop): Program
     {
         return new Program(

@@ -57,10 +57,13 @@ interface CsiHandler
      * Select Graphic Rendition — set text attributes from $params.
      *
      * The list is flattened: `:`-separated sub-parameters arrive as adjacent
-     * entries. Handlers that must tell `SGR 4 : 3` (curly underline) from
-     * `SGR 4 ; 3` (underline + italic) consult {@see Parser::subparams()}
-     * through the parser instance they are wired to, or reconstitute groups
-     * with {@see Parser::groupSubparameters()}.
+     * entries. A handler that must tell `SGR 4 : 3` (curly underline) from
+     * `SGR 4 ; 3` (underline + italic) opts into {@see SubparamsAwareHandler} and
+     * reads the continuation flags the parser pushes in the same dispatch chain —
+     * how candy-vt's renderer `CsiHandlerImpl` gets them (forwarded down by
+     * `RendererHandler`). Alternatively a parser owner reads
+     * {@see Parser::subparams()} after the dispatch or reconstitutes groups with
+     * {@see Parser::groupSubparameters()}.
      *
      * @param list<int> $params  CSI parameter bytes; -1 means default.
      */

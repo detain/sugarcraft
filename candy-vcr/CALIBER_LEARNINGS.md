@@ -90,7 +90,7 @@ This is the baseline before render-pipeline work. Per-event cost will grow as Ph
 
 ### Snapshot equality
 
-Added `Snapshot::equals()` that compares `grid` and `cursor` (but NOT `time`) to enable frame dedup across different virtual timestamps. Also added `equalsWithTime()` for exact reproducibility checks. Added `CellGrid::equals()` by iterating all cells and delegating to `Cell::equals()`. Added `Cursor::equals()` for completeness (already had in original implementation).
+Added `Snapshot::equals()` that compares `grid` and `cursor` (but NOT `time`) to enable frame dedup across different virtual timestamps. Also added `equalsWithTime()` for exact reproducibility checks. Added `Buffer::equals()` (the grid class since the CellGrid collapse) by iterating all cells and delegating to `Cell::equals()`. Added `Cursor::equals()` for completeness (already had in original implementation).
 
 ### typingSpeed in CassetteHeader
 

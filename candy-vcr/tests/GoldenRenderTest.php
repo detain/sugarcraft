@@ -60,7 +60,7 @@ final class GoldenRenderTest extends TestCase
         $output = '';
         for ($r = 0; $r < min(3, $grid->rows); $r++) {
             for ($c = 0; $c < min(10, $grid->cols); $c++) {
-                $cell = $grid->get($r, $c);
+                $cell = $grid->cell($r, $c);
                 if ($cell->char !== "\0" && $cell->char !== ' ') {
                     $output .= $cell->char;
                 }

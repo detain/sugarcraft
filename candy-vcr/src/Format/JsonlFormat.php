@@ -8,6 +8,8 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
+use SugarCraft\Vcr\Support\ObjectMap;
+use SugarCraft\Vcr\Support\Scalars;
 
 /**
  * JSONL cassette serializer — one JSON document per line. The first line is
@@ -168,7 +170,7 @@ final class JsonlFormat implements Format
         return $payload;
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     private function decodeHeader(array $data, int $lineNo): CassetteHeader
     {
         if (!isset($data['v'])) {
@@ -197,35 +199,53 @@ final class JsonlFormat implements Format
         }
 
         return new CassetteHeader(
-            version: (int) $data['v'],
-            createdAt: (string) $data['created'],
-            cols: (int) $data['cols'],
-            rows: (int) $data['rows'],
-            runtime: (string) $data['runtime'],
-            timestampMode: isset($data['timestampMode']) ? (string) $data['timestampMode'] : CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
+            version: Scalars::int($data['v'], 'header v'),
+            createdAt: Scalars::string($data['created'], 'header created'),
+            cols: Scalars::int($data['cols'], 'header cols'),
+            rows: Scalars::int($data['rows'], 'header rows'),
+            runtime: Scalars::string($data['runtime'], 'header runtime'),
+            timestampMode: self::timestampModeOf($data['timestampMode'] ?? CassetteHeader::TIMESTAMP_MODE_ABSOLUTE),
             env: $env,
             typingSpeed: $typingSpeed,
             theme: $theme,
         );
     }
 
-    /** @param array<string, mixed> $data */
+    /**
+     * Parse the timestampMode discriminator at the trust boundary so the
+     * literal-union type reaches CassetteHeader intact; the header ctor
+     * re-validates independently.
+     *
+     * @return 'absolute'|'relative'
+     */
+    private static function timestampModeOf(mixed $value): string
+    {
+        $mode = Scalars::string($value, 'header timestampMode');
+        if ($mode === CassetteHeader::TIMESTAMP_MODE_ABSOLUTE || $mode === CassetteHeader::TIMESTAMP_MODE_RELATIVE) {
+            return $mode;
+        }
+        throw new \InvalidArgumentException(
+            "CassetteHeader timestampMode must be 'absolute' or 'relative', got '{$mode}'",
+        );
+    }
+
+    /** @param array<array-key, mixed> $data */
     private function decodeEvent(array $data, int $lineNo): Event
     {
         if (!array_key_exists('t', $data) || !array_key_exists('k', $data)) {
             throw new \RuntimeException("candy-vcr: event on line {$lineNo} missing 't' or 'k'");
         }
-        $kind = EventKind::tryFrom((string) $data['k']);
+        $kind = EventKind::tryFrom(Scalars::string($data['k'], 'event k'));
         if ($kind === null) {
-            $bad = (string) $data['k'];
-            throw new \RuntimeException("candy-vcr: event on line {$lineNo} has unknown kind '{$bad}'");
+            throw new \RuntimeException("candy-vcr: event on line {$lineNo} has unknown kind '" . Scalars::string($data['k'], 'event k') . "'");
         }
-        $t = (float) $data['t'];
+        $t = Scalars::float($data['t'], 'event t');
         unset($data['t'], $data['k']);
-        return new Event(t: $t, kind: $kind, payload: $data);
+
+        return new Event(t: $t, kind: $kind, payload: ObjectMap::of($data, "event on line {$lineNo} payload"));
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     private function jsonEncode(array $data): string
     {
         $json = json_encode($data, JSON_UNESCAPED_SLASHES);

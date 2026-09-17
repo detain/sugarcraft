@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Encode;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\PhpGifEncoder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * Regression: every image descriptor carries the Local Color Table flag.
@@ -50,7 +51,7 @@ final class PhpGifEncoderLctTest extends TestCase
             $encoder = new PhpGifEncoder();
             $encoder->encode($pngPaths, $gifPath, 30);
 
-            $gif = file_get_contents($gifPath);
+            $gif = Stream::read($gifPath);
             $this->assertIsString($gif);
 
             $packedBytes = $this->extractImageDescriptorPackedBytes($gif);

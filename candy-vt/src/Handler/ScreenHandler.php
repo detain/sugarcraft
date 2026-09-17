@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Handler;
 
-use Closure;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Charset\Charsets;
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Cursor\Cursor;
@@ -15,7 +14,9 @@ use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Msg\FocusInMsg;
 use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Rendition;
 use SugarCraft\Ansi\Parser\Handler;
+use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
@@ -32,7 +33,7 @@ use SugarCraft\Vt\Sgr\Sgr;
  * when alt mode is entered, the current Buffer/Cursor/Sgr move into the
  * `saved*` fields and a fresh blank Buffer takes the active slot.
  */
-final class ScreenHandler implements Handler
+final class ScreenHandler implements SubparamsAwareHandler
 {
     public Buffer $buffer;
     public Cursor $cursor;
@@ -82,41 +83,28 @@ final class ScreenHandler implements Handler
     public bool $wrapPending = false;
 
     /**
-     * Late-bound ECMA-48 colon-continuation flags for the CSI sequence
-     * currently being dispatched — wired by {@see
-     * \SugarCraft\Vt\Terminal\Terminal::new()} to the owning parser's
-     * {@see \SugarCraft\Ansi\Parser\Parser::subparams()}. SGR needs them to
-     * tell `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
-     * italic), because candy-ansi flattens both to [4, 3]. Unattached —
-     * direct construction — SGR keeps its historical next-slot peek.
+     * ECMA-48 colon-continuation flags the parser PUSHED for the sequence
+     * currently being dispatched, via {@see SubparamsAwareHandler::setSubparams()}
+     * immediately before each CSI/DCS dispatch. SGR needs them to tell
+     * `CSI 4 : 3 m` (curly underline) from `CSI 4 ; 3 m` (underline +
+     * italic), because candy-ansi flattens both to [4, 3]. Null — nothing
+     * ever pushed, e.g. direct construction with a manual dispatch loop —
+     * keeps SGR's historical next-slot peek.
      *
-     * @var (Closure(): list<bool>)|null
+     * Fresh per sequence by contract; never read outside a dispatch.
+     *
+     * @var list<bool>|null
      */
-    private ?Closure $subparamsProvider = null;
+    private ?array $subparams = null;
 
     /**
-     * Wire the parser's sub-parameter continuation flags for SGR colon
-     * handling. Called once at terminal construction; see
-     * {@see $subparamsProvider}.
+     * {@inheritDoc}
      *
-     * @param Closure(): list<bool> $provider
+     * @param list<bool> $subparams
      */
-    public function attachSubparamsProvider(Closure $provider): void
+    public function setSubparams(array $subparams): void
     {
-        $this->subparamsProvider = $provider;
-    }
-
-    /**
-     * Continuation flags for the in-flight dispatch, or null when no parser
-     * is attached. Safe to call only from inside a dispatch — the parser has
-     * not cleared its flags yet at that point.
-     *
-     * @return list<bool>|null
-     */
-    private function currentSubparams(): ?array
-    {
-        $provider = $this->subparamsProvider;
-        return $provider === null ? null : $provider();
+        $this->subparams = $subparams;
     }
 
     /**
@@ -339,14 +327,31 @@ final class ScreenHandler implements Handler
             }
         }
 
+        // A graphic printed onto a line already carrying a DEC "hash" line
+        // rendition inherits it: the stamp lives on the cells (so it scrolls
+        // with the content), and re-writing one must not silently drop it.
+        // Mirror of the renderer's {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::printable()}.
+        $rendition = $this->buffer->cell($r, $c)->rendition;
+
         $cell = new Cell(
             grapheme: $rune,
             sgr: $this->sgr,
+            rendition: $rendition,
             hyperlink: $this->currentHyperlink,
         );
         $this->putCell($r, $c, $cell);
         for ($i = 1; $i < $width; $i++) {
             $this->putCell($r, $c + $i, Cell::continuation($cell));
+        }
+
+        // DECDWL (`ESC # 6`) draws this line double-width: while the rendition
+        // is DoubleWidth a single-cell glyph claims one extra column (a base +
+        // continuation), and only when the pair still fits — at the right
+        // margin the glyph stays single-cell so the phantom-wrap geometry is
+        // untouched. Identical rule to the renderer path.
+        $extra = $rendition === Rendition::DoubleWidth && $c + $width + 1 <= $this->buffer->cols ? 1 : 0;
+        for ($i = 0; $i < $extra; $i++) {
+            $this->putCell($r, $c + $width + $i, Cell::continuation($cell));
         }
 
         // Deferred wrap (xterm `cursor_off` semantics): the cursor parks on
@@ -355,7 +360,7 @@ final class ScreenHandler implements Handler
         // set by GEOMETRY alone so a DECAWM toggle mid-wrap behaves like
         // xterm — printing with ?7l overwrites the last cell (the flag
         // re-arms), and re-enabling ?7h resumes the deferred wrap.
-        $nextCol = $c + $width;
+        $nextCol = $c + $width + $extra;
         $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $nextCol));
         $this->wrapPending = $nextCol >= $this->buffer->cols;
     }
@@ -397,7 +402,7 @@ final class ScreenHandler implements Handler
 
         switch ($finalChar) {
             case 'm':
-                $this->sgr = $this->sgrHandler->apply($params, $this->sgr, $this->currentSubparams());
+                $this->sgr = $this->sgrHandler->apply($params, $this->sgr, $this->subparams);
                 return;
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
             case 'H': case 'd': case 'f':
@@ -415,14 +420,52 @@ final class ScreenHandler implements Handler
                 $this->wrapPending = false;
                 return;
             case 's':
-                // CSI s — SCO save-cursor alias of DECSC: same GENERAL slot
-                // as ESC 7, and the phantom cell survives the snapshot (it
-                // is DECRC that clears on the way back).
-                $this->saveCursor();
-                return;
             case 'u':
-                // CSI u — SCO restore-cursor alias of DECRC.
-                $this->restoreCursor();
+                // Private-marker forms are NOT the SCO aliases. xterm switches
+                // the whole final-byte table on a `?` marker (VTPrsTbl.c:558
+                // `?` = CASE_DEC_STATE → charproc.c:3898-3900 parsestate =
+                // dec_table), where 's' saves the DEC private MODE settings
+                // (VTPrsTbl.c:4195 CASE_XTERM_SAVE → charproc.c:6209-6210 →
+                // savemodes(), "process xterm private modes save",
+                // charproc.c:8049-8053) — a feature this emulator does not
+                // model, a deliberate gap — and 'u' is ignored outright
+                // (VTPrsTbl.c:4198 CASE_GROUND_STATE). tmux agrees by
+                // table miss: its CSI entries carry ('s', "") and ('u', "")
+                // only (input.c:345,347), marker bytes 0x3c-0x3f collect into
+                // the key's interm_buf (input.c:577), and a miss returns
+                // before the switch (input.c:1483-1487). So `CSI ? u` — the
+                // kitty keyboard-capability QUERY — must be inert here: no
+                // cursor move, no GENERAL-slot touch. (We still do not answer
+                // it: no kitty reply channel, by design.) Intermediate bytes
+                // are deliberately NOT gated on this pair — `CSI SP s`/`CSI !
+                // s` still save here, inert in both refs (xterm csi_sp_table
+                // 's' = GROUND, VTPrsTbl.c:1920; csi_ex_table VTPrsTbl.c:1271;
+                // tmux strcmp miss, input.c:771-779): the marked finals are
+                // the query hazard this gate answers.
+                if ($prefix !== 0) {
+                    return;
+                }
+                // CSI s / CSI u — SCO save/restore-cursor aliases of DECSC/
+                // DECRC: same GENERAL slot as ESC 7/8, and the phantom cell
+                // survives the snapshot (it is DECRC that clears on the way
+                // back). `CSI Ps s` / `CSI Ps u` (params, NO SP intermediate)
+                // stay save/restore: xterm routes them to the very same
+                // ANSI_SC/ANSI_RC cases (VTPrsTbl.c:623,626) — it merely
+                // no-ops the non-default param spelling via only_default()
+                // (charproc.c:4899,4912-4913 + 2219-2223; xterm's LR-margin
+                // DECSLRM branch at charproc.c:4885-4898 is not modelled —
+                // candy-vt has no DECLRMM) — while tmux ignores the param
+                // (input.c:1820-1831 → input_save_state/input_restore_state,
+                // input.c:849-871). Never a cursor shape: DECSCUSR needs the
+                // SP intermediate + 'q' (xterm csi_sp_table, VTPrsTbl.c:1917-
+                // 1918; tmux input.c:342 `{ 'q', " ", INPUT_CSI_DECSCUSR }`),
+                // handled by the `case 'q'` arm below — following tmux here
+                // keeps the request in save/restore, silently swallowed.
+                if ($finalChar === 's') {
+                    $this->saveCursor();
+                } else {
+                    $this->restoreCursor();
+                }
                 return;
             case 'K': case 'J': case 'X': case 'P': case '@':
                 if ($finalChar === 'J' && ($params[0] ?? -1) === 3 && $intermediate === 0
@@ -574,9 +617,11 @@ final class ScreenHandler implements Handler
         // `CSI # P/Q/R/S`) where '8' is a collected digit, not a final; no
         // surveyed emulator dispatches DECALN from a CSI form and the
         // candy-ansi transition table we mirror agrees. Do not "fix" the
-        // parser for it. Unimplemented # finals (DECDHL ESC # 3/# 4,
-        // DECSWL/DECDWL ESC # 5/# 6 — follow-up work) fall through to
-        // designate(), preserving their historical silent-ignore exactly.
+        // parser for it. The DEC line-rendition family `ESC # 3`/`# 4` (DECDHL
+        // double-height top/bottom), `ESC # 5` (DECSWL single) and `ESC # 6`
+        // (DECDWL double-width) are implemented via {@see setLineRendition()};
+        // any OTHER `#` final still falls through to designate(), preserving
+        // its historical silent-ignore exactly.
         // (The candy-ansi parser keeps a SINGLE intermediate byte, last-wins,
         // so the malformed double-intermediate stream `ESC ( # 8` arrives as
         // ('8', '#') and now runs DECALN where it used to be ignored — an
@@ -584,7 +629,11 @@ final class ScreenHandler implements Handler
         // it, garbage streams are the only way to send it.)
         if ($intermediate === 0x23 /* '#' */) {
             match ($final) {
-                0x38 /* '8' */ => $this->displayAlignmentTest(),
+                0x33 /* '3' */ => $this->setLineRendition(Rendition::DoubleTop),     // DECDHL top half
+                0x34 /* '4' */ => $this->setLineRendition(Rendition::DoubleBottom),  // DECDHL bottom half
+                0x35 /* '5' */ => $this->setLineRendition(Rendition::None),          // DECSWL single width/height
+                0x36 /* '6' */ => $this->setLineRendition(Rendition::DoubleWidth),   // DECDWL double width
+                0x38 /* '8' */ => $this->displayAlignmentTest(),                      // DECALN
                 default => $this->designate($intermediate, $final),
             };
             return;
@@ -631,10 +680,13 @@ final class ScreenHandler implements Handler
      *
      * VT500 §DECSC saves cursor position, active SGR rendition, the
      * G0..G3 charset designations (SCS state) and DECOM. The position
-     * half rides on the Cursor value object (`savedRow`/`savedCol`), so
-     * the slot survives DECSTR/DECALN exactly as before; the remaining
-     * three halves land in the `generalSaved*` fields. The AUX alt-screen
-     * slot is untouched — the two saves are independent.
+     * half rides on the Cursor value object (`savedRow`/`savedCol`); the
+     * remaining three halves land in the `generalSaved*` fields. DECALN
+     * preserves this whole slot, but DECSTR OVERWRITES it with home and
+     * re-saves the companions from the post-reset default state — xterm's
+     * DECSTR branch issues `CursorSave` then forces `sc[whichBuf].row/.col`
+     * to 0 (`charproc.c:14559-14561`); see {@see self::softReset()}. The AUX
+     * alt-screen slot is untouched — the two saves are independent.
      */
     private function saveCursor(): void
     {
@@ -1168,18 +1220,35 @@ final class ScreenHandler implements Handler
      *
      * Design choice — xterm's ctlseqs records DECSTR in a single line;
      * VT510 Table 5-9 enumerates DEC hardware, whose variant resets more.
-     * We follow a deliberately narrower subset than xterm-411 where the
-     * buffer geometry is concerned (see DIVERGENCE), while matching xterm
-     * on cursor shape.
+     * We now match xterm-411 on the full soft-reset subset (see RESETS vs
+     * PRESERVES below), having closed the earlier narrower-subset divergence
+     * on margins, character sets and the DECSC slot. The one place we still
+     * differ from xterm is the VISIBLE cursor: xterm's DECSTR leaves it in
+     * place (only the `if (full)` branch calls `CursorSet(0,0)`,
+     * `charproc.c:14546`), while candy-vt homes it — a pre-existing choice,
+     * orthogonal to the four in-scope buffer-geometry items (margins, charsets
+     * and the DECSC slot now reset; tab stops left preserved — all four now
+     * matching xterm), pinned by the reset matrix.
      *
-     * Resets: SGR pen, cursor home + visible, DECOM off, DECAWM back to its
-     * power-on ON, sync output off (flushing whatever the queue held), wrap
-     * flag dropped, and the DECSCUSR cursor shape — on BOTH
-     * {@see Cursor::$shape} and {@see Mode::$cursorShape}.
-     * SCOPED SUBSET: the DEC-private extension modes outside this list —
-     * mouse tracking, bracketed paste, focus reporting, alt screen — SURVIVE.
-     * Cursor shape is NOT in that list; it is reset, for the source-backed
-     * reason below.
+     * RESETS — everything in this list matches xterm-411's DECSTR except the
+     * visible-cursor home, the declared divergence disclosed above:
+     * SGR pen, cursor home + visible,
+     * DECOM off, DECAWM back to its power-on ON, sync output off (flushing
+     * whatever the queue held), wrap flag dropped, the DECSCUSR cursor shape on
+     * BOTH {@see Cursor::$shape} and {@see Mode::$cursorShape}, the scrolling
+     * region to full screen, the character-set designations (G0/G1 to ASCII,
+     * G2/G3 to the supplemental-set default that candy-vt holds as ASCII, GL→G0,
+     * single shift dropped), and the DECSC saved slot to home — with its
+     * rendition companions re-saved from the post-reset state, exactly what
+     * xterm's `CursorSave` leaves in `sc[whichBuf]` for the state this port
+     * models (xterm's `wrap_flag`/`curgr` members have no candy-vt counterpart).
+     * PRESERVES: screen contents, scrollback, tab stops, line rendition
+     * (DECDHL/DECSWL/DECDWL), the alt screen, and the DEC-private extension
+     * modes outside the list above (mouse tracking, bracketed paste, focus
+     * reporting) — tab stops and the scrollback preserved because xterm gates
+     * them behind `full`/`saved` arguments DECSTR passes False, not a divergence.
+     * Cursor shape is NOT in the preserve list; it is reset, for the
+     * source-backed reason below.
      *
      * CURSOR SHAPE: xterm resets DECSCUSR on the soft reset. `CASE_DECSTR`
      * (`charproc.c:6154-6156`) calls `VTReset(xw, False, False)`, which runs
@@ -1209,19 +1278,29 @@ final class ScreenHandler implements Handler
      * {@see self::__construct()}, and no rasterizer reads this Cursor class,
      * so this is state-integrity work, not a visible-drawing fix.
      *
-     * DIVERGENCE (our choice, not xterm's): xterm also resets the scrolling
-     * region (`resetMarginMode(xw)`, `charproc.c:14398`, likewise above the
-     * `if (full)` gate), the character-set designations
-     * (`resetCharsets(screen)`, `charproc.c:14410`, same side of the gate),
-     * and the DECSC saved cursor — the DECSTR branch itself issues
-     * `CursorSave(xw)` then forces `screen->sc[screen->whichBuf].row` and
-     * `.col` to 0 (`charproc.c:14559-14561`), i.e. it overwrites the save
-     * slot with home rather than preserving it. candy-vt keeps margins,
-     * tab stops, charsets, the saved cursor and the scrollback across
-     * DECSTR; only the items in the Resets list above move. Tab stops and
-     * the scrollback agree with xterm, whose `TabReset` is inside
-     * `if (full)` (`charproc.c:14449`) and whose scrollback flush is gated
-     * on the separate `saved` argument (`charproc.c:14372-14375`).
+     * RESOLVED DIVERGENCE: an earlier revision preserved the scrolling region,
+     * the character-set designations and the DECSC saved cursor across DECSTR as
+     * a deliberately narrower subset. That was a divergence from xterm, whose
+     * soft reset runs `resetMarginMode(xw)` (`charproc.c:14398`) and
+     * `resetCharsets(screen)` (`charproc.c:14410`) above the RIS-only
+     * `if (full)` gate, and whose DECSTR branch issues `CursorSave(xw)` then
+     * forces `screen->sc[screen->whichBuf].row` and `.col` to 0
+     * (`charproc.c:14559-14561`) — overwriting the save slot with home. Those
+     * three are now reset to match. What remains untouched — tab stops and the
+     * scrollback — AGREES with xterm rather than diverging: `TabReset` sits
+     * inside `if (full)` (`charproc.c:14449`) and the scrollback flush is gated
+     * on the separate `saved` argument (`charproc.c:14372-14375`) that DECSTR
+     * passes False.
+     *
+     * LINE RENDITION (`ESC # 3`–`ESC # 6`): DECDHL/DECSWL/DECDWL act on the
+     * cursor's current line the instant they arrive — they stamp a per-cell
+     * attribute onto existing screen content rather than arming a pending
+     * mode. DECSTR clears no screen content, so it clears no rendition either,
+     * and there is no "double-size mode" state for it to forget; this AGREES
+     * with xterm, whose soft reset likewise leaves the per-cell double-height/
+     * double-width attributes in place (contrast {@see self::displayAlignmentTest()},
+     * DECALN, which rewrites every cell to a default-rendition 'E' and so does
+     * reset them — again matching xterm's `xterm_ResetDouble` under DECALN).
      *
      * @see https://vt100.net/docs/vt510-rm/DECSTR.html (DECSTR)
      * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html (DECSTR)
@@ -1232,18 +1311,43 @@ final class ScreenHandler implements Handler
             // Exiting synchronized output — same flush rule as CSI 2026 l.
             $this->flushPendingMutations();
         }
+
+        // Scrolling region back to full screen. xterm's `CASE_DECSTR` routes to
+        // `VTReset(xw, False, False)` (`charproc.c:6154-6156`), and
+        // `ReallyReset()` runs `resetMarginMode(xw)` (`charproc.c:14398`)
+        // ABOVE the RIS-only `if (full)` gate at `charproc.c:14432` — so the
+        // soft reset resets top/bottom margins exactly as the hard one does.
+        $this->scrollRegionTop = 0;
+        $this->scrollRegionBottom = $this->buffer->rows - 1;
+
         $this->sgr = Sgr::empty();
-        // `shape: 0` here equals Cursor's own default, so deleting it would
-        // change nothing today — it is written explicitly so the reset is
-        // legible at the call site and survives a future change to that
-        // default. The behavioural half of this reset is the
-        // ->withCursorShape(0) on the mode below. See the CURSOR SHAPE
-        // paragraph above for why xterm mandates a reset at all.
+
+        // Character-set designations back to their reset defaults, GL to G0, any
+        // armed single shift dropped. xterm runs `resetCharsets(screen)`
+        // (`charproc.c:14410`), likewise above the gate: `initCharset(0/1,
+        // nrc_ASCII)` sends G0/G1 to ASCII (`charproc.c:1271-1272`), G2/G3 to
+        // `dft_upss` (`charproc.c:1273-1274`) which UTF-8 forces back to ASCII
+        // (`charproc.c:1259-1261` — this port is UTF-8 only), and `curgl = 0` /
+        // `curgr = 2` / `curss = 0` (`charproc.c:1277-1279`) drop the GL/GR/SS
+        // invocations. candy-vt models no UPSS/GR resource, so all four GL slots
+        // land on ASCII exactly as hardReset()/DECALN already leave them, and the
+        // single shift is dropped.
+        $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
+        $this->gl = 0;
+        $this->singleShift = null;
+
+        // DECSC slot home. xterm's DECSTR branch (the `else` of `if (full)`)
+        // issues `CursorSave(xw)` then forces `screen->sc[whichBuf].row` and
+        // `.col` to 0 (`charproc.c:14559-14561`) — it OVERWRITES the saved
+        // position with home rather than preserving it, so `savedRow`/`savedCol`
+        // go to 0 (a real save), NOT the carried-through value this method used
+        // to keep. `shape: 0` equals Cursor's own default (see CURSOR SHAPE
+        // above); the visible cursor homes as before.
         $this->cursor = new Cursor(
             visible: true,
             shape: 0,
-            savedRow: $this->cursor->savedRow,
-            savedCol: $this->cursor->savedCol,
+            savedRow: 0,
+            savedCol: 0,
         );
         $this->wrapPending = false;
         $this->mode = $this->mode
@@ -1252,6 +1356,33 @@ final class ScreenHandler implements Handler
             ->withCursorVisible(true)
             ->withSyncUpdate(false)
             ->withCursorShape(0);
+
+        // The DECSC slot's rendition companions — VT500 §DECSC also saves SGR,
+        // G0..G3, GL and DECOM, and xterm keeps those in the very same `sc[]`
+        // struct that DECSTR's `CursorSave` just overwrote (cursor.c:419-423
+        // indexes `sc[whichBuf]`, so the OTHER buffer's slot — ours `parkedGeneral`
+        // — is not written here either). Because xterm issues a fresh save from
+        // the post-reset cursor, these now hold the DEFAULT (post-reset) state,
+        // so a following DECRC restores home + default pen + ASCII rather than a
+        // stale pre-reset snapshot. Read from the live fields exactly like
+        // saveCursor() does — origin mode is already false from the
+        // withOriginMode(false) above, so this mirrors a literal false today but
+        // stays honest if the reset order ever changes.
+        $this->generalSavedSgr = $this->sgr;
+        $this->generalSavedCharsets = $this->charsets;
+        $this->generalSavedGl = $this->gl;
+        $this->generalSavedOriginMode = $this->mode->originMode;
+
+        // Tab stops and the scrollback are DELIBERATELY untouched — and these
+        // two never diverged from xterm at all (unlike the three items above,
+        // which this change just aligned): its `TabReset(xw->tabs)` sits INSIDE
+        // `if (full)` (`charproc.c:14449`),
+        // so DECSTR never rebuilds the stops (only RIS does), and its scrollback
+        // flush is gated on the separate `saved` argument (`charproc.c:14372-14375`)
+        // that DECSTR passes as False. The line rendition (DECDHL/DECSWL/DECDWL)
+        // likewise survives — DECSTR clears no screen content, so it clears no
+        // stamped cell attribute (see LINE RENDITION above).
+
         $this->pendingMutations = [];
     }
 
@@ -1272,9 +1403,10 @@ final class ScreenHandler implements Handler
      * (`screen->do_wrap = False`) — NOT the DECAWM mode; `resetRendition`;
      * `resetMargins`; `xterm_ResetDouble`; `CursorSet(screen, 0, 0, ...)`; and
      * `ScrnFillRectangle(..., 'E', nrc_ASCII, ...)`. This method reproduces every
-     * step of that list which candy-vt models; `xterm_ResetDouble` has no
-     * counterpart because line-width/height modes (DECDHL/DECSWL/DECDWL) are
-     * unimplemented here — see {@see self::escDispatch()}. Because the fill walks
+     * step of that list which candy-vt models, `xterm_ResetDouble` included:
+     * the whole-screen fill re-writes every cell with a default-rendition 'E'
+     * cell, which clears any DECDHL/DECSWL/DECDWL line state set by
+     * {@see setLineRendition()} as a side effect. Because the fill walks
      * the whole buffer (rows × cols) and homes to absolute 0,0, the 'E' pattern
      * covers the screen regardless of any DECSTBM region or origin mode left
      * behind, and origin mode is off afterwards.
@@ -1333,6 +1465,34 @@ final class ScreenHandler implements Handler
         $this->charsets = [Charsets::ASCII, Charsets::ASCII, Charsets::ASCII, Charsets::ASCII];
         $this->gl = 0;
         $this->singleShift = null;
+    }
+
+    /**
+     * DECDHL / DECSWL / DECDWL — apply a line width/height rendition to the
+     * CURSOR row by re-stamping every cell on it.
+     *
+     * The state rides on the cells (not a side table) so it scrolls with the
+     * content and reaches the snapshot; {@see printChar()} reads it back off
+     * the under-cursor cell to keep painting the line in the selected
+     * rendition. `ESC # 3`/`# 4` mark the row double-height (top/bottom half),
+     * `ESC # 5` (DECSWL) clears it to {@see Rendition::None}, and `ESC # 6`
+     * (DECDWL) marks it double-width — the extra-column-per-glyph consequence
+     * is applied in {@see printChar()}. Mirror of the renderer's
+     * {@see \SugarCraft\Vt\Parser\CsiHandlerImpl::escLineRendition()}.
+     *
+     * @see https://vt100.net/docs/vt510-rm/DECST8.html (DECDHL/DECSWL/DECDWL)
+     */
+    private function setLineRendition(Rendition $rendition): void
+    {
+        $row = $this->cursor->row;
+        if ($row < 0 || $row >= $this->buffer->rows) {
+            return;
+        }
+
+        $cols = $this->buffer->cols;
+        for ($c = 0; $c < $cols; $c++) {
+            $this->putCell($row, $c, $this->buffer->cell($row, $c)->withRendition($rendition));
+        }
     }
 
     /**

@@ -9,6 +9,7 @@ use SugarCraft\Pty\Posix\PosixPump;
 use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * P6.5.6 — performance baseline. Measure wallclock for the canonical
@@ -146,8 +147,8 @@ final class ShirleyOverheadTest extends TestCase
         $pair = $system->open(80, 24);
         $child = $pair->slave()->spawn(['/bin/bash', '-c', 'seq 100000']);
 
-        $stdin = \fopen('/dev/null', 'r');
-        $stdout = \fopen('php://memory', 'w+b');
+        $stdin = Stream::devNull();
+        $stdout = Stream::memory('w+b');
         $this->assertIsResource($stdin);
         $this->assertIsResource($stdout);
 

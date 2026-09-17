@@ -224,6 +224,76 @@ final class CheckPathReposTest extends TestCase
         $this->assertStringContainsString('closure clean', $resultAfter['output']);
     }
 
+    /**
+     * W8-F: `composer install` resolves dev by default, so a ROOT lib's
+     * require-dev siblings are part of the fresh-install path and need their
+     * path-repo too. The checker used to walk production `require` edges only
+     * (scripts/refresh-deps.php carried a separate "supplement" loop for this
+     * gap); the CI "Link sibling libs" step runs --fix alone, so a cross-lib
+     * test pinned on an unmerged sibling fix resolved PACKAGIST and went red.
+     * This pins the consolidated behaviour: --fix --strict-closure injects the
+     * require-dev sibling AND the production closure hanging off it.
+     */
+    public function testFixInjectsRequireDevSiblingsAndTheirClosure(): void
+    {
+        // lib-c is lib-b's production dep; lib-a requires lib-b only in
+        // require-dev. Neither lib-a nor lib-b declares any repositories.
+        \mkdir($this->tmpDir . '/lib-c', 0777, true);
+        $this->writeComposerJson($this->tmpDir . '/lib-c', [
+            'name' => 'sugarcraft/lib-c',
+            'type' => 'library',
+            'require' => ['php' => '^8.3'],
+            'autoload' => ['psr-4' => ['SugarCraft\LibC\\' => 'src/']],
+            'minimum-stability' => 'dev',
+        ]);
+        $this->writeComposerJson($this->tmpDir . '/lib-b', [
+            'name' => 'sugarcraft/lib-b',
+            'type' => 'library',
+            'require' => [
+                'php' => '^8.3',
+                'sugarcraft/lib-c' => 'dev-master',
+            ],
+            'autoload' => ['psr-4' => ['SugarCraft\LibB\\' => 'src/']],
+            'minimum-stability' => 'dev',
+        ]);
+        $this->writeComposerJson($this->tmpDir . '/lib-a', [
+            'name' => 'sugarcraft/lib-a',
+            'type' => 'library',
+            'require' => ['php' => '^8.3'],
+            'require-dev' => [
+                'sugarcraft/lib-b' => 'dev-master',
+            ],
+            'repositories' => [],
+            'autoload' => ['psr-4' => ['SugarCraft\LibA\\' => 'src/']],
+            'minimum-stability' => 'dev',
+        ]);
+
+        // Strict mode must FLAG the require-dev gap (offline: no Packagist probe).
+        $resultBefore = $this->runScript($this->tmpDir, ['--strict-closure', '--no-network']);
+        $this->assertNotEquals(0, $resultBefore['exit'], 'require-dev gap must be flagged');
+        $this->assertStringContainsString('missing path-repo for lib-b', $resultBefore['output']);
+
+        // --fix must inject the require-dev sibling AND lib-b's own closure.
+        $resultFix = $this->runScript($this->tmpDir, ['--fix', '--strict-closure', '--no-network']);
+        $this->assertEquals(0, $resultFix['exit'], 'Script with --fix should exit 0 when all issues are fixable');
+
+        $libAComposer = \json_decode(\file_get_contents($this->tmpDir . '/lib-a/composer.json'), true);
+        $this->assertIsArray($libAComposer);
+        $urls = [];
+        foreach ((array) ($libAComposer['repositories'] ?? []) as $repo) {
+            if (($repo['type'] ?? '') === 'path') {
+                $urls[] = (string) ($repo['url'] ?? '');
+            }
+        }
+        \sort($urls);
+        $this->assertSame(['../lib-b', '../lib-c'], $urls, 'lib-a needs ../lib-b (require-dev) and ../lib-c (its closure)');
+
+        // Idempotent re-verify, mirroring the CI step pair.
+        $resultAfter = $this->runScript($this->tmpDir, ['--strict-closure', '--no-network']);
+        $this->assertEquals(0, $resultAfter['exit'], 'Script should exit 0 after fix on clean closure');
+        $this->assertStringContainsString('closure clean', $resultAfter['output']);
+    }
+
     public function testHelpFlagExitsZeroAndPrintsUsage(): void
     {
         // Running from the monorepo root (not a fixture dir) for the help test.

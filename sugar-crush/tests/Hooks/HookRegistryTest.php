@@ -1791,17 +1791,53 @@ final class HookRegistryTest extends TestCase
      * Measured against the hook's OWN report: 200ms is burned before the script
      * hook is reached, so a hook that asked for half a second is given the three
      * tenths that are left and says so when it expires. Remove the clamp and the
-     * expiry message reads "0.5 seconds" and the wall clock is 0.7 instead of
-     * 0.5.
+     * expiry message reads "0.9 seconds" — the figure the hook asked for — and
+     * the "not its own figure" verdict is gone.
+     *
+     * WHY THE BUDGET FIGURE IS A RANGE AND THE PUMP IS A READ COUNT. The chain
+     * arithmetic runs on the registry's real clock (`warmup` spends wall time
+     * to earn what is charged), so the charged figure is only ever "somewhere
+     * strictly under 0.9 and well above zero" — pinning it to `0.[56]` pinned it
+     * to how long `usleep(300_000)` actually took on the box, which is the same
+     * wall-clock coupling this test exists to remove. The expiry PUMP, though,
+     * is now pure: ScriptHook's deadline reads an injected clock that steps half
+     * a second per read, so a correct implementation expires in exactly three
+     * reads (arm, one short slice, overdue) no matter how the CPU is scheduled.
+     * Zero reads means the seam leaked to `microtime(true)` and the verdict is a
+     * scheduler measurement again; more means it pumped on something the scripted
+     * clock cannot produce.
+     *
+     * THE ONE WALL PRECONDITION THAT REMAINS (floor, not verdict): `warmup` must
+     * still finish inside the 0.9s chain budget, or the registry denies at the
+     * chain level BEFORE the hook runs and the regex/read-count pair reddens on
+     * healthy code. Re-measured on this tree the cliff sits at the FULL budget,
+     * not the 600 ms this note once claimed: a warmup stretched anywhere from
+     * 300 to 899.5 ms still leaves a positive remainder, and `withTimeoutSeconds()`
+     * floors that remainder at one `EXIT_POLL_MICROSECONDS` tick (0.01 s) instead
+     * of letting it render as a zero, so the hook still runs and the scripted
+     * clock still expires it inside the [2,4] reads allowed here (12 sweep points
+     * from 300_000 to 899_500 µs of `usleep`, all green; `reads` is 3 at the
+     * ordinary 0.6 s charge and 2 at any charge of 0.5 s or less). The first red
+     * is 900 ms: `remaining <= 0.0`, the chain-level refusal fires, and `reads`
+     * sits at zero. So the box has to TRIPLE a 300 ms `usleep` to redden this —
+     * a scheduling collapse that stops far more of this suite first. The old
+     * version made the VERDICT wall-coupled at ordinary load; this only fails at
+     * extraordinary load, which is the categorically weaker coupling the fixture
+     * itself cannot escape while the charge is chain arithmetic on real time.
      */
     public function testABoundedHookIsChargedWhatIsLeftOfTheChainRatherThanItsOwnFigure(): void
     {
-        $this->registry->register($this->slowAllowingHook('warmup', 300_000));
-        $this->registry->register($this->hangingScriptHook('charged', 0.9));
+        $reads = 0;
+        $clock = static function () use (&$reads): float {
+            ++$reads;
 
-        $started = microtime(true);
+            return ($reads - 1) * 0.5;
+        };
+
+        $this->registry->register($this->slowAllowingHook('warmup', 300_000));
+        $this->registry->register($this->hangingScriptHook('charged', 0.9, clock: $clock));
+
         $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
-        $elapsed = microtime(true) - $started;
 
         $this->assertTrue($result->isDenied(), 'a hook that has not answered has not allowed anything');
         $this->assertStringNotContainsString(
@@ -1809,11 +1845,19 @@ final class HookRegistryTest extends TestCase
             $result->message,
             'the hook started its own clock instead of being charged the chain\'s',
         );
-        $this->assertMatchesRegularExpression('/did not finish within 0\.[56]\d* seconds/', $result->message);
-        $this->assertLessThan(
-            1.05,
-            $elapsed,
-            sprintf('the chain ran past its 0.9s budget: %.3fs', $elapsed),
+        $this->assertMatchesRegularExpression('/did not finish within 0\.\d+ seconds/', $result->message);
+        $this->assertGreaterThanOrEqual(
+            2,
+            $reads,
+            'ScriptHook never consulted the injected clock: its deadline was armed from '
+                . 'microtime(true) again, which makes this verdict — and the 1.05s bound it replaced — '
+                . 'a measurement of the scheduler rather than of the charge',
+        );
+        $this->assertLessThanOrEqual(
+            4,
+            $reads,
+            \sprintf('the scripted clock steps past the charged budget within three reads; %d means '
+                . 'the expiry was reached by pumping the real clock between reads', $reads),
         );
     }
 
@@ -1831,15 +1875,37 @@ final class HookRegistryTest extends TestCase
      * already burned more than its script hooks asked for has produced exactly
      * the freeze being bounded, and running the script hook on top of it would
      * add to a stall that is already over budget.
+     *
+     * HOW "WITHOUT RUNNING IT" IS PROVEN HERE. The old proof was wall clock:
+     * the hook sleeps 30s, so `elapsed < 1.0` meant it could not have run. That
+     * assertion failed on HEALTHY code whenever a contended box stretched the
+     * 400ms warmup past the slack, and it passed vacuously on any machine fast
+     * enough to deny late. Two facts prove the same thing exactly: the hook's
+     * command would touch a canary file as its FIRST act, and the injected
+     * clock counts the reads `execute()` performs — the denial path runs no
+     * hook at all, so the canary is absent and the counter is zero. If a
+     * regression did spawn the child, the scripted clock steps it into expiry
+     * within three reads, so the spawn path is now un-wedgeable too.
      */
     public function testAChainThatRunsOutOfClockDeniesNamingItsBudgetWithoutRunningTheHook(): void
     {
-        $this->registry->register($this->slowAllowingHook('warmup', 400_000));
-        $this->registry->register($this->hangingScriptHook('never-reached', 0.2));
+        $canary = \sys_get_temp_dir() . '/sc_hook_never_ran_' . bin2hex(random_bytes(8));
+        $reads = 0;
+        $clock = static function () use (&$reads): float {
+            ++$reads;
 
-        $started = microtime(true);
+            return ($reads - 1) * 0.5;
+        };
+
+        $this->registry->register($this->slowAllowingHook('warmup', 400_000));
+        $this->registry->register($this->hangingScriptHook(
+            'never-reached',
+            0.2,
+            clock: $clock,
+            command: 'touch ' . \escapeshellarg($canary) . '; sleep 30',
+        ));
+
         $result = $this->registry->executeHooks('PreToolUse', $this->createContext('Bash'));
-        $elapsed = microtime(true) - $started;
 
         $this->assertTrue($result->isDenied());
         // THE BUDGET, and it is the STOPPED hook's own figure — 0.2s is
@@ -1848,11 +1914,11 @@ final class HookRegistryTest extends TestCase
         // whole of E61's S is that stopping here was not enough: naming this
         // number was the misleading part.
         $this->assertStringContainsString('0.2s budget', $result->message);
-        $this->assertLessThan(
-            1.0,
-            $elapsed,
-            'the script hook was run anyway: it sleeps 30s, so reaching it at all shows here',
-        );
+        $this->assertSame(0, $reads, 'ScriptHook::execute() ran — a chain that is out of clock denies '
+            . 'before the hook is invoked, and any read of its deadline clock means it was not');
+        $this->assertFileDoesNotExist($canary, 'the child actually started: its command touches the canary '
+            . 'before anything else it could be killed by');
+        @unlink($canary);
     }
 
     /**
@@ -2197,19 +2263,32 @@ final class HookRegistryTest extends TestCase
         $this->assertSame(200_000, \strlen((string) ($rewritten['body'] ?? '')));
     }
 
-    /** A ScriptHook that will not finish inside the budget it is given. */
+    /**
+     * A ScriptHook that will not finish inside the budget it is given.
+     *
+     * `$clock` reaches {@see \SugarCraft\Crush\Hooks\ScriptHook}'s deadline
+     * seam: a scripted stepping clock converts "watch 0.6 seconds expire" from
+     * a wall-clock pump (three 0.2s drain slices, every one of them at the
+     * scheduler's mercy) into a fixed number of reads. `$command` overrides
+     * the hang itself for tests that need to SEE the child start; the default
+     * stays `sleep 30`, thirty times the largest budget any caller here arms,
+     * so expiry is the only reachable outcome.
+     */
     private function hangingScriptHook(
         string $name,
         float $timeout,
         string $matcher = '^Bash$',
+        ?callable $clock = null,
+        string $command = 'sleep 30',
     ): \SugarCraft\Crush\Hooks\ScriptHook {
         return new \SugarCraft\Crush\Hooks\ScriptHook(
             name: $name,
             event: HookEvent::PreToolUse,
             matcher: $matcher,
-            command: 'sleep 30',
+            command: $command,
             description: '',
             timeoutSeconds: $timeout,
+            clock: $clock,
         );
     }
 

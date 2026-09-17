@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\FontLoader;
 use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
 
@@ -127,11 +127,11 @@ final class GdRasterizerCacheTest extends TestCase
     private function snapshotWithChars(array $chars): Snapshot
     {
         $cols = count($chars);
-        $grid = new CellGrid($cols, 1);
+        $grid = new Buffer($cols, 1);
 
         foreach ($chars as $i => $char) {
             $cell = new Cell($char, 7, 0);
-            $grid->set(0, $i, $cell);
+            $grid->put(0, $i, $cell);
         }
 
         $cursor = new Cursor(0, 0, 0, false);

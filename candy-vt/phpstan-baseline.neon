@@ -1,19 +1,25 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^PHPDoc tag @param references unknown parameter\: \$rgb$#'
+			identifier: parameter.notFound
+			count: 1
+			path: src/Cell.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
-			path: src/Cell/Cell.php
+			path: src/Cell.php
 
 		-
 			message: '#^Using nullsafe property access on non\-nullable type SugarCraft\\Vt\\Sgr\\Sgr\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 2
-			path: src/Cell/Cell.php
+			path: src/Cell.php
 
 		-
-			message: '#^Parameter &\$pending by\-ref type of method SugarCraft\\Vt\\Handler\\EraseHandler\:\:apply\(\) expects array\<int, array\{row\: int, col\: int, cell\: SugarCraft\\Vt\\Cell\\Cell\}\>\|null, array\|null given\.$#'
+			message: '#^Parameter &\$pending by\-ref type of method SugarCraft\\Vt\\Handler\\EraseHandler\:\:apply\(\) expects array\<int, array\{row\: int, col\: int, cell\: SugarCraft\\Vt\\Cell\}\>\|null, array\|null given\.$#'
 			identifier: parameterByRef.type
 			count: 5
 			path: src/Handler/EraseHandler.php
@@ -43,9 +49,81 @@ parameters:
 			path: src/Terminal/Terminal.php
 
 		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertSame\(\) with ''SugarCraft\\\\Vt\\\\Sgr\\\\Sgr'' and ''SugarCraft\\\\Vt\\\\Sgr\\\\Sgr'' will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
+			message: '#^Instantiated class SugarCraft\\Vt\\Cell\\Cell not found\.$#'
+			identifier: class.notFound
 			count: 1
+			path: tests/CellAliasTest.php
+
+		-
+			message: '#^Parameter \#1 \$objectOrClass of class ReflectionClass constructor expects class\-string\<SugarCraft\\Vt\\Cell\\Cell\>\|SugarCraft\\Vt\\Cell\\Cell, string given\.$#'
+			identifier: argument.type
+			count: 1
+			path: tests/CellAliasTest.php
+
+		-
+			message: '#^Access to property \$continuation on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Access to property \$grapheme on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Access to property \$hyperlink on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 2
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method background\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method equals\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 10
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method fgRgb\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method foreground\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to method sgr\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 2
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to static method continuation\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Call to static method empty\(\) on an unknown class SugarCraft\\Vt\\Cell\\Cell\.$#'
+			identifier: class.notFound
+			count: 1
+			path: tests/CellTest.php
+
+		-
+			message: '#^Instantiated class SugarCraft\\Vt\\Cell\\Cell not found\.$#'
+			identifier: class.notFound
+			count: 22
 			path: tests/CellTest.php
 
 		-
@@ -83,3 +161,9 @@ parameters:
 			identifier: method.unused
 			count: 1
 			path: tests/Mode/OriginModeTest.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertSame\(\) with array\{"\\033\[\?62;1;6;22c"\} and array\{\} will always evaluate to false\.$#'
+			identifier: method.impossibleType
+			count: 1
+			path: tests/Terminal/AsyncFeedTest.php

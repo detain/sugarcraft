@@ -17,6 +17,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * End-to-end: run a candy-core Program with a Recorder attached, then
@@ -110,7 +111,9 @@ final class ProgramRecordingTest extends TestCase
             $this->assertNotEmpty($inputs, 'piped input bytes should be recorded');
             $bytes = '';
             foreach ($inputs as $e) {
-                $bytes .= $e->payload['b'];
+                $b = $e->payload['b'];
+                $this->assertIsString($b);
+                $bytes .= $b;
             }
             $this->assertStringContainsString('hello', $bytes);
         } finally {
@@ -180,7 +183,7 @@ final class ProgramRecordingTest extends TestCase
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         $this->assertNotFalse($sockets);
         [$reader, $writer] = $sockets;
-        $output = fopen('php://memory', 'w+');
+        $output = Stream::memory('w+');
         $this->assertNotFalse($output);
         return [$reader, $output, $writer];
     }

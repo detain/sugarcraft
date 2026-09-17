@@ -20,6 +20,9 @@ final class MigrationRunner
     /** @var list<CassetteMigrator> */
     private array $migrators;
 
+    /**
+     * @param list<CassetteMigrator>|null $migrators Custom chain; null selects the built-in default set.
+     */
     public function __construct(?array $migrators = null)
     {
         $this->migrators = $migrators ?? [

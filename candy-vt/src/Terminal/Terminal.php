@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Terminal;
 
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use React\Stream\ReadableStreamInterface;
+use SugarCraft\Async\CancellationToken;
+use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Ansi\Parser\Parser;
@@ -13,12 +18,18 @@ use SugarCraft\Vt\Screen\Screen;
 use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
+use function React\Promise\reject;
+use function React\Promise\resolve;
+
 /**
  * Public terminal facade.
  *
  * Holds a {@see Parser} and a {@see ScreenHandler} that owns the
  * Buffer, Cursor, Sgr pen, and Mode. `feed()` drives bytes through the
  * parser; accessors return the handler's current state.
+ * `feedAsync()`/`feedStream()` are the ReactPHP entry points for the same
+ * machine — they deliver the terminal→host reply channel as promise
+ * values instead of requiring the caller to poll `replies()`.
  */
 final class Terminal
 {
@@ -44,13 +55,10 @@ final class Terminal
         );
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload
         // memory; reduced from the fork's 1 MiB per the W1.2 security item.
+        // The handler is the parser's sink AND a SubparamsAwareHandler, so the
+        // colon continuation flags SGR needs arrive by push — no late-bound
+        // back-reference to this parser is wired anywhere.
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
-
-        // SGR colon sub-parameters (4:N vs 4;N) ride the parser's per-dispatch
-        // continuation flags; late-bind so the handler sees them mid-dispatch.
-        $this->handler->attachSubparamsProvider(
-            fn(): array => $this->parser->subparams(),
-        );
     }
 
     /**
@@ -111,6 +119,208 @@ final class Terminal
     }
 
     /**
+     * Async form of {@see feed()}: parse `$bytes` and resolve with the
+     * terminal→host answer bytes this feed produced (plus any earlier ones
+     * still queued), concatenated in request order — exactly the byte
+     * stream `$respond` would have received from {@see feed()}, delivered
+     * as the promise value instead of a callback.
+     *
+     * The parser is pure CPU work with no I/O wait, so the promise is
+     * already resolved on return; the async win is composability (the
+     * reply channel joins promise pipelines without a callback) and one
+     * honest type for callers that must handle replies either way.
+     * Mirrors charmbracelet/x/vt `Emulator.Read()` io.Pipe semantics in
+     * future form (x/vt emulator.go L265-281).
+     *
+     * @return PromiseInterface<string>
+     */
+    public function feedAsync(string $bytes): PromiseInterface
+    {
+        $this->parser->feed($bytes);
+        return resolve($this->drainReplyBytes());
+    }
+
+    /**
+     * Pump a stream of terminal input through the parser as it arrives.
+     *
+     * Each `data` event feeds the parser incrementally — no chunking or
+     * buffering is imposed, so a sequence split across two events parses
+     * exactly as one feed would. On `end` the parser is {@see flush()}ed
+     * so an unterminated trailing OSC/DCS still dispatches, then the
+     * promise settles. Reply-channel semantics follow {@see feed()}:
+     * with `$respond` given, every answer byte string is handed to it the
+     * moment its sequence dispatches and the promise resolves with the
+     * (empty) remainder; without it, answers queue normally and the
+     * promise resolves with all of them concatenated, the caller's
+     * single drain for the whole session.
+     *
+     * A stream that is already closed or ended when attached yields a
+     * rejected promise; a stream that `close`s without ever signalling
+     * `end` (truncated/aborted input) rejects too, because silently
+     * resolving on half-read input would hide a real transport failure.
+     * Listeners remove themselves once settled, so a late `data` on a
+     * closed pump cannot re-enter the parser — and that holds even when
+     * the caller's `$respond` throws: the pump rejects its promise with
+     * the callback's error and detaches before the exception surfaces to
+     * the emitter (on the `data` route it re-throws for parity with the
+     * sync `feed($bytes, $respond)` contract, where a throwing callback
+     * bubbles to whoever wrote the bytes). On that data-route failure the
+     * replies spliced out of the queue but not yet handed over are DROPPED
+     * with the dead pump — unlike sync `feed()`, which leaves its queue
+     * intact for a later retry, a rejected promise is the caller's notice
+     * and a resurrected answer on a dead stream would be a phantom.
+     *
+     * Cancellation is cooperative and immediate: pass a candy-async
+     * {@see CancellationToken} (owned by the caller's
+     * {@see \SugarCraft\Async\CancellationSource}) as `$cancellation` and the
+     * caller can abort mid-stream — the moment `cancel()` is reached the pump
+     * detaches every stream listener and rejects the promise with
+     * {@see OperationCancelledException}, so a late `data` write can no longer
+     * re-enter the parser. This closes the reviewer-agreed gap where the only
+     * way to stop a pump was to end the promise's *consumer*, leaving the data
+     * listener attached until the stream itself ended or errored (n3, wave-6
+     * handoff §6.1). The race is single-shot: whichever of `end`/`error`/
+     * `close`/cancel arrives first owns the one settlement (the same
+     * settle-once latch the failure paths use), and cancellation is idempotent
+     * — a `cancel()` that arrives after the pump already settled is a no-op.
+     * The pump never closes or pauses `$input` (the stream belongs to the
+     * caller), it only stops listening. Mirrors the token-cooperative bridge the
+     * candy-async consumers use (`CancellableQuery::wrap()`): `null` leaves
+     * today's behaviour byte-identical (the pre-existing `end`/`error`/`close`
+     * settlement paths are untouched); a non-null token rejects promptly with an
+     * {@see OperationCancelledException} (a `\RuntimeException` subclass, so
+     * callers already catching stream rejections catch a cancel unchanged).
+     * Because {@see CancellationToken} offers no callback unregistration, a
+     * token reused across pumps accumulates one settled-guarded closure per
+     * pump — prefer one token per pump.
+     *
+     * @param (callable(string): void)|null $respond
+     *
+     * @return PromiseInterface<string>
+     */
+    public function feedStream(
+        ReadableStreamInterface $input,
+        ?callable $respond = null,
+        ?CancellationToken $cancellation = null,
+    ): PromiseInterface {
+        if (!$input->isReadable()) {
+            return reject(new \RuntimeException('Cannot pump a terminal input stream that is not readable (already ended or closed).'));
+        }
+        /** @var Deferred<string> $deferred */
+        $deferred = new Deferred();
+        /** @var array<string, callable> $listeners */
+        $listeners = [];
+        /** @var bool $settled single-settlement latch, by-ref'd into every listener */
+        $settled = false;
+        $detach = static function () use ($input, &$listeners): void {
+            foreach ($listeners as $event => $listener) {
+                $input->removeListener($event, $listener);
+            }
+            $listeners = [];
+        };
+        $listeners['data'] = function (string $chunk) use ($respond, $deferred, $detach, &$settled): void {
+            if ($settled) {
+                return; // defense in depth: a settled pump never re-enters the parser.
+            }
+            try {
+                $this->parser->feed($chunk);
+                if ($respond === null) {
+                    return;
+                }
+                // Clear-by-slice BEFORE delivering: a callback that throws
+                // mid-loop must not leave already-delivered replies queued
+                // for duplicate delivery on the next chunk (round-1 review n2).
+                $pending = $this->handler->replies;
+                $this->handler->replies = [];
+                foreach ($pending as $reply) {
+                    $respond($reply);
+                }
+            } catch (\Throwable $error) {
+                // Anything the callee throws — parser internals (round-2
+                // review n5) or the caller's own $respond — settles the
+                // pump exactly once: reject, detach, then re-throw for
+                // parity with the sync feed($bytes, $respond) contract,
+                // where the exception bubbles to whoever wrote the bytes.
+                // Replies spliced out but never handed over are dropped
+                // with the dead pump — the rejection is the caller's
+                // notice; a half-dead pump must not re-deliver them.
+                $settled = true;
+                $detach();
+                $deferred->reject($error);
+                throw $error;
+            }
+        };
+        $listeners['error'] = function (\Throwable $error) use ($deferred, $detach, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $detach();
+            $deferred->reject($error);
+        };
+        $listeners['end'] = function () use ($respond, $deferred, $detach, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $tail = '';
+            try {
+                $this->parser->flush();
+                $tail = $this->drainReplyBytes();
+                if ($respond !== null && $tail !== '') {
+                    $respond($tail);
+                    $tail = '';
+                }
+            } catch (\Throwable $error) {
+                // A throwing $respond must still settle and detach: leaving
+                // the promise pending with live listeners on a dead pump
+                // would hang the caller forever (round-1 review M1).
+                $detach();
+                $deferred->reject($error);
+
+                return;
+            }
+            $detach();
+            $deferred->resolve($tail);
+        };
+        // React emits `close` after every `end` and after an abort; only
+        // the one that finds us unsettled matters (end wins when both come).
+        $listeners['close'] = function () use ($deferred, $detach, &$settled): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            $detach();
+            $deferred->reject(new \RuntimeException('Terminal input stream closed before signalling end-of-stream.'));
+        };
+        foreach ($listeners as $event => $listener) {
+            $input->on($event, $listener);
+        }
+        if ($cancellation !== null) {
+            // Cooperative abort: on `cancel()` the pump detaches exactly as the
+            // natural settle paths do, then rejects with the candy-async
+            // cancellation signal, so a caller holding a CancellationSource can
+            // stop the pump mid-stream instead of only ending its consumer (n3).
+            // Registered AFTER the listeners attach so an already-cancelled token
+            // — whose onCancel fires synchronously — still has live listeners to
+            // remove. Guarded by the same $settled latch the failure paths use,
+            // so a cancel racing end/error/close loses cleanly: exactly one
+            // settlement, and a reject-after-settle is ignored regardless.
+            $cancellation->onCancel(static function () use ($deferred, $detach, &$settled): void {
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $detach();
+                $deferred->reject(new OperationCancelledException(
+                    'Terminal input stream pump cancelled by its CancellationToken.',
+                ));
+            });
+        }
+        return $deferred->promise();
+    }
+
+    /**
      * Force any in-flight string sequence (OSC/DCS/SOS/PM/APC) to
      * dispatch with its current payload and reset to ground. Useful at
      * end-of-stream when you can't wait for a real terminator byte.
@@ -118,6 +328,17 @@ final class Terminal
     public function flush(): void
     {
         $this->parser->flush();
+    }
+
+    /**
+     * Consume the whole reply queue as one concatenated byte string,
+     * in request order — the delivery shape shared by the async feeds.
+     */
+    private function drainReplyBytes(): string
+    {
+        $bytes = implode('', $this->handler->replies);
+        $this->handler->replies = [];
+        return $bytes;
     }
 
     public function screen(): Screen
@@ -192,16 +413,13 @@ final class Terminal
      */
     public function __clone(): void
     {
+        // The handler's colon flags arrive by push (SubparamsAwareHandler), so
+        // the clone needs no re-attach dance: constructing the clone's own
+        // Parser over the cloned handler means the clone's SGR dispatches read
+        // the clone's flags — the stale-back-reference this re-attach once
+        // patched simply cannot occur any more.
         $this->handler = clone $this->handler;
         $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
-        // The cloned handler inherited the pre-clone closure, which late-binds
-        // to the ORIGINAL terminal's parser — it would feed this terminal's SGR
-        // dispatches with the other parser's colon flags (stale after the
-        // original saw `4:3`, empty-wrong before it saw anything). Re-attach to
-        // this instance's own parser, exactly as the constructor wires it.
-        $this->handler->attachSubparamsProvider(
-            fn(): array => $this->parser->subparams(),
-        );
     }
 
     /** @internal */

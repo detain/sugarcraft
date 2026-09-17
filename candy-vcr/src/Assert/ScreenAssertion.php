@@ -63,7 +63,7 @@ final class ScreenAssertion implements Assertion
      * Compact human-readable diff: count + first few cell coordinates
      * with their expected vs actual graphemes.
      *
-     * @param array<array{row:int,col:int,prev:\SugarCraft\Vt\Cell\Cell,next:\SugarCraft\Vt\Cell\Cell}> $changes
+     * @param array<array{row:int,col:int,prev:\SugarCraft\Vt\Cell,next:\SugarCraft\Vt\Cell}> $changes
      */
     private function summarize(array $changes): string
     {

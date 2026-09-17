@@ -247,14 +247,23 @@ final class EngineBackendReapTest extends TestCase
     {
         $this->requireFork();
 
+        $deathPipe = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        if ($deathPipe === false) {
+            $this->markTestSkipped('stream_socket_pair() failed on this host.');
+        }
+
         $pid = $this->forkTracked();
         if ($pid === -1) {
+            fclose($deathPipe[0]);
+            fclose($deathPipe[1]);
             $this->markTestSkipped('fork() failed on this host.');
         }
         if ($pid === 0) {
+            fclose($deathPipe[0]);
             usleep(self::LIVE_CHILD_LIFETIME_MICROSECONDS);
             ForkedChild::exitNow(0);
         }
+        fclose($deathPipe[1]);
 
         $tracked = new \ReflectionProperty(EngineBackend::class, 'unreapedChildren');
         $tracked->setAccessible(true);
@@ -270,14 +279,24 @@ final class EngineBackendReapTest extends TestCase
 
             posix_kill($pid, SIGKILL);
             // ...and the next turn's sweep must collect it.
-            self::waitUntilExited($pid);
-            self::sweepUnreapedChildren();
+            self::waitUntilExited($pid, $deathPipe[0]);
+            // The sweep reaps with ONE WNOHANG per pid, so drive it until the
+            // tracked map actually drops the pid: the observed condition is
+            // the sweep's own reap landing, and the bound fails red instead
+            // of spinning if it never does. (Between the pipe's EOF and the
+            // zombie becoming waitable the kernel is still inside do_exit;
+            // WNOHANG answers 0 - "not yet" - for exactly that window.)
+            $sweepDeadline = microtime(true) + 2.0;
+            do {
+                self::sweepUnreapedChildren();
+            } while (\array_key_exists($pid, $tracked->getValue()) && microtime(true) < $sweepDeadline);
 
             $this->assertArrayNotHasKey($pid, $tracked->getValue());
             $status = 0;
             $this->assertSame(-1, pcntl_waitpid($pid, $status, WNOHANG), 'the sweep left a zombie behind');
         } finally {
             posix_kill($pid, SIGKILL);
+            fclose($deathPipe[0]);
             $tracked->setValue(null, $previous);
         }
     }
@@ -296,13 +315,22 @@ final class EngineBackendReapTest extends TestCase
         $source = self::methodSource(new \ReflectionMethod(EngineBackend::class, 'sweepUnreapedChildren'));
         $this->assertStringNotContainsString('pcntl_waitpid(-1', $source);
 
+        $deathPipe = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        if ($deathPipe === false) {
+            $this->markTestSkipped('stream_socket_pair() failed on this host.');
+        }
+
         $pid = $this->forkTracked();
         if ($pid === -1) {
+            fclose($deathPipe[0]);
+            fclose($deathPipe[1]);
             $this->markTestSkipped('fork() failed on this host.');
         }
         if ($pid === 0) {
+            fclose($deathPipe[0]);
             ForkedChild::exitNow(0);
         }
+        fclose($deathPipe[1]);
 
         $tracked = new \ReflectionProperty(EngineBackend::class, 'unreapedChildren');
         $tracked->setAccessible(true);
@@ -311,16 +339,29 @@ final class EngineBackendReapTest extends TestCase
         try {
             // This pid is somebody else's business: it is NOT registered.
             $tracked->setValue(null, []);
-            self::waitUntilExited($pid);
+            self::waitUntilExited($pid, $deathPipe[0]);
             self::sweepUnreapedChildren();
 
+            // The pending reap is STILL MINE, so waitpid must answer with the
+            // pid; anything else - especially -1 - is the sweep having stolen
+            // it. Only the 0 of "kernel still inside do_exit between the
+            // pipe's EOF and the zombie going waitable" is retried, bounded:
+            // a pump on the observed condition, not a settle.
             $status = 0;
+            $reapDeadline = microtime(true) + 2.0;
+            $reaped = pcntl_waitpid($pid, $status, WNOHANG);
+            while ($reaped === 0 && microtime(true) < $reapDeadline) {
+                usleep(5_000);
+                $reaped = pcntl_waitpid($pid, $status, WNOHANG);
+            }
+
             $this->assertSame(
                 $pid,
-                pcntl_waitpid($pid, $status, WNOHANG),
+                $reaped,
                 'the sweep reaped an untracked child - its real owner would have seen ECHILD',
             );
         } finally {
+            fclose($deathPipe[0]);
             $tracked->setValue(null, $previous);
         }
     }
@@ -345,29 +386,65 @@ final class EngineBackendReapTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * Polls (never blocks) until $pid is a zombie, so the sweep assertions
-     * above test the sweep rather than scheduling luck.
+     * Polls (never blocks) until $pid is exited AND waitable, so the sweep
+     * assertions above test the sweep rather than scheduling luck.
      *
      * `posix_kill($pid, 0)` cannot answer this: an exited-but-unreaped child
      * is still a live process entry and answers that probe. procfs can, and
      * the pid is our own unreaped child so its /proc entry cannot vanish
-     * underneath us. Off procfs, settle briefly and let the caller's own
-     * assertion be the judge.
+     * underneath us.
+     *
+     * Off procfs the observable is a pipe: the child inherits one end of a
+     * `stream_socket_pair()` and any death - clean exit, self-SIGKILL through
+     * {@see ForkedChild::exitNow()}, or an external SIGKILL - closes the fd
+     * table and the parent's read hits EOF. That is an observed condition the
+     * bounded pump waits ON (and fails red when the child never dies), not a
+     * settle it trusts. The residual kernel transition from "fds released" to
+     * "waitable" is absorbed by the CALLERS' own bounded pumps - the sweep
+     * re-checks the tracked map, the raw waitpid re-checks WNOHANG - so no
+     * blind nap is needed here either.
      */
-    private static function waitUntilExited(int $pid): void
+    private static function waitUntilExited(int $pid, mixed $childPipe = null): void
     {
         $stat = '/proc/' . $pid . '/stat';
 
-        if (!is_file($stat)) {
-            usleep(100_000);
+        if (is_file($stat)) {
+            for ($i = 0; $i < 400; $i++) {
+                // "<pid> (<comm>) <state> ..." - state Z is exited-and-waitable.
+                if (preg_match('/\)\s+(\S)/', (string) @file_get_contents($stat), $m) === 1 && $m[1] === 'Z') {
+                    return;
+                }
+                usleep(5_000);
+            }
 
-            return;
+            self::fail(sprintf(
+                'child %d never became a zombie within the bounded 2s poll - the exit/SIGKILL '
+                . 'did not take effect, so every assertion after this one would measure a live child',
+                $pid,
+            ));
         }
 
-        for ($i = 0; $i < 400; $i++) {
-            // "<pid> (<comm>) <state> ..." - state Z is exited-and-waitable.
-            if (preg_match('/\)\s+(\S)/', (string) @file_get_contents($stat), $m) === 1 && $m[1] === 'Z') {
-                return;
+        if (!\is_resource($childPipe)) {
+            throw new \LogicException(
+                'waitUntilExited() without procfs has no state to poll unless the caller '
+                . 'hands it the child end of a socket pair to watch for EOF.'
+            );
+        }
+
+        stream_set_blocking($childPipe, false);
+        $deadline = microtime(true) + 2.0;
+        while (true) {
+            $chunk = \fread($childPipe, 1024);
+            if ($chunk === '' && \feof($childPipe)) {
+                return; // the write end is closed: the child is gone.
+            }
+            if (microtime(true) > $deadline) {
+                self::fail(sprintf(
+                    'child %d never closed its socket-pair end within the bounded 2s poll '
+                    . '(last read: %s) - it is still running',
+                    $pid,
+                    $chunk === false ? 'read error' : var_export($chunk, true),
+                ));
             }
             usleep(5_000);
         }

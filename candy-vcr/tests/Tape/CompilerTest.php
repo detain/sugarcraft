@@ -9,6 +9,7 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Tape\Compiler;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 final class CompilerTest extends TestCase
 {
@@ -434,7 +435,7 @@ TAPE;
         file_put_contents($tmpDir . '/main.tape', "Type \"A\"\nSource sub.tape\nType \"C\"\n");
 
         try {
-            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $result = Compiler::parseSource(Stream::read($tmpDir . '/main.tape'));
             $this->assertEmpty($result['errors']);
             $cassette = (new Compiler())->compile($result['ast'], $tmpDir . '/main.tape');
 

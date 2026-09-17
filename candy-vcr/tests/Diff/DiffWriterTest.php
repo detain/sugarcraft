@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Tests\Diff;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Diff\DiffWriter;
+use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
  * @covers \SugarCraft\Vcr\Diff\DiffWriter
@@ -30,7 +31,7 @@ final class DiffWriterTest extends TestCase
         $result = $this->writer->writeUnifiedDiff($path, $expected, $actual);
 
         $this->assertNotFalse($result);
-        $content = file_get_contents($path);
+        $content = Stream::read($path);
         $this->assertStringContainsString('---', $content);
         $this->assertStringContainsString('+++', $content);
         unlink($path);
@@ -46,7 +47,7 @@ final class DiffWriterTest extends TestCase
 
         $this->writer->writeUnifiedDiff($path, $expected, $actual);
 
-        $content = file_get_contents($path);
+        $content = Stream::read($path);
         $this->assertStringContainsString('-world', $content);
         $this->assertStringContainsString('+universe', $content);
         unlink($path);
@@ -61,7 +62,7 @@ final class DiffWriterTest extends TestCase
         $result = $this->writer->writeUnifiedDiff($path, $content, $content);
 
         $this->assertNotFalse($result);
-        $output = file_get_contents($path);
+        $output = Stream::read($path);
         $this->assertStringContainsString('(no differences)', $output);
         unlink($path);
     }
@@ -146,8 +147,9 @@ final class DiffWriterTest extends TestCase
         $actual = "hello\nuniverse\n";
 
         // Should not throw, just write to output
-        $this->writer->writeAnsiDiff($expected, $actual, fopen('php://memory', 'w'));
-        $this->assertTrue(true); // If we get here, no exception was thrown
+        $this->writer->writeAnsiDiff($expected, $actual, Stream::memory('w'));
+        // Reaching this line without an exception is the assertion.
+        $this->addToAssertionCount(1);
     }
 
     public function testBuildUnifiedDiffWithBinaryContent(): void

@@ -13,12 +13,21 @@ use SugarCraft\Vcr\Cli\RenderBatchCommand;
  */
 final class RenderBatchCommandTest extends TestCase
 {
+    /**
+     * @return list<string>
+     */
     private function invokeCollectTapeFiles(string $dir, bool $recursive): array
     {
         $ref = new \ReflectionMethod(\SugarCraft\Vcr\Cli\RenderBatchCommand::class, 'collectTapeFiles');
         $ref->setAccessible(true);
         $cmd = new \SugarCraft\Vcr\Cli\RenderBatchCommand();
-        return $ref->invoke($cmd, $dir, $recursive);
+        // ReflectionMethod::invoke() hands back mixed; collectTapeFiles()
+        // is contractually a list<string> and the assertions in each test
+        // (assertCount + basename matching) keep that honest.
+        /** @var list<string> $files */
+        $files = $ref->invoke($cmd, $dir, $recursive);
+
+        return $files;
     }
 
     public function testCollectTapeFilesNonRecursive(): void

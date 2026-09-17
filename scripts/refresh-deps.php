@@ -24,7 +24,9 @@ declare(strict_types=1);
  *     monorepo. This is the DEVELOPMENT state and what CI does before every
  *     install: it is the only way an edit to `candy-core/src/Util/Width.php`
  *     shows up in `candy-shine`'s test run, and the only reason a PR that
- *     breaks a sibling fails the dependent lib's job.
+ *     breaks a sibling fails the dependent lib's job. Before injecting, it
+ *     purges stale non-symlink `vendor/sugarcraft/*` copies of the targets
+ *     (see `$purgeStaleSiblings`) — composer will not relink them on its own.
  *
  * WHY THE MODE MUST BE EXPLICIT. Measured 2026-08-22: a `composer update` in
  * `sugar-crush` replaced a symlinked `candy-core` with a Packagist copy two
@@ -255,6 +257,100 @@ $restore = static function () use ($root): void {
 };
 
 /**
+ * WHY LINKED MODE MUST PURGE BEFORE IT RELINKS. Switching a lib from
+ * published to linked keeps every sibling at the SAME name and the SAME
+ * version string — `dev-master` on Packagist, `dev-master` from the path
+ * repo — and the installer treats an already-installed name+version as
+ * satisfied: `composer update` rewrites `composer.lock` and
+ * `vendor/composer/installed.json` to `dist.type: path` but skips the
+ * filesystem reinstall, leaving stale Packagist directories beside the few
+ * symlinks that did move (measured on wave-11 and reproduced verbatim on
+ * wave-12: candy-vt 1/7, candy-vcr 1/8). The vendor then *lies* — lock and
+ * installed.json claim path, the bytes on disk are an old snapshot — and the
+ * mixed state is exactly what `$verify`/`$report` exists to refuse. Removing
+ * the stale real dirs AND their records in `installed.json`/`installed.php`
+ * makes the packages absent to the installer, so the injected path repos
+ * relink them. Only non-symlink entries are touched: an existing symlink into
+ * this monorepo already IS the linked state.
+ */
+$purgeStaleSiblings = static function (string $lib) use ($root): array {
+    $purged = [];
+    foreach (\glob("{$root}/{$lib}/vendor/sugarcraft/*") ?: [] as $p) {
+        if (\is_link($p)) {
+            continue;
+        }
+        if (\is_dir($p)) {
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($p, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($it as $f) {
+                if ($f->isDir()) {
+                    @\rmdir($f->getPathname());
+                } else {
+                    @\unlink($f->getPathname());
+                }
+            }
+            @\rmdir($p);
+        } else {
+            @\unlink($p);
+        }
+        $purged[] = 'sugarcraft/' . \basename($p);
+    }
+    if ($purged === []) {
+        return [];
+    }
+    $names = \array_flip($purged);
+
+    $ij = "{$root}/{$lib}/vendor/composer/installed.json";
+    if (\is_file($ij)) {
+        $j = \json_decode((string) \file_get_contents($ij), true);
+        if (\is_array($j)) {
+            foreach (['packages', 'packages-dev'] as $key) {
+                if (isset($j[$key]) && \is_array($j[$key])) {
+                    $j[$key] = \array_values(\array_filter(
+                        $j[$key],
+                        static fn (array $p): bool => !isset($names[$p['name'] ?? ''])
+                    ));
+                }
+            }
+            if (isset($j['dev-package-names']) && \is_array($j['dev-package-names'])) {
+                $j['dev-package-names'] = \array_values(\array_filter(
+                    $j['dev-package-names'],
+                    static fn (string $n): bool => !isset($names[$n])
+                ));
+            }
+            \file_put_contents(
+                $ij,
+                \json_encode($j, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . "\n"
+            );
+        }
+    }
+
+    $ip = "{$root}/{$lib}/vendor/composer/installed.php";
+    if (\is_file($ip)) {
+        $d = include $ip;
+        if (\is_array($d)) {
+            foreach ($purged as $name) {
+                unset($d['versions'][$name]);
+                foreach ($d as $k => $v) {
+                    if (\is_array($v) && isset($v['packages']) && \is_array($v['packages'])) {
+                        unset($d[$k]['packages'][$name]);
+                        $d[$k]['packages'] = \array_values(\array_filter(
+                            $v['packages'],
+                            static fn ($e): bool => $e !== $name
+                        ));
+                    }
+                }
+            }
+            \file_put_contents($ip, "<?php return " . \var_export($d, true) . ";\n");
+        }
+    }
+
+    return $purged;
+};
+
+/**
  * PUBLISHED-MODE POST-CONDITION. If the tree is clean and fully pushed, then
  * what Packagist serves for `dev-master` MUST be byte-identical to the working
  * tree — that is the whole point of the exercise. Any drift means the pipeline
@@ -378,6 +474,13 @@ if ($opts['mode'] === 'published') {
     $updateLibs($targets, $root, $failed);
 } else {
 try {
+    foreach ($targets as $lib) {
+        $purged = $purgeStaleSiblings($lib);
+        if ($purged !== []) {
+            \printf("  purged stale packagist copies in %-16s %s\n", $lib, \implode(',', $purged));
+        }
+    }
+
     \fwrite(\STDOUT, "Injecting path-repo closure (scratch)...\n");
     \exec('php ' . \escapeshellarg("{$root}/tools/check-path-repos.php") . ' --fix --strict-closure 2>&1', $o, $rc);
     \fwrite(\STDOUT, '  ' . (\end($o) ?: '') . "\n");

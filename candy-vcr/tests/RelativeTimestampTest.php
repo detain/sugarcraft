@@ -10,6 +10,7 @@ use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\DecodedJson;
 
 /**
  * Tests for relative timestamp mode (M1).
@@ -20,6 +21,8 @@ use SugarCraft\Vcr\Format\JsonlFormat;
  */
 final class RelativeTimestampTest extends TestCase
 {
+    use DecodedJson;
+
     public function testCassetteHeaderDefaultTimestampModeIsAbsolute(): void
     {
         $header = new CassetteHeader(
@@ -47,22 +50,26 @@ final class RelativeTimestampTest extends TestCase
 
     public function testCassetteHeaderTimestampModeConstantValues(): void
     {
-        $this->assertSame('absolute', CassetteHeader::TIMESTAMP_MODE_ABSOLUTE);
-        $this->assertSame('relative', CassetteHeader::TIMESTAMP_MODE_RELATIVE);
+        $absolute = (new \ReflectionClassConstant(CassetteHeader::class, 'TIMESTAMP_MODE_ABSOLUTE'))->getValue();
+        $relative = (new \ReflectionClassConstant(CassetteHeader::class, 'TIMESTAMP_MODE_RELATIVE'))->getValue();
+        $this->assertSame('absolute', $absolute);
+        $this->assertSame('relative', $relative);
     }
 
     public function testCassetteHeaderInvalidTimestampModeThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("timestampMode must be 'absolute' or 'relative'");
-        new CassetteHeader(
-            version: 1,
-            createdAt: '2026-05-07T10:00:00Z',
-            cols: 80,
-            rows: 24,
-            runtime: 'sugarcraft/candy-core@dev',
-            timestampMode: 'invalid',
-        );
+        // Reflection keeps the invalid-mode payload out of static analysis'
+        // reach while still exercising the constructor's runtime validation.
+        (new \ReflectionClass(CassetteHeader::class))->newInstanceArgs([
+            'version' => 1,
+            'createdAt' => '2026-05-07T10:00:00Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'sugarcraft/candy-core@dev',
+            'timestampMode' => 'invalid',
+        ]);
     }
 
     public function testAbsoluteModeEncodePreservesOriginalTimestamps(): void
@@ -82,14 +89,14 @@ final class RelativeTimestampTest extends TestCase
         $lines = explode("\n", trim($encoded));
 
         // Header should NOT have timestampMode when absolute
-        $header = json_decode($lines[0], true);
+        $header = self::decodeArray($lines[0]);
         $this->assertArrayNotHasKey('timestampMode', $header);
 
         // Event timestamps should be absolute
-        $this->assertEqualsWithDelta(0.0, json_decode($lines[1], true)['t'], 0.001);
-        $this->assertEqualsWithDelta(0.001, json_decode($lines[2], true)['t'], 0.001);
-        $this->assertEqualsWithDelta(0.45, json_decode($lines[3], true)['t'], 0.001);
-        $this->assertEqualsWithDelta(1.201, json_decode($lines[4], true)['t'], 0.001);
+        $this->assertEqualsWithDelta(0.0, self::decodeArray($lines[1])['t'], 0.001);
+        $this->assertEqualsWithDelta(0.001, self::decodeArray($lines[2])['t'], 0.001);
+        $this->assertEqualsWithDelta(0.45, self::decodeArray($lines[3])['t'], 0.001);
+        $this->assertEqualsWithDelta(1.201, self::decodeArray($lines[4])['t'], 0.001);
     }
 
     public function testRelativeModeEncodeConvertsToIntervals(): void
@@ -109,7 +116,7 @@ final class RelativeTimestampTest extends TestCase
         $lines = explode("\n", trim($encoded));
 
         // Header should have timestampMode set to relative
-        $header = json_decode($lines[0], true);
+        $header = self::decodeArray($lines[0]);
         $this->assertSame('relative', $header['timestampMode']);
 
         // Event timestamps should be intervals (relative to previous event)
@@ -117,10 +124,10 @@ final class RelativeTimestampTest extends TestCase
         // Event 1: t=0.001 (interval = 0.001 - 0.0 = 0.001)
         // Event 2: t=0.449 (interval = 0.450 - 0.001 = 0.449)
         // Event 3: t=0.751 (interval = 1.201 - 0.450 = 0.751)
-        $this->assertEqualsWithDelta(0.0, json_decode($lines[1], true)['t'], 0.001);
-        $this->assertEqualsWithDelta(0.001, json_decode($lines[2], true)['t'], 0.001);
-        $this->assertEqualsWithDelta(0.449, json_decode($lines[3], true)['t'], 0.001);
-        $this->assertEqualsWithDelta(0.751, json_decode($lines[4], true)['t'], 0.001);
+        $this->assertEqualsWithDelta(0.0, self::decodeArray($lines[1])['t'], 0.001);
+        $this->assertEqualsWithDelta(0.001, self::decodeArray($lines[2])['t'], 0.001);
+        $this->assertEqualsWithDelta(0.449, self::decodeArray($lines[3])['t'], 0.001);
+        $this->assertEqualsWithDelta(0.751, self::decodeArray($lines[4])['t'], 0.001);
     }
 
     public function testRelativeModeDecodeConvertsIntervalsToAbsolute(): void
@@ -184,7 +191,7 @@ final class RelativeTimestampTest extends TestCase
         $this->assertSame("\x1b[2J\x1b[H", $loaded->events[1]->payload['b']);
 
         $this->assertSame(EventKind::Input, $loaded->events[2]->kind);
-        $this->assertSame('q', $loaded->events[2]->payload['msg']['key']);
+        $this->assertSame('q', self::decodeNested($loaded->events[2]->payload, 'msg')['key']);
 
         $this->assertSame(EventKind::Quit, $loaded->events[3]->kind);
     }
@@ -341,7 +348,7 @@ final class RelativeTimestampTest extends TestCase
         $encoded = $format->encode($cassette);
         $lines = explode("\n", trim($encoded));
 
-        $header = json_decode($lines[0], true);
+        $header = self::decodeArray($lines[0]);
         $this->assertSame('relative', $header['timestampMode']);
 
         // For absolute, timestampMode should not be in header
@@ -351,7 +358,7 @@ final class RelativeTimestampTest extends TestCase
         );
         $absoluteEncoded = $format->encode($absoluteCassette);
         $absoluteLines = explode("\n", trim($absoluteEncoded));
-        $absoluteHeader = json_decode($absoluteLines[0], true);
+        $absoluteHeader = self::decodeArray($absoluteLines[0]);
         $this->assertArrayNotHasKey('timestampMode', $absoluteHeader);
     }
 

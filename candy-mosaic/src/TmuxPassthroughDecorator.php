@@ -6,6 +6,7 @@ namespace SugarCraft\Mosaic;
 
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Renderer\Renderer;
+use SugarCraft\Mosaic\Renderer\SixelRenderer;
 
 /**
  * Renderer decorator that wraps output in tmux's passthrough protocol.
@@ -41,6 +42,65 @@ final class TmuxPassthroughDecorator implements Renderer
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         return $this->wrap($this->inner->render($image, $width, $height));
+    }
+
+    /**
+     * Stream a Sixel render through the tmux passthrough envelope.
+     *
+     * A Sixel image is exactly ONE Device Control String
+     * (`\x1bP … \x1b\\`) with no lone ESC in its printable payload, so tmux's
+     * only requirement — double every inner ESC — is a context-free, per-byte
+     * transform. That lets the envelope be opened before the first band and
+     * closed after the last without ever buffering the image: the concatenation
+     * of `$write` calls is byte-for-byte identical to
+     * {@see render()}'s wrapped output. This is the streaming branch the
+     * Sixel encode (#17) needed, chosen over refusing to stream under tmux
+     * because it is both cheap (a per-chunk `str_replace`) and provably exact.
+     *
+     * @param callable(string):void $write
+     * @throws \LogicException  if the wrapped renderer is not Sixel (only Sixel
+     *                          exposes a band-stream encoder; other protocols
+     *                          are single-shot buffers with no banding to stream)
+     */
+    public function encodeBandStream(ImageSource $image, int $width, callable $write, ?int $height = null): void
+    {
+        $inner = $this->inner;
+        if (!$inner instanceof SixelRenderer) {
+            throw new \LogicException(
+                Lang::t('tmux.stream_not_sixel', ['name' => $inner->name()])
+            );
+        }
+
+        // Open the envelope lazily, on the first inner chunk: if the encode fails
+        // before emitting anything (a GD load error, an over-ceiling frame) the TTY
+        // is left untouched rather than stranded inside an unterminated
+        // `\x1bPtmux;` passthrough. The outer terminator is then guaranteed via
+        // finally, so a mid-stream consumer failure still closes the envelope.
+        $opened = false;
+        $closed = false;
+        try {
+            $inner->encodeBandStream($image, $width, static function (string $chunk) use ($write, &$opened): void {
+                if (!$opened) {
+                    // Open the envelope flag before delivering the introducer, so a
+                    // consumer that writes then throws on the first chunk still gets
+                    // the guaranteed `finally` close. An orphan ST is inert; an
+                    // unterminated `\x1bPtmux;` swallows the rest of the session.
+                    $opened = true;
+                    $write("\x1bPtmux;");
+                }
+                $write(str_replace("\x1b", "\x1b\x1b", $chunk));
+            }, $height);
+            $write("\x1b\\");
+            $closed = true;
+        } finally {
+            if ($opened && !$closed) {
+                try {
+                    $write("\x1b\\");
+                } catch (\Throwable) {
+                    // The consumer is gone; the envelope cannot be closed for it.
+                }
+            }
+        }
     }
 
     public function name(): string

@@ -271,14 +271,32 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      * cap every time. (B is not stable in the control row — 1000, 0, 0 — because
      * a flood that fits in the pipe can be picked up by the handshake's own
      * trailing read; that row asserts only the post-call figure.)
+     *
+     * WHY THE POST-CALL FIGURE IS READ AFTER A pumpStderr() SWEEP, NOT RAW. The
+     * child parks in `fwrite()` the instant the pipe fills, and every byte the
+     * parent absorbs frees the pipe for the child to refill — so the WHOLE flood
+     * is drainable, but how much `callTool()`'s own `readLine()` had absorbed when
+     * the stdout reply LINE happened to complete is a scheduling race, not a
+     * property of the drain. Reading the tail at that raw instant reports the cap
+     * when the reply wins and 57344 (7 x 8192) when the last chunk loses, so the
+     * old raw read was a genuine 65536-vs-57344 flake under contention. The probe
+     * now runs {@see StdioMcpServer::pumpStderr()} — the documented between-
+     * exchanges drain seam — to saturation before reading, converting "did the
+     * drain chance to finish mid-write" into "run the drain to completion and
+     * assert it reached the cap." The assertion below is unchanged in every
+     * respect that carries teeth (expected = the class's own cap, actual = the
+     * tail); only the timing of the read moved, and it moved onto the API whose
+     * stated contract is exactly this completion.
      */
     public function testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(): void
     {
         $probe = $this->tempDir . '/bigprobe.php';
+        $readyPath = $this->tempDir . '/big-server.flood-ready';
         file_put_contents($probe, sprintf(
             self::BIG_WRITE_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->writeBlockedServerScript(self::WEDGE_BYTES, 'big-server'), true),
+            var_export($this->writeBlockedServerScript(self::WEDGE_BYTES, 'big-server', $readyPath), true),
+            var_export($readyPath, true),
             self::OVERSIZED_ARGUMENT_BYTES,
         ));
 
@@ -316,8 +334,9 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         $this->assertSame(
             $this->maxStderrBytes(),
             $this->reportedBytes($out, 'TAILAFTER'),
-            'the exchange did not absorb the whole flood, so the drain under test did not run '
-            . 'to completion during the oversized write. Output: ' . trim($out)
+            'the drain under test could not absorb the whole flood even after running '
+            . 'pumpStderr() to its bound, so a blocked child\'s stderr is not fully drainable. '
+            . 'Output: ' . trim($out)
         );
     }
 
@@ -330,10 +349,12 @@ final class StdioMcpServerStderrDrainTest extends TestCase
     public function testTheOversizedCallWasOnlyEverAtRiskBecauseOfTheStderrFlood(): void
     {
         $probe = $this->tempDir . '/bigquiet.php';
+        $readyPath = $this->tempDir . '/big-quiet-server.flood-ready';
         file_put_contents($probe, sprintf(
             self::BIG_WRITE_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->writeBlockedServerScript(self::SAFE_BYTES, 'big-quiet-server'), true),
+            var_export($this->writeBlockedServerScript(self::SAFE_BYTES, 'big-quiet-server', $readyPath), true),
+            var_export($readyPath, true),
             self::OVERSIZED_ARGUMENT_BYTES,
         ));
 
@@ -537,10 +558,17 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      * stdin back into blocking mode, both left them green. They are pinned by
      * this fixture instead, and by the mutations of those two exact lines.
      */
-    private function writeBlockedServerScript(int $bytes, string $name): string
+    private function writeBlockedServerScript(int $bytes, string $name, string $readyPath): string
     {
         $path = $this->tempDir . '/' . preg_replace('/[^a-z0-9_-]/i', '_', $name) . '-blocked.php';
-        file_put_contents($path, sprintf(self::BLOCKED_ON_STDERR_SERVER_TEMPLATE, $bytes));
+        if (is_file($readyPath)) {
+            unlink($readyPath);
+        }
+        file_put_contents($path, sprintf(
+            self::BLOCKED_ON_STDERR_SERVER_TEMPLATE,
+            $bytes,
+            var_export($readyPath, true),
+        ));
 
         return $path;
     }
@@ -695,11 +723,17 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      * %d bytes of stderr, written unprompted the moment the handshake is done.
      * Above the pipe capacity the child parks inside that `fwrite()` and stops
      * reading stdin, which is the state the oversized write has to meet.
+     *
+     * %s optional marker file: touched immediately BEFORE the flood's fwrite,
+     * so the probe can wait for the flood to have BEGUN instead of trusting a
+     * fixed settle. The touch must precede the write — for a wedged byte count
+     * that fwrite() never returns.
      */
     private const BLOCKED_ON_STDERR_SERVER_TEMPLATE = <<<'PHP'
         <?php
         $noise = str_repeat('e', %d);
         $flooded = false;
+        $ready = %s;
         while (($line = fgets(STDIN)) !== false) {
             $msg = json_decode($line, true);
             if (!is_array($msg) || !isset($msg['id'])) {
@@ -721,12 +755,15 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             flush();
             if ($method === 'tools/list' && !$flooded) {
                 $flooded = true;
+                if ($ready !== '') {
+                    file_put_contents($ready, '1');
+                }
                 fwrite(STDERR, $noise);
             }
         }
         PHP;
 
-    /** %s autoloader · %s server script · %d bytes of argument. */
+    /** %s autoloader · %s server script · %s flood-marker path · %d bytes of argument. */
     private const BIG_WRITE_PROBE_TEMPLATE = <<<'PHP'
         <?php
         require %s;
@@ -738,18 +775,53 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             startTimeoutSeconds: 5.0,
         );
         $server->start();
-        // Let the child reach its unprompted stderr flood and park in that
-        // write() — 300ms, the same settle used by the generator in
-        // StdioMcpServer::writeLine()'s doc-block.
-        usleep(300000);
+        // WAIT FOR THE CHILD TO REACH its unprompted stderr flood — the marker the
+        // fixture touches immediately before that fwrite() — instead of a fixed
+        // 300ms settle. A loaded box can deny the settle enough CPU for the flood
+        // to start only after the oversized write began, which would silently turn
+        // this row into the quiet control beside it; the poll ends the instant the
+        // flood has begun. The 5s is a hard bound on the FIXTURE, not a tolerance
+        // for the mechanism: past it the probe reports READY-TIMEOUT and exits 2
+        // rather than measuring a flood that never started.
+        $ready = %s;
+        $readyDeadline = microtime(true) + 5.0;
+        while (!is_file($ready)) {
+            if (microtime(true) > $readyDeadline) {
+                fwrite(STDERR, "READY-TIMEOUT: the fixture never began its stderr flood\n");
+                $server->stop();
+                exit(2);
+            }
+            usleep(2000);
+        }
         // HOW MANY STDERR BYTES THIS PARENT HAS ABSORBED, reported either side
         // of the oversized call. It is what lets the caller PROVE the child was
-        // blocked instead of trusting the settle above — see the assertions in
+        // blocked instead of trusting the marker wait above — see the assertions in
         // testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(). Read by
         // reflection, and read BEFORE stop(), which clears the buffer.
         $tail = new ReflectionProperty($server, 'stderrTail');
         echo 'TAILBEFORE:', strlen((string) $tail->getValue($server)), "\n";
         $raw = $server->callTool('ping', ['blob' => str_repeat('x', %d)]);
+        // WHY PUMP TO COMPLETION BEFORE READING THE TAIL - THE RACE THIS CLOSES.
+        // callTool()'s own drain runs inside writeLine()/readLine(), but readLine()
+        // returns the instant the stdout reply LINE completes. How many of the
+        // child's 8192-byte stderr chunks happened to be absorbed by that moment is
+        // pure scheduling: the child parked in fwrite() refills whatever space the
+        // pipe frees, so the whole flood is absorbable, yet an un-pumped single read
+        // lands on 57344 (7 x 8192) instead of the 65536 cap whenever the reply line
+        // wins the race against the last chunk. pumpStderr() is this class's
+        // documented between-exchanges drain seam (StdioMcpServer::pumpStderr(),
+        // E537); running it to saturation turns "did the drain happen to finish" into
+        // "run the drain to completion, then assert it did." The 3s is a bound, never
+        // a sleep-and-hope: if the child never floods, the loop runs out its bound and
+        // the caller's assertSame(cap, TAILAFTER) goes RED on the short tail. The
+        // sub-cap control (SAFE_BYTES) can never reach the cap, so this loop simply
+        // runs to its bound and reports the flood's true, undisturbed size.
+        $cap = (int) (new ReflectionClass($server))->getConstant('MAX_STDERR_BYTES');
+        $drainDeadline = microtime(true) + 3.0;
+        while (strlen((string) $tail->getValue($server)) < $cap && microtime(true) < $drainDeadline) {
+            $server->pumpStderr();
+            usleep(2000);
+        }
         echo 'TAILAFTER:', strlen((string) $tail->getValue($server)), "\n";
         $server->stop();
         echo 'BIGCALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";

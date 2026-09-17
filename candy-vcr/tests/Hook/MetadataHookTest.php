@@ -21,10 +21,12 @@ final class MetadataHookTest extends TestCase
         $event = new Event(t: 0.1, kind: EventKind::Output, payload: ['b' => 'hello']);
 
         $result = $hook->beforeSave($event);
+        $meta = $result->payload['__meta'];
+        $this->assertIsArray($meta);
 
         $this->assertArrayHasKey('__meta', $result->payload);
-        $this->assertSame('123', $result->payload['__meta']['CI_RUN_ID']);
-        $this->assertSame('MyTest', $result->payload['__meta']['test']);
+        $this->assertSame('123', $meta['CI_RUN_ID']);
+        $this->assertSame('MyTest', $meta['test']);
     }
 
     public function testOnlyInjectsOnFirstOutputEvent(): void
@@ -65,6 +67,7 @@ final class MetadataHookTest extends TestCase
         $event = new Event(t: 0.1, kind: EventKind::Output, payload: ['b' => 'hello']);
 
         $hook->afterCapture($event);
-        $this->assertTrue(true);
+        // afterCapture is a no-op sink for this hook — not throwing is the point.
+        $this->addToAssertionCount(1);
     }
 }

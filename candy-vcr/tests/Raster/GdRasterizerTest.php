@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Raster\FontLoader;
 use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vt\Cell;
-use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
 
@@ -77,9 +77,9 @@ final class GdRasterizerTest extends TestCase
     public function testRasterizeWithBoldAttribute(): void
     {
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $cell = new Cell('A', 7, 0, Cell::ATTR_BOLD);
-        $grid->set(0, 0, $cell);
+        $grid->put(0, 0, $cell);
 
         $cursor = new Cursor();
         $snapshot = new Snapshot($grid, $cursor, 0.0);
@@ -93,9 +93,9 @@ final class GdRasterizerTest extends TestCase
     public function testRasterizeWithUnderlineAttribute(): void
     {
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $cell = new Cell('A', 7, 0, Cell::ATTR_UNDERLINE);
-        $grid->set(0, 0, $cell);
+        $grid->put(0, 0, $cell);
 
         $cursor = new Cursor();
         $snapshot = new Snapshot($grid, $cursor, 0.0);
@@ -109,9 +109,9 @@ final class GdRasterizerTest extends TestCase
     public function testRasterizeWithInverseAttribute(): void
     {
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
-        $grid = new CellGrid(5, 1);
+        $grid = new Buffer(5, 1);
         $cell = new Cell('A', 7, 0, Cell::ATTR_INVERSE);
-        $grid->set(0, 0, $cell);
+        $grid->put(0, 0, $cell);
 
         $cursor = new Cursor();
         $snapshot = new Snapshot($grid, $cursor, 0.0);
@@ -248,12 +248,12 @@ final class GdRasterizerTest extends TestCase
      */
     private function makeSnapshot(string $text, int $cols, int $rows): Snapshot
     {
-        $grid = new CellGrid($cols, $rows);
+        $grid = new Buffer($cols, $rows);
 
         for ($i = 0; $i < strlen($text) && $i < $cols; $i++) {
             $char = $text[$i];
             $cell = new Cell($char, 7, 0);
-            $grid->set(0, $i, $cell);
+            $grid->put(0, $i, $cell);
         }
 
         $cursor = new Cursor(0, min(strlen($text), $cols - 1), 0, true);
@@ -273,12 +273,12 @@ final class GdRasterizerTest extends TestCase
         bool $cursorVisible,
         int $cursorShape = 0,
     ): Snapshot {
-        $grid = new CellGrid($cols, $rows);
+        $grid = new Buffer($cols, $rows);
 
         for ($i = 0; $i < strlen($text) && $i < $cols; $i++) {
             $char = $text[$i];
             $cell = new Cell($char, 7, 0);
-            $grid->set(0, $i, $cell);
+            $grid->put(0, $i, $cell);
         }
 
         $cursor = new Cursor($cursorRow, $cursorCol, $cursorShape, $cursorVisible);

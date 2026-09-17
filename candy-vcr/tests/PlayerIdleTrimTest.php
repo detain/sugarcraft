@@ -117,7 +117,6 @@ final class PlayerIdleTrimTest extends TestCase
             $elapsed = microtime(true) - $start;
 
             // The play should complete (not timeout) because idle trim clamps 10s to 0.5s
-            $this->assertNotNull($result);
             // Elapsed time should be well under 10 seconds due to idle trimming
             $this->assertLessThan(5.0, $elapsed, 'Idle trim should have clamped the 10s delay');
         } finally {
@@ -162,7 +161,6 @@ final class PlayerIdleTrimTest extends TestCase
             $elapsed = microtime(true) - $start;
 
             // Explicit 0.2s should win over withIdleTrim's 0.5s
-            $this->assertNotNull($result);
             $this->assertLessThan(3.0, $elapsed);
         } finally {
             @unlink($path);
@@ -202,12 +200,16 @@ final class PlayerIdleTrimTest extends TestCase
                 timeoutSeconds: 2.0,
             );
 
-            $this->assertNotNull($result);
         } finally {
             @unlink($path);
         }
     }
 
+    /**
+     * @param resource $input
+     * @param resource $output
+     * @param \React\EventLoop\LoopInterface $loop
+     */
     private function createEchoProgram($input, $output, $loop): Program
     {
         return new Program(

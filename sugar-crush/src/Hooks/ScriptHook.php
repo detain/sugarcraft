@@ -343,6 +343,21 @@ final readonly class ScriptHook implements BoundedHookInterface
     private const EXIT_POLL_MICROSECONDS = 10_000;
 
     /**
+     * The clock the run's deadline is measured against.
+     *
+     * PRODUCTION IS INERT: the default is `microtime(true)`, and no shipped
+     * caller passes anything else. The seam exists for the two
+     * `HookRegistryTest` cases that must watch a budget EXPIRE — the fact
+     * they assert is about the arithmetic of a deadline, but reading it off
+     * the wall clock made the verdict a function of how the box was
+     * scheduling, which is the wave-8 determinism defect. A scripted clock
+     * turns "wait until 0.6 seconds have gone by" into "take the next tick",
+     * at the same number of reads and the same branch shape. Same idiom as
+     * {@see \SugarCraft\Crush\MCP\OAuthLoopbackFlow::$clock}.
+     */
+    private readonly \Closure $clock;
+
+    /**
      * $timeoutSeconds is the wall clock this hook's whole run — drain AND
      * reap — has to finish inside; see {@see DEFAULT_TIMEOUT_SECONDS}. A value
      * that is not positive AND FINITE is NOT "no timeout":
@@ -350,6 +365,9 @@ final readonly class ScriptHook implements BoundedHookInterface
      * because the one thing this parameter must not be able to express is the
      * unbounded wait it was added to remove — and `INF` expressed it exactly,
      * being a float that is greater than zero.
+     *
+     * @param callable(): float|null $clock deadline clock; null keeps production
+     *        on `microtime(true)` — see {@see self::$clock} for the seam's why.
      */
     public function __construct(
         private string $name,
@@ -358,7 +376,12 @@ final readonly class ScriptHook implements BoundedHookInterface
         private string $command,
         private string $description,
         private float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
-    ) {}
+        ?callable $clock = null,
+    ) {
+        $this->clock = $clock !== null
+            ? \Closure::fromCallable($clock)
+            : static fn (): float => microtime(true);
+    }
 
     /**
      * Create a ScriptHook from a config array.
@@ -451,6 +474,12 @@ final readonly class ScriptHook implements BoundedHookInterface
             $this->command,
             $this->description,
             min($this->timeoutSeconds(), $requested),
+            // THE CLONE CARRIES THE CLOCK. HookRegistry charges each hook what
+            // is left of the chain budget through exactly this method; dropping
+            // the seam here would silently re-anchor the clamped copy to the
+            // wall clock and every scripted-clock expectation downstream of a
+            // clamp would be measuring the scheduler again.
+            $this->clock,
         );
     }
 
@@ -599,7 +628,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         // either one alone bounds nothing. See {@see DEFAULT_TIMEOUT_SECONDS}
         // for the measurement of both.
         $budget = $this->timeoutSeconds();
-        $deadline = microtime(true) + $budget;
+        $deadline = ($this->clock)() + $budget;
 
         [$output, $errors, $timedOut] = $this->drain($pipes[1], $pipes[2], $deadline);
 
@@ -612,7 +641,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         // {@see \SugarCraft\Crush\Commands\CommandSpec::runShellSubstitution()}'s
         // post-read wait.
         if (!$timedOut) {
-            $timedOut = !self::waitForExit($process, $deadline);
+            $timedOut = !$this->waitForExit($process, $deadline);
         }
 
         if ($timedOut) {
@@ -946,8 +975,8 @@ final readonly class ScriptHook implements BoundedHookInterface
      *
      * @param resource $stdout
      * @param resource $stderr
-     * @param float $deadline `microtime(true)`-based instant past which the
-     *        drain gives up on whatever the hook has not written yet
+     * @param float $deadline instant on this hook's clock (see {@see self::$clock})
+     *        past which the drain gives up on whatever the hook has not written yet
      * @return array{0: string, 1: string, 2: bool} stdout, stderr, timed-out
      */
     private function drain($stdout, $stderr, float $deadline): array
@@ -960,7 +989,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         $failures = 0;
 
         while ($open !== []) {
-            $remaining = $deadline - microtime(true);
+            $remaining = $deadline - ($this->clock)();
             if ($remaining <= 0.0) {
                 // Sweep what is already buffered on the way out, the same as
                 // the give-up branch below: the pipes are non-blocking, so
@@ -1052,7 +1081,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      *
      * @param resource $process
      */
-    private static function waitForExit($process, float $deadline): bool
+    private function waitForExit($process, float $deadline): bool
     {
         while (true) {
             if ((proc_get_status($process)['running'] ?? false) !== true) {
@@ -1063,7 +1092,7 @@ final readonly class ScriptHook implements BoundedHookInterface
             // as exited even when the caller's budget is already spent — which
             // is the ordinary case on the drain-finished path, where the
             // deadline may well have nothing left on it.
-            if (microtime(true) >= $deadline) {
+            if (($this->clock)() >= $deadline) {
                 return false;
             }
 

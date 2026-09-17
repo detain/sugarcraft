@@ -9,9 +9,9 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
-use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\RelativeFormat;
+use SugarCraft\Vcr\Tests\Support\DecodedJson;
 
 /**
  * Tests for RelativeFormat which uses `dt` (delta-time) field at the file
@@ -19,10 +19,7 @@ use SugarCraft\Vcr\Format\RelativeFormat;
  */
 final class RelativeFormatTest extends TestCase
 {
-    public function testImplementsFormatInterface(): void
-    {
-        $this->assertInstanceOf(Format::class, new RelativeFormat());
-    }
+    use DecodedJson;
 
     public function testHeaderEncodesWithRelativeTimestampMode(): void
     {
@@ -31,7 +28,7 @@ final class RelativeFormatTest extends TestCase
         $lines = explode("\n", trim($encoded));
 
         $this->assertCount(1, $lines);
-        $decoded = json_decode($lines[0], true);
+        $decoded = self::decodeArray($lines[0]);
         $this->assertSame(1, $decoded['v']);
         $this->assertSame('relative', $decoded['timestampMode']);
         $this->assertSame(80, $decoded['cols']);
@@ -54,19 +51,19 @@ final class RelativeFormatTest extends TestCase
         $this->assertCount(4, $lines, '1 header + 3 events');
 
         // First event should have dt=0.0
-        $resize = json_decode($lines[1], true);
+        $resize = self::decodeArray($lines[1]);
         $this->assertSame('resize', $resize['k']);
         $this->assertArrayHasKey('dt', $resize);
         $this->assertArrayNotHasKey('t', $resize);
         $this->assertEqualsWithDelta(0.0, $resize['dt'], 0.001);
 
         // Second event: dt = 0.001 - 0.0 = 0.001
-        $output = json_decode($lines[2], true);
+        $output = self::decodeArray($lines[2]);
         $this->assertSame('output', $output['k']);
         $this->assertEqualsWithDelta(0.001, $output['dt'], 0.001);
 
         // Third event: dt = 0.450 - 0.001 = 0.449
-        $quit = json_decode($lines[3], true);
+        $quit = self::decodeArray($lines[3]);
         $this->assertSame('quit', $quit['k']);
         $this->assertEqualsWithDelta(0.449, $quit['dt'], 0.001);
     }
@@ -108,7 +105,7 @@ final class RelativeFormatTest extends TestCase
         $this->assertSame("\x1b[2J\x1b[H", $loaded->events[1]->payload['b']);
 
         $this->assertSame(EventKind::Input, $loaded->events[2]->kind);
-        $this->assertSame('q', $loaded->events[2]->payload['msg']['key']);
+        $this->assertSame('q', self::decodeNested($loaded->events[2]->payload, 'msg')['key']);
 
         $this->assertSame(EventKind::Quit, $loaded->events[3]->kind);
     }

@@ -6,7 +6,7 @@ namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Buffer\Buffer;
-use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Screen\Screen;
 use SugarCraft\Vt\Sgr\Sgr;
 

@@ -5,8 +5,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Freeze;
 
-use SugarCraft\Ansi\Parser\Handler;
-use SugarCraft\Ansi\Parser\Parser;
+use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
 
 /**
  * Handler implementation for SGR (Select Graphic Rendition) state parsing.
@@ -16,7 +15,7 @@ use SugarCraft\Ansi\Parser\Parser;
  *
  * @internal
  */
-final class SgrStateHandler implements Handler
+final class SgrStateHandler implements SubparamsAwareHandler
 {
     private SgrState $state;
     private string $textBuf;
@@ -26,11 +25,14 @@ final class SgrStateHandler implements Handler
     private array $segments;
 
     /**
-     * Parser whose sub-parameter flags accompany the current dispatch, or null
-     * when this handler is driven by something that reports no flags — in which
-     * case every sequence is read in its flat `;` spelling.
+     * ECMA-48 colon continuation flags the parser PUSHED for the sequence
+     * currently being dispatched ({@see SubparamsAwareHandler::setSubparams()}),
+     * or the empty list when nothing has been pushed — in which case every
+     * sequence is read in its flat `;` spelling.
+     *
+     * @var list<bool>
      */
-    private ?Parser $parser = null;
+    private array $subparams = [];
 
     public function __construct(SgrState &$state, string &$textBuf, callable $flush, array &$segments)
     {
@@ -41,12 +43,13 @@ final class SgrStateHandler implements Handler
     }
 
     /**
-     * Let this handler read {@see Parser::subparams()} while a CSI is in
-     * flight, so colon sub-parameters keep their grouping.
+     * {@inheritDoc}
+     *
+     * @param list<bool> $subparams
      */
-    public function bindParser(Parser $parser): void
+    public function setSubparams(array $subparams): void
     {
-        $this->parser = $parser;
+        $this->subparams = $subparams;
     }
 
     public function printChar(string $rune): void
@@ -66,7 +69,7 @@ final class SgrStateHandler implements Handler
         }
 
         ($this->flush)();
-        $this->state = $this->applySgr($params, $this->state, $this->parser?->subparams() ?? []);
+        $this->state = $this->applySgr($params, $this->state, $this->subparams);
     }
 
     public function escDispatch(int $_final, int $_intermediate): void
@@ -89,7 +92,7 @@ final class SgrStateHandler implements Handler
 
     /**
      * @param list<int>  $params     Flattened SGR parameters; -1 marks an omitted one.
-     * @param list<bool> $subparams  Continuation flags from {@see Parser::subparams()}.
+     * @param list<bool> $subparams  Continuation flags pushed via {@see self::setSubparams()}.
      */
     private function applySgr(array $params, SgrState $cur, array $subparams = []): SgrState
     {

@@ -36,7 +36,7 @@ final class MetadataHook implements Hook
         $this->metadata = $metadata;
     }
 
-    public function beforeSave(Event $event): ?Event
+    public function beforeSave(Event $event): Event
     {
         // Add metadata to the first output event's payload as a marker
         if ($this->firstEvent && $event->kind === EventKind::Output) {

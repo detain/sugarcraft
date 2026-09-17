@@ -34,7 +34,9 @@ final class Parser
      * handler as the identical flat list `[4, 3]` — the mis-split the VT500
      * grammar forbids. The flattened list is still dispatched unchanged for
      * handler compatibility; consumers that need the grouping read
-     * {@see subparams()} or reconstitute it with {@see groupSubparameters()}.
+     * {@see subparams()}, reconstitute it with {@see groupSubparameters()}, or
+     * opt into {@see SubparamsAwareHandler} and have the parser push them in
+     * immediately before each parameterised dispatch.
      *
      * Mirrors charmbracelet/x/ansi `Param.HasMore` / `Params.HasMore(i)`.
      *
@@ -65,6 +67,14 @@ final class Parser
     private int $fastPathRuns = 0;
 
     /**
+     * The handler viewed through the optional {@see SubparamsAwareHandler}
+     * capability, resolved once here rather than on every dispatch: the parser
+     * is fed byte-by-byte in a hot loop, and a handler's class cannot change
+     * under it. Null means the handler never opted in and receives no push.
+     */
+    private readonly ?SubparamsAwareHandler $subparamsSink;
+
+    /**
      * @param int $maxStringBuffer Cap (in bytes) on the DCS/OSC/SOS/PM/APC
      *                             payload accumulator. Defaults to 64 KiB;
      *                             emulator front-ends (e.g. candy-vt) may raise
@@ -75,6 +85,7 @@ final class Parser
         private readonly bool $replaceMalformed = false,
         private readonly int $maxStringBuffer = self::MAX_STRING_BUFFER,
     ) {
+        $this->subparamsSink = $handler instanceof SubparamsAwareHandler ? $handler : null;
     }
 
     /**
@@ -216,11 +227,17 @@ final class Parser
      * parameter group. Indices beyond the last flag default to false — an
      * empty result means the list held no `:` separators.
      *
-     * The flags are read during a {@see Handler} dispatch callback (the
-     * handler holds no parser reference of its own, so a front-end that owns
-     * the Parser — e.g. an emulator terminal — consults them there) or after
-     * `feed()` for the last completed sequence. They reset when the next
-     * sequence's params start accumulating.
+     * A handler that owns its Parser reads them back mid-dispatch this way —
+     * `sugar-spark`'s `AnsiHandler` does exactly that — and a driver reads them
+     * after `feed()` for the last completed sequence; they reset when the next
+     * sequence's params start accumulating. This is the PULL route.
+     *
+     * The alternative — the one the candy-vt and candy-freeze sinks now use — is
+     * the PUSH: implement {@see SubparamsAwareHandler} and be handed the same
+     * flags in the dispatch call chain, so the handler needs no back-reference to
+     * the parser dispatching it. {@see SubparamsAwareHandler::setSubparams()}
+     * removes that back-reference where taken; it does not forbid pulling. Both
+     * routes stay live and byte-identical (see that interface).
      *
      * @return list<bool>
      */
@@ -344,8 +361,9 @@ final class Parser
     private function param(int $byte): void
     {
         // ';' (0x3B) and ':' (0x3A) both start a new param slot; ':' additionally
-        // marks the PRECEDING slot as a sub-parameter group continuation (ECMA-48
-        // §14.1.1), which is recorded in $subparams and surfaced via subparams().
+        // marks the PRECEDING slot as a sub-parameter group continuation (the
+        // ECMA-48 `:` sub-parameter separator), recorded in $subparams and
+        // surfaced via subparams().
         $n = count($this->params);
         if ($byte === 0x3B || $byte === 0x3A) {
             if ($n >= self::MAX_PARAMS) {
@@ -405,6 +423,7 @@ final class Parser
                 $this->handler->oscDispatch($this->stringBuffer);
                 break;
             case State::DcsString:
+                $this->pushSubparams();
                 $this->handler->dcsDispatch(
                     $this->cmd & 0xFF,
                     $this->params,
@@ -427,8 +446,26 @@ final class Parser
                 $this->handler->escDispatch($byte, $intermediate);
                 break;
             default:
+                $this->pushSubparams();
                 $this->handler->csiDispatch($byte, $this->params, $prefix, $intermediate);
         }
         $this->stringBuffer = '';
+    }
+
+    /**
+     * Push the in-flight continuation flags to the handler when — and only when
+     * — it opted into {@see SubparamsAwareHandler}.
+     *
+     * A handler that did not opt in is dispatched exactly as it was before this
+     * capability existed: no extra call, no changed argument. The in-tree sinks
+     * DO opt in and read the push — candy-vt's `ScreenHandler` (emulator) and
+     * `RendererHandler` (renderer, forwarding to `CsiHandlerImpl`), and
+     * candy-freeze's `SgrStateHandler` — so none of them needs the late-bound
+     * back-reference any more. {@see subparams()} remains public for a program
+     * that owns a Parser directly; see {@see SubparamsAwareHandler}.
+     */
+    private function pushSubparams(): void
+    {
+        $this->subparamsSink?->setSubparams($this->subparams);
     }
 }

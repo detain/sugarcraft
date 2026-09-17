@@ -19,6 +19,9 @@ final class UserJsonableMsg implements Msg, \JsonSerializable
     ) {
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function jsonSerialize(): array
     {
         return ['name' => $this->name, 'count' => $this->count];
