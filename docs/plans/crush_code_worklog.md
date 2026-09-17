@@ -11598,6 +11598,26 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 86 (2026-09-17) — PHASE-5 PORT-QUEUE WAVE-1: five build/derivation lanes v1–v5 welded + v6 product-rulings doc; ZERO sugar-crush files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census stays 1 (E736 renoted, r87 tail defined)
+
+### ROUND-86 WAVE-1 WELD (2026-09-17) — v1 shell / v2 layout / v3 bits / v4 charts / v5 vt — five picks ZERO conflicts; companion fold carries five rv-MINORs; ALL six lanes reviewed APPROVE-class before merge
+
+**Welded 2026-09-17 on code tip `0ab8555bf` (v6 rulings doc — already on master at weld time; NEVER pushed).** File-disjoint lanes (shell/layout/bits/charts dirs + vt docs), picked in order, all CLEAN as predicted.
+
+| lane | lib | tip → pick | shipped | gate |
+|---|---|---|---|---|
+| v1 `ea16cf74a` | candy-shell | → `c887c1458` | 12/12 plan rows verified-stamped + 4.1 mis-file test relocation | **334T/694A** (rv-corrected +3T/+7A) |
+| v2 `30beda267` | candy-layout | → `86dd9807c` | Phase-5/6 `SolverEdgeCaseTest` 10T + MAX_FLOOR_RECLAIM const + docblocks; zero behavior bug | **157T/882A** |
+| v3 `2cfd90bba` | sugar-bits | → `2d11ab830` | Table shrink-through-mutate + visibleRows memo (E736/3.3) + Tree twin + multisort/7.1 stamps + LEARNINGS | **509T/1066A** |
+| v4 `926585f2b` | sugar-charts | → `7dfa8de45` | P2–P4 perf builds (Heatmap/BufferHelper/Legend/Sixel) + `Phase2PerfPinsTest`; render-dump md5-identical proof | **576T/1445A** (+6T) |
+| v5 `018739046` | candy-vt docs | → `3696b7bf7` | plan RE-DERIVATION: 22/31 non-actionable, 9-row surviving tail | docs-only |
+
+**rv dispositions:** rv-v1 APPROVE-WITH-FIX 1 MINOR (figure honesty — base was 331/687, delta +3T/+7A not +1T/+3A; weld carries corrected figures); rv-v2 APPROVE 0C/0M/2m (MINOR-1: 2.3 row cited `138b3d7e5` but Tableau.php file-kill is `5a232f565`; MINOR-2 render-dump-style probe note); rv-v3 APPROVE 0C/0M/2m (MINORs: getPaginator docblock memo-claim false — rebuilds inline; 7.1 "cannot reproduce" overstates the measurement); rv-v4 APPROVE 0C/0M/2m (sixel single-channel key-collapse leg; render-dump arg shape); rv-v5 APPROVE 0C/0M/2m (feedAsync attribution — row `a45666b08`, `26ee0fa97` is the feedStream cancellation; mutate() also at Cell.php:126; ENDORSED the r87 cheap-lane cut WITH 6.4 carve-out + 6.2 consumer-set-ordering gate); rv-v6 APPROVE 0C/0M/0m.
+
+**Companion fold `5c9cd321f` (all five MINORs, comment/docs-only):** layout 2.3 SHA correction; bits Table.php getPaginator docblock truth (NOT routed — behavior freeze); bits 7.1 softened to measured truth (bare SORT_NATURAL reverses; SORT_NATURAL|SORT_FLAG_CASE matched probes; SORT_FLAG_CASE_INSENSITIVE absent on this PHP — verdict unchanged); vt 8.2 feedAsync→`a45666b08` attrition corrected; vt 9.1 + findings #24 mutate() Cell.php:126 re-check.
+
+**Gates (weld tree, plain pipe, linked vendor):** shell 334/694 · layout 157/882 · bits 509/1066 · charts 576/1445 · forms **1891/3164 EXACT** (shared keystone) · consumers UNMOVED zero-wobble: prompt 158/310/2S, glow 122/313, stickers 221/476, query 1483/4203, tick 144/349, boxer 187/375, sprinkles 751/2629 · five-guard **125T/7362A** · child-lifetimes + path-repos rc0 · config md5 d96e124ee… start==end · sugar-crush files touched by weld = **0** → floor exact-carry, NO serial re-pin (r84/r85 shape). Rulings at this weld: bits 2.4 BUILD→r87w2, bits 3.1 DECLINED, charts P5 verify→r87w3; r87 w1 = vt 9-row tail per rv endorsement (4.1/4.3/4.4/12.3 → 6.1/6.3 → 2.3 → 6.2-conditional; 6.4 carved for post-w1 ruling). Master ff-only to `5c9cd321f`.
+
 ## ROUND 85 (2026-09-17) — E731 trait sweep + E736 candy-forms F1/F3 welded; one keep-both docblock conflict; floor UNCHANGED 12,027 / 170,392 (zero sugar-crush files moved); census survivors 2 to 3 (E731/E736/E741-mint)
 
 **Welded 2026-09-17 on `988696aea` (r86u post-upstream master; NEVER pushed).** Twin-run context: r86u proved the twin independent-merge protocol on the upstream absorption; r85 resumes the lane model — three lanes (u1/u2/u3), ALL reviewed BEFORE merge (r85-rv-{u1,u2,u3} APPROVE-class), base `988696aea` for all three.
