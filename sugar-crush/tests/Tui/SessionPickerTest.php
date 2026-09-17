@@ -70,18 +70,17 @@ final class SessionPickerTest extends TestCase
 
     public function testSelectedSessionReturnsNullWhenIndexOutOfBounds(): void
     {
-        $sessions = $this->makeSessions();
-        $picker = SessionPicker::new($sessions);
-        // Manually create picker with invalid index via reflection to test bounds checking
-        $reflection = new \ReflectionClass(SessionPicker::class);
-        $picker2 = $reflection->newInstanceWithoutConstructor();
-        $prop = $reflection->getProperty('selectedIndex');
-        $prop->setValue($picker2, 99);
-        $propSessions = $reflection->getProperty('sessions');
-        $propSessions->setValue($picker2, $sessions);
-        $propBranch = $reflection->getProperty('branchFilter');
-        $propBranch->setValue($picker2, null);
-        $this->assertNull($picker2->selectedSession());
+        // E744 WS5 removed the hand-poked invalid cursor this test used to
+        // build by reflection: the selection index now lives on the ItemList
+        // model, which CLAMPS, so a cursor beyond the last row is no longer
+        // constructible — it can only be reasoned about. The bound the poke
+        // forced is now reachable solely through the empty row set (cursor
+        // parked at zero over zero rows), which selectedSession() still
+        // answers with null.
+        $picker = SessionPicker::new($this->makeSessions())->withBranchFilter('no-such-branch');
+        $this->assertSame(0, $picker->selectedIndex());
+        $this->assertCount(0, $picker->filteredSessions());
+        $this->assertNull($picker->selectedSession());
     }
 
     public function testSelectedIndex(): void
@@ -170,22 +169,32 @@ final class SessionPickerTest extends TestCase
         $this->assertSame(1, $newPicker->selectedIndex());
     }
 
-    public function testHandleKeyDownWrapsToStart(): void
+    public function testHandleKeyDownClampsAtLastRow(): void
     {
+        // E744 WS5 divergence, disclosed in the picker docblock: the adopted
+        // ItemList CLAMPS at the end where the hand-rolled picker WRAPPED —
+        // arriving on the last row is the load-more signal (pinned in
+        // SessionPickerWidgetTest), never a jump back to row zero. A picker
+        // with no more pages upstream answers the end press quietly: the
+        // widened tuple's third slot is the widget's navigation Cmd, and
+        // clamped-and-unchanged raises nothing.
         $sessions = $this->makeSessions();
         $picker = SessionPicker::new($sessions)->withSelectedIndex(2); // last index
-        [$newPicker, $action] = $picker->handleKey('down');
+        [$newPicker, $action, $cmd] = $picker->handleKey('down');
         $this->assertSame('browse', $action);
-        $this->assertSame(0, $newPicker->selectedIndex()); // wraps to start
+        $this->assertSame(2, $newPicker->selectedIndex()); // stays clamped
+        $this->assertNull($cmd);
     }
 
-    public function testHandleKeyUpWrapsToEnd(): void
+    public function testHandleKeyUpClampsAtFirstRow(): void
     {
+        // E744 WS5: clamp, not wrap — see testHandleKeyDownClampsAtLastRow.
         $sessions = $this->makeSessions();
         $picker = SessionPicker::new($sessions)->withSelectedIndex(0); // first index
-        [$newPicker, $action] = $picker->handleKey('up');
+        [$newPicker, $action, $cmd] = $picker->handleKey('up');
         $this->assertSame('browse', $action);
-        $this->assertSame(2, $newPicker->selectedIndex()); // wraps to end
+        $this->assertSame(0, $newPicker->selectedIndex()); // stays clamped
+        $this->assertNull($cmd);
     }
 
     public function testHandleKeyEnterWithSelection(): void

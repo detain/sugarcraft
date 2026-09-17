@@ -414,9 +414,18 @@ final class MouseModalGuardTest extends TestCase
      * guards in {@see Chat::update()} and below the reference's, and
      * {@see Chat::scrollTranscript()} already redirects the wheel onto the
      * reference when that is what is up. So in every capture state the two
-     * devices already agreed about scrolling, and they still do.
+     * devices already agreed about scrolling, and they still do —
      *
-     * @param 'keyHelp'|'prompt'|'picker'|'palette' $state
+     * EXCEPT under the session picker as of E744 WS4. The picker became the
+     * first capture state that owns a scrollable LIST of its own, so a wheel
+     * notch there now moves the picker's selection instead of the transcript
+     * (the pointer aims at what it covers); the keyboard's
+     * `PageUp`/`PageDown` still scroll the transcript under the picker, which
+     * keeps the reading-while-deciding affordance alive on the device that
+     * never had a local context to aim at. That split is pinned by
+     * {@see testThePickerTakesTheWheelAndKeepsThePageKeys()}.
+     *
+     * @param 'keyHelp'|'prompt'|'palette' $state
      *
      * @dataProvider scrollableStates
      */
@@ -450,9 +459,33 @@ final class MouseModalGuardTest extends TestCase
         return [
             'keybinding reference' => ['keyHelp'],
             'permission prompt' => ['prompt'],
-            'session picker' => ['picker'],
+            // 'session picker' left this roster at E744 WS4 — the picker
+            // takes the wheel for itself now, pinned by
+            // testThePickerTakesTheWheelAndKeepsThePageKeys().
             'command palette' => ['palette'],
         ];
+    }
+
+    /**
+     * E744 WS4: with the session picker up, a wheel notch drives the
+     * picker's selection (the ItemList wheel arm) and leaves the transcript
+     * exactly where it was, while the keyboard's PageUp still scrolls the
+     * transcript — pointer local, keyboard global, both polarities pinned
+     * here because each one alone would survive neutering the other.
+     */
+    public function testThePickerTakesTheWheelAndKeepsThePageKeys(): void
+    {
+        $chat = $this->capturing('picker', transcriptRows: 200);
+        $chat->view();
+        self::assertGreaterThan(0, count($chat->sessionPicker()->filteredSessions()));
+        $before = $chat->sessionPicker()->selectedIndex();
+
+        [$wheeled] = $chat->update($this->wheel(MouseButton::WheelDown));
+        self::assertSame($before + 1, $wheeled->sessionPicker()->selectedIndex(), 'the notch moved the picker');
+        self::assertSame(0, $wheeled->scrollOffset(), 'and touched no transcript scroll');
+
+        [$paged] = $wheeled->update(new KeyMsg(KeyType::PageUp));
+        self::assertGreaterThan(0, $paged->scrollOffset(), 'PageUp still scrolls the transcript under the picker');
     }
 
     // =========================================================================

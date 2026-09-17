@@ -966,19 +966,24 @@ final class KeyBindingDriftTest extends TestCase
             },
 
             // ── Session picker ───────────────────────────────────────────
-            // Both keys, with DIFFERENT expected answers. "the highlight moved"
-            // is not enough on a wrapping list of two: from row 0, up-wrapping
-            // and down both land on row 1, so the label could say `↓ / ↑` (or
-            // the description `(or j / k)`) and still pass. Three rows separate
-            // the two directions: up wraps to the last, down goes to the
-            // second.
+            // Both keys, with DIFFERENT expected answers. E744: the picker's
+            // selection model is the ItemList, which CLAMPS at both ends — the
+            // pre-E744 hand-rolled list wrapped, and wrap was the reason three
+            // rows were needed to separate the directions ("from row 0,
+            // up-wrapping and down both land on row 1"). Under the clamp the
+            // directions separate on their own: from the top the UP chord holds
+            // at row 0 while the DOWN chord advances, so a label respelled
+            // `↓ / ↑` (or a description `(or j / k)` with the letters swapped)
+            // moves where this expects stillness. The three-row fixture is kept
+            // simply because it was already the shape that made the two
+            // answers unique, and nothing here needs it to be smaller.
             'picker.move' => function (array $k): void {
                 $open = $this->chatWithPicker(3);
                 $this->assertSame(0, $open->sessionPicker()?->selectedIndex(), 'fixture: starts at the top');
 
                 [$up] = $open->update($k[0]);
                 [$down] = $open->update($k[1]);
-                $this->assertSame(2, $up->sessionPicker()?->selectedIndex(), 'the first key must move UP');
+                $this->assertSame(0, $up->sessionPicker()?->selectedIndex(), 'the first key must hold at the top — the clamp, not a wrap');
                 $this->assertSame(1, $down->sessionPicker()?->selectedIndex(), 'the second key must move DOWN');
             },
             'picker.resume' => function (array $k): void {

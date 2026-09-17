@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui;
 
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\Theme;
@@ -17,30 +25,71 @@ use SugarCraft\Crush\Theme;
  * - Space to preview a session without committing
  * - Escape to close the picker
  * - Filter that narrows the list to sessions tied to the current git branch
+ * - E744 WS4/WS5: click-to-select on its painted rows (zones owned by the
+ *   picker outrank the frame behind it) and a LoadMore edge that widens the
+ *   store fetch once browsing exhausts the rows already in hand.
  *
  * Mirrors charmbracelet/crush session picker behavior.
+ *
+ * E744 WS5 adopted {@see ItemList} as the SELECTION MODEL — cursor position,
+ * end-of-list clamping, the mouse row hit-map and the load-more arrival edge
+ * all belong to the widget now, raised through `Cmd::send(new LoadMoreMsg())`
+ * exactly as any other host would receive them. The PIXELS deliberately stayed
+ * here: this overlay paints its own header/border/footer chrome, byte-pinned
+ * by the hosted-frame tests, and its scroll window is a center-on-cursor rule
+ * rather than the widget's pan window, so `ItemList::view()` is never called.
+ * The list is constructed `focused`, with its description/filter/status/help
+ * surfaces off and a height that covers every loaded row, which keeps its
+ * internal pan offset at zero — the one configuration under which a synthesized
+ * click line equals an absolute row (see {@see updateClick()}). The widget's
+ * `/` filter key is never forwarded: {@see handleKey()} routes only up/down/j/k
+ * navigations into the model, so the list's filtering mode is unreachable.
+ *
+ * One behavioral divergence rode the adoption: browsing CLAMPS at the ends of
+ * the list where the hand-rolled picker WRAPPED. Wrapping past the last row
+ * would fight the load-more edge — arriving at the last row while more exist
+ * upstream is the signal to fetch, not the signal to jump to row zero.
  */
 final class SessionPicker
 {
     /** @var list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}> */
     private readonly array $sessions;
 
-    /** Index of the currently selected session in the filtered list. */
-    private readonly int $selectedIndex;
-
     /** Current branch filter - only show sessions tied to this branch, or null for no filter. */
     private readonly string|null $branchFilter;
 
-    private const MAX_VISIBLE_SESSIONS = 15;
+    /**
+     * Store fetch limit that produced {@see $sessions}: the initial page for a
+     * freshly opened picker and, widened by the same step, the next page a
+     * {@see LoadMoreMsg} asks for. A fetch that FILLS its limit leaves
+     * {@see $moreInStore} true; a short fetch closes the edge.
+     */
+    public const PAGE_SIZE = 20;
+
+    /** The selection/scroll/clamp/mouse/load-edge model (E744 WS5). */
+    private readonly ItemList $list;
+
+    /** Store limit the CURRENT {@see $sessions} came back from. */
+    private readonly int $fetchLimit;
+
+    /** Whether the last store fetch filled its limit (another page may exist). */
+    private readonly bool $moreInStore;
 
     /**
      * @param list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}> $sessions
      */
-    private function __construct(array $sessions, int $selectedIndex = 0, string|null $branchFilter = null)
-    {
+    private function __construct(
+        array $sessions,
+        ItemList $list,
+        string|null $branchFilter,
+        int $fetchLimit,
+        bool $moreInStore,
+    ) {
         $this->sessions = $sessions;
-        $this->selectedIndex = $selectedIndex;
+        $this->list = $list;
         $this->branchFilter = $branchFilter;
+        $this->fetchLimit = $fetchLimit;
+        $this->moreInStore = $moreInStore;
     }
 
     /**
@@ -48,9 +97,18 @@ final class SessionPicker
      *
      * @param list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}> $sessions
      */
-    public static function new(array $sessions): self
-    {
-        return new self($sessions, 0, null);
+    public static function new(
+        array $sessions,
+        int $fetchLimit = self::PAGE_SIZE,
+        bool $moreInStore = false,
+    ): self {
+        return new self(
+            $sessions,
+            self::modelFor(self::filterRows($sessions, null), 0, $moreInStore),
+            null,
+            $fetchLimit,
+            $moreInStore,
+        );
     }
 
     /**
@@ -60,15 +118,57 @@ final class SessionPicker
      */
     public function filteredSessions(): array
     {
-        if ($this->branchFilter === null) {
-            return $this->sessions;
+        return self::filterRows($this->sessions, $this->branchFilter);
+    }
+
+    /**
+     * @param list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}> $sessions
+     *
+     * @return list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}>
+     */
+    private static function filterRows(array $sessions, string|null $branchFilter): array
+    {
+        if ($branchFilter === null) {
+            return $sessions;
         }
 
         return array_values(array_filter(
-            $this->sessions,
-            fn(array $s): bool => ($s['gitBranch'] ?? '') !== ''
-                && $s['gitBranch'] === $this->branchFilter,
+            $sessions,
+            static fn(array $s): bool => ($s['gitBranch'] ?? '') !== ''
+                && $s['gitBranch'] === $branchFilter,
         ));
+    }
+
+    /**
+     * Build the ItemList model over one row set: focused, surfaces off, one
+     * screen tall (so its pan offset never moves and a click line is an
+     * absolute row), with the load-more edge armed exactly when more rows may
+     * exist upstream.
+     *
+     * @param list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}> $rows
+     */
+    private static function modelFor(array $rows, int $cursor, bool $moreInStore): ItemList
+    {
+        $items = array_map(static fn(array $row): SessionRow => SessionRow::fromSession($row), $rows);
+        $list = ItemList::new($items, 60, max(1, count($items)))
+            ->withShowDescription(false)
+            ->withShowFilter(false)
+            ->withShowStatusBar(false)
+            ->withShowHelp(false)
+            ->withHasMore($moreInStore);
+        [$focused] = $list->focus();
+        \assert($focused instanceof ItemList);
+
+        // select() is moveCursor-with-no-edge: programmatic positioning must
+        // not fire the arrival signal that only KEYBOARD/MOUSE navigation
+        // raises (loadMoreEdge documents the same split in the widget).
+        return $focused->select($cursor);
+    }
+
+    /** Swap in a rebuilt model, keeping everything else. */
+    private function withList(ItemList $list): self
+    {
+        return new self($this->sessions, $list, $this->branchFilter, $this->fetchLimit, $this->moreInStore);
     }
 
     /**
@@ -80,19 +180,20 @@ final class SessionPicker
     {
         $filtered = $this->filteredSessions();
 
-        if ($this->selectedIndex < 0 || $this->selectedIndex >= count($filtered)) {
+        if ($this->selectedIndex() < 0 || $this->selectedIndex() >= count($filtered)) {
             return null;
         }
 
-        return $filtered[$this->selectedIndex];
+        return $filtered[$this->selectedIndex()];
     }
 
     /**
-     * Return the selected index.
+     * Return the selected index — the ItemList cursor (E744 WS5: the widget is
+     * the selection authority; this class no longer stores a parallel index).
      */
     public function selectedIndex(): int
     {
-        return $this->selectedIndex;
+        return $this->list->index();
     }
 
     /**
@@ -108,19 +209,9 @@ final class SessionPicker
      */
     public function withSelectedIndex(int $index): self
     {
-        $filtered = $this->filteredSessions();
-        $maxIndex = max(0, count($filtered) - 1);
-
-        // Clamp index to valid range
-        if ($index < 0) {
-            $newIndex = 0;
-        } elseif ($index > $maxIndex) {
-            $newIndex = $maxIndex;
-        } else {
-            $newIndex = $index;
-        }
-
-        return new self($this->sessions, $newIndex, $this->branchFilter);
+        // select() clamps against the model's own row count, which is the
+        // filtered set — the same 0..count-1 law the hand-rolled picker had.
+        return $this->withList($this->list->select($index));
     }
 
     /**
@@ -129,7 +220,13 @@ final class SessionPicker
     public function withBranchFilter(string|null $branch): self
     {
         // When filter changes, reset selection to first item
-        return new self($this->sessions, 0, $branch);
+        return new self(
+            $this->sessions,
+            self::modelFor(self::filterRows($this->sessions, $branch), 0, $this->moreInStore),
+            $branch,
+            $this->fetchLimit,
+            $this->moreInStore,
+        );
     }
 
     /**
@@ -139,7 +236,111 @@ final class SessionPicker
      */
     public function withSessions(array $sessions): self
     {
-        return new self($sessions, 0, $this->branchFilter);
+        return new self(
+            $sessions,
+            self::modelFor(self::filterRows($sessions, $this->branchFilter), 0, $this->moreInStore),
+            $this->branchFilter,
+            $this->fetchLimit,
+            $this->moreInStore,
+        );
+    }
+
+    /**
+     * Widened the row set after a store re-fetch (E744 WS5, the LoadMore sink).
+     *
+     * Unlike {@see withSessions()} this KEEPS the cursor: the user is standing
+     * on the last row of the previous page, and the point of growing the page
+     * under them is to keep walking. The clamp that preserves comes from
+     * `ItemList::select()`, which also cannot fire the edge — growth itself is
+     * never a navigation.
+     *
+     * @param list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}> $sessions
+     */
+    public function withFetchedRows(array $sessions, int $fetchLimit, bool $moreInStore): self
+    {
+        return new self(
+            $sessions,
+            self::modelFor(self::filterRows($sessions, $this->branchFilter), $this->selectedIndex(), $moreInStore),
+            $this->branchFilter,
+            $fetchLimit,
+            $moreInStore,
+        );
+    }
+
+    /** Does the last store fetch fill its limit, so more rows may exist? */
+    public function needsStoreFetch(): bool
+    {
+        return $this->moreInStore;
+    }
+
+    /** Store limit the CURRENT page came back from. */
+    public function fetchLimit(): int
+    {
+        return $this->fetchLimit;
+    }
+
+    /** The widened limit the next {@see LoadMoreMsg} page should ask for. */
+    public function nextFetchLimit(): int
+    {
+        return $this->fetchLimit + self::PAGE_SIZE;
+    }
+
+    /**
+     * The picker's overlay box for a terminal of $cols x $rows.
+     *
+     * Single source for BOTH the painting pass ({@see Renderer::renderSessionPicker()})
+     * and the click-zone validation pass ({@see \SugarCraft\Crush\Chat}'s
+     * picker arm) — the geometry a click is judged against must be the
+     * geometry the rows were painted at.
+     *
+     * @return array{0: int, 1: int} [width, height]
+     */
+    public static function overlayGeometry(int $cols, int $rows, int $shellChromeCols): array
+    {
+        $inner = max(20, $cols - $shellChromeCols);
+
+        return [max(20, min($inner - 4, 76)), max(8, $rows - 4)];
+    }
+
+    /**
+     * The body lines the CURRENT paint shows, keyed by absolute filtered row,
+     * for the click-zone registry (E744 WS4).
+     *
+     * Pure and derived from exactly the same {@see window()} the overlay is
+     * painted from — there is no cached copy to drift. Rows outside the
+     * painted window simply have no line to mark, so they are not clickable
+     * (the arrow keys still reach them), and the `(no sessions)` sentinel is
+     * never keyed, because it is not a row.
+     *
+     * @return array<int, string>
+     */
+    public function rowZoneLines(int $width, int $height, Theme $theme): array
+    {
+        [$start, $visible] = $this->window($height);
+
+        $lines = [];
+        foreach ($visible as $i => $session) {
+            $lines[$start + $i] = $this->renderSessionLine($session, $start + $i === $this->selectedIndex(), $width, $theme);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The painted window: [first filtered index, sessions shown] for a box of
+     * $height rows — the one layout rule shared by render() and the zone map.
+     *
+     * @return array{0: int, 1: list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}>}
+     */
+    private function window(int $height): array
+    {
+        $filtered = $this->filteredSessions();
+        // headerHeight is the 3 header lines render() emits (title/separator/
+        // controls); 4 more come off for border + padding, exactly as before.
+        $availableHeight = $height - 3 - 4;
+        $start = $this->calculateScrollOffset(count($filtered), $availableHeight);
+
+        return [$start, array_slice($filtered, $start, max(0, $availableHeight))];
     }
 
     /**
@@ -152,18 +353,14 @@ final class SessionPicker
 
         // Build header
         $header = $this->renderHeader($width, $theme);
-        $headerHeight = substr_count($header, "\n") + 1;
 
-        // Calculate visible range for scrolling
-        $availableHeight = $height - $headerHeight - 4; // 4 for padding/borders
-        $startIndex = $this->calculateScrollOffset(count($filtered), $availableHeight);
-        $visibleSessions = array_slice($filtered, $startIndex, $availableHeight);
+        [$startIndex, $visibleSessions] = $this->window($height);
 
         // Build session list
         $lines = [];
         foreach ($visibleSessions as $i => $session) {
             $actualIndex = $startIndex + $i;
-            $isSelected = $actualIndex === $this->selectedIndex;
+            $isSelected = $actualIndex === $this->selectedIndex();
             $lines[] = $this->renderSessionLine($session, $isSelected, $width, $theme);
         }
 
@@ -275,6 +472,8 @@ final class SessionPicker
 
     /**
      * Render the footer with selected session details.
+     *
+     * @param array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}|null $session
      */
     private function renderFooter(int $width, array|null $session, Theme $theme): string
     {
@@ -311,8 +510,8 @@ final class SessionPicker
         $maxOffset = $totalItems - $visibleHeight;
 
         // If selected is not within visible range, scroll to center it
-        if ($this->selectedIndex < 0 || $this->selectedIndex >= $visibleHeight) {
-            $idealOffset = $this->selectedIndex - (int) floor($visibleHeight / 2);
+        if ($this->selectedIndex() < 0 || $this->selectedIndex() >= $visibleHeight) {
+            $idealOffset = $this->selectedIndex() - (int) floor($visibleHeight / 2);
             return max(0, min($maxOffset, $idealOffset));
         }
 
@@ -322,39 +521,75 @@ final class SessionPicker
     /**
      * Handle a keypress and return the action taken.
      *
-     * @return array{0: self, 1: string|null} [newPicker, action]
+     * E744 WS5 widened the tuple with a third slot: the Cmd an {@see ItemList}
+     * navigation may raise (today only the arrival-on-last-row `Cmd::send(new
+     * LoadMoreMsg())` edge). Call sites that destructure two slots are
+     * unaffected — the actions that never navigate the model carry null there.
+     *
+     * @return array{0: self, 1: string|null, 2: ?\Closure} [newPicker, action, cmd]
      *   action is 'browse' (arrow moved selection), 'resume' (enter pressed), 'preview' (space pressed), 'close' (escape pressed), or null
      */
     public function handleKey(string $key): array
     {
         return match ($key) {
-            'up', 'k' => [$this->moveSelection(-1), 'browse'],
-            'down', 'j' => [$this->moveSelection(1), 'browse'],
-            'enter' => [$this, $this->selectedSession() !== null ? 'resume' : null],
-            ' ' => [$this, $this->selectedSession() !== null ? 'preview' : null],
-            'escape' => [$this, 'close'],
-            'ctrl+b' => [$this->withBranchFilter($this->branchFilter === null ? $this->getCurrentGitBranch() : null), 'browse'],
-            default => [$this, null],
+            'up', 'k' => $this->browsing(new KeyMsg(KeyType::Up)),
+            'down', 'j' => $this->browsing(new KeyMsg(KeyType::Down)),
+            'enter' => [$this, $this->selectedSession() !== null ? 'resume' : null, null],
+            ' ' => [$this, $this->selectedSession() !== null ? 'preview' : null, null],
+            'escape' => [$this, 'close', null],
+            'ctrl+b' => [$this->withBranchFilter($this->branchFilter === null ? $this->getCurrentGitBranch() : null), 'browse', null],
+            default => [$this, null, null],
         };
     }
 
     /**
-     * Move selection up or down by delta positions.
+     * Forward one navigation into the ItemList model and wrap its answer as a
+     * browse action. Only up/down/j/k reach here — see the class docblock for
+     * why no other key is ever forwarded.
+     *
+     * @return array{0: self, 1: string, 2: ?\Closure}
      */
-    private function moveSelection(int $delta): self
+    private function browsing(KeyMsg $key): array
     {
-        $newIndex = $this->selectedIndex + $delta;
-        $filtered = $this->filteredSessions();
-        $maxIndex = max(0, count($filtered) - 1);
+        [$next, $cmd] = $this->list->update($key);
+        \assert($next instanceof ItemList);
 
-        // Wrap around at boundaries
-        if ($newIndex < 0) {
-            $newIndex = $maxIndex;
-        } elseif ($newIndex > $maxIndex) {
-            $newIndex = 0;
+        return [$this->withList($next), 'browse', $cmd];
+    }
+
+    /**
+     * Select the row painted at filtered index $row by a pointer click
+     * (E744 WS4) — forwarded as a list-relative one-based screen line into
+     * `ItemList::handleMouse()`'s hit-map, which is exact here because the
+     * model's pan offset never leaves zero at full-window height.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function updateClick(int $row): array
+    {
+        if ($row < 0 || $row >= count($this->filteredSessions())) {
+            return [$this, null];
         }
 
-        return $this->withSelectedIndex($newIndex);
+        [$next, $cmd] = $this->list->update(new MouseClickMsg(1, $row + 1, MouseButton::Left, MouseAction::Press));
+        \assert($next instanceof ItemList);
+
+        return [$this->withList($next), $cmd];
+    }
+
+    /**
+     * Wheel the selection by one row (E744 WS4) — the widget's own wheel arm
+     * moves the cursor and funnels the result through the same load-more edge
+     * the keyboard uses.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function updateWheel(MouseButton $direction): array
+    {
+        [$next, $cmd] = $this->list->update(new MouseWheelMsg(1, 1, $direction, MouseAction::Press));
+        \assert($next instanceof ItemList);
+
+        return [$this->withList($next), $cmd];
     }
 
     /**

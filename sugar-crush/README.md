@@ -656,10 +656,10 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Enter` | Send |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
-| `Ctrl+C` | Quit |
+| `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
 | `Ctrl+O` | Expand/collapse the most recent tool call's output |
-| `Ctrl+R` | Session picker (persisted across turns) |
+| `Ctrl+R` | Session picker (persisted across turns) — with the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last message you sent |

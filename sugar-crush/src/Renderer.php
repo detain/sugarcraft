@@ -35,6 +35,7 @@ use SugarCraft\Crush\Tui\AgentStatusBar;
 use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\DiffGutter;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\SessionPicker;
 
 /**
  * Pure view function for {@see Chat} — the renderer that actually paints
@@ -290,8 +291,13 @@ final class Renderer
     /**
      * Columns the shell's border + padding(1, 2) consume, subtracted before
      * anything inside it is truncated to width.
+     *
+     * PUBLIC since E744 WS4: {@see \SugarCraft\Crush\Tui\SessionPicker::overlayGeometry()}
+     * and {@see Chat}'s picker-zone whitelist must size the overlay with the
+     * same number {@see renderSessionPicker()} paints it with, and a second
+     * literal 6 would be a drift waiting to happen.
      */
-    private const SHELL_CHROME_COLS = 6;
+    public const SHELL_CHROME_COLS = 6;
 
     /**
      * Columns the "/" popup's own frame costs on top of
@@ -525,6 +531,15 @@ final class Renderer
     public const PALETTE_ITEM_ZONE_PREFIX = 'picker-item:';
 
     /**
+     * Session picker rows (E744 WS4). The suffix is the ABSOLUTE filtered row
+     * index the line is painted at — {@see \SugarCraft\Crush\Tui\SessionPicker::rowZoneLines()}
+     * keys its map by it — so a click names exactly the row the picker would
+     * select, and the whitelist in {@see Chat::sessionRowIndex()} re-checks
+     * the same derivation rather than a second arithmetic of its own.
+     */
+    public const SESSION_ROW_ZONE_PREFIX = 'session-row:';
+
+    /**
      * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
      * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
      * (`ToolResult::$id`, falling back to its name), so a click can be handed
@@ -718,6 +733,17 @@ final class Renderer
      * @var list<array{id: string, line: string}> in row order
      */
     private static array $paletteItemZones = [];
+
+    /**
+     * Session picker rows the current frame wants clickable (E744 WS4), as
+     * the FULLY rendered overlay lines they became — the same pre-composite
+     * detour {@see $paletteItemZones} documents for the palette, and for the
+     * identical reason: Veil measures the overlay it is centring, and marking
+     * before the composite would move it.
+     *
+     * @var list<array{id: string, line: string}> in row order
+     */
+    private static array $sessionRowZones = [];
 
     /**
      * How many content lines the most recent frame had to drop off the top
@@ -1097,6 +1123,7 @@ final class Renderer
         // registered twice, which makes the zone scan throw).
         self::$toolCallZones = [];
         self::$paletteItemZones = [];
+        self::$sessionRowZones = [];
         // Same lifetime, same reason, but NOT the same list - see
         // $toolRowHeads for why the layout question and the click question are
         // answered from two registries rather than one.
@@ -1354,10 +1381,13 @@ final class Renderer
                 Position::CENTER,
                 self::overlayLeftShift($backdrop, $overlay, $chat->cols()),
             );
-            // No-op unless the overlay was the palette: only renderPalette()
-            // records item zones, and an overlay earlier in the chain above
-            // takes the slot before it is ever called.
+            // No-op unless the overlay was the palette or the session picker:
+            // only renderPalette()/renderSessionPicker() record item zones,
+            // an overlay earlier in the chain above takes the slot before
+            // either is ever called, and the two registries are therefore
+            // never both non-empty for one frame.
             $frame = self::markPaletteItems($frame);
+            $frame = self::markSessionRows($frame);
         }
 
         return new View(self::scanRoot($frame, $chat->cols()), images: $images->placements());
@@ -3605,11 +3635,16 @@ final class Renderer
      * terminal, and the diff renderer paints one logical line per physical
      * row, so a wrapped row collides with the next one exactly like the
      * overflow {@see render()}'s tail clip exists to prevent. The lower
-     * bounds keep the picker's separator `str_repeat()` calls non-negative on
-     * a very small terminal.
+     * bounds keep the picker's separator `str_repeat()` calls non-negative
+     * on a very small terminal.
      *
-     * No zone marking here (unlike {@see markPaletteItems()}): the picker is
-     * keyboard-driven only, and its rows carry no click ids.
+     * E744 WS4 changed the last paragraph of this docblock's previous
+     * revision ("keyboard-driven only, and its rows carry no click ids"):
+     * the picker now marks its painted rows `session-row:<n>` exactly like
+     * {@see markPaletteItems()} marks the palette's, and the geometry comes
+     * from the SAME {@see SessionPicker::overlayGeometry()} the click
+     * whitelist re-derives, so a zone can only ever exist where a row was
+     * painted.
      */
     private static function renderSessionPicker(Chat $chat, Theme $theme): string
     {
@@ -3618,11 +3653,12 @@ final class Renderer
             return '';
         }
 
-        $inner = max(20, $chat->cols() - self::SHELL_CHROME_COLS);
-        $width = max(20, min($inner - 4, 76));
-        $height = max(8, $chat->rows() - 4);
+        [$width, $height] = SessionPicker::overlayGeometry($chat->cols(), $chat->rows(), self::SHELL_CHROME_COLS);
 
-        return $picker->render($width, $height, $theme);
+        $overlay = $picker->render($width, $height, $theme);
+        self::recordSessionRowZones($overlay, $picker->rowZoneLines($width, $height, $theme));
+
+        return $overlay;
     }
 
     /**
@@ -3802,6 +3838,78 @@ final class Renderer
                 $lines[$i] = substr_replace(
                     $lines[$i],
                     Mark::zone(self::PALETTE_ITEM_ZONE_PREFIX . $zone['id'], $zone['line']),
+                    $at,
+                    strlen($zone['line']),
+                );
+                $from = $i + 1;
+
+                break;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Remember which lines of the rendered picker overlay are clickable rows
+     * (E744 WS4), for {@see markSessionRows()} to wrap once the box has been
+     * composited — the palette recorder's twin, kept separate because the
+     * two overlays never share a frame and the registries reset together.
+     *
+     * Same claim mechanics as {@see recordPaletteItemZones()}: located by the
+     * content line each row produced (not by index), each overlay line
+     * claimed at most once with the search resuming past the last claim, and
+     * the WHOLE rendered line recorded so the mark wraps only the picker's
+     * own cells, never the dimmed backdrop beside the box. The gated flag is
+     * the same `SUGARCRUSH_DISABLE_MOUSE_CLICKS` law as everywhere else.
+     *
+     * @param array<int, string> $rows row index => the content line it produced
+     */
+    private static function recordSessionRowZones(string $overlay, array $rows): void
+    {
+        if ($rows === [] || !Chat::mouseClicksEnabled()) {
+            return;
+        }
+
+        $lines = explode("\n", $overlay);
+        $from  = 0;
+        foreach ($rows as $id => $row) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                if (str_contains($lines[$i], $row)) {
+                    self::$sessionRowZones[] = ['id' => (string) $id, 'line' => $lines[$i]];
+                    $from                    = $i + 1;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Turn each picker overlay line recorded by {@see recordSessionRowZones()}
+     * into a `session-row:<index>` click zone on the ALREADY-composited frame
+     * (E744 WS4) — see {@see $sessionRowZones} for why the mark cannot happen
+     * before the composite, and {@see markPaletteItems()} for the identical
+     * cell-exactness and clipped-row rules.
+     */
+    private static function markSessionRows(string $frame): string
+    {
+        if (self::$sessionRowZones === []) {
+            return $frame;
+        }
+
+        $lines = explode("\n", $frame);
+        $from  = 0;
+        foreach (self::$sessionRowZones as $zone) {
+            for ($i = $from, $n = count($lines); $i < $n; $i++) {
+                $at = strpos($lines[$i], $zone['line']);
+                if ($at === false) {
+                    continue;
+                }
+
+                $lines[$i] = substr_replace(
+                    $lines[$i],
+                    Mark::zone(self::SESSION_ROW_ZONE_PREFIX . $zone['id'], $zone['line']),
                     $at,
                     strlen($zone['line']),
                 );

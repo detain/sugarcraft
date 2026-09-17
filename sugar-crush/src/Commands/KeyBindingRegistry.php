@@ -450,6 +450,10 @@ final class KeyBindingRegistry
             // Chat::handleKeyHelpKey() is where they live and why.
             KeyBinding::new('chat.keys', '?', 'Show this reference (empty input box)', $c),
             KeyBinding::new('chat.cancel', 'Esc Esc', 'Cancel the turn in flight — twice, quickly', $c),
+            // E744: with a draft selection held this chord COPIES first and the
+            // next press quits (Chat's Ctrl+C arm). The nuance stays out of the
+            // description — renderKeyHelp() clips long text and KeyHelpTest
+            // demands every row paint in full — and lives in the README table.
             KeyBinding::new('chat.quit', 'Ctrl+C', 'Quit SugarCrush', $c),
         ];
     }

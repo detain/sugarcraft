@@ -26,6 +26,7 @@ use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
@@ -1619,6 +1620,19 @@ final class Chat implements Model
 
             return [$this->withInput($pasted), null];
         }
+
+        // E744 WS5: the session picker's load-more edge. The ONLY production
+        // source of this Msg in crush is candy-forms ItemList's
+        // arrival-on-last-row rule (a keyboard step, wheel notch, or click
+        // that moves the cursor onto the last row of the loaded page while
+        // more may exist upstream), raised as Cmd::send and relayed back
+        // through the frame by the E744 WS1 wrapper. Consumed while the
+        // picker is up; with no picker the signal has no owner and joins
+        // every other unhandled Msg below.
+        if ($msg instanceof LoadMoreMsg) {
+            return $this->handleSessionLoadMore();
+        }
+
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -4674,6 +4688,15 @@ final class Chat implements Model
     private function handleMouse(MouseMsg $msg): array
     {
         if ($msg instanceof MouseWheelMsg) {
+            // E744 WS4: while the session picker is up, the wheel belongs to
+            // the picker's rows — the list under the pointer is the scroll
+            // context, exactly as a live terminal would scroll what the user
+            // aimed at. Only with no picker does the notch reach the
+            // transcript (both polarities pinned).
+            if ($this->sessionPicker !== null) {
+                return $this->sessionPickerWheel($msg->button);
+            }
+
             return $this->scrollTranscript($msg->button);
         }
 
@@ -4791,6 +4814,14 @@ final class Chat implements Model
             return $this->selectPaletteItem(substr($zoneId, strlen($pickerPrefix)));
         }
 
+        // E744 WS4. A picker row, keyed by the ABSOLUTE filtered row index it
+        // is painted at (see {@see sessionRowIndex()} for the validation that
+        // put the zone on the whitelist in the first place).
+        $rowPrefix = Renderer::SESSION_ROW_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $rowPrefix)) {
+            return $this->selectSessionRow(substr($zoneId, strlen($rowPrefix)));
+        }
+
         return [$this, null];
     }
 
@@ -4860,9 +4891,11 @@ final class Chat implements Model
      *     are refused there with the keyboard's own notice —
      *     {@see midTurnRefusalOfItsOwn()} names them, and its docblock says
      *     why it is a list rather than a rule.
-     *   * {@see $sessionPicker} marks no zones of its own either: every zone
-     *     visible while it is up belongs to the frame BEHIND it. Same answer
-     *     as the full modals.
+     *   * {@see $sessionPicker} owns zones since E744 WS4 — the
+     *     `session-row:<n>` family marking the rows it paints. Those stay
+     *     live like the palette's; every OTHER zone visible while the picker
+     *     is up belongs to the frame behind it and is refused, same as the
+     *     full modals.
      *   * {@see $palette} is the one overlay that owns zones —
      *     `picker-item:<n>`, which §8 E6 exists to make clickable. Those stay
      *     live; everything else is background and is refused. Mid-turn a row
@@ -4956,7 +4989,7 @@ final class Chat implements Model
             return null;
         }
 
-        if ($this->sessionPicker !== null) {
+        if ($this->sessionPicker !== null && $this->sessionRowIndex($zoneId) === null) {
             return [$this, null];
         }
 
@@ -5099,6 +5132,103 @@ final class Chat implements Model
         }
 
         return (int) $index < count($this->paletteMatches()) ? (int) $index : null;
+    }
+
+    /**
+     * Is this zone one of the session picker's OWN rows right now — the
+     * whitelist the picker arm of {@see refuseMouseDispatch()} checks, under
+     * the same triple validation {@see paletteRowIndex()} states (prefix,
+     * digits only, row exists) and the same measured reason: a bare prefix
+     * test would let a forged `session-row:`-prefixed id through.
+     *
+     * "Exists" here is stronger than the palette's `< count()`: the id must
+     * name a row in the CURRENTLY PAINTED window — {@see SessionPicker::rowZoneLines()}
+     * is the same pure derivation {@see Renderer::renderSessionPicker()} marks
+     * zones from, so a zone can only be whitelisted where a line was actually
+     * rendered to click on. A row scrolled out of the window keeps its index
+     * in the filtered list but is unclickable until it is painted again; the
+     * arrow keys still reach it.
+     */
+    private function sessionRowIndex(string $zoneId): ?int
+    {
+        if ($this->sessionPicker === null) {
+            return null;
+        }
+
+        $prefix = Renderer::SESSION_ROW_ZONE_PREFIX;
+        if (!str_starts_with($zoneId, $prefix)) {
+            return null;
+        }
+
+        $index = substr($zoneId, strlen($prefix));
+        if (preg_match('/\A\d+\z/', $index) !== 1) {
+            return null;
+        }
+
+        [$width, $height] = SessionPicker::overlayGeometry(
+            $this->cols(),
+            $this->rows(),
+            Renderer::SHELL_CHROME_COLS,
+        );
+        $row = (int) $index;
+
+        return array_key_exists($row, $this->sessionPicker->rowZoneLines($width, $height, $this->theme()))
+            ? $row
+            : null;
+    }
+
+    /**
+     * Click-to-select on an open session picker row (E744 WS4).
+     *
+     * Deliberately SELECT-only, unlike the palette's click (§8 E6 mirrors
+     * Enter and dispatches the row): activating a row here RESUMES a session
+     * wholesale, and the pointer affordance the acceptance asked for is
+     * "forward mouse into the list pane" — the widget's own mouse semantics.
+     * Activation stays one deliberate `↵` away.
+     *
+     * The row index was validated against the painted window by
+     * {@see sessionRowIndex()} at the guard; this re-checks through the
+     * picker's own clamp because the state could have been rebuilt between
+     * the press and the release the tracker pairs (a wheel notch in another
+     * update(), say) — a click whose row vanished under it selects nothing.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function selectSessionRow(string $index): array
+    {
+        $picker = $this->sessionPicker;
+        if ($picker === null || preg_match('/\A\d+\z/', $index) !== 1) {
+            return [$this, null];
+        }
+
+        [$next, $cmd] = $picker->updateClick((int) $index);
+        if ($next === $picker) {
+            return [$this, null];
+        }
+
+        return [$this->mutate(['sessionPicker' => $next]), $cmd === null ? null : $this->relayWidgetCmd($cmd)];
+    }
+
+    /**
+     * Wheel while the picker is up (E744 WS4): the notch moves the picker's
+     * selection through the widget's own wheel arm, and a navigation that
+     * ARRIVES on the last loaded row raises the WS5 load-more edge — relayed
+     * through the same WS1 wrapper the keyboard browse uses, so both pointer
+     * devices feed one pipeline.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function sessionPickerWheel(MouseButton $direction): array
+    {
+        $picker = $this->sessionPicker;
+        \assert($picker !== null);
+
+        [$next, $cmd] = $picker->updateWheel($direction);
+
+        return [
+            $this->mutate(['sessionPicker' => $next]),
+            $cmd === null ? null : $this->relayWidgetCmd($cmd),
+        ];
     }
 
     /**
@@ -10767,7 +10897,7 @@ final class Chat implements Model
 
         $next = $this->mutate([
             'history' => [...$this->history, Message::user($inputText), Message::assistant(
-                'Session picker open — ↑/↓ browse, ↵ resume, space preview, esc close.',
+                'Session picker open — ↑/↓ or wheel browse, click selects, ↵ resume, space preview, esc close.',
             )],
             'inputBuf' => '',
             'inFlight' => false,
@@ -10800,12 +10930,70 @@ final class Chat implements Model
             return null;
         }
 
-        $rows = $this->sessionStore->listSessions();
+        $rows = $this->sessionStore->listSessions(SessionPicker::PAGE_SIZE);
         if ($rows === []) {
             return null;
         }
 
-        $sessions = array_map(
+        // A fetch that FILLS its limit may mean more rows live upstream — the
+        // only thing that arms the WS5 load-more edge (E744: the store API
+        // pages by widening the top-N limit, there is no OFFSET to walk).
+        return SessionPicker::new(
+            self::sanitizeSessionRows($rows),
+            SessionPicker::PAGE_SIZE,
+            count($rows) >= SessionPicker::PAGE_SIZE,
+        );
+    }
+
+    /**
+     * Consume the picker's load-more edge (E744 WS5) — the one crush consumer
+     * of the r88 ItemList `LoadMoreMsg`.
+     *
+     * SOURCE-OF-NEXT-PAGE, as E744 demands it be decided rather than implied:
+     * {@see SessionStore::listSessions()} takes a LIMIT and no OFFSET, so the
+     * page is grown by WIDENING the top-N fetch (`limit + PAGE_SIZE`), not by
+     * a cursor walk. The order is deterministic (`updated_at DESC, id DESC`),
+     * so a widened prefix is stable for the lifetime of one opened picker; a
+     * session SAVED mid-browse can shift the tail of the page, which a re-open
+     * corrects — accepted, and cheaper than teaching the store an offset it
+     * has never needed. A fetch that comes back SHORT closes the edge
+     * (`moreInStore = false`), so the last row stops asking forever and the
+     * browse never refetches the same exhausted page.
+     *
+     * The relayed Cmd that carried the Msg here has already been spent — this
+     * method returns no Cmd of its own; growth is pure state.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleSessionLoadMore(): array
+    {
+        $picker = $this->sessionPicker;
+        if ($picker === null || !$picker->needsStoreFetch() || $this->sessionStore === null) {
+            return [$this, null];
+        }
+
+        $limit = $picker->nextFetchLimit();
+        $rows = $this->sessionStore->listSessions($limit);
+
+        return [$this->mutate([
+            'sessionPicker' => $picker->withFetchedRows(
+                self::sanitizeSessionRows($rows),
+                $limit,
+                count($rows) >= $limit,
+            ),
+        ]), null];
+    }
+
+    /**
+     * Map raw store rows onto the picker's sanitized row shape.
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array{sessionId: string, sessionName: string, summary: string, gitBranch: string|null, lastActivity: string}>
+     */
+    private static function sanitizeSessionRows(array $rows): array
+    {
+        return array_map(
             static function (array $row): array {
                 $id = (string) ($row['id'] ?? '');
                 $name = self::sanitizeSessionField((string) ($row['name'] ?? ''));
@@ -10820,8 +11008,6 @@ final class Chat implements Model
             },
             $rows,
         );
-
-        return SessionPicker::new($sessions);
     }
 
     /**
@@ -10880,10 +11066,16 @@ final class Chat implements Model
             return [$this, null];
         }
 
-        [$next, $action] = $picker->handleKey(self::sessionPickerKeyName($msg));
+        [$next, $action, $cmd] = $picker->handleKey(self::sessionPickerKeyName($msg));
+        // E744 WS5: a navigation that ARRIVED on the last loaded row while the
+        // store signalled more pages raises the widget's load-more Cmd. It
+        // rides the same WS1 relay as the draft editor's clipboard writes —
+        // Cmd::send frames are not RawMsg, so the relay passes it through
+        // untouched and the Program re-dispatches LoadMoreMsg into update().
+        $relay = $cmd === null ? null : $this->relayWidgetCmd($cmd);
 
         return match ($action) {
-            'browse' => [$this->mutate(['sessionPicker' => $next]), null],
+            'browse' => [$this->mutate(['sessionPicker' => $next]), $relay],
             // Ctrl+R opens the picker mid-turn and ↑/↓/space browse it, but
             // resuming adopts another session's history and id wholesale — the
             // running turn's transcript replaced under it — so mid-turn that one
@@ -10942,7 +11134,12 @@ final class Chat implements Model
 
         $sessionId = $selected['sessionId'];
         $name = null;
-        foreach ($this->sessionStore->listSessions() as $row) {
+        // Read the store back at the SAME limit the picker's page was fetched
+        // from (E744 WS5): after a load-more the selected row can live past
+        // the default page, and a missed lookup would silently drop the real
+        // name to null — suppressing nothing visible but mis-naming the
+        // resume notice.
+        foreach ($this->sessionStore->listSessions($picker->fetchLimit()) as $row) {
             if ((string) ($row['id'] ?? '') === $sessionId) {
                 $stored = (string) ($row['name'] ?? '');
                 $name = $stored !== '' ? $stored : null;
