@@ -11598,6 +11598,15 @@ flight. In `Chat.php` two of the three were the expensive kind — a method sile
 prose sat above an unrelated declaration.
 
 
+## ROUND 87 (2026-09-17) — PHASE-5 TAIL WELD: candy-vt 9-row tail + sugar-bits 2.4 + sugar-charts P5 dispositioned; E742 MINTED; ZERO sugar-crush files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census 1 → 2 (E736 renoted + E742 ruling)
+
+**Lanes (all base `cfb26f8f2`, worktrees clean at tips, all reviewed APPROVE-class BEFORE merge):** w1 candy-vt `d40802f16` (4 commits — API batch 4.1/4.3/4.4/12.3, perf 6.1/6.3, DRY 2.3, 6.2 gated-no-build; 6.4 carved OUT by design per §0-NOW-89 §2(b); vt 926/12689 +14T/+46A exact, render-dump md5-identical `dccc5c48…` 9,728 lines, 10/10 mutations; rv-w1 APPROVE 0C/0M/2MINOR — era-figure 305 + plan stamps folded IN-LANE; SEAM → §E742). w2 sugar-bits `4903d6727` (1 amended commit — `Tabs::view()` consumes stored scrollEnd; rv-w2 MAJOR-1 (left-ellipsis over-claim, 9 sweep regressions) fixed IN-LANE via POLICY-G: `computeScrollEnd` seeds `(1+dividerWidth)` iff `rendersLeftEllipsis()`, tail bounds width-1/width, first-tab force-include; P2 honestly re-measured scrollEnd 2→1 byte-pin unchanged; NEW P5 walk-form pin — LESSON LANDED: withActive-jump form missed the seed-neuter mutation, walk-form mandatory for adjust-gating defects; audit harness tuple-paired census: 15,506 rows 0 width-fail improve=46 regress=0 9/9 flips; rv-re-review CONFIRM-RESOLVED; zone-cost ≈13 cells erratum folded to §E736). w3 sugar-charts `30eb1ce18` (Phase-5 4/4 dispositioned: 5.1 verified-landed, 5.2/5.3/5.4 ruled-skip — feature/new-dep/API-sprawl; rv-v4 MINOR-1 Sixel key-collapse hardening tests-only; charts 577/1453, query+tick UNMOVED; rv APPROVE 0C/0M).
+
+**Weld:** picks `f48537daf` `c37486747` `848f1fbb0` `232686276` `66debe01c` `971c0fa96` zero conflicts (file-disjoint); companion `7988f2305` (E742 MINT backlog+triage, zone-cost erratum, vt 6.2 stamp verify); stamps+filemap ride after. ZERO sugar-crush files diffed per lane (verified `git diff --name-only cfb26f8f2..tip | grep -c '^sugar-crush/'`=0 x3) → floor carried EXACT (4th consecutive zero-move round), NO re-pin, NO durations row. Link census 19/19 + 8/8 verified; config md5 `d96e124ee…231ad` start==end.
+
+**Laws reinforced:** walk-form pins for adjust-gating defects (M3 seed-neuter caught only by replay-walking tests); tuple-pairing for transition censuses (recorded-offset keysets churn — pair by (row,old,new) not raw keys); zone-marker cost ≈13 cells to Width::of (measure stripped rows); frozen-not-blessed memo folds make later RULING-gated value fixes cheap (w1 6.3 → §E742).
+
+
 ## ROUND 86 (2026-09-17) — PHASE-5 PORT-QUEUE WAVE-1: five build/derivation lanes v1–v5 welded + v6 product-rulings doc; ZERO sugar-crush files moved — floor EXACT-carry 12,027 / 170,392 / 1S / exit0; census stays 1 (E736 renoted, r87 tail defined)
 
 ### ROUND-86 WAVE-1 WELD (2026-09-17) — v1 shell / v2 layout / v3 bits / v4 charts / v5 vt — five picks ZERO conflicts; companion fold carries five rv-MINORs; ALL six lanes reviewed APPROVE-class before merge
