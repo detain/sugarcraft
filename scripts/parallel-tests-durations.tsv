@@ -530,3 +530,4 @@ sugar-crush/tests/Cli/HeadlessPermissionPromptStdinDefaultTest.php	0.000	3
 sugar-crush/tests/Providers/CompleteResponseUsageCarrierTest.php	0.000	4
 sugar-crush/tests/Providers/ToolCallFallbackIdAlphabetTest.php	0.000	4
 sugar-crush/tests/Workflows/WorkflowStatusTest.php	0.000	4
+sugar-crush/tests/Chat/WidgetCmdRelayTest.php	0.9	10

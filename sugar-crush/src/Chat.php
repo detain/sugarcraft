@@ -22,6 +22,8 @@ use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\RawMsg;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
@@ -432,6 +434,22 @@ final class Chat implements Model
      * click.
      */
     private const CLICK_DRAG_TOLERANCE_CELLS = 1;
+
+    /**
+     * Ceiling on ONE clipboard copy's character count, enforced on the
+     * OSC 52 payload the frame relays for its widgets (E744 WS1).
+     *
+     * 65_536 = 64 KiB in characters, the family bound this codebase already
+     * keeps for oversized terminal payloads (the 64 KiB stderr-tail group).
+     * OSC 52 is a synchronous escape sequence: a terminal that rate-limits,
+     * or a paste of a whole file copied by triple-click, can stall or
+     * outright drop an oversized response, and several terminals cap the
+     * sequence anyway — clipping HERE is what turns a silent terminal-side
+     * loss into a visible transcript notice naming the clip. The count is
+     * characters, not bytes, because the payload crosses the wire base64
+     * of UTF-8 and the user's mental model of "what I selected" is glyphs.
+     */
+    public const OSC52_MAX_CHARS = 65_536;
 
     /**
      * Reconciliation id of the background-session poll subscription
@@ -1583,7 +1601,23 @@ final class Chat implements Model
             // (ProgramOptions::$sanitizePaste, default ON) is the one place
             // untrusted bytes get stripped. The companion PasteEndMsg carries
             // no payload and stays dropped below, with every other non-KeyMsg.
-            return [$this->withInput($this->input->insertString($msg->content)), null];
+            //
+            // E744 WS3 routes this through the widget's OWN paste arm so the
+            // frame stops owning a private copy of the draft-edit law: the
+            // widget replaces a live selection before inserting (E736 5.13),
+            // and on an empty selection `deleteSelection()` returns the
+            // editor unchanged — making the focused no-selection outcome
+            // byte-identical to the insertString call this arm used to make.
+            // A dropped/unfocused editor answers its paste with the SAME
+            // instance, and the fallback below keeps this box's pre-E744
+            // contract for that state verbatim: paste lands regardless.
+            [$pasted] = $this->input->update($msg);
+            \assert($pasted instanceof TextArea);
+            if ($pasted === $this->input) {
+                return [$this->withInput($this->input->insertString($msg->content)), null];
+            }
+
+            return [$this->withInput($pasted), null];
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -1591,11 +1625,26 @@ final class Chat implements Model
         // BOTH encodings of Ctrl+C. candy-core's InputReader normalizes every
         // control byte 0x01-0x1a into (Char, chr(0x60 + code), ctrl: true), so
         // the real terminal delivers ^C as rune 'c' WITH the ctrl flag and
-        // never as the raw "\x03" this used to test for alone -- which meant
+        // never as the raw "\x03" this used to test for alone — which meant
         // Ctrl+C could not quit the app on the live path at all. The raw rune
         // is still accepted for callers that synthesize a KeyMsg directly.
+        //
+        // E744 WS2 precedence (the key-routing decision in the acceptance):
+        // with a selection up, the flagged pair is the EDITOR'S copy chord —
+        // the draft is the focused surface and its widget already answers
+        // ctrl+c exactly this way (TextArea's own table); delegating reuses
+        // that answer instead of reimplementing selection extraction here,
+        // and the Cmd it raises rides the E744 WS1 relay. Quitting stays the
+        // outcome for every no-selection press, and for the raw synthetic
+        // "\x03" in ANY state — that encoding is a programmatic escape hatch,
+        // not the terminal's copy gesture, and a caller that sends it means
+        // the signal, not the chord.
         if ($msg->type === KeyType::Char
             && ($msg->rune === "\x03" || ($msg->ctrl && $msg->rune === 'c'))) {
+            if ($msg->ctrl && $msg->rune === 'c' && $this->input->hasSelection()) {
+                return $this->delegateToInput($msg);
+            }
+
             return [$this, Cmd::quit()];
         }
 
@@ -12109,21 +12158,98 @@ final class Chat implements Model
     /**
      * Hand one keystroke to the draft editor.
      *
-     * Both call sites guard on `!$msg->ctrl` and they are the only two — a
-     * ctrl-flagged key must never arrive here, because `TextArea::update()`
-     * answers ctrl from its own five-rune table and DROPS everything else,
-     * which turns a delegated ctrl chord into a dead key rather than an error.
-     * See the guard's comment at the foot of {@see update()} for the two that
-     * died that way and where they live now.
+     * The plain-text call site still guards on `!$msg->ctrl`: a ctrl chord
+     * the chat has not decided to route is a DEAD KEY inside
+     * `TextArea::update()` (its ctrl table answers a fixed rune set and drops
+     * everything else), and the chat's key table is the authority on which
+     * ctrl chords mean something — see {@see update()}'s Ctrl+C arm, which
+     * since E744 WS2 deliberately DOES arrive here when the draft carries a
+     * selection, because at that point the chord is the widget's own copy.
+     *
+     * The widget's Cmd slot is no longer dropped (E744 WS1 — the acceptance
+     * half of "Cmd plumbing, widget to frame"): whatever the editor raises
+     * goes through {@see relayWidgetCmd()}, so a copy/cut reaches the
+     * terminal with the frame's OSC 52 policy applied instead of vanishing
+     * the way it did pre-E744.
      *
      * @return array{0: self, 1: ?\Closure}
      */
     private function delegateToInput(KeyMsg $msg): array
     {
-        [$next] = $this->input->update($msg);
+        [$next, $cmd] = $this->input->update($msg);
         \assert($next instanceof TextArea);
 
-        return [$this->withInput($next), null];
+        return [$this->withInput($next), $cmd === null ? null : $this->relayWidgetCmd($cmd)];
+    }
+
+    /**
+     * Relay one widget-raised Cmd through the frame (E744 WS1).
+     *
+     * LAZY on purpose: the widget contract is `Closure(): ?Msg`, evaluated by
+     * `Program::scheduleCmd()` on a future tick, and wrapping the closure —
+     * rather than invoking it here — is what keeps that timing. Every Cmd a
+     * widget in this tree can currently raise (`setClipboard`, `exec`,
+     * `send`, `batch`) is pure-at-invoke; the one impure factory in the
+     * vocabulary is `promise`, which no widget emits — if one ever does, the
+     * wrapper relays it untouched, which is the correct outcome anyway.
+     *
+     * The frame's policy is exactly one rule wide: an OSC 52 clipboard write
+     * over {@see OSC52_MAX_CHARS} is clipped and the clip is announced as a
+     * runtime notice. A payload that parses as OSC 52 but does not
+     * base64-decode passes VERBATIM — the relay refuses to fabricate a
+     * terminal sequence it cannot fully account for, and the alternative
+     * (dropping it) is precisely the silent loss this relay exists to end.
+     * Any other Msg is relayed unchanged: nothing in the widget's vocabulary
+     * may vanish between the model and the interpreter.
+     *
+     * The notice rides {@see RuntimeNoticeSink::record()} — the transcript's
+     * own diagnostic channel, drained by the subscription this class already
+     * wires — and NOT stderr: an unarmed sink (one-shot hosts, embedded
+     * drivers) loses the notice and keeps the clip, which is disclosed here
+     * rather than papered over with a second channel.
+     */
+    private function relayWidgetCmd(\Closure $cmd): \Closure
+    {
+        return static function () use ($cmd): ?Msg {
+            $msg = $cmd();
+
+            return $msg instanceof RawMsg ? self::cappedOsc52($msg) : $msg;
+        };
+    }
+
+    /**
+     * Apply the frame's OSC 52 policy to one raw terminal write.
+     *
+     * Recognises exactly the shape {@see Ansi::setClipboard()} produces —
+     * `OSC "52;" selection ";" base64 BEL` — because that is the only OSC 52
+     * producer in this tree. The pattern is assembled from Ansi's own
+     * constants so no raw escape byte appears in this file (the same law
+     * that keeps the transcript free of hand-rolled SGR).
+     */
+    private static function cappedOsc52(RawMsg $msg): RawMsg
+    {
+        $pattern = '/\A' . preg_quote(Ansi::OSC, '/') . '52;(.);([A-Za-z0-9+\/=]*)'
+            . preg_quote(Ansi::BEL, '/') . '\z/s';
+        if (preg_match($pattern, $msg->bytes, $out) !== 1) {
+            return $msg;
+        }
+
+        $decoded = base64_decode($out[2], true);
+        if ($decoded === false) {
+            return $msg;
+        }
+
+        $chars = mb_strlen($decoded, 'UTF-8');
+        if ($chars <= self::OSC52_MAX_CHARS) {
+            return $msg;
+        }
+
+        $clipped = mb_substr($decoded, 0, self::OSC52_MAX_CHARS, 'UTF-8');
+        RuntimeNoticeSink::record(
+            'Clipboard copy clipped to ' . self::OSC52_MAX_CHARS . ' of ' . $chars . ' characters.'
+        );
+
+        return new RawMsg(Ansi::setClipboard($clipped, $out[1]));
     }
 
     /**
