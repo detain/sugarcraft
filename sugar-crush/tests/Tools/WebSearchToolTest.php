@@ -11,6 +11,44 @@ use SugarCraft\Crush\Tools\ToolResult;
 
 final class WebSearchToolTest extends TestCase
 {
+    /**
+     * A WebSearch whose one network call is answered from a fixture.
+     *
+     * Three tests here used to drive {@see WebSearch::execute()} all the way
+     * to the configured SearXNG endpoint, so their verdict was that host's
+     * uptime rather than the tool's behaviour — CI went red on
+     * `testQueryLengthBoundaryAt1000Chars` the first day the box did not
+     * answer, and the other two paid a 30s connect timeout each on every day
+     * it did. Overriding {@see WebSearch::fetch()} leaves every other step
+     * (validation, the SSRF host checks, status mapping, JSON decode,
+     * formatting) on the real code path.
+     *
+     * @param list<string> $headers raw response header lines; empty means
+     *                              "no status line", which is what the tool
+     *                              sees for any non-HTTP wrapper
+     */
+    private function stubbedSearch(string|false $body, array $headers = [], string $endpoint = 'http://example.com/search'): WebSearch
+    {
+        // An explicit public endpoint on purpose: the SSRF guard resolves the
+        // host with gethostbyname() before the (stubbed) fetch, so defaulting
+        // to null would put the real default endpoint's DNS lookup back into
+        // a test that is supposed to touch no network at all.
+        return new class ($body, $headers, $endpoint) extends WebSearch {
+            public function __construct(
+                private readonly string|false $stubBody,
+                private readonly array $stubHeaders,
+                string $endpoint,
+            ) {
+                parent::__construct($endpoint);
+            }
+
+            protected function fetch(string $url): array
+            {
+                return [$this->stubBody, $this->stubHeaders];
+            }
+        };
+    }
+
     public function testImplementsToolInterface(): void
     {
         $tool = new WebSearch();
@@ -166,7 +204,7 @@ final class WebSearchToolTest extends TestCase
 
     public function testQueryLengthBoundaryAt1000Chars(): void
     {
-        $tool = new WebSearch();
+        $tool = $this->stubbedSearch(json_encode(['query' => 'aaa', 'results' => []]));
         $result = $tool->execute(['query' => str_repeat('a', 1000), 'description' => 'test']);
         // 1000 chars should pass (limit is 2000)
         $this->assertFalse($result->isError());
@@ -192,22 +230,29 @@ final class WebSearchToolTest extends TestCase
 
     public function testHandlesRedirectResponse(): void
     {
-        // This test verifies behavior when endpoint returns a redirect
-        // Currently the tool would get the redirect body, not follow it
-        // This is a known limitation — test documents it
-        $tool = new WebSearch('http://httpbin.org/redirect-to?url=http://example.com');
+        // The tool does not follow redirects: `ignore_errors` hands it the 302
+        // body, which is HTML, not the JSON it asked for. A known limitation,
+        // documented here — it must surface as an error, never a crash and
+        // never a "result" built from the redirect page.
+        $tool = $this->stubbedSearch(
+            '<html><body>Redirecting to <a href="http://example.com">example</a></body></html>',
+            ['HTTP/1.1 302 Found', 'Location: http://example.com'],
+            'http://example.com/search',
+        );
         $result = $tool->execute(['query' => 'test', 'description' => 'test']);
-        // Should either follow redirect or return error, not crash
         $this->assertInstanceOf(ToolResult::class, $result);
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('invalid JSON', $result->content());
     }
 
     public function testHandlesNonStringQuery(): void
     {
-        $tool = new WebSearch();
+        $tool = $this->stubbedSearch(json_encode(['query' => '12345', 'results' => []]));
         // Integer query gets cast to string
         $result = $tool->execute(['query' => 12345, 'description' => 'test']);
         // Should be processed as string "12345" without error
         $this->assertInstanceOf(ToolResult::class, $result);
+        $this->assertFalse($result->isError());
         // If query was empty after coercion, would be error
     }
 

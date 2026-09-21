@@ -14,6 +14,12 @@ use SugarCraft\Crush\Tools\ToolResult;
  * tests have to stub a response. Marking it final breaks every WebSearch test
  * with ClassIsFinalException. Injecting a client would be the tidier fix and
  * would let this join the others as final.
+ *
+ * That seam is {@see fetch()} — the single method that touches the network.
+ * It was extracted because the suite used to exercise the success path by
+ * really querying the configured SearXNG endpoint, which made three tests a
+ * function of one host's uptime: they went red in CI the first day the box
+ * was unreachable, and cost a 30s connect timeout apiece on every other day.
  */
 class WebSearch implements Tool, ParallelSafe
 {
@@ -161,17 +167,9 @@ class WebSearch implements Tool, ParallelSafe
             }
         }
 
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => $this->timeout,
-                'ignore_errors' => true,
-            ],
-        ]);
-
         $start = hrtime(true);
 
-        $body = @file_get_contents($url, false, $context);
-        $responseHeaders = $http_response_header ?? [];
+        [$body, $responseHeaders] = $this->fetch($url);
 
         if ($body !== false && strlen($body) > self::MAX_RESPONSE_SIZE) {
             return new ToolResult(
@@ -225,6 +223,39 @@ class WebSearch implements Tool, ParallelSafe
             isError: false,
             durationMs: $durationMs,
         );
+    }
+
+    /**
+     * Perform the search request and hand back its body and status line.
+     *
+     * The ONLY method in the class that opens a socket, and the reason the
+     * class is not final: a subclass overrides this to answer from a fixture,
+     * so a test can drive the parse/format path — or simply assert that a
+     * 1000-character query clears the length gate — without the configured
+     * endpoint having to be up. Everything around it (query validation, the
+     * SSRF host checks, status-code mapping, JSON decoding, formatting) stays
+     * on the real code path.
+     *
+     * `$http_response_header` is the magic local `file_get_contents()` writes
+     * into the calling scope, so it must be read HERE and returned rather
+     * than left for execute() to find — moving the call moved the variable.
+     *
+     * @return array{0: string|false, 1: list<string>} body (false on connect
+     *                                                 failure) and raw
+     *                                                 response header lines
+     */
+    protected function fetch(string $url): array
+    {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => $this->timeout,
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        $body = @file_get_contents($url, false, $context);
+
+        return [$body, $http_response_header ?? []];
     }
 
     private function targetsBlockedAddress(string $host): bool

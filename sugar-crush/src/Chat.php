@@ -57,6 +57,7 @@ use SugarCraft\Crush\Commands\NoticesCommand;
 use SugarCraft\Crush\Commands\RulesCommand;
 use SugarCraft\Crush\Commands\ShareCommand;
 use SugarCraft\Crush\Commands\WebSearchCommand;
+use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Palette\PaletteState;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -1230,6 +1231,20 @@ final class Chat implements Model
          * reader; see it for the unit caveat the clamp bounds exist to cap.
          */
         private readonly ?float $tokenEstimateCalibration = null,
+        /**
+         * The search tool `/websearch` runs on, so the command's success path
+         * is reachable without a live SearXNG endpoint.
+         *
+         * Null — every caller but a test — lets {@see WebSearchCommand} build
+         * its own {@see WebSearch} exactly as before, so nothing about a real
+         * launch changes. The seam exists because the transcript-wiring test
+         * for `/websearch` could only assert `Role::Assistant` on the reply
+         * when the configured endpoint happened to answer; the day it did
+         * not, the command took its failure branch, appended a
+         * `Role::System` notice, and the test reported an endpoint outage as
+         * a transcript regression.
+         */
+        private readonly ?WebSearch $webSearch = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -6340,6 +6355,7 @@ final class Chat implements Model
             // would evaporate on the first character typed after settling.
             'promptEstimateAtDispatch' => $this->promptEstimateAtDispatch,
             'tokenEstimateCalibration' => $this->tokenEstimateCalibration,
+            'webSearch' => $this->webSearch,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -9192,7 +9208,7 @@ final class Chat implements Model
         $args = $afterCommand !== '' ? preg_split('/\s+/', $afterCommand) : [];
 
         ob_start();
-        $command = new WebSearchCommand();
+        $command = new WebSearchCommand($this->webSearch);
         $exitCode = $command->execute($this, $args);
         $output = ob_get_clean();
 

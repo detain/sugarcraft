@@ -18,13 +18,32 @@ use SugarCraft\Crush\Tools\BuiltIn\WebSearch;
 /**
  * Tests for WebSearchCommand and its integration with Chat.
  *
- * Note: Some tests (testWebSearchCommandExecutesSuccessfully,
- * testWebSearchCommandHandlesHttpError) make real HTTP calls through
- * WebSearch::execute(). These test the successful parsing path and
- * rely on the configured search endpoint being available.
+ * No test here touches the network. Several used to: they constructed a bare
+ * `new WebSearchCommand()`, which builds its own {@see WebSearch} against the
+ * configured SearXNG endpoint, so the flag-parsing assertions were paid for
+ * with a real search and `testWebSearchCommandExecutesSuccessfully` asserted
+ * exit 0 from a host that CI cannot be promised. Every test that reaches
+ * {@see WebSearch::execute()} now injects a stub instead — the command's own
+ * seam, which it has always had — and the ones that stop at argument
+ * validation keep the real default because they never get that far.
  */
 final class WebSearchCommandTest extends TestCase
 {
+    /**
+     * A WebSearch that answers without a socket.
+     *
+     * {@see WebSearchCommand} only ever calls `execute()` on its tool, so a
+     * plain mock is the whole seam; the tool's own HTTP path is covered in
+     * {@see \SugarCraft\Crush\Tests\Tools\WebSearchToolTest}.
+     */
+    private function stubSearch(string $content = "Search results (1):\n  1. Result", bool $isError = false): WebSearch
+    {
+        $mock = $this->createMock(WebSearch::class);
+        $mock->method('execute')->willReturn(new ToolResult('', $content, $isError));
+
+        return $mock;
+    }
+
     // =========================================================================
     // Data Providers
     // =========================================================================
@@ -160,10 +179,7 @@ final class WebSearchCommandTest extends TestCase
 
     public function testWebSearchCommandExecutesSuccessfully(): void
     {
-        // This test makes a real HTTP call via WebSearch::execute()
-        // The search endpoint must be configured and reachable.
-        // If the endpoint is unavailable, this test will fail with a connection error.
-        $command = new WebSearchCommand();
+        $command = new WebSearchCommand($this->stubSearch('Search results (1):' . "\n" . '  1. PHP tutorial'));
         $chat = new Chat(
             history: [],
             inputBuf: '',
@@ -174,8 +190,11 @@ final class WebSearchCommandTest extends TestCase
         $exitCode = $command->execute($chat, ['php', 'tutorial']);
         $output = ob_get_clean();
 
-        // A successful search should return exit code 0
+        // A successful search should return exit code 0 and print the digest
+        // the tool handed back, framed by the command's own rules.
         $this->assertSame(0, $exitCode, "Expected exit code 0 for successful search. Output: $output");
+        $this->assertStringContainsString('PHP tutorial', $output);
+        $this->assertStringNotContainsString("\u{2717}", $output);
     }
 
     public function testWebSearchCommandReturnsErrorOnEmptyQuery(): void
@@ -215,10 +234,9 @@ final class WebSearchCommandTest extends TestCase
 
     public function testWebSearchCommandReturnsErrorOnToolError(): void
     {
-        // This test is tricky since WebSearch::execute() makes real HTTP calls.
-        // We test the command's error handling path for empty/invalid queries
-        // which don't require HTTP. Real HTTP error handling would require
-        // a test endpoint or mocking.
+        // The empty-query path errors before the tool is reached at all, so
+        // this one needs no stub — the tool-error path itself is covered by
+        // testWebSearchCommandHandlesHttpError.
         $command = new WebSearchCommand();
         $chat = new Chat(
             history: [],
@@ -237,22 +255,20 @@ final class WebSearchCommandTest extends TestCase
 
     public function testWebSearchCommandParsesSafesearchFlag(): void
     {
-        $command = new WebSearchCommand();
+        $command = new WebSearchCommand($this->stubSearch());
         $chat = new Chat(
             history: [],
             inputBuf: '',
             backend: new EchoBackend(),
         );
 
-        // This will call WebSearch::execute() with safesearch=2
-        // Exit code depends on HTTP response - we just verify parsing succeeds
         ob_start();
         $exitCode = $command->execute($chat, ['query', '--safesearch', '2']);
         $output = ob_get_clean();
 
-        // Parsing succeeds if we get any exit code (0 from success, or error from HTTP)
-        // A parse error would show "Unknown flag" before the HTTP call
-        $this->assertIsInt($exitCode);
+        // Parsing succeeded: the flag was consumed and the query still
+        // reached the tool. A parse failure prints usage and never searches.
+        $this->assertSame(0, $exitCode);
         $this->assertStringNotContainsString('Usage:', $output);
     }
 
@@ -271,7 +287,7 @@ final class WebSearchCommandTest extends TestCase
 
     public function testWebSearchCommandParsesTimeRangeFlag(): void
     {
-        $command = new WebSearchCommand();
+        $command = new WebSearchCommand($this->stubSearch());
         $chat = new Chat(
             history: [],
             inputBuf: '',
@@ -283,7 +299,7 @@ final class WebSearchCommandTest extends TestCase
         $output = ob_get_clean();
 
         // Verify parsing succeeds (no usage error printed)
-        $this->assertIsInt($exitCode);
+        $this->assertSame(0, $exitCode);
         $this->assertStringNotContainsString('Usage:', $output);
     }
 
@@ -343,10 +359,15 @@ final class WebSearchCommandTest extends TestCase
 
     public function testHandleWebSearchCommandUpdatesHistory(): void
     {
+        // The search tool is injected because the ASSERTION BELOW is about
+        // the transcript, not about connectivity: on the failure branch the
+        // command's notice lands as Role::System, so an unreachable endpoint
+        // used to report itself here as a wiring regression.
         $chat = new Chat(
             history: [],
             inputBuf: '/websearch test',
             backend: new EchoBackend(),
+            webSearch: $this->stubSearch(),
         );
 
         [$next, ] = $chat->update(new KeyMsg(KeyType::Enter, ''));
@@ -371,7 +392,7 @@ final class WebSearchCommandTest extends TestCase
 
     public function testWebSearchCommandParsesMultipleFlags(): void
     {
-        $command = new WebSearchCommand();
+        $command = new WebSearchCommand($this->stubSearch());
         $chat = new Chat(
             history: [],
             inputBuf: '',
@@ -384,7 +405,7 @@ final class WebSearchCommandTest extends TestCase
         $output = ob_get_clean();
 
         // Verify parsing succeeded (no usage error)
-        $this->assertIsInt($exitCode);
+        $this->assertSame(0, $exitCode);
         $this->assertStringNotContainsString('Usage:', $output);
 
         // The query "query" should have been extracted correctly
@@ -397,7 +418,7 @@ final class WebSearchCommandTest extends TestCase
 
     public function testWebSearchCommandWithQueryBeforeFlags(): void
     {
-        $command = new WebSearchCommand();
+        $command = new WebSearchCommand($this->stubSearch());
         $chat = new Chat(
             history: [],
             inputBuf: '',
@@ -409,7 +430,7 @@ final class WebSearchCommandTest extends TestCase
         $exitCode = $command->execute($chat, ['search', '--safesearch', '0']);
         $output = ob_get_clean();
 
-        $this->assertIsInt($exitCode);
+        $this->assertSame(0, $exitCode);
         $this->assertStringNotContainsString('Usage:', $output);
     }
 

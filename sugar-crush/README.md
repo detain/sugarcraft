@@ -1158,10 +1158,17 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,061 tests / 170,810 assertions, 0 failures, 1 skipped** — the whole of
+**12,061 tests / 170,837 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-10m30s — the r88 sibling builds (candy-forms Date/Slider/Color + mouse/clipboard, candy-vt row-shift) moved zero crush tests and retree the tree-scan censuses into a few-dozen-assertion re-count. Measured 2026-09-17 on the round-89 wave-2 weld — the E744 widget-Cmd
+13m57s. Measured 2026-09-21, re-pinned when the three `WebSearch` tests that
+had been asserting against a live SearXNG endpoint were made hermetic: the day
+the endpoint stopped answering they took `Test PHP 8.3 · sugar-crush`,
+`… 8.4` and `Coverage · sugar-crush` red, which is a decoder of that host's
+uptime and not of this suite. Stubbing the tool's one network call moved zero
+tests and +27 assertions (170,810 → 170,837), and took roughly 150s of connect
+timeouts out of the sharded run. The figures before that: 12,061/170,810 on
+2026-09-17 — the r88 sibling builds (candy-forms Date/Slider/Color + mouse/clipboard, candy-vt row-shift) moved zero crush tests and retree the tree-scan censuses into a few-dozen-assertion re-count; measured on the round-89 wave-2 weld, where the E744 widget-Cmd
 relay and session-picker pins raised the tests figure +34 over the campaign
 floor of 12,027 (itself the round-83/84 floor, +18 pins over 12,009/172,461 on
 2026-09-15), while the assertions re-derive: upstream's wave-8 determinism tails rode the merge, so
