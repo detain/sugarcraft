@@ -2654,8 +2654,11 @@ final class KeyHelpTest extends TestCase
      * hardcoded English literals, which is the caveat
      * {@see Renderer::KEY_HELP_OVER_PROMPT}'s docblock already carries.
      *
-     * ~8 seconds, which is why the two big-history fixtures are hoisted rather than
-     * rebuilt per render — see {@see barStates()}.
+     * MEASURED 2026-09-21, PHP 8.3.6: 8.8s, down from 41.5s, which is why the
+     * two big-history fixtures are hoisted WHOLE — Chat and submitted turn,
+     * not merely the message array — rather than rebuilt per render. See
+     * {@see barStates()} for the per-state measurement and for the equivalence
+     * that licenses hoisting the submit.
      */
     public function testTheCuesFitTheNarrowestBarAnyAppStateCanProduce(): void
     {
@@ -2812,6 +2815,31 @@ final class KeyHelpTest extends TestCase
         $long = $history(40);
         $huge = $history(1200);
 
+        // Hoisted for the same reason the histories above are, and it is the
+        // same defect one level up: closing over the ARRAY stopped the 2,400
+        // messages being rebuilt, but the two states that carry them still
+        // built a Chat around it — and, for the in-flight one, ran a whole
+        // submit through it — once per (cols, rows), i.e. 1,600 times each.
+        //
+        // MEASURED, PHP 8.3.6, per-state wall inside the sweep: `turn in
+        // flight, big context` 30.42s and `context over 100%` 4.64s, against
+        // 0.21-0.40s for every one of the other seven. 35 of the test's 37
+        // seconds were those two rebuilding what does not vary. That put the
+        // test at 41.5s in a full run — 2.3x the next-slowest test in the
+        // suite — and under pcov it crossed phpunit.xml's 60s hang-catcher,
+        // which `failOnRisky` turns into a red `Coverage · sugar-crush`.
+        //
+        // Only the SIZE varies per iteration, and `withSize()` is what the
+        // factories applied last anyway. Hoisting the submit as well is the
+        // one step that is not true by construction, so it was measured
+        // rather than assumed: over all 1,600 (cols, rows) pairs, submitting
+        // and then resizing renders a byte-identical status bar — closed and
+        // with the reference open — to resizing and then submitting. 0
+        // differences.
+        $hugeIdle = new Chat(history: $huge, inputBuf: '', backend: new EchoBackend());
+        [$hugeFlight] = (new Chat(history: $huge, inputBuf: 'hello', backend: new EchoBackend()))
+            ->update(new KeyMsg(KeyType::Enter));
+
         return [
             'empty history' => static fn(int $cols, int $rows): Chat
                 => (new Chat(history: [], inputBuf: '', backend: new EchoBackend()))->withSize($cols, $rows),
@@ -2825,19 +2853,14 @@ final class KeyHelpTest extends TestCase
             'long history' => static fn(int $cols, int $rows): Chat
                 => (new Chat(history: $long, inputBuf: '', backend: new EchoBackend()))->withSize($cols, $rows),
             'context over 100%' => static fn(int $cols, int $rows): Chat
-                => (new Chat(history: $huge, inputBuf: '', backend: new EchoBackend()))->withSize($cols, $rows),
+                => $hugeIdle->withSize($cols, $rows),
             'turn in flight' => function (int $cols, int $rows): Chat {
                 [$flight] = $this->chat('hello', $cols, $rows)->update(new KeyMsg(KeyType::Enter));
 
                 return $flight;
             },
-            'turn in flight, big context' => static function (int $cols, int $rows) use ($huge): Chat {
-                $chat = (new Chat(history: $huge, inputBuf: 'hello', backend: new EchoBackend()))
-                    ->withSize($cols, $rows);
-                [$flight] = $chat->update(new KeyMsg(KeyType::Enter));
-
-                return $flight;
-            },
+            'turn in flight, big context' => static fn(int $cols, int $rows): Chat
+                => $hugeFlight->withSize($cols, $rows),
             'prompt pending' => function (int $cols, int $rows): Chat {
                 [$blocked] = $this->chat('', $cols, $rows)->update(new \SugarCraft\Crush\PermissionRequestMsg(
                     Message::assistant(''),

@@ -14,13 +14,36 @@
         input already present in this suite: without a limit that run never ends
         and never reports, so the whole suite reads as "still going" rather than
         "broken" (measured: such a run had to be killed externally at 180s).
-        60s was picked off measurement, not taste. A JUnit-logged run of
-        all 6465 tests on this host (PHP 8.3.6) peaks at 9.321s
-        (Tools\WebSearchToolTest::testHandlesRedirectResponse), with 4 tests over
-        5s and none over 10s. So the bound sits ~6x above the slowest real test:
-        loose enough that host load or a slow network redirect cannot trip it,
-        tight enough that an infinite loop reports in a minute. Re-measure with
-        phpunit's JUnit log flag if that peak ever moves.
+        60s was picked off measurement, not taste, and the peak it was picked
+        against has since moved twice — so this paragraph is re-derived from a
+        JUnit-logged run rather than carried forward.
+
+        RE-MEASURED 2026-09-21, all 12,061 tests on this host (PHP 8.3.6):
+        the peak is 18.007s (Agents\ProcessExecutorTest::testALeasedWorker-
+        SurvivesPastTheHeartbeatWindowWhileAlive, which waits out a real
+        heartbeat window), with 11 tests over 10s and 27 over 5s. The bound
+        therefore sits ~3.3x above the slowest real test.
+
+        WHAT THIS PARAGRAPH USED TO CLAIM, and both halves had rotted: a peak
+        of 9.321s over 6,465 tests, "4 tests over 5s and none over 10s", and
+        a ~6x margin. The suite has since almost doubled, and the same run
+        measured above found the real peak at 41.474s — Renderer\KeyHelpTest::
+        testTheCuesFitTheNarrowestBarAnyAppStateCanProduce, 2.3x the next
+        slowest, rebuilding a 2,400-message fixture 1,600 times. That is only
+        1.4x under this limit uninstrumented, and under pcov it crossed it:
+        `Coverage · sugar-crush` went red with "This test was aborted after 60
+        seconds". The test was made to fit (8.8s) rather than the limit
+        loosened to admit it — a hang-catcher that has to be raised for a test
+        that is merely slow has stopped catching hangs.
+
+        The named peak also moved for a second reason worth recording: the old
+        one, Tools\WebSearchToolTest::testHandlesRedirectResponse, was slow
+        because it made a real HTTP round-trip to httpbin.org. It is hermetic
+        now, so no test on this roster is timed by a network any more, and the
+        "a slow network redirect cannot trip it" clause this comment used to
+        need has no referent left.
+
+        Re-measure with phpunit's JUnit log flag if that peak moves again.
 
         WHAT THE TIME LIMIT DOES AND DOES NOT BOUND, measured on this host rather
         than assumed. Three runaway shapes were probed under this config: a pure
