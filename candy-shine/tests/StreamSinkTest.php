@@ -132,6 +132,13 @@ final class StreamSinkTest extends TestCase
 
     public function testToPathUnwritableParentThrowsPathUnwritable(): void
     {
+        // Windows has no POSIX mode bits: chmod() there flips only the read-only
+        // attribute on files, never a directory's writability, so a 0555 dir
+        // still accepts new children and there is no unwritable door to judge.
+        if (!\function_exists('posix_getuid')) {
+            $this->markTestSkipped('ext-posix absent (Windows) — directory mode bits are not enforced');
+        }
+
         if (0 === posix_getuid()) {
             $this->markTestSkipped('uid 0 ignores mode bits — the door is only judgable for non-root');
         }
