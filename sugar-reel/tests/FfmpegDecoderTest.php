@@ -462,6 +462,89 @@ final class FfmpegDecoderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // close() must not report its own teardown as a decoder failure
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox close() after a normal decode logs nothing, but a real ffmpeg failure still logs
+     *
+     * REGRESSION, reported against `examples/play.php` in sixel/iterm2: every
+     * quit printed `FfmpegDecoder: ffmpeg exited with code 224`.
+     *
+     * 224 is not a failure. `close()` closes the read end of the stdout pipe
+     * FIRST, deliberately — the class calls that "the polite exit for a stream
+     * decoder" — and ffmpeg answers the resulting write error by exiting with
+     * `AVERROR(EPIPE)` (-32) truncated to a byte. The teardown was reporting
+     * its own success as an error, through `error_log`, i.e. onto stderr and
+     * straight over the frame candy-core had just composed. A child that had
+     * to be signalled by the reaper is the same story with `proc_close()`
+     * returning -1.
+     *
+     * Both halves are asserted together on purpose: silencing the noise is
+     * only correct if a genuine failure still speaks, so the second decode
+     * feeds ffmpeg a file that is not a video at all.
+     */
+    public function testCloseDoesNotLogItsOwnTeardownButStillLogsRealFailures(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-teardown-' . getmypid() . '.mp4';
+        $notAVideo = sys_get_temp_dir() . '/sugar-reel-test-teardown-' . getmypid() . '.txt';
+
+        try {
+            $gen = proc_open(
+                [
+                    Probe::ffmpeg(),
+                    '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi',
+                    '-i', 'testsrc=duration=1:size=64x48:rate=10',
+                    '-y', $clip,
+                ],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            $this->assertIsResource($gen, 'ffmpeg clip generation must start');
+            foreach ($genPipes as $pipe) {
+                if (is_resource($pipe)) {
+                    \fclose($pipe);
+                }
+            }
+            proc_close($gen);
+            $this->assertFileExists($clip);
+
+            // A decode abandoned mid-stream is the ordinary case: quit, seek,
+            // resize and mode change all close a decoder that still had frames.
+            $logged = $this->captureErrorLog(function () use ($clip): void {
+                $decoder = new FfmpegDecoder();
+                $decoder->open($clip, 16, 12, 10.0, Mode::HalfBlock);
+                $this->assertNotNull($decoder->next());
+                $decoder->close();
+            });
+
+            $this->assertSame('', trim($logged), "an ordinary teardown must be silent; got: {$logged}");
+
+            file_put_contents($notAVideo, "not a video\n");
+
+            $logged = $this->captureErrorLog(function () use ($notAVideo): void {
+                $decoder = new FfmpegDecoder();
+                $decoder->open($notAVideo, 16, 12, 10.0, Mode::HalfBlock);
+                $decoder->next();
+                $decoder->close();
+            });
+
+            $this->assertStringContainsString('ffmpeg exited with code', $logged, 'a real ffmpeg failure must still be reported');
+        } finally {
+            foreach ([$clip, $notAVideo] as $file) {
+                if (is_file($file)) {
+                    @unlink($file);
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // getIterator returns a Generator
     // -------------------------------------------------------------------------
 

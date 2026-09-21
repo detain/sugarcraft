@@ -28,8 +28,16 @@ final class Decoder
     /**
      * Maximum allowed cell-grid product (cellsW * cellsH) to prevent
      * excessive memory allocation from untrusted input.
+     *
+     * Public so a caller can SIZE ITS REQUEST rather than discover the bound
+     * by catching the exception: {@see sampleCanvas()} area-averages in PHP,
+     * one `imagecolorat()` per source pixel per cell, so the grid is both the
+     * memory and the time budget (MEASURED: a 6-frame GIF at 316×316 ≈ 100k
+     * cells costs ~1.1s and ~288MB). sugar-reel's graphics modes ask in
+     * PIXELS, which for an ordinary 80×24 terminal is ~384k — six times over
+     * this line, and a hard failure rather than a slow success.
      */
-    private const MAX_CELLS = 100_000;
+    public const MAX_CELLS = 100_000;
 
     /** @return list<Frame> */
     public static function decode(string $path, int $cellsW, int $cellsH): array

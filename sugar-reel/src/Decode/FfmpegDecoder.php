@@ -126,6 +126,12 @@ final class FfmpegDecoder implements Decoder
     /** Cached fps value from the last open() call — avoids re-probing the source. */
     private float $fps = 0.0;
 
+    /**
+     * ffmpeg's exit status when its output pipe goes away: `AVERROR(EPIPE)`
+     * (-32) truncated to a byte. See {@see isTeardownExit()}.
+     */
+    private const EXIT_EPIPE = 224;
+
     /** Captured exit code from the ffmpeg process, populated on close(). */
     private ?int $exitCode = null;
 
@@ -556,7 +562,13 @@ final class FfmpegDecoder implements Decoder
      * window for exactly that, and escalates SIGTERM→SIGKILL if it does not
      * come, so `proc_close()` below reaps instead of waiting. The recorded
      * exit code keeps its meaning: a process that took the escalation ends
-     * signalled, and the error_log line below says so.
+     * signalled, and {@see getExitCode()} still reports it.
+     *
+     * What is NOT reported is an exit this method itself caused — see
+     * {@see isTeardownExit()}. Closing the pipe to make ffmpeg leave and then
+     * logging the resulting EPIPE as a decoder error meant every quit, seek,
+     * resize and mode change printed `ffmpeg exited with code 224` to stderr,
+     * i.e. over the frame candy-core had just composed.
      */
     public function close(): void
     {
@@ -567,13 +579,45 @@ final class FfmpegDecoder implements Decoder
 
         if ($this->process !== null && is_resource($this->process)) {
             BoundedReaper::terminateAfterGrace($this->process);
+            // Read the disposition BEFORE proc_close(): once the child is
+            // reaped, proc_close() collapses "killed by signal N" to a flat
+            // -1, and the reaper's own SIGTERM becomes indistinguishable from
+            // a crash.
+            $status = @proc_get_status($this->process);
+            $signalled = is_array($status) && ($status['signaled'] ?? false) === true;
             $this->exitCode = proc_close($this->process);
             $this->process = null;
 
-            if ($this->exitCode !== 0) {
+            if ($this->exitCode !== 0 && !self::isTeardownExit($this->exitCode, $signalled)) {
                 error_log("FfmpegDecoder: ffmpeg exited with code {$this->exitCode}");
             }
         }
+    }
+
+    /**
+     * Whether a non-zero exit is one {@see close()} itself provoked.
+     *
+     * MEASURED on ffmpeg 6.1.1 / PHP 8.3.6 / Linux 6.8. `close()` deliberately
+     * closes the read end of the stdout pipe first — the class docblock calls
+     * that "the polite exit for a stream decoder", because ffmpeg then dies on
+     * its own write error in microseconds instead of having to be signalled.
+     * ffmpeg reports that write error by exiting with the libav errno
+     * truncated to a byte: `AVERROR(EPIPE)` is -32, and -32 & 0xFF is
+     * {@see EXIT_EPIPE} (224). A child that ignored the closed pipe and had to
+     * be TERMed or KILLed by {@see BoundedReaper} comes back `signaled`
+     * instead, and for a signalled child `proc_close()` returns -1.
+     *
+     * Both outcomes are this object's own teardown reported back to it, and
+     * neither says anything about the stream that was decoded — so neither is
+     * logged. A genuine failure (unreadable input, missing codec, a filtergraph
+     * ffmpeg rejects) still exits with its own status and still gets its line.
+     *
+     * @param bool $signalled `proc_get_status()['signaled']`, sampled before
+     *                        the reap that would have erased it
+     */
+    private static function isTeardownExit(int $exitCode, bool $signalled): bool
+    {
+        return $exitCode === self::EXIT_EPIPE || $signalled || $exitCode === -1;
     }
 
     /**
