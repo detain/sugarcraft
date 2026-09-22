@@ -76,11 +76,13 @@ use SugarCraft\Layout\Region;
 
 $dock = DockLayout::new('chat')                 // center id; empty sides, 1/3 column shares
     ->withSlotAdded(Side::Left, 'files')
+    ->withSlotAdded(Side::Left, 'git')
     ->withSlotAdded(Side::Right, 'term')
-    ->withStackWeight(Side::Left, 0, 2, 1);     // files takes twice the rows
+    ->withStackWeight(Side::Left, 0, 2, 1);     // files takes twice the rows of git
 
 $geometry = $dock->resolve(Region::fromSize(100, 30));
-$geometry->regionFor('files');                  // Region(0, 0, 32, 20)
+$geometry->regionFor('files');                  // Region(0, 0, 32, 19)
+$geometry->regionFor('git');                    // Region(0, 20, 32, 10)
 $geometry->regionFor('chat');                   // Region(33, 0, 34, 30)
 $geometry->dividerColumns();                    // [['x' => 32, 'side' => Side::Left], ...]
 ```
