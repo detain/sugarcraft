@@ -25,6 +25,9 @@ use SugarCraft\Crush\Tui\Components\SettingsPane;
 use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Layout\Dock\DockLayout;
+use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Layout\Region;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Zone;
 
@@ -330,6 +333,7 @@ final class Renderer
         int $dropped,
         int $frameRows,
         bool $withDropdown,
+        array $dockRows = [],
     ): void {
         if ($dropped > 0 || !Chat::mouseClicksEnabled()) {
             self::chromeScanner()->clear();
@@ -348,6 +352,22 @@ final class Renderer
                 }
                 $lines[$top + $i] = str_repeat(' ', $col) . $panelLine;
             }
+        }
+
+        // Dock divider rows share this coordinate space. A row already
+        // carrying a menu or dropdown mark keeps that mark: the float is the
+        // transient, the divider is repainted on the next frame after the
+        // menu closes.
+        foreach ($dockRows as $row => $line) {
+            if ($row >= $frameRows || (isset($lines[$row]) && $lines[$row] !== '')) {
+                continue;
+            }
+
+            while (count($lines) <= $row) {
+                $lines[] = '';
+            }
+
+            $lines[$row] = $line;
         }
 
         try {
@@ -441,6 +461,10 @@ final class Renderer
         // content band becomes the dashboard, no sidebars and no chat column.
         // A dashboard squeezed into a quarter-width sidebar cannot show the
         // status/operation/elapsed/usage columns it exists to show.
+        // (Docking changes nothing here: the divert keys on FOCUS. A docked
+        // Pane::Agents is painted through renderSide()/AgentsPane while some
+        // other pane holds focus — the side-by-side seam the sidebar
+        // docblocks named — and focusing Agents still takes the full band.)
         if ($a->pane === Pane::Agents) {
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
@@ -453,8 +477,8 @@ final class Renderer
         $agentCols = self::agentSplitWidth($liveAgents, $cols);
         $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
 
-        $leftPane = self::leftSidebar($a, $bandCols, $paneRows);
-        $rightPane = self::rightSidebar($a, $bandCols, $paneRows);
+        [$leftPane, $leftMeta] = self::renderSide($a, Side::Left, $bandCols, $paneRows);
+        [$rightPane, $rightMeta] = self::renderSide($a, Side::Right, $bandCols, $paneRows);
 
         // The chat pane gets the columns actually LEFT OVER, measured from the
         // rendered sidebars. The old `$cols - 80` guess assumed two 40-column
@@ -497,10 +521,43 @@ final class Renderer
 
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
+        // Dock divider click targets, phase 2 (stamped, not yet consumed —
+        // the gesture phase reads them). Only STACKED sides paint a divider
+        // column and gap rows, so only they contribute zones: a legacy
+        // one-pane side keeps today's byte-identical flush frame, and its box
+        // border stays just a border. The marked rows are scanner scratch and
+        // never join the frame, mirroring the menu bar's marked/plain pair.
+        $dockRows = [];
+        if (Chat::mouseClicksEnabled() && ($leftMeta !== null || $rightMeta !== null)) {
+            $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+            $frameRowsTotal = self::lineCount($frame);
+            $leftSpans = self::dividerZones($leftMeta, Side::Left, 0, $bandTop, $cols, $frameRowsTotal);
+            $rightSpans = self::dividerZones(
+                $rightMeta,
+                Side::Right,
+                self::blockWidth($leftPane) + $paneCols,
+                $bandTop,
+                $cols,
+                $frameRowsTotal,
+            );
+
+            foreach ($leftSpans + $rightSpans as $absRow => $spans) {
+                // Spans from both sides can share a row only where the two
+                // side blocks do not overlap columns, so ordering by start
+                // column is enough to keep the assembly non-overlapping.
+                if (isset($leftSpans[$absRow], $rightSpans[$absRow])) {
+                    $spans = array_merge($leftSpans[$absRow], $rightSpans[$absRow]);
+                    usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
+                }
+
+                $dockRows[$absRow] = self::scratchRow($cols, $spans);
+            }
+        }
+
         // The bar's own click zones, recorded against the frame that was just
         // composed — the menu bar is chrome, so this is the terminal's own
         // coordinate space and NOT the pane-local space declared below.
-        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true);
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), true, $dockRows);
 
         // The composite is final, so the hosted chat's zone registry — recorded
         // against the chat's own body, one nesting level down — can be told
@@ -860,53 +917,303 @@ final class Renderer
         );
     }
 
+    /**
+     * The LEFT sidebar region of the band, as a composed block.
+     *
+     * Kept as a named entry point because test docblocks cite it; the pane
+     * branching it used to own now lives in {@see renderSide()} /
+     * {@see sidePanes()}, which consult the App's dock plus the transient
+     * focus rule rather than switching on `App::$pane` directly.
+     */
     private static function leftSidebar(App $a, int $cols, int $rows): string
     {
-        $width = (int) floor($cols / 4);
-        $width = max(20, $width);
-
-        if ($a->pane === Pane::Files) {
-            return FilesPane::render($a, $width, $rows);
-        }
-
-        if ($a->pane === Pane::Tools) {
-            return ToolsPane::render($a, $width, $rows);
-        }
-
-        return FilesPane::render($a, $width, $rows);
+        return self::renderSide($a, Side::Left, $cols, $rows)[0];
     }
 
     /**
-     * Note on {@see AgentsPane}: its `Pane::Agents` arm below is no longer
-     * taken, because {@see renderView()} now diverts that pane to the
-     * full-width {@see AgentDashboardPane} before any sidebar is built. It is
-     * kept, not removed — it is the sidebar-sized agents widget, and the arm
-     * is the seam a future side-by-side layout re-enters through.
+     * The RIGHT sidebar region of the band — `''` when neither the dock nor
+     * the focused pane puts anything there.
      *
-     * {@see \SugarCraft\Crush\Renderer}'s class docblock records the same
-     * dormant-seam status from the transcript renderer's side; if one of the
-     * two is ever changed, the other has to move with it.
+     * Note on {@see AgentsPane}: the full-pane divert for a FOCUSED
+     * `Pane::Agents` in {@see renderView()} still wins before any sidebar is
+     * built, so the dashboard remains the focused-Agents frame. What docking
+     * changed (phase 2) is that the widget is no longer unreachable: an
+     * Agents slot in the dock paints through {@see renderPane()} while some
+     * other pane holds focus — the side-by-side re-entry this seam was
+     * preserved for. {@see \SugarCraft\Crush\Renderer}'s class docblock
+     * records the same story from the transcript renderer's side; the two are
+     * meant to agree.
      */
     private static function rightSidebar(App $a, int $cols, int $rows): string
     {
-        $width = (int) floor($cols / 4);
-        $width = max(20, $width);
+        return self::renderSide($a, Side::Right, $cols, $rows)[0];
+    }
 
-        if ($a->pane === Pane::Skills) {
-            return SkillsPane::render($a, $width, $rows);
+    /**
+     * Compose one side of the frame from the panes it must show, returning
+     * the block plus the divider metadata the zone pass consumes (null
+     * metadata for the single-pane LEGACY shape — see below).
+     *
+     * ## The width question, settled deliberately
+     *
+     * {@see DockLayout::resolve()} would give the side its configured 1/3
+     * column share, but the shipped frame has always measured the sidebar as
+     * `max(20, floor(bandCols/4))`, and byte-identity of the default frame is
+     * a hard requirement (snapshot tests pin it). 1/3 and 1/4 disagree for
+     * many widths (100 columns: 25 vs 24), so the side width stays the
+     * legacy quarter-measure — the documented post-resolve clamp the design
+     * phase allowed — and `resolve()` is consumed for what only it can
+     * produce: the per-slot HEIGHTS of a vertical stack.
+     *
+     * ## Two shapes
+     *
+     * One pane on the side renders exactly as today's sidebar did: one block,
+     * joined flush against the chat, no divider column. Two or more stack
+     * vertically at the resolved heights with a one-row `\u{2500}` gap
+     * between slots and an explicit one-column `\u{2502}` divider between
+     * the stack and the chat column — SplitLayout's own divider glyphs, the
+     * same pair {@see \SugarCraft\Crush\Tui\SplitLayout} composes with.
+     * Only the stacked shape carries divider metadata: a legacy side's box
+     * border stays just a border, so unchanged frames gain neither pixels nor
+     * zones.
+     *
+     * @return array{0: string, 1: ?array{width: int, dividerColLocal: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>}}
+     */
+    private static function renderSide(App $a, Side $side, int $cols, int $rows): array
+    {
+        $panes = self::sidePanes($a, $side);
+
+        if ($panes === []) {
+            return ['', null];
         }
 
-        // Pane::Settings had no arm here at all, which is what made selecting
-        // it (Ctrl+, or, before it was dropped, Tab) draw an empty band.
-        if ($a->pane === Pane::Settings) {
-            return SettingsPane::render($a, $width, $rows);
+        $width = max(20, (int) floor($cols / 4));
+
+        if (count($panes) === 1) {
+            return [self::renderPane($a, $panes[0], $width, $rows), null];
         }
 
-        if ($a->pane === Pane::Agents) {
-            return AgentsPane::render($a, $width, $rows);
+        $heights = self::stackHeights($a, $panes, $cols, $rows);
+        $blocks = [];
+        $gaps = [];
+        $row = 0;
+
+        foreach ($panes as $i => $pane) {
+            if ($i > 0) {
+                $gaps[] = ['row' => $row, 'slotIndex' => $i - 1];
+                $blocks[] = str_repeat(SplitDirection::Horizontal->divider(), $width);
+                $row++;
+            }
+
+            $block = self::renderPane($a, $pane, $width, max(1, $heights[$i]));
+            $blocks[] = $block;
+            $row += self::lineCount($block);
         }
 
-        return '';
+        $lines = explode("\n", implode("\n", $blocks));
+        $divider = SplitDirection::Vertical->divider();
+
+        if ($side === Side::Left) {
+            $block = implode("\n", array_map(static fn (string $l): string => $l . $divider, $lines));
+
+            return [$block, ['width' => $width, 'dividerColLocal' => $width, 'blockRows' => count($lines), 'gaps' => $gaps]];
+        }
+
+        $block = implode("\n", array_map(static fn (string $l): string => $divider . $l, $lines));
+
+        return [$block, ['width' => $width, 'dividerColLocal' => 0, 'blockRows' => count($lines), 'gaps' => $gaps]];
+    }
+
+    /**
+     * Which panes this side must paint, in order: the dock's slots for the
+     * side first, then — when the focused pane belongs to this side and is
+     * docked NOWHERE — the focused pane appended transiently. The transient
+     * arm is what keeps the pre-docking behavior intact: focusing Tools used
+     * to paint Tools left, and it still does, without a single dock write.
+     *
+     * @return list<Pane>
+     */
+    private static function sidePanes(App $a, Side $side): array
+    {
+        $panes = [];
+
+        foreach ($a->dock()->slots($side) as $slot) {
+            $pane = Pane::tryFrom($slot->paneId);
+            if ($pane !== null && $pane->dockSide() === $side && !in_array($pane, $panes, true)) {
+                $panes[] = $pane;
+            }
+        }
+
+        $focus = $a->pane;
+
+        if ($focus->dockable() && $focus->dockSide() === $side && !$a->isDocked($focus)) {
+            $panes[] = $focus;
+        }
+
+        return $panes;
+    }
+
+    /**
+     * The dock as the RENDERER sees it: the stored layout plus the transient
+     * focused slot. Height resolution runs against this view so a stacked
+     * side's rows match what is painted even when one of its slots is the
+     * focus rather than a docked pane.
+     */
+    private static function dockView(App $a): DockLayout
+    {
+        $dock = $a->dock();
+        $focus = $a->pane;
+        $side = $focus->dockSide();
+
+        if ($side === null || $a->isDocked($focus)) {
+            return $dock;
+        }
+
+        return $dock->withSlotAdded($side, $focus->value);
+    }
+
+    /**
+     * Per-slot heights for a stacked side, straight from the dock's own
+     * geometry: resolve the band and read each pane's region. If the
+     * degradation ladder dropped this side's column at this width (regions
+     * missing), fall back to the library's stack rule spelled locally: an
+     * even split of `rows - gaps`, residual to the last slot.
+     *
+     * @param list<Pane> $panes
+     *
+     * @return list<int>
+     */
+    private static function stackHeights(App $a, array $panes, int $cols, int $rows): array
+    {
+        $geometry = self::dockView($a)->resolve(new Region(0, 0, $cols, $rows));
+        $heights = [];
+
+        foreach ($panes as $pane) {
+            $heights[] = $geometry->regionFor($pane->value)?->height;
+        }
+
+        if (in_array(null, $heights, true)) {
+            return self::evenStackHeights(count($panes), $rows);
+        }
+
+        /** @var list<int> $heights */
+        return $heights;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function evenStackHeights(int $n, int $rows): array
+    {
+        $budget = max($n, $rows - ($n - 1));
+        $each = max(1, intdiv($budget, $n));
+        $heights = array_fill(0, max(0, $n - 1), $each);
+        $heights[] = max(1, $budget - $each * ($n - 1));
+
+        return $heights;
+    }
+
+    /**
+     * Paint one sidebar pane at the given box size. The five component
+     * renderers share this signature; anything else has no sidebar form and
+     * paints nothing.
+     */
+    private static function renderPane(App $a, Pane $pane, int $width, int $rows): string
+    {
+        return match ($pane) {
+            Pane::Files => FilesPane::render($a, $width, $rows),
+            Pane::Tools => ToolsPane::render($a, $width, $rows),
+            Pane::Skills => SkillsPane::render($a, $width, $rows),
+            Pane::Settings => SettingsPane::render($a, $width, $rows),
+            Pane::Agents => AgentsPane::render($a, $width, $rows),
+            default => '',
+        };
+    }
+
+    /**
+     * The scanner-scratch rows carrying this side's divider click targets.
+     *
+     * One zone per line, strictly: a divider-column row gets the single-cell
+     * `divider:<side>:r<absRow>` zone (the invariant on
+     * {@see LiveRenderer::DIVIDER_ZONE_PREFIX} and the markPaneHeader note it
+     * inherits), and a gap row gets the whole-width
+     * `stackdiv:<side>:<slotIndex>:r<absRow>` zone instead — never both on
+     * one line, which is also why the divider column skips gap rows: a drag
+     * started on an ambiguous cell belongs to the gap it visually crosses.
+     *
+     * @param ?array{width: int, dividerColLocal: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>} $meta
+     *
+     * @return array<int, list<array{0: int, 1: int, 2: string}>> absolute frame row => segments
+     */
+    private static function dividerZones(
+        ?array $meta,
+        Side $side,
+        int $startX,
+        int $bandTop,
+        int $cols,
+        int $frameRows,
+    ): array {
+        if ($meta === null) {
+            return [];
+        }
+
+        $sideValue = strtolower($side->name);
+        $gapRows = [];
+
+        foreach ($meta['gaps'] as $gap) {
+            $gapRows[$gap['row']] = $gap['slotIndex'];
+        }
+
+        $rows = [];
+
+        for ($r = 0; $r < $meta['blockRows']; $r++) {
+            $absRow = $bandTop + $r;
+
+            if ($absRow >= $frameRows) {
+                break;
+            }
+
+            if (isset($gapRows[$r])) {
+                $from = $startX;
+                $to = min($startX + $meta['width'], $cols);
+                if ($to > $from) {
+                    $rows[$absRow] = [
+                        [$from, $to, LiveRenderer::markStackGapRow($sideValue, $gapRows[$r], $absRow, $frameRows, $to - $from)],
+                    ];
+                }
+
+                continue;
+            }
+
+            $col = $startX + $meta['dividerColLocal'];
+
+            if ($col < $cols) {
+                $rows[$absRow] = [
+                    [$col, $col + 1, LiveRenderer::markDividerCell($sideValue, $absRow, $frameRows)],
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Lay marked segments onto an otherwise-blank $cols-wide scan line.
+     *
+     * @param list<array{0: int, 1: int, 2: string}> $segments non-overlapping, ordered, each segment already cell-clamped
+     */
+    private static function scratchRow(int $cols, array $segments): string
+    {
+        $line = '';
+        $cursor = 0;
+
+        foreach ($segments as [$from, $to, $segment]) {
+            $line .= str_repeat(' ', max(0, $from - $cursor));
+            $line .= $segment;
+            $cursor = max($cursor, $to);
+        }
+
+        return $line . str_repeat(' ', max(0, $cols - $cursor));
     }
 
     /**

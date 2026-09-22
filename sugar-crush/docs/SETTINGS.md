@@ -42,7 +42,11 @@ repository `--root` named.
   `readUserConfig()` callers such as the per-turn read.
 
 Layer 4 is also only *partly* CLI-written: exactly two keys are ever written
-there (`provider` and `theme` — see below). Everything else in it, including
+through the chat's config-change door (`provider` and `theme` — see below),
+and a third, `layout`, is written by the shell itself each time a pane is
+docked, moved, undocked or reset — its value is the versioned `DockLayout`
+manifest, and the door is `App`'s own `onLayoutChange` hook rather than
+Chat's. Everything else in it, including
 `trustedProjectSettings`, you hand-author.
 
 Two orderings on that table are deliberate and both cost something:
@@ -156,9 +160,10 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `parallelToolDeadlineSeconds` | `EngineBackend::complete()` | yes |
 | `maxOutputTokens` | `EngineBackend::complete()` | **no** |
 | `statusLine` | `Bootstrap::chat()` → `StatusLineCommand::fromSettings()` | **no** |
+| `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these thirteen, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these fourteen, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. A key nothing reads is worse than
@@ -647,10 +652,10 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   all four `trustedProject*` grants.
 - [`MEMORY.md`](MEMORY.md) — the rest of the `~/.sugar-crush/` layout.
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
-  this stack. They do not cover it: only five of the thirteen layered keys have an
+  this stack. They do not cover it: only five of the fourteen layered keys have an
   env override (`provider`, `titleModel`, `summaryModel`, `parallelToolCalls`,
   `parallelToolDeadlineSeconds`). `theme`, `instructions`, `disabledSkills`,
-  `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens` and
-  `statusLine` have none.
+  `disabledRules`, `allowedTools`, `disabledTools`, `maxOutputTokens`,
+  `statusLine` and `layout` have none.
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.)

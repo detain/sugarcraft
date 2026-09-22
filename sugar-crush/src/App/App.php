@@ -37,6 +37,8 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Layout\Dock\DockLayout;
+use SugarCraft\Layout\Dock\Side;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
@@ -183,6 +185,30 @@ final class App implements Model
          * embedder, and the per-turn App of a launch that wired no rules state.
          */
         public readonly ?RulesState $rulesState = null,
+        /**
+         * Which sidebar panes are docked into the frame, on which side, in
+         * which order, and with what column/stack weights (pane-docking
+         * phase 2). Null resolves to {@see App::defaultDock()} — the shape
+         * every App gets whose builder never touched the dock, which is every
+         * App but the one {@see \SugarCraft\Crush\Cli\Bootstrap::app()} loads
+         * from the `layout` setting.
+         *
+         * The dock is the SOURCE OF TRUTH for side, stack order and size of
+         * docked panes. Focus ({@see $pane}) stays a separate axis: a focused
+         * sidebar pane that is not docked renders TRANSIENTLY on its home
+         * side, exactly as today's single-pane-per-side sidebar did, so the
+         * default frame is unchanged whether or not anyone has ever docked
+         * anything.
+         */
+        public readonly ?DockLayout $dock = null,
+        /**
+         * Persistence hook for dock mutations, shaped exactly like
+         * {@see \SugarCraft\Crush\Chat}'s `$onConfigChange`: invoked with the
+         * manifest array ({@see DockLayout::toArray()}) whenever a model-level
+         * mutation changes the dock. Null in every App that was not launched
+         * by the CLI, so tests and embedders mutate freely without writing.
+         */
+        public readonly ?\Closure $onLayoutChange = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -368,6 +394,148 @@ final class App implements Model
     public function withRulesState(?RulesState $v): self
     {
         return $this->mutate(rulesState: $v);
+    }
+
+    /**
+     * The docked-pane layout in force, with the default folded in.
+     *
+     * The DEFAULT reproduces the pre-docking frame exactly: `files` docked
+     * left — the pane `Tui\Renderer::leftSidebar()` has always painted when
+     * nothing else was on — and nothing docked right, where today's sidebar
+     * only ever renders while its pane has focus.
+     */
+    public function dock(): DockLayout
+    {
+        return $this->dock ?? self::defaultDock();
+    }
+
+    /**
+     * The launch-default dock: Files left, right side empty.
+     */
+    public static function defaultDock(): DockLayout
+    {
+        return DockLayout::new('chat')->withSlotAdded(Side::Left, 'files');
+    }
+
+    public function withDock(?DockLayout $v): self
+    {
+        return $this->mutate(dock: $v);
+    }
+
+    public function withOnLayoutChange(?\Closure $v): self
+    {
+        return $this->mutate(onLayoutChange: $v);
+    }
+
+    /**
+     * Dock `pane` on `side` — moving it there when it already sits in a slot.
+     *
+     * Not routed through `update()`: the dock changes when the GESTURE phase
+     * (or a `/dock`-shaped command, later) asks for a specific placement, and
+     * a message carrying a Side would name the layout enum inside the message
+     * taxonomy. `Pane::dockSide()` refuses the panes with no sidebar to speak
+     * of; Chat, Input, Help and Menu have no home column and no renderer that
+     * would honour one, so an attempt is a programming error, not a no-op.
+     *
+     * Persists through {@see $onLayoutChange} like every other mutation
+     * entry point here — see {@see togglePaneDocking()} for why that is safe.
+     */
+    public function setPaneSide(Pane $pane, Side $side): self
+    {
+        if (!$pane->dockable()) {
+            throw new \InvalidArgumentException(
+                'Pane ' . $pane->value . ' has no sidebar of its own, so it cannot be docked.',
+            );
+        }
+
+        $dock = $this->dock();
+        $next = $this->dockIsOccupied($dock, $pane)
+            ? $dock->withSlotMovedTo($pane->value, $side)
+            : $dock->withSlotAdded($side, $pane->value);
+
+        return $this->persistDock($this->mutate(dock: $next));
+    }
+
+    /**
+     * Dock `pane` on its home side, or undock it when it sits in any slot.
+     *
+     * Undocking a FOCUSED pane also drops focus to Chat: the focused pane
+     * renders transiently on its home side, so leaving it focused would make
+     * the undock look inert — the pane the user just sent away would stay
+     * painted.
+     */
+    public function togglePaneDocking(Pane $pane): self
+    {
+        if (!$pane->dockable()) {
+            throw new \InvalidArgumentException(
+                'Pane ' . $pane->value . ' has no sidebar of its own, so it cannot be docked.',
+            );
+        }
+
+        $dock = $this->dock();
+
+        if ($this->dockIsOccupied($dock, $pane)) {
+            $next = $dock->withSlotRemoved($pane->value);
+
+            return $this->persistDock($this->mutate(
+                dock: $next,
+                pane: $this->pane === $pane ? Pane::Chat : $this->pane,
+            ));
+        }
+
+        $side = $pane->dockSide();
+        assert($side !== null); // guarded by dockable() above
+
+        return $this->persistDock($this->mutate(dock: $dock->withSlotAdded($side, $pane->value)));
+    }
+
+    /**
+     * Return the dock to the launch default ({@see defaultDock()}).
+     */
+    public function layoutReset(): self
+    {
+        return $this->persistDock($this->mutate(dock: self::defaultDock()));
+    }
+
+    /**
+     * Whether `pane` currently occupies a dock slot on either side.
+     *
+     * Public because the renderer's transient-focus rule needs it: a focused
+     * pane that is already docked must not be painted twice on its side.
+     */
+    public function isDocked(Pane $pane): bool
+    {
+        return $this->dockIsOccupied($this->dock(), $pane);
+    }
+
+    private function dockIsOccupied(DockLayout $dock, Pane $pane): bool
+    {
+        foreach ([Side::Left, Side::Right] as $side) {
+            foreach ($dock->slots($side) as $slot) {
+                if ($slot->paneId === $pane->value) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Hand the new manifest to the persistence hook, when the launch wired
+     * one. Mirrors Chat's config-change call sites: a non-`update()` model
+     * method invoking an injected persistence closure is the established shape
+     * here, and the App holding the closure is the mutated COPY (readonly),
+     * whose hook is the same object the builder installed.
+     */
+    private function persistDock(self $next): self
+    {
+        $hook = $next->onLayoutChange;
+        if ($hook !== null) {
+            $hook->call($next, $next->dock()->toArray());
+        }
+
+        return $next;
     }
 
     /**
@@ -1389,6 +1557,8 @@ final class App implements Model
             root: array_key_exists('root', $changes) ? $changes['root'] : $this->root,
             memoryStore: array_key_exists('memoryStore', $changes) ? $changes['memoryStore'] : $this->memoryStore,
             rulesState: array_key_exists('rulesState', $changes) ? $changes['rulesState'] : $this->rulesState,
+            dock: array_key_exists('dock', $changes) ? $changes['dock'] : $this->dock,
+            onLayoutChange: array_key_exists('onLayoutChange', $changes) ? $changes['onLayoutChange'] : $this->onLayoutChange,
         );
     }
 }

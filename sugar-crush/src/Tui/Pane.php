@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Focus\FocusRing;
+use SugarCraft\Layout\Dock\Side;
 
 /**
  * Pane types for the SugarCrush TUI layout.
@@ -148,6 +149,31 @@ enum Pane: string
         // current() is nullable only for an empty ring, which ofStrict() above
         // cannot produce; Chat is the same anchor the fold-back uses.
         return self::tryFrom($moved->current() ?? '') ?? self::Chat;
+    }
+
+    /**
+     * The sidebar this pane belongs to, or null when it is not a sidebar pane.
+     *
+     * The docking column of the frame is per-side; Chat, Input, Help and Menu
+     * are full-width or chrome-only surfaces and so have no natural side.
+     * This is the pane's HOME side — {@see \SugarCraft\Crush\App\App}'s dock
+     * state records which panes are actually docked and where.
+     */
+    public function dockSide(): ?Side
+    {
+        return match ($this) {
+            self::Files, self::Tools => Side::Left,
+            self::Skills, self::Settings, self::Agents => Side::Right,
+            default => null,
+        };
+    }
+
+    /**
+     * Whether this pane can occupy a dock slot at all.
+     */
+    public function dockable(): bool
+    {
+        return $this->dockSide() !== null;
     }
 
     /**

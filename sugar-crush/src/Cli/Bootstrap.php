@@ -18,6 +18,7 @@ use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
+use SugarCraft\Layout\Dock\DockLayout;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
@@ -2415,7 +2416,39 @@ final class Bootstrap
             // Same string the tools/skill scan above used, so the shell's
             // Settings pane, the environment block the model reads and every
             // hook context all name one directory.
-            ->withRoot($root);
+            ->withRoot($root)
+            // Pane-docking phase 2: the `layout` setting loads onto the
+            // model, and every model-level dock mutation writes the manifest
+            // straight back — the same injected-persistence shape
+            // `chat()` uses for `onConfigChange` above, its own key because
+            // the value is the versioned DockLayout manifest, not a string.
+            ->withDock(self::dockFromUserConfig())
+            ->withOnLayoutChange(
+                static fn(array $manifest) => self::writeUserConfig(['layout' => $manifest]),
+            );
+    }
+
+    /**
+     * The docked-pane layout the `layout` setting names, or null — which
+     * {@see \SugarCraft\Crush\App\App::dock()} resolves to the launch
+     * default — when the key is absent, malformed, or left over from a build
+     * whose manifest this one cannot read. Failing soft here is the whole
+     * point: a bad geometry blob is a stale file, not a reason to refuse to
+     * start.
+     */
+    private static function dockFromUserConfig(): ?DockLayout
+    {
+        $raw = self::readUserConfig()['layout'] ?? null;
+
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        try {
+            return DockLayout::fromArray($raw);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

@@ -14,8 +14,15 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
 use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
 
 /**
- * `~/.sugar-crush/config.json` receives exactly two keys, and every document
- * that says so ALSO enumerates where those two keys come from. That
+ * `~/.sugar-crush/config.json` receives exactly two keys through Chat's
+ * `$onConfigChange` door, and every document that says so ALSO enumerates
+ * where those two keys come from. (The shell writes a third key, `layout`,
+ * through {@see \SugarCraft\Crush\App\App}'s own `onLayoutChange` hook
+ * straight into `Bootstrap::writeUserConfig()` — pane docking phase 2. That
+ * door deliberately rides a SEPARATE closure, so this census keeps its
+ * exact-two shape for the alphabet it walks, and the docs sentence that used
+ * to say "exactly two keys are ever written" was widened to disclose the
+ * layout writer in the same commit set.) That
  * enumeration is the part that drifted: {@see LayeredSettings}' class
  * doc-block and `docs/SETTINGS.md` both credited the Ctrl+P palette's
  * "Switch Model" row for `provider` and stopped there, while `/model <name>`
@@ -49,7 +56,7 @@ use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
  * leave every assertion here green while the enumeration went stale again.
  * There is no cheap oracle for "every user-facing route into this method",
  * because the routes are ordinary private-method calls. The census in
- * `testConfigJsonEverReceivesExactlyTwoKeys()` catches a new KEY, which is the
+ * `testTheConfigChangeCallbackEverReceivesExactlyTwoKeys()` catches a new KEY, which is the
  * half that is mechanically derivable.
  *
  * THAT LAST SENTENCE WAS ONCE TRUE OF THE IDEA AND FALSE OF THE CODE, and the
@@ -280,7 +287,7 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
      * The census. This is the assertion that reds the day a third key becomes
      * persistable, before any of the prose checks below are reached.
      */
-    public function testConfigJsonEverReceivesExactlyTwoKeys(): void
+    public function testTheConfigChangeCallbackEverReceivesExactlyTwoKeys(): void
     {
         $this->assertSame(
             ['provider', 'theme'],

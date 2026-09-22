@@ -48,6 +48,7 @@
         "sugarcraft/sugar-veil": "dev-master",
         "sugarcraft/candy-mosaic": "dev-master",
         "sugarcraft/candy-mouse": "dev-master",
+        "sugarcraft/candy-layout": "dev-master",
         "sugarcraft/candy-focus": "@dev",
         "sugarcraft/candy-kit": "@dev"
     },

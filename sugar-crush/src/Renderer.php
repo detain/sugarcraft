@@ -217,13 +217,14 @@ use SugarCraft\Crush\Tui\SessionPicker;
  * here originally. The `App`-keyed pane system it belongs to is no longer
  * disconnected (see the opening paragraph), but that does NOT mean the shell
  * paints `AgentsPane`: {@see \SugarCraft\Crush\Tui\Renderer::renderView()}
- * diverts `Pane::Agents` to the full-width
+ * diverts a FOCUSED `Pane::Agents` to the full-width
  * {@see \SugarCraft\Crush\Tui\Components\AgentDashboardPane} before any
- * sidebar is built, so the `Pane::Agents` arm of that class's
- * `rightSidebar()` is never reached on a real frame. `AgentsPane` is an
- * intentionally preserved DORMANT SEAM — the sidebar-sized agents widget,
- * kept as the re-entry point for a future side-by-side layout — not dead
- * code and not to be deleted. `Tui\Renderer::rightSidebar()`'s own docblock
+ * sidebar is built, so on a focused-Agents frame the dashboard is still the
+ * only agents surface in play. Docking phase 2 took the seam off death row,
+ * though: the sidebar composition ({@see \SugarCraft\Crush\Tui\Renderer::renderSide()})
+ * paints `AgentsPane` for an Agents slot in the dock while any other pane
+ * holds focus — the side-by-side re-entry the seam was preserved for.
+ * `Tui\Renderer::rightSidebar()`'s own docblock
  * records the same thing from the other side; the two are meant to agree.
  *
  * Do not "confirm" the opposite by eye: `AgentDashboardPane` delegates to
@@ -548,6 +549,83 @@ final class Renderer
      * expansion mechanism.
      */
     public const TOOL_CALL_ZONE_PREFIX = 'toolcall:';
+
+    /**
+     * Zone-id prefix every painted dock-divider CELL carries, one zone per
+     * rendered row of the divider column (`divider:<side>:r<absRow>`,
+     * pane-docking phase 2). The gesture phase hit-tests these to start a
+     * column drag; this phase only stamps them.
+     *
+     * WHY PER-ROW AND NEVER MULTI-LINE: the invariant documented on
+     * {@see markPaneHeader()} is that no zone may span lines, because
+     * `renderView()` drops whole LEADING lines under height clipping and a
+     * zone split across the drop desynchronises the scanner's row bookkeeping
+     * for the ENTIRE frame. One single-cell zone per row clips whole-or-not-
+     * at-all with its line, which is safe by construction.
+     */
+    public const DIVIDER_ZONE_PREFIX = 'divider:';
+
+    /**
+     * Zone-id prefix every painted intra-stack gap ROW carries
+     * (`stackdiv:<side>:<slotIndex>:r<absRow>`), where `slotIndex` is the
+     * index of the slot ABOVE the gap. The gesture phase hit-tests these to
+     * pull a stacked pane out of its slot. Same one-line-per-zone invariant
+     * as {@see DIVIDER_ZONE_PREFIX}.
+     */
+    public const STACK_DIVIDER_ZONE_PREFIX = 'stackdiv:';
+
+    /**
+     * The marked single-cell segment for one rendered row of a stack
+     * divider column: `divider:<side>:r<absRow>` wrapping one cell.
+     *
+     * Returns null — caller paints the cell unmarked — when clicks are off,
+     * the row fell outside the frame, or the composed id would violate
+     * {@see ZONE_ID_CHARSET}; an id violation degrades to "not clickable",
+     * never to an exception from the paint path. The Tui compositor embeds
+     * the returned segment in a scanner-scratch line that never reaches the
+     * frame, mirroring how the menu bar keeps a marked and a plain render
+     * ({@see \SugarCraft\Crush\Tui\Renderer::scanChrome()}).
+     */
+    public static function markDividerCell(string $sideValue, int $absRow, int $frameRows): string
+    {
+        $id = self::DIVIDER_ZONE_PREFIX . $sideValue . ':r' . $absRow;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows) {
+            return ' ';
+        }
+
+        if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return ' ';
+        }
+
+        return Mark::zone($id, ' ');
+    }
+
+    /**
+     * The marked segment for one stacked side's whole intra-stack gap row:
+     * `stackdiv:<side>:<slotIndex>:r<absRow>` wrapping $width cells, where
+     * `slotIndex` is the slot ABOVE the gap. Same degrade rules — and the
+     * same one-zone-per-line invariant — as {@see markDividerCell()}.
+     */
+    public static function markStackGapRow(
+        string $sideValue,
+        int $slotIndex,
+        int $absRow,
+        int $frameRows,
+        int $width,
+    ): string {
+        $id = self::STACK_DIVIDER_ZONE_PREFIX . $sideValue . ':' . $slotIndex . ':r' . $absRow;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1) {
+            return str_repeat(' ', max(0, $width));
+        }
+
+        if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return str_repeat(' ', $width);
+        }
+
+        return Mark::zone($id, str_repeat(' ', $width));
+    }
 
     /**
      * The zone-id charset {@see Mark::wrap()} accepts, duplicated here

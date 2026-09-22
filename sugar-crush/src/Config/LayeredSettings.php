@@ -221,6 +221,12 @@ final class LayeredSettings
      *  - `statusLine` {@see \SugarCraft\Crush\Config\StatusLineCommand::fromSettings()},
      *                 installed by `Bootstrap::chat()` and painted by
      *                 {@see \SugarCraft\Crush\Renderer::renderStatusBar()}.
+     *  - `layout`   {@see \SugarCraft\Layout\Dock\DockLayout::fromArray()},
+     *                 loaded by {@see \SugarCraft\Crush\Cli\Bootstrap::app()}
+     *                 onto {@see \SugarCraft\Crush\App\App::$dock} and saved
+     *                 back by the App's `onLayoutChange` hook through
+     *                 `Bootstrap::writeUserConfig()` — the shell's pane
+     *                 docking geometry, which sidebars exist within.
      *
      * `statusLine` IS THE ONLY KEY HERE WHOSE VALUE IS A COMMAND, and that is
      * why it is user-tier only ({@see PROJECT_TIER_KEYS} does not list it).
@@ -244,6 +250,18 @@ final class LayeredSettings
      * no `command` runs nothing — so there is no merge for them to lose. The
      * shape is also Claude Code's, which is what makes a `settings.json`
      * written for that tool carry over unchanged.
+     *
+     * `layout` is user-tier only for the plain reason that frame geometry is
+     * the OPERATOR's habit, not the repository's business: nothing a checked-out
+     * project could say about it would be more authoritatively "theirs" than the
+     * placement the human just dragged into place. It is also the second nested
+     * value on this list, and the `statusLine` note above applies to it unchanged
+     * — every field of the manifest belongs to the SAME tier and is meaningless
+     * spread across two, so there is no key-wise merge for it to lose. Unlike
+     * `statusLine` it carries no executable string at all: the value is the
+     * versioned {@see \SugarCraft\Layout\Dock\DockLayout::toArray()} manifest
+     * (slot ids, weights, column shares, minimums), a reader that interprets and
+     * never runs.
      *
      * `allowedTools` / `disabledTools`, NOT a nested `tools: {allow, deny}`,
      * and the shape is forced rather than chosen: {@see merge()} is KEY-WISE,
@@ -332,6 +350,7 @@ final class LayeredSettings
         'allowedTools',
         'disabledTools',
         'statusLine',
+        'layout',
     ];
 
     /**
@@ -550,8 +569,8 @@ final class LayeredSettings
      *
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`,
-     * `instructions`, `disabledRules`, `maxOutputTokens`, `allowedTools` and
-     * `statusLine`, in {@see LAYERED_KEYS} order — named rather than numbered
+     * `instructions`, `disabledRules`, `maxOutputTokens`, `allowedTools`,
+     * `statusLine` and `layout`, in {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the
      * ordinals this sentence used to carry went stale the moment a fifth key
      * joined the list. `allowedTools`'s argument is on {@see PROJECT_TIER_KEYS},

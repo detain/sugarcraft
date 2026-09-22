@@ -59,7 +59,7 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
  * with no shared marker, so there is no cheap oracle for "every user-facing
  * route into this callback". What IS mechanically derivable is the set of KEYS,
  * and that is already censused from the token stream by
- * `ConfigWriteProducerDocumentationDriftTest::testConfigJsonEverReceivesExactlyTwoKeys()`.
+ * `ConfigWriteProducerDocumentationDriftTest::testTheConfigChangeCallbackEverReceivesExactlyTwoKeys()`.
  *
  * @internal
  */
