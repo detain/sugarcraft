@@ -87,11 +87,11 @@ $geometry->regionFor('chat');                   // Region(33, 0, 34, 30)
 $geometry->dividerColumns();                    // [['x' => 32, 'side' => Side::Left], ...]
 ```
 
-**Degradation ladder.** `resolve()` never throws on small frames: a side column is raised to `sideMinCols` only while the center keeps `centerMinCols`; if no plan satisfies both floors, the side with fewer slots drops (ties drop Left), then the remaining side, and finally the center takes the whole frame. Degenerate (zero-width/height) frames resolve to empty geometry — the host decides the fallback. The center region rides inside `$geometry->regions` under its pane id.
+**Degradation ladder.** `resolve()` never throws on small frames: a side column is raised to `sideMinCols` only while the center keeps `centerMinCols`; if no plan satisfies both floors, the side with fewer slots drops (ties drop Left), then the remaining side, and finally the center takes the whole frame. Degenerate (zero-width/height) frames resolve to empty geometry — the host decides the fallback. The center region rides inside `$geometry->regions` under its pane id. A side whose share floors to 0 columns (raise refused while the center still meets its floor) intentionally keeps its divider and a width-0 region — the frame stays exactly tiled; hide a side by removing all of its slots.
 
 **Shares.** Column shares are rational `[num, denom]` pairs (like sugar-crush's `Tui/SplitLayout`, referenced but not depended on). `withColumnShare()` *clamps* — never throws — so left+right stay ≤ 1/2 of usable width; chat is the primary surface. The ceiling is a mutator policy: `fromArray()` restores persisted shares verbatim so round-trips are lossless.
 
-**Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape: `['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`. Malformed manifests throw `InvalidArgumentException` naming the failed key. `dividerCols` has no public mutator and is not persisted.
+**Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape: `['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`. Malformed manifests throw `InvalidArgumentException` naming the failed key — including a slot id that collides with the center pane's (a pane has exactly one home; `withSlotAdded()` refuses the same collision). `dividerCols` has no public mutator and is not persisted.
 
 ## References
 

@@ -6,6 +6,7 @@ namespace SugarCraft\Layout\Tests\Dock;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Layout\Dock\DockLayout;
+use SugarCraft\Layout\Dock\DockSlot;
 use SugarCraft\Layout\Dock\Side;
 use SugarCraft\Layout\Region;
 
@@ -105,6 +106,55 @@ final class DockLayoutTest extends TestCase
         DockLayout::new()
             ->withSlotAdded(Side::Left, 'files')
             ->withSlotAdded(Side::Right, 'files');
+    }
+
+    public function testSlotAddedRejectsTheCenterPaneId(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Pane 'chat' is the center surface; a pane has exactly one home");
+        DockLayout::new('chat')->withSlotAdded(Side::Right, 'chat');
+    }
+
+    public function testDockingANonCenterIdStandsAlongsideTheCenter(): void
+    {
+        // Negative control for the M1 guard: unrelated ids dock and resolve
+        // with BOTH the slot region and the center region present.
+        $layout = DockLayout::new('chat')->withSlotAdded(Side::Right, 'term');
+        $this->assertSame(['term'], $this->ids($layout->slots(Side::Right)));
+
+        $geometry = $layout->resolve(Region::fromSize(100, 30));
+        $this->assertEquals(new Region(0, 0, 66, 30), $geometry->regionFor('chat'));
+        $this->assertEquals(new Region(67, 0, 33, 30), $geometry->regionFor('term'));
+        $this->assertCount(2, $geometry->regions);
+    }
+
+    public function testConstructorInvariantRefusesCenterCollidingSlots(): void
+    {
+        // The named guards live in withSlotAdded()/fromArray(); this pins the
+        // constructor's sole-site invariant — the fail-safe for any future path
+        // — by reaching the private ctor through a scope-bound Closure. (Any
+        // static-analyst complaint about private access here is a false
+        // positive: Closure::bind re-scopes the call, proven by the green run.)
+        $build = \Closure::bind(
+            static fn(): DockLayout => new DockLayout(
+                centerPaneId: 'chat',
+                leftSlots: [DockSlot::new('chat')],
+                rightSlots: [],
+                leftShareNum: 1,
+                leftShareDenom: 3,
+                rightShareNum: 1,
+                rightShareDenom: 3,
+                centerMinCols: 24,
+                sideMinCols: 20,
+                dividerCols: 1,
+            ),
+            null,
+            DockLayout::class,
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("cannot dock the center pane 'chat'");
+        $build();
     }
 
     public function testSlotAddedRejectsOutOfBoundsIndex(): void
@@ -472,6 +522,25 @@ final class DockLayoutTest extends TestCase
         );
     }
 
+    public function testZeroColumnActiveSideKeepsDividerAndWidthZeroRegion(): void
+    {
+        // Review m1, DOCUMENTED-ACCEPTED shape: the 1/1000000 share floors to
+        // 0 cols, the min-protection raise to 20 is refused (90-col center
+        // floor), yet the center alone meets it — so the side stays active at
+        // 0 columns. Deterministic and exactly tiling: 0 + 1 divider + 99 = 100.
+        $layout = DockLayout::new()
+            ->withSlotAdded(Side::Left, 'files')
+            ->withMinimums(90, 20)
+            ->withColumnShare(Side::Left, 1, 1000000);
+
+        $geometry = $layout->resolve(Region::fromSize(100, 30));
+
+        $this->assertEquals(new Region(0, 0, 0, 30), $geometry->regionFor('files'));
+        $this->assertEquals(new Region(1, 0, 99, 30), $geometry->regionFor('chat'));
+        $this->assertSame([['x' => 0, 'side' => Side::Left]], $geometry->dividerColumns());
+        $this->assertFalse($geometry->isEmpty());
+    }
+
     // ── resolve: min protection + degradation ladder ────────────────────────
 
     public function testMinProtectionRaisesAShortSideWhileCenterKeepsItsFloor(): void
@@ -779,6 +848,34 @@ final class DockLayoutTest extends TestCase
             'sides' => [
                 'left' => [['id' => 'files', 'weight' => [1, 1]]],
                 'right' => [['id' => 'files', 'weight' => [1, 1]]],
+            ],
+        ] + $this->validManifest());
+    }
+
+    public function testFromRejectsSlotIdCollidingWithCenter(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("sides.left.0.id' collides with the center pane 'chat'");
+        DockLayout::fromArray([
+            'sides' => [
+                'left' => [['id' => 'chat', 'weight' => [1, 1]]],
+                'right' => [],
+            ],
+        ] + $this->validManifest());
+    }
+
+    public function testFromRejectsCenterCollisionOnALaterRow(): void
+    {
+        // The check lives inside the row loop, not just at position 0.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("sides.right.1.id' collides with the center pane 'chat'");
+        DockLayout::fromArray([
+            'sides' => [
+                'left' => [],
+                'right' => [
+                    ['id' => 'term', 'weight' => [1, 1]],
+                    ['id' => 'chat', 'weight' => [1, 1]],
+                ],
             ],
         ] + $this->validManifest());
     }

@@ -23,6 +23,18 @@ use SugarCraft\Layout\Region;
  *    state invariant, so defaults and restored manifests may exceed it and
  *    {@see resolve()} handles tight centers through its degradation ladder.
  *  - resolve() never throws on small/degenerate frames; it degrades.
+ *  - Unique home: a pane id equal to `centerPaneId` is refused at every point a
+ *    slot id can enter — the withSlotAdded() guard, the fromArray() manifest
+ *    parse (each message names the offender / failed key path), and the
+ *    constructor invariant as defense-in-depth for any future path.
+ *    centerPaneId itself has no mutator, so the invariant cannot drift after
+ *    construction.
+ *  - An active side planned at 0 columns (share floored to 0, min-protection
+ *    raise refused while the center still meets its floor) keeps its divider
+ *    and a width-0 slot region: deterministic, frame coverage stays exact
+ *    (0 + divider + center = width). Collapsing it instead would pre-empt the
+ *    degradation ladder; a host hiding a side removes its slots.
+ *    Pinned by DockLayoutTest::testZeroColumnActiveSideKeepsDividerAndWidthZeroRegion.
  */
 final class DockLayout
 {
@@ -59,6 +71,11 @@ final class DockLayout
         foreach ([...$leftSlots, ...$rightSlots] as $slot) {
             if ($slot instanceof DockSlot === false) {
                 throw new \InvalidArgumentException('DockLayout slots must be DockSlot instances');
+            }
+            if ($slot->paneId === $centerPaneId) {
+                throw new \InvalidArgumentException(
+                    "DockLayout cannot dock the center pane '{$centerPaneId}'; a pane has exactly one home"
+                );
             }
         }
         if ($leftShareNum < 1 || $leftShareDenom < 1 || $rightShareNum < 1 || $rightShareDenom < 1) {
@@ -99,11 +116,16 @@ final class DockLayout
 
     /**
      * Dock a pane onto a side. Null index appends; index is an insertion
-     * position in `0..count`. Duplicate pane ids across BOTH sides are refused
-     * — a pane has exactly one home.
+     * position in `0..count`. Duplicate pane ids across BOTH sides are refused,
+     * and so is the center pane's own id — a pane has exactly one home.
      */
     public function withSlotAdded(Side $side, string $paneId, ?int $index = null): self
     {
+        if ($paneId === $this->centerPaneId) {
+            throw new \InvalidArgumentException(
+                "Pane '{$paneId}' is the center surface; a pane has exactly one home"
+            );
+        }
         $slot = DockSlot::new($paneId);
         if ($this->findSlot($paneId) !== null) {
             throw new \InvalidArgumentException(
@@ -327,6 +349,9 @@ final class DockLayout
      *  - Each active side gets floor((width - dividersTotal) * share) columns,
      *    then min-protection raises a side to `sideMinCols` (Left first, then
      *    Right) ONLY while the center keeps `centerMinCols`.
+     *  - An active side stays emitted even when planned at 0 columns (raise
+     *    refused, center above its floor): its divider and a width-0 region
+     *    keep the frame exactly tiled — see the class notes.
      *  - If the center would fall below `centerMinCols`, degrade: drop the side
      *    with FEWER slots (ties drop Left first), retry; drop the remaining
      *    side; finally center-only across the whole frame.
@@ -423,6 +448,10 @@ final class DockLayout
             if ($usable - array_sum($raised) >= $this->centerMinCols) {
                 $cols = $raised;
             }
+            // Refused raise: the side keeps its natural floor — possibly 0 cols.
+            // Intentional (review m1): resolve() still emits its divider and a
+            // width-0 region so the frame stays exactly tiled and the ladder is
+            // reserved for real center-starvation, never a cosmetic collapse.
         }
 
         $center = $usable - array_sum($cols);
@@ -543,7 +572,8 @@ final class DockLayout
     /**
      * Parse a manifest produced by {@see toArray()}. Strict at the boundary —
      * every failure throws InvalidArgumentException naming the offending key
-     * path. Hand-edited data that violates basic ranges is REFUSED here
+     * path, including a slot id that collides with the center pane (a pane has
+     * exactly one home). Hand-edited data that violates basic ranges is REFUSED here
      * (fail-fast), while the 1/2 pair rule stays a withColumnShare() clamping
      * policy: restored manifests keep their persisted shares untouched (the
      * thirds default included), so round-trip identity holds.
@@ -580,6 +610,11 @@ final class DockLayout
                 }
                 if (isset($row['id']) === false || is_string($row['id']) === false || $row['id'] === '') {
                     throw new \InvalidArgumentException("Dock manifest key '{$path}.id' must be a non-empty string");
+                }
+                if ($row['id'] === $data['center']) {
+                    throw new \InvalidArgumentException(
+                        "Dock manifest key '{$path}.id' collides with the center pane '{$row['id']}'"
+                    );
                 }
                 if (isset($seen[$row['id']])) {
                     throw new \InvalidArgumentException(

@@ -57,4 +57,19 @@ Source: ai/candy-layout-solver-deprecate
 - Stack split: rows = height − (count−1) gap rows; non-last slots floor at
   their float weight share, LAST slot takes the residual — deterministic, and
   absurd frames yield zero-height Regions (allowed by Region).
+- **Unique home (review round-2 M1):** a slot id equal to `centerPaneId` was
+  silently accepted, and resolve() culled one region via key collision. Fixed
+  in depth: named early-exit guard in withSlotAdded(), key-path-named refusal
+  in the fromArray() row loop, plus a constructor invariant covering every
+  present/future introduction path (pinned through a scope-bound Closure —
+  the static-analyst complaint there is a known Closure::bind false positive).
+  centerPaneId has NO mutator, so the invariant cannot drift post-construction;
+  withSlotMovedTo/withStackWeight cannot introduce ids. Lesson: dedupe guards
+  must enumerate every name-space a shared key lives in, not only siblings.
+- **Zero-col active side is accepted-by-design (review round-2 m1):** share
+  floored to 0 + refused min-raise + feasible center leaves the side emitting
+  its divider and a width-0 region (0 + 1 + 99 = width exact). Chosen over
+  collapsing because the ladder must fire only for real center-starvation, and
+  hosts already hide sides by removing slots. Pinned by
+  testZeroColumnActiveSideKeepsDividerAndWidthZeroRegion.
 Source: ai/candy-layout-dock
