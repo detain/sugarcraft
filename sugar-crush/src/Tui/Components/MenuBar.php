@@ -39,6 +39,22 @@ final class MenuBar
     public const MENU_ITEM_ZONE_PREFIX = 'menuitem:';
 
     /**
+     * Zone-id prefix every clickable PANE-TAB label in the strip carries.
+     * The suffix is the pane's enum value, so the click routes through
+     * {@see \SugarCraft\Crush\Tui\Pane::tryFrom()} exactly like a docked
+     * pane's header zone does — and lands in the same
+     * `App::dispatchChromeClick()` door.
+     *
+     * What the click MEANS is the docking phase's rule: on a dockable
+     * pane's tab it toggles that pane's docked visibility through
+     * {@see \SugarCraft\Crush\App\App::togglePaneDocking()} — the one entry
+     * point that already carries the seed-shares and persist-once laws —
+     * and on Chat's tab it focuses the always-visible center column without
+     * toggling anything, because Chat has no dock slot to lose.
+     */
+    public const PANE_TAB_ZONE_PREFIX = 'panetab:';
+
+    /**
      * The bar's menus: one per {@see CommandSpec::$category}, holding that
      * category's rows in the registry's own declaration order.
      *
@@ -66,6 +82,11 @@ final class MenuBar
 
     /**
      * Panes surfaced as quick-switch tabs in the bar, in display order.
+     *
+     * Each is also a click-to-toggle target ({@see PANE_TAB_ZONE_PREFIX}):
+     * a dockable one's tab shows its docked visibility (highlighted when
+     * docked, dimmed when not) and toggles it; Chat's tab only focuses the
+     * center column, which is always visible.
      *
      * @var list<Pane>
      */
@@ -103,8 +124,9 @@ final class MenuBar
     }
 
     /**
-     * The very same bar, with every menu title wrapped in a candy-mouse click
-     * zone ({@see MENU_TITLE_ZONE_PREFIX}).
+     * The very same bar, with every menu title AND every pane-tab label
+     * wrapped in a candy-mouse click zone ({@see MENU_TITLE_ZONE_PREFIX},
+     * {@see PANE_TAB_ZONE_PREFIX}).
      *
      * A SEPARATE render rather than a flag on the painted one, because the
      * sentinels are Private-Use cells that
@@ -126,13 +148,17 @@ final class MenuBar
     private static function compose(App $a, ?int $cols, bool $marked): string
     {
         $theme = $a->theme();
-        $tabs = self::paneTabs($a, $theme);
+        // The budget is measured on the PLAIN strip even in the marked pass:
+        // the zone sentinels are Private-Use cells Width counts as content,
+        // and the whole point of the marked twin is that its visible columns
+        // land where the painted ones do.
+        $tabsMeasure = self::paneTabs($a, $theme, false);
 
         // The tab strip and the "Currently:" indicator are how the shell is
         // navigated, so when the terminal cannot hold the whole bar it is the
         // MENU NAMES that give way — dropped from the right, rarest-used
         // first — instead of the navigational tail being cut off the end.
-        $budget = $cols === null ? null : $cols - Width::string($tabs) - 1;
+        $budget = $cols === null ? null : $cols - Width::string($tabsMeasure) - 1;
 
         $output = ' ';
         $width = 1;
@@ -159,20 +185,44 @@ final class MenuBar
         }
         $output .= ' ';
 
-        return $output . $tabs;
+        return $output . self::paneTabs($a, $theme, $marked);
     }
 
     /**
      * Render the quick-switch pane tabs plus the current-pane indicator.
-     * The focused pane's tab is highlighted; the indicator drives the
-     * "Currently: <Label>" hint the status line relies on.
+     *
+     * Three visual states per tab, so both state dimensions are legible at
+     * once — which panes are ON, and which one has focus:
+     *
+     * - docked + focused: `shellPrimary`, bold, underlined;
+     * - docked (enabled), not focused: `shellForeground`;
+     * - not docked: `shellMuted` (dimmed — clicking it turns the pane on).
+     *
+     * Chat is the center column and always visible, so it only ever shows
+     * the two focus states. With `$marked` every label also carries a
+     * {@see PANE_TAB_ZONE_PREFIX} click zone — scan-only, for the reason
+     * {@see renderMarked()} gives.
      */
-    private static function paneTabs(App $a, Theme $theme): string
+    private static function paneTabs(App $a, Theme $theme, bool $marked): string
     {
         $tabs = ' ';
         foreach (self::PANE_TABS as $pane) {
-            $color = $a->pane === $pane ? $theme->shellPrimary : $theme->shellMuted;
-            $tabs .= Style::new()->foreground($color)->render('[' . $pane->label() . ']');
+            $focused = $a->pane === $pane;
+            // A non-dockable pane has no visibility to toggle and is always
+            // on screen (Chat is the frame's center column), so it counts as
+            // enabled for the highlight rule.
+            $enabled = !$pane->dockable() || $a->isDocked($pane);
+
+            $style = match (true) {
+                $focused => Style::new()->foreground($theme->shellPrimary)->bold()->underline(),
+                $enabled => Style::new()->foreground($theme->shellForeground),
+                default => Style::new()->foreground($theme->shellMuted),
+            };
+
+            $label = $style->render('[' . $pane->label() . ']');
+            $tabs .= $marked
+                ? Mark::zone(self::PANE_TAB_ZONE_PREFIX . $pane->value, $label)
+                : $label;
             $tabs .= ' ';
         }
 
