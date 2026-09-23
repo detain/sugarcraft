@@ -218,6 +218,45 @@ final class CommandRegistry
                 'Rules',
                 argumentHint: '[name]',
             ),
+            // The phase-3 gesture pair: keyboard twins of the mouse dock
+            // operations. The state they move lives on the shell, so both
+            // dispatch an App message over Chat's Cmd channel (see
+            // {@see \SugarCraft\Crush\Chat::handlePaneCommand()}); `pane`
+            // carries no paletteAction because two side-variants share the
+            // one verb and the pseudo-rows below own the palette surface.
+            CommandSpec::new(
+                'pane',
+                'Dock a pane to a side, or move it to the other side',
+                'Layout',
+                argumentHint: 'dock <left|right> [name]',
+            ),
+            CommandSpec::new(
+                'layout',
+                'Reset the pane layout to the launch default',
+                'Layout',
+                paletteAction: PaletteAction::LayoutReset,
+                paletteLabel: 'Reset layout',
+                argumentHint: 'reset',
+            ),
+            // Palette-only twins of the two dock sides, mirroring the `docs`
+            // row's pattern: the slash surface stays one command that says
+            // what it takes, the palette gets the two concrete actions.
+            CommandSpec::new(
+                'pane-dock-left',
+                'Dock the focused pane to the left',
+                'Layout',
+                paletteAction: PaletteAction::DockPaneLeft,
+                paletteLabel: 'Dock pane left',
+                slashVisible: false,
+            ),
+            CommandSpec::new(
+                'pane-dock-right',
+                'Dock the focused pane to the right',
+                'Layout',
+                paletteAction: PaletteAction::DockPaneRight,
+                paletteLabel: 'Dock pane right',
+                slashVisible: false,
+            ),
             CommandSpec::new('compact', 'Manually compact chat history to save context', 'Session'),
             // Deliberately NOT `/new`: this wipes the transcript and keeps the
             // session id, so the session file on disk keeps accumulating the

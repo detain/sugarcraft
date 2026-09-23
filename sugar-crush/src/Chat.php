@@ -7730,6 +7730,12 @@ final class Chat implements Model
             'theme' => $this->handleThemeCommand($text),
             'mcp' => $this->handleMcpAuthCommand($text),
             'websearch' => $this->handleWebSearchCommand($text),
+            // The keyboard twins of the mouse gesture phase: dock state lives
+            // on the shell, so both handlers parse locally and hand the
+            // decision to App as a message over Cmd::send — the one channel
+            // Chat has into the shell's model.
+            'pane' => $this->handlePaneCommand($text),
+            'layout' => $this->handleLayoutCommand($text),
             // The only arm that wants the parsed arguments rather than the raw
             // text: a provider name is one token, and CommandParser has
             // already unquoted it.
@@ -9418,6 +9424,86 @@ final class Chat implements Model
             'inputBuf' => '',
             'inFlight' => false,
         ]);
+        return [$next, null];
+    }
+
+    /**
+     * `/pane dock <left|right> [name]` — the command twin of the drag
+     * gesture: move a pane into the named side's dock column, appended at
+     * the end of it (a drag picks its slot by the row it lands on; a command
+     * has no pointer to aim with). With no name the FOCUSED pane moves, and
+     * `App::applyDockCommand()` answers a non-dockable focus in words.
+     *
+     * Usage failures are answered on the transcript rather than routed to
+     * the model — the side word is load-bearing, so there is no superset
+     * reading of a half-typed `/pane` to fall back to. The pane NAME is not
+     * validated here: `Pane::tryFrom` on the shell's side is the single
+     * source, and a name Chat accepted but App rejects still gets a status
+     * line naming it.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handlePaneCommand(string $inputBuf): array
+    {
+        $tokens = preg_split('/\s+/', trim($inputBuf)) ?: [];
+        $side = strtolower($tokens[2] ?? '');
+
+        if (count($tokens) > 4 || strtolower($tokens[1] ?? '') !== 'dock' || ($side !== 'left' && $side !== 'right')) {
+            return $this->gestureUsageResponse($inputBuf, 'usage: /pane dock <left|right> [pane name]');
+        }
+
+        $name = isset($tokens[3]) ? strtolower($tokens[3]) : null;
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
+        return [$next, Cmd::send(new App\DockPaneMsg($side, $name))];
+    }
+
+    /**
+     * `/layout reset` — restore the launch default dock (files-left at the
+     * seeded shares), dropping every drag-resized column and every docked
+     * pane except the default's. Same transcript discipline as
+     * {@see handlePaneCommand()}: the word `reset` is the command, anything
+     * else is usage, never a prompt to the model.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleLayoutCommand(string $inputBuf): array
+    {
+        $tokens = preg_split('/\s+/', trim($inputBuf)) ?: [];
+
+        if (count($tokens) !== 2 || strtolower($tokens[1]) !== 'reset') {
+            return $this->gestureUsageResponse($inputBuf, 'usage: /layout reset');
+        }
+
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
+        return [$next, Cmd::send(new App\LayoutResetMsg())];
+    }
+
+    /**
+     * Echo a mis-typed gesture command: user line plus a system usage hint,
+     * draft cleared — the `commandFailureResponse` shape without the
+     * exit-code machinery these handlers do not have.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function gestureUsageResponse(string $inputBuf, string $usage): array
+    {
+        $next = $this->mutate([
+            'history' => [...$this->history, Message::user($inputBuf), Message::system($usage)],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+
         return [$next, null];
     }
 
@@ -13248,6 +13334,11 @@ final class Chat implements Model
             PaletteAction::ToggleMcp => $closed->handleMcpAuthCommand('mcp auth list'),
             PaletteAction::NewSession => $closed->handlePaletteNewSession(),
             PaletteAction::OpenDocs => $closed->handlePaletteOpenDocs(),
+            // The gesture phase's palette twins: the same handlers the slash
+            // commands reach, driven with fully-formed text.
+            PaletteAction::DockPaneLeft => $closed->handlePaneCommand('/pane dock left'),
+            PaletteAction::DockPaneRight => $closed->handlePaneCommand('/pane dock right'),
+            PaletteAction::LayoutReset => $closed->handleLayoutCommand('/layout reset'),
             PaletteAction::Exit => [$closed, Cmd::quit()],
             default => [$closed, null],
         };

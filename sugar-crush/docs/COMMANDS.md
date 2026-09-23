@@ -277,6 +277,10 @@ it does not; the *What the row says* column is its `description`.
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
+| `/pane` | ✓ | | `dock <left\|right> [name]` | Dock a pane to a side, or move it to the other side |
+| `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |
+| `/pane-dock-left` | | | — | Dock the focused pane to the left |
+| `/pane-dock-right` | | | — | Dock the focused pane to the right |
 | `/compact` | ✓ | | — | Manually compact chat history to save context |
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
@@ -289,12 +293,15 @@ it does not; the *What the row says* column is its `description`.
 | `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |
 | `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |
 
-**S** is blank on `new` and `docs` alone: they are palette-only
-(`slashVisible: false`), reachable from Ctrl+P and from no "/" popup. They have
-the other asymmetry too — `Chat::dispatchCommand()` carries no arm for either, so
-a typed `/new` is a prompt to the model. The Ctrl+P palette and the draft box are
-two different surfaces over one registry, and only one of them dispatches by
-match arm.
+**S** is blank on `new`, `docs`, `pane-dock-left` and `pane-dock-right`
+alone: they are palette-only (`slashVisible: false`), reachable from Ctrl+P and
+from no "/" popup. All four share the typed-name asymmetry —
+`Chat::dispatchCommand()` carries no arm for the pseudo-names, so a typed
+`/pane-dock-left` is a prompt to the model; the pair's palette arms instead
+drive the COMPLETE command text (`/pane dock left`) through
+`Chat::handlePaneCommand()`, the handler the real `/pane` row dispatches to.
+The Ctrl+P palette and the draft box are two different surfaces over one
+registry, and a palette row may be a fuller sentence than a slash spelling.
 
 One row's description understates its handler. `/memory`'s text names every
 sub-action but one: `Chat::handleMemoryCommand()` also answers `delete`. The

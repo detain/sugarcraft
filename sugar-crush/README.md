@@ -706,7 +706,7 @@ discriminated so a text-selection drag does not fire the zone underneath it.
 ### Slash commands
 
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/notices` `/permissions`
+`/compact` `/fork` `/help` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions`
 `/rename` `/rewind` `/rules` `/sessions` `/share` `/theme` `/websearch` `/workflow`
 `/exit` (`/quit`).
 

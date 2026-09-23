@@ -30,6 +30,9 @@ enum PaletteAction: string
     case SwitchTheme = 'switch_theme';
     case SwitchAgent = 'switch_agent';
     case ToggleMcp = 'toggle_mcp';
+    case DockPaneLeft = 'dock_pane_left';
+    case DockPaneRight = 'dock_pane_right';
+    case LayoutReset = 'layout_reset';
 
     /**
      * This action's registry row. Throws rather than returning null: an
