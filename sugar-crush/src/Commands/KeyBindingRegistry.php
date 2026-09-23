@@ -466,14 +466,30 @@ final class KeyBindingRegistry
         $c = self::CONTEXT_SHELL;
 
         return [
-            KeyBinding::new(
-                'shell.pane-next',
-                'Tab',
-                'Focus the next pane, unless a "/" popup is open',
-                $c,
-            ),
+            // The Tab pair cycles focus over the DOCKED frame — the panes
+            // actually on screen, in left-to-right, stack-top-to-bottom order
+            // (`App::paneCycleOrder()`), not the fixed six-pane strip these
+            // rows promised before pane docking L2. The old pane-next text
+            // carried the completion exception as prose ("unless a \"/\" popup
+            // is open"); under L2 the exception is structural — completion is
+            // answered by `chat.slash-complete` only while chat itself holds
+            // focus, so the row no longer needs to say it, and a dock pane's
+            // Tab cycles even with the popup open.
+            KeyBinding::new('shell.pane-next', 'Tab', 'Focus the next docked pane', $c),
+            KeyBinding::new('shell.pane-prev', 'Shift+Tab', 'Focus the previous docked pane', $c),
             KeyBinding::new('shell.menu', 'F10', 'Open the menu bar', $c),
             KeyBinding::new('shell.pane-chat', 'Esc', 'Leave the pane, back to the chat', $c),
+            // Enter keeps its chat meaning (send) everywhere it had it; this
+            // row is the one new door: with a dockable pane focused and the
+            // draft empty, Enter opens the palette, which is how a read-only
+            // pane (Files, Tools, Settings) reaches the commands that change
+            // settings — its panel footer says so (`/theme`, `/model`).
+            KeyBinding::new(
+                'shell.pane-palette',
+                'Enter',
+                'Open the palette from a docked pane (empty draft)',
+                $c,
+            ),
             KeyBinding::new('shell.new-session', 'Ctrl+N', 'Start a fresh session', $c),
             KeyBinding::new('shell.palette', 'Ctrl+K', 'Open the command palette', $c),
             KeyBinding::new('shell.skills', 'Ctrl+S', 'Open the skill picker', $c),

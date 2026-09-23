@@ -657,6 +657,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
 | `/keys` | The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
 | `Enter` | Send |
+| `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change settings; a non-empty draft sends exactly as before, from any pane |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
@@ -667,7 +668,8 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last message you sent |
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
-| `Tab` | Cycle panes |
+| `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead: completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
+| `Shift+Tab` | Cycle pane focus backwards (same docked list) |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` | Answer a permission prompt: once / refuse / ask to allow for the session. **While a prompt is up it owns the keyboard** — nothing reaches the input box — but it only answers to a letter while it is *armed*, and the first key you press that is not an answer disarms it. So typing a slash command at a live prompt now does nothing at all: measured, `/keys`, `/init`, `/agents`, `/branch main`, `/compact` and `/new` are all swallowed whole. `Enter` re-arms (and answers nothing), `Esc` refuses in any state, and the modal says which state it is in. The one thing that still answers on the first keystroke is a message that *begins* with `y` or `n` — those are the answers. And `a` no longer grants on its own: it asks "allow every later call this session?", which one `y` confirms and any other key cancels, so the session-wide grant costs two deliberate keystrokes |
@@ -699,9 +701,43 @@ box, but not advertised either.
 Mouse mode is on by default (`SUGARCRUSH_DISABLE_MOUSE=1` turns it off). Zones
 are registered during the render pass, so clicks land on what you see: wheel
 scrolls the transcript, clicking a tool call expands/collapses it, clicking a
-session tab or a pane label switches to it, clicking a palette/picker row
-selects it, and clicking the menu bar opens a menu. Click-vs-drag is
+session tab switches sessions, clicking a docked pane's header focuses that
+pane, clicking a pane tab on the menu bar toggles its docking (see below),
+clicking a palette/picker row selects it, and clicking the menu bar opens a
+menu. Click-vs-drag is
 discriminated so a text-selection drag does not fire the zone underneath it.
+
+### Pane docking
+
+Five panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**
+and **Settings** to the right — and the chat owns whatever is left over. The
+menu bar's right end carries a tab for chat plus each dockable pane, and the
+tab tells you the whole state at a glance: muted when the pane is undocked,
+full foreground when it is docked, bold-underlined when it also holds focus.
+Clicking a tab toggles docking — docking lands the pane on its home side and
+focuses it; undocking the focused pane hands focus back to chat. Clicking the
+**Chat** tab never hides anything (the center pane is always up); it just
+returns focus. `/pane dock left|right` and `/pane toggle [name]` drive the
+same state from the keyboard, and dragging the dividers resizes the columns
+and re-stacks the panes within a side.
+
+Focus decides who answers `Tab`, `Shift+Tab` and `Enter`; typing a printable
+character always reaches the chat draft regardless of focus, as do `Ctrl+O`
+(expand/collapse the newest tool output) and the other always-chat chords.
+`Tab`/`Shift+Tab` walk the docked frame — chat, then the left column
+top-to-bottom, then the right — and wrap; `Esc` from any docked pane falls
+back to chat; `Enter` on an empty draft from a docked pane opens the command
+palette (see the keys table). What a focused pane then does with the keys the
+shell leaves alone varies, and is by design, because L2 adopted the panes that
+existed rather than building new bodies: **Chat** is the full editor, the `/`
+popup completing as you type; **Agents** is a real dashboard (`c`/`r`/`s`/`q`,
+`Alt+1…9`, enter to peek or attach); **Skills** drives its picker (arrows and
+enter) whenever the picker is open — `Ctrl+S` opens it; **Files** and **Tools**
+are read-only listings — their focus buys you the divider-resized view, the
+`Ctrl+O` peek, and the `Enter` palette door; **Settings** is a read-out panel
+by design — its own footer says the settings change through `/theme`, `/model`
+and the palette, which is exactly what the `Enter` door from that pane hands
+you.
 
 ### Slash commands
 

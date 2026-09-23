@@ -1047,7 +1047,7 @@ final class KeyHelpTest extends TestCase
     public function testTheFooterSaysThatTheSecondQuestionMarkTypesOne(): void
     {
         // Two sizes, because the hint is a different string in each: 100x30
-        // overflows the box (63 live rows plus 9 headers and 8 separators = 80
+        // overflows the box (65 live rows plus 9 headers and 8 separators = 82
         // content lines, against a 25-line body) so the footer carries the
         // scroll clause as well, while 100x90 fits the whole list and drops it.
         //
@@ -1059,14 +1059,16 @@ final class KeyHelpTest extends TestCase
         // — eight rows for keystrokes that had been live and undocumented since
         // the draft moved into `candy-forms`' TextArea, which is the same
         // failure one round later. It moved 62 -> 63 when `chat.slash-complete`
-        // was declared (W4: bare Tab completes the highlighted "/" row), which
-        // is the +1 the 54 -> 55 below is.
+        // was declared (W4: bare Tab completes the highlighted "/" row), and
+        // 63 -> 65 with pane docking L2, which declared `shell.pane-prev` (the
+        // Shift+Tab half of the focus cycle) and `shell.pane-palette` (the
+        // Enter door from a docked pane) — the +2 the 55 -> 57 below is.
         //
         // The 25 derives from renderKeyHelp() rather than being counted off a
         // screenshot: at 100x30, keyHelpGeometry() gives boxRows = rows - 2 = 28,
         // the border takes two more so viewport = 26, and the footer itself
         // takes one, so body = 25. Which is why the measured
-        // Renderer::keyHelpMaxOffset() here is 80 - 25 = 55; an earlier version
+        // Renderer::keyHelpMaxOffset() here is 82 - 25 = 57; an earlier version
         // of this comment said 27, a body that would have made it 43. Both
         // overflow figures are asserted below rather than left in the prose,
         // since a body height stated and not read back is what went wrong.
@@ -1076,7 +1078,7 @@ final class KeyHelpTest extends TestCase
         // of 80 - 2 - 2 - 1 = 75 no longer holds 80 lines, while 90 gives 85 and
         // does. The 0 below is what measures that, so the "fits" half of this
         // test cannot quietly become a second overflow case.
-        foreach ([[100, 30, 55], [100, 90, 0]] as [$cols, $rows, $expectedOverflow]) {
+        foreach ([[100, 30, 57], [100, 90, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1140,7 +1142,7 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 90 rows, not 80: the list is 80 content lines now (63 live rows,
+            // 90 rows, not 80: the list is 82 content lines now (65 live rows,
             // 9 headers, 8 separators), and an 80-row terminal gives a body of
             // 80 - 2 - 2 - 1 = 75, so it would paint the SCROLLING form and this
             // assertion would be measuring the same string twice. See
