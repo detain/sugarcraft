@@ -53,7 +53,7 @@ final class ToolsPane
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' tools '))
+            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Tools->icon() . ' tools '))
             ->padding(0, 1)
             ->width($width);
 

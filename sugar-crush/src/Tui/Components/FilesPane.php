@@ -53,7 +53,7 @@ final class FilesPane
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' files '))
+            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Files->icon() . ' files '))
             ->padding(0, 1)
             ->width($width);
 

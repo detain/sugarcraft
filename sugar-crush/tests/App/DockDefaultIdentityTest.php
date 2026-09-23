@@ -75,7 +75,7 @@ final class DockDefaultIdentityTest extends TestCase
     {
         $frame = $this->frame(Pane::Files, $cols);
 
-        self::assertSameCorner($legacy, self::headerRow($frame, '╭ files '));
+        self::assertSameCorner($legacy, self::headerRow($frame, '╭ ' . Pane::Files->icon() . ' files '));
     }
 
     /**
@@ -88,8 +88,8 @@ final class DockDefaultIdentityTest extends TestCase
     {
         $frame = $this->frame(Pane::Tools, $cols);
 
-        self::assertSameCorner($legacy, self::headerRow($frame, '╭ files '));
-        self::assertSameCorner($legacy, self::headerRow($frame, '╭ tools '));
+        self::assertSameCorner($legacy, self::headerRow($frame, '╭ ' . Pane::Files->icon() . ' files '));
+        self::assertSameCorner($legacy, self::headerRow($frame, '╭ ' . Pane::Tools->icon() . ' tools '));
     }
 
     /**

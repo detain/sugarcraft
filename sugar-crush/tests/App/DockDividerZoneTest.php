@@ -178,8 +178,8 @@ final class DockDividerZoneTest extends TestCase
         // Stripped: the border glyph and the title run carry separate SGR
         // sequences in the raw body, so the readable string only exists once
         // colours are gone (same discipline as the gap-row pin above).
-        self::assertStringContainsString('╭ skills ', $plain);
-        self::assertStringContainsString('╭ settings ', $plain);
+        self::assertStringContainsString('╭ ' . Pane::Skills->icon() . ' skills ', $plain);
+        self::assertStringContainsString('╭ ' . Pane::Settings->icon() . ' settings ', $plain);
 
         $left = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX . 'left:');
         $right = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX . 'right:');

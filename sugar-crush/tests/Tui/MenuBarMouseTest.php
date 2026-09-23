@@ -113,10 +113,13 @@ final class MenuBarMouseTest extends TestCase
 
     public function testEveryPaintedMenuTitleGetsItsOwnZone(): void
     {
-        $frame = TuiRenderer::renderView($this->app(), 100, 30)->body;
+        // 120 columns since the pane icons joined the tab strip: the icons
+        // cost the strip one extra column each, and the budget drops MENU
+        // NAMES first, which would silently shrink this test to one title.
+        $frame = TuiRenderer::renderView($this->app(), 120, 30)->body;
 
         $marked = TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX);
-        self::assertGreaterThan(1, count($marked), 'the bar draws more than one menu at 100 columns');
+        self::assertGreaterThan(1, count($marked), 'the bar draws more than one menu at 120 columns');
 
         foreach ($marked as $id => $zone) {
             $index = (int) substr($id, strlen(MenuBar::MENU_TITLE_ZONE_PREFIX));
@@ -140,7 +143,9 @@ final class MenuBarMouseTest extends TestCase
     public function testAClickWhereAMenuTitleIsPaintedOpensThatMenu(): void
     {
         $app = $this->app();
-        $frame = TuiRenderer::renderView($app, 100, 30)->body;
+        // 120 columns: the icons widened the tab strip, and at 100 the
+        // second menu name is already beyond the budget — see the pin above.
+        $frame = TuiRenderer::renderView($app, 120, 30)->body;
         [$col, $row] = $this->locate($frame, $this->menuName(2));
 
         [$app] = $this->click($app, $col, $row);

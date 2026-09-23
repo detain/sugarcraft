@@ -124,7 +124,7 @@ final class SettingsPane
         $lines[] = $labelStyle->render(Width::truncate(self::FOOTER, $inner));
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' settings '))
+            ->border(Border::rounded()->withTitle(' ' . Pane::Settings->icon() . ' settings '))
             ->padding(0, 1)
             ->width($width);
 

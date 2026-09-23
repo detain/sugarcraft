@@ -125,7 +125,7 @@ final class ChatPane
         }
 
         $st = Style::new()
-            ->border(Border::normal()->withTitle(' chat '))
+            ->border(Border::normal()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Chat->icon() . ' chat '))
             ->padding(0, 1)
             ->width($width);
 

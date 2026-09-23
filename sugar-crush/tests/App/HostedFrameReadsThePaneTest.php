@@ -87,11 +87,11 @@ final class HostedFrameReadsThePaneTest extends TestCase
         $files = $this->hostedFrame(Pane::Files);
         $tools = $this->hostedFrame(Pane::Tools);
 
-        $this->assertStringContainsString('╭ files ', $files);
-        $this->assertStringNotContainsString('╭ tools ', $files);
+        $this->assertStringContainsString('╭ ' . Pane::Files->icon() . ' files ', $files);
+        $this->assertStringNotContainsString('╭ ' . Pane::Tools->icon() . ' tools ', $files);
 
-        $this->assertStringContainsString('╭ tools ', $tools);
-        $this->assertStringContainsString('╭ files ', $tools, 'focusing Tools must STACK it onto the docked Files, not shadow it');
+        $this->assertStringContainsString('╭ ' . Pane::Tools->icon() . ' tools ', $tools);
+        $this->assertStringContainsString('╭ ' . Pane::Files->icon() . ' files ', $tools, 'focusing Tools must STACK it onto the docked Files, not shadow it');
     }
 
     /**
@@ -111,13 +111,13 @@ final class HostedFrameReadsThePaneTest extends TestCase
         $files = $this->hostedFrame(Pane::Files);
         $skills = $this->hostedFrame(Pane::Skills);
 
-        $this->assertStringContainsString('╭ files ', $skills, 'the left sidebar should be unchanged');
+        $this->assertStringContainsString('╭ ' . Pane::Files->icon() . ' files ', $skills, 'the left sidebar should be unchanged');
         $this->assertStringContainsString(
-            '╭ skills ',
+            '╭ ' . Pane::Skills->icon() . ' skills ',
             $skills,
             'rightSidebar() is no longer painting a Skills block for Pane::Skills.',
         );
-        $this->assertStringNotContainsString('╭ skills ', $files);
+        $this->assertStringNotContainsString('╭ ' . Pane::Skills->icon() . ' skills ', $files);
     }
 
     /**

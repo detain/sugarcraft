@@ -113,10 +113,10 @@ final class DockGeometryPlumbingTest extends TestCase
         $filesRow = null;
         $toolsRow = null;
         foreach ($frame as $i => $line) {
-            if ($filesRow === null && str_starts_with($line, '╭ files ')) {
+            if ($filesRow === null && str_starts_with($line, '╭ ' . Pane::Files->icon() . ' files ')) {
                 $filesRow = $i;
             }
-            if ($toolsRow === null && str_starts_with($line, '╭ tools ')) {
+            if ($toolsRow === null && str_starts_with($line, '╭ ' . Pane::Tools->icon() . ' tools ')) {
                 $toolsRow = $i;
             }
         }

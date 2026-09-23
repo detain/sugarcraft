@@ -185,6 +185,42 @@ enum Pane: string
     }
 
     /**
+     * The pane's picture — one glyph the frame title and the menu-bar tab
+     * both compose from, so the two surfaces can never advertise different
+     * images of the same pane.
+     *
+     * Every glyph is a monochrome BMP geometric/technical symbol whose
+     * display width is EXACTLY 1, pinned by
+     * {@see \SugarCraft\Crush\Tests\Tui\PaneTest::testEveryFramedPaneIconIsWidthOneAndDistinct()}
+     * — not an emoji, no combining mark: a double-width or ambiguous-width
+     * picture inside a border title would shift the closing corner glyph off
+     * the pane's column budget, the exact class of desync the width law of
+     * renderAgentView already defends against elsewhere.
+     *
+     * Input, Help and Menu are chrome-only surfaces with no framed pane
+     * identity to advertise, so they carry no picture and compose as the
+     * empty string.
+     */
+    public function icon(): string
+    {
+        return match ($this) {
+            // ▤ framed horizontal lines — the transcript
+            self::Chat => "\u{25A4}",
+            // ☰ three unframed lines — the file list
+            self::Files => "\u{2630}",
+            // ⚒ hammer and pick — the tool bench
+            self::Tools => "\u{2692}",
+            // ✦ four-point star — a learnt skill
+            self::Skills => "\u{2726}",
+            // ❖ diamond of nodes — a swarm of agents
+            self::Agents => "\u{2756}",
+            // ⚙ gear — the settings dials
+            self::Settings => "\u{2699}",
+            self::Input, self::Help, self::Menu => '',
+        };
+    }
+
+    /**
      * Returns a human-readable label for the pane.
      */
     public function label(): string

@@ -73,11 +73,11 @@ final class ComponentTest extends TestCase
         $output = MenuBar::render($app);
 
         // Menu bar should list all available panes as tabs
-        $this->assertStringContainsString('[Chat]', $output);
-        $this->assertStringContainsString('[Files]', $output);
-        $this->assertStringContainsString('[Tools]', $output);
-        $this->assertStringContainsString('[Skills]', $output);
-        $this->assertStringContainsString('[Agents]', $output);
+        $this->assertStringContainsString(self::paneTabCaption(Pane::Chat), $output);
+        $this->assertStringContainsString(self::paneTabCaption(Pane::Files), $output);
+        $this->assertStringContainsString(self::paneTabCaption(Pane::Tools), $output);
+        $this->assertStringContainsString(self::paneTabCaption(Pane::Skills), $output);
+        $this->assertStringContainsString(self::paneTabCaption(Pane::Agents), $output);
     }
 
     public function testMenuBarShowsCurrentlySelectedPane(): void
@@ -140,13 +140,13 @@ final class ComponentTest extends TestCase
         $enabled = Style::new()->foreground($theme->shellForeground);
         $disabled = Style::new()->foreground($theme->shellMuted);
 
-        $this->assertStringContainsString($focused->render('[Chat]'), $output, 'Chat focused = primary+bold+underline');
-        $this->assertStringContainsString($enabled->render('[Files]'), $output, 'docked Files = enabled highlight');
-        $this->assertStringContainsString($disabled->render('[Tools]'), $output, 'undocked Tools = dimmed');
-        $this->assertStringContainsString($disabled->render('[Settings]'), $output, 'undocked Settings = dimmed');
+        $this->assertStringContainsString($focused->render(self::paneTabCaption(Pane::Chat)), $output, 'Chat focused = primary+bold+underline');
+        $this->assertStringContainsString($enabled->render(self::paneTabCaption(Pane::Files)), $output, 'docked Files = enabled highlight');
+        $this->assertStringContainsString($disabled->render(self::paneTabCaption(Pane::Tools)), $output, 'undocked Tools = dimmed');
+        $this->assertStringContainsString($disabled->render(self::paneTabCaption(Pane::Settings)), $output, 'undocked Settings = dimmed');
 
-        $this->assertStringNotContainsString($disabled->render('[Files]'), $output, 'docked Files must NOT read as disabled');
-        $this->assertStringNotContainsString($enabled->render('[Tools]'), $output, 'undocked Tools must NOT read as enabled');
+        $this->assertStringNotContainsString($disabled->render(self::paneTabCaption(Pane::Files)), $output, 'docked Files must NOT read as disabled');
+        $this->assertStringNotContainsString($enabled->render(self::paneTabCaption(Pane::Tools)), $output, 'undocked Tools must NOT read as enabled');
     }
 
     public function testFocusingADockedPaneMovesTheFocusDecorationWithThePane(): void
@@ -157,11 +157,11 @@ final class ComponentTest extends TestCase
 
         $focused = Style::new()->foreground($theme->shellPrimary)->bold()->underline();
 
-        $this->assertStringContainsString($focused->render('[Files]'), $output);
+        $this->assertStringContainsString($focused->render(self::paneTabCaption(Pane::Files)), $output);
         // Chat is always enabled but no longer focused: the enabled state,
         // never the muted one.
-        $this->assertStringContainsString(Style::new()->foreground($theme->shellForeground)->render('[Chat]'), $output);
-        $this->assertStringNotContainsString(Style::new()->foreground($theme->shellMuted)->render('[Chat]'), $output);
+        $this->assertStringContainsString(Style::new()->foreground($theme->shellForeground)->render(self::paneTabCaption(Pane::Chat)), $output);
+        $this->assertStringNotContainsString(Style::new()->foreground($theme->shellMuted)->render(self::paneTabCaption(Pane::Chat)), $output);
     }
 
     public function testChatTabIsNeverDimmedEvenWithAnEmptyDock(): void
@@ -174,9 +174,9 @@ final class ComponentTest extends TestCase
 
         $muted = Style::new()->foreground($theme->shellMuted);
         foreach ([Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings] as $pane) {
-            $this->assertStringContainsString($muted->render('[' . $pane->label() . ']'), $output, $pane->label() . ' undocked = dimmed');
+            $this->assertStringContainsString($muted->render(self::paneTabCaption($pane)), $output, $pane->label() . ' undocked = dimmed');
         }
-        $this->assertStringNotContainsString($muted->render('[Chat]'), $output);
+        $this->assertStringNotContainsString($muted->render(self::paneTabCaption(Pane::Chat)), $output);
     }
 
     public function testMarkedBarCarriesPaneTabZonesAndPaintedBarCarriesNone(): void
@@ -358,5 +358,15 @@ final class ComponentTest extends TestCase
         $this->assertNotEmpty($menuBar);
         $this->assertNotEmpty($chatPane);
         $this->assertNotEmpty($inputPane);
+    }
+
+    /**
+     * The tab caption as MenuBar::paneTabs() composes it — icon, one space,
+     * label, inside brackets — spelled from the Pane enum so these strip pins
+     * can never drift from the picture mapping they are testing.
+     */
+    private static function paneTabCaption(Pane $pane): string
+    {
+        return '[' . $pane->icon() . ' ' . $pane->label() . ']';
     }
 }

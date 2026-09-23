@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Tui;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Crush\Tui\Pane;
 use PHPUnit\Framework\TestCase;
 
@@ -113,5 +114,53 @@ final class PaneTest extends TestCase
     {
         $this->expectException(\ValueError::class);
         Pane::from('');
+    }
+
+    /**
+     * @testdox The six framed panes carry the adopted glyphs
+     *
+     * The table IS the design record: swapping a glyph for a lookalike is a
+     * visual change a reader of the frame cannot audit without this pin.
+     */
+    public function testFramedPaneIconsAreTheAdoptedGlyphs(): void
+    {
+        $this->assertSame("\u{25A4}", Pane::Chat->icon());
+        $this->assertSame("\u{2630}", Pane::Files->icon());
+        $this->assertSame("\u{2692}", Pane::Tools->icon());
+        $this->assertSame("\u{2726}", Pane::Skills->icon());
+        $this->assertSame("\u{2756}", Pane::Agents->icon());
+        $this->assertSame("\u{2699}", Pane::Settings->icon());
+    }
+
+    /**
+     * @testdox Every framed-pane icon is one BMP codepoint of display width 1, and all six differ
+     *
+     * The width law from Pane::icon()'s contract, executed: a double-width
+     * or combining picture in a border title pushes the closing corner off
+     * the pane's column budget, so the glyph set may never grow one.
+     */
+    public function testEveryFramedPaneIconIsWidthOneAndDistinct(): void
+    {
+        $icons = [];
+        foreach ([Pane::Chat, Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings] as $pane) {
+            $icon = $pane->icon();
+            $this->assertNotSame('', $icon, $pane->name . ' lost its frame icon');
+            $this->assertSame(1, mb_strlen($icon), $pane->name . "'s icon must be a single codepoint");
+            $this->assertLessThanOrEqual(0xFFFF, mb_ord($icon), $pane->name . "'s icon must stay in the BMP");
+            $this->assertSame(1, Width::of($icon), $pane->name . "'s icon is not display-width 1");
+            $icons[$pane->name] = $icon;
+        }
+
+        $this->assertCount(6, array_unique($icons), 'two framed panes advertise the same picture');
+    }
+
+    /**
+     * @testdox Input, Help and Menu — the chrome-only surfaces — carry no picture
+     */
+    public function testChromeOnlyPanesCarryNoIcon(): void
+    {
+        $this->assertSame('', Pane::Input->icon());
+        $this->assertSame('', Pane::Help->icon());
+        $this->assertSame('', Pane::Menu->icon());
     }
 }

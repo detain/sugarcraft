@@ -256,6 +256,6 @@ final class SettingsPaneTest extends TestCase
     {
         $bar = Ansi::strip(\SugarCraft\Crush\Tui\Components\MenuBar::render($this->app(), 200));
 
-        $this->assertStringContainsString('[Settings]', $bar);
+        $this->assertStringContainsString('[' . Pane::Settings->icon() . ' Settings]', $bar);
     }
 }

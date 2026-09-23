@@ -191,6 +191,10 @@ final class MenuBar
     /**
      * Render the quick-switch pane tabs plus the current-pane indicator.
      *
+     * Every tab is `[icon Label]`, the picture composed from
+     * {@see \SugarCraft\Crush\Tui\Pane::icon()} — the same mapping the pane's
+     * own frame title uses, so the strip and the frame always agree.
+     *
      * Three visual states per tab, so both state dimensions are legible at
      * once — which panes are ON, and which one has focus:
      *
@@ -219,7 +223,7 @@ final class MenuBar
                 default => Style::new()->foreground($theme->shellMuted),
             };
 
-            $label = $style->render('[' . $pane->label() . ']');
+            $label = $style->render('[' . $pane->icon() . ' ' . $pane->label() . ']');
             $tabs .= $marked
                 ? Mark::zone(self::PANE_TAB_ZONE_PREFIX . $pane->value, $label)
                 : $label;
