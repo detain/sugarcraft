@@ -541,3 +541,5 @@ sugar-crush/tests/App/DockDividerZoneTest.php	0.15	6
 sugar-crush/tests/App/DockGeometryPlumbingTest.php	0.05	6
 sugar-crush/tests/App/DockSeedTest.php	0.05	12
 sugar-crush/tests/App/DockPersistenceRoundTripTest.php	0.05	5
+sugar-crush/tests/App/MenuBarPaneTabClickTest.php	0.072	6
+sugar-crush/tests/App/PaneFocusCycleTest.php	0.007	12

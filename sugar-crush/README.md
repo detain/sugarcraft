@@ -1197,13 +1197,15 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,145 tests / 171,620 assertions, 0 failures, 1 skipped** — the whole of
+**12,169 tests / 171,812 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-16m04s. Measured 2026-09-23. The pane-docking feature re-pinned the figure in stages,
+15m40s. Measured 2026-09-23. The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
-(`37c50e389`), the review-fix round (`b4a5a11e7`), and the docking crash/resize fix
-lane — each adding its own tests and assertions, so the running arithmetic lives in
+(`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
+lane, and the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle
+and palette door (L2, `3c4db713d`..`b9ea9b386`) — each adding its own tests and
+assertions, so the running arithmetic lives in
 `git log` rather than in this sentence (a hard-coded "+N over M" chain went stale here
 the moment the next stage landed). The
 re-pin before that: the three `WebSearch` tests that had been asserting against a
