@@ -132,6 +132,6 @@ final class SettingsPane
             ? $st->borderForeground($theme->shellPrimary)
             : $st->borderForeground($theme->border);
 
-        return $st->render(implode("\n", array_slice($lines, 0, $budget)));
+        return PaneFrame::render($st, implode("\n", array_slice($lines, 0, $budget)), $theme->border);
     }
 }

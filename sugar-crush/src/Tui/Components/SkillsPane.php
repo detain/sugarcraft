@@ -108,7 +108,7 @@ final class SkillsPane
             ? $st->borderForeground($theme->shellPrimary)
             : $st->borderForeground($theme->border);
 
-        return $st->render($body);
+        return PaneFrame::render($st, $body, $theme->border);
     }
 
     /**

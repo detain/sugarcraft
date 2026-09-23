@@ -133,7 +133,7 @@ final class ChatPane
             ? $st->borderForeground($theme->shellPrimary)
             : $st->borderForeground($theme->border);
 
-        return [$st->render($body), $images];
+        return [PaneFrame::render($st, $body, $theme->border), $images];
     }
 
     private static function formatMessage(Message $msg, Theme $theme): string
