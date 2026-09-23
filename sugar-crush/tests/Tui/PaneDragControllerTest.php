@@ -13,7 +13,7 @@ use SugarCraft\Crush\Tui\PaneDragController;
  * arm/disarm laws, and the two pieces of arithmetic the App delegates its
  * drag decisions to (column-share pixels for a resize, drop side and slot
  * index for a dock drag). The wiring face — MouseMsg sequences through the
- * real `App::update()` — lives in {@see PaneDragGestureTest}.
+ * real `App::update()` — lives in {@see PaneDragIntegrationTest}.
  *
  * @see PaneDragController
  */
