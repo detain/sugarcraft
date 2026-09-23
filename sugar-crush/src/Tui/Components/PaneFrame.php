@@ -44,6 +44,13 @@ use SugarCraft\Sprinkles\Style;
  * than a theme of its own on tall panes, and height/4 scales it with the
  * box. {@see gradientRows()} is public so the budget formula has ONE
  * definition and a test can straddle every clamp edge.
+ *
+ * THE AGENT VIEW IS DELIBERATELY OUT OF SCOPE. The agent boxes —
+ * {@see \SugarCraft\Crush\Tui\AgentViewPane} and
+ * {@see \SugarCraft\Crush\Tui\AgentOutputPane}, composited by
+ * Renderer::renderAgentView() — frame themselves on a separate render path
+ * that never calls this class, and they intentionally do NOT receive the
+ * gradient: L3's conversion was exactly the six dockable pane components.
  */
 final class PaneFrame
 {
