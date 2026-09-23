@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Layout\Dock\Side;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Tui\PaneDragController;
 
 /**
@@ -38,7 +39,7 @@ final class PaneDragControllerTest extends TestCase
 
     public function testPressingADividerBeginsAnArmedResize(): void
     {
-        $drag = PaneDragController::idle()->beginResize(Side::Left, 31, 13);
+        $drag = PaneDragController::idle()->beginResize(Side::Left, 31);
 
         self::assertTrue($drag->isResizing());
         self::assertFalse($drag->isIdle());
@@ -85,7 +86,7 @@ final class PaneDragControllerTest extends TestCase
 
     public function testTheFirstResizeMotionLatchesThePreviewedFlag(): void
     {
-        $drag = PaneDragController::idle()->beginResize(Side::Left, 31, 13);
+        $drag = PaneDragController::idle()->beginResize(Side::Left, 31);
 
         $moved = $drag->withMotion(35, 13);
         self::assertTrue($moved->isPreviewed());
@@ -115,7 +116,7 @@ final class PaneDragControllerTest extends TestCase
 
     public function testALeftDragTranslatesTheGrabByThePointerTravel(): void
     {
-        $drag = PaneDragController::idle()->beginResize(Side::Left, 44, 13);
+        $drag = PaneDragController::idle()->beginResize(Side::Left, 44);
 
         // Grab painted on column 44, the side measures 39 content columns,
         // the centre can spare 20. Releasing ten columns east grows the
@@ -125,7 +126,7 @@ final class PaneDragControllerTest extends TestCase
 
     public function testARightDragGrowsLeftwardWithTheSameTravelRule(): void
     {
-        $drag = PaneDragController::idle()->beginResize(Side::Right, 80, 13);
+        $drag = PaneDragController::idle()->beginResize(Side::Right, 80);
 
         // A right band widens when the pointer travels WEST of its grab.
         self::assertSame(47, $drag->resizeColumns(72, 39, 20, 20));
@@ -134,8 +135,8 @@ final class PaneDragControllerTest extends TestCase
 
     public function testADragNeverShrinksASideBelowItsFloor(): void
     {
-        $left = PaneDragController::idle()->beginResize(Side::Left, 44, 13);
-        $right = PaneDragController::idle()->beginResize(Side::Right, 44, 13);
+        $left = PaneDragController::idle()->beginResize(Side::Left, 44);
+        $right = PaneDragController::idle()->beginResize(Side::Right, 44);
 
         self::assertSame(20, $left->resizeColumns(14, 39, 20, 20), 'left clamps at sideMinCols');
         self::assertSame(20, $right->resizeColumns(74, 39, 20, 20), 'right clamps at sideMinCols');
@@ -143,8 +144,8 @@ final class PaneDragControllerTest extends TestCase
 
     public function testADragNeverGrowsASidePastTheCentresFloor(): void
     {
-        $left = PaneDragController::idle()->beginResize(Side::Left, 44, 13);
-        $right = PaneDragController::idle()->beginResize(Side::Right, 80, 13);
+        $left = PaneDragController::idle()->beginResize(Side::Left, 44);
+        $right = PaneDragController::idle()->beginResize(Side::Right, 80);
 
         // current 39 plus a centre that can spare 16 → the side tops out at 55.
         self::assertSame(55, $left->resizeColumns(300, 39, 20, 16));
@@ -157,7 +158,7 @@ final class PaneDragControllerTest extends TestCase
         // side floor: the drag STATES the request (floor wins locally);
         // DockLayout::resolve()'s degradation ladder keeps the geometry
         // guarantee at paint time.
-        $drag = PaneDragController::idle()->beginResize(Side::Left, 44, 13);
+        $drag = PaneDragController::idle()->beginResize(Side::Left, 44);
 
         self::assertSame(20, $drag->resizeColumns(94, 12, 20, -2));
     }
@@ -224,5 +225,28 @@ final class PaneDragControllerTest extends TestCase
     public function testAnEmptyStackAlwaysInsertsAtZero(): void
     {
         self::assertSame(0, PaneDragController::insertIndex(7, []));
+    }
+
+    /**
+     * Cross-pin for the duplicated arm tolerance. The controller's public
+     * `DRAG_ARM_TOLERANCE_CELLS` and `Chat`'s private
+     * `CLICK_DRAG_TOLERANCE_CELLS` are two spellings of ONE product rule —
+     * how many cells a pointer may drift before a click becomes a drag. A
+     * one-sided tune silently decouples click-to-focus from drag-to-dock, so
+     * this reflection assertion fails loudly if either drifts apart.
+     *
+     * @see PaneDragController::DRAG_ARM_TOLERANCE_CELLS
+     */
+    public function testTheArmToleranceStaysEqualToChatsClickDragTolerance(): void
+    {
+        $chatTolerance = (new \ReflectionClass(Chat::class))
+            ->getReflectionConstant('CLICK_DRAG_TOLERANCE_CELLS')
+            ->getValue();
+
+        self::assertSame(
+            $chatTolerance,
+            PaneDragController::DRAG_ARM_TOLERANCE_CELLS,
+            'PaneDragController::DRAG_ARM_TOLERANCE_CELLS must equal Chat::CLICK_DRAG_TOLERANCE_CELLS — click-vs-drag is one rule, not two'
+        );
     }
 }

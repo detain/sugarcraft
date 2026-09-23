@@ -504,11 +504,12 @@ final class App implements Model
      * Dock `pane` on `side` — moving it there when it already sits in a slot.
      *
      * Not routed through `update()`: the dock changes when the GESTURE phase
-     * (or a `/dock`-shaped command, later) asks for a specific placement, and
-     * a message carrying a Side would name the layout enum inside the message
-     * taxonomy. `Pane::dockSide()` refuses the panes with no sidebar to speak
-     * of; Chat, Input, Help and Menu have no home column and no renderer that
-     * would honour one, so an attempt is a programming error, not a no-op.
+     * (or the `/pane dock` command shipped this phase) asks for a specific
+     * placement, and a message carrying a Side would name the layout enum
+     * inside the message taxonomy. `Pane::dockSide()` refuses the panes with
+     * no sidebar to speak of; Chat, Input, Help and Menu have no home column
+     * and no renderer that would honour one, so an attempt is a programming
+     * error, not a no-op.
      *
      * Persists through {@see $onLayoutChange} like every other mutation
      * entry point here — see {@see togglePaneDocking()} for why that is safe.
@@ -1106,7 +1107,7 @@ final class App implements Model
         $zone = TuiRenderer::chromeZoneAt($msg->x, $msg->y);
 
         if ($press && $zone !== null) {
-            $started = $this->beginPaneDrag($zone->id, $zone->startCol, $zone->startRow, $msg->x, $msg->y);
+            $started = $this->beginPaneDrag($zone->id, $zone->startCol, $msg->x, $msg->y);
 
             if ($started !== null) {
                 return $started;
@@ -1145,7 +1146,7 @@ final class App implements Model
      *
      * @return ?array{0: self, 1: ?\Closure}
      */
-    private function beginPaneDrag(string $zoneId, int $startCol, int $startRow, int $pressX, int $pressY): ?array
+    private function beginPaneDrag(string $zoneId, int $startCol, int $pressX, int $pressY): ?array
     {
         $dividers = Renderer::DIVIDER_ZONE_PREFIX;
 
@@ -1156,7 +1157,7 @@ final class App implements Model
                 return null;
             }
 
-            self::$paneDrag = self::paneDragController()->beginResize($side, $startCol, $startRow);
+            self::$paneDrag = self::paneDragController()->beginResize($side, $startCol);
             self::$paneDragOrigin = $this->dock();
 
             return [$this, null];
@@ -1165,8 +1166,9 @@ final class App implements Model
         if (str_starts_with($zoneId, Renderer::STACK_DIVIDER_ZONE_PREFIX)) {
             // Consumed, no state: pressing a gap row today did nothing
             // either (dispatchChromeClick fell through), so the frame's only
-            // observable change is that the press never arms Chat's gesture
-            // tracker — which is exactly what a drag-in-waiting wants.
+            // observable change is that the press never arms App's own
+            // `chromeClickTracker` — which is exactly what a drag-in-waiting
+            // wants.
             return [$this, null];
         }
 
@@ -1230,17 +1232,29 @@ final class App implements Model
                 return [$this, null];
             }
 
-            // The commit reads the ORIGIN snapshot inside
-            // previewColumnResize, so the statics are cleared only after the
-            // final width is computed — clearing first would make the
-            // release measure from the already-previewed model and compound
-            // the travel.
+            // A mode-switch mid-drag is the one release that CANNOT measure.
+            // Rendering a full-band dashboard/overlay frame nulls
+            // Tui\Renderer::$lastDockFrame (see that class's dashboard tail),
+            // so the release below lands with no band to re-state the pointer
+            // against and `previewColumnResize` takes its frame-null guard,
+            // handing the model back untouched. Persisting there would freeze
+            // the last previewed width as a manifest without a real
+            // measurement — a stray write, so skip it and let the next framed
+            // interaction commit. Note this is a FRAME-PRESENCE test, not
+            // object identity: an ordinary release ALSO returns the live model
+            // by identity (the same-value tail in `previewColumnResize`) and
+            // MUST persist, so `$next === $this` cannot tell the two apart.
+            $commitMeasured = TuiRenderer::lastDockFrame() !== null;
             $next = $this->previewColumnResize($drag, $msg->x);
             self::$paneDrag = null;
             self::$paneDragOrigin = null;
 
-            // Persist only when the gesture actually moved something: the
-            // release that follows previews commits the final width once.
+            if (!$commitMeasured) {
+                return [$next, null];
+            }
+
+            // Persist once on release: the release re-states the pointer's
+            // measurement over the origin snapshot and commits the final width.
             return [$next->persistDock($next), null];
         }
 
@@ -1768,10 +1782,16 @@ final class App implements Model
      */
     public function applyDockCommand(DockPaneMsg $msg): array
     {
-        $side = self::dockSideFromWord($msg->side);
+        $action = strtolower($msg->action);
+
+        if ($action === 'toggle') {
+            return $this->applyPaneToggle($msg);
+        }
+
+        $side = self::dockSideFromWord($action);
 
         if ($side === null) {
-            return [$this->withError("pane: dock side must be left or right, got '{$msg->side}'"), null];
+            return [$this->withError("pane: dock side must be left or right, got '{$msg->action}'"), null];
         }
 
         $name = $msg->paneName ?? $this->pane->value;
@@ -1787,6 +1807,36 @@ final class App implements Model
         }
 
         return [$this->setPaneSide($pane, $side)->withStatus("pane: {$pane->label()} docked {$side->name}"), null];
+    }
+
+    /**
+     * The `toggle` verb of {@see applyDockCommand()}: dock a pane onto its
+     * home side, or free it from whichever slot already holds it — routed to
+     * the already-tested {@see togglePaneDocking()}. Same subject rule as the
+     * dock arms: no name means the focused pane, a non-dockable focus is
+     * refused in words, and an unknown name is named straight back. The
+     * status line reports which arm ran, because the gesture has no undock
+     * half (releasing centre cancels), so this is the only keyboard way to
+     * free a single docked pane short of `/layout reset`.
+     *
+     * @return array{0: self, 1: ?Cmd}
+     */
+    private function applyPaneToggle(DockPaneMsg $msg): array
+    {
+        if ($msg->paneName === null && !$this->pane->dockable()) {
+            return [$this->withError('pane: no dockable pane is focused — name one with /pane toggle <name>'), null];
+        }
+
+        $name = $msg->paneName ?? $this->pane->value;
+        $pane = Pane::tryFrom($name);
+
+        if ($pane === null || !$pane->dockable()) {
+            return [$this->withError("pane: '{$name}' is not a dockable pane"), null];
+        }
+
+        $verb = $this->isDocked($pane) ? 'undocked' : 'docked';
+
+        return [$this->togglePaneDocking($pane)->withStatus("pane: {$pane->label()} {$verb}"), null];
     }
 
     /**
@@ -2139,11 +2189,12 @@ final readonly class SelectSkillMsg implements Msg
 }
 
 /**
- * Message to dock (or move) a pane into a side column — the command twin of
- * the {@see \SugarCraft\Crush\Tui\PaneDragController} drop. The side travels
- * as the `left`/`right` word the user typed because `Chat` has no reason to
- * know candy-layout's enum; {@see App::applyDockCommand()} parses it into a
- * {@see Side} at the boundary and refuses anything else.
+ * Message carrying a `/pane` verb to the shell — the command twin of the
+ * {@see \SugarCraft\Crush\Tui\PaneDragController} drop and of the keyboard
+ * dock/undock arm. The verb travels as the `left`/`right`/`toggle` word the
+ * user typed because `Chat` has no reason to know candy-layout's enum;
+ * {@see App::applyDockCommand()} parses it at the boundary and refuses
+ * anything else.
  *
  * `paneName` null means "whatever pane currently holds focus", the same
  * subject the mouse gestures take; the focus-not-dockable case is answered
@@ -2151,7 +2202,7 @@ final readonly class SelectSkillMsg implements Msg
  */
 final readonly class DockPaneMsg implements Msg
 {
-    public function __construct(public string $side, public ?string $paneName = null) {}
+    public function __construct(public string $action, public ?string $paneName = null) {}
 }
 
 /**

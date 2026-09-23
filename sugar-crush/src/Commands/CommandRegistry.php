@@ -222,13 +222,15 @@ final class CommandRegistry
             // operations. The state they move lives on the shell, so both
             // dispatch an App message over Chat's Cmd channel (see
             // {@see \SugarCraft\Crush\Chat::handlePaneCommand()}); `pane`
-            // carries no paletteAction because two side-variants share the
-            // one verb and the pseudo-rows below own the palette surface.
+            // carries no paletteAction because its dock side-variants share
+            // the one verb and the two pseudo-rows below own the palette
+            // surface — `toggle` has no palette twin, it is a keyboard-only
+            // undock.
             CommandSpec::new(
                 'pane',
-                'Dock a pane to a side, or move it to the other side',
+                'Dock a pane to a side, or toggle its docked state',
                 'Layout',
-                argumentHint: 'dock <left|right> [name]',
+                argumentHint: 'dock <left|right>|toggle [name]',
             ),
             CommandSpec::new(
                 'layout',

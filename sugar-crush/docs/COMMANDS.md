@@ -277,7 +277,7 @@ it does not; the *What the row says* column is its `description`.
 | `/permissions` | ✓ | ✓ | — | Show this session's permission mode, its source, and the rules it decides by |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
-| `/pane` | ✓ | | `dock <left\|right> [name]` | Dock a pane to a side, or move it to the other side |
+| `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |
 | `/pane-dock-left` | | | — | Dock the focused pane to the left |
 | `/pane-dock-right` | | | — | Dock the focused pane to the right |

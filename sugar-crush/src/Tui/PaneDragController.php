@@ -51,7 +51,6 @@ final class PaneDragController
         private readonly string $kind,
         private readonly ?Side $side,
         private readonly int $grabCol,
-        private readonly int $originRow,
         private readonly ?string $paneId,
         private readonly int $pressX,
         private readonly int $pressY,
@@ -69,7 +68,6 @@ final class PaneDragController
             kind: self::KIND_IDLE,
             side: null,
             grabCol: 0,
-            originRow: 0,
             paneId: null,
             pressX: 0,
             pressY: 0,
@@ -87,13 +85,12 @@ final class PaneDragController
      * A press landed on `divider:<side>:r<row>` — the pointer now owns that
      * side's band width until the release.
      */
-    public function beginResize(Side $side, int $grabCol, int $originRow): self
+    public function beginResize(Side $side, int $grabCol): self
     {
         return $this->mutate(
             kind: self::KIND_RESIZE,
             side: $side,
             grabCol: $grabCol,
-            originRow: $originRow,
             paneId: null,
             paneIdSet: true,
             armed: true,
@@ -112,7 +109,6 @@ final class PaneDragController
             side: null,
             sideSet: true,
             grabCol: 0,
-            originRow: 0,
             paneId: $paneId,
             pressX: $pressX,
             pressY: $pressY,
@@ -277,7 +273,6 @@ final class PaneDragController
         ?Side $side = null,
         bool $sideSet = false,
         ?int $grabCol = null,
-        ?int $originRow = null,
         ?string $paneId = null,
         bool $paneIdSet = false,
         ?int $pressX = null,
@@ -289,7 +284,6 @@ final class PaneDragController
             kind: $kind ?? $this->kind,
             side: $sideSet ? $side : ($side ?? $this->side),
             grabCol: $grabCol ?? $this->grabCol,
-            originRow: $originRow ?? $this->originRow,
             paneId: $paneIdSet ? $paneId : ($paneId ?? $this->paneId),
             pressX: $pressX ?? $this->pressX,
             pressY: $pressY ?? $this->pressY,

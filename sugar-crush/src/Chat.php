@@ -9428,15 +9428,21 @@ final class Chat implements Model
     }
 
     /**
-     * `/pane dock <left|right> [name]` — the command twin of the drag
-     * gesture: move a pane into the named side's dock column, appended at
-     * the end of it (a drag picks its slot by the row it lands on; a command
-     * has no pointer to aim with). With no name the FOCUSED pane moves, and
-     * `App::applyDockCommand()` answers a non-dockable focus in words.
+     * `/pane dock <left|right> [name]` / `/pane toggle [name]` — the command
+     * twins of the drag gesture: dock moves a pane into the named side's
+     * dock column, appended at the end of it (a drag picks its slot by the row
+     * it lands on; a command has no pointer to aim with). `/pane toggle
+     * [name]` is its undock twin:
+     * send a pane to its home side, or free it from whatever slot holds it —
+     * the one keyboard route that releases a single docked pane without
+     * `/layout reset` tearing the whole layout down (the gesture has no
+     * undock half: releasing over the centre just cancels). With no name the
+     * FOCUSED pane moves, and `App::applyDockCommand()` answers a
+     * non-dockable focus in words.
      *
      * Usage failures are answered on the transcript rather than routed to
-     * the model — the side word is load-bearing, so there is no superset
-     * reading of a half-typed `/pane` to fall back to. The pane NAME is not
+     * the model — the verb is load-bearing, so there is no superset reading
+     * of a half-typed `/pane` to fall back to. The pane NAME is not
      * validated here: `Pane::tryFrom` on the shell's side is the single
      * source, and a name Chat accepted but App rejects still gets a status
      * line naming it.
@@ -9446,10 +9452,28 @@ final class Chat implements Model
     private function handlePaneCommand(string $inputBuf): array
     {
         $tokens = preg_split('/\s+/', trim($inputBuf)) ?: [];
+        $verb = strtolower($tokens[1] ?? '');
+
+        if ($verb === 'toggle') {
+            if (count($tokens) > 3) {
+                return $this->gestureUsageResponse($inputBuf, 'usage: /pane toggle [pane name]');
+            }
+
+            $name = isset($tokens[2]) ? strtolower($tokens[2]) : null;
+
+            $next = $this->mutate([
+                'history' => [...$this->history, Message::user($inputBuf)],
+                'inputBuf' => '',
+                'inFlight' => false,
+            ]);
+
+            return [$next, Cmd::send(new App\DockPaneMsg('toggle', $name))];
+        }
+
         $side = strtolower($tokens[2] ?? '');
 
-        if (count($tokens) > 4 || strtolower($tokens[1] ?? '') !== 'dock' || ($side !== 'left' && $side !== 'right')) {
-            return $this->gestureUsageResponse($inputBuf, 'usage: /pane dock <left|right> [pane name]');
+        if (count($tokens) > 4 || $verb !== 'dock' || ($side !== 'left' && $side !== 'right')) {
+            return $this->gestureUsageResponse($inputBuf, 'usage: /pane dock <left|right> [pane name] | /pane toggle [pane name]');
         }
 
         $name = isset($tokens[3]) ? strtolower($tokens[3]) : null;

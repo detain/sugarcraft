@@ -189,6 +189,46 @@ final class PaneDragIntegrationTest extends TestCase
     }
 
     /**
+     * The one release that cannot measure. Rendering a full-band
+     * dashboard/overlay frame nulls Tui\Renderer::$lastDockFrame; if the
+     * pointer is mid-divider-drag when that happens, the release lands with no
+     * band to re-state against, so `previewColumnResize` hands back the model
+     * untouched and persisting would freeze the last previewed width as a
+     * manifest for nothing. The release path skips the write when the frame is
+     * gone (a FRAME-PRESENCE test — the ordinary commit also returns the model
+     * by identity, so object identity could not distinguish them).
+     */
+    public function testAModeSwitchMidDragNullsTheFrameAndTheReleasePersistsNothing(): void
+    {
+        $app = $this->app();
+        $this->render($app);
+
+        $divider = $this->dividerZone('left');
+
+        [$app] = $app->update($this->press($divider->startCol, $divider->startRow));
+        [$app] = $app->update($this->motion($divider->startCol + 12, $divider->startRow));
+
+        // The preview genuinely moved the model (anti-vacuity: without a real
+        // preview the skip would prove nothing) and a frame existed to measure
+        // it against.
+        self::assertNotSame(
+            ['num' => 1, 'denom' => 3],
+            $app->dock()->columnShare(Side::Left),
+            'fixture: the motion previewed a real width change',
+        );
+        self::assertNotNull(TuiRenderer::lastDockFrame(), 'fixture: a dock band frame is live before the mode switch');
+
+        // Simulate the mode switch: a dashboard frame renders and drops the
+        // dock frame, exactly as Tui\Renderer's dashboard tail does.
+        (new \ReflectionProperty(TuiRenderer::class, 'lastDockFrame'))->setValue(null, null);
+
+        [$app] = $app->update($this->release($divider->startCol + 12, $divider->startRow));
+
+        self::assertSame([], $this->manifests, 'an unmeasurable release must not write a manifest');
+        self::assertTrue(App::paneDragController()->isIdle(), 'the gesture still ends idle');
+    }
+
+    /**
      * Step 0 (b2), pinned empirically: candy-core's Program repaints from its
      * periodic timer, so a motion event that mutates the dock is VISIBLE on
      * the very next frame with no extra signal — the live preview needs no
@@ -367,6 +407,104 @@ final class PaneDragIntegrationTest extends TestCase
 
         [$app] = $app->update(new DockPaneMsg('right', 'skills'));
         self::assertContainsSlot($app, Side::Right, 'skills');
+    }
+
+    /**
+     * `toggle` command twin: a docked pane (Tools on Left here) frees from
+     * the slot it holds, and the removal persists exactly once.
+     */
+    public function testTheToggleMessageUndocksADockedPaneAndPersistsOnce(): void
+    {
+        $app = $this->app();
+        self::assertContainsSlot($app, Side::Left, 'tools');
+
+        [$app] = $app->update(new DockPaneMsg('toggle', 'tools'));
+
+        self::assertSame(['files'], self::slotIds($app, Side::Left), 'only the untouched sibling survives on Left');
+        self::assertCount(1, $this->manifests, 'the undock commits exactly once');
+        self::assertStringContainsString('undocked', (string) $app->status);
+    }
+
+    /**
+     * The other half of `toggle`: a dockable pane with no slot lands on its
+     * HOME side (Agents → Right), never an arbitrary one.
+     */
+    public function testTheToggleMessageDocksAnUndockedPaneOntoItsHomeSide(): void
+    {
+        $app = $this->app();
+        self::assertNotContains('agents', self::slotIds($app, Side::Right), 'fixture: agents is dockable but free');
+
+        [$app] = $app->update(new DockPaneMsg('toggle', 'agents'));
+
+        self::assertContainsSlot($app, Side::Right, 'agents');
+        self::assertCount(1, $this->manifests);
+        self::assertStringContainsString('docked', (string) $app->status);
+    }
+
+    /**
+     * No name follows the focused pane (Tools → undock), and a non-dockable
+     * name is refused in words — the same subject rules the dock arms obey.
+     */
+    public function testTheToggleMessageFollowsTheFocusedPaneAndRejectsNonDockableNames(): void
+    {
+        $app = $this->app()->withPane(Pane::Tools);
+        [$app] = $app->update(new DockPaneMsg('toggle'));
+        self::assertSame(['files'], self::slotIds($app, Side::Left), 'the focused docked pane was freed');
+
+        [$app] = $app->update(new DockPaneMsg('toggle', 'chat'));
+        self::assertStringContainsString('not a dockable pane', (string) $app->error);
+    }
+
+    /**
+     * The Chat text layer that routes `/pane …` into the App command above —
+     * proven here (reflection over the private handler) because no drag or
+     * App-level test reaches the parser. Accepted spellings must carry the
+     * right verb and name; a malformed verb is answered with usage and NO
+     * command at all (nothing reaches the model).
+     */
+    public function testThePaneParserRoutesToggleAndDockVerbsToTheShellMessage(): void
+    {
+        $parse = new \ReflectionMethod(Chat::class, 'handlePaneCommand');
+        $chat = new Chat(backend: new \SugarCraft\Crush\Backend\EchoBackend());
+
+        [$next, $cmd] = $parse->invoke($chat, '/pane toggle files');
+        self::assertNotNullCmd($cmd, '/pane toggle files');
+        $msg = $cmd();
+        self::assertInstanceOf(DockPaneMsg::class, $msg);
+        self::assertSame('toggle', $msg->action);
+        self::assertSame('files', $msg->paneName);
+        self::assertSame('', $next->inputBuf, 'the buffer clears on a routed command');
+
+        [, $cmd] = $parse->invoke($chat, '/pane toggle');
+        self::assertNotNull($cmd, 'a bare /pane toggle (focused pane) is still a command');
+        self::assertNull((self::msgOf($cmd))->paneName, 'no name means the focused pane travels as null');
+        self::assertSame('toggle', (self::msgOf($cmd))->action);
+
+        [, $cmd] = $parse->invoke($chat, '/pane dock left tools');
+        self::assertSame('left', (self::msgOf($cmd))->action);
+        self::assertSame('tools', (self::msgOf($cmd))->paneName);
+
+        [, $cmd] = $parse->invoke($chat, '/pane sideways');
+        self::assertNull($cmd, 'an unknown verb is usage-only, never a model prompt');
+    }
+
+    /**
+     * @param ?\Closure $cmd
+     */
+    private static function assertNotNullCmd(?\Closure $cmd, string $text): void
+    {
+        self::assertNotNull($cmd, "{$text} must emit a command");
+    }
+
+    /**
+     * @param \Closure():object $cmd
+     */
+    private static function msgOf(\Closure $cmd): DockPaneMsg
+    {
+        $msg = $cmd();
+        self::assertInstanceOf(DockPaneMsg::class, $msg);
+
+        return $msg;
     }
 
     public function testTheLayoutResetMessageRestoresTheDefaultManifest(): void
