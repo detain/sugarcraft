@@ -567,13 +567,16 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         // Dock click targets, phase 2+3 (dividers stamped by phase 2, pane
-        // headers consumed by the phase-3 gesture). Only STACKED sides paint
-        // a divider column and gap rows, so only they contribute divider
-        // zones: a legacy one-pane side keeps today's byte-identical flush
-        // frame, and its box border stays just a border. Headers are the
-        // drag phase's press targets and stamp for any DOCKED pane, single
-        // or stacked. The marked rows are scanner scratch and never join the
-        // frame, mirroring the menu bar's marked/plain pair.
+        // headers consumed by the phase-3 gesture). Every occupied side
+        // contributes divider zones, so every side is grabbable: a stacked
+        // side grabs on its painted divider column and gap rows, while a
+        // single-pane side grabs on the boundary cell its box border already
+        // paints (Fix 2). The stackdiv gap seams stay stacked-only — a
+        // documented no-op for a lone pane. Neither shape changes frame
+        // bytes. Headers are the drag phase's press targets and stamp for
+        // any DOCKED pane, single or stacked. The marked rows are scanner
+        // scratch and never join the frame, mirroring the menu bar's
+        // marked/plain pair.
         $dockRows = [];
         if (Chat::mouseClicksEnabled()
             && ($leftMeta !== null || $rightMeta !== null || $leftHeaders !== [] || $rightHeaders !== [])) {
