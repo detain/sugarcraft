@@ -5830,6 +5830,37 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertContains('maxOutputTokens', $withoutEnv[1], 'the E707 ceiling is config-only on purpose (no env hatch) — if that ever changes, move the name AND re-read the tier argument on LayeredSettings::LAYERED_KEYS');
     }
 
+    /**
+     * Pane-docking L3 fix round (REVIEW-L3 MAJOR-1): TROUBLESHOOTING.md's
+     * walk-cap bullet restates BOTH SkillLoader bounds in one breath, and it
+     * is the cross-page copy the SKILLS.md arm cannot see — it rotted the
+     * moment MAX_DEPTH moved 6 to 7 while only the SKILLS page was edited.
+     * From here a constant move must flip the two pages together or redden
+     * two arms, never silently lie on the third surface a reader reaches for
+     * when a skill refuses to load.
+     */
+    public function testTroubleshootingWalkCapBulletReadsBothLoaderBounds(): void
+    {
+        $prose = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md'));
+        $loader = new \ReflectionClass(SkillLoader::class);
+
+        self::assertSame(
+            1,
+            preg_match('/The walk hit a cap\.\*\* Depth (\d+), or (\d+) directories/', $prose, $caps),
+            'the walk-cap bullet no longer states the depth and breadth caps in the pinned breath — re-establish this pin with the new wording, do not delete it',
+        );
+        self::assertSame(
+            (int) $loader->getConstant('MAX_DEPTH'),
+            (int) $caps[1],
+            'TROUBLESHOOTING.md still names the old depth cap — SKILLS.md and this page quote the same constant; flip both in the commit that moves MAX_DEPTH',
+        );
+        self::assertSame(
+            (int) $loader->getConstant('MAX_DIRECTORIES'),
+            (int) $caps[2],
+            'TROUBLESHOOTING.md still names the old breadth cap — SKILLS.md and this page quote the same constant; flip both in the commit that moves MAX_DIRECTORIES',
+        );
+    }
+
     private static function sourceOf(string $relative): string
     {
         $text = file_get_contents(\dirname(__DIR__, 2) . '/src/' . $relative);

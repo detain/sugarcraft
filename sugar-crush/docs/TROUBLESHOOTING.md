@@ -102,7 +102,7 @@ Then work down this list:
 4. **The foreign user tier is gone.** If `$HOME` is unresolvable,
    world-writable, or owned by somebody else, `~/.claude/skills` and
    `~/.config/opencode/skills` are dropped entirely — project trees survive.
-5. **The walk hit a cap.** Depth 6, or 2000 directories. A `skills/x -> /usr/share`
+5. **The walk hit a cap.** Depth 7, or 2000 directories. A `skills/x -> /usr/share`
    link cost 8.29s on one measured launch, which is why the caps exist.
 6. **A name collision.** Native always beats foreign; within the native tiers,
    project beats user beats built-in.
