@@ -1479,12 +1479,16 @@ final class App implements Model
     /**
      * Act on a completed click on a chrome zone.
      *
-     * Both arms route into the keyboard's own entry points rather than a
-     * parallel mouse path: a title click is {@see MenuBar::openMenu()}, the
-     * toggle F10 already calls, and a row click is
-     * {@see MenuBar::selectItem()}, which moves the same cursor the arrows
-     * move and returns the same {@see MenuSelectedMsg} Enter produces — so it
-     * is handed to {@see consumeShellCmd()}, the one place that runs it.
+     * Every arm routes into the keyboard's or the dock's own entry point
+     * rather than a parallel mouse path: a title click is
+     * {@see MenuBar::openMenu()}, the toggle F10 already calls, and a row
+     * click is {@see MenuBar::selectItem()}, which moves the same cursor the
+     * arrows move and returns the same {@see MenuSelectedMsg} Enter produces
+     * — so it is handed to {@see consumeShellCmd()}, the one place that runs
+     * it. A pane-header click is the same `withPane` selection the
+     * `tab`/`shift+tab` cycle makes, and a menu-bar pane-tab click is the
+     * same {@see togglePaneDocking()} the `/pane dock` command calls (see
+     * the arm comments for each rule's focus semantics).
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -1517,6 +1521,31 @@ final class App implements Model
             }
 
             return [$this, null];
+        }
+
+        // A completed click on a menu-bar pane-tab label toggles that pane's
+        // docked visibility (docking L2): through togglePaneDocking — the ONE
+        // entry point already carrying the seed-shares first-mutation rule
+        // and the persist-once law — so a click and a `/pane dock` command
+        // are indistinguishable downstream. Docking focuses the pane that
+        // just appeared (the eye is where the click was); undocking lets
+        // togglePaneDocking's own rule drop focus to Chat when the pane
+        // being sent away held it. Chat's tab never toggles: the center
+        // column is always visible, so its click is a pure focus move.
+        $paneTabs = MenuBar::PANE_TAB_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $paneTabs)) {
+            $pane = Pane::tryFrom(substr($zoneId, strlen($paneTabs)));
+
+            if ($pane === null || !$pane->dockable()) {
+                return $pane === Pane::Chat
+                    ? [$this->withPane(Pane::Chat), null]
+                    : [$this, null];
+            }
+
+            $wasDocked = $this->isDocked($pane);
+            $next = $this->togglePaneDocking($pane);
+
+            return [$wasDocked ? $next : $next->withPane($pane), null];
         }
 
         return [$this, null];

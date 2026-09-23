@@ -35,6 +35,15 @@ use SugarCraft\Mouse\Zone;
  * keeps its live status (never-remove rule: dormant rows keep their rows,
  * but here the row is genuinely live, only its DESCRIPTION was overclaiming
  * "Focus that pane"; it now reads what the drift test observes).
+ *
+ * ERRATUM (docking L2): the door this test asked for has now landed, as a
+ * new fixture — {@see \SugarCraft\Crush\Tests\App\MenuBarPaneTabClickTest} —
+ * so "the pane tabs paint without a zone" and "NO mouse path changes
+ * `App::$pane`" above describe round-65, not this tree: a menu-bar pane-tab
+ * click now carries a `panetab:` zone and moves focus (and docking). What
+ * stays true, and what the assertions below still police, is that the door
+ * routes through `withPane`/`togglePaneDocking` directly and `SelectPaneMsg`
+ * remains a consumer-without-producer in `src/`.
  */
 final class MousePaneJumpDoesNotHandOverTest extends TestCase
 {
