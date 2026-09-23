@@ -110,8 +110,12 @@ final class DockDividerZoneTest extends TestCase
         // Same row, a few cells into the chat column: a click there belongs
         // to the chat, never to the divider.
         self::assertNull(TuiRenderer::chromeScanner()->hit($first->startCol + 4, $first->startRow));
-        // Same row, inside the Files box: just a border/content cell.
-        self::assertNull(TuiRenderer::chromeScanner()->hit($first->startCol - 4, $first->startRow));
+        // One row BELOW the band top, inside the Files box: a plain content
+        // cell. (The band's TOP row is no longer empty inside the box — phase
+        // 3 stamps the docked pane's header there as the drag press target —
+        // so the "divider column is one cell wide" probe must step off that
+        // row, not sit on it.)
+        self::assertNull(TuiRenderer::chromeScanner()->hit($first->startCol - 4, $first->startRow + 1));
     }
 
     public function testTheGapRowCarriesTheWholeWidthStackDivZoneAndNoDividerZone(): void

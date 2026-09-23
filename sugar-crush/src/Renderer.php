@@ -628,6 +628,32 @@ final class Renderer
     }
 
     /**
+     * The marked header row of a docked pane: `pane:<paneId>` across the
+     * side block's width — the dock-drag gesture's press target. Same
+     * degrade rules and one-zone-per-line invariant as
+     * {@see markDividerCell()}.
+     *
+     * The id carries no `:r<absRow>` suffix because the whole strip is ONE
+     * press target (unlike a divider, whose every row is its own resize
+     * handle), and one zone per pane keeps {@see PANE_ZONE_PREFIX} meaning
+     * exactly one thing everywhere it is stamped: "the header of pane X".
+     */
+    public static function markDockedPaneHeader(string $paneId, int $absRow, int $frameRows, int $width): string
+    {
+        $id = self::PANE_ZONE_PREFIX . $paneId;
+
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1) {
+            return str_repeat(' ', max(0, $width));
+        }
+
+        if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
+            return str_repeat(' ', $width);
+        }
+
+        return Mark::zone($id, str_repeat(' ', $width));
+    }
+
+    /**
      * The zone-id charset {@see Mark::wrap()} accepts, duplicated here
      * because Mark's own copy is private and it THROWS on a violation.
      * Session ids arrive from disk (`SessionStore::listSessions()`), so an id
