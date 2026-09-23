@@ -417,6 +417,67 @@ final class App implements Model
         return DockLayout::new('chat')->withSlotAdded(Side::Left, 'files');
     }
 
+    /**
+     * Whether a dock is byte-for-byte the untouched {@see defaultDock()} —
+     * same slots AND same design shares. The renderer's width rule keys on
+     * this (see {@see \SugarCraft\Crush\Tui\Renderer::sideWidth()}): while
+     * nothing has ever been docked or resized, the frame keeps the exact
+     * legacy quarter-measure it shipped with for a decade of snapshot pins.
+     */
+    public static function isUntouchedDefaultDock(DockLayout $dock): bool
+    {
+        return $dock->toArray() === self::defaultDock()->toArray();
+    }
+
+    /**
+     * Snapshot the frame the eye last saw into the dock's column shares,
+     * exactly once — at the moment the untouched default first acquires a
+     * side's worth of slots.
+     *
+     * The default dock carries the library's 1/3 design shares, but the
+     * shipped frame measures a sidebar as `max(20, floor(bandCols / 4))`.
+     * Those disagree for most widths (100 columns: 25 vs 33), so the FIRST
+     * user dock/undock mutation seeds each side that will carry slots after
+     * the mutation with the rational `(legacyWidth, bandCols)` — the frame
+     * therefore starts where it visually was and every later resize scales
+     * that proportion instead of snapping back to a quarter or a third.
+     * A dock that is already non-default returns unchanged: seeding is a
+     * one-time hand-off from the legacy measure, never a re-snapshot on
+     * top of sizes the user has chosen.
+     *
+     * The write goes through the manifest parse rather than
+     * {@see DockLayout::withColumnShare()} on purpose: withColumnShare
+     * clamps the pair to 1/2 against the UNTOUCHED 1/3 sibling, which would
+     * squash a 1/4 snapshot to 1/6 — a snapshot of drawn width is a
+     * measurement, not the tightening request the clamp exists to police,
+     * and the manifest path (the restore path, where exact carried values
+     * are law) preserves the rational. Two seeded sides at 1/4 + 1/4 still
+     * honour the 1/2 pair rule.
+     *
+     * `$bandCols` arrives as the App's last-known terminal width — before
+     * the first `WindowSizeMsg` there is no measured frame to preserve, so
+     * `0` (null cols) seeds nothing. The renderer's agent-split band can be
+     * narrower than that whole width; the seeded value is a PROPORTION, so
+     * the difference is one divider column's worth of scale, never a jump.
+     */
+    public static function seedSharesFromFrame(DockLayout $dock, int $bandCols, ?Side $docksInto = null): DockLayout
+    {
+        if ($bandCols < 1 || !self::isUntouchedDefaultDock($dock)) {
+            return $dock;
+        }
+
+        $share = [max(20, intdiv($bandCols, 4)), $bandCols];
+        $manifest = $dock->toArray();
+
+        foreach (Side::cases() as $side) {
+            if ($dock->slots($side) !== [] || $side === $docksInto) {
+                $manifest['columnShare'][$side === Side::Left ? 'left' : 'right'] = $share;
+            }
+        }
+
+        return DockLayout::fromArray($manifest);
+    }
+
     public function withDock(?DockLayout $v): self
     {
         return $this->mutate(dock: $v);
@@ -439,6 +500,8 @@ final class App implements Model
      *
      * Persists through {@see $onLayoutChange} like every other mutation
      * entry point here — see {@see togglePaneDocking()} for why that is safe.
+     * Seeds the drawn frame's sizes into otherwise-untouched default shares
+     * on the way out — see {@see seedSharesFromFrame()}.
      */
     public function setPaneSide(Pane $pane, Side $side): self
     {
@@ -448,7 +511,7 @@ final class App implements Model
             );
         }
 
-        $dock = $this->dock();
+        $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
         $next = $this->dockIsOccupied($dock, $pane)
             ? $dock->withSlotMovedTo($pane->value, $side)
             : $dock->withSlotAdded($side, $pane->value);
@@ -472,9 +535,8 @@ final class App implements Model
             );
         }
 
-        $dock = $this->dock();
-
-        if ($this->dockIsOccupied($dock, $pane)) {
+        if ($this->dockIsOccupied($this->dock(), $pane)) {
+            $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0);
             $next = $dock->withSlotRemoved($pane->value);
 
             return $this->persistDock($this->mutate(
@@ -485,6 +547,8 @@ final class App implements Model
 
         $side = $pane->dockSide();
         assert($side !== null); // guarded by dockable() above
+
+        $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
 
         return $this->persistDock($this->mutate(dock: $dock->withSlotAdded($side, $pane->value)));
     }
@@ -532,7 +596,10 @@ final class App implements Model
     {
         $hook = $next->onLayoutChange;
         if ($hook !== null) {
-            $hook->call($next, $next->dock()->toArray());
+            // __invoke, not call(): Bootstrap wires a STATIC closure, and an
+            // attempted rebind of a static closure is a silently-skipped
+            // warning, not a call — the persistence would never fire.
+            $hook->__invoke($next->dock()->toArray());
         }
 
         return $next;

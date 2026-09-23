@@ -956,14 +956,19 @@ final class Renderer
      *
      * ## The width question, settled deliberately
      *
-     * {@see DockLayout::resolve()} would give the side its configured 1/3
-     * column share, but the shipped frame has always measured the sidebar as
-     * `max(20, floor(bandCols/4))`, and byte-identity of the default frame is
-     * a hard requirement (snapshot tests pin it). 1/3 and 1/4 disagree for
-     * many widths (100 columns: 25 vs 24), so the side width stays the
-     * legacy quarter-measure — the documented post-resolve clamp the design
-     * phase allowed — and `resolve()` is consumed for what only it can
-     * produce: the per-slot HEIGHTS of a vertical stack.
+     * Two regimes, joined by one invariant — see
+     * {@see sideWidth()} for the rule itself. While the dock is the
+     * UNTOUCHED {@see App::defaultDock()} the side keeps the legacy
+     * `max(20, floor(bandCols/4))` measure the shipped frame has always
+     * used, because byte-identity of the default frame is a hard
+     * requirement (the round-89 goldens constraint). The moment the user's
+     * first dock mutation hands the shares real pixels
+     * ({@see App::seedSharesFromFrame()}), the side width comes from
+     * {@see DockLayout::resolve()} instead — so resizing scales the panes
+     * proportionally at the size the eye last saw rather than snapping a
+     * seeded frame back to a fixed quarter. resolve() is additionally the
+     * sole source for the per-slot HEIGHTS of a vertical stack, which only
+     * it can produce.
      *
      * ## Two shapes
      *
@@ -987,7 +992,7 @@ final class Renderer
             return ['', null];
         }
 
-        $width = max(20, (int) floor($cols / 4));
+        $width = self::sideWidth($a, $panes[0], $cols, $rows);
 
         if (count($panes) === 1) {
             return [self::renderPane($a, $panes[0], $width, $rows), null];
@@ -995,33 +1000,85 @@ final class Renderer
 
         $heights = self::stackHeights($a, $panes, $cols, $rows);
         $blocks = [];
+
+        foreach ($panes as $i => $pane) {
+            $blocks[] = self::renderPane($a, $pane, $width, max(1, $heights[$i]));
+        }
+
+        // Pane widgets paint their own box chrome, so a rendered block can be
+        // a few columns wider than the requested content `$width`. The gap
+        // rule and the divider column must follow the PAINTED extent: sizing
+        // them from the request left the `\u{2502}` jittering several cells
+        // sideways between box rows and gap rows, and put the stamped click
+        // zones beside the divider instead of on it.
+        $painted = $width;
+        foreach ($blocks as $block) {
+            $painted = max($painted, self::blockWidth($block));
+        }
+
+        $stacked = [];
         $gaps = [];
         $row = 0;
 
-        foreach ($panes as $i => $pane) {
+        foreach ($blocks as $i => $block) {
             if ($i > 0) {
                 $gaps[] = ['row' => $row, 'slotIndex' => $i - 1];
-                $blocks[] = str_repeat(SplitDirection::Horizontal->divider(), $width);
+                $stacked[] = str_repeat(SplitDirection::Horizontal->divider(), $painted);
                 $row++;
             }
 
-            $block = self::renderPane($a, $pane, $width, max(1, $heights[$i]));
-            $blocks[] = $block;
+            $stacked[] = $block;
             $row += self::lineCount($block);
         }
 
-        $lines = explode("\n", implode("\n", $blocks));
+        $lines = explode("\n", implode("\n", $stacked));
         $divider = SplitDirection::Vertical->divider();
 
         if ($side === Side::Left) {
             $block = implode("\n", array_map(static fn (string $l): string => $l . $divider, $lines));
 
-            return [$block, ['width' => $width, 'dividerColLocal' => $width, 'blockRows' => count($lines), 'gaps' => $gaps]];
+            return [$block, ['width' => $painted, 'dividerColLocal' => $painted, 'blockRows' => count($lines), 'gaps' => $gaps]];
         }
 
         $block = implode("\n", array_map(static fn (string $l): string => $divider . $l, $lines));
 
-        return [$block, ['width' => $width, 'dividerColLocal' => 0, 'blockRows' => count($lines), 'gaps' => $gaps]];
+        return [$block, ['width' => $painted, 'dividerColLocal' => 0, 'blockRows' => count($lines), 'gaps' => $gaps]];
+    }
+
+    /**
+     * Columns the side paints into.
+     *
+     * The default frame must stay byte-identical to the pre-docking shipped
+     * frame — that is a goldens constraint, not a preference — while a dock
+     * the user has mutated has to honour real, resizable widths. Hence two
+     * regimes:
+     *
+     *  - Untouched {@see App::defaultDock()} → the legacy
+     *    `max(20, floor(bandCols/4))`, to the cell. This covers stacked
+     *    DEFAULT frames too (a transient focus on Tools stacks two boxes at
+     *    the same legacy width), so no frame anyone has never docked into
+     *    shifts a pixel.
+     *  - Any other dock → the side's width from
+     *    {@see DockLayout::resolve()} output: {@see App::seedSharesFromFrame()}
+     *    planted the legacy measurement into the column shares at the first
+     *    mutation, so those shares carry real pixels and scale with every
+     *    later resize.
+     *  - Resolve answers with no region for the first pane (the degradation
+     *    ladder dropped this side at this frame size, or the pane is only
+     *    TRANSIENTLY focused on an otherwise-empty side, whose share was
+     *    never seeded because seeding runs at dock mutations, not at focus) →
+     *    fall back to the legacy measure. Something has to width the box;
+     *    the number the frame always used is the honest answer.
+     */
+    private static function sideWidth(App $a, Pane $firstPane, int $cols, int $rows): int
+    {
+        $legacy = max(20, (int) floor($cols / 4));
+
+        if (App::isUntouchedDefaultDock($a->dock())) {
+            return $legacy;
+        }
+
+        return $a->dock()->resolve(new Region(0, 0, $cols, $rows))->regionFor($firstPane->value)?->width ?? $legacy;
     }
 
     /**
