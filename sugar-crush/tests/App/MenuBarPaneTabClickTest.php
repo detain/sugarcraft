@@ -239,6 +239,46 @@ final class MenuBarPaneTabClickTest extends TestCase
         return $app;
     }
 
+    /**
+     * L3 MINOR-fold (review r-L2): the `panetab:` arm of
+     * {@see App::dispatchChromeClick()} must SHRUG at a zone id whose suffix
+     * is not a pane at all — a forged `panetab:nope` (which no painted bar
+     * can emit, but a stale tracker or a hostile marker row could feed the
+     * door) has to fall through: same instance back, no command, no focus
+     * move, no docking toggle, nothing persisted, nothing thrown.
+     */
+    public function testAForgedPaneTabSuffixFallsThroughWithoutTouchingAnything(): void
+    {
+        $app = $this->app()->withPane(Pane::Files);
+        $dock = $app->dock()->toArray();
+
+        [$next, $cmd] = $this->forgeChromeClick($app, 'panetab:nope');
+
+        self::assertSame($app, $next, 'fall-through hands back the identical instance');
+        self::assertNull($cmd);
+        self::assertSame(Pane::Files, $next->pane, 'focus unchanged');
+        self::assertSame($dock, $next->dock()->toArray(), 'dock unchanged');
+        self::assertCount(0, $this->manifests, 'a forged zone id never persists');
+
+        // The empty-suffix spelling rides the same tryFrom(null) door.
+        [, $cmd] = $this->forgeChromeClick($app, MenuBar::PANE_TAB_ZONE_PREFIX);
+        self::assertNull($cmd);
+        self::assertCount(0, $this->manifests);
+    }
+
+    /**
+     * Drive the private door with a zone id the scanner can never paint.
+     * Reflection is deliberate: every LIVE press resolves its id through the
+     * painted zones, so a forgery has no coordinate to click at.
+     */
+    private function forgeChromeClick(App $app, string $zoneId): array
+    {
+        $door = new \ReflectionMethod(App::class, 'dispatchChromeClick');
+
+        /** @var array{0: App, 1: null} */
+        return $door->invoke($app, $zoneId);
+    }
+
     private function resetChromeTracker(): void
     {
         (new \ReflectionProperty(App::class, 'chromeClickTracker'))->setValue(null, null);
