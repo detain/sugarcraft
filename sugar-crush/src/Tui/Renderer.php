@@ -1035,20 +1035,20 @@ final class Renderer
      *
      * ## Two shapes
      *
-      * One pane on the side renders exactly as today's sidebar did: one block,
-      * joined flush against the chat, no divider COLUMN. Two or more stack
-      * vertically at the resolved heights with a one-row `\u{2500}` gap
-      * between slots and an explicit one-column `\u{2502}` divider between
-      * the stack and the chat column — SplitLayout's own divider glyphs, the
-      * same pair {@see \SugarCraft\Crush\Tui\SplitLayout} composes with.
-      * Both shapes carry divider CLICK metadata (Fix 2): a single-pane side
-      * stamps a per-row `divider:<side>:r<row>` zone on the boundary cell its
-      * own box border already paints, so the default one-pane-per-side layout
-      * is resizable. Because a legacy side gains no painted column, its frame
-      * stays byte-identical — the zones ride scanner-scratch rows that never
-      * join the frame — but a lone side is no longer the un-grabbable seam the
-      * Phase-3 cut left it.
-      *
+     * One pane on the side renders exactly as today's sidebar did: one block,
+     * joined flush against the chat, no divider COLUMN. Two or more stack
+     * vertically at the resolved heights with a one-row `\u{2500}` gap
+     * between slots and an explicit one-column `\u{2502}` divider between
+     * the stack and the chat column — SplitLayout's own divider glyphs, the
+     * same pair {@see \SugarCraft\Crush\Tui\SplitLayout} composes with.
+     * Both shapes carry divider CLICK metadata (Fix 2): a single-pane side
+     * stamps a per-row `divider:<side>:r<row>` zone on the boundary cell its
+     * own box border already paints, so the default one-pane-per-side layout
+     * is resizable. Because a legacy side gains no painted column, its frame
+     * stays byte-identical — the zones ride scanner-scratch rows that never
+     * join the frame — but a lone side is no longer the un-grabbable seam the
+     * Phase-3 cut left it.
+     *
      * @return array{0: string, 1: ?array{width: int, dividerColLocal: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>}, 2: list<array{paneId: string, row: int, from: int, to: int}>}
      */
     private static function renderSide(App $a, Side $side, int $cols, int $rows): array
