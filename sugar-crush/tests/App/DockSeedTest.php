@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\App;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Providers\ProviderInterface;
@@ -210,7 +211,7 @@ final class DockSeedTest extends TestCase
 
     private static function sideWidth(App $app, Pane $pane, int $cols): int
     {
-        return (new \ReflectionMethod(TuiRenderer::class, 'sideWidth'))->invoke(null, $app, $pane, $cols, 40);
+        return (new ReflectionMethod(TuiRenderer::class, 'sideWidth'))->invoke(null, $app, $pane, $cols, 40);
     }
 
     private static function assertContainsPaneId(string $paneId, App $app): void

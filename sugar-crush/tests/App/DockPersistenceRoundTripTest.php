@@ -131,7 +131,9 @@ final class DockPersistenceRoundTripTest extends TestCase
     private function writeRawLayout(mixed $stored): void
     {
         $path = Bootstrap::userConfigPath();
-        mkdir(dirname($path), 0700, true);
+        if (!is_dir(dirname($path))) {
+            mkdir(dirname($path), 0700, true);
+        }
         file_put_contents($path, (string) json_encode(['layout' => $stored]));
     }
 
