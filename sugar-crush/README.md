@@ -1161,11 +1161,13 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,061 tests / 170,837 assertions, 0 failures, 1 skipped** — the whole of
+**12,102 tests / 171,186 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-13m57s. Measured 2026-09-21, re-pinned when the three `WebSearch` tests that
-had been asserting against a live SearXNG endpoint were made hermetic: the day
+14m46s. Measured 2026-09-22, re-pinned when the pane-docking visual layer landed
+its five `Dock*` suites: +41 tests and +349 assertions over 12,061/170,837. The
+re-pin before that: the three `WebSearch` tests that had been asserting against a
+live SearXNG endpoint were made hermetic — the day
 the endpoint stopped answering they took `Test PHP 8.3 · sugar-crush`,
 `… 8.4` and `Coverage · sugar-crush` red, which is a decoder of that host's
 uptime and not of this suite. Stubbing the tool's one network call moved zero
