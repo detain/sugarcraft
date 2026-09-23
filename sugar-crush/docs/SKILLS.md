@@ -339,7 +339,7 @@ walk is bounded in four separate ways (`SkillLoader::skillFilesIn()`):
   user tree's may reach anywhere under `$HOME`. The *directory itself* is also
   anchored, so a committed `.sugar-crush/skills -> /elsewhere` is refused
   wholesale and recorded on `SkillLoader::refusedDirectories()`.
-- **Depth is capped at 6** and **breadth at 2000 directories**, because one
+- **Depth is capped at 7** and **breadth at 2000 directories**, because one
   symlink can graft a tree of any size on. A real skills tree is two or three
   levels and tens of directories.
 - **The user tier of the *foreign* trees is dropped entirely** when

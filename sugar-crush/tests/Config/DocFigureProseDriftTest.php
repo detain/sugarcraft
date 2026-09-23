@@ -3277,7 +3277,7 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertSame((int) $walkCaps[1], (int) $loader->getConstant('MAX_DEPTH'), 'the page depth figure drifted from SkillLoader::MAX_DEPTH');
         self::assertSame((int) $walkCaps[2], (int) $loader->getConstant('MAX_DIRECTORIES'), 'the page breadth figure drifted from SkillLoader::MAX_DIRECTORIES');
-        self::assertSame(6, (int) $loader->getConstant('MAX_DEPTH'), 'MAX_DEPTH moved — the page still caps the walk at 6');
+        self::assertSame(7, (int) $loader->getConstant('MAX_DEPTH'), 'MAX_DEPTH moved — the page still caps the walk at 7');
         self::assertSame(2000, (int) $loader->getConstant('MAX_DIRECTORIES'), 'MAX_DIRECTORIES moved — the page still caps breadth at 2000');
 
         $tiersBody = self::bodyExcerpt(self::sourceOf('Skills/ForeignSkillDiscovery.php'), 'tiers');

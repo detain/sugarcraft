@@ -174,7 +174,7 @@ final class SkillLoader
      * single symlink can graft a tree of ANY depth on: without it, a link to a
      * large directory turned a launch into a full recursive stat of it.
      */
-    private const MAX_DEPTH = 6;
+    private const MAX_DEPTH = 7;
 
     /**
      * How many directories one walk will visit before it stops descending.

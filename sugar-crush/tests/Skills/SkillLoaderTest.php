@@ -1116,6 +1116,15 @@ SKILL
         mkdir($deep, 0777, true);
         file_put_contents($deep . '/SKILL.md', "---\ndescription: Too deep\n---\n\nBody.");
 
+        // The deepest directory the walk still enters sits exactly AT
+        // MAX_DEPTH's ceiling — level 7 under MAX_DEPTH = 7 (see
+        // SkillLoader::MAX_DEPTH): a directory at level L is walked only
+        // while L <= MAX_DEPTH, so the level-8 `too-deep` marker above is
+        // the first refusal. Pinning the level-7 marker as FOUND makes this
+        // test discriminate the cap value itself, in both directions, not
+        // just "something very deep is refused".
+        file_put_contents(dirname($deep) . '/SKILL.md', "---\ndescription: At the cap\n---\n\nBody.");
+
         $shallow = $skills . '/reachable';
         mkdir($shallow, 0777, true);
         file_put_contents($shallow . '/SKILL.md', "---\ndescription: Fine\n---\n\nBody.");
@@ -1123,6 +1132,7 @@ SKILL
         $result = $loader->loadFromDirectory($skills);
 
         $this->assertArrayHasKey('reachable', $result);
+        $this->assertArrayHasKey('a/b/c/d/e/f/g', $result);
         $this->assertArrayNotHasKey('a/b/c/d/e/f/g/too-deep', $result);
         $this->assertNotSame([], $loader->skipped());
     }
