@@ -39,9 +39,9 @@ use SugarCraft\Mouse\Zone;
  */
 final class MenuBarPaneTabClickTest extends TestCase
 {
-    private const COLS = 120;
+    private const FRAME_COLS = 120;
 
-    private const ROWS = 40;
+    private const FRAME_ROWS = 40;
 
     private ProviderInterface $provider;
 
@@ -168,7 +168,7 @@ final class MenuBarPaneTabClickTest extends TestCase
         self::assertNotNull($frame, 'fixture: the cast frame published its dock geometry');
         self::assertSame(0, $frame['centerFrom']);
         self::assertSame($frame['bandCols'] - 1, $frame['centerTo'], 'centre owns the whole band');
-        self::assertSame(self::COLS, $frame['bandCols'], 'no divider columns remain');
+        self::assertSame(self::FRAME_COLS, $frame['bandCols'], 'no divider columns remain');
     }
 
     public function testSeedSharesRuleRidesTheClickPathUnchanged(): void
@@ -189,7 +189,7 @@ final class MenuBarPaneTabClickTest extends TestCase
 
         $share = $app->dock()->columnShare(Side::Left);
         self::assertSame(
-            [max(20, intdiv(self::COLS, 4)), self::COLS],
+            [max(20, intdiv(self::FRAME_COLS, 4)), self::FRAME_COLS],
             [$share['num'], $share['denom']],
             'the click seeded the last-known window width, exactly once',
         );
@@ -221,7 +221,7 @@ final class MenuBarPaneTabClickTest extends TestCase
 
     private function render(App $app): string
     {
-        return TuiRenderer::renderView($app, self::COLS, self::ROWS)->body;
+        return TuiRenderer::renderView($app, self::FRAME_COLS, self::FRAME_ROWS)->body;
     }
 
     private function app(): App
@@ -234,7 +234,7 @@ final class MenuBarPaneTabClickTest extends TestCase
             ->withOnLayoutChange(function (array $manifest): void {
                 $this->manifests[] = $manifest;
             })
-            ->update(new WindowSizeMsg(self::COLS, self::ROWS));
+            ->update(new WindowSizeMsg(self::FRAME_COLS, self::FRAME_ROWS));
 
         return $app;
     }
