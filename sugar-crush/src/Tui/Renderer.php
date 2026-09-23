@@ -1232,7 +1232,13 @@ final class Renderer
 
             if (isset($gapRows[$r])) {
                 $from = $startX;
-                $to = min($startX + $meta['width'], $cols);
+                // Harmonised one rule for both sides (round-1 review): every
+                // stacked gap row paints width+1 cells from $startX — the
+                // ─ run plus its divider cell, trailing on the left and
+                // leading on the right — so the zone crosses the whole row,
+                // which is exactly the docblock's promise that a drag on an
+                // ambiguous divider cell belongs to the gap it crosses.
+                $to = min($startX + $meta['width'] + 1, $cols);
                 if ($to > $from) {
                     $rows[$absRow] = [
                         [$from, $to, LiveRenderer::markStackGapRow($sideValue, $gapRows[$r], $absRow, $frameRows, $to - $from)],

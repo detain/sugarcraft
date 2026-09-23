@@ -437,10 +437,14 @@ final class App implements Model
      * The default dock carries the library's 1/3 design shares, but the
      * shipped frame measures a sidebar as `max(20, floor(bandCols / 4))`.
      * Those disagree for most widths (100 columns: 25 vs 33), so the FIRST
-     * user dock/undock mutation seeds each side that will carry slots after
-     * the mutation with the rational `(legacyWidth, bandCols)` — the frame
-     * therefore starts where it visually was and every later resize scales
-     * that proportion instead of snapping back to a quarter or a third.
+     * user dock/undock mutation seeds each side that carries slots at the
+     * mutation or is the docking target with the rational `(legacyWidth,
+     * bandCols)` — the frame therefore starts where it visually was and
+     * every later resize scales that proportion instead of snapping back to
+     * a quarter or a third. A side being stripped keeps its snapshot because
+     * a later re-add scales it (DockSeedTest pins that toggle-off behaviour),
+     * and the carried share is render-inert meanwhile: resolve activates only
+     * sides that have slots (candy-layout DockLayout.php:370-375).
      * A dock that is already non-default returns unchanged: seeding is a
      * one-time hand-off from the legacy measure, never a re-snapshot on
      * top of sizes the user has chosen.
@@ -459,6 +463,11 @@ final class App implements Model
      * `0` (null cols) seeds nothing. The renderer's agent-split band can be
      * narrower than that whole width; the seeded value is a PROPORTION, so
      * the difference is one divider column's worth of scale, never a jump.
+     * FORWARD POINTER for the gesture phase: any divider drag must size
+     * against the LIVE bandCols the pointer lives in, re-evaluating this
+     * seeding under an active agent split — the ±divider-column delta is
+     * exactly where a whole-width measure would drift from the grabbed
+     * column.
      */
     public static function seedSharesFromFrame(DockLayout $dock, int $bandCols, ?Side $docksInto = null): DockLayout
     {

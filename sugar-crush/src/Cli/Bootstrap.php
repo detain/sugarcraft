@@ -18,7 +18,6 @@ use SugarCraft\Crush\Backend\StreamingCommandBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Commands\CommandLoader;
 use SugarCraft\Crush\Config\LayeredSettings;
-use SugarCraft\Layout\Dock\DockLayout;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
@@ -70,6 +69,7 @@ use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
 use SugarCraft\Crush\Workflows\WorkflowRegistry;
+use SugarCraft\Layout\Dock\DockLayout;
 
 /**
  * Wires up the CLI's shared, side-effecting collaborators: backend

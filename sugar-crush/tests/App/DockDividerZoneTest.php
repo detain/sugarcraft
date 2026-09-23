@@ -123,7 +123,7 @@ final class DockDividerZoneTest extends TestCase
 
         $gap = reset($stack);
         self::assertMatchesRegularExpression('/\Astackdiv:left:0:r\d+\z/', $gap->id, 'slotIndex is the slot ABOVE the gap');
-        self::assertSame(34, $gap->width(), 'the gap zone spans the PAINTED side — legacy 30 plus the widgets\' 4-column box chrome — so zones sit on the pixels, not beside them');
+        self::assertSame(35, $gap->width(), 'the gap zone spans the WHOLE painted row — legacy 30 plus the widgets\' 4-column box chrome plus the divider cell — the harmonised one-rule width both sides share');
 
         // The id names the 0-based FRAME row; the scanner stores the 1-based
         // terminal row mouse reports arrive in. Pinned, not assumed.
@@ -136,10 +136,11 @@ final class DockDividerZoneTest extends TestCase
             self::assertNotSame($divider->startRow, $gap->startRow);
         }
 
-        // And the painted row the id names is the ─ run itself, flush: exactly
-        // as many box-painting columns of rule, then the divider cell.
+        // And the painted row the id names is the ─ run followed by ITS
+        // divider cell — the zone now crosses the full row (round-1 review
+        // harmonisation), so width-1 columns of rule then the │.
         $frameLine = explode("\n", Ansi::strip($body))[$frameRow];
-        self::assertSame(str_repeat("\u{2500}", $gap->width()) . "\u{2502}", mb_substr($frameLine, 0, $gap->width() + 1));
+        self::assertSame(str_repeat("\u{2500}", $gap->width() - 1) . "\u{2502}", mb_substr($frameLine, 0, $gap->width()));
     }
 
     public function testTheStackedRightSideStampsItsOwnDividerZones(): void
@@ -160,7 +161,21 @@ final class DockDividerZoneTest extends TestCase
 
         self::assertSame([], $left, 'a single-pane left side adds no divider column');
         self::assertNotEmpty($right);
-        self::assertNotEmpty(TuiRenderer::chromeScanner()->prefixed(LiveRenderer::STACK_DIVIDER_ZONE_PREFIX . 'right:'));
+
+        // The harmonised rule mirrored on the right: the gap zone STARTS on
+        // its leading divider cell and crosses the full ─ run — painted+1
+        // cells, the same whole-row span the left side pins above.
+        $rightStack = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::STACK_DIVIDER_ZONE_PREFIX . 'right:');
+        self::assertCount(1, $rightStack);
+        $rightGap = reset($rightStack);
+        self::assertNotFalse($rightGap);
+        $rightFrameRow = (int) substr($rightGap->id, strrpos($rightGap->id, 'r') + 1);
+        $rightLine = explode("\n", $plain)[$rightFrameRow];
+        self::assertSame(
+            "\u{2502}" . str_repeat("\u{2500}", $rightGap->width() - 1),
+            mb_substr($rightLine, $rightGap->startCol - 1, $rightGap->width()),
+            'startCol is the 1-based divider cell; the zone spans rule+divider'
+        );
     }
 
     public function testClicksDisabledClearsEveryDividerZone(): void
