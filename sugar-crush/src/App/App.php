@@ -1039,6 +1039,17 @@ final class App implements Model
      */
     private static ?PaneDragController $paneDrag = null;
 
+    /**
+     * The dock as it stood when the gesture was armed. A resize PREVIEW rides
+     * the model between motion events (that is what makes it visible on the
+     * next repaint), so cancelling mid-drag has to put the shares back — the
+     * snapshot is the only record of "before", because `App` itself is
+     * immutable and every previewed frame is already the newest one.
+     *
+     * @see $paneDrag
+     */
+    private static ?DockLayout $paneDragOrigin = null;
+
     /** @see $paneDrag */
     public static function paneDragController(): PaneDragController
     {
@@ -1053,6 +1064,7 @@ final class App implements Model
     public static function resetPaneDragController(): void
     {
         self::$paneDrag = null;
+        self::$paneDragOrigin = null;
     }
 
     /**
@@ -1145,6 +1157,7 @@ final class App implements Model
             }
 
             self::$paneDrag = self::paneDragController()->beginResize($side, $startCol, $startRow);
+            self::$paneDragOrigin = $this->dock();
 
             return [$this, null];
         }
@@ -1164,6 +1177,7 @@ final class App implements Model
 
             if ($pane !== null && $this->isDocked($pane)) {
                 self::$paneDrag = self::paneDragController()->beginDockDrag($pane->value, $pressX, $pressY);
+                self::$paneDragOrigin = $this->dock();
             }
         }
 
@@ -1205,15 +1219,33 @@ final class App implements Model
             return [$this, null];
         }
 
-        self::$paneDrag = null;
-
         if ($drag->isResizing()) {
-            $next = $this->previewColumnResize($drag, $msg->x);
+            // A press-and-release on the divider with no motion in between is
+            // a plain click that owns no action: no preview ever rode the
+            // model, so nothing is committed, re-rolled, or written to disk.
+            if (!$drag->isPreviewed()) {
+                self::$paneDrag = null;
+                self::$paneDragOrigin = null;
 
-            // Persist only when the gesture actually moved something: a bare
-            // click on a divider commits no manifest and costs no disk write.
-            return [$drag->isPreviewed() ? $next->persistDock($next) : $next, null];
+                return [$this, null];
+            }
+
+            // The commit reads the ORIGIN snapshot inside
+            // previewColumnResize, so the statics are cleared only after the
+            // final width is computed — clearing first would make the
+            // release measure from the already-previewed model and compound
+            // the travel.
+            $next = $this->previewColumnResize($drag, $msg->x);
+            self::$paneDrag = null;
+            self::$paneDragOrigin = null;
+
+            // Persist only when the gesture actually moved something: the
+            // release that follows previews commits the final width once.
+            return [$next->persistDock($next), null];
         }
+
+        self::$paneDrag = null;
+        self::$paneDragOrigin = null;
 
         // An unarmed dock drag is a plain click: hand the release back to
         // the normal path (the controller is already cleared above) so the
@@ -1250,14 +1282,56 @@ final class App implements Model
             }
         }
 
+        // Content-space measurements come from the ORIGIN snapshot, never
+        // the live (already-previewed) model: the pointer's travel maps onto
+        // the width the band had when the grab happened, so restating the
+        // same column — every motion plus the final release — is idempotent
+        // instead of compounding. The share is still written onto the live
+        // dock; $dock above and $this->dock() are the same object until the
+        // first preview lands, after which only the measurement diverges by
+        // design.
+        $origin = self::$paneDragOrigin ?? $dock;
         $usable = max(1, $frame['bandCols'] - $active * $dock->dividerCols);
-        $px = $drag->resizeColumns($releaseX, $frame['bandCols'], $usable, $dock->sideMinCols, $dock->centerMinCols);
+        $geometry = $origin->resolve(new \SugarCraft\Layout\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $sideSlots = $origin->slots($side);
+        $current = $sideSlots === []
+            ? $dock->sideMinCols
+            : ($geometry->regionFor($sideSlots[0]->paneId)?->width ?? $dock->sideMinCols);
+        $centre = $geometry->regionFor($origin->centerPaneId)?->width ?? $dock->centerMinCols;
+        $px = $drag->resizeColumns($releaseX, $current, $dock->sideMinCols, $centre - $dock->centerMinCols);
 
-        if ($dock->columnShare($side) === [$px, $usable]) {
+        $share = $dock->columnShare($side);
+        if ($share['num'] === $px && $share['denom'] === $usable) {
             return $this;
         }
 
-        return $this->mutate(dock: $dock->withColumnShare($side, $px, $usable));
+        return $this->mutate(dock: self::applyMeasuredColumnShare($dock, $side, $px, $usable));
+    }
+
+    /**
+     * Write the drag's measured band width into the dock.
+     *
+     * The manifest round-trip is deliberate and follows the exact doctrine of
+     * {@see seedSharesFromFrame()}, whose forward pointer this gesture is: a
+     * dragged width is a MEASUREMENT the pointer stated, not the tightening
+     * request {@see DockLayout::withColumnShare()}'s pair rule exists to
+     * police. The pair rule reserves against the sibling's stored share even
+     * while that side holds no slots at all — with the untouched 1/3 default
+     * it would squash every request past 1/6, snapping the band the user is
+     * dragging SMALLER the moment the drag starts. The gesture keeps the
+     * centre honest itself: {@see PaneDragController::resizeColumns()} clamps
+     * every request to `usable - centerMinCols`, and resolve()'s min-protection
+     * and degradation ladder remain the hard floor no write can bypass.
+     *
+     * @param int $usable the band minus one divider per ACTIVE side — the
+     *                    column budget shares actually split at resolve time
+     */
+    private static function applyMeasuredColumnShare(DockLayout $dock, Side $side, int $px, int $usable): DockLayout
+    {
+        $manifest = $dock->toArray();
+        $manifest['columnShare'][$side === Side::Left ? 'left' : 'right'] = [$px, $usable];
+
+        return DockLayout::fromArray($manifest);
     }
 
     /**
@@ -1287,11 +1361,31 @@ final class App implements Model
             return $this;
         }
 
+        // Slot tops in PAINTED space: the header zones the renderer stamped
+        // this frame are where the eye actually sees each box begin. The
+        // resolve() region rows are the content-layout truth, which drifts
+        // from the painted box tops by each box's own decoration and
+        // content height — a drop aimed beside the tools box must index
+        // against where tools was PAINTED, not where its content region
+        // starts. Fall back to the resolve row only if a header zone is
+        // somehow absent (clicks were on to press the divider, so they
+        // should be on for headers; the fallback keeps the drop total).
         $dock = $this->dock();
         $geometry = $dock->resolve(new \SugarCraft\Layout\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $paintedRows = [];
+
+        foreach (TuiRenderer::chromeScanner()->prefixed(Renderer::PANE_ZONE_PREFIX) as $id => $zone) {
+            $paintedRows[substr($id, strlen(Renderer::PANE_ZONE_PREFIX))] = $zone->startRow - 1;
+        }
+
         $tops = [];
 
         foreach ($dock->slots($side) as $slot) {
+            if (isset($paintedRows[$slot->paneId])) {
+                $tops[] = $paintedRows[$slot->paneId];
+                continue;
+            }
+
             $region = $geometry->regionFor($slot->paneId);
 
             if ($region !== null) {
@@ -1381,15 +1475,17 @@ final class App implements Model
     {
         // Escape is the drag's abort key while a gesture is in flight —
         // BEFORE the shell's own bindings, because mid-drag the keystroke
-        // means "put the pane back", not "cancel the turn". The controller
-        // is a value: dropping the static returns the model to exactly the
-        // state the press left, and the preview (if any) lives only in the
-        // dock, whose seeded shares are the pre-drag ones until a release
-        // commits — so cancelling costs zero state change.
+        // means "put the pane back", not "cancel the turn". The press
+        // snapshotted the dock and every motion preview rode the model
+        // (that preview IS the live feedback candy-core's repaint tick
+        // shows), so cancelling hands back the snapshot: zero state change,
+        // zero disk write — the release is the only path that persists.
         if (!self::paneDragController()->isIdle() && $msg->type === KeyType::Escape) {
+            $origin = self::$paneDragOrigin;
             self::$paneDrag = null;
+            self::$paneDragOrigin = null;
 
-            return [$this, null];
+            return [$origin === null ? $this : $this->mutate(dock: $origin), null];
         }
 
         $handled = $this->dispatchKey($msg);

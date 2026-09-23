@@ -186,40 +186,47 @@ final class PaneDragController
     }
 
     /**
-     * Which band width the pointer asks for, in columns, clamped into the
-     * frame the dock itself will enforce.
+     * Which band width the pointer asks for, in content columns, clamped
+     * into the frame the dock itself will enforce.
      *
-     * The grabbed divider rides the pointer: on the left the band content is
-     * every column LEFT of the release (columns 1..releaseX-1), on the right
-     * every band column to the release's RIGHT (columns releaseX+1..bandCols
-     * — the release names the new divider cell directly, exactly like the
-     * left arm). `$usableCols` is the band minus one divider per active side
-     * — the columns a share may actually claim — and the upper clamp is what
-     * keeps the centre honest: the side can never grow past
-     * `usableCols - centerMinCols`. When the frame is too tight for both
-     * floors, `sideMinCols` wins locally and the dock's own degradation
-     * ladder decides at resolve time — the drag states the request, the
-     * geometry keeps the guarantee.
+     * Delta, not absolute: the grabbed divider is PAINTED (inside the side
+     * block's box decoration), while the width lives in resolve space —
+     * the two coordinate systems differ by a per-side constant nobody
+     * outside the renderer should have to know. Translating the pointer's
+     * travel onto the current width is therefore correct wherever the grab
+     * happened: dragging right by n cells grows a left band by n, dragging
+     * left by n grows a right band by n. `$centerRoomPx` is how far the
+     * centre may still shrink (`centre width - centreMinCols`) and is what
+     * keeps the centre honest: the side can never grow past the centre's
+     * floor. When the frame is too tight for both floors, `sideMinCols`
+     * wins locally and the dock's own degradation ladder decides at resolve
+     * time — the drag states the request, the geometry keeps the guarantee.
      *
      * @throws \LogicException when asked of an idle or dock-dragging state
      *                         (the caller's dispatch bug, never user input)
      */
     public function resizeColumns(
         int $releaseX,
-        int $bandCols,
-        int $usableCols,
+        int $currentWidthPx,
         int $sideMinCols,
-        int $centerMinCols,
+        int $centerRoomPx,
     ): int {
         if ($this->kind !== self::KIND_RESIZE || $this->side === null) {
             throw new \LogicException('resizeColumns() asked outside a resize gesture.');
         }
 
-        $raw = $this->side === Side::Left
-            ? $releaseX - 1
-            : $bandCols - $releaseX;
+        // Delta, not absolute: the grabbed divider is painted inside the
+        // side block's box decoration, so its column and the side's
+        // resolve-space width live in coordinate systems that differ by a
+        // constant. Translating the GRAB by the pointer's travel is the one
+        // formula correct in both.
+        $travel = $this->side === Side::Left
+            ? $releaseX - $this->grabCol
+            : $this->grabCol - $releaseX;
 
-        $max = max($sideMinCols, $usableCols - $centerMinCols);
+        $raw = $currentWidthPx + $travel;
+
+        $max = max($sideMinCols, $currentWidthPx + $centerRoomPx);
 
         return max($sideMinCols, min($raw, $max));
     }
