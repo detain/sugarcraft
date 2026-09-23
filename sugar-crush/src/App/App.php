@@ -518,7 +518,10 @@ final class App implements Model
      *
      * `$index` is where a DROP lands in the side's slot stack — the gesture
      * phase computes it from the release row; null appends, which is what
-     * every pre-gesture caller (and the command surface) wants.
+     * every pre-gesture caller (and the command surface) wants. A concrete
+     * index is clamped into the destination side's legal range here (see
+     * {@see clampDropIndex()}) so a mouse gesture can never drive the dock's
+     * fail-fast insertion guard.
      */
     public function setPaneSide(Pane $pane, Side $side, ?int $index = null): self
     {
@@ -529,11 +532,58 @@ final class App implements Model
         }
 
         $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
+        $drop = $this->clampDropIndex($index, $dock, $pane, $side);
         $next = $this->dockIsOccupied($dock, $pane)
-            ? $dock->withSlotMovedTo($pane->value, $side, $index)
-            : $dock->withSlotAdded($side, $pane->value, $index);
+            ? $dock->withSlotMovedTo($pane->value, $side, $drop)
+            : $dock->withSlotAdded($side, $pane->value, $drop);
 
         return $this->persistDock($this->mutate(dock: $next));
+    }
+
+    /**
+     * Clamp a gesture-computed drop index into the target side's legal
+     * insertion range, so a mouse release can never trip the dock library's
+     * fail-fast `guardInsertion`.
+     *
+     * The pointer maps the release ROW onto a stack index using the side's
+     * PAINTED slot tops — which, on a same-side reorder, still include the
+     * dragged pane. But `withSlotMovedTo` removes the pane from its side
+     * BEFORE re-splicing, so a same-side drop's valid range is one shorter
+     * than the painted top count, and a drop released past the last slot asks
+     * for exactly the index that removal makes illegal. A cross-side drop (or
+     * an add onto an unoccupied side) keeps the full `0..count` range: the
+     * dragged pane never sat in the destination's list.
+     *
+     * A null index means "append" and is every non-gesture caller's spelling,
+     * so it passes straight through — the library's own `?? count` already
+     * lands it at the safe end. The clamp never raises and never reorders a
+     * legal drop; it only folds an overflowing pointer request onto the
+     * nearest legal slot, honouring the pointer's intent (drop to the end).
+     *
+     * @param ?int             $index the raw painted-row index, or null
+     * @param DockLayout       $dock  the destination dock (post-seed)
+     * @param Pane             $pane  the pane being moved or added
+     * @param Side             $side  the side the drop lands on
+     */
+    private function clampDropIndex(?int $index, DockLayout $dock, Pane $pane, Side $side): ?int
+    {
+        if ($index === null) {
+            return null;
+        }
+
+        $count = count($dock->slots($side));
+
+        // Same-side reorder: the dragged pane vacates a slot, so the deepest
+        // legal insertion is one above the painted-top count.
+        foreach ($dock->slots($side) as $slot) {
+            if ($slot->paneId === $pane->value) {
+                $count = max(0, $count - 1);
+
+                break;
+            }
+        }
+
+        return max(0, min($index, $count));
     }
 
     /**

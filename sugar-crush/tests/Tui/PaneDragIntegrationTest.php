@@ -311,6 +311,75 @@ final class PaneDragIntegrationTest extends TestCase
         self::assertTrue(App::paneDragController()->isIdle());
     }
 
+    /**
+     * The live crash (user-reported): a header drag whose release lands past
+     * the last slot of a SHORT target side. Here Skills is the only pane on
+     * Right; releasing below its top makes `insertIndex` count the dragged
+     * pane's own top — but `withSlotMovedTo` removes the pane from the side
+     * BEFORE splicing, so the live slot list is empty and only index 0 is
+     * valid. The painted-rows index (1) would reach the library's fail-fast
+     * guard ("Slot index 1 out of bounds 0..0 for Right side"); the drop path
+     * now clamps it, the pane stays put, and exactly one manifest persists.
+     */
+    public function testAnArmedSinglePaneHeaderDragReleasedPastTheOnlySlotClampsInsteadOfThrowing(): void
+    {
+        $app = $this->app();
+        $this->render($app);
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+
+        $header = $this->headerZone('skills');
+        [$app] = $app->update($this->press($header->startCol + 1, $header->startRow));
+        [$app] = $app->update($this->motion($header->startCol + 4, $header->startRow));
+        self::assertTrue(App::paneDragController()->isArmed());
+
+        // Two cells past the centre (so the drop side is Right) and a tall
+        // travel down (so the release row clears the single slot's top).
+        [$app] = $app->update($this->release($frame['centerTo'] + 3, $header->startRow + 20));
+
+        self::assertSame(
+            ['skills'],
+            self::slotIds($app, Side::Right),
+            'a clamped past-the-end drop leaves the lone pane exactly where it was — index 0',
+        );
+        self::assertSame(['files', 'tools'], self::slotIds($app, Side::Left), 'the source band is untouched');
+        self::assertCount(1, $this->manifests, 'the clamped drop still commits exactly once');
+        self::assertTrue(App::paneDragController()->isIdle());
+    }
+
+    /**
+     * The same overflow on a genuine reorder: Files+Tools stack Left; dragging
+     * Files and releasing below the LAST slot asks for index 2, but removing
+     * Files first leaves one slot (valid 0..1). The clamp lands Files after
+     * Tools instead of throwing — the pointer's intent (bottom of the stack)
+     * is honoured, just at the deepest legal position.
+     */
+    public function testASameSideHeaderDragReleasedPastTheStackClampsToTheLastSlot(): void
+    {
+        $app = $this->app();
+        $this->render($app);
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+
+        $header = $this->headerZone('files');
+        [$app] = $app->update($this->press($header->startCol + 1, $header->startRow));
+        [$app] = $app->update($this->motion($header->startCol + 3, $header->startRow));
+
+        // Release far down the LEFT band (column inside the left block, row
+        // below Tools' top): every painted left top sits above the release
+        // row, so insertIndex counts both — but only 0..1 is legal once Files
+        // leaves the stack.
+        [$app] = $app->update($this->release($frame['centerFrom'] - 2, $header->startRow + 20));
+
+        self::assertSame(
+            ['tools', 'files'],
+            self::slotIds($app, Side::Left),
+            'Files drops to the deepest legal slot: last, not out of bounds',
+        );
+        self::assertCount(1, $this->manifests, 'the clamped reorder persists exactly once');
+        self::assertTrue(App::paneDragController()->isIdle());
+    }
+
     public function testAnArmedHeaderDragReleasedInsideTheCentreCancels(): void
     {
         $app = $this->app();
