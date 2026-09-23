@@ -77,12 +77,15 @@ final class DockSeedTest extends TestCase
 
     public function testSeedSnapshotsTheLegacyMeasureIntoEverySideThatWillCarrySlots(): void
     {
-        // docksInto=Right: Files (non-empty left) and the Right target both
-        // take the drawn quarter; a side that stays empty does not.
+        // docksInto=Left: Files already occupies the non-empty Left side, so the
+        // Left target takes the drawn quarter; the still-empty Right side keeps
+        // the design share (seeding only touches sides that will carry slots).
         $leftOnly = App::seedSharesFromFrame(App::defaultDock(), 100, Side::Left);
         self::assertSame([25, 100], $leftOnly->toArray()['columnShare']['left']);
         self::assertSame([1, 3], $leftOnly->toArray()['columnShare']['right'], 'an untouched, still-empty side keeps the design share');
 
+        // docksInto=Right: Files keeps Left non-empty AND Right is the drop
+        // target, so both sides take the drawn quarter this time.
         $intoRight = App::seedSharesFromFrame(App::defaultDock(), 100, Side::Right);
         self::assertSame([25, 100], $intoRight->toArray()['columnShare']['left']);
         self::assertSame([25, 100], $intoRight->toArray()['columnShare']['right']);

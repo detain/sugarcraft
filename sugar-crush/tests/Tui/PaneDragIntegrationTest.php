@@ -55,10 +55,16 @@ final class PaneDragIntegrationTest extends TestCase
     /** @var list<array<string, mixed>> */
     private array $manifests = [];
 
+    private string|false $originalDisableMouse;
+
+    private string|false $originalDisableClicks;
+
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->originalDisableMouse = getenv('SUGARCRUSH_DISABLE_MOUSE');
+        $this->originalDisableClicks = getenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
         putenv('SUGARCRUSH_DISABLE_MOUSE');
         putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
 
@@ -75,8 +81,7 @@ final class PaneDragIntegrationTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv('SUGARCRUSH_DISABLE_MOUSE');
-        putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
+        $this->restoreMouseEnv();
 
         TuiRenderer::chromeScanner()->clear();
         LiveRenderer::scanner()->clear();
@@ -702,6 +707,24 @@ final class PaneDragIntegrationTest extends TestCase
     private function resetChromeTracker(): void
     {
         (new \ReflectionProperty(App::class, 'chromeClickTracker'))->setValue(null, null);
+    }
+
+    /**
+     * Put the two mouse-env switches back exactly as the ambient process had
+     * them, so this suite cannot leak a disabled-mouse environment into a
+     * sibling that runs after it (Fix 3c: the old bare `putenv(key)` unset the
+     * var on teardown regardless of what the developer's shell carried in).
+     */
+    private function restoreMouseEnv(): void
+    {
+        $originals = [
+            'SUGARCRUSH_DISABLE_MOUSE' => $this->originalDisableMouse,
+            'SUGARCRUSH_DISABLE_MOUSE_CLICKS' => $this->originalDisableClicks,
+        ];
+
+        foreach ($originals as $key => $original) {
+            putenv($original === false ? $key : $key . '=' . $original);
+        }
     }
 
     /**

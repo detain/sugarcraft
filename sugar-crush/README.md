@@ -1164,8 +1164,12 @@ cd sugar-crush && composer install && vendor/bin/phpunit
 **12,142 tests / 171,589 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-14m46s. Measured 2026-09-23, re-pinned when the pane-docking review-fix round landed
-its five `Dock*` suites: +41 tests and +349 assertions over 12,061/170,837. The
+14m46s. Measured 2026-09-23. The pane-docking feature re-pinned the figure in stages,
+one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
+(`37c50e389`), the review-fix round (`b4a5a11e7`), and the docking crash/resize fix
+lane — each adding its own tests and assertions, so the running arithmetic lives in
+`git log` rather than in this sentence (a hard-coded "+N over M" chain went stale here
+the moment the next stage landed). The
 re-pin before that: the three `WebSearch` tests that had been asserting against a
 live SearXNG endpoint were made hermetic — the day
 the endpoint stopped answering they took `Test PHP 8.3 · sugar-crush`,
