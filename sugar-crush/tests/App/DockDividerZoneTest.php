@@ -28,9 +28,13 @@ use SugarCraft\Layout\Dock\Side;
  * carries the whole-width `stackdiv:<side>:<slotIndex>:r<absRow>` zone, and
  * strictly one zone per line: the divider column skips gap rows.
  *
- * A LEGACY side — one pane, flush frame, no divider column — contributes no
- * zones at all, which is what keeps unchanged frames byte- and
- * zone-identical to the pre-docking shipped frame.
+ * A single-pane side carries the same per-row divider click zones a stacked
+ * side does: Fix 2 overturned the Phase-3 seam that had left a lone pane with
+ * no grabbable divider — which made resize unusable out of the box, since the
+ * default layout puts one pane per occupied side. No divider COLUMN is painted
+ * for a single pane, so the frame stays byte-identical to the shipped flush
+ * sidebar; the zones ride scanner-scratch rows that never join the frame.
+ * Intra-stack gap rows stay stacked-only — a single pane stacks nothing.
  */
 final class DockDividerZoneTest extends TestCase
 {
@@ -66,14 +70,31 @@ final class DockDividerZoneTest extends TestCase
         parent::tearDown();
     }
 
-    public function testALegacySinglePaneSideCarriesNoDividerZones(): void
+    public function testASinglePaneSideCarriesPerRowDividerZonesButNoStackDivZones(): void
     {
-        // Default dock, Files focused: one pane per side, the pre-docking
-        // flush frame. Its box border must stay JUST a border.
+        // Fix 2: default dock, Files focused — one pane, the pre-docking flush
+        // frame. It now stamps a grabbable `divider:` column so a lone side is
+        // resizable, but never a stacked-only `stackdiv:` gap zone.
         $this->render($this->app()->withPane(Pane::Files));
 
-        self::assertSame([], TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX));
-        self::assertSame([], TuiRenderer::chromeScanner()->prefixed(LiveRenderer::STACK_DIVIDER_ZONE_PREFIX));
+        $zones = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX);
+        self::assertNotEmpty($zones, 'a single-pane side must offer a grabbable divider');
+
+        $rows = [];
+        foreach ($zones as $id => $zone) {
+            self::assertMatchesRegularExpression('/\Adivider:left:r\d+\z/', $id);
+            self::assertSame(1, $zone->width(), 'a single-pane divider zone wraps exactly one cell');
+            self::assertSame(1, $zone->height(), 'one zone per rendered row, never a multi-row block');
+            $rows[] = $zone->startRow;
+        }
+
+        self::assertSame(array_values(array_unique($rows)), $rows, 'each rendered row carries its OWN divider zone');
+
+        self::assertSame(
+            [],
+            TuiRenderer::chromeScanner()->prefixed(LiveRenderer::STACK_DIVIDER_ZONE_PREFIX),
+            'a single pane stacks nothing, so there is no intra-stack gap row',
+        );
     }
 
     public function testStackedSideStampsOneSingleCellZonePerRenderedDividerRow(): void
@@ -163,7 +184,11 @@ final class DockDividerZoneTest extends TestCase
         $left = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX . 'left:');
         $right = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX . 'right:');
 
-        self::assertSame([], $left, 'a single-pane left side adds no divider column');
+        // Fix 2 made the lone Left pane grabbable too, so `left` is no longer
+        // the empty control it was under the Phase-3 seam; the point of this
+        // test — that the RIGHT stacked side stamps its OWN zones on the far
+        // column — is the `right` assertions below.
+        self::assertNotEmpty($left, 'a single-pane left side now stamps divider zones too');
         self::assertNotEmpty($right);
 
         // The harmonised rule mirrored on the right: the gap zone STARTS on

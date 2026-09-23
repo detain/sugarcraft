@@ -1035,16 +1035,20 @@ final class Renderer
      *
      * ## Two shapes
      *
-     * One pane on the side renders exactly as today's sidebar did: one block,
-     * joined flush against the chat, no divider column. Two or more stack
-     * vertically at the resolved heights with a one-row `\u{2500}` gap
-     * between slots and an explicit one-column `\u{2502}` divider between
-     * the stack and the chat column — SplitLayout's own divider glyphs, the
-     * same pair {@see \SugarCraft\Crush\Tui\SplitLayout} composes with.
-     * Only the stacked shape carries divider metadata: a legacy side's box
-     * border stays just a border, so unchanged frames gain neither pixels nor
-     * zones.
-     *
+      * One pane on the side renders exactly as today's sidebar did: one block,
+      * joined flush against the chat, no divider COLUMN. Two or more stack
+      * vertically at the resolved heights with a one-row `\u{2500}` gap
+      * between slots and an explicit one-column `\u{2502}` divider between
+      * the stack and the chat column — SplitLayout's own divider glyphs, the
+      * same pair {@see \SugarCraft\Crush\Tui\SplitLayout} composes with.
+      * Both shapes carry divider CLICK metadata (Fix 2): a single-pane side
+      * stamps a per-row `divider:<side>:r<row>` zone on the boundary cell its
+      * own box border already paints, so the default one-pane-per-side layout
+      * is resizable. Because a legacy side gains no painted column, its frame
+      * stays byte-identical — the zones ride scanner-scratch rows that never
+      * join the frame — but a lone side is no longer the un-grabbable seam the
+      * Phase-3 cut left it.
+      *
      * @return array{0: string, 1: ?array{width: int, dividerColLocal: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>}, 2: list<array{paneId: string, row: int, from: int, to: int}>}
      */
     private static function renderSide(App $a, Side $side, int $cols, int $rows): array
@@ -1059,8 +1063,27 @@ final class Renderer
 
         if (count($panes) === 1) {
             $block = self::renderPane($a, $panes[0], $width, $rows);
+            $painted = self::blockWidth($block);
 
-            return [$block, null, self::paneHeaders($a, $panes, [0], 0, self::blockWidth($block) - 1)];
+            // Fix 2: the lone side is resizable, so hand the zone pass the
+            // same divider metadata a stacked side gets — but WITHOUT painting
+            // an extra divider column. The grab target is the boundary cell the
+            // pane's own box border already occupies: the rightmost column for
+            // a Left side, the leftmost for a Right side. The header spans stop
+            // one cell short of that border, mirroring the stacked rule that a
+            // header never spans its own divider cell, so the two zone families
+            // never collide on a column. Frame bytes are untouched: dividerZones
+            // builds scanner-scratch rows that never join the frame.
+            $meta = [
+                'width' => $painted,
+                'dividerColLocal' => $side === Side::Left ? $painted - 1 : 0,
+                'blockRows' => self::lineCount($block),
+                'gaps' => [],
+            ];
+            $headerFrom = $side === Side::Left ? 0 : 1;
+            $headerTo = $side === Side::Left ? $painted - 2 : $painted - 1;
+
+            return [$block, $meta, self::paneHeaders($a, $panes, [0], $headerFrom, $headerTo)];
         }
 
         $heights = self::stackHeights($a, $panes, $cols, $rows);

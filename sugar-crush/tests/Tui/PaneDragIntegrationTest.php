@@ -133,6 +133,43 @@ final class PaneDragIntegrationTest extends TestCase
         self::assertTrue(App::paneDragController()->isIdle());
     }
 
+    /**
+     * Fix 2's behaviour half: a side holding a SINGLE pane (Skills here, the
+     * default one-pane-per-side layout) must be resizable by dragging its
+     * divider. Under the overturned Phase-3 seam a lone pane stamped no
+     * grabbable `divider:` zone, so the grab was unreachable out of the box —
+     * the pointer could never arm a resize on that side.
+     */
+    public function testASinglePaneSideDividerDragResizesAndPersistsOnce(): void
+    {
+        $app = $this->app();
+        $this->render($app);
+
+        // The cast keeps Right at exactly one pane (Skills).
+        self::assertSame(['skills'], self::slotIds($app, Side::Right), 'fixture: Right is a single-pane side');
+
+        $divider = $this->dividerZone('right');
+        $startWidth = self::sideWidthPx($app, Side::Right);
+        self::assertSame(['num' => 1, 'denom' => 3], $app->dock()->columnShare(Side::Right));
+
+        [$app] = $app->update($this->press($divider->startCol, $divider->startRow));
+        self::assertTrue(App::paneDragController()->isResizing(), 'the lone side now offers a grabbable divider');
+
+        // Dragging a RIGHT divider westward by 10 grows the right band by 10.
+        [$app] = $app->update($this->motion($divider->startCol - 10, $divider->startRow));
+        self::assertSame(
+            ['num' => $startWidth + 10, 'denom' => self::USABLE],
+            $app->dock()->columnShare(Side::Right),
+            'the preview restates the pointer width on the single-pane side',
+        );
+        self::assertSame([], $this->manifests, 'motion previews, never persists');
+
+        [$app] = $app->update($this->release($divider->startCol - 10, $divider->startRow));
+
+        self::assertSame(['num' => $startWidth + 10, 'denom' => self::USABLE], $app->dock()->columnShare(Side::Right));
+        self::assertCount(1, $this->manifests, 'the release commits the single-pane resize exactly once');
+    }
+
     public function testADragShrinkingPastTheSideFloorCommitsTheFloor(): void
     {
         $app = $this->app();
