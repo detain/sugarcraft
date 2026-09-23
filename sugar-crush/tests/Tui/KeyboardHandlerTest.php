@@ -118,11 +118,16 @@ final class KeyboardHandlerTest extends TestCase
      */
     public function testTabCyclesThroughAllPanes(): void
     {
-        // Exactly the panes the tab strip advertises, in strip order. Tab
-        // used to walk Input/Help too -- panes absent from the strip with no
-        // renderer behind them. Settings is in the strip again now that
-        // SettingsPane renders it.
-        $app = $this->createApp(Pane::Chat);
+        // Dock-scoped since L2: the cycle visits Chat plus every DOCKED pane
+        // in frame order -- left column top-to-bottom, then right. Docking
+        // all five is what turns this back into a walk of the full strip;
+        // the order it must land in is Files, Tools (left, in slot order),
+        // then Skills, Agents, Settings (right, in slot order), then wraps.
+        $app = $this->createApp(Pane::Chat)
+            ->togglePaneDocking(Pane::Tools)
+            ->togglePaneDocking(Pane::Skills)
+            ->togglePaneDocking(Pane::Agents)
+            ->togglePaneDocking(Pane::Settings);
 
         foreach ([Pane::Files, Pane::Tools, Pane::Skills, Pane::Agents, Pane::Settings, Pane::Chat] as $expected) {
             [$app] = $this->handler->handle('tab', $app);

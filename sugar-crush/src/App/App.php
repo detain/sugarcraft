@@ -653,6 +653,66 @@ final class App implements Model
     }
 
     /**
+     * The panes Tab can focus, in visual order: Chat, then the left column's
+     * slots top-to-bottom, then the right column's.
+     *
+     * Dock-scoped by construction — an undocked pane is not in this list, so
+     * the cycle only visits panes the frame persistently shows. The menu-bar
+     * labels are the door for everything else: clicking one docks the pane
+     * and focuses it ({@see dispatchChromeClick()}), which admits it to this
+     * cycle. A malformed manifest id is skipped rather than fatal — focus
+     * cannot name a pane the enum does not have.
+     *
+     * @return list<Pane>
+     */
+    public function paneCycleOrder(): array
+    {
+        $order = [Pane::Chat];
+
+        foreach ([Side::Left, Side::Right] as $side) {
+            foreach ($this->dock()->slots($side) as $slot) {
+                $pane = Pane::tryFrom((string) $slot->paneId);
+
+                if ($pane !== null && !in_array($pane, $order, true)) {
+                    $order[] = $pane;
+                }
+            }
+        }
+
+        return $order;
+    }
+
+    /**
+     * Move focus one step along {@see paneCycleOrder()} — +1 forward,
+     * -1 backward, wrapping at both ends. The spelling is direction, not
+     * delta: the caller says which way the user reached, the sign carries it.
+     *
+     * A focus that is not in the cycle — an undocked pane reached by a ctrl
+     * chord, or one of the chrome-only panes — folds to Chat in BOTH
+     * directions. That is the same anchor rule {@see \SugarCraft\Crush\Tui\Pane::step()}
+     * set for off-ring panes, and for the same reason: the user is parked
+     * somewhere the frame does not persistently show and reached for Tab to
+     * get out; Chat is the pane that always draws.
+     *
+     * Focus is not layout: pure {@see withPane()}, no `persistDock` — the
+     * dock manifest is unchanged by where the keyboard sits.
+     */
+    public function cyclePaneFocus(int $direction): self
+    {
+        $order = $this->paneCycleOrder();
+        $index = array_search($this->pane, $order, true);
+
+        if (!is_int($index)) {
+            return $this->withPane(Pane::Chat);
+        }
+
+        $count = count($order);
+        $step = $direction <=> 0;
+
+        return $this->withPane($order[((($index + $step) % $count) + $count) % $count]);
+    }
+
+    /**
      * Hand the new manifest to the persistence hook, when the launch wired
      * one. Mirrors Chat's config-change call sites: a non-`update()` model
      * method invoking an injected persistence closure is the established shape

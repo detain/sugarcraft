@@ -104,6 +104,14 @@ enum Pane: string
     /**
      * Walk the ring one step, or fold back to Chat when off it.
      *
+     * ERRATUM (pane-docking L2): the shell's Tab arm no longer calls this.
+     * Focus now cycles over Chat plus the DOCKED panes in frame order —
+     * {@see \SugarCraft\Crush\App\App::cyclePaneFocus()} — because with the
+     * menu-bar toggles, "the next pane" means the next pane the frame shows,
+     * not the next name in the strip. The ring stays the full-strip order
+     * (and these methods stay the tested API for it); the fold-back rule
+     * below is what cyclePaneFocus mirrors for off-cycle focus.
+     *
      * **The fold-back is deliberate and is not what "not in the ring" means.**
      * Tab used to walk all nine cases, so it stopped on Input, Settings and
      * Help — none of which appeared in the tab strip and none of which had a

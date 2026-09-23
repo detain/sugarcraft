@@ -118,14 +118,18 @@ final class KeyboardHandler
      *    agent view (where c/r/s/q are commands, not text, and `q` is how the
      *    user leaves), or an OPEN skill picker.
      * 3. F10 opens the menu, from any pane.
-     * 4. Unmodified Tab cycles panes, but only while the hosted chat's "/"
-     *    popup is NOT showing matches — there it is that popup's completion
-     *    key and falls through. Ctrl+Tab is excluded by rule 1 — that is
-     *    Chat's session cycling (§5 E2).
+     * 4. Unmodified Tab cycles pane FOCUS along the docked frame
+     *    ({@see App::cyclePaneFocus()}), except while Chat itself holds focus
+     *    and its "/" popup is showing matches — there it is that popup's
+     *    completion key and falls through. Ctrl+Tab is excluded by rule 1 —
+     *    that is Chat's session cycling (§5 E2).
      * 5. Escape returns to the chat pane, but only when the shell has
      *    somewhere to return FROM. In `Pane::Chat` it belongs to Chat, whose
      *    Escape cancels an in-flight turn and closes the palette.
-     * 6. The {@see shellCtrlRunes()} chords.
+     * 6. Enter from a docked non-Chat pane opens the command palette while
+     *    the chat draft is empty — the interaction door for the read-only
+     *    surfaces. A non-empty draft submits as always.
+     * 7. The {@see shellCtrlRunes()} chords.
      *
      * Element 1 is consumed by {@see App::consumeShellCmd()}, which translates
      * it into shell state or into keystrokes the hosted Chat already answers.
@@ -200,15 +204,15 @@ final class KeyboardHandler
         // OwnsTheKeyboard() -- reordering this block above that call is a real
         // behaviour change, and used to go unnoticed.
         //
-        // NOT ordered on $app->pane, though, and that is the deliberate half:
-        // from Pane::Files or Pane::Tools the chat and its popup are still on
-        // screen (those panes are a quarter-width SIDEBAR -- see
-        // Renderer::leftSidebar()) and typing still reaches inputBuf, so the
-        // completion is drivable and wins there too, even though Tab is that
-        // pane's only navigation key. Pinned by
-        // testTabCompletesFromASidebarPaneToo().
+        // Ordered on $app->pane since the pane-docking feature (L2): the
+        // popup's claim on Tab is a CHAT-mode privilege. While Chat holds
+        // focus and its "/" popup is showing matches, Tab completes and
+        // falls through; from any docked pane Tab is the focus cycle, which
+        // is the whole point of docking a pane you cannot type into. The
+        // sidebar-era rule that yielded Tab from Files/Tools too pinned away
+        // — see SlashMenuTabCompletionTest::testTabFromADockPaneCyclesFocusEvenWithThePopupOpen().
         if ($msg->type === KeyType::Tab && !$msg->ctrl && !$msg->alt && !$msg->shift) {
-            return !self::chatIsCompletingSlashCommand($app);
+            return $app->pane !== Pane::Chat || !self::chatIsCompletingSlashCommand($app);
         }
 
         // Shift+Tab cycles panes BACKWARD, and is claimed UNCONDITIONALLY --
@@ -226,6 +230,15 @@ final class KeyboardHandler
         // open menu, the Agents dashboard or the skill picker keeps it.
         if ($msg->type === KeyType::Tab && $msg->shift && !$msg->ctrl && !$msg->alt) {
             return true;
+        }
+
+        // Enter is the palette door from a dockable non-Chat pane while the
+        // chat draft is empty — see {@see enterOpensPaletteDoor()}. Claimed
+        // only under that predicate; every other Enter keeps falling through
+        // to Chat, so a NON-empty draft still submits from any pane exactly
+        // as it did before the door existed.
+        if ($msg->type === KeyType::Enter && !$msg->ctrl && !$msg->alt && !$msg->shift) {
+            return self::enterOpensPaletteDoor($app);
         }
 
         if ($msg->type === KeyType::Escape && $app->pane !== Pane::Chat) {
@@ -254,6 +267,42 @@ final class KeyboardHandler
     private static function chatIsCompletingSlashCommand(App $app): bool
     {
         return $app->chat !== null && $app->chat->slashMenuOwnsTab();
+    }
+
+    /**
+     * Whether Enter should open the command palette instead of falling
+     * through to Chat: the user is on a DOCKABLE non-Chat pane (Files,
+     * Tools, Skills, Agents, Settings — the strip the menu bar toggles),
+     * and the chat draft is empty.
+     *
+     * This is the interaction door the docked panes were missing. Most of
+     * them are deliberately read-only surfaces — SettingsPane's own footer
+     * says "read-only — /theme, /model", and Files/Tools are lists — so
+     * without a key, focusing one was a dead end for changing anything.
+     * Enter feeds `Ctrl+P` to the hosted Chat through
+     * {@see \SugarCraft\Crush\App\App::consumeShellCmd()}'s
+     * {@see CommandPaletteCmd} arm, which is the same palette the `/`
+     * commands and every setting change already route through; the door
+     * adds no new surface, it makes the existing one reachable from focus.
+     *
+     * The empty-draft condition is what keeps Chat's send path intact: a
+     * draft in progress submits exactly as before, from any pane.
+     *
+     * The {@see shellOwnsKeyboard()} conjunct earns its keep on the ACT side,
+     * not the claim side: claims() returns true for an Agents dashboard or an
+     * open picker long before this rule is consulted, and handle() re-reads
+     * the predicate after those views have passed on the key. Without it,
+     * Enter in the agent list with nothing selected would open a palette that
+     * is abandoned the moment it is up — the E666 defect through a door this
+     * feature built.
+     */
+    private static function enterOpensPaletteDoor(App $app): bool
+    {
+        if ($app->pane === Pane::Chat || !$app->pane->dockable() || self::shellOwnsKeyboard($app)) {
+            return false;
+        }
+
+        return $app->chat !== null && $app->chat->inputBuf === '';
     }
 
     /**
@@ -437,17 +486,20 @@ final class KeyboardHandler
      */
     public function handle(string $key, App $app): array
     {
-        // Handle Tab - cycle panes
+        // Tab - cycle focus over Chat plus the docked panes, left column
+        // first (top-to-bottom), then right. Dock-scoped since L2: the cycle
+        // visits what the frame persistently shows; docking more panes widens
+        // it, undocking narrows it, and an off-cycle focus folds to Chat.
         if ($key === 'tab') {
-            return [$app->withPane($app->pane->next()), null];
+            return [$app->cyclePaneFocus(1), null];
         }
 
-        // Shift+Tab - cycle panes the other way. The label is whatever
+        // Shift+Tab - cycle focus the other way. The label is whatever
         // KeyMsg::string() builds, which prefixes modifiers in the fixed order
         // ctrl, alt, shift; ctrl+tab never reaches here (chatOwns() takes it),
         // so 'shift+tab' is the only spelling this arm can see.
         if ($key === 'shift+tab') {
-            return [$app->withPane($app->pane->previous()), null];
+            return [$app->cyclePaneFocus(-1), null];
         }
 
         // Agent view keyboard handling - before generic navigation
@@ -487,6 +539,14 @@ final class KeyboardHandler
             if ($result !== null) {
                 return $result;
             }
+        }
+
+        // Enter on a docked pane with nothing drafted opens the palette --
+        // the change door for the read-only surfaces (claims() admitted the
+        // key on exactly this predicate; the agent view and the skill picker
+        // consumed their own Enter above).
+        if ($key === 'enter' && self::enterOpensPaletteDoor($app)) {
+            return [$app, new CommandPaletteCmd()];
         }
 
         // Handle arrow keys / vim keys for navigation

@@ -127,10 +127,18 @@ final class PaneReverseCycleTest extends TestCase
     public function testShiftTabWalksThePaneStripBackwards(): void
     {
         $handler = new KeyboardHandler();
-        $app = $this->appOn(Pane::Chat);
+        // Dock-scoped cycle (L2): every pane must be DOCKED for the shell's
+        // Shift+Tab to walk the whole strip -- App::cyclePaneFocus() visits
+        // Chat plus the docked slots; see the enum-level ring pins below,
+        // which are the full-strip order this shell walk now mirrors.
+        $app = $this->appOn(Pane::Chat)
+            ->togglePaneDocking(Pane::Tools)
+            ->togglePaneDocking(Pane::Skills)
+            ->togglePaneDocking(Pane::Agents)
+            ->togglePaneDocking(Pane::Settings);
         $shiftTab = new KeyMsg(KeyType::Tab, shift: true);
 
-        // Chat is the strip's first member, so one Shift+Tab wraps to the last.
+        // Chat is the cycle's first member, so one Shift+Tab wraps to the last.
         $result = $handler->handleKeyMsg($shiftTab, $app);
         $this->assertNotNull($result, 'the shell did not claim Shift+Tab');
         $this->assertSame(Pane::Settings, $result[0]->pane);
