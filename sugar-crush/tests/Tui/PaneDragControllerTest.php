@@ -198,13 +198,35 @@ final class PaneDragControllerTest extends TestCase
         self::assertSame(Side::Right, $drag->dockDropSide(91, 30, 89), 'first cell past the centre');
     }
 
-    public function testAReleaseInsideTheCentreCancels(): void
+    public function testTheCentresOuterThirdsDropOntoTheSideTheyFace(): void
     {
         $drag = PaneDragController::idle()->beginDockDrag('files', 10, 4);
 
-        self::assertNull($drag->dockDropSide(31, 30, 89), 'first centre column');
-        self::assertNull($drag->dockDropSide(90, 30, 89), 'last centre column');
+        // Centre 30..89 is 60 columns: thirds of 20 — 30..49 | 50..69 | 70..89.
+        self::assertSame(Side::Left, $drag->dockDropSide(31, 30, 89), 'first centre column');
+        self::assertSame(Side::Left, $drag->dockDropSide(50, 30, 89), 'last column of the left third');
+        self::assertSame(Side::Right, $drag->dockDropSide(71, 30, 89), 'first column of the right third');
+        self::assertSame(Side::Right, $drag->dockDropSide(90, 30, 89), 'last centre column');
+    }
+
+    public function testAReleaseInTheCentresMiddleThirdCancels(): void
+    {
+        $drag = PaneDragController::idle()->beginDockDrag('files', 10, 4);
+
+        self::assertNull($drag->dockDropSide(51, 30, 89), 'first middle column');
         self::assertNull($drag->dockDropSide(60, 30, 89), 'dead centre');
+        self::assertNull($drag->dockDropSide(70, 30, 89), 'last middle column');
+    }
+
+    public function testAnEmptySideIsStillADropTarget(): void
+    {
+        // No right band: the centre runs to the frame edge (0-based 30..159
+        // on a 160-column frame), so no release can land east of it. The
+        // right third must still dock right, or the empty side is unreachable.
+        $drag = PaneDragController::idle()->beginDockDrag('files', 10, 4);
+
+        self::assertSame(Side::Right, $drag->dockDropSide(150, 30, 159));
+        self::assertSame(Side::Right, $drag->dockDropSide(160, 30, 159), 'the last terminal column');
     }
 
     // =========================================================================

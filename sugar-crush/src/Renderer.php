@@ -575,10 +575,12 @@ final class Renderer
     public const STACK_DIVIDER_ZONE_PREFIX = 'stackdiv:';
 
     /**
-     * The marked single-cell segment for one rendered row of a stack
-     * divider column: `divider:<side>:r<absRow>` wrapping one cell.
+     * The marked segment for one band row of a side's resize seam:
+     * `divider:<side>:r<absRow>` wrapping `$width` cells (the side box's
+     * border, any stacked divider column, and the centre's border — see
+     * {@see \SugarCraft\Crush\Tui\Renderer::dividerZones()}).
      *
-     * Returns null — caller paints the cell unmarked — when clicks are off,
+     * Returns blanks — caller paints the cells unmarked — when clicks are off,
      * the row fell outside the frame, or the composed id would violate
      * {@see ZONE_ID_CHARSET}; an id violation degrades to "not clickable",
      * never to an exception from the paint path. The Tui compositor embeds
@@ -586,19 +588,20 @@ final class Renderer
      * frame, mirroring how the menu bar keeps a marked and a plain render
      * ({@see \SugarCraft\Crush\Tui\Renderer::scanChrome()}).
      */
-    public static function markDividerCell(string $sideValue, int $absRow, int $frameRows): string
+    public static function markDividerCell(string $sideValue, int $absRow, int $frameRows, int $width = 1): string
     {
         $id = self::DIVIDER_ZONE_PREFIX . $sideValue . ':r' . $absRow;
+        $blank = str_repeat(' ', max(0, $width));
 
-        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows) {
-            return ' ';
+        if (!Chat::mouseClicksEnabled() || $absRow < 0 || $absRow >= $frameRows || $width < 1) {
+            return $blank;
         }
 
         if (preg_match(self::ZONE_ID_CHARSET, $id) !== 1 || strlen($id) > Mark::MAX_ID_BYTES) {
-            return ' ';
+            return $blank;
         }
 
-        return Mark::zone($id, ' ');
+        return Mark::zone($id, $blank);
     }
 
     /**

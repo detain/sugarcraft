@@ -274,6 +274,68 @@ final class DockDragBytePathTest extends TestCase
     }
 
     // =========================================================================
+    // Live-report regressions: the gestures a real session could not reach
+    // =========================================================================
+
+    public function testARawByteHeaderDragOntoAnEmptyRightSideDocksAndPaintsThePaneThere(): void
+    {
+        // No right band at all — the default-shaped layout. The centre runs to
+        // the frame edge, so "east of the centre" had no cell; the centre's
+        // right third is the drop target that makes the empty side reachable.
+        $app = App::new($this->provider, 'test-model')
+            ->withChat(new Chat())
+            ->setPaneSide(Pane::Tools, Side::Left)
+            ->withOnLayoutChange(function (array $manifest): void {
+                $this->writes[] = $manifest;
+            });
+        $this->writes = [];
+        $body = $this->paintBody($app);
+
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+        self::assertSame(self::BARE_COLS - 1, $frame['centerTo'], 'with no right band the centre reaches the last column');
+
+        [$headerX, $headerY] = $this->paintedHeaderCell($body, Pane::Files->value);
+        $app = $this->driveBytes($app, $this->dragBurst($headerX, $headerY, self::BARE_COLS - 4, $headerY + 1));
+
+        self::assertSame(['tools'], $this->slotIdsOn($app, Side::Left));
+        self::assertSame(['files'], $this->slotIdsOn($app, Side::Right));
+        self::assertCount(1, $this->writes);
+
+        // And the frame PAINTS it on the right: the dock placement, not the
+        // pane's home side, decides where a slot draws.
+        [$paintedX] = $this->paintedHeaderCell($this->paintBody($app), Pane::Files->value);
+        self::assertGreaterThan(intdiv(self::BARE_COLS, 2), $paintedX, 'Files is drawn in the right band, not dropped from the frame');
+    }
+
+    public function testARawByteResizeGrabbedOnTheCentreBorderBelowTheBoxesResizesTheBand(): void
+    {
+        $app = $this->castApp();
+        $body = $this->paintBody($app);
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+
+        // The LAST band row, far below the two short stacked boxes, on the
+        // seam's last cell: the centre pane's own left border.
+        $row = $frame['bandTop'] + $frame['paneRows'];
+        $seam = TuiRenderer::chromeZoneAt($frame['centerFrom'] + 1, $row);
+        self::assertSame('divider:left:r' . ($row - 1), $seam?->id, 'the centre border is part of the grab seam on every band row');
+        $col = $seam->startCol + $seam->width() - 1;
+        self::assertSame("\u{2514}", mb_substr($this->plainLine($body, $row - 1), $col - 1, 1), 'the grabbed cell is the painted centre border');
+
+        $startColumns = $this->bandColumns($app, Side::Left);
+        $app = $this->driveBytes($app, "\x1b[<0;{$col};{$row}M\x1b[<32;" . ($col + 6) . ";{$row}M\x1b[<0;" . ($col + 6) . ";{$row}m");
+
+        self::assertSame(
+            ['num' => $startColumns + 6, 'denom' => self::CONTENT_COLS],
+            $app->dock()->columnShare(Side::Left),
+            'travel is measured from the pressed cell, not the seam start',
+        );
+        self::assertCount(1, $this->writes);
+        self::assertTrue(App::paneDragController()->isIdle());
+    }
+
+    // =========================================================================
     // Harness
     // =========================================================================
 

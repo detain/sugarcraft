@@ -1238,8 +1238,9 @@ final class App implements Model
     }
 
     /**
-     * A left press on the chrome asks the gesture phase first: the divider
-     * column of a stacked band owns a live resize, a docked pane owns a
+     * A left press on the chrome asks the gesture phase first: a side's
+     * resize seam (box border, divider, centre border — every band row) owns
+     * a live resize, a docked pane owns a
      * potential dock drag from EITHER of its header surfaces — the frame
      * header row (`pane:<id>`) and the menu-bar tab (L2's
      * {@see MenuBar::PANE_TAB_ZONE_PREFIX}, the live-report fix: the bar tab
@@ -1275,7 +1276,10 @@ final class App implements Model
                 return null;
             }
 
-            self::$paneDrag = self::paneDragController()->beginResize($side, $startCol);
+            // The PRESSED cell, not the zone's start: the seam is several
+            // cells wide, and measuring travel from its first cell would jump
+            // the band by the press's offset into it on the first motion.
+            self::$paneDrag = self::paneDragController()->beginResize($side, $pressX);
             self::$paneDragOrigin = $this->dock();
 
             return [$this, null];

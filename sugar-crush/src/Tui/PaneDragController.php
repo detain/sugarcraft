@@ -233,18 +233,25 @@ final class PaneDragController
 
     /**
      * Where a released dock drag lands: Left band, Right band, or null for
-     * "inside the centre — cancel". `$centerFromCol`/`$centerToCol` are the
-     * centre column's 0-based inclusive frame span as last painted.
+     * "the middle of the centre — cancel". `$centerFromCol`/`$centerToCol`
+     * are the centre column's 0-based inclusive frame span as last painted.
+     *
+     * The centre's outer thirds are drop targets for the side they face. An
+     * EMPTY side paints no band, so the centre runs to the frame edge and a
+     * rule of "left of / right of the centre" alone had no cell at all that
+     * could dock into it — dragging a pane to the empty right side was
+     * unreachable in the default layout. The middle third still cancels.
      */
     public function dockDropSide(int $releaseX, int $centerFromCol, int $centerToCol): ?Side
     {
         $col = $releaseX - 1;
+        $edge = intdiv(max(0, $centerToCol - $centerFromCol + 1), 3);
 
-        if ($col < $centerFromCol) {
+        if ($col < $centerFromCol + $edge) {
             return Side::Left;
         }
 
-        return $col > $centerToCol ? Side::Right : null;
+        return $col > $centerToCol - $edge ? Side::Right : null;
     }
 
     /**
