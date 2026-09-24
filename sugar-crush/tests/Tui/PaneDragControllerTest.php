@@ -218,6 +218,30 @@ final class PaneDragControllerTest extends TestCase
         self::assertNull($drag->dockDropSide(70, 30, 89), 'last middle column');
     }
 
+    public function testThePointerFollowsEveryMotionOfADockDrag(): void
+    {
+        $drag = PaneDragController::idle()->beginDockDrag('files', 10, 4);
+        self::assertSame([10, 4], $drag->pointer(), 'the press is the pointer until a motion arrives');
+
+        $drag = $drag->withMotion(11, 4);
+        self::assertSame([11, 4], $drag->pointer(), 'recorded inside the tolerance too');
+        self::assertFalse($drag->isArmed());
+
+        $drag = $drag->withMotion(40, 9);
+        self::assertTrue($drag->isArmed());
+        self::assertSame([40, 9], $drag->pointer());
+
+        $drag = $drag->withMotion(12, 4);
+        self::assertTrue($drag->isArmed(), 'wandering back through the tolerance never un-arms');
+        self::assertSame([12, 4], $drag->pointer());
+    }
+
+    public function testTheDropEdgeIsTheThirdDockDropSideAnswersWith(): void
+    {
+        self::assertSame(20, PaneDragController::dropEdgeCols(30, 89));
+        self::assertSame(0, PaneDragController::dropEdgeCols(30, 31), 'a two-column centre has no edge thirds');
+    }
+
     public function testAnEmptySideIsStillADropTarget(): void
     {
         // No right band: the centre runs to the frame edge (0-based 30..159

@@ -336,6 +336,119 @@ final class DockDragBytePathTest extends TestCase
     }
 
     // =========================================================================
+    // The drop-target outline an armed drag paints under the pointer
+    // =========================================================================
+
+    public function testAnArmedHeaderDragOutlinesTheDropTargetUnderThePointer(): void
+    {
+        $app = $this->castApp();
+        $body = $this->paintBody($app);
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+        [$headerX, $headerY] = $this->paintedHeaderCell($body, Pane::Files->value);
+
+        $edge = PaneDragController::dropEdgeCols($frame['centerFrom'], $frame['centerTo']);
+        $top = $frame['bandTop'];
+        $bottom = $top + $frame['paneRows'] - 1;
+
+        // Over the right band: the outline spans the band plus the centre's
+        // facing third, labelled with the pane and the side.
+        $app = $this->driveBytes($app, "\x1b[<0;{$headerX};{$headerY}M\x1b[<32;" . (self::BARE_COLS - 2) . ";{$headerY}M");
+        $lines = explode("\n", $this->paintBody($app));
+        $from = $frame['centerTo'] - $edge + 1;
+        $to = $frame['bandCols'] - 1;
+
+        $topLine = $this->plainText($lines[$top]);
+        self::assertSame("\u{250F}", mb_substr($topLine, $from, 1), 'top-left corner on the first column that docks right');
+        self::assertSame("\u{2513}", mb_substr($topLine, $to, 1));
+        self::assertStringContainsString(Pane::Files->icon() . ' dock Files right', $topLine);
+        self::assertSame("\u{2517}", mb_substr($this->plainText($lines[$bottom]), $from, 1));
+        self::assertSame("\u{251B}", mb_substr($this->plainText($lines[$bottom]), $to, 1));
+        $middle = $this->plainText($lines[$top + 2]);
+        self::assertSame("\u{2503}", mb_substr($middle, $from, 1));
+        self::assertSame("\u{2503}", mb_substr($middle, $to, 1));
+
+        // Swung over to the left: the outline follows the pointer.
+        $app = $this->driveBytes($app, "\x1b[<32;3;{$headerY}M");
+        $lines = explode("\n", $this->paintBody($app));
+        $topLine = $this->plainText($lines[$top]);
+        self::assertSame("\u{250F}", mb_substr($topLine, 0, 1));
+        self::assertSame("\u{2513}", mb_substr($topLine, $frame['centerFrom'] + $edge - 1, 1), 'the outline ends on the last column that docks left');
+        self::assertStringContainsString('dock Files left', $topLine);
+
+        // Nothing is painted after the release retires the gesture.
+        $app = $this->driveBytes($app, "\x1b[<0;3;{$headerY}m");
+        self::assertStringNotContainsString("\u{250F}", $this->plainText($this->paintBody($app)));
+    }
+
+    public function testTheOutlineLeavesTheFrameBesideItUntouched(): void
+    {
+        $app = $this->castApp();
+        $baseline = explode("\n", $this->paintBody($app));
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+        [$headerX, $headerY] = $this->paintedHeaderCell(implode("\n", $baseline), Pane::Files->value);
+        $edgeTo = $frame['centerFrom'] + PaneDragController::dropEdgeCols($frame['centerFrom'], $frame['centerTo']) - 1;
+
+        $app = $this->driveBytes($app, "\x1b[<0;{$headerX};{$headerY}M\x1b[<32;3;" . ($headerY + 3) . "M");
+        $dragged = explode("\n", $this->paintBody($app));
+
+        for ($row = $frame['bandTop']; $row < $frame['bandTop'] + $frame['paneRows']; $row++) {
+            $plain = $this->plainText($dragged[$row]);
+            self::assertSame(self::BARE_COLS, Width::of($plain), "row {$row} keeps its width");
+            self::assertSame(
+                mb_substr($this->plainText($baseline[$row]), $edgeTo + 1),
+                mb_substr($plain, $edgeTo + 1),
+                "row {$row}: every cell right of the outline is the frame as painted without it",
+            );
+            // Hollow: the interior row keeps its cells between the two edges.
+            if ($row > $frame['bandTop'] && $row < $frame['bandTop'] + $frame['paneRows'] - 1) {
+                self::assertSame(
+                    mb_substr($this->plainText($baseline[$row]), 1, $edgeTo - 1),
+                    mb_substr($plain, 1, $edgeTo - 1),
+                    "row {$row}: the outline is hollow",
+                );
+            }
+        }
+
+        // The cut keeps the styling on the far side of the edge: the chat's
+        // right border cell still carries an SGR run after the outline.
+        $raw = $dragged[$frame['bandTop'] + 2];
+        self::assertMatchesRegularExpression('/\x{2503}\x1b\[0m\x1b\[[0-9;]*m/u', $raw, 'the tail re-opens its own SGR state after the edge');
+    }
+
+    public function testTheCentresMiddleThirdShowsTheCancelHintInsteadOfAnOutline(): void
+    {
+        $app = $this->castApp();
+        $body = $this->paintBody($app);
+        $frame = TuiRenderer::lastDockFrame();
+        self::assertNotNull($frame);
+        [$headerX, $headerY] = $this->paintedHeaderCell($body, Pane::Files->value);
+        $centreX = intdiv($frame['centerFrom'] + $frame['centerTo'], 2) + 1;
+
+        $app = $this->driveBytes($app, "\x1b[<0;{$headerX};{$headerY}M\x1b[<32;{$centreX};" . ($headerY + 4) . "M");
+        $plain = $this->plainText($this->paintBody($app));
+
+        self::assertStringContainsString('release here to cancel', $plain);
+        self::assertStringNotContainsString("\u{250F}", $plain);
+    }
+
+    public function testAnUnarmedHeaderPressPaintsNoDropTarget(): void
+    {
+        $app = $this->castApp();
+        $body = $this->paintBody($app);
+        [$headerX, $headerY] = $this->paintedHeaderCell($body, Pane::Files->value);
+
+        // Press plus one cell of travel: still a potential click.
+        $app = $this->driveBytes($app, "\x1b[<0;{$headerX};{$headerY}M\x1b[<32;" . ($headerX + 1) . ";{$headerY}M");
+        self::assertTrue(App::paneDragController()->isDockDragging());
+        $plain = $this->plainText($this->paintBody($app));
+
+        self::assertStringNotContainsString("\u{250F}", $plain);
+        self::assertStringNotContainsString('release here to cancel', $plain);
+    }
+
+    // =========================================================================
     // Harness
     // =========================================================================
 
