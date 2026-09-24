@@ -566,6 +566,10 @@ final class Renderer
 
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
+        // An armed dock drag outlines where its release would land, painted
+        // last so nothing composed above can cover it.
+        $frame = self::overlayDropTarget($a, $frame, $bandTop - $dropped, $paneRows);
+
         // Dock click targets, phase 2+3 (dividers stamped by phase 2, pane
         // headers consumed by the phase-3 gesture). Every occupied side
         // contributes divider zones, so every side is grabbable: a stacked
@@ -1490,6 +1494,105 @@ final class Renderer
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Outline the drop target of the dock drag in flight.
+     *
+     * Without it a header drag had no visible answer until the release —
+     * the pane either moved or it did not, and the user could only learn
+     * the drop rule by trial. The target is resolved from the controller's
+     * last pointer through {@see PaneDragController::dockDropSide()}, the
+     * exact rule the release runs, so the outline can never promise a side
+     * the release will not deliver. The outline spans the whole region that
+     * docks to that side (its band plus the facing third of the centre,
+     * {@see PaneDragController::dropEdgeCols()}), over the band's rows.
+     *
+     * Hollow and heavy-lined: the four edges are painted over the frame and
+     * the interior is left alone, so the content the pane will sit beside
+     * stays readable, and the heavy `┏━┓` set cannot be mistaken for a pane's
+     * own rounded frame. Over the centre's middle third, where a release
+     * cancels, a one-line hint says so instead.
+     *
+     * Only an ARMED drag paints: an unarmed one may still end as the plain
+     * click its press began, and flashing an outline under every header
+     * click would be noise.
+     */
+    private static function overlayDropTarget(App $a, string $frame, int $bandTop, int $paneRows): string
+    {
+        $drag = App::paneDragController();
+        $geometry = self::$lastDockFrame;
+
+        if (!$drag->isDockDragging() || !$drag->isArmed() || $geometry === null || $paneRows < 2 || $bandTop < 0) {
+            return $frame;
+        }
+
+        $pane = Pane::tryFrom((string) $drag->dragPaneId());
+
+        if ($pane === null) {
+            return $frame;
+        }
+
+        [$pointerX] = $drag->pointer();
+        $centerFrom = $geometry['centerFrom'];
+        $centerTo = $geometry['centerTo'];
+        $side = $drag->dockDropSide($pointerX, $centerFrom, $centerTo);
+        $theme = $a->theme();
+        $lines = explode("\n", $frame);
+
+        if ($side === null) {
+            $hint = Width::truncate(' release here to cancel ', max(0, $centerTo - $centerFrom - 1));
+            $row = $bandTop + intdiv($paneRows, 2);
+
+            if ($hint !== '' && isset($lines[$row])) {
+                $col = $centerFrom + intdiv($centerTo - $centerFrom + 1 - Width::string($hint), 2);
+                $lines[$row] = self::paintCells($lines[$row], $col, Style::new()->foreground($theme->shellMuted)->reverse()->render($hint));
+            }
+
+            return implode("\n", $lines);
+        }
+
+        $edge = PaneDragController::dropEdgeCols($centerFrom, $centerTo);
+        [$from, $to] = $side === Side::Left
+            ? [0, $centerFrom + $edge - 1]
+            : [$centerTo - $edge + 1, $geometry['bandCols'] - 1];
+        $inner = $to - $from - 1;
+
+        if ($inner < 2) {
+            return $frame;
+        }
+
+        $st = Style::new()->foreground($theme->shellPrimary)->bold();
+        $label = Width::truncate(' ' . $pane->icon() . ' dock ' . $pane->label() . ' ' . strtolower($side->name) . ' ', max(0, $inner - 2));
+        $top = "\u{250F}\u{2501}" . $label . str_repeat("\u{2501}", max(0, $inner - 1 - Width::string($label))) . "\u{2513}";
+        $bottom = "\u{2517}" . str_repeat("\u{2501}", $inner) . "\u{251B}";
+        $last = $bandTop + $paneRows - 1;
+
+        for ($row = $bandTop; $row <= $last && isset($lines[$row]); $row++) {
+            if ($row === $bandTop || $row === $last) {
+                $lines[$row] = self::paintCells($lines[$row], $from, $st->render($row === $bandTop ? $top : $bottom));
+                continue;
+            }
+
+            $lines[$row] = self::paintCells($lines[$row], $from, $st->render("\u{2503}"));
+            $lines[$row] = self::paintCells($lines[$row], $to, $st->render("\u{2503}"));
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Paint $patch over the cells starting at $col, keeping the styling of
+     * everything on both sides — {@see spliceInto()} strips the tail's SGR,
+     * which a dropdown's single splice per row can afford but an outline
+     * that cuts every band row twice cannot.
+     */
+    private static function paintCells(string $line, int $col, string $patch): string
+    {
+        $head = Width::truncateAnsi($line, $col);
+        $pad = str_repeat(' ', max(0, $col - Width::string($head)));
+
+        return $head . "\e[0m" . $pad . $patch . "\e[0m" . Width::dropAnsi($line, $col + Width::string($patch));
     }
 
     /**

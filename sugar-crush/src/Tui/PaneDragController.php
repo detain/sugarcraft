@@ -56,6 +56,8 @@ final class PaneDragController
         private readonly int $pressY,
         private readonly bool $armed,
         private readonly bool $previewed,
+        private readonly int $pointerX,
+        private readonly int $pointerY,
     ) {
     }
 
@@ -73,6 +75,8 @@ final class PaneDragController
             pressY: 0,
             armed: false,
             previewed: false,
+            pointerX: 0,
+            pointerY: 0,
         );
     }
 
@@ -117,6 +121,8 @@ final class PaneDragController
             pressX: $pressX,
             pressY: $pressY,
             armed: false,
+            pointerX: $pressX,
+            pointerY: $pressY,
         );
     }
 
@@ -165,15 +171,33 @@ final class PaneDragController
             return $this->previewed ? $this : $this->mutate(previewed: true);
         }
 
-        if ($this->armed || $this->kind !== self::KIND_DOCK) {
+        if ($this->kind !== self::KIND_DOCK) {
             return $this;
         }
 
+        // The pointer is recorded on every motion, armed or not: the
+        // renderer paints the drop target under it (see {@see pointer()}).
         $travelled = abs($x - $this->pressX) + abs($y - $this->pressY);
 
-        return $travelled > self::DRAG_ARM_TOLERANCE_CELLS
-            ? $this->mutate(armed: true)
-            : $this;
+        return $this->mutate(
+            armed: $this->armed || $travelled > self::DRAG_ARM_TOLERANCE_CELLS,
+            pointerX: $x,
+            pointerY: $y,
+        );
+    }
+
+    /**
+     * Where the pointer of a dock drag last was, 1-based terminal cells —
+     * the press until the first motion arrives. The renderer resolves it
+     * through {@see dockDropSide()} each frame to paint the drop target the
+     * release would land on, so what is highlighted and what the release
+     * does can never disagree.
+     *
+     * @return array{0: int, 1: int} x, y
+     */
+    public function pointer(): array
+    {
+        return [$this->pointerX, $this->pointerY];
     }
 
     /**
@@ -245,13 +269,23 @@ final class PaneDragController
     public function dockDropSide(int $releaseX, int $centerFromCol, int $centerToCol): ?Side
     {
         $col = $releaseX - 1;
-        $edge = intdiv(max(0, $centerToCol - $centerFromCol + 1), 3);
+        $edge = self::dropEdgeCols($centerFromCol, $centerToCol);
 
         if ($col < $centerFromCol + $edge) {
             return Side::Left;
         }
 
         return $col > $centerToCol - $edge ? Side::Right : null;
+    }
+
+    /**
+     * How many of the centre's outer columns, on each side, belong to the
+     * facing side's drop target — the one rule {@see dockDropSide()} and
+     * the renderer's drop-target outline share.
+     */
+    public static function dropEdgeCols(int $centerFromCol, int $centerToCol): int
+    {
+        return intdiv(max(0, $centerToCol - $centerFromCol + 1), 3);
     }
 
     /**
@@ -290,6 +324,8 @@ final class PaneDragController
         ?int $pressY = null,
         ?bool $armed = null,
         ?bool $previewed = null,
+        ?int $pointerX = null,
+        ?int $pointerY = null,
     ): self {
         return new self(
             kind: $kind ?? $this->kind,
@@ -300,6 +336,8 @@ final class PaneDragController
             pressY: $pressY ?? $this->pressY,
             armed: $armed ?? $this->armed,
             previewed: $previewed ?? $this->previewed,
+            pointerX: $pointerX ?? $this->pointerX,
+            pointerY: $pointerY ?? $this->pointerY,
         );
     }
 }
