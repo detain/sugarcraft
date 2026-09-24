@@ -197,6 +197,17 @@ enum Pane: string
      * the pane's column budget, the exact class of desync the width law of
      * renderAgentView already defends against elsewhere.
      *
+     * Unicode-16 table law: every glyph carries East Asian Width property
+     * N (Neutral) in the CURRENT UCD, not merely in the table the running
+     * PHP bundles. U+2630 TRIGRAM FOR HEAVEN sat at N through Unicode 15.1
+     * and was reclassified W in 16.0 — the exact drift that made PHP 8.4's
+     * mb_strwidth (oniguruma, Unicode-16 tables) count a pinned 120-column
+     * chrome line as 121 while 8.3 stayed green. Adjudicate any candidate
+     * against https://www.unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt
+     * (retrieved 2026-09-24) before adoption; A (Ambiguous) is excluded too,
+     * since East-Asian-locale terminals render it double-width even though
+     * mb_strwidth never does.
+     *
      * Input, Help and Menu are chrome-only surfaces with no framed pane
      * identity to advertise, so they carry no picture and compose as the
      * empty string.
@@ -204,10 +215,10 @@ enum Pane: string
     public function icon(): string
     {
         return match ($this) {
-            // ▤ framed horizontal lines — the transcript
-            self::Chat => "\u{25A4}",
-            // ☰ three unframed lines — the file list
-            self::Files => "\u{2630}",
+            // ▢ rounded window frame — the transcript surface
+            self::Chat => "\u{25A2}",
+            // ◫ vertical bisecting line — the file-explorer split pane
+            self::Files => "\u{25EB}",
             // ⚒ hammer and pick — the tool bench
             self::Tools => "\u{2692}",
             // ✦ four-point star — a learnt skill

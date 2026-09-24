@@ -19,7 +19,7 @@ use SugarCraft\Sprinkles\Style;
  * fallback when the border walk's row shape is not the one we know, and the
  * piped-stdout default that keeps every existing snapshot honest.
  *
- * Glyphs are composed as "\u{2630}" escapes so no string literal here ever
+ * Glyphs are composed as "\u{25EB}" escapes so no string literal here ever
  * looks glob-shaped to the PathGlob differential corpus.
  */
 final class PaneFrameTest extends TestCase
@@ -35,7 +35,7 @@ final class PaneFrameTest extends TestCase
     private static function frameStyle(Color $borderFg, int $width = 40): Style
     {
         return Style::new()
-            ->border(Border::rounded()->withTitle(' ' . "\u{2630}" . ' files '))
+            ->border(Border::rounded()->withTitle(' ' . "\u{25EB}" . ' files '))
             ->padding(0, 1)
             ->width($width)
             ->borderForeground($borderFg);

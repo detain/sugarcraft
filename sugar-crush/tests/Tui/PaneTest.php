@@ -124,8 +124,8 @@ final class PaneTest extends TestCase
      */
     public function testFramedPaneIconsAreTheAdoptedGlyphs(): void
     {
-        $this->assertSame("\u{25A4}", Pane::Chat->icon());
-        $this->assertSame("\u{2630}", Pane::Files->icon());
+        $this->assertSame("\u{25A2}", Pane::Chat->icon());
+        $this->assertSame("\u{25EB}", Pane::Files->icon());
         $this->assertSame("\u{2692}", Pane::Tools->icon());
         $this->assertSame("\u{2726}", Pane::Skills->icon());
         $this->assertSame("\u{2756}", Pane::Agents->icon());
@@ -133,11 +133,47 @@ final class PaneTest extends TestCase
     }
 
     /**
-     * @testdox Every framed-pane icon is one BMP codepoint of display width 1, and all six differ
+     * Unicode-16 East Asian Width whitelist — one row per adopted frame
+     * icon, the value being the EAW property that codepoint carries in the
+     * authoritative table as adjudicated at adoption time.
+     *
+     * Source: https://www.unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt
+     * (retrieved 2026-09-24). The U+2630 TRIGRAM FOR HEAVEN row the Files
+     * pane used to carry is why this exists: property N through Unicode
+     * 15.1, reclassified W in 16.0 — PHP 8.4's mb_strwidth (oniguruma with
+     * the Unicode-16 tables) then counted a pinned 120-column chrome line as
+     * 121 while 8.3's older bundled table stayed green, so only the 8.4 CI
+     * leg could see the drift.
+     *
+     * Every row must read 'N': F/W break mb_strwidth on Unicode-16 runtimes
+     * outright, and A (Ambiguous) breaks East-Asian-locale terminals that
+     * render Ambiguous wide even though mb_strwidth never counts it as 2.
+     * The staleness arm at the bottom of
+     * {@see self::testEveryFramedPaneIconIsWidthOneAndDistinct()} compares
+     * icon()'s codepoints against these keys, so adopting a 7th icon — or
+     * respelling one — without adjudicating its property here first reddens
+     * the suite.
+     */
+    private const ICON_EAW_WHITELIST = [
+        "\u{25A2}" => 'N', // Chat — WHITE SQUARE WITH ROUNDED CORNERS
+        "\u{25EB}" => 'N', // Files — WHITE SQUARE WITH VERTICAL BISECTING LINE
+        "\u{2692}" => 'N', // Tools — HAMMER AND PICK
+        "\u{2726}" => 'N', // Skills — BLACK FOUR POINTED STAR
+        "\u{2756}" => 'N', // Agents — BLACK DIAMOND MINUS WHITE X
+        "\u{2699}" => 'N', // Settings — GEAR
+    ];
+
+    /**
+     * @testdox Every framed-pane icon is one BMP codepoint of display width 1 under BOTH width oracles, and all six differ
      *
      * The width law from Pane::icon()'s contract, executed: a double-width
      * or combining picture in a border title pushes the closing corner off
      * the pane's column budget, so the glyph set may never grow one.
+     *
+     * Two oracles run because they disagreed in the field: Width::of is the
+     * project's own static table, mb_strwidth is what BootstrapTest's
+     * frame-budget loop measures with, and PHP 8.4 ships it on Unicode-16
+     * East Asian Width tables where several older lookalikes went wide.
      */
     public function testEveryFramedPaneIconIsWidthOneAndDistinct(): void
     {
@@ -148,10 +184,20 @@ final class PaneTest extends TestCase
             $this->assertSame(1, mb_strlen($icon), $pane->name . "'s icon must be a single codepoint");
             $this->assertLessThanOrEqual(0xFFFF, mb_ord($icon), $pane->name . "'s icon must stay in the BMP");
             $this->assertSame(1, Width::of($icon), $pane->name . "'s icon is not display-width 1");
+            $this->assertSame(1, mb_strwidth($icon), $pane->name . "'s icon counts double-width to mbstring (EAW W/F) — the 8.4 chrome-line budget breaks");
             $icons[$pane->name] = $icon;
         }
 
         $this->assertCount(6, array_unique($icons), 'two framed panes advertise the same picture');
+
+        $this->assertSame(
+            array_keys(self::ICON_EAW_WHITELIST),
+            array_values($icons),
+            'the framed-pane icon set drifted from the adjudicated EAW whitelist — re-run the Unicode table check before extending it',
+        );
+        foreach (self::ICON_EAW_WHITELIST as $glyph => $property) {
+            $this->assertSame('N', $property, "whitelisted icon " . mb_ord($glyph, 'UTF-8') . " is not property N");
+        }
     }
 
     /**
