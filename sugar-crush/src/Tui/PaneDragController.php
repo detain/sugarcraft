@@ -98,9 +98,13 @@ final class PaneDragController
     }
 
     /**
-     * A press landed on a docked pane's `pane:<id>` header. NOT yet armed:
-     * a release that never left the tolerance must still complete the plain
-     * click-to-focus the chrome tracker would have completed.
+     * A press landed on one of a docked pane's header surfaces — its frame
+     * header (`pane:<id>`) or the menu-bar tab standing for it
+     * (`panetab:<id>`, the live-report fix: dragging the bar label must move
+     * the pane exactly like dragging the box top). NOT yet armed: a release
+     * that never left the tolerance must still complete the plain click the
+     * chrome tracker would have completed — focus from the header, the dock
+     * toggle from the tab.
      */
     public function beginDockDrag(string $paneId, int $pressX, int $pressY): self
     {

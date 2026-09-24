@@ -1239,20 +1239,28 @@ final class App implements Model
 
     /**
      * A left press on the chrome asks the gesture phase first: the divider
-     * column of a stacked band owns a live resize, a docked pane's header
-     * row owns a potential dock drag, and an intra-stack gap row is consumed
-     * as a no-op (its height drag is the documented follow-up on
-     * {@see PaneDragController}). Anything else — including a pane header
-     * that is only TRANSIENTLY focused — returns null so the press continues
-     * down the plain click path it always took.
+     * column of a stacked band owns a live resize, a docked pane owns a
+     * potential dock drag from EITHER of its header surfaces — the frame
+     * header row (`pane:<id>`) and the menu-bar tab (L2's
+     * {@see MenuBar::PANE_TAB_ZONE_PREFIX}, the live-report fix: the bar tab
+     * is the header the eye reaches first, and until it armed the gesture a
+     * press-drag-release there was a cancelled click with no visible answer)
+     * — and an intra-stack gap row is consumed as a no-op (its height drag
+     * is the documented follow-up on {@see PaneDragController}). Anything
+     * else — including a tab of an UNDOCKED pane (its click still docks on
+     * the home side; grabbing it to move would strand a pane the pointer
+     * never saw docked) or a pane header that is only TRANSIENTLY focused —
+     * returns null so the press continues down the plain click path it
+     * always took.
      *
      * A resize press is fully swallowed (never fed to the chrome tracker):
      * the gesture owns the whole sequence from here, and a tracker left
      * holding the press could pair a later stray release against a zone that
      * has since re-rendered elsewhere. A dock-drag press deliberately does
      * NOT swallow — it arms the controller and falls through — because an
-     * UNARMED release must complete exactly the click-to-focus the tracker
-     * would have completed before this phase existed.
+     * UNARMED release must complete exactly the click the tracker would have
+     * completed before this phase existed: focus on a frame header, the
+     * dock toggle on a bar tab.
      *
      * @return ?array{0: self, 1: ?\Closure}
      */
@@ -1282,14 +1290,30 @@ final class App implements Model
             return [$this, null];
         }
 
-        $headers = Renderer::PANE_ZONE_PREFIX;
+        $pane = self::dragTargetPane($zoneId);
 
-        if (str_starts_with($zoneId, $headers)) {
-            $pane = Pane::tryFrom(substr($zoneId, strlen($headers)));
+        if ($pane !== null && $this->isDocked($pane)) {
+            self::$paneDrag = self::paneDragController()->beginDockDrag($pane->value, $pressX, $pressY);
+            self::$paneDragOrigin = $this->dock();
+        }
 
-            if ($pane !== null && $this->isDocked($pane)) {
-                self::$paneDrag = self::paneDragController()->beginDockDrag($pane->value, $pressX, $pressY);
-                self::$paneDragOrigin = $this->dock();
+        return null;
+    }
+
+    /**
+     * The pane a pressed chrome zone-id names, when it names one: the pane's
+     * frame header ({@see Renderer::PANE_ZONE_PREFIX}) or the menu-bar tab
+     * standing for it ({@see MenuBar::PANE_TAB_ZONE_PREFIX}) — the two
+     * surfaces where “grab this pane and move it” is a legitimate reading of
+     * the press. Any other id (menu title, session tab, divider remainders
+     * handled above, a stray prefix that is not a Pane) resolves to null and
+     * the press falls through to the plain click path.
+     */
+    private static function dragTargetPane(string $zoneId): ?Pane
+    {
+        foreach ([Renderer::PANE_ZONE_PREFIX, MenuBar::PANE_TAB_ZONE_PREFIX] as $prefix) {
+            if (str_starts_with($zoneId, $prefix)) {
+                return Pane::tryFrom(substr($zoneId, strlen($prefix)));
             }
         }
 
