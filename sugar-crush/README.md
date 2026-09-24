@@ -720,9 +720,13 @@ focuses it; undocking the focused pane hands focus back to chat. Clicking the
 returns focus. `/pane dock left|right` and `/pane toggle [name]` drive the
 same state from the keyboard. Dragging either header of a docked pane — the
 frame's title row, or the menu-bar tab standing for it — carries the pane to
-the band under the release; dropping inside the centre cancels, and the
-release row picks the slot within the destination stack. Dragging the
-dividers resizes the columns and re-stacks the panes within a side.
+the side under the release: the side band itself, or the outer third of the
+chat facing it (so an empty side, which paints no band, is still a target);
+dropping in the chat's middle third cancels, and the release row picks the
+slot within the destination stack. A pane may dock on either side, not only
+its home side. To resize a side, press on the border between it and the chat —
+the side box's edge, the divider, or the chat's own edge, anywhere down the
+full height — and drag; no modifier key is needed (Esc mid-drag cancels).
 
 Focus decides who answers `Tab`, `Shift+Tab` and `Enter`; typing a printable
 character always reaches the chat draft regardless of focus, as do `Ctrl+O`
@@ -1200,14 +1204,15 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,196 tests / 172,148 assertions, 0 failures, 1 skipped** — the whole of
+**12,201 tests / 172,522 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-15m40s. Measured 2026-09-23. The pane-docking feature re-pinned the figure in stages,
+14m38s. Measured 2026-09-24. The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
 (`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
-lane, and the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle
-and palette door (L2, `3c4db713d`..`b9ea9b386`) — each adding its own tests and
+lane, the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle
+and palette door (L2, `3c4db713d`..`b9ea9b386`), and the live-gesture fix (full-height resize
+seam, empty-side drop target, cross-side painting) — each adding its own tests and
 assertions, so the running arithmetic lives in
 `git log` rather than in this sentence (a hard-coded "+N over M" chain went stale here
 the moment the next stage landed). The

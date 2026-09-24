@@ -582,9 +582,9 @@ final class Renderer
             && ($leftMeta !== null || $rightMeta !== null || $leftHeaders !== [] || $rightHeaders !== [])) {
             $frameRowsTotal = self::lineCount($frame);
             $rightStartX = self::blockWidth($leftPane) + $paneCols;
-            $byRow = self::dividerZones($leftMeta, Side::Left, 0, $bandTop, $cols, $frameRowsTotal);
+            $byRow = self::dividerZones($leftMeta, Side::Left, 0, $bandTop, $cols, $frameRowsTotal, $paneRows);
 
-            foreach (self::dividerZones($rightMeta, Side::Right, $rightStartX, $bandTop, $cols, $frameRowsTotal) as $absRow => $spans) {
+            foreach (self::dividerZones($rightMeta, Side::Right, $rightStartX, $bandTop, $cols, $frameRowsTotal, $paneRows) as $absRow => $spans) {
                 $byRow[$absRow] = array_merge($byRow[$absRow] ?? [], $spans);
             }
 
@@ -608,8 +608,9 @@ final class Renderer
 
             foreach ($byRow as $absRow => $spans) {
                 // Spans from both sides can share a row only where the two
-                // side blocks do not overlap columns — and a header never
-                // spans its own divider cell — so ordering by start column
+                // side seams do not overlap columns — the centre keeps at
+                // least its own interior between them — and a header never
+                // spans its side's seam, so ordering by start column
                 // is enough to keep the assembly non-overlapping.
                 usort($spans, static fn (array $x, array $y): int => $x[0] <=> $y[0]);
 
@@ -1052,7 +1053,7 @@ final class Renderer
      * join the frame — but a lone side is no longer the un-grabbable seam the
      * Phase-3 cut left it.
      *
-     * @return array{0: string, 1: ?array{width: int, dividerColLocal: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>}, 2: list<array{paneId: string, row: int, from: int, to: int}>}
+     * @return array{0: string, 1: ?array{width: int, dividerColLocal: int, grabFrom: int, grabTo: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>}, 2: list<array{paneId: string, row: int, from: int, to: int}>}
      */
     private static function renderSide(App $a, Side $side, int $cols, int $rows): array
     {
@@ -1080,6 +1081,8 @@ final class Renderer
             $meta = [
                 'width' => $painted,
                 'dividerColLocal' => $side === Side::Left ? $painted - 1 : 0,
+                'grabFrom' => $side === Side::Left ? $painted - 1 : -1,
+                'grabTo' => $side === Side::Left ? $painted + 1 : 1,
                 'blockRows' => self::lineCount($block),
                 'gaps' => [],
             ];
@@ -1130,12 +1133,12 @@ final class Renderer
         if ($side === Side::Left) {
             $block = implode("\n", array_map(static fn (string $l): string => $l . $divider, $lines));
 
-            return [$block, ['width' => $painted, 'dividerColLocal' => $painted, 'blockRows' => count($lines), 'gaps' => $gaps], self::paneHeaders($a, $panes, $slotTops, 0, $painted - 1)];
+            return [$block, ['width' => $painted, 'dividerColLocal' => $painted, 'grabFrom' => $painted - 1, 'grabTo' => $painted + 2, 'blockRows' => count($lines), 'gaps' => $gaps], self::paneHeaders($a, $panes, $slotTops, 0, $painted - 2)];
         }
 
         $block = implode("\n", array_map(static fn (string $l): string => $divider . $l, $lines));
 
-        return [$block, ['width' => $painted, 'dividerColLocal' => 0, 'blockRows' => count($lines), 'gaps' => $gaps], self::paneHeaders($a, $panes, $slotTops, 1, $painted)];
+        return [$block, ['width' => $painted, 'dividerColLocal' => 0, 'grabFrom' => -1, 'grabTo' => 2, 'blockRows' => count($lines), 'gaps' => $gaps], self::paneHeaders($a, $panes, $slotTops, 2, $painted)];
     }
 
     /**
@@ -1207,6 +1210,13 @@ final class Renderer
      * arm is what keeps the pre-docking behavior intact: focusing Tools used
      * to paint Tools left, and it still does, without a single dock write.
      *
+     * A docked slot paints on whichever side the DOCK holds it, not on the
+     * pane's home {@see Pane::dockSide()}: the home side only decides where a
+     * transient focus or a first click-to-dock lands. Filtering slots by home
+     * side made every cross-side move (a header drag across the centre, or
+     * `/pane dock right files`) persist a slot the frame then never painted —
+     * the pane simply vanished.
+     *
      * @return list<Pane>
      */
     private static function sidePanes(App $a, Side $side): array
@@ -1215,7 +1225,7 @@ final class Renderer
 
         foreach ($a->dock()->slots($side) as $slot) {
             $pane = Pane::tryFrom($slot->paneId);
-            if ($pane !== null && $pane->dockSide() === $side && !in_array($pane, $panes, true)) {
+            if ($pane !== null && $pane->dockable() && !in_array($pane, $panes, true)) {
                 $panes[] = $pane;
             }
         }
@@ -1309,15 +1319,26 @@ final class Renderer
     /**
      * The scanner-scratch rows carrying this side's divider click targets.
      *
-     * One zone per line, strictly: a divider-column row gets the single-cell
-     * `divider:<side>:r<absRow>` zone (the invariant on
-     * {@see LiveRenderer::DIVIDER_ZONE_PREFIX} and the markPaneHeader note it
-     * inherits), and a gap row gets the whole-width
-     * `stackdiv:<side>:<slotIndex>:r<absRow>` zone instead — never both on
-     * one line, which is also why the divider column skips gap rows: a drag
-     * started on an ambiguous cell belongs to the gap it visually crosses.
+     * Every band row gets a `divider:<side>:r<absRow>` grab span — not just
+     * the rows the side's boxes happen to fill. Side panes are only as tall
+     * as their content, so a divider stamped over `blockRows` alone left the
+     * boundary grabbable on a handful of rows at the top of the frame while
+     * the chat pane's border, the line the eye reads as "the side", ran
+     * inert down the rest of the screen. The span is the boundary's whole
+     * painted seam (`grabFrom`..`grabTo`, block-local and allowed to reach
+     * one cell into the centre): the side box's own border, the stacked
+     * divider column when there is one, and the centre pane's border — a
+     * one-cell target between two look-alike `│` columns was a guessing game.
      *
-     * @param ?array{width: int, dividerColLocal: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>} $meta
+     * One zone per line per id, strictly (the invariant on
+     * {@see LiveRenderer::DIVIDER_ZONE_PREFIX}). A gap row carries its
+     * `stackdiv:<side>:<slotIndex>:r<absRow>` zone across the rest of the
+     * row, but yields the seam cells to the divider: the gap drag is still
+     * the documented no-op follow-up on {@see PaneDragController}, and a
+     * press on the seam there must resize like on every other row rather
+     * than be swallowed.
+     *
+     * @param ?array{width: int, dividerColLocal: int, grabFrom: int, grabTo: int, blockRows: int, gaps: list<array{row: int, slotIndex: int}>} $meta
      *
      * @return array<int, list<array{0: int, 1: int, 2: string}>> absolute frame row => segments
      */
@@ -1328,6 +1349,7 @@ final class Renderer
         int $bandTop,
         int $cols,
         int $frameRows,
+        int $paneRows,
     ): array {
         if ($meta === null) {
             return [];
@@ -1340,40 +1362,36 @@ final class Renderer
             $gapRows[$gap['row']] = $gap['slotIndex'];
         }
 
+        $grabFrom = max(0, $startX + $meta['grabFrom']);
+        $grabTo = min($startX + $meta['grabTo'], $cols);
         $rows = [];
 
-        for ($r = 0; $r < $meta['blockRows']; $r++) {
+        for ($r = 0, $bandRows = max($meta['blockRows'], $paneRows); $r < $bandRows; $r++) {
             $absRow = $bandTop + $r;
 
             if ($absRow >= $frameRows) {
                 break;
             }
 
+            $spans = [];
+
             if (isset($gapRows[$r])) {
-                $from = $startX;
-                // Harmonised one rule for both sides (round-1 review): every
-                // stacked gap row paints width+1 cells from $startX — the
-                // ─ run plus its divider cell, trailing on the left and
-                // leading on the right — so the zone crosses the whole row,
-                // which is exactly the docblock's promise that a drag on an
-                // ambiguous divider cell belongs to the gap it crosses.
-                $to = min($startX + $meta['width'] + 1, $cols);
+                // The ─ run of a stacked gap row spans the block; the seam
+                // end of it belongs to the divider (see the docblock).
+                [$from, $to] = $side === Side::Left
+                    ? [$startX, min($grabFrom, $cols)]
+                    : [$grabTo, min($startX + $meta['width'] + 1, $cols)];
+
                 if ($to > $from) {
-                    $rows[$absRow] = [
-                        [$from, $to, LiveRenderer::markStackGapRow($sideValue, $gapRows[$r], $absRow, $frameRows, $to - $from)],
-                    ];
+                    $spans[] = [$from, $to, LiveRenderer::markStackGapRow($sideValue, $gapRows[$r], $absRow, $frameRows, $to - $from)];
                 }
-
-                continue;
             }
 
-            $col = $startX + $meta['dividerColLocal'];
-
-            if ($col < $cols) {
-                $rows[$absRow] = [
-                    [$col, $col + 1, LiveRenderer::markDividerCell($sideValue, $absRow, $frameRows)],
-                ];
+            if ($grabTo > $grabFrom) {
+                $spans[] = [$grabFrom, $grabTo, LiveRenderer::markDividerCell($sideValue, $absRow, $frameRows, $grabTo - $grabFrom)];
             }
+
+            $rows[$absRow] = $spans;
         }
 
         return $rows;

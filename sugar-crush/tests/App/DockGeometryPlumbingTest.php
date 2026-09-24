@@ -68,15 +68,18 @@ final class DockGeometryPlumbingTest extends TestCase
         self::assertSame([Pane::Files], self::invoke('sidePanes', $app, Side::Left));
     }
 
-    public function testSidePanesDropsDockedSlotsForPanesWithNoHomeOnThatSide(): void
+    public function testSidePanesPaintsADockedSlotOnTheSideTheDockHoldsIt(): void
     {
-        // A manifest written by another build could name a right-side pane in
-        // a left slot; the renderer reads Pane::dockSide() rather than the
-        // slot's placement, so such a slot paints nowhere instead of wrong.
+        // The home side (Pane::dockSide()) only routes a transient focus or a
+        // first click-to-dock. A slot the dock placed on the OTHER side — a
+        // header drag across the centre, `/pane dock left skills` — paints
+        // where the dock put it; filtering by home side made the moved pane
+        // vanish from the frame while the manifest still held it.
         $dock = DockLayout::new('chat')->withSlotAdded(Side::Left, 'skills');
         $app = $this->app()->withDock($dock)->withPane(Pane::Chat);
 
-        self::assertSame([], self::invoke('sidePanes', $app, Side::Left));
+        self::assertSame([Pane::Skills], self::invoke('sidePanes', $app, Side::Left));
+        self::assertSame([], self::invoke('sidePanes', $app, Side::Right));
     }
 
     public function testStackHeightsSplitTheResolvedRegionsBetweenStackedSlots(): void
