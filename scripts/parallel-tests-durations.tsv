@@ -173,6 +173,7 @@ sugar-crush/tests/Integration/StreamingWiringTest.php	0.390	20
 sugar-crush/tests/Agents/MailboxTest.php	0.389	14
 sugar-crush/tests/App/AppModelTest.php	0.384	60
 sugar-crush/tests/Chat/CallbackAuthoredRefusalTest.php	0.370	5
+sugar-crush/tests/App/DockDragBytePathTest.php	0.367	8
 sugar-crush/tests/Integration/TaskToolWiringTest.php	0.366	4
 sugar-crush/tests/Support/ForkedChildTest.php	0.358	2
 sugar-crush/tests/Skills/SkillLoaderTest.php	0.352	55
