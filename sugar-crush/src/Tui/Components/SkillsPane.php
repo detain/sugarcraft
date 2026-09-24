@@ -60,9 +60,9 @@ final class SkillsPane
                     ));
             }
             $body = implode("\n", $lines);
-            $title = ' select a skill ';
+            $title = ' ' . \SugarCraft\Crush\Tui\Pane::Skills->icon() . ' select a skill ';
         } else {
-            $title = ' skills ';
+            $title = ' ' . \SugarCraft\Crush\Tui\Pane::Skills->icon() . ' skills ';
             $enabled = $a->enabledSkills;
 
             if ($enabled !== []) {
@@ -108,7 +108,7 @@ final class SkillsPane
             ? $st->borderForeground($theme->shellPrimary)
             : $st->borderForeground($theme->border);
 
-        return $st->render($body);
+        return PaneFrame::render($st, $body, $theme->border);
     }
 
     /**

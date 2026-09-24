@@ -13,8 +13,10 @@ use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\View;
@@ -37,6 +39,8 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tools\Tool;
+use SugarCraft\Layout\Dock\DockLayout;
+use SugarCraft\Layout\Dock\Side;
 use SugarCraft\Crush\Tui\AgentViewMode;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
@@ -48,6 +52,7 @@ use SugarCraft\Crush\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Tui\KeyboardHandler;
 use SugarCraft\Crush\Tui\Pane;
+use SugarCraft\Crush\Tui\PaneDragController;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Mouse\MouseEvent;
@@ -183,6 +188,30 @@ final class App implements Model
          * embedder, and the per-turn App of a launch that wired no rules state.
          */
         public readonly ?RulesState $rulesState = null,
+        /**
+         * Which sidebar panes are docked into the frame, on which side, in
+         * which order, and with what column/stack weights (pane-docking
+         * phase 2). Null resolves to {@see App::defaultDock()} — the shape
+         * every App gets whose builder never touched the dock, which is every
+         * App but the one {@see \SugarCraft\Crush\Cli\Bootstrap::app()} loads
+         * from the `layout` setting.
+         *
+         * The dock is the SOURCE OF TRUTH for side, stack order and size of
+         * docked panes. Focus ({@see $pane}) stays a separate axis: a focused
+         * sidebar pane that is not docked renders TRANSIENTLY on its home
+         * side, exactly as today's single-pane-per-side sidebar did, so the
+         * default frame is unchanged whether or not anyone has ever docked
+         * anything.
+         */
+        public readonly ?DockLayout $dock = null,
+        /**
+         * Persistence hook for dock mutations, shaped exactly like
+         * {@see \SugarCraft\Crush\Chat}'s `$onConfigChange`: invoked with the
+         * manifest array ({@see DockLayout::toArray()}) whenever a model-level
+         * mutation changes the dock. Null in every App that was not launched
+         * by the CLI, so tests and embedders mutate freely without writing.
+         */
+        public readonly ?\Closure $onLayoutChange = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -368,6 +397,339 @@ final class App implements Model
     public function withRulesState(?RulesState $v): self
     {
         return $this->mutate(rulesState: $v);
+    }
+
+    /**
+     * The docked-pane layout in force, with the default folded in.
+     *
+     * The DEFAULT reproduces the pre-docking frame exactly: `files` docked
+     * left — the pane `Tui\Renderer::leftSidebar()` has always painted when
+     * nothing else was on — and nothing docked right, where today's sidebar
+     * only ever renders while its pane has focus.
+     */
+    public function dock(): DockLayout
+    {
+        return $this->dock ?? self::defaultDock();
+    }
+
+    /**
+     * The launch-default dock: Files left, right side empty.
+     */
+    public static function defaultDock(): DockLayout
+    {
+        return DockLayout::new('chat')->withSlotAdded(Side::Left, 'files');
+    }
+
+    /**
+     * Whether a dock is byte-for-byte the untouched {@see defaultDock()} —
+     * same slots AND same design shares. The renderer's width rule keys on
+     * this (see {@see \SugarCraft\Crush\Tui\Renderer::sideWidth()}): while
+     * nothing has ever been docked or resized, the frame keeps the exact
+     * legacy quarter-measure it shipped with for a decade of snapshot pins.
+     */
+    public static function isUntouchedDefaultDock(DockLayout $dock): bool
+    {
+        return $dock->toArray() === self::defaultDock()->toArray();
+    }
+
+    /**
+     * Snapshot the frame the eye last saw into the dock's column shares,
+     * exactly once — at the moment the untouched default first acquires a
+     * side's worth of slots.
+     *
+     * The default dock carries the library's 1/3 design shares, but the
+     * shipped frame measures a sidebar as `max(20, floor(bandCols / 4))`.
+     * Those disagree for most widths (100 columns: 25 vs 33), so the FIRST
+     * user dock/undock mutation seeds each side that carries slots at the
+     * mutation or is the docking target with the rational `(legacyWidth,
+     * bandCols)` — the frame therefore starts where it visually was and
+     * every later resize scales that proportion instead of snapping back to
+     * a quarter or a third. A side being stripped keeps its snapshot because
+     * a later re-add scales it (DockSeedTest pins that toggle-off behaviour),
+     * and the carried share is render-inert meanwhile: resolve activates only
+     * sides that have slots (candy-layout DockLayout.php:370-375).
+     * A dock that is already non-default returns unchanged: seeding is a
+     * one-time hand-off from the legacy measure, never a re-snapshot on
+     * top of sizes the user has chosen.
+     *
+     * The write goes through the manifest parse rather than
+     * {@see DockLayout::withColumnShare()} on purpose: withColumnShare
+     * clamps the pair to 1/2 against the UNTOUCHED 1/3 sibling, which would
+     * squash a 1/4 snapshot to 1/6 — a snapshot of drawn width is a
+     * measurement, not the tightening request the clamp exists to police,
+     * and the manifest path (the restore path, where exact carried values
+     * are law) preserves the rational. Two seeded sides at 1/4 + 1/4 still
+     * honour the 1/2 pair rule.
+     *
+     * `$bandCols` arrives as the App's last-known terminal width — before
+     * the first `WindowSizeMsg` there is no measured frame to preserve, so
+     * `0` (null cols) seeds nothing. The renderer's agent-split band can be
+     * narrower than that whole width; the seeded value is a PROPORTION, so
+     * the difference is one divider column's worth of scale, never a jump.
+     * FORWARD POINTER for the gesture phase: any divider drag must size
+     * against the LIVE bandCols the pointer lives in, re-evaluating this
+     * seeding under an active agent split — the ±divider-column delta is
+     * exactly where a whole-width measure would drift from the grabbed
+     * column.
+     */
+    public static function seedSharesFromFrame(DockLayout $dock, int $bandCols, ?Side $docksInto = null): DockLayout
+    {
+        if ($bandCols < 1 || !self::isUntouchedDefaultDock($dock)) {
+            return $dock;
+        }
+
+        $share = [max(20, intdiv($bandCols, 4)), $bandCols];
+        $manifest = $dock->toArray();
+
+        foreach (Side::cases() as $side) {
+            if ($dock->slots($side) !== [] || $side === $docksInto) {
+                $manifest['columnShare'][$side === Side::Left ? 'left' : 'right'] = $share;
+            }
+        }
+
+        return DockLayout::fromArray($manifest);
+    }
+
+    public function withDock(?DockLayout $v): self
+    {
+        return $this->mutate(dock: $v);
+    }
+
+    public function withOnLayoutChange(?\Closure $v): self
+    {
+        return $this->mutate(onLayoutChange: $v);
+    }
+
+    /**
+     * Dock `pane` on `side` — moving it there when it already sits in a slot.
+     *
+     * Not routed through `update()`: the dock changes when the GESTURE phase
+     * (or the `/pane dock` command shipped this phase) asks for a specific
+     * placement, and a message carrying a Side would name the layout enum
+     * inside the message taxonomy. `Pane::dockSide()` refuses the panes with
+     * no sidebar to speak of; Chat, Input, Help and Menu have no home column
+     * and no renderer that would honour one, so an attempt is a programming
+     * error, not a no-op.
+     *
+     * Persists through {@see $onLayoutChange} like every other mutation
+     * entry point here — see {@see togglePaneDocking()} for why that is safe.
+     * Seeds the drawn frame's sizes into otherwise-untouched default shares
+     * on the way out — see {@see seedSharesFromFrame()}.
+     *
+     * `$index` is where a DROP lands in the side's slot stack — the gesture
+     * phase computes it from the release row; null appends, which is what
+     * every pre-gesture caller (and the command surface) wants. A concrete
+     * index is clamped into the destination side's legal range here (see
+     * {@see clampDropIndex()}) so a mouse gesture can never drive the dock's
+     * fail-fast insertion guard.
+     */
+    public function setPaneSide(Pane $pane, Side $side, ?int $index = null): self
+    {
+        if (!$pane->dockable()) {
+            throw new \InvalidArgumentException(
+                'Pane ' . $pane->value . ' has no sidebar of its own, so it cannot be docked.',
+            );
+        }
+
+        $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
+        $drop = $this->clampDropIndex($index, $dock, $pane, $side);
+        $next = $this->dockIsOccupied($dock, $pane)
+            ? $dock->withSlotMovedTo($pane->value, $side, $drop)
+            : $dock->withSlotAdded($side, $pane->value, $drop);
+
+        return $this->persistDock($this->mutate(dock: $next));
+    }
+
+    /**
+     * Clamp a gesture-computed drop index into the target side's legal
+     * insertion range, so a mouse release can never trip the dock library's
+     * fail-fast `guardInsertion`.
+     *
+     * The pointer maps the release ROW onto a stack index using the side's
+     * PAINTED slot tops — which, on a same-side reorder, still include the
+     * dragged pane. But `withSlotMovedTo` removes the pane from its side
+     * BEFORE re-splicing, so a same-side drop's valid range is one shorter
+     * than the painted top count, and a drop released past the last slot asks
+     * for exactly the index that removal makes illegal. A cross-side drop (or
+     * an add onto an unoccupied side) keeps the full `0..count` range: the
+     * dragged pane never sat in the destination's list.
+     *
+     * A null index means "append" and is every non-gesture caller's spelling,
+     * so it passes straight through — the library's own `?? count` already
+     * lands it at the safe end. The clamp never raises and never reorders a
+     * legal drop; it only folds an overflowing pointer request onto the
+     * nearest legal slot, honouring the pointer's intent (drop to the end).
+     *
+     * @param ?int             $index the raw painted-row index, or null
+     * @param DockLayout       $dock  the destination dock (post-seed)
+     * @param Pane             $pane  the pane being moved or added
+     * @param Side             $side  the side the drop lands on
+     */
+    private function clampDropIndex(?int $index, DockLayout $dock, Pane $pane, Side $side): ?int
+    {
+        if ($index === null) {
+            return null;
+        }
+
+        $count = count($dock->slots($side));
+
+        // Same-side reorder: the dragged pane vacates a slot, so the deepest
+        // legal insertion is one above the painted-top count.
+        foreach ($dock->slots($side) as $slot) {
+            if ($slot->paneId === $pane->value) {
+                $count = max(0, $count - 1);
+
+                break;
+            }
+        }
+
+        return max(0, min($index, $count));
+    }
+
+    /**
+     * Dock `pane` on its home side, or undock it when it sits in any slot.
+     *
+     * Undocking a FOCUSED pane also drops focus to Chat: the focused pane
+     * renders transiently on its home side, so leaving it focused would make
+     * the undock look inert — the pane the user just sent away would stay
+     * painted.
+     */
+    public function togglePaneDocking(Pane $pane): self
+    {
+        if (!$pane->dockable()) {
+            throw new \InvalidArgumentException(
+                'Pane ' . $pane->value . ' has no sidebar of its own, so it cannot be docked.',
+            );
+        }
+
+        if ($this->dockIsOccupied($this->dock(), $pane)) {
+            $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0);
+            $next = $dock->withSlotRemoved($pane->value);
+
+            return $this->persistDock($this->mutate(
+                dock: $next,
+                pane: $this->pane === $pane ? Pane::Chat : $this->pane,
+            ));
+        }
+
+        $side = $pane->dockSide();
+        assert($side !== null); // guarded by dockable() above
+
+        $dock = self::seedSharesFromFrame($this->dock(), $this->cols ?? 0, $side);
+
+        return $this->persistDock($this->mutate(dock: $dock->withSlotAdded($side, $pane->value)));
+    }
+
+    /**
+     * Return the dock to the launch default ({@see defaultDock()}).
+     */
+    public function layoutReset(): self
+    {
+        return $this->persistDock($this->mutate(dock: self::defaultDock()));
+    }
+
+    /**
+     * Whether `pane` currently occupies a dock slot on either side.
+     *
+     * Public because the renderer's transient-focus rule needs it: a focused
+     * pane that is already docked must not be painted twice on its side.
+     */
+    public function isDocked(Pane $pane): bool
+    {
+        return $this->dockIsOccupied($this->dock(), $pane);
+    }
+
+    private function dockIsOccupied(DockLayout $dock, Pane $pane): bool
+    {
+        foreach ([Side::Left, Side::Right] as $side) {
+            foreach ($dock->slots($side) as $slot) {
+                if ($slot->paneId === $pane->value) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The panes Tab can focus, in visual order: Chat, then the left column's
+     * slots top-to-bottom, then the right column's.
+     *
+     * Dock-scoped by construction — an undocked pane is not in this list, so
+     * the cycle only visits panes the frame persistently shows. The menu-bar
+     * labels are the door for everything else: clicking one docks the pane
+     * and focuses it ({@see dispatchChromeClick()}), which admits it to this
+     * cycle. A malformed manifest id is skipped rather than fatal — focus
+     * cannot name a pane the enum does not have.
+     *
+     * @return list<Pane>
+     */
+    public function paneCycleOrder(): array
+    {
+        $order = [Pane::Chat];
+
+        foreach ([Side::Left, Side::Right] as $side) {
+            foreach ($this->dock()->slots($side) as $slot) {
+                $pane = Pane::tryFrom((string) $slot->paneId);
+
+                if ($pane !== null && !in_array($pane, $order, true)) {
+                    $order[] = $pane;
+                }
+            }
+        }
+
+        return $order;
+    }
+
+    /**
+     * Move focus one step along {@see paneCycleOrder()} — +1 forward,
+     * -1 backward, wrapping at both ends. The spelling is direction, not
+     * delta: the caller says which way the user reached, the sign carries it.
+     *
+     * A focus that is not in the cycle — an undocked pane reached by a ctrl
+     * chord, or one of the chrome-only panes — folds to Chat in BOTH
+     * directions. That is the same anchor rule {@see \SugarCraft\Crush\Tui\Pane::step()}
+     * set for off-ring panes, and for the same reason: the user is parked
+     * somewhere the frame does not persistently show and reached for Tab to
+     * get out; Chat is the pane that always draws.
+     *
+     * Focus is not layout: pure {@see withPane()}, no `persistDock` — the
+     * dock manifest is unchanged by where the keyboard sits.
+     */
+    public function cyclePaneFocus(int $direction): self
+    {
+        $order = $this->paneCycleOrder();
+        $index = array_search($this->pane, $order, true);
+
+        if (!is_int($index)) {
+            return $this->withPane(Pane::Chat);
+        }
+
+        $count = count($order);
+        $step = $direction <=> 0;
+
+        return $this->withPane($order[((($index + $step) % $count) + $count) % $count]);
+    }
+
+    /**
+     * Hand the new manifest to the persistence hook, when the launch wired
+     * one. Mirrors Chat's config-change call sites: a non-`update()` model
+     * method invoking an injected persistence closure is the established shape
+     * here, and the App holding the closure is the mutated COPY (readonly),
+     * whose hook is the same object the builder installed.
+     */
+    private function persistDock(self $next): self
+    {
+        $hook = $next->onLayoutChange;
+        if ($hook !== null) {
+            // __invoke, not call(): Bootstrap wires a STATIC closure, and an
+            // attempted rebind of a static closure is a silently-skipped
+            // warning, not a call — the persistence would never fire.
+            $hook->__invoke($next->dock()->toArray());
+        }
+
+        return $next;
     }
 
     /**
@@ -705,6 +1067,8 @@ final class App implements Model
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
+            $msg instanceof DockPaneMsg,
+            $msg instanceof LayoutResetMsg,
             $msg instanceof ToolResultMsg,
             $msg instanceof ErrorMsg,
             $msg instanceof StatusMsg,
@@ -777,6 +1141,44 @@ final class App implements Model
     }
 
     /**
+     * The pane-gesture state machine, parked static for exactly the reason
+     * {@see $chromeClickTracker} is: a drag spans several `update()` calls
+     * and `App` is immutable, so the live {@see PaneDragController} instance
+     * would be discarded with every intermediate copy. Transitions never
+     * mutate in place — the controller is a value object and each gesture
+     * event swaps in the copy it returned.
+     */
+    private static ?PaneDragController $paneDrag = null;
+
+    /**
+     * The dock as it stood when the gesture was armed. A resize PREVIEW rides
+     * the model between motion events (that is what makes it visible on the
+     * next repaint), so cancelling mid-drag has to put the shares back — the
+     * snapshot is the only record of "before", because `App` itself is
+     * immutable and every previewed frame is already the newest one.
+     *
+     * @see $paneDrag
+     */
+    private static ?DockLayout $paneDragOrigin = null;
+
+    /** @see $paneDrag */
+    public static function paneDragController(): PaneDragController
+    {
+        return self::$paneDrag ??= PaneDragController::idle();
+    }
+
+    /**
+     * Drop any gesture in flight — the suite's isolation seam (a test that
+     * builds frames without driving a full gesture must not inherit one),
+     * and the shape Escape takes below.
+     */
+    public static function resetPaneDragController(): void
+    {
+        self::$paneDrag = null;
+        self::$paneDragOrigin = null;
+    }
+
+    /**
      * Click-to-open a menu title and click-to-run a dropdown row
      * (crush_feat.md §8's click-to-select pattern, applied to the one surface
      * its E-list never reached — the user report is "clicking the menu up top
@@ -799,6 +1201,12 @@ final class App implements Model
      */
     private function handleShellMouse(MouseMsg $msg): array
     {
+        $drag = self::paneDragController();
+
+        if (!$drag->isIdle()) {
+            return $this->advancePaneDrag($drag, $msg);
+        }
+
         $press = $msg instanceof MouseClickMsg;
         $release = $msg instanceof MouseReleaseMsg;
 
@@ -807,6 +1215,15 @@ final class App implements Model
         }
 
         $zone = TuiRenderer::chromeZoneAt($msg->x, $msg->y);
+
+        if ($press && $zone !== null) {
+            $started = $this->beginPaneDrag($zone->id, $zone->startCol, $msg->x, $msg->y);
+
+            if ($started !== null) {
+                return $started;
+            }
+        }
+
         $event = $press
             ? MouseEvent::press($msg->x, $msg->y)
             : MouseEvent::release($msg->x, $msg->y);
@@ -821,14 +1238,317 @@ final class App implements Model
     }
 
     /**
+     * A left press on the chrome asks the gesture phase first: the divider
+     * column of a stacked band owns a live resize, a docked pane's header
+     * row owns a potential dock drag, and an intra-stack gap row is consumed
+     * as a no-op (its height drag is the documented follow-up on
+     * {@see PaneDragController}). Anything else — including a pane header
+     * that is only TRANSIENTLY focused — returns null so the press continues
+     * down the plain click path it always took.
+     *
+     * A resize press is fully swallowed (never fed to the chrome tracker):
+     * the gesture owns the whole sequence from here, and a tracker left
+     * holding the press could pair a later stray release against a zone that
+     * has since re-rendered elsewhere. A dock-drag press deliberately does
+     * NOT swallow — it arms the controller and falls through — because an
+     * UNARMED release must complete exactly the click-to-focus the tracker
+     * would have completed before this phase existed.
+     *
+     * @return ?array{0: self, 1: ?\Closure}
+     */
+    private function beginPaneDrag(string $zoneId, int $startCol, int $pressX, int $pressY): ?array
+    {
+        $dividers = Renderer::DIVIDER_ZONE_PREFIX;
+
+        if (str_starts_with($zoneId, $dividers)) {
+            $side = self::sideFromZoneId(substr($zoneId, strlen($dividers)));
+
+            if ($side === null) {
+                return null;
+            }
+
+            self::$paneDrag = self::paneDragController()->beginResize($side, $startCol);
+            self::$paneDragOrigin = $this->dock();
+
+            return [$this, null];
+        }
+
+        if (str_starts_with($zoneId, Renderer::STACK_DIVIDER_ZONE_PREFIX)) {
+            // Consumed, no state: pressing a gap row today did nothing
+            // either (dispatchChromeClick fell through), so the frame's only
+            // observable change is that the press never arms App's own
+            // `chromeClickTracker` — which is exactly what a drag-in-waiting
+            // wants.
+            return [$this, null];
+        }
+
+        $headers = Renderer::PANE_ZONE_PREFIX;
+
+        if (str_starts_with($zoneId, $headers)) {
+            $pane = Pane::tryFrom(substr($zoneId, strlen($headers)));
+
+            if ($pane !== null && $this->isDocked($pane)) {
+                self::$paneDrag = self::paneDragController()->beginDockDrag($pane->value, $pressX, $pressY);
+                self::$paneDragOrigin = $this->dock();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Run one event of an in-flight gesture.
+     *
+     * Motion previews: a resize mutates the dock state (no persist — see the
+     * persist-only-on-release law), and candy-core's periodic repaint makes
+     * the new widths visible on the very next frame, measured in the phase
+     * plan's step 0. A dock drag's motion only decides arming. Release
+     * commits or cancels and clears the state; Escape clears with zero
+     * state change. A press mid-drag is consumed (terminals pair every
+     * press with a release, so the drag can always end), and the wheel stays
+     * the transcript's — scrolling mid-drag is how a user reads what they
+     * are about to drop a pane onto.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function advancePaneDrag(PaneDragController $drag, MouseMsg $msg): array
+    {
+        if ($msg instanceof MouseWheelMsg) {
+            return $this->delegateToChat($msg);
+        }
+
+        if ($msg instanceof MouseMotionMsg) {
+            self::$paneDrag = $drag->withMotion($msg->x, $msg->y);
+
+            if ($drag->isResizing()) {
+                return [$this->previewColumnResize($drag, $msg->x), null];
+            }
+
+            return [$this, null];
+        }
+
+        if (!($msg instanceof MouseReleaseMsg)) {
+            return [$this, null];
+        }
+
+        if ($drag->isResizing()) {
+            // A press-and-release on the divider with no motion in between is
+            // a plain click that owns no action: no preview ever rode the
+            // model, so nothing is committed, re-rolled, or written to disk.
+            if (!$drag->isPreviewed()) {
+                self::$paneDrag = null;
+                self::$paneDragOrigin = null;
+
+                return [$this, null];
+            }
+
+            // A mode-switch mid-drag is the one release that CANNOT measure.
+            // Rendering a full-band dashboard/overlay frame nulls
+            // Tui\Renderer::$lastDockFrame (see that class's dashboard tail),
+            // so the release below lands with no band to re-state the pointer
+            // against and `previewColumnResize` takes its frame-null guard,
+            // handing the model back untouched. Persisting there would freeze
+            // the last previewed width as a manifest without a real
+            // measurement — a stray write, so skip it and let the next framed
+            // interaction commit. Note this is a FRAME-PRESENCE test, not
+            // object identity: an ordinary release ALSO returns the live model
+            // by identity (the same-value tail in `previewColumnResize`) and
+            // MUST persist, so `$next === $this` cannot tell the two apart.
+            $commitMeasured = TuiRenderer::lastDockFrame() !== null;
+            $next = $this->previewColumnResize($drag, $msg->x);
+            self::$paneDrag = null;
+            self::$paneDragOrigin = null;
+
+            if (!$commitMeasured) {
+                return [$next, null];
+            }
+
+            // Persist once on release: the release re-states the pointer's
+            // measurement over the origin snapshot and commits the final width.
+            return [$next->persistDock($next), null];
+        }
+
+        self::$paneDrag = null;
+        self::$paneDragOrigin = null;
+
+        // An unarmed dock drag is a plain click: hand the release back to
+        // the normal path (the controller is already cleared above) so the
+        // chrome tracker completes the click-to-focus it always completed.
+        if (!$drag->isArmed()) {
+            return $this->handleShellMouse($msg);
+        }
+
+        return [$this->commitDockDrop($drag, $msg->x, $msg->y), null];
+    }
+
+    /**
+     * Paint the resize preview: the grabbed side takes the width the pointer
+     * asks for, sized against the LIVE band the pointer lives in — the
+     * forward pointer on {@see seedSharesFromFrame()}, honoured: `App::$cols`
+     * would over-count by the agent-split's columns and its divider, so the
+     * grabbed cell and the number written would drift apart under a split.
+     */
+    private function previewColumnResize(PaneDragController $drag, int $releaseX): self
+    {
+        $frame = TuiRenderer::lastDockFrame();
+        $side = $drag->dragSide();
+
+        if ($frame === null || $side === null) {
+            return $this;
+        }
+
+        $dock = $this->dock();
+        $active = 0;
+
+        foreach ([Side::Left, Side::Right] as $candidate) {
+            if ($dock->slots($candidate) !== []) {
+                $active++;
+            }
+        }
+
+        // Content-space measurements come from the ORIGIN snapshot, never
+        // the live (already-previewed) model: the pointer's travel maps onto
+        // the width the band had when the grab happened, so restating the
+        // same column — every motion plus the final release — is idempotent
+        // instead of compounding. The share is still written onto the live
+        // dock; $dock above and $this->dock() are the same object until the
+        // first preview lands, after which only the measurement diverges by
+        // design.
+        $origin = self::$paneDragOrigin ?? $dock;
+        $usable = max(1, $frame['bandCols'] - $active * $dock->dividerCols);
+        $geometry = $origin->resolve(new \SugarCraft\Layout\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $sideSlots = $origin->slots($side);
+        $current = $sideSlots === []
+            ? $dock->sideMinCols
+            : ($geometry->regionFor($sideSlots[0]->paneId)?->width ?? $dock->sideMinCols);
+        $centre = $geometry->regionFor($origin->centerPaneId)?->width ?? $dock->centerMinCols;
+        $px = $drag->resizeColumns($releaseX, $current, $dock->sideMinCols, $centre - $dock->centerMinCols);
+
+        $share = $dock->columnShare($side);
+        if ($share['num'] === $px && $share['denom'] === $usable) {
+            return $this;
+        }
+
+        return $this->mutate(dock: self::applyMeasuredColumnShare($dock, $side, $px, $usable));
+    }
+
+    /**
+     * Write the drag's measured band width into the dock.
+     *
+     * The manifest round-trip is deliberate and follows the exact doctrine of
+     * {@see seedSharesFromFrame()}, whose forward pointer this gesture is: a
+     * dragged width is a MEASUREMENT the pointer stated, not the tightening
+     * request {@see DockLayout::withColumnShare()}'s pair rule exists to
+     * police. The pair rule reserves against the sibling's stored share even
+     * while that side holds no slots at all — with the untouched 1/3 default
+     * it would squash every request past 1/6, snapping the band the user is
+     * dragging SMALLER the moment the drag starts. The gesture keeps the
+     * centre honest itself: {@see PaneDragController::resizeColumns()} clamps
+     * every request to `usable - centerMinCols`, and resolve()'s min-protection
+     * and degradation ladder remain the hard floor no write can bypass.
+     *
+     * @param int $usable the band minus one divider per ACTIVE side — the
+     *                    column budget shares actually split at resolve time
+     */
+    private static function applyMeasuredColumnShare(DockLayout $dock, Side $side, int $px, int $usable): DockLayout
+    {
+        $manifest = $dock->toArray();
+        $manifest['columnShare'][$side === Side::Left ? 'left' : 'right'] = [$px, $usable];
+
+        return DockLayout::fromArray($manifest);
+    }
+
+    /**
+     * Land a dropped pane: left of the centre means the left band, right of
+     * it means the right band, inside it cancels. The slot index counts the
+     * drop side's painted slot tops above the release row, so the pane
+     * lands where the pointer says within the stack.
+     *
+     * Tops come from the STORED dock (the renderer's transient-focus slot is
+     * not a dock slot and a mid-drag focus change is rarer than a frame
+     * tick), which is also what guarantees exactly one dock mutation and one
+     * seed pass through {@see setPaneSide()}.
+     */
+    private function commitDockDrop(PaneDragController $drag, int $releaseX, int $releaseY): self
+    {
+        $frame = TuiRenderer::lastDockFrame();
+        $paneId = $drag->dragPaneId();
+
+        if ($frame === null || $paneId === null) {
+            return $this;
+        }
+
+        $side = $drag->dockDropSide($releaseX, $frame['centerFrom'], $frame['centerTo']);
+        $pane = Pane::tryFrom($paneId);
+
+        if ($side === null || $pane === null || !$pane->dockable() || !$this->isDocked($pane)) {
+            return $this;
+        }
+
+        // Slot tops in PAINTED space: the header zones the renderer stamped
+        // this frame are where the eye actually sees each box begin. The
+        // resolve() region rows are the content-layout truth, which drifts
+        // from the painted box tops by each box's own decoration and
+        // content height — a drop aimed beside the tools box must index
+        // against where tools was PAINTED, not where its content region
+        // starts. Fall back to the resolve row only if a header zone is
+        // somehow absent (clicks were on to press the divider, so they
+        // should be on for headers; the fallback keeps the drop total).
+        $dock = $this->dock();
+        $geometry = $dock->resolve(new \SugarCraft\Layout\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $paintedRows = [];
+
+        foreach (TuiRenderer::chromeScanner()->prefixed(Renderer::PANE_ZONE_PREFIX) as $id => $zone) {
+            $paintedRows[substr($id, strlen(Renderer::PANE_ZONE_PREFIX))] = $zone->startRow - 1;
+        }
+
+        $tops = [];
+
+        foreach ($dock->slots($side) as $slot) {
+            if (isset($paintedRows[$slot->paneId])) {
+                $tops[] = $paintedRows[$slot->paneId];
+                continue;
+            }
+
+            $region = $geometry->regionFor($slot->paneId);
+
+            if ($region !== null) {
+                $tops[] = $frame['bandTop'] + $region->y;
+            }
+        }
+
+        return $this->setPaneSide($pane, $side, PaneDragController::insertIndex($releaseY, $tops));
+    }
+
+    /**
+     * `left` / `right` out of a zone id's remainder (`left:r12`), or null
+     * for anything the gesture phase does not own — a malformed remainder
+     * declines the drag rather than guessing a side.
+     */
+    private static function sideFromZoneId(string $remainder): ?Side
+    {
+        $side = explode(':', $remainder, 2)[0];
+
+        return match ($side) {
+            'left' => Side::Left,
+            'right' => Side::Right,
+            default => null,
+        };
+    }
+
+    /**
      * Act on a completed click on a chrome zone.
      *
-     * Both arms route into the keyboard's own entry points rather than a
-     * parallel mouse path: a title click is {@see MenuBar::openMenu()}, the
-     * toggle F10 already calls, and a row click is
-     * {@see MenuBar::selectItem()}, which moves the same cursor the arrows
-     * move and returns the same {@see MenuSelectedMsg} Enter produces — so it
-     * is handed to {@see consumeShellCmd()}, the one place that runs it.
+     * Every arm routes into the keyboard's or the dock's own entry point
+     * rather than a parallel mouse path: a title click is
+     * {@see MenuBar::openMenu()}, the toggle F10 already calls, and a row
+     * click is {@see MenuBar::selectItem()}, which moves the same cursor the
+     * arrows move and returns the same {@see MenuSelectedMsg} Enter produces
+     * — so it is handed to {@see consumeShellCmd()}, the one place that runs
+     * it. A pane-header click is the same `withPane` selection the
+     * `tab`/`shift+tab` cycle makes, and a menu-bar pane-tab click is the
+     * same {@see togglePaneDocking()} the `/pane dock` command calls (see
+     * the arm comments for each rule's focus semantics).
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -846,6 +1566,46 @@ final class App implements Model
             $selected = MenuBar::selectItem((int) substr($zoneId, strlen($items)));
 
             return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
+        }
+
+        // A completed click on a docked pane's header (the drag phase handed
+        // it here because the pointer never armed a move) focuses that pane —
+        // the same selection `tab`/`shift+tab` cycle, routed through
+        // `withPane` exactly as SelectPaneMsg is.
+        $headers = Renderer::PANE_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $headers)) {
+            $pane = Pane::tryFrom(substr($zoneId, strlen($headers)));
+
+            if ($pane !== null && $pane->dockable() && $this->isDocked($pane)) {
+                return [$this->withPane($pane), null];
+            }
+
+            return [$this, null];
+        }
+
+        // A completed click on a menu-bar pane-tab label toggles that pane's
+        // docked visibility (docking L2): through togglePaneDocking — the ONE
+        // entry point already carrying the seed-shares first-mutation rule
+        // and the persist-once law — so a click and a `/pane dock` command
+        // are indistinguishable downstream. Docking focuses the pane that
+        // just appeared (the eye is where the click was); undocking lets
+        // togglePaneDocking's own rule drop focus to Chat when the pane
+        // being sent away held it. Chat's tab never toggles: the center
+        // column is always visible, so its click is a pure focus move.
+        $paneTabs = MenuBar::PANE_TAB_ZONE_PREFIX;
+        if (str_starts_with($zoneId, $paneTabs)) {
+            $pane = Pane::tryFrom(substr($zoneId, strlen($paneTabs)));
+
+            if ($pane === null || !$pane->dockable()) {
+                return $pane === Pane::Chat
+                    ? [$this->withPane(Pane::Chat), null]
+                    : [$this, null];
+            }
+
+            $wasDocked = $this->isDocked($pane);
+            $next = $this->togglePaneDocking($pane);
+
+            return [$wasDocked ? $next : $next->withPane($pane), null];
         }
 
         return [$this, null];
@@ -866,6 +1626,21 @@ final class App implements Model
      */
     private function handleKey(KeyMsg $msg): array
     {
+        // Escape is the drag's abort key while a gesture is in flight —
+        // BEFORE the shell's own bindings, because mid-drag the keystroke
+        // means "put the pane back", not "cancel the turn". The press
+        // snapshotted the dock and every motion preview rode the model
+        // (that preview IS the live feedback candy-core's repaint tick
+        // shows), so cancelling hands back the snapshot: zero state change,
+        // zero disk write — the release is the only path that persists.
+        if (!self::paneDragController()->isIdle() && $msg->type === KeyType::Escape) {
+            $origin = self::$paneDragOrigin;
+            self::$paneDrag = null;
+            self::$paneDragOrigin = null;
+
+            return [$origin === null ? $this : $this->mutate(dock: $origin), null];
+        }
+
         $handled = $this->dispatchKey($msg);
 
         if ($handled === null) {
@@ -1107,6 +1882,8 @@ final class App implements Model
         return match (true) {
             $msg instanceof UserInputMsg => $this->handleUserInput($msg),
             $msg instanceof SelectPaneMsg => [$this->withPane($msg->pane)->withError(null), null],
+            $msg instanceof DockPaneMsg => $this->applyDockCommand($msg),
+            $msg instanceof LayoutResetMsg => [$this->layoutReset()->withStatus('layout: reset to the launch default'), null],
             $msg instanceof ToolResultMsg => $this->handleToolResult($msg),
             $msg instanceof ErrorMsg => [$this->withError($msg->message), null],
             $msg instanceof StatusMsg => [$this->withStatus($msg->message), null],
@@ -1126,6 +1903,92 @@ final class App implements Model
     private static function withoutEngineCmd(array $handled): array
     {
         return [$handled[0], null];
+    }
+
+    /**
+     * Run a `/pane dock` command: parse, move, acknowledge.
+     *
+     * This is the keyboard twin of the drag drop — the same
+     * {@see setPaneSide()}, the same one-mutation seed pass, the same
+     * persist-to-`layout` write. The differences are the index (a command
+     * has no pointer row to aim by, so the pane appends at the end of the
+     * column) and the subject: with no name the FOCUSED pane moves, and a
+     * focus that is not dockable is refused in words rather than silently
+     * ignored, because the user just asked for something about a pane and
+     * the shell knows which pane it meant.
+     *
+     * @return array{0: self, 1: ?Cmd}
+     */
+    public function applyDockCommand(DockPaneMsg $msg): array
+    {
+        $action = strtolower($msg->action);
+
+        if ($action === 'toggle') {
+            return $this->applyPaneToggle($msg);
+        }
+
+        $side = self::dockSideFromWord($action);
+
+        if ($side === null) {
+            return [$this->withError("pane: dock side must be left or right, got '{$msg->action}'"), null];
+        }
+
+        $name = $msg->paneName ?? $this->pane->value;
+
+        if ($msg->paneName === null && !$this->pane->dockable()) {
+            return [$this->withError('pane: no dockable pane is focused — name one with /pane dock <left|right> <name>'), null];
+        }
+
+        $pane = $name !== null ? Pane::tryFrom($name) : null;
+
+        if ($pane === null || !$pane->dockable()) {
+            return [$this->withError("pane: '{$name}' is not a dockable pane"), null];
+        }
+
+        return [$this->setPaneSide($pane, $side)->withStatus("pane: {$pane->label()} docked {$side->name}"), null];
+    }
+
+    /**
+     * The `toggle` verb of {@see applyDockCommand()}: dock a pane onto its
+     * home side, or free it from whichever slot already holds it — routed to
+     * the already-tested {@see togglePaneDocking()}. Same subject rule as the
+     * dock arms: no name means the focused pane, a non-dockable focus is
+     * refused in words, and an unknown name is named straight back. The
+     * status line reports which arm ran, because the gesture has no undock
+     * half (releasing centre cancels), so this is the only keyboard way to
+     * free a single docked pane short of `/layout reset`.
+     *
+     * @return array{0: self, 1: ?Cmd}
+     */
+    private function applyPaneToggle(DockPaneMsg $msg): array
+    {
+        if ($msg->paneName === null && !$this->pane->dockable()) {
+            return [$this->withError('pane: no dockable pane is focused — name one with /pane toggle <name>'), null];
+        }
+
+        $name = $msg->paneName ?? $this->pane->value;
+        $pane = Pane::tryFrom($name);
+
+        if ($pane === null || !$pane->dockable()) {
+            return [$this->withError("pane: '{$name}' is not a dockable pane"), null];
+        }
+
+        $verb = $this->isDocked($pane) ? 'undocked' : 'docked';
+
+        return [$this->togglePaneDocking($pane)->withStatus("pane: {$pane->label()} {$verb}"), null];
+    }
+
+    /**
+     * `left`/`right` (any case) into a {@see Side}, null for anything else —
+     * the boundary parse behind {@see applyDockCommand()}.
+     */
+    private static function dockSideFromWord(string $word): ?Side
+    {
+        return match (strtolower($word)) {
+            'left' => Side::Left,
+            'right' => Side::Right,
+            default => null,
+        };
     }
 
     /**
@@ -1389,6 +2252,8 @@ final class App implements Model
             root: array_key_exists('root', $changes) ? $changes['root'] : $this->root,
             memoryStore: array_key_exists('memoryStore', $changes) ? $changes['memoryStore'] : $this->memoryStore,
             rulesState: array_key_exists('rulesState', $changes) ? $changes['rulesState'] : $this->rulesState,
+            dock: array_key_exists('dock', $changes) ? $changes['dock'] : $this->dock,
+            onLayoutChange: array_key_exists('onLayoutChange', $changes) ? $changes['onLayoutChange'] : $this->onLayoutChange,
         );
     }
 }
@@ -1460,6 +2325,31 @@ final readonly class OpenSkillPickerMsg implements Msg
 final readonly class SelectSkillMsg implements Msg
 {
     public function __construct(public string $skillName) {}
+}
+
+/**
+ * Message carrying a `/pane` verb to the shell — the command twin of the
+ * {@see \SugarCraft\Crush\Tui\PaneDragController} drop and of the keyboard
+ * dock/undock arm. The verb travels as the `left`/`right`/`toggle` word the
+ * user typed because `Chat` has no reason to know candy-layout's enum;
+ * {@see App::applyDockCommand()} parses it at the boundary and refuses
+ * anything else.
+ *
+ * `paneName` null means "whatever pane currently holds focus", the same
+ * subject the mouse gestures take; the focus-not-dockable case is answered
+ * with a status line rather than silence.
+ */
+final readonly class DockPaneMsg implements Msg
+{
+    public function __construct(public string $action, public ?string $paneName = null) {}
+}
+
+/**
+ * Message to reset the dock to the launch default — the command twin of the
+ * gesture phase's `layout reset`. No payload: the reset target is fixed.
+ */
+final readonly class LayoutResetMsg implements Msg
+{
 }
 
 // Cmd types (side-effects to execute)

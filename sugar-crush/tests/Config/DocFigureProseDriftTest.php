@@ -3277,7 +3277,7 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertSame((int) $walkCaps[1], (int) $loader->getConstant('MAX_DEPTH'), 'the page depth figure drifted from SkillLoader::MAX_DEPTH');
         self::assertSame((int) $walkCaps[2], (int) $loader->getConstant('MAX_DIRECTORIES'), 'the page breadth figure drifted from SkillLoader::MAX_DIRECTORIES');
-        self::assertSame(6, (int) $loader->getConstant('MAX_DEPTH'), 'MAX_DEPTH moved — the page still caps the walk at 6');
+        self::assertSame(7, (int) $loader->getConstant('MAX_DEPTH'), 'MAX_DEPTH moved — the page still caps the walk at 7');
         self::assertSame(2000, (int) $loader->getConstant('MAX_DIRECTORIES'), 'MAX_DIRECTORIES moved — the page still caps breadth at 2000');
 
         $tiersBody = self::bodyExcerpt(self::sourceOf('Skills/ForeignSkillDiscovery.php'), 'tiers');
@@ -5052,9 +5052,9 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertSame($live[$row[1]]['plane'], ($row[3] ?? '') === '✓', "the CP column on /{$row[1]} disagrees with CommandRegistry::CONTROL_PLANE — the intro states CP marks exactly the reserved names");
         }
         self::assertSame(
-            ['new', 'docs'],
+            ['new', 'docs', 'pane-dock-left', 'pane-dock-right'],
             array_keys(array_filter($live, static fn(array $spec): bool => !$spec['slash'])),
-            'the page says S is blank on new and docs ALONE — the palette-only pair changed shape'
+            'the page says S is blank on the new/docs/dock-pseudo quartet — the palette-only set changed shape'
         );
         self::assertStringContainsString('(`slashVisible: false`)', self::markdownProse($raw), 'the asymmetry paragraph no longer quotes the spec flag the S column proves');
         self::assertStringContainsString('**CP** marks a reserved name', self::markdownProse($raw), 'the intro no longer states what the CP column marks — that derivation is the sentence');
@@ -5828,6 +5828,37 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame($live, $roster, 'the See-also sentence no longer names every layered key exactly once — a key joining or leaving LAYERED_KEYS must edit this split in the same commit');
 
         self::assertContains('maxOutputTokens', $withoutEnv[1], 'the E707 ceiling is config-only on purpose (no env hatch) — if that ever changes, move the name AND re-read the tier argument on LayeredSettings::LAYERED_KEYS');
+    }
+
+    /**
+     * Pane-docking L3 fix round (REVIEW-L3 MAJOR-1): TROUBLESHOOTING.md's
+     * walk-cap bullet restates BOTH SkillLoader bounds in one breath, and it
+     * is the cross-page copy the SKILLS.md arm cannot see — it rotted the
+     * moment MAX_DEPTH moved 6 to 7 while only the SKILLS page was edited.
+     * From here a constant move must flip the two pages together or redden
+     * two arms, never silently lie on the third surface a reader reaches for
+     * when a skill refuses to load.
+     */
+    public function testTroubleshootingWalkCapBulletReadsBothLoaderBounds(): void
+    {
+        $prose = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md'));
+        $loader = new \ReflectionClass(SkillLoader::class);
+
+        self::assertSame(
+            1,
+            preg_match('/The walk hit a cap\.\*\* Depth (\d+), or (\d+) directories/', $prose, $caps),
+            'the walk-cap bullet no longer states the depth and breadth caps in the pinned breath — re-establish this pin with the new wording, do not delete it',
+        );
+        self::assertSame(
+            (int) $loader->getConstant('MAX_DEPTH'),
+            (int) $caps[1],
+            'TROUBLESHOOTING.md still names the old depth cap — SKILLS.md and this page quote the same constant; flip both in the commit that moves MAX_DEPTH',
+        );
+        self::assertSame(
+            (int) $loader->getConstant('MAX_DIRECTORIES'),
+            (int) $caps[2],
+            'TROUBLESHOOTING.md still names the old breadth cap — SKILLS.md and this page quote the same constant; flip both in the commit that moves MAX_DIRECTORIES',
+        );
     }
 
     private static function sourceOf(string $relative): string

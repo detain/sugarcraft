@@ -17,7 +17,7 @@ final class AgentsPane
             ->render('(no active agents)');
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' agents '))
+            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Agents->icon() . ' agents '))
             ->padding(0, 1)
             ->width($width);
 
@@ -25,6 +25,6 @@ final class AgentsPane
             ? $st->borderForeground($theme->shellPrimary)
             : $st->borderForeground($theme->border);
 
-        return $st->render($body);
+        return PaneFrame::render($st, $body, $theme->border);
     }
 }

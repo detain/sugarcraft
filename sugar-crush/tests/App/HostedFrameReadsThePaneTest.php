@@ -64,22 +64,34 @@ final class HostedFrameReadsThePaneTest extends TestCase
     }
 
     /**
-     * The LEFT sidebar reads it: {@see TuiRenderer::leftSidebar()} branches on
-     * `Pane::Files` / `Pane::Tools`.
+     * The LEFT sidebar reads it: {@see TuiRenderer::leftSidebar()} paints the
+     * dock's slots plus the transient focused pane — `Pane::Files` and
+     * `Pane::Tools` both have a sidebar, and docking phase 2 changed what
+     * happens when the focused one is NOT already docked.
      *
      * Asserted on the border TITLE rather than on pane contents, because an
      * empty Files pane and an empty Tools pane can otherwise look alike.
+     *
+     * ⚠️ PIN MOVED BY THE DOCKING PHASE, deliberately. This test used to
+     * assert `╭ files ` was ABSENT from the Tools frame — one pane per side,
+     * focus shadowing the docked default, which was the entire meaning of the
+     * sidebar back then. That semantics is exactly what pane-docking removes:
+     * the default dock keeps Files docked left, and focusing Tools now STACKS
+     * Tools under it instead of shadowing it, so the Tools frame carries BOTH
+     * boxes. The Files-frame pair still proves focus reaches the sidebar, and
+     * the both-present assertion below proves the stacking is the visible
+     * outcome; the shadowing claim itself is gone because the feature is.
      */
     public function testTheHostedFramesLeftSidebarFollowsThePane(): void
     {
         $files = $this->hostedFrame(Pane::Files);
         $tools = $this->hostedFrame(Pane::Tools);
 
-        $this->assertStringContainsString('╭ files ', $files);
-        $this->assertStringNotContainsString('╭ tools ', $files);
+        $this->assertStringContainsString('╭ ' . Pane::Files->icon() . ' files ', $files);
+        $this->assertStringNotContainsString('╭ ' . Pane::Tools->icon() . ' tools ', $files);
 
-        $this->assertStringContainsString('╭ tools ', $tools);
-        $this->assertStringNotContainsString('╭ files ', $tools);
+        $this->assertStringContainsString('╭ ' . Pane::Tools->icon() . ' tools ', $tools);
+        $this->assertStringContainsString('╭ ' . Pane::Files->icon() . ' files ', $tools, 'focusing Tools must STACK it onto the docked Files, not shadow it');
     }
 
     /**
@@ -99,13 +111,13 @@ final class HostedFrameReadsThePaneTest extends TestCase
         $files = $this->hostedFrame(Pane::Files);
         $skills = $this->hostedFrame(Pane::Skills);
 
-        $this->assertStringContainsString('╭ files ', $skills, 'the left sidebar should be unchanged');
+        $this->assertStringContainsString('╭ ' . Pane::Files->icon() . ' files ', $skills, 'the left sidebar should be unchanged');
         $this->assertStringContainsString(
-            '╭ skills ',
+            '╭ ' . Pane::Skills->icon() . ' skills ',
             $skills,
             'rightSidebar() is no longer painting a Skills block for Pane::Skills.',
         );
-        $this->assertStringNotContainsString('╭ skills ', $files);
+        $this->assertStringNotContainsString('╭ ' . Pane::Skills->icon() . ' skills ', $files);
     }
 
     /**

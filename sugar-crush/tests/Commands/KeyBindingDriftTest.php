@@ -248,8 +248,8 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 67 declared rows — and THAT is the domain
-     * of the zero. It says nothing about prose not yet written; it says those 67
+     * Zero false positives across all 69 declared rows — and THAT is the domain
+     * of the zero. It says nothing about prose not yet written; it says those 69
      * rows are clean under this pattern.
      *
      * The eight rows the draft's editing keyboard added are what it cost to keep
@@ -874,9 +874,18 @@ final class KeyBindingDriftTest extends TestCase
             },
 
             // ── Panes & windows (the App shell's KeyboardHandler) ─────────
+            // Three docked panes, not the default two: with [Chat, Files] the
+            // cycle wraps onto the same row in both directions, so the pair of
+            // rows below could be swapped and both observations would still
+            // pass — the lesson `chat.session-cycle` already learned. Tools
+            // joins on the RIGHT, making the order [Chat, Files, Tools].
             'shell.pane-next' => function (array $k): void {
-                [$app] = $this->claim($k[0], $this->app());
+                [$app] = $this->claim($k[0], $this->app()->togglePaneDocking(Pane::Tools));
                 $this->assertSame(Pane::Files, $app->pane);
+            },
+            'shell.pane-prev' => function (array $k): void {
+                [$app] = $this->claim($k[0], $this->app()->togglePaneDocking(Pane::Tools));
+                $this->assertSame(Pane::Tools, $app->pane, 'backward from chat must wrap to the LAST docked pane');
             },
             // The FIRST menu, not merely "some menu": `> 0` passed with F10
             // wired to any index at all, and "open the menu bar" means the
@@ -888,6 +897,15 @@ final class KeyBindingDriftTest extends TestCase
             'shell.pane-chat' => function (array $k): void {
                 [$app] = $this->claim($k[0], $this->app()->withPane(Pane::Files));
                 $this->assertSame(Pane::Chat, $app->pane);
+            },
+            // The door is the SAME fixture's other polarity: Files focused and
+            // the draft EMPTY answers Enter with the palette, which is why the
+            // row qualifies its condition in prose. Typing a character first
+            // (PaneFocusCycleTest pins that half) sends the draft to chat
+            // instead, exactly as the `chat.send` row promises.
+            'shell.pane-palette' => function (array $k): void {
+                [, $cmd] = $this->claim($k[0], $this->app()->withChat(new Chat())->withPane(Pane::Files));
+                $this->assertInstanceOf(CommandPaletteCmd::class, $cmd);
             },
             'shell.new-session' => function (array $k): void {
                 [, $cmd] = $this->claim($k[0], $this->app());
@@ -1795,6 +1813,15 @@ final class KeyBindingDriftTest extends TestCase
                 mb_strlen($rest) === 1 => self::ctrl(mb_strtolower($rest)),
                 default => null,
             };
+        }
+
+        // `shell.pane-prev`'s label, added the day the row was declared: the
+        // bare Shift pair of Tab reaches the shell as a named key with the
+        // shift flag, the same shape Ctrl+Tab takes above — and the label must
+        // read back or the row could only live in HAND_DRIVEN, which would
+        // leave 'Shift+Tab' itself uncovered by this suite.
+        if ($token === 'Shift+Tab') {
+            return new KeyMsg(KeyType::Tab, '', shift: true);
         }
 
         if (str_starts_with($token, 'Alt+')) {

@@ -410,7 +410,10 @@ final class SlashMenuTabCompletionTest extends TestCase
 
             $next = $this->press($app, [self::tab()]);
 
-            $this->assertSame($app->pane->next(), $next->pane, "{$label}: Tab must still cycle panes");
+            // Dock-scoped since L2: these shell-owned states are focused but
+            // undocked, so the cycle folds them to Chat -- still a MOVE, the
+            // anti-dead-key claim of this test.
+            $this->assertSame($app->cyclePaneFocus(1)->pane, $next->pane, "{$label}: Tab must still cycle panes");
             $this->assertSame('/comp', $next->chat->inputBuf, "{$label}: and must not complete");
         }
 
@@ -418,25 +421,30 @@ final class SlashMenuTabCompletionTest extends TestCase
     }
 
     /**
-     * The deliberate opposite: from a SIDEBAR pane the completion wins.
+     * The deliberate opposite of Chat-mode completion: from a DOCKED pane the
+     * focus cycle wins, popup notwithstanding.
      *
-     * `Pane::Files`/`Pane::Tools` render a quarter-width sidebar beside the
-     * chat ({@see \SugarCraft\Crush\Tui\Renderer::leftSidebar()}), the popup
-     * is still on screen, and typing still reaches inputBuf -- so Tab
-     * completes rather than cycling, even though Tab is the only pane-nav key
-     * there. Recorded as a decision, not an accident.
+     * This test used to pin the sidebar-era rule -- Files/Tools drew beside a
+     * live chat, typing still reached inputBuf, so Tab completed there too.
+     * Docking re-spelled those panes as INTERACTION MODES (the menu-bar label
+     * toggles them), and a mode whose only navigation key is held hostage by
+     * a buried popup is a trap: the cycle now belongs to the focused pane,
+     * and the completion is Chat-mode's privilege. Escape (or clicking Chat's
+     * label) returns to the input, where Tab completes again -- pinned by
+     * {@see testTabExpandsAPartialSlashCommandThroughTheShell()} up top.
      */
-    public function testTabCompletesFromASidebarPaneToo(): void
+    public function testTabFromADockPaneCyclesFocusEvenWithThePopupOpen(): void
     {
         $app = $this->press($this->shell(), $this->type('/comp'))->withPane(Pane::Files);
+        $this->assertTrue($app->chat->slashMenuOwnsTab(), 'fixture: Chat WOULD complete this Tab in Chat mode');
 
         $next = $this->press($app, [self::tab()]);
 
-        $this->assertSame('/compact ', $next->chat->inputBuf);
-        $this->assertSame(Pane::Files, $next->pane, 'the completion consumed the Tab');
+        $this->assertSame('/comp', $next->chat->inputBuf, 'the docked pane must not complete');
+        $this->assertSame(Pane::Chat, $next->pane, 'Tab cycles to Chat: Files is the only docked pane');
 
-        // ... and once the popup is closed the same pane cycles again.
-        $this->assertSame(Pane::Files->next(), $this->press($next, [self::tab()])->pane);
+        // ... and back in Chat mode the same still-open popup takes Tab as completion.
+        $this->assertSame('/compact ', $this->press($next, [self::tab()])->chat->inputBuf);
     }
 
     /**
@@ -453,9 +461,10 @@ final class SlashMenuTabCompletionTest extends TestCase
      * and it was right to.
      *
      * What changed is not the risk assessment but the code: `handle()` now has
-     * a real `'shift+tab'` arm calling {@see Pane::previous()}, so claim and
-     * action exist together and the swallow the old test guarded cannot
-     * happen. The `!$msg->shift` conjunct still stands on the ORIGINAL Tab
+     * a real `'shift+tab'` arm calling {@see App::cyclePaneFocus()} with -1
+     * (dock-scoped since L2; it walked {@see Pane::previous()} before that),
+     * so claim and action exist together and the swallow the old test guarded
+     * cannot happen. The `!$msg->shift` conjunct still stands on the ORIGINAL Tab
      * rule -- Shift+Tab is claimed by its own rule beside it, not by widening
      * that one, so the popup-yield logic is untouched.
      *
@@ -490,18 +499,20 @@ final class SlashMenuTabCompletionTest extends TestCase
             'the shell did not claim Shift+Tab with the popup up',
         );
 
-        // Claimed AND acted on: Chat is the strip's first member, so one
-        // Shift+Tab wraps to its last. Asserting the pane MOVED is what
-        // separates this from the swallow the old test was written against.
+        // Claimed AND acted on: the dock-scoped cycle (L2) from Chat reaches
+        // the cycle's last member backward -- the default dock shows only
+        // Files, so one Shift+Tab wraps straight to it. Asserting the pane
+        // MOVED is what separates this from the swallow the old test was
+        // written against; the full-strip arithmetic lives in
+        // {@see \SugarCraft\Crush\Tests\Tui\PaneReverseCycleTest}.
         $empty = $this->press($this->shell(), [$shiftTab]);
-        $this->assertSame(Pane::Chat->previous(), $empty->pane);
-        $this->assertSame(Pane::Settings, $empty->pane, 'the reverse cycle did not wrap to the last tab');
+        $this->assertSame(Pane::Files, $empty->pane, 'the reverse cycle did not wrap to the last docked tab');
 
         // ...and it never reaches the input box, popup showing or not.
         $this->assertSame('', $empty->chat->inputBuf);
 
         $showing = $this->press($this->press($this->shell(), $this->type('/comp')), [$shiftTab]);
-        $this->assertSame(Pane::Settings, $showing->pane);
+        $this->assertSame(Pane::Files, $showing->pane);
         $this->assertSame('/comp', $showing->chat->inputBuf, 'Shift+Tab typed a character into the draft');
     }
 

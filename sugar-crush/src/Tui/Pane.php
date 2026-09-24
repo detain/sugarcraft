@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui;
 
 use SugarCraft\Focus\FocusRing;
+use SugarCraft\Layout\Dock\Side;
 
 /**
  * Pane types for the SugarCrush TUI layout.
@@ -103,6 +104,14 @@ enum Pane: string
     /**
      * Walk the ring one step, or fold back to Chat when off it.
      *
+     * ERRATUM (pane-docking L2): the shell's Tab arm no longer calls this.
+     * Focus now cycles over Chat plus the DOCKED panes in frame order —
+     * {@see \SugarCraft\Crush\App\App::cyclePaneFocus()} — because with the
+     * menu-bar toggles, "the next pane" means the next pane the frame shows,
+     * not the next name in the strip. The ring stays the full-strip order
+     * (and these methods stay the tested API for it); the fold-back rule
+     * below is what cyclePaneFocus mirrors for off-cycle focus.
+     *
      * **The fold-back is deliberate and is not what "not in the ring" means.**
      * Tab used to walk all nine cases, so it stopped on Input, Settings and
      * Help — none of which appeared in the tab strip and none of which had a
@@ -148,6 +157,78 @@ enum Pane: string
         // current() is nullable only for an empty ring, which ofStrict() above
         // cannot produce; Chat is the same anchor the fold-back uses.
         return self::tryFrom($moved->current() ?? '') ?? self::Chat;
+    }
+
+    /**
+     * The sidebar this pane belongs to, or null when it is not a sidebar pane.
+     *
+     * The docking column of the frame is per-side; Chat, Input, Help and Menu
+     * are full-width or chrome-only surfaces and so have no natural side.
+     * This is the pane's HOME side — {@see \SugarCraft\Crush\App\App}'s dock
+     * state records which panes are actually docked and where.
+     */
+    public function dockSide(): ?Side
+    {
+        return match ($this) {
+            self::Files, self::Tools => Side::Left,
+            self::Skills, self::Settings, self::Agents => Side::Right,
+            default => null,
+        };
+    }
+
+    /**
+     * Whether this pane can occupy a dock slot at all.
+     */
+    public function dockable(): bool
+    {
+        return $this->dockSide() !== null;
+    }
+
+    /**
+     * The pane's picture — one glyph the frame title and the menu-bar tab
+     * both compose from, so the two surfaces can never advertise different
+     * images of the same pane.
+     *
+     * Every glyph is a monochrome BMP geometric/technical symbol whose
+     * display width is EXACTLY 1, pinned by
+     * {@see \SugarCraft\Crush\Tests\Tui\PaneTest::testEveryFramedPaneIconIsWidthOneAndDistinct()}
+     * — not an emoji, no combining mark: a double-width or ambiguous-width
+     * picture inside a border title would shift the closing corner glyph off
+     * the pane's column budget, the exact class of desync the width law of
+     * renderAgentView already defends against elsewhere.
+     *
+     * Unicode-16 table law: every glyph carries East Asian Width property
+     * N (Neutral) in the CURRENT UCD, not merely in the table the running
+     * PHP bundles. U+2630 TRIGRAM FOR HEAVEN sat at N through Unicode 15.1
+     * and was reclassified W in 16.0 — the exact drift that made PHP 8.4's
+     * mb_strwidth (oniguruma, Unicode-16 tables) count a pinned 120-column
+     * chrome line as 121 while 8.3 stayed green. Adjudicate any candidate
+     * against https://www.unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt
+     * (retrieved 2026-09-24) before adoption; A (Ambiguous) is excluded too,
+     * since East-Asian-locale terminals render it double-width even though
+     * mb_strwidth never does.
+     *
+     * Input, Help and Menu are chrome-only surfaces with no framed pane
+     * identity to advertise, so they carry no picture and compose as the
+     * empty string.
+     */
+    public function icon(): string
+    {
+        return match ($this) {
+            // ▢ rounded window frame — the transcript surface
+            self::Chat => "\u{25A2}",
+            // ◫ vertical bisecting line — the file-explorer split pane
+            self::Files => "\u{25EB}",
+            // ⚒ hammer and pick — the tool bench
+            self::Tools => "\u{2692}",
+            // ✦ four-point star — a learnt skill
+            self::Skills => "\u{2726}",
+            // ❖ diamond of nodes — a swarm of agents
+            self::Agents => "\u{2756}",
+            // ⚙ gear — the settings dials
+            self::Settings => "\u{2699}",
+            self::Input, self::Help, self::Menu => '',
+        };
     }
 
     /**

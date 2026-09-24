@@ -124,7 +124,7 @@ final class SettingsPane
         $lines[] = $labelStyle->render(Width::truncate(self::FOOTER, $inner));
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' settings '))
+            ->border(Border::rounded()->withTitle(' ' . Pane::Settings->icon() . ' settings '))
             ->padding(0, 1)
             ->width($width);
 
@@ -132,6 +132,6 @@ final class SettingsPane
             ? $st->borderForeground($theme->shellPrimary)
             : $st->borderForeground($theme->border);
 
-        return $st->render(implode("\n", array_slice($lines, 0, $budget)));
+        return PaneFrame::render($st, implode("\n", array_slice($lines, 0, $budget)), $theme->border);
     }
 }

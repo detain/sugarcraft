@@ -237,9 +237,9 @@ final class RendererTest extends TestCase
         $output = Renderer::render($app);
 
         // Menu bar should contain these tabs
-        $this->assertStringContainsString('[Chat]', $output);
-        $this->assertStringContainsString('[Files]', $output);
-        $this->assertStringContainsString('[Tools]', $output);
+        $this->assertStringContainsString('[' . Pane::Chat->icon() . ' Chat]', $output);
+        $this->assertStringContainsString('[' . Pane::Files->icon() . ' Files]', $output);
+        $this->assertStringContainsString('[' . Pane::Tools->icon() . ' Tools]', $output);
     }
 
     public function testRenderOutputContainsSwitchPaneHint(): void
@@ -312,7 +312,7 @@ final class RendererTest extends TestCase
         // `(tool history empty)` and not ToolsPane's ` tools ` TITLE, which is
         // what this assertion first used: a title needle carrying its own
         // padding is a change-detector waiting for a restyle, and it sits one
-        // space away from the `[Tools]` menu-bar caption this test is trying to
+        // space away from the bracketed `[icon Tools]` menu-bar caption this test is trying to
         // distinguish itself from. The empty-state string is body content, has
         // no whitespace contract, and mirrors `(no skills enabled)` above.
         $this->assertStringContainsString(

@@ -148,11 +148,11 @@ cannot tell whether the sentence is about them.)
 > was wrong. `config.json` keeps working indefinitely, and there is nothing to
 > migrate *to*: `settings.json` is never written.
 
-Only these thirteen keys are layered — `provider`, `theme`, `titleModel`,
+Only these fourteen keys are layered — `provider`, `theme`, `titleModel`,
 `summaryModel`, `instructions`, `disabledSkills`, `disabledRules`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxOutputTokens`,
 `allowedTools`,
-`disabledTools`, `statusLine`. The
+`disabledTools`, `statusLine`, `layout`. The
 `trustedProject*` lists are read from `~/.sugar-crush/config.json` **alone**, so
 no lower layer can grant itself trust.
 
@@ -185,7 +185,7 @@ is advice to whoever commits, not a property of a repo someone else wrote, so a
 `git add -f`'d "local" file arrives with a clone just as readily. The two differ
 in precedence only.
 
-Even for a trusted project, six keys are **never** taken from a project file:
+Even for a trusted project, seven keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path;
@@ -199,8 +199,11 @@ prompt prose the operator wrote, not a capability the harness enforces (see
 `RulesState`); `maxOutputTokens`, because it is the one layered key whose
 meaningful direction is UP — every raise sends bigger paid requests on the
 operator's credential, and a spend ceiling a checkout can lift is a bill a
-clone can run up; and `allowedTools`, for a reason worth spelling out because
-on capability alone it looks harmless. A whitelist is an intersection — it
+clone can run up; `layout`, because it records where the operator chose to put
+their own windows — frame geometry is a personal habit, not a property of the
+checked-out code, and a project that moves your panes behind your back is
+answering to the wrong owner; and `allowedTools`, for a reason worth spelling
+out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
 defined by what it *omits*, so `allowedTools: ["Bash"]` deletes all ten of the
 others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`,
@@ -654,6 +657,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
 | `/keys` | The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
 | `Enter` | Send |
+| `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change settings; a non-empty draft sends exactly as before, from any pane |
 | `Esc` `Esc` | Cancel the in-flight turn — press **twice** within 0.6s (a single `Esc` is a no-op, which is why the status bar reads `Esc Esc to cancel` while thinking) |
 | `Esc` | Close the palette or the session picker |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
@@ -664,7 +668,8 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last message you sent |
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
-| `Tab` | Cycle panes |
+| `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead: completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
+| `Shift+Tab` | Cycle pane focus backwards (same docked list) |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` | Answer a permission prompt: once / refuse / ask to allow for the session. **While a prompt is up it owns the keyboard** — nothing reaches the input box — but it only answers to a letter while it is *armed*, and the first key you press that is not an answer disarms it. So typing a slash command at a live prompt now does nothing at all: measured, `/keys`, `/init`, `/agents`, `/branch main`, `/compact` and `/new` are all swallowed whole. `Enter` re-arms (and answers nothing), `Esc` refuses in any state, and the modal says which state it is in. The one thing that still answers on the first keystroke is a message that *begins* with `y` or `n` — those are the answers. And `a` no longer grants on its own: it asks "allow every later call this session?", which one `y` confirms and any other key cancels, so the session-wide grant costs two deliberate keystrokes |
@@ -696,14 +701,48 @@ box, but not advertised either.
 Mouse mode is on by default (`SUGARCRUSH_DISABLE_MOUSE=1` turns it off). Zones
 are registered during the render pass, so clicks land on what you see: wheel
 scrolls the transcript, clicking a tool call expands/collapses it, clicking a
-session tab or a pane label switches to it, clicking a palette/picker row
-selects it, and clicking the menu bar opens a menu. Click-vs-drag is
+session tab switches sessions, clicking a docked pane's header focuses that
+pane, clicking a pane tab on the menu bar toggles its docking (see below),
+clicking a palette/picker row selects it, and clicking the menu bar opens a
+menu. Click-vs-drag is
 discriminated so a text-selection drag does not fire the zone underneath it.
+
+### Pane docking
+
+Five panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**
+and **Settings** to the right — and the chat owns whatever is left over. The
+menu bar's right end carries a tab for chat plus each dockable pane, and the
+tab tells you the whole state at a glance: muted when the pane is undocked,
+full foreground when it is docked, bold-underlined when it also holds focus.
+Clicking a tab toggles docking — docking lands the pane on its home side and
+focuses it; undocking the focused pane hands focus back to chat. Clicking the
+**Chat** tab never hides anything (the center pane is always up); it just
+returns focus. `/pane dock left|right` and `/pane toggle [name]` drive the
+same state from the keyboard, and dragging the dividers resizes the columns
+and re-stacks the panes within a side.
+
+Focus decides who answers `Tab`, `Shift+Tab` and `Enter`; typing a printable
+character always reaches the chat draft regardless of focus, as do `Ctrl+O`
+(expand/collapse the newest tool output) and the other always-chat chords.
+`Tab`/`Shift+Tab` walk the docked frame — chat, then the left column
+top-to-bottom, then the right — and wrap; `Esc` from any docked pane falls
+back to chat; `Enter` on an empty draft from a docked pane opens the command
+palette (see the keys table). What a focused pane then does with the keys the
+shell leaves alone varies, and is by design, because L2 adopted the panes that
+existed rather than building new bodies: **Chat** is the full editor, the `/`
+popup completing as you type; **Agents** is a real dashboard (`c`/`r`/`s`/`q`,
+`Alt+1…9`, enter to peek or attach); **Skills** drives its picker (arrows and
+enter) whenever the picker is open — `Ctrl+S` opens it; **Files** and **Tools**
+are read-only listings — their focus buys you the divider-resized view, the
+`Ctrl+O` peek, and the `Enter` palette door; **Settings** is a read-out panel
+by design — its own footer says the settings change through `/theme`, `/model`
+and the palette, which is exactly what the `Enter` door from that pane hands
+you.
 
 ### Slash commands
 
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/budget` `/clear`
-`/compact` `/fork` `/help` `/keys` `/mcp` `/memory` `/model` `/notices` `/permissions`
+`/compact` `/fork` `/help` `/keys` `/layout` `/mcp` `/memory` `/model` `/notices` `/pane` `/permissions`
 `/rename` `/rewind` `/rules` `/sessions` `/share` `/theme` `/websearch` `/workflow`
 `/exit` (`/quit`).
 
@@ -1158,11 +1197,19 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,061 tests / 170,837 assertions, 0 failures, 1 skipped** — the whole of
+**12,188 tests / 172,066 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-13m57s. Measured 2026-09-21, re-pinned when the three `WebSearch` tests that
-had been asserting against a live SearXNG endpoint were made hermetic: the day
+15m40s. Measured 2026-09-23. The pane-docking feature re-pinned the figure in stages,
+one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
+(`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
+lane, and the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle
+and palette door (L2, `3c4db713d`..`b9ea9b386`) — each adding its own tests and
+assertions, so the running arithmetic lives in
+`git log` rather than in this sentence (a hard-coded "+N over M" chain went stale here
+the moment the next stage landed). The
+re-pin before that: the three `WebSearch` tests that had been asserting against a
+live SearXNG endpoint were made hermetic — the day
 the endpoint stopped answering they took `Test PHP 8.3 · sugar-crush`,
 `… 8.4` and `Coverage · sugar-crush` red, which is a decoder of that host's
 uptime and not of this suite. Stubbing the tool's one network call moved zero

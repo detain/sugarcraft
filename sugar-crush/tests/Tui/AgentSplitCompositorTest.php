@@ -140,8 +140,8 @@ final class AgentSplitCompositorTest extends TestCase
         // layout that is not being drawn — 34 cells inside a 79-cell band, 43%
         // of it rather than 30%. The frame stays exactly `cols` wide either
         // way, so only the sidebar's own right edge shows the difference.
-        $silent = $this->boxRightEdge($this->frame($this->appWithLiveAgent('reviewer', ''), 120, 40), "\u{256D} files ");
-        $live = $this->boxRightEdge($this->frame($this->appWithLiveAgent('reviewer', "scanning src\nfound 3 issues"), 120, 40), "\u{256D} files ");
+        $silent = $this->boxRightEdge($this->frame($this->appWithLiveAgent('reviewer', ''), 120, 40), "\u{256D} " . Pane::Files->icon() . " files ");
+        $live = $this->boxRightEdge($this->frame($this->appWithLiveAgent('reviewer', "scanning src\nfound 3 issues"), 120, 40), "\u{256D} " . Pane::Files->icon() . " files ");
 
         self::assertSame(33, $silent, 'Unsplit, the sidebar is a quarter of 120 plus its chrome.');
         self::assertSame(23, $live, 'Split, the sidebar must re-lay out against the 79-cell band.');
@@ -591,7 +591,7 @@ final class AgentSplitCompositorTest extends TestCase
     /** Visual column of the chat box's right border, from its titled top row. */
     private function chatBoxRightEdge(string $frame): ?int
     {
-        return $this->boxRightEdge($frame, "\u{250C} chat ", "\u{2510}");
+        return $this->boxRightEdge($frame, "\u{250C} " . Pane::Chat->icon() . " chat ", "\u{2510}");
     }
 
     /**

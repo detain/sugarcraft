@@ -120,7 +120,7 @@ It is the largest file in the package — well past ten thousand lines; run
 `wc -l src/Chat.php` rather than trusting a figure here, because the one this
 sentence used to carry ("10,381 lines, measured on this checkout") was stale by
 the time anyone read it — because it owns every interactive surface: the input widget, the transcript, the "/" popup, the Ctrl+P
-palette, session tabs, the permission prompt, and the dispatch arms for 23
+palette, session tabs, the permission prompt, and the dispatch arms for 25
 built-in slash commands.
 
 `Chat` is **standalone-runnable**. Every collaborator is optional and degrades to
@@ -502,10 +502,10 @@ believes it owns.
 
 PHP `^8.3`. Beyond the SDKs (`openai-php/client`, `guzzlehttp/guzzle`,
 `aws/aws-sdk-php`, `google/cloud-ai-platform`, `symfony/yaml`,
-`react/promise`), ten SugarCraft siblings: `candy-core` (TEA runtime,
+`react/promise`), eleven SugarCraft siblings: `candy-core` (TEA runtime,
 `Program`, `Model`, `Cmd`), `candy-forms`, `candy-sprinkles` (styles),
 `candy-shine`, `candy-fuzzy`, `sugar-veil`, `candy-mosaic`, `candy-mouse`,
-`candy-focus`, `candy-kit`.
+`candy-layout` (dock geometry), `candy-focus`, `candy-kit`.
 
 `ext-sqlite3` is declared, and `src/` constructs it in exactly one place:
 `Agents\TaskList`'s task database. The session store reaches SQLite through
