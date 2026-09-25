@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Query\Admin\AsyncCachingServerContext;
+use SugarCraft\Query\Admin\CacheTtl;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\QueryLogger;
@@ -32,7 +33,8 @@ use SugarCraft\Sprinkles\Style;
  * Performance Dashboard page with 3-column layout.
  *
  * Shows Network, MySQL, and InnoDB panels with live metrics,
- * timeline graphs, counters, and meters. Updates every 3 seconds
+ * timeline graphs, counters, and meters. Refreshes on MySQL Workbench's
+ * one-second Performance-Dashboard cadence (gated by CacheTtl::DASHBOARD)
  * by sampling the ServerContext cache.
  *
  * Keyboard shortcuts:
@@ -48,7 +50,17 @@ final class DashboardPage extends PageBase
 
     private ?float $lastPollAt = null;
 
-    /** @var array<string, TimeSeriesCell> */
+    /**
+     * Wall-clock of the last committed snapshot. Rate denominators measure
+     * against THIS, not the gate stamp: the ReloadReportMsg arm nulls
+     * lastPollAt to bypass the throttle, and if elapsed were derived from
+     * lastPollAt too, the first post-reload poll would silently fall back to
+     * the DASHBOARD window and skew every rate (a 6s data gap divided by 1s
+     * reads 6x hot). MySQL Workbench samples against its own last frame.
+     */
+    private ?float $lastSnapshotAt = null;
+
+    /** @var array<string, MultiSeriesCell> */
     private array $timelineCells = [];
 
     /** @var array<string, CounterCell> */
@@ -249,7 +261,7 @@ final class DashboardPage extends PageBase
                 $this->context->refreshFromLiveCache();
             }
             // Force the next view() to poll immediately instead of waiting out
-            // the 3s throttle window — fresh data just arrived.
+            // the 1s throttle window — fresh data just arrived.
             $this->lastPollAt = null;
             return [$this, null];
         }
@@ -275,7 +287,7 @@ final class DashboardPage extends PageBase
 
         $now = microtime(true);
 
-        if ($this->lastPollAt !== null && ($now - $this->lastPollAt) < 3.0) {
+        if ($this->lastPollAt !== null && ($now - $this->lastPollAt) < CacheTtl::DASHBOARD) {
             return;
         }
 
@@ -285,15 +297,18 @@ final class DashboardPage extends PageBase
             : $current;
         $serverVars = $this->context->serverVariables();
 
-        // Measure actual wall-clock elapsed since last poll; use 3.0 as fallback
-        // only on the very first sample when lastPollAt is null.
-        if ($this->lastPollAt !== null) {
-            $elapsed = max(0.001, $now - $this->lastPollAt);
-        } else {
-            $elapsed = 3.0;
-        }
+        // Rate denominator = true wall-clock since the last committed snapshot,
+        // never the gate stamp: the ReloadReportMsg arm nulls only lastPollAt
+        // (a gate bypass), so a poll that arrives 6s after the last frame
+        // divides by 6 — not by the fallback window (C4/M1: no 3s/1s-fallback
+        // skew on the first post-reload sample). The fallback remains for the
+        // very first poll, where there is no previous frame to span.
+        $elapsed = $this->lastSnapshotAt === null
+            ? CacheTtl::DASHBOARD
+            : max(0.001, $now - $this->lastSnapshotAt);
 
         $this->lastPollAt = $now;
+        $this->lastSnapshotAt = $now;
 
         foreach ($this->timelineCells as $cell) {
             $cell->ingest($current, $previous, $elapsed);
@@ -324,7 +339,7 @@ final class DashboardPage extends PageBase
      * $breachedAlertKeys array tracks which alert keys were active at the last
      * check; array_diff_key against the current alert keys isolates newly-breached
      * entries. This prevents alert storms when a threshold remains breached
-     * across consecutive 3s poll cycles.
+     * across consecutive 1s poll cycles.
      *
      * @param array $statusVars  SHOW GLOBAL STATUS (or pg_stat_database for Postgres)
      * @param array $serverVars  SHOW GLOBAL VARIABLES (or pg_settings for Postgres)
@@ -368,7 +383,14 @@ final class DashboardPage extends PageBase
             $id = $this->widgetId($widget);
 
             match ($widget->kind) {
-                WidgetRegistry::KIND_TIMELINE => $this->timelineCells[$id] = new TimeSeriesCell($widget),
+                // Workbench plots every dashboard timeline as its own colored
+                // trace, so all timelines route through MultiSeriesCell: tuple
+                // calcs get one series per member, scalar calcs a single trace.
+                // Height 4 rows: the Network panel stacks Bytes In/Out charts
+                // plus the Connections chart+bar in the ~20-row panel budget of
+                // a 24-row terminal; braille's 4x vertical resolution keeps a
+                // 4-cell trace legible (16 dot rows).
+                WidgetRegistry::KIND_TIMELINE => $this->timelineCells[$id] = new MultiSeriesCell($widget, width: 40, height: 4),
                 WidgetRegistry::KIND_COUNTER => $this->counterCells[$id] = new CounterCell($widget),
                 WidgetRegistry::KIND_ROUND, WidgetRegistry::KIND_LEVEL => $this->meterCells[$id] = new MeterCell($widget),
                 default => null,
@@ -406,29 +428,42 @@ final class DashboardPage extends PageBase
         return $widget->caption . ':' . $widget->kind;
     }
 
+    /**
+     * Render a dashboard panel: section header, then one block per widget with
+     * the caption on its own line and the visualisation underneath.
+     *
+     * Workbench composes each metric as graph + labels in one frame, so some
+     * widgets are not drawn standalone: the network/disk kb/s counters become
+     * labels under their timelines, and the Connections level meter is drawn
+     * beside its chart instead of below it. Such siblings are marked consumed
+     * (keyed by widget id) and skipped when the walk reaches them.
+     */
     private function renderPanel(string $title, Region $region, string $section): string
     {
         $lines = [];
         $lines[] = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render($title);
 
         $widgets = $this->getWidgetsForSection($section);
+        $panelWidth = max(10, $region->width - 2);
+
+        /** @var array<string,bool> $consumed */
+        $consumed = [];
 
         foreach ($widgets as $widget) {
             $id = $this->widgetId($widget);
-
-            $value = match (true) {
-                isset($this->timelineCells[$id]) => $this->timelineCells[$id]->view(),
-                isset($this->counterCells[$id]) => $this->counterCells[$id]->view(),
-                isset($this->meterCells[$id]) => $this->meterCells[$id]->view(),
-                default => '',
-            };
+            if (isset($consumed[$id])) {
+                continue;
+            }
 
             $color = $widget->color;
             $caption = Style::new()
                 ->foreground(Color::rgb($color['r'], $color['g'], $color['b']))
                 ->render($widget->caption);
+            $lines[] = $caption;
 
-            $lines[] = $caption . ': ' . $value;
+            foreach ($this->renderWidgetBlock($widget, $panelWidth, $consumed) as $row) {
+                $lines[] = ' ' . $row;
+            }
         }
 
         $padding = $region->height - count($lines);
@@ -437,6 +472,219 @@ final class DashboardPage extends PageBase
         }
 
         return implode("\n", array_slice($lines, 0, $region->height));
+    }
+
+    /**
+     * The visualisation block for one widget. MySQL panel captions select the
+     * Workbench-shaped compositions; anything else (every Postgres widget,
+     * future additions) falls through to a generic chart/donut/counter block,
+     * which keeps PG rendering intact while still gaining multi-series traces
+     * for its tuple timelines (e.g. Transactions commits/rollbacks).
+     *
+     * @param array<string,bool> $consumed in-out: sibling ids folded into this block
+     * @return list<string>
+     */
+    private function renderWidgetBlock(Widget $widget, int $panelWidth, array &$consumed): array
+    {
+        $id = $this->widgetId($widget);
+
+        if (isset($this->timelineCells[$id])) {
+            $cell = $this->timelineCells[$id];
+            return match ($widget->caption) {
+                'Bytes In' => $this->labeledRateBlock($cell, 'Bytes In:counter', 'receiving', $panelWidth, $consumed, true),
+                'Bytes Out' => $this->labeledRateBlock($cell, 'Bytes Out:counter', 'sending', $panelWidth, $consumed, true),
+                'Connections' => $this->connectionsBlock($cell, $panelWidth, $consumed),
+                'SQL Statements' => $this->sqlStatementsBlock($cell, $panelWidth, $consumed),
+                'InnoDB Disk Writes' => $this->diskWritesBlock($cell, $panelWidth, $consumed),
+                'InnoDB Disk Reads' => $this->labeledRateBlock($cell, 'InnoDB Disk Reads:counter', 'reading', $panelWidth, $consumed, false),
+                default => $this->plainChartRows($cell, $panelWidth),
+            };
+        }
+
+        if (isset($this->meterCells[$id])) {
+            $meter = $this->meterCells[$id];
+            if ($widget->caption === 'Buffer Pool Usage') {
+                return $this->bufferPoolBlock($meter, $consumed);
+            }
+            return $this->rows($meter->view());
+        }
+
+        if (isset($this->counterCells[$id])) {
+            return [$this->counterCells[$id]->view()];
+        }
+
+        return [];
+    }
+
+    /**
+     * Chart plus a one-line rate label built from the paired byte-counter
+     * ("receiving 12.3 kb/s" / "sending …", Workbench wording). The counter
+     * widget is consumed here so it never renders as a duplicate standalone row.
+     *
+     * @param array<string,bool> $consumed
+     * @return list<string>
+     */
+    private function labeledRateBlock(MultiSeriesCell $cell, string $counterId, string $verb, int $panelWidth, array &$consumed, bool $asKb): array
+    {
+        $lines = $this->plainChartRows($cell, $panelWidth);
+
+        $counter = $this->counterCells[$counterId] ?? null;
+        if ($counter === null) {
+            return $lines;
+        }
+        $consumed[$counterId] = true;
+        if (!$counter->hasValue()) {
+            return $lines;
+        }
+
+        $lines[] = $asKb
+            ? sprintf('%s %.1f kb/s', $verb, $counter->lastValue() / 1024.0)
+            : sprintf('%s %s b/s', $verb, sprintf('%.0f', $counter->lastValue()));
+
+        return $lines;
+    }
+
+    /**
+     * InnoDB disk-writes frame: line graph plus the three spec labels
+     * (query_dashboard.md lines 32-34: "data written xx kb/s", "writes xx
+     * #/s", "writing xxx kb/s"). Both paired counters are consumed here so
+     * neither renders as a duplicate standalone row; a missing counter only
+     * drops its label lines, never the chart.
+     *
+     * @param array<string,bool> $consumed
+     * @return list<string>
+     */
+    private function diskWritesBlock(MultiSeriesCell $cell, int $panelWidth, array &$consumed): array
+    {
+        $lines = $this->plainChartRows($cell, $panelWidth);
+
+        $bytes = $this->counterCells['InnoDB Disk Writes:counter'] ?? null;
+        if ($bytes !== null) {
+            $consumed['InnoDB Disk Writes:counter'] = true;
+        }
+        $kb = $bytes !== null && $bytes->hasValue() ? $bytes->lastValue() / 1024.0 : null;
+        if ($kb !== null) {
+            $lines[] = sprintf('data written %.1f kb/s', $kb);
+        }
+
+        $writes = $this->counterCells['Disk Write Requests:counter'] ?? null;
+        if ($writes !== null) {
+            $consumed['Disk Write Requests:counter'] = true;
+            if ($writes->hasValue()) {
+                $lines[] = sprintf('writes %s #/s', $writes->scaledFormatted());
+            }
+        }
+
+        if ($kb !== null) {
+            $lines[] = sprintf('writing %.1f kb/s', $kb);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Connections history chart with the current-vs-limit vertical bar on its
+     * right (Workbench puts the bar in the same frame) and a threads/max
+     * readout below. Consumes the 'Connections' level meter widget.
+     *
+     * @param array<string,bool> $consumed
+     * @return list<string>
+     */
+    private function connectionsBlock(MultiSeriesCell $cell, int $panelWidth, array &$consumed): array
+    {
+        $meter = $this->meterCells['Connections:level'] ?? null;
+        if ($meter === null) {
+            return $this->plainChartRows($cell, $panelWidth);
+        }
+        $consumed['Connections:level'] = true;
+
+        // ~10 cells for the vertical bar plus gutter; the chart takes the rest.
+        $chart = implode("\n", $this->plainChartRows($cell, max(8, $panelWidth - 10)));
+        $joined = Layout::joinHorizontal(Position::TOP, $chart, ' ', $meter->viewMeter(4));
+
+        $lines = $this->rows($joined);
+        if ($meter->hasValue()) {
+            $lines[] = sprintf('threads %d / max %d', (int) $meter->value(), (int) $meter->max());
+        }
+        return $lines;
+    }
+
+    /**
+     * The seven-trace statements chart plus per-verb x/s labels, in a two
+     * column grid so seven labels still fit a narrow panel (Workbench lists
+     * select/insert/update/delete/create/alter/drop under the graph). The
+     * seven verb counters are consumed here.
+     *
+     * @param array<string,bool> $consumed
+     * @return list<string>
+     */
+    private function sqlStatementsBlock(MultiSeriesCell $cell, int $panelWidth, array &$consumed): array
+    {
+        $lines = $this->plainChartRows($cell, $panelWidth);
+
+        $labels = [];
+        foreach (['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'] as $verb) {
+            $counterId = strtoupper($verb) . ':counter';
+            $counter = $this->counterCells[$counterId] ?? null;
+            if ($counter === null) {
+                continue;
+            }
+            $consumed[$counterId] = true;
+            $labels[] = sprintf('%-7s %s', $verb, $counter->hasValue() ? $counter->scaledFormatted() : '0');
+        }
+
+        foreach (array_chunk($labels, 2) as $pair) {
+            $lines[] = implode('  ', $pair);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Buffer pool donut (usage % in the hole) with the read-reqs / write-reqs /
+     * disk-reads per-second labels underneath, mirroring the counter column
+     * Workbench docks beside DBRoundMeter. Consumes those three counters.
+     *
+     * @param array<string,bool> $consumed
+     * @return list<string>
+     */
+    private function bufferPoolBlock(MeterCell $meter, array &$consumed): array
+    {
+        $lines = $this->rows($meter->viewRound());
+
+        foreach ([
+            ['Buffer Pool Read Reqs', 'read reqs %s pages/s'],
+            ['Buffer Pool Write Reqs', 'write reqs %s pages/s'],
+            ['Disk Reads (not from pool)', 'disk reads %s /s'],
+        ] as [$caption, $format]) {
+            $counterId = $caption . ':counter';
+            $counter = $this->counterCells[$counterId] ?? null;
+            if ($counter === null) {
+                continue;
+            }
+            $consumed[$counterId] = true;
+            $lines[] = sprintf($format, $counter->hasValue() ? $counter->scaledFormatted() : '0');
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function plainChartRows(MultiSeriesCell $cell, int $panelWidth): array
+    {
+        return $this->rows($cell->view($panelWidth));
+    }
+
+    /**
+     * Split a multi-row renderer (chart, donut, joined columns) into panel rows.
+     *
+     * @return list<string>
+     */
+    private function rows(string $rendered): array
+    {
+        return explode("\n", rtrim($rendered, "\n"));
     }
 
     /**
@@ -550,6 +798,7 @@ final class DashboardPage extends PageBase
         }
         $clone->previousSnapshot = null;
         $clone->lastPollAt = null;
+        $clone->lastSnapshotAt = null;
         return $clone;
     }
 

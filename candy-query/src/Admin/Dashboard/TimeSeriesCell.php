@@ -62,19 +62,20 @@ final class TimeSeriesCell
         $value = $this->widget->compute($current, $previous, $elapsed);
 
         if (is_array($value)) {
-            // MakeTuple / TupleRatePerSecond return associative arrays like
-            // ['Com_select' => 10.0, 'Com_insert' => 5.0, ...]. Summing these
-            // would produce meaningless totals (e.g. 15 from two unrelated
-            // counter series). Multi-series timeline rendering (separate
-            // polylines per series) requires broader LineChart changes and is
-            // deferred; for now, show the dominant series so the graph is at
-            // least informative rather than misleading.
+            // Legacy single-series limitation: the dashboard now routes every
+            // timeline through MultiSeriesCell, which plots each tuple member
+            // as its own colored trace. This cell keeps collapsing tuples to
+            // the dominant member so any external caller of the published
+            // single-line sparkline API is unaffected.
             $value = empty($value) ? 0.0 : max($value);
         }
 
         $value = (float) $value;
 
-        if ($value <= 0) {
+        // Zero is a real observation, not noise: Workbench draws an idle
+        // counter as a flat floor line, and dropping 0 would freeze the trace
+        // at the last busy value. Only negative/non-finite artifacts are refused.
+        if (!is_finite($value) || $value < 0) {
             return $this;
         }
 

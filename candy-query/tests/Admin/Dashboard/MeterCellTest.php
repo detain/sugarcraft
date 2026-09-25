@@ -451,4 +451,35 @@ final class MeterCellTest extends TestCase
 
         $this->assertSame(0.0, $cell->ratio());
     }
+
+    /**
+     * Discriminating pin for the round-widget ratio fix (review MAJOR-1): a
+     * percent-valued round widget (Table Open Cache, serverVarsKeys null →
+     * resolveMax 0) must fill its ring by value/100, not collapse to ratio 0
+     * as before the fix. Asserts BOTH the computed ratio and the rendered
+     * readout: the center value alone would survive a reverted fix (it prints
+     * the raw value), so the ratio assertion is the load-bearing leg.
+     */
+    public function testRoundPercentWidgetFillsRingByValueOverHundred(): void
+    {
+        $widget = new Widget(
+            caption: 'Table Open Cache',
+            kind: WidgetRegistry::KIND_ROUND,
+            calc: new \SugarCraft\Query\Admin\Calc\TableOpenCacheHitRate(),
+            format: '%.0f%%',
+            color: ['r' => 60, 'g' => 178, 'b' => 191],
+        );
+
+        $cell = new MeterCell($widget);
+
+        $current = ['Table_open_cache_hits' => '850', 'Table_open_cache_misses' => '150'];
+
+        $cell->ingest($current, [], 1.0, null);
+
+        $this->assertTrue($cell->hasValue());
+        $this->assertEqualsWithDelta(85.0, $cell->value(), 1e-9);
+        $this->assertEqualsWithDelta(0.85, $cell->ratio(), 1e-9, 'round ratio must be value/100 when no serverVars max exists');
+        $this->assertSame(85, $cell->percentage());
+        $this->assertStringContainsString('85%', $cell->viewRound(), 'donut hole must print the percentage');
+    }
 }

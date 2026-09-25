@@ -49,8 +49,9 @@ final class AdminTickThrottleTest extends TestCase
 
     /**
      * App started against FakeDatabase (MySQL flavor) and navigated into the
-     * Admin pane. lastFetchAt is still 0.0, i.e. beyond the status TTL — the
-     * "due for a full fetch" state.
+     * Admin pane. Entering Admin arms the entry fetch, so loading is TRUE and
+     * lastFetchAt is still 0.0 (beyond every TTL) — the "first fetch in
+     * flight" state, which the C4 in-flight guard must hold back.
      */
     private function adminApp(): App
     {
@@ -62,9 +63,22 @@ final class AdminTickThrottleTest extends TestCase
     }
 
     /**
+     * Beyond-TTL AND not loading — the settled "due for a full fetch" state.
+     * AdminDataLoadedMsg clears the entry fetch's loading flag and leaves
+     * lastFetchAt untouched at 0.0, so the next tick is unambiguously due.
+     */
+    private function idleApp(): App
+    {
+        [$a, ] = $this->adminApp()->update(
+            new AdminDataLoadedMsg(['Uptime' => '10'], ['max_connections' => '100'], microtime(true)),
+        );
+        return $a;
+    }
+
+    /**
      * Move the throttle stamp forward: AdminFetchStartedMsg records lastFetchAt
      * while not already loading, and AdminDataLoadedMsg clears the loading flag,
-     * so the pair puts the App inside the CacheTtl::STATUS cooldown window.
+     * so the pair puts the App inside the CacheTtl::DASHBOARD cooldown window.
      */
     private function cooledDownApp(App $a): App
     {
@@ -101,15 +115,55 @@ final class AdminTickThrottleTest extends TestCase
 
     public function testTickBeyondTtlEmitsFullFetchBatch(): void
     {
-        $a = $this->adminApp();
+        $a = $this->idleApp();
 
         [$a, $cmd] = $a->update(new AdminTickMsg());
 
-        $this->assertNotNull($cmd, 'beyond the status window the tick arms the full fetch');
+        $this->assertNotNull($cmd, 'beyond the dashboard window, settled, the tick arms the full fetch');
         $batch = $cmd();
         $this->assertInstanceOf(BatchMsg::class, $batch);
         $this->assertCount(2, $batch->cmds, 'AdminFetchStartedMsg + promise fetch');
         $this->assertInstanceOf(AdminFetchStartedMsg::class, ($batch->cmds[0])());
+    }
+
+    public function testTickBeyondTtlWhileFetchInFlightDoesNotPileOn(): void
+    {
+        // C4/M2: adminApp() is beyond-TTL with the entry fetch still loading.
+        // Without the guard every 1s tick would launch another full batch onto
+        // the same connection — the r82 pile-up shape. Empty queue ⇒ silence.
+        $a = $this->adminApp();
+
+        [$a, $cmd] = $a->update(new AdminTickMsg());
+
+        $this->assertNull($cmd, 'a due tick while a full fetch is in flight starts nothing');
+        $this->assertSame([], $this->seenSql);
+    }
+
+    public function testInFlightDueTickDowngradesToDrainOnly(): void
+    {
+        // The guard demotes, it does not mute: pending page SQL still drains
+        // while the full fetch runs (status/server queries stay skipped).
+        $a = $this->adminApp();
+        AdminQueryCache::instance()->lookup('SHOW FULL PROCESSLIST');
+        $this->seedFakeConnection([['Id' => '7', 'User' => 'root']]);
+
+        [$a, $cmd] = $a->update(new AdminTickMsg());
+
+        $this->assertNotNull($cmd, 'in-flight but pending — the tick still drains');
+        $async = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $async);
+
+        $outcome = null;
+        $async->promise->then(static function (mixed $msg) use (&$outcome): void {
+            $outcome = $msg;
+        });
+
+        $this->assertInstanceOf(AdminDrainCompletedMsg::class, $outcome);
+        $this->assertSame(
+            ['SHOW FULL PROCESSLIST'],
+            $this->seenSql,
+            'the downgraded tick never issues SHOW GLOBAL STATUS/VARIABLES',
+        );
     }
 
     public function testTickWithinTtlWithoutPendingEmitsNothing(): void
