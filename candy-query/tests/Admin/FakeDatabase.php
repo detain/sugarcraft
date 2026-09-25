@@ -16,6 +16,9 @@ final class FakeDatabase implements DatabaseInterface
     private array $queryResult = [];
 
     private ?\PDOException $queryException = null;
+
+    /** When set, exec() logs the SQL and then throws this (GTID-failure pins). */
+    private ?\Throwable $execException = null;
     private string $serverVersion = 'MySQL version 8.0.33';
 
     /** @var list<array{sql: string, values: array}> */
@@ -96,7 +99,16 @@ final class FakeDatabase implements DatabaseInterface
     public function exec(string $sql): int
     {
         $this->execLog[] = $sql;
+        if ($this->execException !== null) {
+            throw $this->execException;
+        }
         return 0;
+    }
+
+    /** Make the next exec() calls throw (mirrors setQueryThrows for the write path). */
+    public function setExecThrows(?\Throwable $e): void
+    {
+        $this->execException = $e;
     }
 
     /** @return list<string> Raw SQL strings passed to exec(), in order. */

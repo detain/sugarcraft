@@ -68,6 +68,13 @@ final class ServerStatusPage extends PageBase
     private string|null $gtidModeCurrent = null;
     private bool $gtidDialog = false;
     private string $gtidModeEdit = '';
+    /**
+     * One-line failure text from the last SET @@GLOBAL.GTID_MODE attempt.
+     * Non-empty keeps the dialog open (the user stays where the fix is —
+     * cycle to another whitelisted mode or cancel) and renders under the
+     * dialog line. Empty means no pending error.
+     */
+    private string $gtidError = '';
 
     public function __construct(
         ServerContextInterface $context,
@@ -219,6 +226,16 @@ final class ServerStatusPage extends PageBase
         $lines[] = $this->renderReplicaPanel();
         $lines[] = '';
         $lines[] = $this->renderFirewallPanel();
+
+        // The GTID dialog is a modal editing surface while open: it must be
+        // visible (its state was previously key-handled with no render at
+        // all, so neither the mode being edited nor a failure could ever be
+        // seen).
+        if ($this->gtidDialog) {
+            $lines[] = '';
+            $lines[] = $this->renderGtidDialogPanel();
+        }
+
         $lines[] = '';
         $lines[] = $this->renderFooter();
 
@@ -386,6 +403,25 @@ final class ServerStatusPage extends PageBase
         ]);
 
         return Card::titled($list, 'Firewall')->render();
+    }
+
+    /**
+     * One visible block for the open GTID-mode dialog: the mode under edit +
+     * key hints, and the last failure line when the SET was refused.
+     */
+    private function renderGtidDialogPanel(): string
+    {
+        $line = Style::new()->bold()->foreground(Color::hex('#cba6f0'))->render(
+            sprintf('GTID_MODE [%s]   c: cycle   Enter: apply   Esc: cancel', $this->gtidModeEdit),
+        );
+
+        if ($this->gtidError === '') {
+            return $line;
+        }
+
+        return $line . "\n" . Style::new()->foreground(Color::hex('#f38ba8'))->render(
+            'Error: ' . $this->gtidError,
+        );
     }
 
     private function renderFooter(): string
@@ -706,6 +742,7 @@ final class ServerStatusPage extends PageBase
 
         $clone = clone $this;
         $clone->gtidDialog = true;
+        $clone->gtidError = ''; // a reopened dialog starts clean, not on last failure's error
         // Initialize edit value from current server GTID_MODE
         $current = $this->context->serverVariables()['gtid_mode'] ?? 'OFF';
         $clone->gtidModeCurrent = $current;
@@ -728,6 +765,7 @@ final class ServerStatusPage extends PageBase
         if ($msg->type === \SugarCraft\Core\KeyType::Escape) {
             $clone = clone $this;
             $clone->gtidDialog = false;
+            $clone->gtidError = '';
             return [$clone, null];
         }
 
@@ -744,16 +782,27 @@ final class ServerStatusPage extends PageBase
         if ($msg->type === \SugarCraft\Core\KeyType::Enter) {
             // Execute the GTID_MODE change
             $mode = $this->gtidModeEdit;
-            $clone = clone $this;
-            $clone->gtidDialog = false;
-            // Execute SET @@GLOBAL.GTID_MODE = $mode
             // GTID_MODE is always an identifier (whitelist), not user free-text
             $connection = $this->context->connection();
             try {
                 $connection->exec("SET @@GLOBAL.GTID_MODE = {$mode}");
-            } catch (\Throwable) {
-                // Non-fatal: just close the dialog; user can read the error
+            } catch (\Throwable $e) {
+                // Admin mutations must never fail silently: an earlier shape
+                // closed the dialog on failure behind a comment claiming the
+                // user could read the error — they could not. Keep the dialog
+                // open (the target mode is still on screen) and surface a
+                // flattened one-line reason, same "Error: <msg>" idiom the
+                // other admin pages use (PageBase::errorScreen, PerfSchema).
+                $clone = clone $this;
+                $reason = (string) preg_replace('/\s+/u', ' ', $e->getMessage());
+                $clone->gtidError = 'GTID_MODE = ' . $mode . ': ' . mb_substr(trim($reason), 0, 160);
+                return [$clone, null];
             }
+            $clone = clone $this;
+            $clone->gtidDialog = false;
+            $clone->gtidError = '';
+            // No explicit refresh here: the admin tick lands the new
+            // gtid_mode within its 1s cadence, same as every other change.
             return [$clone, null];
         }
 
