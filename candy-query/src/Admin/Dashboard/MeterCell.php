@@ -172,8 +172,15 @@ final class MeterCell
      * (used vs free) keep the ring total constant at 100 so Donut never hits
      * its empty-render path, and the free segment carries a muted grey so the
      * fill reads as progress against a visible track.
+     *
+     * Size 14 is the smallest ring whose hole fits a four-character readout
+     * ("100%"): Donut truncates center text to the hole span, and at the
+     * former size 12 the live page clipped "85%" to "85". The center always
+     * prints %.0f%% because KIND_ROUND widgets are percent metrics by
+     * contract (hit-rate / usage), so the widget's own %llf-format precision
+     * would not survive the hole anyway.
      */
-    public function viewRound(int $size = 12): string
+    public function viewRound(int $size = 14): string
     {
         $color = $this->widget->color;
         $used = max(0.0, min(100.0, $this->ratio * 100.0));
@@ -187,7 +194,7 @@ final class MeterCell
         );
 
         if ($this->hasValue) {
-            $donut = $donut->withCenterValue(sprintf($this->widget->format, $this->value));
+            $donut = $donut->withCenterValue(sprintf('%.0f%%', $this->value));
         }
 
         return $donut->render();
