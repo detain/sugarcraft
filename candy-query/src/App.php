@@ -145,11 +145,14 @@ final class App implements Model
             // After status/server vars are cached, trigger report reload for
             // ReportsPage so its async query is queued for the next tick.
             $newApp = $this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt);
-            // admin page may be null if msg arrives before first render (e.g. tests).
-            if ($this->admin->page !== null) {
-                [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
-                $newApp = $newApp->withAdminPage($newPage);
-            }
+            // Pin the lazily-built page into model state the moment data
+            // arrives, not merely when a keypress happened to delegate first:
+            // adminPage() never persisted its build, so an un-touched pane
+            // minted a throwaway page per render — rolling-window widgets
+            // (Server Status graphs, Sampler rates) could never accumulate.
+            $page = $newApp->admin->page ?? $newApp->adminPage();
+            [$newPage,] = $page->update(new ReloadReportMsg());
+            $newApp = $newApp->withAdminPage($newPage);
             return [$newApp, null];
         }
         if ($msg instanceof TableRowsLoadedMsg) {
@@ -761,6 +764,10 @@ final class App implements Model
             $this->admin->cachedStatusVars,
             $this->admin->cachedServerVars,
             $this->admin->loading,
+            // AdminState keeps the payload's true fetchedAt beside the vars;
+            // pass it so a pane rebuild stamps the snapshot's real age
+            // instead of "now" (review MINOR-1 — false Running on rebuild).
+            statusVarsArrivedAt: $this->admin->cacheTs > 0.0 ? $this->admin->cacheTs : null,
         );
 
         return match ($this->admin->pane) {

@@ -218,14 +218,18 @@ final class SidebarGaugeSet
     }
 
     /**
-     * Compute key efficiency ratio: Key_reads / (Key_reads + Key_read_requests).
+     * Compute key efficiency ratio: Key_reads / (Key_reads + Key_write_requests).
      *
      * A high ratio indicates many cache misses (reads hitting disk).
      * A low ratio indicates good cache utilization.
      *
+     * Public static: MetricsColumn reuses this exact formula for its label
+     * (per the parity brief: "same calc the existing gauge uses") so the two
+     * surfaces cannot drift apart.
+     *
      * @return float 0.0-1.0 where higher is worse (more misses)
      */
-    private function computeKeyEfficiencyRatio(array $statusVars): float
+    public static function computeKeyEfficiencyRatio(array $statusVars): float
     {
         $keyReads = (int) ($statusVars['Key_reads'] ?? '0');
         $keyWriteRequests = (int) ($statusVars['Key_write_requests'] ?? '0');
@@ -263,9 +267,11 @@ final class SidebarGaugeSet
      * Uses pages_free / pages_total. If individual stats not available,
      * falls back to buffer_pool_size / total_memory estimate.
      *
+     * Public static for the same reason as computeKeyEfficiencyRatio.
+     *
      * @return float 0.0-1.0 where 1.0 = completely full (bad for writes)
      */
-    private function computeInnoDBRatio(array $statusVars): float
+    public static function computeInnoDBRatio(array $statusVars): float
     {
         $pagesFree = (int) ($statusVars['Innodb_buffer_pool_pages_free'] ?? '0');
         $pagesTotal = (int) ($statusVars['Innodb_buffer_pool_pages_total'] ?? '0');

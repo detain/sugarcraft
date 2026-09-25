@@ -5,16 +5,36 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Admin\ServerStatus;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Components\Card\Badge;
 use SugarCraft\Dash\Components\Card\Card;
 use SugarCraft\Dash\Components\Card\DefinitionList;
+use SugarCraft\Query\Admin\AsyncCachingServerContext;
+use SugarCraft\Query\Admin\CacheTtl;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\Sampler;
 use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Query\Core\Msg\ReloadReportMsg;
+use SugarCraft\Query\Renderer;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
+
+/**
+ * Liveness of the admin data feed backing the Server Status page.
+ *
+ * Mirrors the green play-arrow / grey stop-square header MySQL Workbench
+ * shows above Management :: Server Status (query_dashboard.md line 45):
+ * the triangle means the monitor thread is still landing samples, the
+ * square means it is not.
+ */
+enum RunState: string
+{
+    case Running = 'running';
+    case Stopped = 'stopped';
+    case Unreachable = 'unreachable';
+}
 
 /**
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.
@@ -32,14 +52,29 @@ use SugarCraft\Sprinkles\Style;
  */
 final class ServerStatusPage extends PageBase
 {
+    /**
+     * A sample younger than 3 × the 1 s admin cadence means the fetch loop is
+     * still landing data; anything older is treated as a stopped feed. Three
+     * full cadences of slack so one slow SHOW GLOBAL STATUS (network blip,
+     * lock on the server) does not flicker the Running badge to Stopped.
+     */
+    private const RUNNING_FRESHNESS_SECONDS = 3 * CacheTtl::DASHBOARD;
+
     private ?ReplicaStatusProvider $replicaProvider = null;
     private ?Sampler $sampler = null;
-    private ?SidebarGaugeSet $gaugeSet = null;
+    private ?MetricsColumn $column = null;
 
     /** @var ReplicaStatusKind::*|null */
     private string|null $gtidModeCurrent = null;
     private bool $gtidDialog = false;
     private string $gtidModeEdit = '';
+    /**
+     * One-line failure text from the last SET @@GLOBAL.GTID_MODE attempt.
+     * Non-empty keeps the dialog open (the user stays where the fix is —
+     * cycle to another whitelisted mode or cancel) and renders under the
+     * dialog line. Empty means no pending error.
+     */
+    private string $gtidError = '';
 
     public function __construct(
         ServerContextInterface $context,
@@ -57,8 +92,10 @@ final class ServerStatusPage extends PageBase
     public static function new(ServerContextInterface $context, ?Sampler $sampler = null): self
     {
         $page = new self($context, null, $sampler);
-        // First build polls to prime the sampler with the initial snapshot.
-        $page->gaugeSet = SidebarGaugeSet::new($context, $sampler)->poll();
+        // First build polls to prime the sampler with the initial snapshot
+        // and seed the CPU/Load + graph windows (same role gaugeSet played).
+        $page->column = MetricsColumn::forContext($context, $sampler);
+        $page->column->poll();
         return $page;
     }
 
@@ -76,6 +113,75 @@ final class ServerStatusPage extends PageBase
     }
 
     /**
+     * Render the page, keeping the Workbench liveness label visible even
+     * when there is no data to build the panels from: Workbench greys the
+     * whole Server Status tab but still shows the stopped indicator, and
+     * without the header the user cannot tell "connection died" from
+     * "page still loading".
+     */
+    public function view(): string
+    {
+        // First async fetch in flight with nothing cached: loading screen,
+        // same door PageBase uses — a loading pane must not read as dead.
+        if ($this->context instanceof AsyncCachingServerContext
+            && $this->context->isLoading()
+            && !$this->context->hasCachedData()) {
+            return $this->loadingScreen();
+        }
+
+        if (!$this->validate()) {
+            return $this->runLabel(RunState::Unreachable) . "\n" . $this->errorScreen();
+        }
+
+        return $this->build();
+    }
+
+    /**
+     * Liveness of the admin fetch feeding this page.
+     *
+     * Derived purely from cached state — the timestamp ServerContext stamps
+     * on the last SHOW GLOBAL STATUS — so no extra message or subscription
+     * is needed: every App re-render (each landed AdminDataLoadedMsg)
+     * re-evaluates it against the current clock.
+     */
+    private function runState(float $now): RunState
+    {
+        try {
+            $vars = $this->context->statusVariables();
+        } catch (\Throwable) {
+            return RunState::Unreachable;
+        }
+
+        if ($vars === []) {
+            return RunState::Unreachable;
+        }
+
+        $age = $now - $this->context->statusVariablesTs();
+        return $age <= self::RUNNING_FRESHNESS_SECONDS
+            ? RunState::Running
+            : RunState::Stopped;
+    }
+
+    /**
+     * Play-triangle + word label (query_dashboard.md line 45), severity
+     * colored: green while samples land, amber when the feed stalled, red
+     * when no sample has ever arrived.
+     */
+    private function runLabel(RunState $state): string
+    {
+        [$glyph, $word, $hex] = match ($state) {
+            RunState::Running => ['▶', 'Running', '#a6e3a1'],
+            RunState::Stopped => ['■', 'Stopped', '#fbbf24'],
+            RunState::Unreachable => ['✖', 'Unreachable', '#f38ba8'],
+        };
+
+        return Style::new()
+            ->bold()
+            ->foreground(Color::hex($hex))
+            ->render($glyph . ' ' . $word);
+    }
+
+    /**
      * Build the complete status page output.
      */
     protected function build(): string
@@ -83,11 +189,20 @@ final class ServerStatusPage extends PageBase
         // Left panel: existing info panels stacked vertically
         $leftPanel = $this->buildLeftPanel();
 
-        // Right panel: live gauge sidebar (already polled via withRefresh or ::new)
-        $gaugeSet = $this->gaugeSet ?? SidebarGaugeSet::new($this->context, $this->sampler);
-        $rightPanel = $gaugeSet->view();
+        // Right panel: live metric column (CPU/Load first, then the Workbench
+        // graph frames — replaces the five-gauge sidebar rendering). Width is
+        // whatever the terminal leaves beside the info panels, so graphs never
+        // push the layout past the viewport.
+        $column = $this->column ?? MetricsColumn::forContext($this->context, $this->sampler);
+        $size = Renderer::getTerminalSize();
+        $leftWidth = 0;
+        foreach (explode("\n", $leftPanel) as $line) {
+            $leftWidth = max($leftWidth, Width::of($line));
+        }
+        $rightWidth = max(22, min(72, ($size['cols'] ?? 120) - $leftWidth - 2));
+        $rightPanel = $column->view($rightWidth, (int) ($size['rows'] ?? 24));
 
-        // 2-column layout: info panels on left, gauges on right
+        // 2-column layout: info panels on left, metric column on right
         return Layout::joinHorizontal(Position::TOP, $leftPanel, '  ', $rightPanel);
     }
 
@@ -111,6 +226,16 @@ final class ServerStatusPage extends PageBase
         $lines[] = $this->renderReplicaPanel();
         $lines[] = '';
         $lines[] = $this->renderFirewallPanel();
+
+        // The GTID dialog is a modal editing surface while open: it must be
+        // visible (its state was previously key-handled with no render at
+        // all, so neither the mode being edited nor a failure could ever be
+        // seen).
+        if ($this->gtidDialog) {
+            $lines[] = '';
+            $lines[] = $this->renderGtidDialogPanel();
+        }
+
         $lines[] = '';
         $lines[] = $this->renderFooter();
 
@@ -122,6 +247,18 @@ final class ServerStatusPage extends PageBase
      */
     public function update(\SugarCraft\Core\Msg $msg): array
     {
+        if ($msg instanceof ReloadReportMsg) {
+            // App forwards this whenever fresh admin data lands in the shared
+            // cache (same arm DashboardPage carries): adopt the live values and
+            // bypass the 1s poll throttle so the graphs move on the tick that
+            // delivered data, not the next one.
+            if ($this->context instanceof AsyncCachingServerContext) {
+                $this->context->refreshFromLiveCache();
+            }
+            $this->column?->forcePoll();
+            $this->column?->poll();
+            return [$this, null];
+        }
         if (!$msg instanceof \SugarCraft\Core\Msg\KeyMsg) {
             return [$this, null];
         }
@@ -150,7 +287,10 @@ final class ServerStatusPage extends PageBase
 
         $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Server Status');
 
-        return sprintf(
+        // Workbench puts the play-arrow liveness label ABOVE the tab title
+        // (query_dashboard.md line 45), so it reads as the page's status
+        // light rather than part of the connection banner.
+        return $this->runLabel($this->runState(microtime(true))) . "\n" . sprintf(
             '%s | %s %s | %s',
             $title,
             $flavor->value,
@@ -263,6 +403,25 @@ final class ServerStatusPage extends PageBase
         ]);
 
         return Card::titled($list, 'Firewall')->render();
+    }
+
+    /**
+     * One visible block for the open GTID-mode dialog: the mode under edit +
+     * key hints, and the last failure line when the SET was refused.
+     */
+    private function renderGtidDialogPanel(): string
+    {
+        $line = Style::new()->bold()->foreground(Color::hex('#cba6f0'))->render(
+            sprintf('GTID_MODE [%s]   c: cycle   Enter: apply   Esc: cancel', $this->gtidModeEdit),
+        );
+
+        if ($this->gtidError === '') {
+            return $line;
+        }
+
+        return $line . "\n" . Style::new()->foreground(Color::hex('#f38ba8'))->render(
+            'Error: ' . $this->gtidError,
+        );
     }
 
     private function renderFooter(): string
@@ -552,8 +711,11 @@ final class ServerStatusPage extends PageBase
         $clone = clone $this;
         $clone->context->refresh();
         $clone->replicaProvider = $this->replicaProvider->refresh();
-        // Build fresh gauge set and poll to advance the sampler.
-        $clone->gaugeSet = SidebarGaugeSet::new($clone->context, $clone->sampler)->poll();
+        // Advance the metric column: fresh data just landed, so skip the
+        // throttle and take the sample immediately.
+        $clone->column ??= MetricsColumn::forContext($clone->context, $clone->sampler);
+        $clone->column->forcePoll();
+        $clone->column->poll();
         return $clone;
     }
 
@@ -580,6 +742,7 @@ final class ServerStatusPage extends PageBase
 
         $clone = clone $this;
         $clone->gtidDialog = true;
+        $clone->gtidError = ''; // a reopened dialog starts clean, not on last failure's error
         // Initialize edit value from current server GTID_MODE
         $current = $this->context->serverVariables()['gtid_mode'] ?? 'OFF';
         $clone->gtidModeCurrent = $current;
@@ -599,9 +762,10 @@ final class ServerStatusPage extends PageBase
     {
         $ch = $msg->rune ?? '';
 
-        if ($msg->keyType === \SugarCraft\Core\KeyType::Escape) {
+        if ($msg->type === \SugarCraft\Core\KeyType::Escape) {
             $clone = clone $this;
             $clone->gtidDialog = false;
+            $clone->gtidError = '';
             return [$clone, null];
         }
 
@@ -615,19 +779,30 @@ final class ServerStatusPage extends PageBase
             return [$clone, null];
         }
 
-        if ($msg->keyType === \SugarCraft\Core\KeyType::Enter) {
+        if ($msg->type === \SugarCraft\Core\KeyType::Enter) {
             // Execute the GTID_MODE change
             $mode = $this->gtidModeEdit;
-            $clone = clone $this;
-            $clone->gtidDialog = false;
-            // Execute SET @@GLOBAL.GTID_MODE = $mode
             // GTID_MODE is always an identifier (whitelist), not user free-text
             $connection = $this->context->connection();
             try {
                 $connection->exec("SET @@GLOBAL.GTID_MODE = {$mode}");
-            } catch (\Throwable) {
-                // Non-fatal: just close the dialog; user can read the error
+            } catch (\Throwable $e) {
+                // Admin mutations must never fail silently: an earlier shape
+                // closed the dialog on failure behind a comment claiming the
+                // user could read the error — they could not. Keep the dialog
+                // open (the target mode is still on screen) and surface a
+                // flattened one-line reason, same "Error: <msg>" idiom the
+                // other admin pages use (PageBase::errorScreen, PerfSchema).
+                $clone = clone $this;
+                $reason = (string) preg_replace('/\s+/u', ' ', $e->getMessage());
+                $clone->gtidError = 'GTID_MODE = ' . $mode . ': ' . mb_substr(trim($reason), 0, 160);
+                return [$clone, null];
             }
+            $clone = clone $this;
+            $clone->gtidDialog = false;
+            $clone->gtidError = '';
+            // No explicit refresh here: the admin tick lands the new
+            // gtid_mode within its 1s cadence, same as every other change.
             return [$clone, null];
         }
 
