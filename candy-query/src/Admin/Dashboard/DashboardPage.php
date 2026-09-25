@@ -615,8 +615,8 @@ final class DashboardPage extends PageBase
         $lines = $this->rows($meter->viewRound());
 
         foreach ([
-            ['Buffer Pool Read Reqs', 'reads %s pages/s'],
-            ['Buffer Pool Write Reqs', 'writes %s pages/s'],
+            ['Buffer Pool Read Reqs', 'read reqs %s pages/s'],
+            ['Buffer Pool Write Reqs', 'write reqs %s pages/s'],
             ['Disk Reads (not from pool)', 'disk reads %s /s'],
         ] as [$caption, $format]) {
             $counterId = $caption . ':counter';

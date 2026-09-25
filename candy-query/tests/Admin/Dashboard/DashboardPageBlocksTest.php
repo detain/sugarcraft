@@ -128,8 +128,8 @@ final class DashboardPageBlocksTest extends TestCase
                 'Innodb_buffer_pool_pages_total' => '1000', 'Innodb_buffer_pool_bytes_data' => '100', 'Uptime' => '3'],
         );
 
-        $this->assertMatchesRegularExpression('/reads \S+ pages\/s/', $view);
-        $this->assertMatchesRegularExpression('/writes \S+ pages\/s/', $view);
+        $this->assertMatchesRegularExpression('/read reqs \S+ pages\/s/', $view);
+        $this->assertMatchesRegularExpression('/write reqs \S+ pages\/s/', $view);
         $this->assertMatchesRegularExpression('/disk reads \S+ \/s/', $view);
         $this->assertSame(1, substr_count($view, 'Buffer Pool Usage'));
     }
