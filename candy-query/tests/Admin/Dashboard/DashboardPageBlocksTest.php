@@ -137,12 +137,16 @@ final class DashboardPageBlocksTest extends TestCase
     public function testInnodbDiskPanelsLabelRates(): void
     {
         $view = $this->renderedAfterTwoPolls(
-            ['Innodb_data_written' => '0', 'Innodb_data_read' => '0', 'Innodb_os_log_bytes_written' => '0', 'Uptime' => '1'],
-            ['Innodb_data_written' => '20480', 'Innodb_data_read' => '8192', 'Innodb_os_log_bytes_written' => '1024', 'Uptime' => '3'],
+            ['Innodb_data_written' => '0', 'Innodb_data_read' => '0', 'Innodb_data_writes' => '0', 'Innodb_os_log_bytes_written' => '0', 'Uptime' => '1'],
+            ['Innodb_data_written' => '20480', 'Innodb_data_read' => '8192', 'Innodb_data_writes' => '36', 'Innodb_os_log_bytes_written' => '1024', 'Uptime' => '3'],
         );
 
+        $this->assertMatchesRegularExpression('/data written \d+(\.\d+)? kb\/s/', $view);
+        $this->assertMatchesRegularExpression('/writes \S+ #\/s/', $view);
         $this->assertMatchesRegularExpression('/writing \d+(\.\d+)? kb\/s/', $view);
         $this->assertMatchesRegularExpression('/reading \d+(\.\d+)? b\/s/', $view);
+        // The write-request counter folds into the block, never standalone.
+        $this->assertSame(0, substr_count($view, 'Disk Write Requests'));
     }
 
     public function testPostgresPanelsStillRenderThroughGenericBlocks(): void

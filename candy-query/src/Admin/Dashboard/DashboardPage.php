@@ -495,7 +495,7 @@ final class DashboardPage extends PageBase
                 'Bytes Out' => $this->labeledRateBlock($cell, 'Bytes Out:counter', 'sending', $panelWidth, $consumed, true),
                 'Connections' => $this->connectionsBlock($cell, $panelWidth, $consumed),
                 'SQL Statements' => $this->sqlStatementsBlock($cell, $panelWidth, $consumed),
-                'InnoDB Disk Writes' => $this->labeledRateBlock($cell, 'InnoDB Disk Writes:counter', 'writing', $panelWidth, $consumed, true),
+                'InnoDB Disk Writes' => $this->diskWritesBlock($cell, $panelWidth, $consumed),
                 'InnoDB Disk Reads' => $this->labeledRateBlock($cell, 'InnoDB Disk Reads:counter', 'reading', $panelWidth, $consumed, false),
                 default => $this->plainChartRows($cell, $panelWidth),
             };
@@ -540,6 +540,44 @@ final class DashboardPage extends PageBase
         $lines[] = $asKb
             ? sprintf('%s %.1f kb/s', $verb, $counter->lastValue() / 1024.0)
             : sprintf('%s %s b/s', $verb, sprintf('%.0f', $counter->lastValue()));
+
+        return $lines;
+    }
+
+    /**
+     * InnoDB disk-writes frame: line graph plus the three spec labels
+     * (query_dashboard.md lines 32-34: "data written xx kb/s", "writes xx
+     * #/s", "writing xxx kb/s"). Both paired counters are consumed here so
+     * neither renders as a duplicate standalone row; a missing counter only
+     * drops its label lines, never the chart.
+     *
+     * @param array<string,bool> $consumed
+     * @return list<string>
+     */
+    private function diskWritesBlock(MultiSeriesCell $cell, int $panelWidth, array &$consumed): array
+    {
+        $lines = $this->plainChartRows($cell, $panelWidth);
+
+        $bytes = $this->counterCells['InnoDB Disk Writes:counter'] ?? null;
+        if ($bytes !== null) {
+            $consumed['InnoDB Disk Writes:counter'] = true;
+        }
+        $kb = $bytes !== null && $bytes->hasValue() ? $bytes->lastValue() / 1024.0 : null;
+        if ($kb !== null) {
+            $lines[] = sprintf('data written %.1f kb/s', $kb);
+        }
+
+        $writes = $this->counterCells['Disk Write Requests:counter'] ?? null;
+        if ($writes !== null) {
+            $consumed['Disk Write Requests:counter'] = true;
+            if ($writes->hasValue()) {
+                $lines[] = sprintf('writes %s #/s', $writes->scaledFormatted());
+            }
+        }
+
+        if ($kb !== null) {
+            $lines[] = sprintf('writing %.1f kb/s', $kb);
+        }
 
         return $lines;
     }

@@ -346,6 +346,19 @@ final class WidgetCatalog
                 null,
             ],
             [
+                // Workbench's DiskWrites frame pairs the byte rate with the
+                // write-REQUEST count; Innodb_data_writes is that counter. The
+                // DashboardPage disk-writes block consumes it, so it never
+                // renders as a standalone row.
+                'Disk Write Requests',
+                'counter',
+                new RatePerSecond('Innodb_data_writes'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'InnoDB data file write requests per second',
+                null,
+            ],
+            [
                 'InnoDB Disk Reads',
                 'timeline',
                 new RatePerSecond('Innodb_data_read'),
