@@ -7,21 +7,6 @@ namespace SugarCraft\Query\Admin\Calc;
 use SugarCraft\Query\Admin\DsnParser;
 
 /**
- * Which source feeds the CPU/Load column.
- *
- * Declared alongside its only producer (house style — cf. GaugeType in
- * SidebarGauge): no other class mints these values.
- */
-enum HostLoadMode: string
-{
-    /** OS counters read straight from /proc because the server is this box. */
-    case HostProc = 'host-proc';
-
-    /** Remote server: SQL carries no OS counters, activity is a proxy. */
-    case BusyProxy = 'busy-proxy';
-}
-
-/**
  * Collects the CPU/Load series for Workbench's Server Status parity.
  *
  * WHY two modes: MySQL Workbench samples the host's own CPU/load because it

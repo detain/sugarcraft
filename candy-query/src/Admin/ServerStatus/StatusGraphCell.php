@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\ServerStatus;
 
-use SugarCraft\Charts\Chart\NiceScale;
 use SugarCraft\Dash\Plot\Chart\AreaChart;
 use SugarCraft\Query\Admin\Calc\HostLoadSampler;
 
@@ -24,9 +23,9 @@ use SugarCraft\Query\Admin\Calc\HostLoadSampler;
  *    the lower cells with its own color). The visible bands are exactly
  *    bottom + delta, i.e. cumulative-height semantics.
  *
- * maxValue is pinned per frame from the window's own peak via NiceScale so
- * traces use the vertical space instead of a fixed 100-unit axis that would
- * flatten real traffic.
+ * maxValue is pinned per frame from the window's own peak on a 1/2/2.5/5/10
+ * ladder so traces use the vertical space at any magnitude, from a dozen
+ * connections up to megabytes-per-second of traffic.
  */
 final class StatusGraphCell
 {
@@ -146,15 +145,32 @@ final class StatusGraphCell
     }
 
     /**
-     * Frame the vertical axis to the window's peak, floored by NiceScale so
-     * short spikes do not rescale every second into visual noise.
+     * Frame the vertical axis to the window's peak on a 1/2/2.5/5/10 x 10^k
+     * ladder.
+     *
+     * WHY not the Dashboard's NiceScale: its 100-unit floor exists to keep
+     * per-second QPS traces stable, but the status column spans connections
+     * (~dozens) to bytes/s (millions), and a forced axis of 100 would draw a
+     * 12-connection server as a flat line on the floor. The ladder rescales
+     * only when a new peak crosses a step, so traces fill their pane without
+     * flickering every frame.
      *
      * @param list<float> $values
      */
     private function ceiling(array $values): float
     {
         $peak = $values === [] ? 0.0 : max($values);
+        if ($peak <= 0.0) {
+            return 1.0;
+        }
 
-        return $peak > 0.0 ? NiceScale::ceiling($peak) : 1.0;
+        $magnitude = 10 ** (int) floor(log10($peak));
+        foreach ([1.0, 2.0, 2.5, 5.0, 10.0] as $step) {
+            if ($peak <= $step * $magnitude) {
+                return $step * $magnitude;
+            }
+        }
+
+        return 10.0 * $magnitude;
     }
 }
