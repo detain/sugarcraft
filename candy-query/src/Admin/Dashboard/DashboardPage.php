@@ -239,6 +239,20 @@ final class DashboardPage extends PageBase
 
     public function update(\SugarCraft\Core\Msg $msg): array
     {
+        if ($msg instanceof \SugarCraft\Query\Core\Msg\ReloadReportMsg) {
+            // App forwards this whenever fresh admin data lands in the shared
+            // cache. Without the arm the page keeps the construction-time
+            // snapshot pinned in AsyncCachingServerContext forever: every poll
+            // would compute current == previous, all rates read 0, and
+            // TimeSeriesCell drops non-positive samples — flat/empty graphs.
+            if ($this->context instanceof AsyncCachingServerContext) {
+                $this->context->refreshFromLiveCache();
+            }
+            // Force the next view() to poll immediately instead of waiting out
+            // the 3s throttle window — fresh data just arrived.
+            $this->lastPollAt = null;
+            return [$this, null];
+        }
         if (!$msg instanceof \SugarCraft\Core\Msg\KeyMsg) {
             return [$this, null];
         }

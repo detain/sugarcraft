@@ -50,7 +50,9 @@ use SugarCraft\Query\Admin\History\HistoryRecorder;
 use SugarCraft\Query\Admin\QueryLogger;
 use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
+use SugarCraft\Query\Core\Msg\AdminDrainCompletedMsg;
 use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
+use SugarCraft\Query\Core\Msg\AdminTickMsg;
 use SugarCraft\Query\Core\Msg\QueryRowsLoadedMsg;
 use SugarCraft\Query\Core\Msg\ReloadReportMsg;
 use SugarCraft\Query\Core\Msg\TableRowsLoadedMsg;
@@ -157,6 +159,19 @@ final class App implements Model
         if ($msg instanceof QueryRowsLoadedMsg) {
             // An async query finished — fold its rows (or error) into the result table.
             return [$this->applyQueryRows($msg), null];
+        }
+        if ($msg instanceof AdminTickMsg) {
+            return $this->handleAdminTick();
+        }
+        if ($msg instanceof AdminDrainCompletedMsg) {
+            // Page-driven rows landed in the cache during the status cooldown.
+            // Only the page is told to re-read (memo invalidation) — never
+            // AdminDataLoadedMsg, whose empty arrays would wipe the cached vars.
+            if ($this->admin->page !== null) {
+                [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
+                return [$this->withAdminPage($newPage), null];
+            }
+            return [$this, null];
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -887,34 +902,52 @@ final class App implements Model
             return null;
         }
 
-        // Throttle: the admin fetch runs at most once per status-cache window
-        // (CacheTtl::STATUS) — fetching faster would only refill a still-fresh
-        // cache. We call createAdminFetchPromise() directly and manage a
-        // cooldown flag. The tick at 1s continues firing so the page-driven
-        // query queue (AdminQueryCache) is drained promptly even when the
-        // status fetch is throttled. The throttle timestamp is stored in the
-        // model state (AdminState::$lastFetchAt) rather than a function-static,
-        // so each App instance has independent throttle state and the timestamp
-        // survives across poll cycles.
-        $now = microtime(true);
-        $elapsed = $now - $this->admin->lastFetchAt;
-
-        if ($elapsed < CacheTtl::STATUS) {
-            // In cooldown — still fire the tick (for queue draining) but skip the fetch.
-            return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
-                return Cmd::none();
-            });
-        }
-
-        return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
-            return Cmd::batch(
-                fn (): Msg => new AdminFetchStartedMsg(),
-                Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
-            )();
-        });
+        // ONE stable declaration while the Admin pane is open. The throttle
+        // decision (full fetch vs. pending-drain vs. silence) is made per-fire
+        // inside update()'s AdminTickMsg arm, NOT here: Program::reconcileSubscriptions()
+        // diffs subscriptions only by id, so whichever closure this method
+        // returned at install time would be locked in until the pane leaves
+        // Admin and re-enters — a declaration-time branch can never change
+        // its mind across ticks.
+        return (new Subscriptions())->withTick('admin-fetch', 1.0, static fn (): Msg => new AdminTickMsg());
     }
 
-    private function createAdminFetchPromise(?HistoryRecorder $recorder = null): \React\Promise\PromiseInterface
+    /**
+     * Per-fire admin throttle. Beyond the status-cache window (CacheTtl::STATUS)
+     * run the full fetch — fetching inside the window would only refill a
+     * still-fresh cache. During cooldown the tick still matters: pages register
+     * pending SQL through AdminQueryCache (that is how SHOW FULL PROCESSLIST
+     * results ever arrive), so drain it; otherwise emit nothing.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleAdminTick(): array
+    {
+        $elapsed = microtime(true) - $this->admin->lastFetchAt;
+
+        if ($elapsed >= CacheTtl::STATUS) {
+            return [$this, Cmd::batch(
+                static fn (): Msg => new AdminFetchStartedMsg(),
+                Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
+            )];
+        }
+
+        if (AdminQueryCache::instance()->hasPending()) {
+            return [$this, Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder, drainOnly: true))];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * @param bool $drainOnly When true, skip the status/server fetch entirely and
+     *        run only the page-registered pending SQL — used by the throttled
+     *        ticks inside CacheTtl::STATUS so page queries still land during the
+     *        status cooldown. Resolves AdminDrainCompletedMsg (NOT
+     *        AdminDataLoadedMsg — empty arrays there would wipe cached vars),
+     *        or null when there is nothing pending.
+     */
+    private function createAdminFetchPromise(?HistoryRecorder $recorder = null, bool $drainOnly = false): \React\Promise\PromiseInterface
     {
         // Wrap entire async flow in try-catch to ensure we ALWAYS return a promise.
         // This prevents synchronous exceptions from causing unhandled promise rejections.
@@ -924,12 +957,12 @@ final class App implements Model
             // Any exception during context creation (not just RuntimeException)
             $msg = $e->getMessage();
             QueryLogger::log('error', 'createContext', 0, $msg);
-            return \React\Promise\resolve(new AdminDataLoadedMsg([], [], microtime(true)));
+            return \React\Promise\resolve($drainOnly ? null : new AdminDataLoadedMsg([], [], microtime(true)));
         }
 
         // Null context means unsupported flavor
         if ($context === null) {
-            return \React\Promise\resolve(new AdminDataLoadedMsg([], [], microtime(true)));
+            return \React\Promise\resolve($drainOnly ? null : new AdminDataLoadedMsg([], [], microtime(true)));
         }
 
         $dsn = $context->connection()->dsn();
@@ -956,7 +989,10 @@ final class App implements Model
             $serverQuery = 'SHOW GLOBAL VARIABLES';
         }
 
-        $promises = [
+        // Ternary (not if/else around a 80-line literal) so the status/server
+        // queries are never even issued in drain mode — only the selected
+        // branch of a ternary is evaluated.
+        $promises = $drainOnly ? [] : [
             'status' => $connection->query($statusQuery)
                 ->then(function(array $rows) use ($isPostgres): array {
                     if ($isPostgres) {
@@ -1044,7 +1080,14 @@ final class App implements Model
         // availability) requested during the last render. Each is isolated so a
         // single failing query can't sink the batch, and every result — even an
         // empty one — is cached so the next render renders instead of blocking.
-        foreach ($cache->takePending() as $sql) {
+        $pending = $cache->takePending();
+        if ($drainOnly && $pending === []) {
+            // Guard against a race where the queue emptied between the
+            // hasPending() check and takePending() — silently resolve, never
+            // emit an empty AdminDataLoadedMsg that would wipe cached vars.
+            return \React\Promise\resolve(null);
+        }
+        foreach ($pending as $sql) {
             $promises[] = $connection->query($sql)->then(
                 static function(array $rows) use ($cache, $sql): void {
                     $cache->store($sql, $rows);
@@ -1054,6 +1097,12 @@ final class App implements Model
                     $cache->store($sql, []);
                     QueryLogger::log('error', $sql, 0, $e->getMessage());
                 },
+            );
+        }
+
+        if ($drainOnly) {
+            return \React\Promise\all($promises)->then(
+                static fn(array $results): Msg => new AdminDrainCompletedMsg(),
             );
         }
 

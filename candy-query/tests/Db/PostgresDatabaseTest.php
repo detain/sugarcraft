@@ -143,4 +143,33 @@ final class PostgresDatabaseTest extends TestCase
             );
         }
     }
+
+    /**
+     * PostgresServerContext::password() delegates via method_exists() — same
+     * blind spot as MySQL (see MysqlDatabaseTest). Pin the accessor.
+     */
+    public function testPasswordReturnsConfiguredPass(): void
+    {
+        $config = new \SugarCraft\Query\Db\ConnectionConfig(
+            driver: 'postgresql',
+            host: 'db.example.com',
+            port: 5432,
+            user: 'analyst',
+            pass: 'sekrit-pass',
+            dbname: 'metrics',
+            sslMode: 'require',
+            dsn: 'pgsql:host=db.example.com;port=5432;dbname=metrics',
+        );
+
+        $property = new \ReflectionProperty(PostgresDatabase::class, 'connectionConfig');
+        $property->setValue($this->db, $config);
+
+        $this->assertSame('sekrit-pass', $this->db->password());
+    }
+
+    /** Without a config there is no password — the honest empty string. */
+    public function testPasswordDefaultsToEmptyStringWithoutConfig(): void
+    {
+        $this->assertSame('', $this->db->password());
+    }
 }

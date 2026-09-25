@@ -361,4 +361,16 @@ final class MysqlDatabase implements DatabaseInterface
         return $this->connectionConfig?->user ?? '';
     }
 
+    /**
+     * WHY this exists: ServerContext::password() delegates here through a
+     * method_exists() guard, and App's async admin fetch authenticates with it.
+     * Audit commit c22d8d31f deleted this as "unused" — static analysis missed
+     * the dynamic call, so every async admin query silently sent an empty
+     * password ("using password: NO") and the dashboard stayed empty.
+     */
+    public function password(): string
+    {
+        return $this->connectionConfig?->pass ?? '';
+    }
+
 }

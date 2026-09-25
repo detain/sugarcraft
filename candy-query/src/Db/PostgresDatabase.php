@@ -218,4 +218,15 @@ final class PostgresDatabase implements DatabaseInterface
     {
         return $this->connectionConfig?->user ?? '';
     }
+
+    /**
+     * PostgresServerContext::password() delegates here through a method_exists()
+     * guard; the async admin fetch authenticates with it. Restored alongside
+     * MysqlDatabase::password() (see the WHY comment there — same dynamic-call
+     * miss), so the pg admin pane does not silently send an empty password.
+     */
+    public function password(): string
+    {
+        return $this->connectionConfig?->pass ?? '';
+    }
 }

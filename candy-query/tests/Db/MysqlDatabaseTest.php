@@ -144,4 +144,34 @@ final class MysqlDatabaseTest extends TestCase
             );
         }
     }
+
+    /**
+     * ServerContext::password() delegates via method_exists() — a dynamic call
+     * static analysis cannot see. This pins the accessor so a future "unused
+     * method" sweep cannot silently blind the async admin fetch again.
+     */
+    public function testPasswordReturnsConfiguredPass(): void
+    {
+        $config = new \SugarCraft\Query\Db\ConnectionConfig(
+            driver: 'mysql',
+            host: 'db.example.com',
+            port: 3306,
+            user: 'app',
+            pass: 'sekrit-pass',
+            dbname: 'widgets',
+            sslMode: 'required',
+            dsn: 'mysql:host=db.example.com;port=3306;dbname=widgets',
+        );
+
+        $property = new \ReflectionProperty(MysqlDatabase::class, 'connectionConfig');
+        $property->setValue($this->db, $config);
+
+        $this->assertSame('sekrit-pass', $this->db->password());
+    }
+
+    /** Without a config there is no password — the honest empty string. */
+    public function testPasswordDefaultsToEmptyStringWithoutConfig(): void
+    {
+        $this->assertSame('', $this->db->password());
+    }
 }

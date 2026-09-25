@@ -9,9 +9,11 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Query\Admin\AsyncCachingServerContext;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\StatusSnapshot;
+use SugarCraft\Query\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 
@@ -173,6 +175,32 @@ final class ConnectionsPage extends PageBase
      */
     public function update(Msg $msg): array
     {
+        if ($msg instanceof ReloadReportMsg) {
+            // Fresh data just landed in the shared AdminQueryCache (App forwards
+            // this on every admin load/drain completion). Without this arm the
+            // filtered-processlist memo set at last render sticks forever and
+            // the table shows a frozen snapshot despite rows arriving in cache.
+            if ($this->context instanceof AsyncCachingServerContext) {
+                $this->context->refreshFromLiveCache();
+            }
+            $clone = clone $this;
+            $clone->cachedFilteredProcesslist = null;
+            if ($clone->processlistProvider !== null) {
+                // refresh() also re-probes @@performance_schema: a cold-miss []
+                // from the async cache previously stuck the probe at false for
+                // the page's lifetime, pinning the fallback query even after
+                // the real answer (ps=1) arrived.
+                $clone->processlistProvider = $clone->processlistProvider->refresh();
+            }
+            if ($clone->counters !== null) {
+                $clone->counters = ConnectionCounters::fromSnapshot(
+                    new StatusSnapshot($this->context->statusVariables(), $this->context->statusVariablesTs()),
+                    $this->maxConnections ?? 151,
+                );
+            }
+            return [$clone, null];
+        }
+
         // Early exit for non-key messages
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
