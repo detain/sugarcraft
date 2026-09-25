@@ -196,6 +196,35 @@ final class AsyncCachingServerContext implements ServerContextInterface
         return $this->isLoading;
     }
 
+    /**
+     * Re-pull the snapshot fields from the live AdminQueryCache.
+     *
+     * WHY: the construction-time arrays short-circuit statusVariables()/
+     * serverVariables() forever, and the page holding this context survives
+     * admin ticks (App::withAdminLoading preserves the page instance) — so
+     * without this call a rendered dashboard freezes on its first snapshot
+     * and every rate computed across polls reads zero. ReloadReportMsg arms
+     * invoke this when fresh data lands.
+     *
+     * Null/empty live values are deliberately ignored: an in-flight cooldown
+     * window can hand back null and a wiped cache [] — neither should replace
+     * the last-known snapshot (that would flash the error screen at the user).
+     */
+    public function refreshFromLiveCache(): void
+    {
+        $status = $this->cache()->getStatusVariables();
+        if ($status !== null && $status !== []) {
+            $this->cachedStatusVars = $status;
+        }
+
+        $server = $this->cache()->getServerVariables();
+        if ($server !== null && $server !== []) {
+            $this->cachedServerVars = $server;
+        }
+
+        $this->isLoading = false;
+    }
+
     public function hasCachedData(): bool
     {
         return $this->cachedStatusVars !== null && $this->cachedStatusVars !== [];
