@@ -145,9 +145,36 @@ final class MetricsColumnTest extends TestCase
 
         self::assertCount(1, $column->cell('connections')->series('threads'));
 
+        // advance() first: forcePoll opens the cadence gate, but a byte-
+        // identical status frame is still no new data (see the idempotence
+        // pin below), so the second point needs genuinely changed counters.
+        $this->context->advance();
         $column->forcePoll();
         $column->poll(1000.6);
 
+        self::assertCount(2, $column->cell('connections')->series('threads'));
+    }
+
+    public function testSameArrivalRepollNeverOverwritesTrueRates(): void
+    {
+        $column = $this->column(HostLoadSampler::proxy());
+        $column->poll(1000.0);
+        // Real traffic deltas (advance() deliberately leaves bytes flat):
+        // +10240 received, +5120 sent over one second => 15.00 kb/s truth.
+        $this->context->statusVars['Bytes_received'] = '11240';
+        $this->context->statusVars['Bytes_sent'] = '7120';
+        $column->poll(1001.0);
+
+        $truth = $this->plain($column->view(72, 24));
+        self::assertStringNotContainsStringNormalized('0.00 kb/s', $truth);
+
+        // The AdminDrainCompletedMsg arm re-forwards ReloadReportMsg for the
+        // same arrival microseconds later: identical frame must not rewrite
+        // the rates, the labels, or any rolling window.
+        $column->forcePoll();
+        $column->poll(1001.000001);
+
+        self::assertSame($truth, $this->plain($column->view(72, 24)));
         self::assertCount(2, $column->cell('connections')->series('threads'));
     }
 

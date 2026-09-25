@@ -115,6 +115,20 @@ final class MetricsColumn
 
         $serverVars = $this->context->serverVariables();
 
+        if ($statusVars === $this->previousSnapshot) {
+            // A re-poll that sees the byte-identical status frame carries no
+            // new information: both AdminDataLoadedMsg and AdminDrainCompletedMsg
+            // forward ReloadReportMsg for the SAME arrival, and re-deriving rates
+            // ~10us later divides a zero delta by a near-zero elapsed time —
+            // overwriting the true rates with all-zeros and poisoning every rate
+            // window with a fake valley right before render. Keep the last real
+            // rates and windows untouched; only the OS sampler advances, since
+            // /proc CPU is alive even while an idle server's counters stand still.
+            $this->lastPollAt = $now;
+            $this->hostLoad->sample($statusVars, $serverVars);
+            return;
+        }
+
         $elapsed = $this->lastSnapshotAt === null
             ? CacheTtl::DASHBOARD
             : max(0.001, $now - $this->lastSnapshotAt);
@@ -170,7 +184,9 @@ final class MetricsColumn
 
     /**
      * Drop the throttle so the next poll() reads immediately (fresh data
-     * arrived through the shared async cache, or the user hit [r]).
+     * arrived through the shared async cache, or the user hit [r]). Opening
+     * the cadence gate does not fabricate data: a poll that still sees the
+     * identical status frame stays a no-op for rates and windows.
      */
     public function forcePoll(): void
     {

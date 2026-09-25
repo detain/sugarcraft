@@ -88,11 +88,13 @@ final class AdminPagePersistenceTest extends TestCase
 
         $window = (new \ReflectionProperty(get_class($connections), 'windows'));
         $window->setAccessible(true);
-        // msg1 pins + builds the page (its construction polls), then its own
-        // ReloadReportMsg arm polls again; msg2 adds the third. The point is
-        // the window GROWS ACROSS arrivals on one instance — a throwaway page
-        // per render could never hold more than one value.
-        $this->assertSame([100.0, 100.0, 117.0], $window->getValue($connections)['threads']);
+        // msg1 pins + builds the page (its construction polls 100; its own
+        // ReloadReportMsg arm re-polls the identical frame and the column's
+        // idempotence guard drops it — no duplicate point); msg2's changed
+        // frame adds 117. The point is the window GROWS ACROSS arrivals on
+        // one instance — a throwaway page per render could never hold more
+        // than one value.
+        $this->assertSame([100.0, 117.0], $window->getValue($connections)['threads']);
     }
 
     /** @return App navigated to the Admin pane with the Server Status sidebar entry selected. */
