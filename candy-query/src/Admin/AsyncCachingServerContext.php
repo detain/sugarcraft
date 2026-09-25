@@ -37,12 +37,17 @@ final class AsyncCachingServerContext implements ServerContextInterface
         private ?array $cachedServerVars = null,
         private bool $isLoading = false,
         private ?AdminQueryCache $cache = null,
+        ?float $statusVarsArrivedAt = null,
     ) {
         // The construction snapshot arrived from the async fetch that just
         // landed (App seeds it from cachedStatusVars on AdminDataLoadedMsg),
-        // so it is fresh as of now — record that arrival.
+        // so it is fresh as of now — record that arrival. When the caller
+        // knows the payload's true fetchedAt it must pass it: rebuilding a
+        // pane hands the SAME aged snapshot to a new wrapper, and stamping
+        // "now" again would launder a stale frame into up to
+        // RUNNING_FRESHNESS_SECONDS of false Running (review MINOR-1).
         if ($cachedStatusVars !== null && $cachedStatusVars !== []) {
-            $this->statusVarsAdoptedAt = microtime(true);
+            $this->statusVarsAdoptedAt = $statusVarsArrivedAt ?? microtime(true);
         }
     }
 

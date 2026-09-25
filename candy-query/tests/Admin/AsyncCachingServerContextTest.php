@@ -193,4 +193,40 @@ final class AsyncCachingServerContextTest extends TestCase
         $this->assertGreaterThanOrEqual($before, $ctx->statusVariablesTs());
         $this->assertSame(['Threads_connected' => '7'], $ctx->statusVariables());
     }
+
+    public function testExplicitArrivalStampIsHonouredNotRewrittenToNow(): void
+    {
+        // Review MINOR-1: a pane rebuild re-wraps the SAME aged snapshot.
+        // Without the caller's fetchedAt the construction seed would stamp
+        // it "arrived now", laundering up to the full freshness window of
+        // stale data into a green Running label.
+        $inner = $this->createMock(ServerContextInterface::class);
+        $inner->method('statusVariablesTs')->willReturn(1000.0);
+
+        $arrivedAt = microtime(true) - 10.0;
+        $ctx = new AsyncCachingServerContext(
+            $inner,
+            cachedStatusVars: ['Uptime' => '42'],
+            statusVarsArrivedAt: $arrivedAt,
+        );
+
+        $this->assertSame($arrivedAt, $ctx->statusVariablesTs());
+    }
+
+    public function testAbsentArrivalStampFallsBackToNowForUnmediatedCallers(): void
+    {
+        // Direct constructions (tests, non-App callers) carry no fetchedAt;
+        // the payload is genuinely arriving now, so "now" stays honest.
+        $inner = $this->createMock(ServerContextInterface::class);
+        $inner->method('statusVariablesTs')->willReturn(1000.0);
+
+        $before = microtime(true);
+        $ctx = new AsyncCachingServerContext(
+            $inner,
+            cachedStatusVars: ['Uptime' => '42'],
+            statusVarsArrivedAt: null,
+        );
+
+        $this->assertGreaterThanOrEqual($before, $ctx->statusVariablesTs());
+    }
 }

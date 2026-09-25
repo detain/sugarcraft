@@ -764,6 +764,10 @@ final class App implements Model
             $this->admin->cachedStatusVars,
             $this->admin->cachedServerVars,
             $this->admin->loading,
+            // AdminState keeps the payload's true fetchedAt beside the vars;
+            // pass it so a pane rebuild stamps the snapshot's real age
+            // instead of "now" (review MINOR-1 — false Running on rebuild).
+            statusVarsArrivedAt: $this->admin->cacheTs > 0.0 ? $this->admin->cacheTs : null,
         );
 
         return match ($this->admin->pane) {
