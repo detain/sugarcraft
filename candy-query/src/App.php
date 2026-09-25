@@ -913,9 +913,10 @@ final class App implements Model
     }
 
     /**
-     * Per-fire admin throttle. Beyond the status-cache window (CacheTtl::STATUS)
-     * run the full fetch — fetching inside the window would only refill a
-     * still-fresh cache. During cooldown the tick still matters: pages register
+     * Per-fire admin throttle. Beyond the dashboard refresh window
+     * (CacheTtl::DASHBOARD — Workbench's 1s cadence) run the full fetch —
+     * fetching inside the window would only refill a still-fresh cache.
+     * During cooldown the tick still matters: pages register
      * pending SQL through AdminQueryCache (that is how SHOW FULL PROCESSLIST
      * results ever arrive), so drain it; otherwise emit nothing.
      *
@@ -925,7 +926,7 @@ final class App implements Model
     {
         $elapsed = microtime(true) - $this->admin->lastFetchAt;
 
-        if ($elapsed >= CacheTtl::STATUS) {
+        if ($elapsed >= CacheTtl::DASHBOARD) {
             return [$this, Cmd::batch(
                 static fn (): Msg => new AdminFetchStartedMsg(),
                 Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
@@ -942,7 +943,7 @@ final class App implements Model
     /**
      * @param bool $drainOnly When true, skip the status/server fetch entirely and
      *        run only the page-registered pending SQL — used by the throttled
-     *        ticks inside CacheTtl::STATUS so page queries still land during the
+     *        ticks inside CacheTtl::DASHBOARD so page queries still land during the
      *        status cooldown. Resolves AdminDrainCompletedMsg (NOT
      *        AdminDataLoadedMsg — empty arrays there would wipe cached vars),
      *        or null when there is nothing pending.

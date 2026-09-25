@@ -29,6 +29,16 @@ final class CacheTtlTest extends TestCase
         );
     }
 
+    public function testDashboardWindowIsOneSecondBelowStatus(): void
+    {
+        $this->assertSame(1.0, CacheTtl::DASHBOARD);
+        $this->assertLessThan(
+            CacheTtl::STATUS,
+            CacheTtl::DASHBOARD,
+            "Workbench's dashboard cadence is the fastest window — one second",
+        );
+    }
+
     public function testAdminQueryCacheTtlResolvesToTheSharedStatusWindow(): void
     {
         $ttl = new \ReflectionClassConstant(AdminQueryCache::class, 'TTL');
@@ -52,9 +62,9 @@ final class CacheTtlTest extends TestCase
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/App.php');
 
         $this->assertStringContainsString(
-            'CacheTtl::STATUS',
+            'CacheTtl::DASHBOARD',
             $source,
-            'App::subscriptions() must throttle by the shared status window',
+            'the admin-fetch throttle must reference the shared dashboard window, not a magic number',
         );
         $this->assertStringNotContainsString(
             '$elapsed < 3.0',

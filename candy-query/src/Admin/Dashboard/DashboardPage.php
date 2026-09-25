@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Query\Admin\AsyncCachingServerContext;
+use SugarCraft\Query\Admin\CacheTtl;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\QueryLogger;
@@ -32,7 +33,8 @@ use SugarCraft\Sprinkles\Style;
  * Performance Dashboard page with 3-column layout.
  *
  * Shows Network, MySQL, and InnoDB panels with live metrics,
- * timeline graphs, counters, and meters. Updates every 3 seconds
+ * timeline graphs, counters, and meters. Refreshes on MySQL Workbench's
+ * one-second Performance-Dashboard cadence (gated by CacheTtl::DASHBOARD)
  * by sampling the ServerContext cache.
  *
  * Keyboard shortcuts:
@@ -249,7 +251,7 @@ final class DashboardPage extends PageBase
                 $this->context->refreshFromLiveCache();
             }
             // Force the next view() to poll immediately instead of waiting out
-            // the 3s throttle window — fresh data just arrived.
+            // the 1s throttle window — fresh data just arrived.
             $this->lastPollAt = null;
             return [$this, null];
         }
@@ -275,7 +277,7 @@ final class DashboardPage extends PageBase
 
         $now = microtime(true);
 
-        if ($this->lastPollAt !== null && ($now - $this->lastPollAt) < 3.0) {
+        if ($this->lastPollAt !== null && ($now - $this->lastPollAt) < CacheTtl::DASHBOARD) {
             return;
         }
 
@@ -285,12 +287,14 @@ final class DashboardPage extends PageBase
             : $current;
         $serverVars = $this->context->serverVariables();
 
-        // Measure actual wall-clock elapsed since last poll; use 3.0 as fallback
-        // only on the very first sample when lastPollAt is null.
+        // Measure actual wall-clock elapsed since last poll; use the dashboard
+        // window as fallback only on the very first sample when lastPollAt is
+        // null (fresh-from-cache reloads null lastPollAt, so post-reload polls
+        // keep using their true inter-data elapsed — see update()'s ReloadReportMsg arm).
         if ($this->lastPollAt !== null) {
             $elapsed = max(0.001, $now - $this->lastPollAt);
         } else {
-            $elapsed = 3.0;
+            $elapsed = CacheTtl::DASHBOARD;
         }
 
         $this->lastPollAt = $now;
@@ -324,7 +328,7 @@ final class DashboardPage extends PageBase
      * $breachedAlertKeys array tracks which alert keys were active at the last
      * check; array_diff_key against the current alert keys isolates newly-breached
      * entries. This prevents alert storms when a threshold remains breached
-     * across consecutive 3s poll cycles.
+     * across consecutive 1s poll cycles.
      *
      * @param array $statusVars  SHOW GLOBAL STATUS (or pg_stat_database for Postgres)
      * @param array $serverVars  SHOW GLOBAL VARIABLES (or pg_settings for Postgres)

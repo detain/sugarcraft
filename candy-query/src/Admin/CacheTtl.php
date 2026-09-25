@@ -28,6 +28,19 @@ final class CacheTtl
      */
     public const SERVER = 30.0;
 
+    /**
+     * Seconds between full admin status fetch batches (SHOW GLOBAL STATUS +
+     * SHOW GLOBAL VARIABLES) while the Admin pane is open, and the matching
+     * gate on DashboardPage's cell poll. MySQL Workbench's Performance
+     * Dashboard refreshes once per second; the graphs are rate-based, so the
+     * cadence is the feature. Deliberately NOT a cut of STATUS: that window
+     * is also the AdminQueryCache / ServerContext freshness stamp for page
+     * queries (processlist, async results), and halving it would double those
+     * caches' re-query load for no dashboard benefit — the 1s rhythm only
+     * needs the status fetch and the page poll to agree, and both read here.
+     */
+    public const DASHBOARD = 1.0;
+
     private function __construct()
     {
         // Constants-only holder.
