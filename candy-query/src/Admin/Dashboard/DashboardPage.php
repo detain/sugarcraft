@@ -50,6 +50,16 @@ final class DashboardPage extends PageBase
 
     private ?float $lastPollAt = null;
 
+    /**
+     * Wall-clock of the last committed snapshot. Rate denominators measure
+     * against THIS, not the gate stamp: the ReloadReportMsg arm nulls
+     * lastPollAt to bypass the throttle, and if elapsed were derived from
+     * lastPollAt too, the first post-reload poll would silently fall back to
+     * the DASHBOARD window and skew every rate (a 6s data gap divided by 1s
+     * reads 6x hot). MySQL Workbench samples against its own last frame.
+     */
+    private ?float $lastSnapshotAt = null;
+
     /** @var array<string, MultiSeriesCell> */
     private array $timelineCells = [];
 
@@ -287,17 +297,18 @@ final class DashboardPage extends PageBase
             : $current;
         $serverVars = $this->context->serverVariables();
 
-        // Measure actual wall-clock elapsed since last poll; use the dashboard
-        // window as fallback only on the very first sample when lastPollAt is
-        // null (fresh-from-cache reloads null lastPollAt, so post-reload polls
-        // keep using their true inter-data elapsed — see update()'s ReloadReportMsg arm).
-        if ($this->lastPollAt !== null) {
-            $elapsed = max(0.001, $now - $this->lastPollAt);
-        } else {
-            $elapsed = CacheTtl::DASHBOARD;
-        }
+        // Rate denominator = true wall-clock since the last committed snapshot,
+        // never the gate stamp: the ReloadReportMsg arm nulls only lastPollAt
+        // (a gate bypass), so a poll that arrives 6s after the last frame
+        // divides by 6 — not by the fallback window (C4/M1: no 3s/1s-fallback
+        // skew on the first post-reload sample). The fallback remains for the
+        // very first poll, where there is no previous frame to span.
+        $elapsed = $this->lastSnapshotAt === null
+            ? CacheTtl::DASHBOARD
+            : max(0.001, $now - $this->lastSnapshotAt);
 
         $this->lastPollAt = $now;
+        $this->lastSnapshotAt = $now;
 
         foreach ($this->timelineCells as $cell) {
             $cell->ingest($current, $previous, $elapsed);
@@ -749,6 +760,7 @@ final class DashboardPage extends PageBase
         }
         $clone->previousSnapshot = null;
         $clone->lastPollAt = null;
+        $clone->lastSnapshotAt = null;
         return $clone;
     }
 

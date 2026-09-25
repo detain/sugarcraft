@@ -926,7 +926,11 @@ final class App implements Model
     {
         $elapsed = microtime(true) - $this->admin->lastFetchAt;
 
-        if ($elapsed >= CacheTtl::DASHBOARD) {
+        // In-flight guard: while a full fetch is still running, the next due
+        // tick must not pile a second one onto the same connection — it falls
+        // through to drain-only/silence instead. The in-flight fetch drains the
+        // pending queue on completion, so nothing starves.
+        if ($elapsed >= CacheTtl::DASHBOARD && !$this->admin->loading) {
             return [$this, Cmd::batch(
                 static fn (): Msg => new AdminFetchStartedMsg(),
                 Cmd::promise(fn () => $this->createAdminFetchPromise($this->admin->historyRecorder)),
