@@ -149,4 +149,48 @@ final class AsyncCachingServerContextTest extends TestCase
         $this->assertSame('PostgreSQL 16.2 on x86_64', $ctx->versionString());
         $this->assertSame([], $ctx->plugins());
     }
+
+    public function testConstructionSnapshotArrivalBecomesTheStatusStamp(): void
+    {
+        // E718 follow-up (Server Status live smoke): the inner sync stamp freezes
+        // at connection-build time in the async pipeline, so a stale delegation
+        // made the running label read Stopped and collapsed Sampler's elapsed
+        // to zero. A construction snapshot IS fresh — its arrival must be stamp.
+        $inner = $this->createMock(ServerContextInterface::class);
+        $inner->method('statusVariablesTs')->willReturn(1000.0);
+
+        $before = microtime(true);
+        $ctx = new AsyncCachingServerContext($inner, cachedStatusVars: ['Uptime' => '42']);
+
+        $this->assertGreaterThanOrEqual($before, $ctx->statusVariablesTs());
+    }
+
+    public function testColdConstructionStillDelegatesTheStampToInner(): void
+    {
+        // No snapshot has arrived through this wrapper, so the only honest stamp
+        // is the inner context's own last sync fetch — delegation must survive.
+        $inner = $this->createMock(ServerContextInterface::class);
+        $inner->method('statusVariablesTs')->willReturn(1000.0);
+
+        $ctx = new AsyncCachingServerContext($inner, cache: new AdminQueryCache());
+
+        $this->assertSame(1000.0, $ctx->statusVariablesTs());
+    }
+
+    public function testAdoptionFromLiveCacheAdvancesTheStamp(): void
+    {
+        $inner = $this->createMock(ServerContextInterface::class);
+        $inner->method('statusVariablesTs')->willReturn(1000.0);
+        $cache = new AdminQueryCache();
+        $cache->store('status', ['Threads_connected' => '7']);
+
+        $ctx = new AsyncCachingServerContext($inner, cache: $cache);
+        $this->assertSame(1000.0, $ctx->statusVariablesTs());
+
+        $before = microtime(true);
+        $ctx->refreshFromLiveCache();
+
+        $this->assertGreaterThanOrEqual($before, $ctx->statusVariablesTs());
+        $this->assertSame(['Threads_connected' => '7'], $ctx->statusVariables());
+    }
 }

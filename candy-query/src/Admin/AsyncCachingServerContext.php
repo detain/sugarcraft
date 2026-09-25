@@ -25,13 +25,26 @@ final class AsyncCachingServerContext implements ServerContextInterface
     /** MySQL-family plugin catalogue query. */
     private const PLUGINS_SQL = 'SHOW PLUGINS';
 
+    /**
+     * Wall-clock time the last non-empty status snapshot was accepted from the
+     * async pipeline (construction seed or refreshFromLiveCache adoption).
+     */
+    private ?float $statusVarsAdoptedAt = null;
+
     public function __construct(
         private ServerContextInterface $inner,
         private ?array $cachedStatusVars = null,
         private ?array $cachedServerVars = null,
         private bool $isLoading = false,
         private ?AdminQueryCache $cache = null,
-    ) {}
+    ) {
+        // The construction snapshot arrived from the async fetch that just
+        // landed (App seeds it from cachedStatusVars on AdminDataLoadedMsg),
+        // so it is fresh as of now — record that arrival.
+        if ($cachedStatusVars !== null && $cachedStatusVars !== []) {
+            $this->statusVarsAdoptedAt = microtime(true);
+        }
+    }
 
     public function connection(): \SugarCraft\Query\Db\DatabaseInterface
     {
@@ -79,7 +92,15 @@ final class AsyncCachingServerContext implements ServerContextInterface
 
     public function statusVariablesTs(): float
     {
-        return $this->inner->statusVariablesTs();
+        // WHY not plain inner delegation: the inner stamp only advances on a
+        // synchronous SHOW GLOBAL STATUS, which the async admin pipeline never
+        // takes (E718 froze the render path that way). While the displayed
+        // snapshot arrives through AdminQueryCache adoption, delegating pins
+        // the age at connection-build time: the running label misread Stopped
+        // and Sampler's elapsed collapsed to zero, flattening every rate.
+        // The last accepted arrival is the honest stamp for the data on
+        // screen; max() keeps it monotonic against a later sync fetch.
+        return max($this->inner->statusVariablesTs(), $this->statusVarsAdoptedAt ?? 0.0);
     }
 
     /** @return list<array<string, mixed>> */
@@ -215,6 +236,7 @@ final class AsyncCachingServerContext implements ServerContextInterface
         $status = $this->cache()->getStatusVariables();
         if ($status !== null && $status !== []) {
             $this->cachedStatusVars = $status;
+            $this->statusVarsAdoptedAt = microtime(true);
         }
 
         $server = $this->cache()->getServerVariables();
