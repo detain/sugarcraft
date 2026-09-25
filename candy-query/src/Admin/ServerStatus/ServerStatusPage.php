@@ -8,6 +8,8 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Dash\Components\Card\Badge;
 use SugarCraft\Dash\Components\Card\Card;
 use SugarCraft\Dash\Components\Card\DefinitionList;
+use SugarCraft\Query\Admin\AsyncCachingServerContext;
+use SugarCraft\Query\Admin\CacheTtl;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\Sampler;
@@ -15,6 +17,21 @@ use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
+
+/**
+ * Liveness of the admin data feed backing the Server Status page.
+ *
+ * Mirrors the green play-arrow / grey stop-square header MySQL Workbench
+ * shows above Management :: Server Status (query_dashboard.md line 45):
+ * the triangle means the monitor thread is still landing samples, the
+ * square means it is not.
+ */
+enum RunState: string
+{
+    case Running = 'running';
+    case Stopped = 'stopped';
+    case Unreachable = 'unreachable';
+}
 
 /**
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.
@@ -32,6 +49,14 @@ use SugarCraft\Sprinkles\Style;
  */
 final class ServerStatusPage extends PageBase
 {
+    /**
+     * A sample younger than 3 × the 1 s admin cadence means the fetch loop is
+     * still landing data; anything older is treated as a stopped feed. Three
+     * full cadences of slack so one slow SHOW GLOBAL STATUS (network blip,
+     * lock on the server) does not flicker the Running badge to Stopped.
+     */
+    private const RUNNING_FRESHNESS_SECONDS = 3 * CacheTtl::DASHBOARD;
+
     private ?ReplicaStatusProvider $replicaProvider = null;
     private ?Sampler $sampler = null;
     private ?SidebarGaugeSet $gaugeSet = null;
@@ -73,6 +98,75 @@ final class ServerStatusPage extends PageBase
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Render the page, keeping the Workbench liveness label visible even
+     * when there is no data to build the panels from: Workbench greys the
+     * whole Server Status tab but still shows the stopped indicator, and
+     * without the header the user cannot tell "connection died" from
+     * "page still loading".
+     */
+    public function view(): string
+    {
+        // First async fetch in flight with nothing cached: loading screen,
+        // same door PageBase uses — a loading pane must not read as dead.
+        if ($this->context instanceof AsyncCachingServerContext
+            && $this->context->isLoading()
+            && !$this->context->hasCachedData()) {
+            return $this->loadingScreen();
+        }
+
+        if (!$this->validate()) {
+            return $this->runLabel(RunState::Unreachable) . "\n" . $this->errorScreen();
+        }
+
+        return $this->build();
+    }
+
+    /**
+     * Liveness of the admin fetch feeding this page.
+     *
+     * Derived purely from cached state — the timestamp ServerContext stamps
+     * on the last SHOW GLOBAL STATUS — so no extra message or subscription
+     * is needed: every App re-render (each landed AdminDataLoadedMsg)
+     * re-evaluates it against the current clock.
+     */
+    private function runState(float $now): RunState
+    {
+        try {
+            $vars = $this->context->statusVariables();
+        } catch (\Throwable) {
+            return RunState::Unreachable;
+        }
+
+        if ($vars === []) {
+            return RunState::Unreachable;
+        }
+
+        $age = $now - $this->context->statusVariablesTs();
+        return $age <= self::RUNNING_FRESHNESS_SECONDS
+            ? RunState::Running
+            : RunState::Stopped;
+    }
+
+    /**
+     * Play-triangle + word label (query_dashboard.md line 45), severity
+     * colored: green while samples land, amber when the feed stalled, red
+     * when no sample has ever arrived.
+     */
+    private function runLabel(RunState $state): string
+    {
+        [$glyph, $word, $hex] = match ($state) {
+            RunState::Running => ['▶', 'Running', '#a6e3a1'],
+            RunState::Stopped => ['■', 'Stopped', '#fbbf24'],
+            RunState::Unreachable => ['✖', 'Unreachable', '#f38ba8'],
+        };
+
+        return Style::new()
+            ->bold()
+            ->foreground(Color::hex($hex))
+            ->render($glyph . ' ' . $word);
     }
 
     /**
@@ -150,7 +244,10 @@ final class ServerStatusPage extends PageBase
 
         $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Server Status');
 
-        return sprintf(
+        // Workbench puts the play-arrow liveness label ABOVE the tab title
+        // (query_dashboard.md line 45), so it reads as the page's status
+        // light rather than part of the connection banner.
+        return $this->runLabel($this->runState(microtime(true))) . "\n" . sprintf(
             '%s | %s %s | %s',
             $title,
             $flavor->value,
@@ -599,7 +696,7 @@ final class ServerStatusPage extends PageBase
     {
         $ch = $msg->rune ?? '';
 
-        if ($msg->keyType === \SugarCraft\Core\KeyType::Escape) {
+        if ($msg->type === \SugarCraft\Core\KeyType::Escape) {
             $clone = clone $this;
             $clone->gtidDialog = false;
             return [$clone, null];
@@ -615,7 +712,7 @@ final class ServerStatusPage extends PageBase
             return [$clone, null];
         }
 
-        if ($msg->keyType === \SugarCraft\Core\KeyType::Enter) {
+        if ($msg->type === \SugarCraft\Core\KeyType::Enter) {
             // Execute the GTID_MODE change
             $mode = $this->gtidModeEdit;
             $clone = clone $this;
