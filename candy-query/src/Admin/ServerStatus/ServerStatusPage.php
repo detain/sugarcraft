@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Admin\ServerStatus;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Components\Card\Badge;
 use SugarCraft\Dash\Components\Card\Card;
 use SugarCraft\Dash\Components\Card\DefinitionList;
@@ -14,6 +15,8 @@ use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\Sampler;
 use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Query\Core\Msg\ReloadReportMsg;
+use SugarCraft\Query\Renderer;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
@@ -59,7 +62,7 @@ final class ServerStatusPage extends PageBase
 
     private ?ReplicaStatusProvider $replicaProvider = null;
     private ?Sampler $sampler = null;
-    private ?SidebarGaugeSet $gaugeSet = null;
+    private ?MetricsColumn $column = null;
 
     /** @var ReplicaStatusKind::*|null */
     private string|null $gtidModeCurrent = null;
@@ -82,8 +85,10 @@ final class ServerStatusPage extends PageBase
     public static function new(ServerContextInterface $context, ?Sampler $sampler = null): self
     {
         $page = new self($context, null, $sampler);
-        // First build polls to prime the sampler with the initial snapshot.
-        $page->gaugeSet = SidebarGaugeSet::new($context, $sampler)->poll();
+        // First build polls to prime the sampler with the initial snapshot
+        // and seed the CPU/Load + graph windows (same role gaugeSet played).
+        $page->column = MetricsColumn::forContext($context, $sampler);
+        $page->column->poll();
         return $page;
     }
 
@@ -177,11 +182,20 @@ final class ServerStatusPage extends PageBase
         // Left panel: existing info panels stacked vertically
         $leftPanel = $this->buildLeftPanel();
 
-        // Right panel: live gauge sidebar (already polled via withRefresh or ::new)
-        $gaugeSet = $this->gaugeSet ?? SidebarGaugeSet::new($this->context, $this->sampler);
-        $rightPanel = $gaugeSet->view();
+        // Right panel: live metric column (CPU/Load first, then the Workbench
+        // graph frames — replaces the five-gauge sidebar rendering). Width is
+        // whatever the terminal leaves beside the info panels, so graphs never
+        // push the layout past the viewport.
+        $column = $this->column ?? MetricsColumn::forContext($this->context, $this->sampler);
+        $size = Renderer::getTerminalSize();
+        $leftWidth = 0;
+        foreach (explode("\n", $leftPanel) as $line) {
+            $leftWidth = max($leftWidth, Width::of($line));
+        }
+        $rightWidth = max(22, min(72, ($size['cols'] ?? 120) - $leftWidth - 2));
+        $rightPanel = $column->view($rightWidth, (int) ($size['rows'] ?? 24));
 
-        // 2-column layout: info panels on left, gauges on right
+        // 2-column layout: info panels on left, metric column on right
         return Layout::joinHorizontal(Position::TOP, $leftPanel, '  ', $rightPanel);
     }
 
@@ -216,6 +230,18 @@ final class ServerStatusPage extends PageBase
      */
     public function update(\SugarCraft\Core\Msg $msg): array
     {
+        if ($msg instanceof ReloadReportMsg) {
+            // App forwards this whenever fresh admin data lands in the shared
+            // cache (same arm DashboardPage carries): adopt the live values and
+            // bypass the 1s poll throttle so the graphs move on the tick that
+            // delivered data, not the next one.
+            if ($this->context instanceof AsyncCachingServerContext) {
+                $this->context->refreshFromLiveCache();
+            }
+            $this->column?->forcePoll();
+            $this->column?->poll();
+            return [$this, null];
+        }
         if (!$msg instanceof \SugarCraft\Core\Msg\KeyMsg) {
             return [$this, null];
         }
@@ -649,8 +675,11 @@ final class ServerStatusPage extends PageBase
         $clone = clone $this;
         $clone->context->refresh();
         $clone->replicaProvider = $this->replicaProvider->refresh();
-        // Build fresh gauge set and poll to advance the sampler.
-        $clone->gaugeSet = SidebarGaugeSet::new($clone->context, $clone->sampler)->poll();
+        // Advance the metric column: fresh data just landed, so skip the
+        // throttle and take the sample immediately.
+        $clone->column ??= MetricsColumn::forContext($clone->context, $clone->sampler);
+        $clone->column->forcePoll();
+        $clone->column->poll();
         return $clone;
     }
 
