@@ -85,6 +85,13 @@ final class AppTest extends TestCase
      * Subscriptions::withTick(). Guard the whole path: no tick outside admin,
      * tick registered immediately on admin entry (throttle gates the fetch, not
      * the tick), and a produce() closure that yields a Msg (not a fatal).
+     *
+     * The tick must be a STABLE declaration emitting AdminTickMsg: the throttle
+     * decision (full fetch / pending drain / silence) moved per-fire into
+     * update()'s AdminTickMsg arm because Program::reconcileSubscriptions()
+     * diffs only by id — a declaration-time branch would be locked in at
+     * install time forever (and its cooldown variant once called the
+     * non-existent Cmd::none(), fataling every tick).
      */
     public function testAdminSubscriptionTickIsWiredAndProducesAMsg(): void
     {
@@ -100,9 +107,30 @@ final class AppTest extends TestCase
         $this->assertNotNull($subs, 'tick registered immediately (throttle gates fetch, not tick)');
         $this->assertTrue($subs->has('admin-fetch'));
 
-        // The tick's produce() must yield a Msg the Program can dispatch.
+        // The tick's produce() must yield the per-fire message that update()'s
+        // AdminTickMsg arm consumes — never a Cmd (Cmd::none never existed).
         $produced = ($subs->all()[0]->produce)();
-        $this->assertInstanceOf(\SugarCraft\Core\Msg::class, $produced);
+        $this->assertInstanceOf(\SugarCraft\Query\Core\Msg\AdminTickMsg::class, $produced);
+
+        // Stability leg: after a load lands and a new fetch starts (the throttle
+        // states the old code branched on HERE), the declaration stays the same
+        // AdminTickMsg tick. Program locks the first installed closure per id,
+        // so any branching here would freeze a wrong state in for the pane's
+        // entire lifetime.
+        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminDataLoadedMsg(
+            ['Uptime' => '1'],
+            ['max_connections' => '100'],
+            microtime(true),
+        ));
+        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminFetchStartedMsg());
+        $subs = $a->subscriptions();
+        $this->assertNotNull($subs);
+        $this->assertTrue($subs->has('admin-fetch'));
+        $this->assertInstanceOf(
+            \SugarCraft\Query\Core\Msg\AdminTickMsg::class,
+            ($subs->all()[0]->produce)(),
+            'the tick declaration never branches at declaration time',
+        );
     }
 
     /**
