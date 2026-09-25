@@ -30,6 +30,43 @@ use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes;
 final class WidgetCatalog
 {
     /**
+     * Com_create_* command keys folded into the 'create' DDL series (pre-8.0).
+     *
+     * @var list<string>
+     */
+    private const CREATE_KEYS = [
+        'Com_create_db',
+        'Com_create_function',
+        'Com_create_procedure',
+        'Com_create_server',
+        'Com_create_table',
+        'Com_create_tablespace',
+        'Com_create_trigger',
+    ];
+
+    /** @var list<string> */
+    private const ALTER_KEYS = [
+        'Com_alter_db',
+        'Com_alter_function',
+        'Com_alter_procedure',
+        'Com_alter_server',
+        'Com_alter_table',
+        'Com_alter_tablespace',
+        'Com_alter_user',
+    ];
+
+    /** @var list<string> */
+    private const DROP_KEYS = [
+        'Com_drop_db',
+        'Com_drop_function',
+        'Com_drop_procedure',
+        'Com_drop_server',
+        'Com_drop_table',
+        'Com_drop_tablespace',
+        'Com_drop_trigger',
+    ];
+
+    /**
      * Network panel widgets.
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
@@ -97,145 +134,63 @@ final class WidgetCatalog
     /**
      * MySQL widgets for versions before 8.0.
      *
-     * DDL expression includes Com_alter_db_upgrade; version 8.0 removes it
-     * and adds role-related commands (Com_create_role, Com_drop_role,
-     * Com_alter_user_default_role).
+     * The 8.0 line adds role commands (Com_create_role, Com_drop_role,
+     * Com_alter_user_default_role); the pre-8.0 DDL groups additionally carry
+     * Com_alter_db_upgrade, the version the upgrade path actually bumps.
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
     public function mysqlPre80(): array
     {
-        $ddlRates = (new MakeTuple(','))
-            ->addRate('Com_create_db')
-            ->addRate('Com_create_function')
-            ->addRate('Com_create_procedure')
-            ->addRate('Com_create_server')
-            ->addRate('Com_create_table')
-            ->addRate('Com_create_tablespace')
-            ->addRate('Com_create_trigger')
-            ->addRate('Com_drop_db')
-            ->addRate('Com_drop_function')
-            ->addRate('Com_drop_procedure')
-            ->addRate('Com_drop_server')
-            ->addRate('Com_drop_table')
-            ->addRate('Com_drop_tablespace')
-            ->addRate('Com_drop_trigger')
-            ->addRate('Com_alter_db')
-            ->addRate('Com_alter_function')
-            ->addRate('Com_alter_procedure')
-            ->addRate('Com_alter_server')
-            ->addRate('Com_alter_table')
-            ->addRate('Com_alter_tablespace')
-            ->addRate('Com_alter_user')
-            ->addRate('Com_alter_db_upgrade');
+        $createKeys = [...self::CREATE_KEYS];
+        $alterKeys = [...self::ALTER_KEYS, 'Com_alter_db_upgrade'];
+        $dropKeys = [...self::DROP_KEYS];
 
-        return [
-            [
-                'Table Open Cache',
-                'round',
-                new TableOpenCacheHitRate(),
-                '%.0f%%',
-                ['r' => 124, 'g' => 193, 'b' => 80],
-                'Table open cache hit ratio',
-                null,
-            ],
-            [
-                'SQL Statements',
-                'timeline',
-                (new MakeTuple(','))
-                    ->addRate('Com_select')
-                    ->addRate('Com_insert')
-                    ->addRate('Com_update')
-                    ->addRate('Com_delete'),
-                '%s/s',
-                ['r' => 255, 'g' => 215, 'b' => 0],
-                'SQL statement rates: SELECT / INSERT,UPDATE,DELETE / DDL',
-                null,
-            ],
-            [
-                'SELECT',
-                'counter',
-                new RatePerSecond('Com_select'),
-                '%s/s',
-                ['r' => 60, 'g' => 178, 'b' => 191],
-                'SELECT rate',
-                null,
-            ],
-            [
-                'INSERT',
-                'counter',
-                new RatePerSecond('Com_insert'),
-                '%s/s',
-                ['r' => 253, 'g' => 138, 'b' => 39],
-                'INSERT rate',
-                null,
-            ],
-            [
-                'UPDATE',
-                'counter',
-                new RatePerSecond('Com_update'),
-                '%s/s',
-                ['r' => 253, 'g' => 138, 'b' => 39],
-                'UPDATE rate',
-                null,
-            ],
-            [
-                'DELETE',
-                'counter',
-                new RatePerSecond('Com_delete'),
-                '%s/s',
-                ['r' => 253, 'g' => 138, 'b' => 39],
-                'DELETE rate',
-                null,
-            ],
-            [
-                'DDL',
-                'counter',
-                $ddlRates,
-                '%s/s',
-                ['r' => 155, 'g' => 89, 'b' => 182],
-                'CREATE/ALTER/DROP rate',
-                null,
-            ],
-        ];
+        return $this->mysqlWidgets($createKeys, $alterKeys, $dropKeys);
     }
 
     /**
      * MySQL widgets for version 8.0 and later.
      *
-     * Differs from pre-8.0 by including role commands
-     * (Com_create_role, Com_drop_role, Com_alter_user_default_role)
-     * and excluding Com_alter_db_upgrade.
+     * Role commands join their DDL groups; Com_alter_db_upgrade is gone.
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
     public function mysqlPost80(): array
     {
-        $ddlRates = (new MakeTuple(','))
-            ->addRate('Com_create_db')
-            ->addRate('Com_create_function')
-            ->addRate('Com_create_procedure')
-            ->addRate('Com_create_server')
-            ->addRate('Com_create_table')
-            ->addRate('Com_create_tablespace')
-            ->addRate('Com_create_trigger')
-            ->addRate('Com_drop_db')
-            ->addRate('Com_drop_function')
-            ->addRate('Com_drop_procedure')
-            ->addRate('Com_drop_server')
-            ->addRate('Com_drop_table')
-            ->addRate('Com_drop_tablespace')
-            ->addRate('Com_drop_trigger')
-            ->addRate('Com_alter_db')
-            ->addRate('Com_alter_function')
-            ->addRate('Com_alter_procedure')
-            ->addRate('Com_alter_server')
-            ->addRate('Com_alter_table')
-            ->addRate('Com_alter_tablespace')
-            ->addRate('Com_alter_user')
-            ->addRate('Com_create_role')
-            ->addRate('Com_drop_role')
-            ->addRate('Com_alter_user_default_role');
+        $createKeys = [...self::CREATE_KEYS, 'Com_create_role'];
+        $alterKeys = [...self::ALTER_KEYS, 'Com_alter_user_default_role'];
+        $dropKeys = [...self::DROP_KEYS, 'Com_drop_role'];
+
+        return $this->mysqlWidgets($createKeys, $alterKeys, $dropKeys);
+    }
+
+    /**
+     * Shared MySQL panel body; only the DDL group memberships differ between
+     * versions, and the statement timeline + CREATE/ALTER/DROP counters below
+     * MUST use the very same key lists or graph and label would disagree.
+     *
+     * Workbench plots SQL statements as one multi-line graph with
+     * select/insert/update/delete/create/alter/drop labels, so the tuple
+     * carries all seven series (declaration order = palette order) and the
+     * old flat 'DDL' counter is replaced by per-verb counters fed by the
+     * summed groups.
+     *
+     * @param list<string> $createKeys
+     * @param list<string> $alterKeys
+     * @param list<string> $dropKeys
+     * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
+     */
+    private function mysqlWidgets(array $createKeys, array $alterKeys, array $dropKeys): array
+    {
+        $statements = static fn(): MakeTuple => (new MakeTuple(','))
+            ->addRateAs('select', 'Com_select')
+            ->addRateAs('insert', 'Com_insert')
+            ->addRateAs('update', 'Com_update')
+            ->addRateAs('delete', 'Com_delete')
+            ->addRateSum('create', ...$createKeys)
+            ->addRateSum('alter', ...$alterKeys)
+            ->addRateSum('drop', ...$dropKeys);
 
         return [
             [
@@ -250,14 +205,10 @@ final class WidgetCatalog
             [
                 'SQL Statements',
                 'timeline',
-                (new MakeTuple(','))
-                    ->addRate('Com_select')
-                    ->addRate('Com_insert')
-                    ->addRate('Com_update')
-                    ->addRate('Com_delete'),
+                $statements(),
                 '%s/s',
                 ['r' => 255, 'g' => 215, 'b' => 0],
-                'SQL statement rates: SELECT / INSERT,UPDATE,DELETE / DDL',
+                'SQL statement rates: select / insert / update / delete / create / alter / drop',
                 null,
             ],
             [
@@ -297,12 +248,30 @@ final class WidgetCatalog
                 null,
             ],
             [
-                'DDL',
+                'CREATE',
                 'counter',
-                $ddlRates,
+                (new MakeTuple(','))->addRateSum('create', ...$createKeys),
                 '%s/s',
                 ['r' => 155, 'g' => 89, 'b' => 182],
-                'CREATE/ALTER/DROP rate',
+                'CREATE command rate (all Com_create_* verbs)',
+                null,
+            ],
+            [
+                'ALTER',
+                'counter',
+                (new MakeTuple(','))->addRateSum('alter', ...$alterKeys),
+                '%s/s',
+                ['r' => 155, 'g' => 89, 'b' => 182],
+                'ALTER command rate (all Com_alter_* verbs)',
+                null,
+            ],
+            [
+                'DROP',
+                'counter',
+                (new MakeTuple(','))->addRateSum('drop', ...$dropKeys),
+                '%s/s',
+                ['r' => 155, 'g' => 89, 'b' => 182],
+                'DROP command rate (all Com_drop_* verbs)',
                 null,
             ],
         ];
@@ -311,11 +280,26 @@ final class WidgetCatalog
     /**
      * InnoDB panel widgets.
      *
+     * Order is deliberate: the buffer-pool donut first, then its three spec
+     * label counters (read reqs / write reqs / disk reads), then the disk
+     * write/read line graphs with their byte-rate counters, then the deeper
+     * detail counters. DashboardPage renders widgets top-to-bottom, so this
+     * IS the panel layout Workbench shows.
+     *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
     public function innodb(): array
     {
         return [
+            [
+                'Buffer Pool Usage',
+                'round',
+                new InnoDBBufferPoolUsageBytes(),
+                '%.0f%%',
+                ['r' => 124, 'g' => 193, 'b' => 80],
+                'InnoDB buffer pool usage percentage (bytes-based, Appendix A)',
+                null,
+            ],
             [
                 'Buffer Pool Read Reqs',
                 'counter',
@@ -335,21 +319,48 @@ final class WidgetCatalog
                 null,
             ],
             [
-                'Buffer Pool Usage',
-                'round',
-                new InnoDBBufferPoolUsageBytes(),
-                '%.0f%%',
-                ['r' => 124, 'g' => 193, 'b' => 80],
-                'InnoDB buffer pool usage percentage (bytes-based, Appendix A)',
-                null,
-            ],
-            [
                 'Disk Reads (not from pool)',
                 'counter',
                 new RatePerSecond('Innodb_buffer_pool_reads'),
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
                 'InnoDB buffer pool reads from disk per second',
+                null,
+            ],
+            [
+                'InnoDB Disk Writes',
+                'timeline',
+                new RatePerSecond('Innodb_data_written'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'InnoDB data bytes written to disk per second',
+                null,
+            ],
+            [
+                'InnoDB Disk Writes',
+                'counter',
+                new RatePerSecond('Innodb_data_written'),
+                '%s B/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                '',
+                null,
+            ],
+            [
+                'InnoDB Disk Reads',
+                'timeline',
+                new RatePerSecond('Innodb_data_read'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB data bytes read from disk per second',
+                null,
+            ],
+            [
+                'InnoDB Disk Reads',
+                'counter',
+                new RatePerSecond('Innodb_data_read'),
+                '%s B/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                '',
                 null,
             ],
             [
@@ -440,42 +451,6 @@ final class WidgetCatalog
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
                 'InnoDB doublewrite writes per second',
-                null,
-            ],
-            [
-                'InnoDB Disk Writes',
-                'timeline',
-                new RatePerSecond('Innodb_data_written'),
-                '%s/s',
-                ['r' => 253, 'g' => 138, 'b' => 39],
-                'InnoDB data bytes written to disk per second',
-                null,
-            ],
-            [
-                'InnoDB Disk Writes',
-                'counter',
-                new RatePerSecond('Innodb_data_written'),
-                '%s B/s',
-                ['r' => 253, 'g' => 138, 'b' => 39],
-                '',
-                null,
-            ],
-            [
-                'InnoDB Disk Reads',
-                'timeline',
-                new RatePerSecond('Innodb_data_read'),
-                '%s/s',
-                ['r' => 60, 'g' => 178, 'b' => 191],
-                'InnoDB data bytes read from disk per second',
-                null,
-            ],
-            [
-                'InnoDB Disk Reads',
-                'counter',
-                new RatePerSecond('Innodb_data_read'),
-                '%s B/s',
-                ['r' => 60, 'g' => 178, 'b' => 191],
-                '',
                 null,
             ],
         ];

@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Dashboard;
 
+use SugarCraft\Dash\Plot\Chart\Donut;
 use SugarCraft\Dash\Plot\Chart\Gauge;
-use SugarCraft\Dash\Plot\Chart\GaugeCircle;
 use SugarCraft\Dash\Plot\Chart\Meter;
 use SugarCraft\Dash\Foundation\Color;
 
 /**
  * Renders round and level meter widgets using sugar-dash chart components.
  *
- * - "round" kind: uses GaugeCircle (circular gauge) for efficiency metrics
+ * - "round" kind: uses Donut (Workbench's DBRoundMeter is a ring gauge: the
+ *   filled arc is the used share, the hole carries the percentage readout)
  * - "level" kind: uses Gauge (horizontal) for usage vs max metrics
  *
  * @see Mirrors mysql-workbench/wb_admin_performance_dashboard DBRoundMeter, DBLevelMeter
@@ -58,6 +59,13 @@ final class MeterCell
 
         if ($this->max > 0) {
             $this->ratio = min(1.0, $this->value / $this->max);
+        } elseif ($this->widget->kind === WidgetRegistry::KIND_ROUND) {
+            // Round widgets (Table Open Cache, Buffer Pool Usage, PG Cache Hit
+            // Rate) compute a 0-100 PERCENT directly and carry no serverVars
+            // max, so value/100 is the ring fill. Without this the old code
+            // fell to ratio 0 and the gauge rendered empty forever.
+            $this->ratio = max(0.0, min(1.0, $this->value / 100.0));
+            $this->max = 100.0;
         } else {
             $this->ratio = 0.0;
         }
@@ -156,19 +164,33 @@ final class MeterCell
     }
 
     /**
-     * Render as a round meter (GaugeCircle).
+     * Render as a round meter (donut ring with the percentage in the hole).
+     *
+     * Workbench's DBRoundMeter is exactly this shape: an annulus whose filled
+     * sweep is the used share and whose center prints the numeric readout, so
+     * sugar-dash Donut replaces the earlier GaugeCircle here. Two segments
+     * (used vs free) keep the ring total constant at 100 so Donut never hits
+     * its empty-render path, and the free segment carries a muted grey so the
+     * fill reads as progress against a visible track.
      */
-    public function viewRound(): string
+    public function viewRound(int $size = 12): string
     {
-        if (!$this->hasValue) {
-            return GaugeCircle::new(0.0)->render();
+        $color = $this->widget->color;
+        $used = max(0.0, min(100.0, $this->ratio * 100.0));
+
+        $donut = new Donut(
+            [
+                ['label' => 'used', 'value' => $used, 'color' => Color::rgb($color['r'], $color['g'], $color['b'])],
+                ['label' => 'free', 'value' => 100.0 - $used, 'color' => Color::rgb(107, 114, 128)],
+            ],
+            $size,
+        );
+
+        if ($this->hasValue) {
+            $donut = $donut->withCenterValue(sprintf($this->widget->format, $this->value));
         }
 
-        $color = $this->widget->color;
-        $gauge = GaugeCircle::new($this->ratio)
-            ->withArcColor(Color::rgb($color['r'], $color['g'], $color['b']));
-
-        return $gauge->render();
+        return $donut->render();
     }
 
     /**

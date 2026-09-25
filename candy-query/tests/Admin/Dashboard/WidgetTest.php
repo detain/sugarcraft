@@ -211,6 +211,57 @@ final class WidgetTest extends TestCase
         $this->assertNotContains('Com_alter_db_upgrade', $this->extractCalcKeys($entries));
     }
 
+    /**
+     * Workbench's SQL-statements graph plots exactly seven labelled lines;
+     * MultiSeriesCell assigns palette colors positionally, so the tuple must
+     * also emit them in the select…drop declaration order for both versions.
+     */
+    public function testSqlStatementsTimelineCarriesSevenNamedSeriesInOrder(): void
+    {
+        $current = [
+            'Com_select' => '700',
+            'Com_insert' => '600',
+            'Com_update' => '500',
+            'Com_delete' => '400',
+            'Com_create_table' => '150',
+            'Com_create_db' => '150',
+            'Com_alter_table' => '200',
+            'Com_drop_table' => '100',
+        ];
+        $previous = array_fill_keys(array_keys($current), '0');
+
+        foreach ([(new WidgetCatalog())->mysqlPre80(), (new WidgetCatalog())->mysqlPost80()] as $entries) {
+            $calc = null;
+            foreach ($entries as $entry) {
+                if ($entry[0] === 'SQL Statements' && $entry[1] === WidgetRegistry::KIND_TIMELINE) {
+                    $calc = $entry[2];
+                }
+            }
+
+            $this->assertInstanceOf(MakeTuple::class, $calc);
+            $series = $calc->compute($current, $previous, 1.0);
+            $this->assertSame(
+                ['select', 'insert', 'update', 'delete', 'create', 'alter', 'drop'],
+                array_keys($series),
+            );
+            $this->assertSame(700.0, $series['select']);
+            $this->assertSame(300.0, $series['create'], 'create sums every Com_create_* verb');
+            $this->assertSame(200.0, $series['alter']);
+            $this->assertSame(100.0, $series['drop']);
+        }
+    }
+
+    public function testMysqlCountersReplaceFlatDdlWithPerVerbCounters(): void
+    {
+        foreach ([(new WidgetCatalog())->mysqlPre80(), (new WidgetCatalog())->mysqlPost80()] as $entries) {
+            $captions = array_column($entries, 0);
+            $this->assertNotContains('DDL', $captions, 'flat DDL counter folds into per-verb counters');
+            foreach (['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP'] as $verb) {
+                $this->assertContains($verb, $captions);
+            }
+        }
+    }
+
     public function testWidgetCatalogInnodbReturnsNonEmpty(): void
     {
         $entries = (new WidgetCatalog())->innodb();
@@ -329,14 +380,35 @@ final class WidgetTest extends TestCase
     {
         $keys = [];
         foreach ($entries as $entry) {
-            $calc = $entry[2];
-            if ($calc instanceof RatePerSecond) {
-                $keys[] = $calc->key;
-            } elseif ($calc instanceof MakeTuple) {
-                $reflection = new \ReflectionClass($calc);
-                $prop = $reflection->getProperty('rates');
-                $prop->setAccessible(true);
-                $rates = $prop->getValue($calc);
+            foreach ($this->rateKeysOf($entry[2]) as $key) {
+                $keys[] = $key;
+            }
+        }
+        return $keys;
+    }
+
+    /**
+     * Every RatePerSecond key a calc reads: bare rates, aliased rates, and the
+     * members of each summed group (MakeTuple's private groups walked via
+     * reflection — same mechanism as before, extended to the DDL-sum groups).
+     *
+     * @return list<string>
+     */
+    private function rateKeysOf(object $calc): array
+    {
+        if ($calc instanceof RatePerSecond) {
+            return [$calc->key];
+        }
+        if (!$calc instanceof MakeTuple) {
+            return [];
+        }
+        $reflection = new \ReflectionClass($calc);
+        $keys = [];
+        foreach (['rates', 'aliased', 'sums'] as $group) {
+            $prop = $reflection->getProperty($group);
+            $prop->setAccessible(true);
+            foreach ($prop->getValue($calc) as $member) {
+                $rates = is_array($member) ? (isset($member[1]) && is_array($member[1]) ? $member[1] : [$member[1]]) : [$member];
                 foreach ($rates as $rate) {
                     if ($rate instanceof RatePerSecond) {
                         $keys[] = $rate->key;
@@ -357,18 +429,8 @@ final class WidgetTest extends TestCase
     {
         $keys = [];
         foreach ($widgets as $w) {
-            if ($w->calc instanceof RatePerSecond) {
-                $keys[] = $w->calc->key;
-            } elseif ($w->calc instanceof MakeTuple) {
-                $reflection = new \ReflectionClass($w->calc);
-                $prop = $reflection->getProperty('rates');
-                $prop->setAccessible(true);
-                $rates = $prop->getValue($w->calc);
-                foreach ($rates as $rate) {
-                    if ($rate instanceof RatePerSecond) {
-                        $keys[] = $rate->key;
-                    }
-                }
+            foreach ($this->rateKeysOf($w->calc) as $key) {
+                $keys[] = $key;
             }
         }
         return $keys;
