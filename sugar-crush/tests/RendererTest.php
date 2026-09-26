@@ -35,6 +35,11 @@ final class RendererTest extends TestCase
         );
     }
 
+    private function stripAnsi(string $frame): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $frame);
+    }
+
     private function agentManagerWith(array $agents): AgentManager
     {
         $provider = $this->createMock(ProviderInterface::class);
@@ -225,17 +230,86 @@ final class RendererTest extends TestCase
      */
     public function testRendersAssistantReasoningDimmedAndCollapsed(): void
     {
-        $out = Renderer::render($this->chat([
+        $reasoning = "Let me think about light wavelengths.\nBlue scatters more.";
+        $chat = $this->chat([
             Message::user('why is the sky blue?', 0),
-            Message::assistant('Rayleigh scattering.', 0, reasoning: "Let me think about light wavelengths.\nBlue scatters more."),
-        ]));
+            Message::assistant('Rayleigh scattering.', 0, reasoning: $reasoning),
+        ]);
+        $out = Renderer::render($chat);
 
-        $this->assertStringContainsString('💭', $out);
-        $this->assertStringContainsString('Let me think about light wavelengths.', $out);
-        // Collapsed onto one line: the newline inside the reasoning text
-        // must not survive into the rendered block.
-        $this->assertStringNotContainsString("wavelengths.\nBlue", $out);
+        // Collapsed to one row by default: the thought is announced, not shown.
+        $this->assertStringContainsString('💭 Thought', $out);
+        $this->assertStringContainsString('2 lines', $out);
+        $this->assertStringNotContainsString('Let me think about light wavelengths.', $out);
         $this->assertStringContainsString('Rayleigh scattering.', $out);
+
+        // Opened, the whole trace appears with its own line break intact.
+        $open = Renderer::render($chat->toggleToolOutput(Renderer::thoughtKey($reasoning)));
+        $this->assertStringContainsString('Let me think about light wavelengths.', $open);
+        $this->assertStringContainsString('Blue scatters more.', $open);
+        $rows = explode("\n", $open);
+        $first = array_key_first(array_filter($rows, static fn(string $r): bool => str_contains($r, 'wavelengths.')));
+        $this->assertStringNotContainsString('Blue', $rows[$first], 'the trace was flattened onto one row');
+    }
+
+    /**
+     * An expanded shell row names WHAT ran, not just what it printed: the head
+     * shows the model's `description`, which never mentions the command.
+     */
+    public function testAnExpandedShellCallShowsTheCommandThatRan(): void
+    {
+        $result = \SugarCraft\Crush\ToolResult::ok('bash', "total 0\nfile.txt", 'call_1')
+            ->withDescription('List files in current directory')
+            ->withArguments(['command' => "ls -la /tmp\necho done", 'description' => 'List files in current directory', 'timeout' => 30]);
+        $chat = $this->chat(history: [Message::assistant('')->withToolResults([$result])]);
+
+        $collapsed = $this->stripAnsi(Renderer::render($chat));
+        $this->assertStringContainsString('List files in current directory', $collapsed);
+        $this->assertStringNotContainsString('ls -la /tmp', $collapsed, 'a collapsed row must stay one line');
+
+        $open = $this->stripAnsi(Renderer::render($chat->toggleToolOutput('call_1')));
+        $this->assertStringContainsString('$ ls -la /tmp', $open);
+        $this->assertStringContainsString('  echo done', $open, 'a multi-line command must be continued under its prompt');
+        $this->assertStringContainsString('timeout: 30', $open);
+        $this->assertStringContainsString('file.txt', $open);
+        $this->assertLessThan(strpos($open, 'file.txt'), strpos($open, '$ ls -la /tmp'), 'the command must come before its output');
+        $this->assertSame(1, substr_count($open, 'List files in current directory'), 'the description must not be repeated as an argument line');
+    }
+
+    /**
+     * A non-shell call lists its arguments as `key: value`, clipping a long
+     * value (a file body travels here) with a count rather than silently.
+     */
+    public function testAnExpandedCallListsItsArgumentsAndClipsLongValues(): void
+    {
+        $content = implode("\n", array_map(static fn(int $i): string => "line {$i}", range(1, 30)));
+        $result = \SugarCraft\Crush\ToolResult::ok('write', 'wrote 30 lines', 'call_1')
+            ->withArguments(['path' => 'src/a.php', 'content' => $content]);
+        $open = $this->stripAnsi(Renderer::render(
+            $this->chat(history: [Message::assistant('')->withToolResults([$result])])->toggleToolOutput('call_1'),
+        ));
+
+        $this->assertStringContainsString('path: src/a.php', $open);
+        $this->assertStringContainsString('content: line 1', $open);
+        $this->assertStringNotContainsString('line 30', $open);
+        $this->assertStringContainsString('… 22 more lines', $open);
+        $this->assertStringNotContainsString('$ ', $open, 'only a call with a `command` gets a prompt line');
+    }
+
+    /**
+     * Arguments are model-authored: a smuggled SGR or BEL must not reach the frame.
+     */
+    public function testInvocationArgumentsAreSanitized(): void
+    {
+        $result = \SugarCraft\Crush\ToolResult::ok('bash', 'ok', 'call_1')
+            ->withArguments(['command' => "echo \x1b[31mred\x07"]);
+        $open = Renderer::render(
+            $this->chat(history: [Message::assistant('')->withToolResults([$result])])->toggleToolOutput('call_1'),
+        );
+
+        $this->assertStringNotContainsString("\x1b[31m", $open);
+        $this->assertStringNotContainsString("\x07", $open);
+        $this->assertStringContainsString('echo red', $this->stripAnsi($open));
     }
 
     public function testOmitsReasoningLineWhenProviderDidNotSplitAny(): void

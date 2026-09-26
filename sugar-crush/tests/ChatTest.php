@@ -936,6 +936,19 @@ final class ChatTest extends TestCase
         $this->assertSame('echo', $next->history[2]->toolResults[0]->name);
     }
 
+    /** The Chat-native (registerTool) path carries the call's arguments too. */
+    public function testANativeToolResultCarriesTheCallsArguments(): void
+    {
+        $toolCall = new \SugarCraft\Crush\ToolCall('echo', ['text' => 'hello']);
+        $message = Message::assistant('Echoing...')->withToolCalls([$toolCall]);
+        $chat = (new Chat(history: [Message::user('say hello')], inFlight: true))
+            ->registerTool('echo', static fn(array $args) => $args['text'] ?? '');
+
+        [, $next] = $this->runToolCallsToCompletion($chat, $message);
+
+        $this->assertSame(['text' => 'hello'], $next->history[2]->toolResults[0]->arguments);
+    }
+
     /**
      * W2.S1b: ToolResult's reconciled $diff/$durationMs (the fields that
      * previously existed only on the engine-side Tools\ToolResult) have to
@@ -2888,6 +2901,31 @@ final class ChatTest extends TestCase
         $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
         $this->assertCount(1, $withResults);
         $this->assertSame('bash(command: "ls -la")', $withResults[0]->toolResults[0]->description);
+    }
+
+    /**
+     * The same carry for the call's full ARGUMENTS: the description is a
+     * bounded one-liner that, when the model sent one, never names the
+     * command, so an expanded row needs the raw arguments to show `$ ls -la`.
+     */
+    public function testToolFinishedCarriesThePlaceholdersArgumentsOntoTheResult(): void
+    {
+        $call = new EngineToolCall('call_1', 'bash', ['command' => 'ls -la', 'description' => 'List files']);
+        $chat = new Chat(
+            backend: $this->eventEmittingBackend([
+                ToolStarted::fromCall($call),
+                ToolFinished::fromResult($call, new EngineToolResult('call_1', 'a.txt')),
+            ], Message::assistant('there is one file')),
+            inputBuf: 'list files',
+        );
+
+        [$afterSubmit] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $final = $this->drainBackendEvents($afterSubmit, $this->resolveBackendCmd($chat));
+
+        $withResults = array_values(array_filter($final->history, static fn(Message $m): bool => $m->toolResults !== []));
+        $this->assertCount(1, $withResults);
+        $this->assertSame('List files', $withResults[0]->toolResults[0]->description);
+        $this->assertSame(['command' => 'ls -la', 'description' => 'List files'], $withResults[0]->toolResults[0]->arguments);
     }
 
     /**

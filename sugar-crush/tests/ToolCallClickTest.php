@@ -298,6 +298,52 @@ final class ToolCallClickTest extends TestCase
         self::assertFalse($chat->isToolOutputExpanded('call_1'));
     }
 
+    /**
+     * A settled thought's collapsed row is a click zone on the SAME registry and
+     * expansion map as tool rows: one click opens it, a second closes it.
+     */
+    public function testClickingAThoughtRowOpensItAndClickingAgainClosesIt(): void
+    {
+        $reasoning = "THOUGHTBODY weighing it\nand deciding";
+        $key = Renderer::thoughtKey($reasoning);
+        $chat = $this->chatWith([Message::user('why?'), Message::assistant('Because.', null, $reasoning)]);
+        self::assertStringNotContainsString('THOUGHTBODY', Renderer::render($chat));
+
+        $zone = Renderer::scanner()->get('toolcall:' . $key);
+        self::assertInstanceOf(Zone::class, $zone);
+        self::assertSame($zone->startRow, $zone->endRow);
+
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat, $cmd] = $chat->update($this->release($zone->startCol, $zone->startRow));
+        self::assertNull($cmd);
+        self::assertTrue($chat->isToolOutputExpanded($key));
+        self::assertStringContainsString('THOUGHTBODY', Renderer::render($chat));
+
+        $zone = Renderer::scanner()->get('toolcall:' . $key);
+        self::assertInstanceOf(Zone::class, $zone);
+        [$chat] = $chat->update($this->press($zone->startCol, $zone->startRow));
+        [$chat] = $chat->update($this->release($zone->startCol, $zone->startRow));
+        self::assertFalse($chat->isToolOutputExpanded($key));
+        self::assertStringNotContainsString('THOUGHTBODY', Renderer::render($chat));
+    }
+
+    /**
+     * A thought row and the tool row below it claim their own rows, so a
+     * click on either toggles only that one.
+     */
+    public function testAThoughtAboveAToolRowGetsItsOwnZone(): void
+    {
+        $reasoning = 'check the clock';
+        $message = Message::assistant('', reasoning: $reasoning)->withToolResults([ToolResult::ok('clock', 'noon', 'call_1')]);
+        Renderer::render($this->chatWith([$message]));
+
+        $thought = Renderer::scanner()->get('toolcall:' . Renderer::thoughtKey($reasoning));
+        $tool = Renderer::scanner()->get('toolcall:call_1');
+        self::assertInstanceOf(Zone::class, $thought);
+        self::assertInstanceOf(Zone::class, $tool);
+        self::assertLessThan($tool->startRow, $thought->startRow, 'the thought belongs ABOVE the call it led to');
+    }
+
     // =========================================================================
     // Helpers
     // =========================================================================

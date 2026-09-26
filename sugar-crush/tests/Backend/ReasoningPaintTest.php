@@ -540,219 +540,165 @@ final class ReasoningPaintTest extends TestCase
     }
 
     /**
-     * The LIVE thought must not evict the answer (E706, round 81, kept the
-     * bound here on purpose). The in-flight trace goes through the same
-     * collapse a settled Message's reasoning does, but where the settled
-     * transcript now wraps in full, this ticker stays a bounded rolling tail
-     * behind an honest count-suffixed trailer - a trace still growing would
-     * otherwise push the answer off-screen every frame.
+     * While the model is still THINKING - no reply text yet - the trace itself
+     * is painted, newlines kept, under a `💭 Thinking…` marker: the user reads
+     * the thought as it is written instead of watching a one-line ticker.
      */
-    public function testALongThoughtIsCollapsedRatherThanPaintedInFull(): void
+    public function testALiveThoughtIsPaintedInFullWhileTheModelIsStillThinking(): void
     {
-        $thought = str_repeat('every thought in full ', 60);
-        $chat = $this->pumpToQuiescence($this->withThought(
-            new Chat(inFlight: true),
-            $thought,
-        ));
+        $frame = $this->paintedThought("FIRSTLINE weighing it up\nSECONDLINE and deciding");
 
-        $frame = $this->render($chat);
-        $lines = explode("\n", $frame);
-        $first = null;
-        foreach ($lines as $index => $line) {
-            if (str_contains($line, '💭')) {
-                $first = $index;
-                break;
-            }
-        }
-        $this->assertNotNull($first, 'the thought was not painted at all');
-
-        // The ticker runs from its marker row to the row carrying the honest
-        // trailer's closer - with the trailer the logical row wraps, so
-        // "collapsed" is a claim about a few rows and not about exactly one.
-        $rows = 0;
-        for ($i = $first; $i < count($lines); $i++) {
-            $rows++;
-            if (str_contains($lines[$i], 'chars shown]')) {
-                break;
-            }
-        }
-
-        $this->assertLessThanOrEqual(
-            3,
-            $rows,
-            'a live trace that would fill a screen must stay a bounded ticker',
-        );
-        $painted = implode("\n", array_slice($lines, $first, $rows));
-        $this->assertStringContainsString('…', $painted, 'a trace longer than the cap must be elided');
-        // The elision must SAY how much it shows - the house count-suffixed
-        // trailer (E706) - not just leave a bare ellipsis as its only tell.
-        $total = mb_strlen(trim(preg_replace('/\s+/', ' ', $thought) ?? ''));
-        $this->assertStringContainsString(
-            sprintf(Renderer::REASONING_LIVE_TRAILER, 120, $total),
-            $painted,
-            'the bounded live ticker is missing its honest N-of-M trailer',
-        );
-        $this->assertLessThan(
-            substr_count($thought, 'every'),
-            substr_count($painted, 'every'),
-            'the whole trace reached the frame - nothing was collapsed',
-        );
+        $this->assertStringContainsString('💭 Thinking…', $this->plain($frame));
+        $this->assertStringContainsString('FIRSTLINE', $frame);
+        $this->assertStringContainsString('SECONDLINE', $frame);
+        $rows = $this->rowsContaining($frame, ['FIRSTLINE', 'SECONDLINE']);
+        $this->assertNotSame($rows['FIRSTLINE'], $rows['SECONDLINE'], "the trace's own line break must survive into the frame");
+        $this->assertStringNotContainsString('💭 Thought', $this->plain($frame), 'a thought still being written must not be collapsed yet');
     }
 
     /**
-     * **The live thought must keep ADVANCING once it passes the cap.**
-     *
-     * E494 painted the in-flight thought through the same head-anchored
-     * elision the settled transcript uses. An in-flight thought is an
-     * accumulation that only grows, so the moment it passed the cap every
-     * later frame rendered the same leading characters: measured before the
-     * fix, on this host at 100x30, the frame for a 340-character accumulation
-     * and the frame for a 3790-character one were byte-identical. For the
-     * MiniMax-scale trace the renderer's own doc-block names, that is the
-     * first second of a two-minute turn followed by a static line under a
-     * spinner still claiming work is happening - which is the exact symptom
-     * E494 exists to remove.
-     *
-     * Nothing caught it: with the elision flipped end-for-end the ENTIRE
-     * suite stayed green, assertion count unmoved. The neighbouring
-     * {@see testALongThoughtIsCollapsedRatherThanPaintedInFull()} looks like
-     * it covers this and does not - it checks the cap and the row budget, and
-     * never which end of the accumulation survives. So this asserts the
-     * property those two miss directly: two accumulations sharing a prefix
-     * longer than the cap must not render the same bytes.
-     *
-     * Single-word markers rather than phrases, deliberately: the collapsed
-     * line is word-wrapped to the pane afterwards, so a multi-word marker can
-     * be split across rows and a `assertStringContainsString` on it would fail
-     * for a reason that has nothing to do with the anchor.
+     * A trace longer than the viewport keeps its NEWEST rows (the end still
+     * moving) behind an honest N-of-M trailer, so it neither evicts everything
+     * above it nor freezes on its opening lines (E494's measurement: a
+     * head-anchored bound painted a 340- and a 3790-character accumulation
+     * byte-identical).
      */
-    public function testALiveThoughtKeepsAdvancingOnceItPassesTheCap(): void
+    public function testALongLiveThoughtKeepsItsNewestRowsBehindAnHonestTrailer(): void
     {
-        $opening = 'OPENINGMARKER ' . str_repeat('and then a further consideration ', 8);
-        $this->assertGreaterThan(120, mb_strlen($opening), 'the fixture must exceed the cap or it proves nothing');
+        $lines = ['OPENINGMARKER'];
+        for ($i = 1; $i <= 80; $i++) {
+            $lines[] = "consideration {$i}";
+        }
+        $early = $this->paintedThought(implode("\n", $lines));
+        $later = $this->paintedThought(implode("\n", [...$lines, 'TAILMARKER']));
 
-        $early = $this->paintedThought($opening);
-        $later = $this->paintedThought($opening . ' TAILMARKER');
-
-        $this->assertNotSame(
-            $early,
-            $later,
-            'the live thought froze: two accumulations differing only in their newest text painted identical frames',
+        $this->assertStringNotContainsString('OPENINGMARKER', $later, 'the live paint is not bounded - a long trace would fill every row');
+        $this->assertStringContainsString('TAILMARKER', $later, 'the newest thinking never reached the frame - the bound keeps the wrong end');
+        $this->assertStringNotContainsString('TAILMARKER', $early, 'known-negative: the marker must be absent from the accumulation without it');
+        $this->assertNotSame($early, $later, 'the live thought froze once it outgrew the viewport');
+        $this->assertMatchesRegularExpression(
+            '/' . str_replace(['%d', '…'], ['\\d+', '…'], preg_quote(Renderer::THINKING_LIVE_TRAILER, '/')) . '/u',
+            $this->plain($later),
+            'the bounded live paint must say how much of the trace it shows',
         );
-        $this->assertStringContainsString(
-            'TAILMARKER',
-            $later,
-            'the newest thinking never reached the frame - the elision is keeping the wrong end',
-        );
-        $this->assertStringNotContainsString(
-            'TAILMARKER',
-            $early,
-            'known-negative: the marker must be absent from the accumulation that does not carry it',
-        );
-        $this->assertStringNotContainsString(
-            'OPENINGMARKER',
-            $later,
-            'the whole trace reached the frame - the cap is gone, which trades a frozen line for an evicted answer',
-        );
-        $this->assertStringContainsString('…', $later, 'an elided trace must still say it was elided');
+        $this->assertStringContainsString('of 82 lines shown', $this->plain($later));
     }
 
     /**
-     * The two paths' difference after E706 (round 81): the SETTLED transcript
-     * paints the WHOLE thought - wrapped over as many rows as it needs, no
-     * bound, no trailer - while the RUNNING ticker keeps only the newest tail
-     * behind {@see Renderer::REASONING_LIVE_TRAILER}. Asserted together
-     * because they are one decision: "fixing" the settled clip by dropping
-     * the bound wholesale - taking the live cap with it - would trade a
-     * bounded ticker for an evicted answer, and keeping any settled clip
-     * re-commits the truncation the operator ruled out. The trailer's
-     * PRESENCE on the ticker and ABSENCE from the settled frame pin which
-     * side of the decision moved.
+     * Once the model starts SPEAKING the thought is over: it folds into one
+     * collapsed `💭 Thought ▸` row above the streaming reply instead of pushing
+     * that reply off-screen.
      */
-    public function testTheSettledTranscriptPaintsTheWholeThoughtTheLiveTickerStaysBounded(): void
+    public function testALiveThoughtCollapsesOnceTheReplyStartsStreaming(): void
     {
-        $thought = 'OPENINGMARKER ' . str_repeat('and then a further consideration ', 8) . ' TAILMARKER';
+        $chat = new Chat(inFlight: true);
+        $chat->enqueueReasoning("HIDDENTHOUGHT line one\nline two");
+        $chat->enqueueToken('The answer is noon.');
+        $speaking = $this->pumpToQuiescence($chat);
+        $frame = $this->render($speaking);
 
-        $settled = $this->render(new Chat(history: [
+        $this->assertStringContainsString('💭 Thought ▸ 2 lines', $this->plain($frame));
+        $this->assertStringNotContainsString('HIDDENTHOUGHT', $frame, 'a collapsed thought must not paint its trace');
+        $this->assertStringContainsString('The answer is noon.', $frame);
+
+        $open = $this->render($speaking->toggleToolOutput(Renderer::THOUGHT_LIVE_KEY));
+        $this->assertStringContainsString('💭 Thought ▾', $this->plain($open));
+        $this->assertStringContainsString('HIDDENTHOUGHT', $open, 'opening the collapsed live thought must show its trace');
+    }
+
+    /**
+     * A settled turn's thought is collapsed by default and opens - in full,
+     * newlines kept, every word - on its own key; closing it hides it again.
+     */
+    public function testASettledThoughtIsCollapsedUntilOpenedAndThenShownInFull(): void
+    {
+        $thought = 'OPENINGMARKER ' . str_repeat("and then a further consideration\n", 8) . 'TAILMARKER';
+        $chat = new Chat(history: [
             Message::user('what time is it?'),
             Message::assistant('Noon.', null, $thought),
-        ]));
+        ]);
 
-        $this->assertStringContainsString(
-            'OPENINGMARKER',
-            $settled,
-            'a settled turn must still open with the beginning of its thought',
-        );
-        $this->assertStringContainsString(
-            'TAILMARKER',
-            $settled,
-            'the settled transcript clipped the thought again - E706 ruled it paints the full trace',
-        );
-        $this->assertStringNotContainsString(
-            'thinking truncated',
-            $settled,
-            "a settled turn shows everything, so it must not carry the ticker's truncation trailer",
-        );
+        $collapsed = $this->render($chat);
+        $this->assertStringContainsString('💭 Thought ▸ 9 lines', $this->plain($collapsed));
+        $this->assertStringNotContainsString('OPENINGMARKER', $collapsed);
+        $this->assertStringNotContainsString('TAILMARKER', $collapsed);
+        $this->assertStringContainsString('Noon.', $collapsed, 'collapsing the thought must not take the answer with it');
 
-        $live = $this->paintedThought($thought);
-        $this->assertStringContainsString('TAILMARKER', $live);
-        $this->assertStringNotContainsString(
-            'OPENINGMARKER',
-            $live,
-            'the live cap vanished with the settled one - the ticker must stay bounded (E706 kept it on purpose)',
-        );
-        $this->assertStringContainsString(
-            'thinking truncated',
-            $live,
-            'the bounded ticker must say it is bounded',
-        );
+        $open = $chat->toggleToolOutput(Renderer::thoughtKey($thought));
+        $expanded = $this->render($open);
+        $this->assertStringContainsString('💭 Thought ▾', $this->plain($expanded));
+        $this->assertStringContainsString('OPENINGMARKER', $expanded);
+        $this->assertStringContainsString('TAILMARKER', $expanded);
+        $this->assertSame(8, substr_count($expanded, 'further consideration'), 'an opened thought must carry every line of its trace');
+
+        $this->assertSame($collapsed, $this->render($open->toggleToolOutput(Renderer::thoughtKey($thought))), 'a second toggle must close it again');
     }
 
     /**
-     * E706 (round 81) in its load-bearing shape: a long SETTLED trace must be
-     * readable on screen, not merely retained in state. Three independent
-     * claims, each killed by a different regression:
-     *
-     * - every WORD of the trace appears in the frame as often as the fixture
-     *   repeats it - wrapping never splits a word, so ANY re-clip anywhere in
-     *   the settled path drops this count.
-     * - the trace occupies multiple rows (measured at this exact 100-column
-     *   pane) - proof it rode the wrap rather than painting one unreachable
-     *   over-wide row.
-     * - every row of the frame stays within the pane width once SGR and the
-     *   zero-cell zone sentinels are stripped - the invariant
-     *   {@see Renderer}'s fitter exists to hold, and the one a reasoning
-     *   row dodging it would break for every cursorTo() below it.
+     * An opened long thought wraps inside the pane - every row of the frame
+     * stays within the pane width once SGR and zone sentinels are stripped.
      */
-    public function testTheSettledThoughtWrapsAcrossRowsWithoutLosingATrace(): void
+    public function testAnOpenedThoughtWrapsWithinThePane(): void
     {
         $thought = str_repeat('every thought in full ', 60);
-        $frame = Renderer::render(new Chat(history: [
+        $chat = (new Chat(history: [
             Message::user('why?'),
             Message::assistant('Because.', null, $thought),
-        ], rows: 40, cols: 100));
+        ], rows: 40, cols: 100))->toggleToolOutput(Renderer::thoughtKey($thought));
+        $frame = Renderer::render($chat);
 
-        $this->assertSame(
-            60,
-            substr_count($frame, 'every'),
-            'the settled frame does not carry every word of the trace - something clipped it '
-                . '(word-level on purpose: the wrap breaks rows between words, so an intact '
-                . 'phrase can straddle a row boundary, but a WORD never splits)',
-        );
-
-        $lines = explode("\n", $frame);
-        $carried = 0;
-        foreach ($lines as $row) {
-            if (str_contains($row, 'every')) {
-                $carried++;
-            }
+        $this->assertGreaterThanOrEqual(10, count(array_filter(explode("\n", $frame), static fn(string $row): bool => str_contains($row, 'every'))), 'the trace did not wrap over rows');
+        foreach (explode("\n", $frame) as $row) {
             $this->assertLessThanOrEqual(
                 100,
                 Width::of((string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]|\x{e000}|\x{e001}/u', '', $row)),
                 'a frame row exceeded the pane width - the fitToPane wrap was bypassed',
             );
         }
-        $this->assertGreaterThanOrEqual(10, $carried, 'the trace did not wrap over rows');
+    }
+
+    /**
+     * The step's thinking is parked on the placeholder of the tool call it led
+     * to, rather than dropped by the ToolStarted reset - and it never enters
+     * the conversation the model is re-sent (the placeholder's content is the
+     * call's one-liner, and a history entry's reasoning is not part of the
+     * wire).
+     */
+    public function testAToolCallKeepsTheThoughtThatLedToItAsACollapsedRow(): void
+    {
+        $chat = new Chat(inFlight: true);
+        $chat->enqueueReasoning('PARKEDTHOUGHT check the clock');
+        $chat->enqueueToolEvent(new ToolStarted('call_1', 'clock', ['description' => 'Read the clock']));
+        $chat = $this->pumpToQuiescence($chat);
+
+        $this->assertSame('', $chat->reasoningText());
+        $placeholder = $chat->history[count($chat->history) - 1];
+        $this->assertSame('call_1', $placeholder->pendingToolCallId);
+        $this->assertSame('PARKEDTHOUGHT check the clock', $placeholder->reasoning);
+        $this->assertStringNotContainsString('PARKEDTHOUGHT', $placeholder->content, 'the thought must not become what the model is re-sent');
+
+        $frame = $this->render($chat);
+        $this->assertStringContainsString('💭 Thought ▸ 1 line', $this->plain($frame));
+        $this->assertStringNotContainsString('PARKEDTHOUGHT', $frame);
+    }
+
+    /**
+     * An open live thought stays open when it lands: the live key moves onto
+     * the settled thought's content key, and no live key is left behind to
+     * pre-open the next turn's thought.
+     */
+    public function testAnOpenLiveThoughtStaysOpenWhenTheTurnSettles(): void
+    {
+        $chat = new Chat(inFlight: true);
+        $chat->enqueueReasoning('LANDED thought');
+        $chat->enqueueToken('No');
+        $inFlight = $this->pumpToQuiescence($chat)->toggleToolOutput(Renderer::THOUGHT_LIVE_KEY);
+
+        [$settled] = $inFlight->update(new AssistantMsg(Message::assistant('Noon.', null, 'LANDED thought')));
+
+        $this->assertArrayNotHasKey(Renderer::THOUGHT_LIVE_KEY, $settled->expanded());
+        $this->assertTrue($settled->isToolOutputExpanded(Renderer::thoughtKey('LANDED thought')));
+        $this->assertStringContainsString('LANDED', $this->render($settled));
     }
 
     /**
@@ -783,6 +729,30 @@ final class ReasoningPaintTest extends TestCase
     private function paintedThought(string $thought): string
     {
         return $this->render($this->pumpToQuiescence($this->withThought(new Chat(inFlight: true), $thought)));
+    }
+
+    private function plain(string $frame): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*[A-Za-z]/', '', $frame);
+    }
+
+    /**
+     * @param list<string> $needles
+     * @return array<string, int> needle => index of the first frame row carrying it
+     */
+    private function rowsContaining(string $frame, array $needles): array
+    {
+        $found = [];
+        foreach (explode("\n", $frame) as $index => $row) {
+            foreach ($needles as $needle) {
+                if (!isset($found[$needle]) && str_contains($row, $needle)) {
+                    $found[$needle] = $index;
+                }
+            }
+        }
+        $this->assertCount(count($needles), $found, 'not every needle reached the frame');
+
+        return $found;
     }
 
     private function withThought(Chat $chat, string $thought): Chat

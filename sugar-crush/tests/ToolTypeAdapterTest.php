@@ -235,4 +235,16 @@ final class ToolTypeAdapterTest extends TestCase
 
         $this->assertSame('bash(command: "ls")', $result->description);
     }
+
+    /** The call's raw arguments ride on the result for the expanded row. */
+    public function testWithArgumentsAttachesTheCallsArgumentsAndSurvivesTheOtherWithers(): void
+    {
+        $result = ToolResult::ok('bash', 'out', 'call_1');
+        $withArgs = $result->withArguments(['command' => 'ls']);
+
+        $this->assertSame(['command' => 'ls'], $withArgs->arguments);
+        $this->assertSame([], $result->arguments, 'immutable: the original must be untouched');
+        $this->assertSame(['command' => 'ls'], $withArgs->withDescription('List')->arguments);
+        $this->assertSame(['command' => 'ls'], $withArgs->withImage('PNGBYTES')->arguments);
+    }
 }

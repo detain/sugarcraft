@@ -96,6 +96,20 @@ final class Message
          * of one agentic turn: any step that hit the ceiling marks the turn.
          */
         public readonly bool $lengthStopped = false,
+        /**
+         * The model's raw arguments for the call a "running" placeholder
+         * stands in for - set only alongside {@see $pendingToolCallId}.
+         * {@see $content} carries just {@see describeToolCall()}'s bounded
+         * one-liner, which for a tool whose call carries a `description`
+         * never mentions the command at all; this is what lets
+         * {@see \SugarCraft\Crush\Chat} hand the finished
+         * {@see ToolResult} the full invocation, so an expanded row can show
+         * WHAT ran (`$ ls -la`) and not only its output. Display-only: never
+         * part of {@see toWire()}.
+         *
+         * @var array<string, mixed>
+         */
+        public readonly array $pendingToolArguments = [],
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -130,6 +144,7 @@ final class Message
             content: self::describeToolCall($call),
             createdAt: $now ?? time(),
             pendingToolCallId: $call->id ?? $call->name,
+            pendingToolArguments: $call->arguments,
         );
     }
 
@@ -222,6 +237,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
@@ -240,6 +256,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
@@ -263,6 +280,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
@@ -289,6 +307,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: [],
         );
     }
 
@@ -315,6 +334,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
@@ -340,6 +360,7 @@ final class Message
             imageProtocol: $imageProtocol,
             usage: $this->usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
@@ -366,6 +387,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $usage,
             lengthStopped: $this->lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
@@ -391,6 +413,7 @@ final class Message
             imageProtocol: $this->imageProtocol,
             usage: $this->usage,
             lengthStopped: $lengthStopped,
+            pendingToolArguments: $this->pendingToolArguments,
         );
     }
 
