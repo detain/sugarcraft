@@ -140,6 +140,22 @@ final class MessageTest extends TestCase
         $this->assertSame('List files in current directory', Message::describeToolCall($call));
     }
 
+    /**
+     * The running placeholder keeps the call's raw arguments beside its
+     * one-liner, every with*() carries them, and the finished result message
+     * drops them (they have moved onto its ToolResult).
+     */
+    public function testToolRunningKeepsTheCallsArgumentsUntilTheResultReplacesIt(): void
+    {
+        $call = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la'], 'call_1');
+        $placeholder = Message::toolRunning($call);
+
+        $this->assertSame(['command' => 'ls -la'], $placeholder->pendingToolArguments);
+        $this->assertSame(['command' => 'ls -la'], $placeholder->withReasoning('hmm')->pendingToolArguments);
+        $this->assertSame([], $placeholder->withToolResults([\SugarCraft\Crush\ToolResult::ok('bash', 'x')])->pendingToolArguments);
+        $this->assertArrayNotHasKey('pendingToolArguments', $placeholder->toWire());
+    }
+
     public function testDescribeToolCallFallsBackWhenDescriptionIsMissingOrUnusable(): void
     {
         $noDescription = new \SugarCraft\Crush\ToolCall('bash', ['command' => 'ls -la']);

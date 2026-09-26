@@ -480,30 +480,53 @@ final class Renderer
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
     /**
-     * Characters of a model's thinking trace the LIVE paint in
-     * {@see renderReasoning()} keeps before it elides.
-     *
-     * WHAT THIS SAID BEFORE: the cap bounded both the live paint and the
-     * settled transcript. WHAT IS TRUE NOW (E706, round 81): it bounds the
-     * live ticker ONLY. An in-flight thought is a progress indicator that
-     * only ever grows, so a bounded rolling tail is honest about what it is;
-     * a settled thought is a finished artefact the operator ruled must be
-     * readable in full - the transcript wraps it across rows through
-     * {@see fitToPane()} instead of clipping it.
+     * Lines of a shell `command` {@see renderInvocation()} paints before it
+     * clips - generous, because the command is the thing the user expanded
+     * the row to read; the bound exists only for a heredoc-sized script.
      */
-    private const REASONING_MAX_CHARS = 120;
+    private const INVOCATION_COMMAND_MAX_LINES = 200;
 
     /**
-     * The honest count-suffixed trailer the bounded live reasoning ticker
-     * appends after its rolling tail, mirroring the house truncation wording
-     * (`ScriptHook::clip()`, `TruncatesOutput::truncationMarker()`): a reader
-     * who sees the ticker must be able to tell HOW MUCH of the trace it is
-     * showing, not just that something was eaten. sprintf args: shown, total.
-     *
-     * Public so a test pins the SAME string the renderer paints rather than a
-     * hand-copied literal that can drift out from under it.
+     * Lines of any other argument value {@see renderInvocation()} paints
+     * before it clips - see that method for why these are kept short.
      */
-    public const REASONING_LIVE_TRAILER = ' … [thinking truncated: %d of %d chars shown]';
+    private const INVOCATION_VALUE_MAX_LINES = 8;
+
+    /**
+     * The honest trailer the live "💭 Thinking…" block prints above its
+     * rolling tail once the trace outgrows the rows it is given. sprintf
+     * args: lines shown, lines total. Public so a test pins the SAME string
+     * the renderer paints rather than a hand-copied literal.
+     *
+     * The tail - not the head - is kept for the reason E494 measured: a
+     * head-anchored bound freezes the paint, every later frame repeating the
+     * same leading text while the model keeps thinking.
+     */
+    public const THINKING_LIVE_TRAILER = '… %d of %d lines shown';
+
+    /**
+     * {@see Chat::expanded()} key of the in-flight thought once the reply has
+     * started and the thought has collapsed. Its text is still growing, so it
+     * cannot be keyed by content the way a settled one is
+     * ({@see thoughtKey()}); Chat moves an open live thought onto its content
+     * key when it lands ({@see Chat::expandedAfterLiveThought()}).
+     */
+    public const THOUGHT_LIVE_KEY = 'thought.live';
+
+    /**
+     * The collapsible thought row's visible label. The ROW is a
+     * {@see TOOL_CALL_ZONE_PREFIX} click zone sharing {@see Chat::expanded()}
+     * with tool rows, so one click mechanism opens both.
+     */
+    private const THOUGHT_ROW_LABEL = '💭 Thought';
+
+    /**
+     * Rows of wrapped trace the live thinking block may paint before it
+     * keeps only the tail, given as the frame rows it leaves for everything
+     * else: the transcript is tail-clipped to the viewport anyway, so a trace
+     * painted past it is only work the terminal throws away.
+     */
+    private const THINKING_LIVE_CHROME_ROWS = 10;
 
     /**
      * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
@@ -1261,34 +1284,25 @@ final class Renderer
         );
         if ($chat->inFlight) {
             // E494 - the model's THINKING while the turn runs, painted above
-            // the reply and below whatever has already settled. This is the
-            // last hop of E456: round 56 carried a reasoning fragment from the
-            // provider's chunk across {@see Backend\EngineBackend}'s fork and
-            // out of a callback that nobody passed, so a user daily-driving
-            // this app watched a static "assistant is thinking..." while the
-            // thinking was arriving and being discarded.
+            // the reply and below whatever has already settled.
             //
-            // Through {@see renderReasoning()}, the same flatten-to-one-row and
-            // dim style a settled Message's own `reasoning` gets in
-            // {@see renderAssistantTurn()}, rather than a second style. What
-            // the two now differ on is the BOUND, not the look (E706, round
-            // 81): the settled transcript wraps the whole trace, while this
-            // ticker stays a rolling tail of {@see REASONING_MAX_CHARS} behind
-            // an honest {@see REASONING_LIVE_TRAILER} - painting a
-            // still-growing MiniMax-scale trace in full every frame would push
-            // the answer off-screen for the duration of the turn.
+            // Two states, split on whether the model has started SPEAKING:
+            //  - still thinking (no reply text yet): the trace itself, newlines
+            //    kept, as a rolling tail sized to the viewport - the user
+            //    reads the thought as it is written;
+            //  - past the thought (the reply is streaming): it folds into the
+            //    same collapsible "💭 Thought" row a settled turn gets, so the
+            //    answer is not pushed off-screen by the reasoning behind it.
+            //    A click opens it, keyed THOUGHT_LIVE_KEY until it lands.
             //
-            // The TAIL anchor is what keeps the ticker alive: a head-anchored
-            // bound re-freezes the frame once the accumulation passes the cap.
-            // See that method for the measurement.
-            //
-            // ABOVE the partial, not below it, and the order is load-bearing
-            // rather than aesthetic: the model thinks and then speaks, so a
-            // thought under the prose it produced would invert the causality
-            // the transcript is meant to show.
+            // ABOVE the partial, not below it: the model thinks and then
+            // speaks, so a thought under the prose it produced would invert
+            // the causality the transcript is meant to show.
             $liveThought = $chat->reasoningText();
-            if ($liveThought !== '') {
-                $thought = self::renderReasoning($liveThought, $theme, keepTail: true);
+            if (trim($liveThought) !== '') {
+                $thought = $chat->streamingText() === ''
+                    ? self::renderLiveThinking($liveThought, $theme, $contentWidth, max(3, $chat->rows() - self::THINKING_LIVE_CHROME_ROWS))
+                    : self::renderThought($liveThought, $theme, $chat->expanded(), self::THOUGHT_LIVE_KEY);
                 $body = $body === '' ? $thought : $body . "\n\n" . $thought;
             }
             // The reply so far, when the model has started writing one
@@ -2847,13 +2861,13 @@ final class Renderer
                 continue;
             }
             if ($msg->pendingToolCallId !== null) {
-                $blocks[] = self::renderPendingToolCall($msg, $theme);
+                $blocks[] = self::renderPendingToolCall($msg, $theme, $expanded);
 
                 continue;
             }
             $blocks[] = match ($msg->role) {
                 Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . self::untrusted($msg->content),
-                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md),
+                Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $expanded),
                 Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . self::untrusted($msg->content)),
             };
         }
@@ -2862,15 +2876,16 @@ final class Renderer
 
     /**
      * An assistant turn's label + (when present) its {@see Message::$reasoning}
-     * painted in full across however many pane-width rows it needs (E706,
-     * round 81 - wrapped, never clipped) + rendered Markdown body. §12 D3's
-     * final wiring step - the
-     * extractor already splits reasoning out at the provider layer and
+     * as a collapsible "💭 Thought" row ({@see renderThought()}) + rendered
+     * Markdown body. §12 D3's final wiring step - the extractor already splits
+     * reasoning out at the provider layer and
      * {@see \SugarCraft\Crush\Backend\EngineBackend} threads it onto the root
      * {@see Message} DTO; this is where it actually reaches the user instead
      * of being computed and discarded.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
      */
-    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md): string
+    private static function renderAssistantTurn(Message $msg, Theme $theme, Markdown $md, array $expanded = []): string
     {
         $label = Style::new()->foreground($theme->assistantLabel)->bold()->render('assistant');
         // Sentinels stripped BEFORE CandyShine, not after: the rendered output
@@ -2882,7 +2897,9 @@ final class Renderer
             return $label . "\n" . $body;
         }
 
-        return $label . "\n" . self::renderReasoning($msg->reasoning, $theme) . "\n" . $body;
+        $thought = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
+
+        return $label . "\n" . $thought . ($body === '' ? '' : "\n" . $body);
     }
 
     /**
@@ -2926,64 +2943,112 @@ final class Renderer
     }
 
     /**
-     * Dimmed, collapsed rendering of a model's extracted "thinking" text -
-     * per crush_feat.md §12 D3 ("surface the result rendered dimmed/collapsed
-     * in the TUI"). Collapse governs WHITESPACE: the trace is flattened to
-     * one logical line, and the pane's {@see fitToPane()} is what walks that
-     * line back onto rows at the pane width - it is never cut short
-     * (E706, round 81: the operator ruling was WRAP, not truncate). The live
-     * ticker is the one bounded path, and it says so with an honest trailer.
-     * Reasoning is raw
-     * model output that never passes through CandyShine's Markdown renderer,
-     * so - like every other untrusted turn in this method - it goes through
-     * {@see Sanitize::untrusted()} before display.
-     *
-     * ## Settled wraps; only the live ticker is bounded
-     *
-     * WHAT THIS SAID BEFORE: both anchors elided at
-     * {@see REASONING_MAX_CHARS} - the settled transcript kept a head-120,
-     * the live paint a tail-120 - so the operator saw the same clipped window
-     * either way while the full trace survived only in state and on disk.
-     * WHAT IS TRUE NOW (E706, round 81): the settled path does not bound. The
-     * flattened row rides {@see renderView()}'s single {@see fitToPane()}
-     * choke point exactly like prose does and wraps over as many rows as it
-     * needs; rows past the frame's bottom fall to the row-budget tail clip,
-     * which is scrollback, not deletion - the same trade every transcript
-     * row already makes.
-     * WHY LIVE STAYS BOUNDED: an in-flight trace grows a fragment at a time
-     * against an answer that must stay readable under it, and it is not yet a
-     * finished artefact - a MiniMax-scale trace painted in full every frame
-     * would push that answer off-screen for the duration of the turn. The
-     * ticker therefore keeps the newest {@see REASONING_MAX_CHARS} characters
-     * behind a leading ellipsis and names the bound honestly in
-     * {@see REASONING_LIVE_TRAILER}; when the turn settles the complete text
-     * appears under the same marker.
-     * WHY THE LIVE ANCHOR IS STILL THE TAIL: a head-anchored elision freezes
-     * the ticker - once past the cap every later frame renders the same
-     * leading characters (E494's measurement: a 340-character accumulation
-     * and a 3790-character one painted byte-identical frames).
-     *
-     * @param bool $keepTail bound the in-flight ticker to a rolling tail of
-     *                       {@see REASONING_MAX_CHARS} newest characters and
-     *                       append the honest {@see REASONING_LIVE_TRAILER}.
-     *                       True at the live paint in {@see renderView()};
-     *                       false at the settled transcript in
-     *                       {@see renderAssistantTurn()}, where nothing is
-     *                       bounded at all (E706, round 81).
+     * The {@see Chat::expanded()} key of a settled thought: derived from the
+     * text alone, so the running placeholder a thought rides on and the
+     * finished row that replaces it (a new {@see Message}, new timestamp)
+     * resolve to the same open/closed state.
      */
-    private static function renderReasoning(string $reasoning, Theme $theme, bool $keepTail = false): string
+    public static function thoughtKey(string $reasoning): string
     {
-        $flat = trim(preg_replace('/\s+/', ' ', self::untrusted($reasoning)) ?? '');
-        // E706 (round 81): the settled trace is NOT clipped here. It paints as
-        // one flattened logical row and the existing fitToPane() wrap path -
-        // the one prose already rides - is what turns it into pane-width rows.
-        // This branch is the live ticker alone.
-        if ($keepTail && mb_strlen($flat) > self::REASONING_MAX_CHARS) {
-            $flat = '…' . mb_substr($flat, -self::REASONING_MAX_CHARS)
-                . sprintf(self::REASONING_LIVE_TRAILER, self::REASONING_MAX_CHARS, mb_strlen($flat));
+        return 'thought.' . substr(sha1($reasoning), 0, 16);
+    }
+
+    /**
+     * A model's thinking as ONE collapsible row (crush_feat.md §12 D3's
+     * "dimmed/collapsed"): `💭 Thought ▸ 42 lines · click to expand` until
+     * the user opens it, then the same row flipped to `▾` with the whole
+     * trace below it, newlines kept. Clicking the row again closes it.
+     *
+     * The row is a click zone on the SAME registry and key space tool rows
+     * use ({@see recordToolCallZone()}, {@see Chat::toggleToolOutput()}), so
+     * no second expansion mechanism can disagree with the first. Its head is
+     * also recorded in {@see $toolRowHeads}, which makes {@see fitToPane()}
+     * truncate the row rather than wrap it - a wrapped head would split the
+     * one-line zone.
+     *
+     * Reasoning is raw model output that never passes through CandyShine, so
+     * every line is {@see untrusted()}-scrubbed before display.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
+     */
+    private static function renderThought(string $reasoning, Theme $theme, array $expanded, string $key): string
+    {
+        $lines = self::thoughtLines($reasoning);
+        $isExpanded = ($expanded[$key] ?? false) === true;
+        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+
+        $head = Style::new()->foreground($theme->systemLabel)->faint()->italic()->render(self::THOUGHT_ROW_LABEL);
+        self::$toolRowHeads[] = $head;
+        self::recordToolCallZone($key, $head);
+
+        $count = count($lines);
+        $size = $count . ' line' . ($count === 1 ? '' : 's');
+        $hint = Chat::mouseClicksEnabled() ? ($isExpanded ? ' · click to collapse' : ' · click to expand') : '';
+        $row = $head . $faint->render(($isExpanded ? ' ▾ ' : ' ▸ ') . $size . $hint);
+
+        if (!$isExpanded) {
+            return $row;
         }
 
-        return Style::new()->foreground($theme->systemLabel)->faint()->render('💭 ' . $flat);
+        return $row . "\n" . implode("\n", array_map(
+            static fn(string $line): string => $faint->render($line),
+            $lines,
+        ));
+    }
+
+    /**
+     * The in-flight thought while the model is still thinking: the trace
+     * itself, newlines kept, under a `💭 Thinking…` marker - so the user reads
+     * the thought as it is written rather than watching a spinner.
+     *
+     * Bounded to the newest $rowBudget WRAPPED rows, with an honest
+     * {@see THINKING_LIVE_TRAILER} saying how much is shown: the transcript is
+     * tail-clipped to the viewport, so rows past it are pure repaint cost on
+     * a trace that can run to tens of thousands of characters. The tail is
+     * the end that is kept because it is the end still moving.
+     */
+    private static function renderLiveThinking(string $reasoning, Theme $theme, int $width, int $rowBudget): string
+    {
+        $lines = self::thoughtLines($reasoning);
+        $total = count($lines);
+
+        $kept = [];
+        $rows = 0;
+        for ($i = $total - 1; $i >= 0; $i--) {
+            $cost = max(1, (int) ceil(Width::of($lines[$i]) / max(1, $width)));
+            if ($kept !== [] && $rows + $cost > $rowBudget) {
+                break;
+            }
+            array_unshift($kept, $lines[$i]);
+            $rows += $cost;
+        }
+
+        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+        $marker = Style::new()->foreground($theme->systemLabel)->faint()->italic()->render('💭 Thinking…');
+        if (count($kept) < $total) {
+            $marker .= $faint->render(' ' . sprintf(self::THINKING_LIVE_TRAILER, count($kept), $total));
+        }
+
+        return $marker . "\n" . implode("\n", array_map(
+            static fn(string $line): string => $faint->render($line),
+            $kept,
+        ));
+    }
+
+    /**
+     * A thought's display lines: scrubbed, tabs expanded (a raw TAB measures
+     * zero cells but the terminal advances it to the next stop, which would
+     * push the row past the pane), right-trimmed, and with the runs of blank
+     * lines providers pad a trace with folded to one.
+     *
+     * @return list<string>
+     */
+    private static function thoughtLines(string $reasoning): array
+    {
+        $text = trim(str_replace("\t", '    ', self::untrusted($reasoning)));
+        $text = (string) preg_replace("/\n{3,}/", "\n\n", str_replace(["\r\n", "\r"], "\n", $text));
+
+        return array_map('rtrim', explode("\n", $text));
     }
 
     /**
@@ -3046,6 +3111,12 @@ final class Renderer
     private static function renderToolResults(Message $msg, Theme $theme, int $width, array $expanded, ImageLayer $images, ?Mosaic $mosaic, int $imageRows): string
     {
         $lines = [];
+        // The thought that led to this call (parked on its placeholder by
+        // Chat::pumpLiveToolEvents()), as the same collapsible row a settled
+        // turn gets - ABOVE the call, because the model thought and then acted.
+        if ($msg->reasoning !== null && trim($msg->reasoning) !== '') {
+            $lines[] = self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning));
+        }
         foreach ($msg->toolResults as $result) {
             // The name is model-chosen, not ours: Chat::executeToolCall() copies
             // it verbatim off the parsed tool call, so an unknown-tool reply can
@@ -3119,6 +3190,15 @@ final class Renderer
             $hasImage = $result->hasImage();
 
             $block = $row;
+            // Expanded, a row says WHAT ran before what it printed: the head's
+            // one-liner is bounded and, when the model sent a `description`,
+            // never names the command at all.
+            if ($isExpanded) {
+                $invocation = self::renderInvocation($result, $theme);
+                if ($invocation !== '') {
+                    $block .= "\n" . $invocation;
+                }
+            }
             if ($body !== '') {
                 $block .= "\n" . self::renderToolBody($body, $result->isError() || $hasImage, $isExpanded, $theme);
             }
@@ -3551,11 +3631,84 @@ final class Renderer
      * history with {@see renderToolResults()}'s finished marker once the
      * real result arrives (see Chat's ToolResultsMsg handling).
      */
-    private static function renderPendingToolCall(Message $msg, Theme $theme): string
+    private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = []): string
     {
         $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
+        $running = $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . self::untrusted($msg->content));
 
-        return $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . self::untrusted($msg->content));
+        if ($msg->reasoning === null || trim($msg->reasoning) === '') {
+            return $running;
+        }
+
+        // Same key the finished row will compute (thoughtKey() reads the
+        // text only), so a thought opened while the call runs stays open.
+        return self::renderThought($msg->reasoning, $theme, $expanded, self::thoughtKey($msg->reasoning)) . "\n\n" . $running;
+    }
+
+    /**
+     * What an expanded tool row ran, painted between its head and its output.
+     *
+     * A call with a string `command` argument (the shell tools) leads with a
+     * prompt line - `$ ls -la`, a multi-line script continued under it - since
+     * the command IS the call. Every other argument follows as a faint
+     * `key: value` line. `description` is left out: it is already the head's
+     * suffix, and repeating it is noise.
+     *
+     * The command is shown whole, as far as {@see INVOCATION_COMMAND_MAX_LINES}.
+     * Other values are clipped to {@see INVOCATION_VALUE_MAX_LINES} lines,
+     * because they are where a whole file body travels (`Write`'s `content`,
+     * `Edit`'s strings) and the diff below already shows that change.
+     *
+     * Model-authored, so every line is {@see untrusted()}-scrubbed and has its
+     * tabs expanded before it reaches the frame.
+     */
+    private static function renderInvocation(ToolResult $result, Theme $theme): string
+    {
+        $args = $result->arguments;
+        unset($args['description']);
+        if ($args === []) {
+            return '';
+        }
+
+        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+        $out = [];
+
+        $command = $args['command'] ?? null;
+        if (is_string($command) && trim($command) !== '') {
+            unset($args['command']);
+            $prompt = Style::new()->foreground($theme->assistantLabel)->bold()->render('$');
+            foreach (self::invocationValueLines($command, self::INVOCATION_COMMAND_MAX_LINES) as $i => $line) {
+                $out[] = ($i === 0 ? $prompt . ' ' : '  ') . $line;
+            }
+        }
+
+        foreach ($args as $key => $value) {
+            $text = is_string($value) ? $value : (json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
+            foreach (self::invocationValueLines($text, self::INVOCATION_VALUE_MAX_LINES) as $i => $line) {
+                $out[] = $faint->render(($i === 0 ? self::untrusted((string) $key) . ': ' : '  ') . $line);
+            }
+        }
+
+        return implode("\n", $out);
+    }
+
+    /**
+     * One argument value as scrubbed display lines, clipped to $maxLines with
+     * a trailing `… N more lines` so the clip is never silent.
+     *
+     * @return list<string>
+     */
+    private static function invocationValueLines(string $value, int $maxLines): array
+    {
+        $text = str_replace("\t", '    ', self::untrusted(rtrim($value)));
+        $lines = array_map('rtrim', preg_split('/\r\n|\r|\n/', $text) ?: ['']);
+        $hidden = count($lines) - $maxLines;
+        if ($hidden > 0) {
+            $lines = array_slice($lines, 0, $maxLines);
+            $lines[] = "… {$hidden} more line" . ($hidden === 1 ? '' : 's');
+        }
+
+        return $lines;
     }
 
     /**

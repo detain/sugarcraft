@@ -89,6 +89,13 @@ final class ToolResult
      *                                 "running" placeholder is replaced, because that placeholder is
      *                                 the only carrier of the call's arguments that survives to the
      *                                 finish of an engine-dispatched call (crush_feat.md §3 E2/§1 E5).
+     * @param array<string, mixed> $arguments The model's raw arguments for the CALL this result
+     *                                        answers. Display-only for the same reasons as
+     *                                        $description, and attached at the same point: it
+     *                                        is what an EXPANDED row paints above the output
+     *                                        (`$ ls -la` for a shell call), because the
+     *                                        one-liner is bounded and, whenever the model sent
+     *                                        a `description`, never names the command at all.
      */
     public function __construct(
         public readonly string $name,
@@ -101,6 +108,7 @@ final class ToolResult
         public readonly ?string $diff = null,
         public readonly ?int $durationMs = null,
         public readonly ?string $description = null,
+        public readonly array $arguments = [],
     ) {}
 
     /**
@@ -160,6 +168,7 @@ final class ToolResult
             diff: $this->diff,
             durationMs: $this->durationMs,
             description: $this->description,
+            arguments: $this->arguments,
         );
     }
 
@@ -188,6 +197,30 @@ final class ToolResult
             $this->diff,
             $this->durationMs,
             $trimmed === '' ? null : $trimmed,
+            $this->arguments,
+        );
+    }
+
+    /**
+     * Fluent attach of the raw arguments of the CALL this result answers --
+     * see the constructor's `$arguments` docblock. Returns a new instance.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public function withArguments(array $arguments): self
+    {
+        return new self(
+            $this->name,
+            $this->result,
+            $this->error,
+            $this->id,
+            $this->imageBytes,
+            $this->imagePath,
+            $this->imageProtocol,
+            $this->diff,
+            $this->durationMs,
+            $this->description,
+            $arguments,
         );
     }
 

@@ -700,8 +700,8 @@ box, but not advertised either.
 
 Mouse mode is on by default (`SUGARCRUSH_DISABLE_MOUSE=1` turns it off). Zones
 are registered during the render pass, so clicks land on what you see: wheel
-scrolls the transcript, clicking a tool call expands/collapses it, clicking a
-session tab switches sessions, clicking a docked pane's header focuses that
+scrolls the transcript, clicking a tool call or a `💭 Thought` row
+expands/collapses it, clicking a session tab switches sessions, clicking a docked pane's header focuses that
 pane, clicking a pane tab on the menu bar toggles its docking (see below),
 clicking a palette/picker row selects it, and clicking the menu bar opens a
 menu. Click-vs-drag is
@@ -957,7 +957,11 @@ running→done transition. `Edit`/`Write` results render a real unified diff. A
 no-op edit reports as a no-op instead of success. Denied and interrupted calls
 get their own visual state. Tool results that carry images are labelled and
 rendered inline via candy-mosaic. Successful tool bodies are hidden by default
-(`Ctrl+O` or a click opens them). Context usage shows as both a token count and
+(`Ctrl+O` or a click opens them); an expanded call shows the invocation above
+its output — `$ <command>` for shell calls, `key: value` for other tools. The
+model's thinking streams in full while it thinks, then folds into a collapsed
+`💭 Thought` row once the reply (or a tool call) starts; click the row to open
+or close it. Context usage shows as both a token count and
 a percentage, and the budget it is measured against is the **live model's own
 context window** as its provider reports it (a backend with no model behind it,
 such as the offline echo default, falls back to 100,000 estimated tokens). That
@@ -1206,10 +1210,10 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,207 tests / 172,676 assertions, 0 failures, 1 skipped** — the whole of
+**12,219 tests / 172,740 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-14m50s. Measured 2026-09-24. The pane-docking feature re-pinned the figure in stages,
+13m37s. Measured 2026-09-26. The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
 (`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
 lane, the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle

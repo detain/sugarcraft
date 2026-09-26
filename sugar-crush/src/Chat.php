@@ -1459,7 +1459,9 @@ final class Chat implements Model
             // from the transcript, so leaving the live accumulation up would
             // show the same thought twice.
             $settled = $this->mutate(array_merge(
-                ['streamingText' => '', 'reasoningText' => ''],
+                // A user who opened the collapsed live thought keeps it open
+                // on the settled turn that now carries it.
+                ['streamingText' => '', 'reasoningText' => '', 'expanded' => $this->expandedAfterLiveThought($message->reasoning)],
                 // E17: fold this turn's estimate-vs-real observation into the
                 // calibration HERE — this mutate is the one point every exit
                 // of the arm passes through, the tool-call branch above it
@@ -1790,6 +1792,7 @@ final class Chat implements Model
                 // so nothing can type into the void after this.
                 'streamingText' => '',
                 'reasoningText' => '',
+                'expanded' => $this->expandedAfterLiveThought(null),
                 // The generation bump does NOT cover a summarization: the latch
                 // is $pendingCompactionId, deliberately not the generation
                 // counter (see that property's docblock). Releasing it here is
@@ -3175,9 +3178,10 @@ final class Chat implements Model
                 // arguments that reaches this point - the result itself never
                 // saw them. Carrying it onto the finished result is what lets
                 // a collapsed row still say WHAT ran (crush_feat.md §3 E2).
-                $result = $resultsById[$pendingId]->withDescription($historyMessage->content);
-                $newHistory[] = Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
-                    ->withToolResults([$result]);
+                $result = $resultsById[$pendingId]
+                    ->withDescription($historyMessage->content)
+                    ->withArguments($historyMessage->pendingToolArguments);
+                $newHistory[] = self::toolResultMessage($result, $historyMessage->reasoning);
 
                 continue;
             }
@@ -3514,7 +3518,10 @@ final class Chat implements Model
         }
 
         $next = $event instanceof ToolStarted
-            ? $this->appendToolRunningPlaceholder($event)
+            // The step's thinking is parked on the placeholder rather than
+            // dropped with the reset below: it is what led to this call, and
+            // it becomes the finished row's collapsible "💭 Thought".
+            ? $this->appendToolRunningPlaceholder($event, $this->reasoningText)
             // A ToolFinished deliberately does NOT reset the partial: the
             // model has not spoken since the reset its ToolStarted already
             // did, so there is nothing to clear and clearing would be
@@ -3527,7 +3534,11 @@ final class Chat implements Model
         // docblock for why an accumulation spanning steps would visibly
         // shrink when the turn settles.
         if ($event instanceof ToolStarted) {
-            $next = $next->mutate(['streamingText' => '', 'reasoningText' => '']);
+            $next = $next->mutate([
+                'streamingText' => '',
+                'reasoningText' => '',
+                'expanded' => $next->expandedAfterLiveThought($this->reasoningText),
+            ]);
         }
 
         return [$next, $more];
@@ -3543,13 +3554,45 @@ final class Chat implements Model
      * `pendingToolCallId` keys exactly the way the rest of the Chat-side
      * pipeline keys (W2.S1b).
      */
-    private function appendToolRunningPlaceholder(ToolStarted $event): self
+    private function appendToolRunningPlaceholder(ToolStarted $event, string $reasoning = ''): self
     {
         $call = ToolCall::fromEngineCall(
             new EngineToolCall($event->toolCallId, $event->toolName, $event->arguments),
         );
+        $placeholder = Message::toolRunning($call);
+        if (trim($reasoning) !== '') {
+            $placeholder = $placeholder->withReasoning($reasoning);
+        }
 
-        return $this->mutate(['history' => [...$this->history, Message::toolRunning($call)]]);
+        return $this->mutate(['history' => [...$this->history, $placeholder]]);
+    }
+
+    /**
+     * {@see $expanded} once the live thought has left the in-flight paint.
+     *
+     * The collapsed live thought is keyed {@see Renderer::THOUGHT_LIVE_KEY}
+     * because its text is still growing; once it lands somewhere settled - a
+     * finished turn, or the placeholder of the tool call it led to - it is
+     * keyed by its content ({@see Renderer::thoughtKey()}). Moving an open
+     * live thought onto that key keeps it open across the hand-off instead of
+     * snapping shut under the user's cursor, and dropping the live key either
+     * way stops the next turn's thought opening pre-expanded.
+     *
+     * @return array<string, bool>
+     */
+    private function expandedAfterLiveThought(?string $landed): array
+    {
+        $expanded = $this->expanded;
+        if (!isset($expanded[Renderer::THOUGHT_LIVE_KEY])) {
+            return $expanded;
+        }
+
+        unset($expanded[Renderer::THOUGHT_LIVE_KEY]);
+        if ($landed !== null && trim($landed) !== '') {
+            $expanded[Renderer::thoughtKey($landed)] = true;
+        }
+
+        return $expanded;
     }
 
     /**
@@ -3604,7 +3647,15 @@ final class Chat implements Model
                 // is Message::describeToolCall()'s one-liner, and ToolFinished
                 // carries no arguments, so this is the only point at which the
                 // finished row can learn WHAT ran (crush_feat.md §3 E2).
-                $newHistory[] = self::toolResultMessage($result->withDescription($historyMessage->content));
+                // The thought that led to this call rides along from the
+                // placeholder (see pumpLiveToolEvents()), so the finished row
+                // keeps its collapsible "💭 Thought" above it.
+                $newHistory[] = self::toolResultMessage(
+                    $result
+                        ->withDescription($historyMessage->content)
+                        ->withArguments($historyMessage->pendingToolArguments),
+                    $historyMessage->reasoning,
+                );
                 $replaced = true;
 
                 continue;
@@ -3627,9 +3678,12 @@ final class Chat implements Model
      * replace branch attaches a description the append branch has no way of
      * knowing (there is no placeholder to read it off).
      */
-    private static function toolResultMessage(ToolResult $result): Message
+    private static function toolResultMessage(ToolResult $result, ?string $reasoning = null): Message
     {
-        return Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result)
+        // $reasoning is display-only here: EngineBackend::toTypedMessages()
+        // re-sends a history entry's content alone, so a thought parked on a
+        // tool row never reaches the model as something the assistant said.
+        return Message::assistant($result->isError() ? "Tool error: {$result->error}" : $result->result, reasoning: $reasoning)
             ->withToolResults([$result]);
     }
 
@@ -4008,6 +4062,7 @@ final class Chat implements Model
             $result->diff,
             $result->durationMs,
             $result->description,
+            $result->arguments,
         );
     }
 
@@ -7357,6 +7412,7 @@ final class Chat implements Model
             // thought no matter how the previous one ended.
             'streamingText' => '',
             'reasoningText' => '',
+            'expanded' => $this->expandedAfterLiveThought(null),
             // E17: pair THIS number — the RAW proxy over exactly the
             // history being dispatched — with what the provider reports when
             // the turn settles. Recomputed here rather than threaded from
@@ -10369,6 +10425,7 @@ final class Chat implements Model
             // about to be sent starts from a blank partial and a blank thought.
             'streamingText' => '',
             'reasoningText' => '',
+            'expanded' => $this->expandedAfterLiveThought(null),
         ]);
 
         return [$next, $request['cmd']];
