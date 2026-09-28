@@ -38,6 +38,16 @@ happen to share the numbers 1–4.
   `Tools\ExemptFromParallelDeadline` tools; the parent heartbeats while it
   waits so `completeAsync()`'s idle ceiling does not kill a long delegation;
   a forked delegation abandons its run once its parent process is gone.
+- **Resumable `Task` runs.** A sub-agent that hits its step cap without a
+  report, or fails part-way (provider error, dropped connection, cancelled
+  parent), has its full typed transcript saved to
+  `Agents\SuspendedDelegations` (owner-only temp dir, `serialize()` with a
+  class allowlist, 7-day expiry) and its refusal names a `resume` id. Calling
+  Task with `"resume": "<id>"` continues the same conversation with `prompt` as
+  the next instruction; the id is stable across repeated resumes and the
+  refusal counts them. `EngineBackend::completeTranscript()` is the new
+  typed-history seam (`TranscriptTurn`, and `TurnInterrupted` carrying the
+  transcript up to the last completed step); `complete()` is unchanged.
 - **`composer.json` / `composer.lock` are no longer protected** by
   `ProtectFilesHook`. The unanchored patterns were judged against Read paths
   and whole Bash strings, so they denied even `grep -c . candy-core/composer.json`

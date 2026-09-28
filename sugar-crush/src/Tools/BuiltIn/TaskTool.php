@@ -8,8 +8,11 @@ use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Agents\SuspendedDelegations;
 use SugarCraft\Crush\Backend\EngineBackend;
-use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Backend\TurnInterrupted;
+use SugarCraft\Crush\Messages\SystemMessage;
+use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
@@ -100,6 +103,17 @@ use SugarCraft\Crush\Tools\ToolResult;
  * would keep editing the tree, so every chunk and tool event checks the
  * parent pid it started under and abandons the run once that process is gone.
  *
+ * A RUN THAT ENDS WITHOUT A REPORT CAN BE RESUMED. When the sub-agent hits its
+ * step cap without answering, or fails part-way (a provider error, a dropped
+ * connection, a cancelled parent), its transcript is saved to
+ * {@see SuspendedDelegations} and the refusal names a `resume` id. Calling
+ * Task again with that id continues the SAME conversation — every tool call
+ * and result it already made — with `prompt` as the next instruction, and
+ * another full `maxTurns` of steps. The id is stable across repeated resumes,
+ * and the refusal counts them, so a caller can apply its own retry budget; a
+ * report clears it. A refusal that says nothing about resuming is one where
+ * nothing ran (bad grant, unknown agent) and there is nothing to continue.
+ *
  * Mirrors the delegation role of sugar-crush's plan P8.13 (`Task` tool) over
  * the in-tree {@see AgentManager}/{@see AgentWorkerPool} machinery; see
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
@@ -110,19 +124,25 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /** Step cap for a preset that declares no `maxTurns`. */
     public const DEFAULT_MAX_TURNS = 50;
 
+    /** The instruction a resume continues with when the caller gives no better one. */
+    public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
+
     /**
      * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
+     * @param SuspendedDelegations|null $suspended where resumable runs are kept;
+     *        null uses {@see SuspendedDelegations::new()}
      */
     public function __construct(
         private ?AgentManager $agentManager = null,
         private ?AgentWorkerPool $workerPool = null,
         private ?EngineBackend $engine = null,
         private ?\Closure $heartbeat = null,
+        private ?SuspendedDelegations $suspended = null,
     ) {}
 
     public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null): self
     {
-        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat);
+        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat, $this->suspended);
     }
 
     /**
@@ -177,6 +197,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         . ' "architect", "tester", "devops"); an unknown name is refused and the live roster is'
                         . ' named in the failure',
                 ],
+                'resume' => [
+                    'type' => 'string',
+                    'description' => 'Optional. The resume id from an earlier Task result that ended without a'
+                        . ' report or was interrupted: continues that sub-agent\'s own conversation instead of'
+                        . ' starting over. `agent` must name the same agent, and `prompt` is the instruction to'
+                        . ' continue with (e.g. "continue and give your final report")',
+                ],
             ],
             'required' => ['description', 'prompt', 'agent'],
         ];
@@ -216,6 +243,31 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ));
         }
 
+        $resumeId = trim((string) ($args['resume'] ?? ''));
+        $suspension = null;
+        if ($resumeId !== '') {
+            if ($this->engine === null) {
+                return $this->refusal($toolCallId, 'resume needs the engine-bound Task path, which this launch did not wire; start a new Task instead');
+            }
+
+            $suspension = $this->suspendedStore()->load($resumeId);
+            if ($suspension === null) {
+                return $this->refusal($toolCallId, sprintf(
+                    'resume id "%s" is unknown, expired or unreadable, so that run CANNOT be resumed; start a new Task instead',
+                    $resumeId,
+                ));
+            }
+
+            if ($suspension['agent'] !== $agentName) {
+                return $this->refusal($toolCallId, sprintf(
+                    'resume id "%s" belongs to agent "%s", not "%s"; resume it with that agent',
+                    $resumeId,
+                    $suspension['agent'],
+                    $agentName,
+                ));
+            }
+        }
+
         try {
             $subAgent = $this->agentManager->createSubAgent($agentName, $prompt);
         } catch (\RuntimeException|\LogicException $refusal) {
@@ -223,7 +275,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
 
         if ($this->engine !== null) {
-            return $this->runOnEngine($this->engine, $this->agentManager, $subAgent, $toolCallId, $startedAt);
+            return $this->runOnEngine(
+                $this->engine,
+                $this->agentManager,
+                $subAgent,
+                $toolCallId,
+                $startedAt,
+                $suspension === null ? null : ['id' => $resumeId] + $suspension,
+            );
         }
 
         $request = new CompleteRequest(
@@ -287,6 +346,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     /**
      * Run $subAgent to completion through the bound engine's tool loop — see
      * the class doc for what it inherits and what it is narrowed to.
+     *
+     * @param array{id: string, agent: string, transcript: list<\SugarCraft\Crush\Messages\Message>, resumes: int}|null $suspension
+     *        the saved run to continue, or null for a fresh one
      */
     private function runOnEngine(
         EngineBackend $engine,
@@ -294,6 +356,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         SubAgent $subAgent,
         string $toolCallId,
         float $startedAt,
+        ?array $suspension = null,
     ): ToolResult {
         $agentName = $subAgent->agent->name;
 
@@ -312,8 +375,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         ));
         $maxTurns = max(1, $subAgent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
 
-        $history = trim($systemPrompt) === '' ? [] : [Message::system($systemPrompt)];
-        $history[] = Message::user($subAgent->task);
+        if ($suspension !== null) {
+            // The saved transcript already opens with the preset's system turn.
+            $messages = [...$suspension['transcript'], new UserMessage($subAgent->task)];
+        } else {
+            $messages = trim($systemPrompt) === '' ? [] : [new SystemMessage($systemPrompt)];
+            $messages[] = new UserMessage($subAgent->task);
+        }
+        $resumes = $suspension === null ? 0 : $suspension['resumes'] + 1;
 
         $orphanGuard = self::orphanGuard();
         $heartbeat = $this->heartbeat;
@@ -328,11 +397,11 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $subAgent->startedAt = new \DateTimeImmutable();
 
         try {
-            $reply = $engine
+            $turn = $engine
                 ->withTools($tools)
                 ->withMaxSteps($maxTurns)
-                ->complete(
-                    $history,
+                ->completeTranscript(
+                    $messages,
                     onEvent: static function () use ($onProgress): void {
                         $onProgress();
                     },
@@ -341,13 +410,18 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                     },
                     onHeartbeat: $heartbeat,
                 );
-        } catch (\Throwable $failure) {
+        } catch (TurnInterrupted $failure) {
             $why = sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
             $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
 
-            return $this->refusal($toolCallId, $why, self::elapsedMs($startedAt));
+            return $this->refusal(
+                $toolCallId,
+                $why . '. ' . $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null),
+                self::elapsedMs($startedAt),
+            );
         }
 
+        $reply = $turn->reply;
         $content = trim($reply->content);
         $this->settle($subAgent, SubAgent::STATUS_COMPLETE, $content, null);
         $subAgent->tokensUsed += $reply->usage?->totalTokens ?? 0;
@@ -356,10 +430,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         if ($content === '') {
             return $this->refusal($toolCallId, sprintf(
                 'sub-agent "%s" ended without a final report (step cap %d); any work it did is in the tree'
-                . ' but was not summarised — inspect the working tree, or re-run it with a narrower task',
+                . ' but was not summarised. %s',
                 $agentName,
                 $maxTurns,
+                $this->suspend($agentName, $turn->transcript, $resumes, $suspension['id'] ?? null),
             ), self::elapsedMs($startedAt));
+        }
+
+        if ($suspension !== null) {
+            $this->suspendedStore()->forget($suspension['id']);
         }
 
         return new ToolResult(
@@ -368,6 +447,33 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             isError: false,
             durationMs: self::elapsedMs($startedAt),
         );
+    }
+
+    /**
+     * Save a run that ended without a report and say how to continue it — or,
+     * if it cannot be saved, say plainly that it cannot be resumed.
+     *
+     * @param list<\SugarCraft\Crush\Messages\Message> $transcript
+     */
+    private function suspend(string $agentName, array $transcript, int $resumes, ?string $id): string
+    {
+        try {
+            $id = $this->suspendedStore()->save($agentName, $transcript, $resumes, $id);
+        } catch (\RuntimeException $unsaved) {
+            return 'It CANNOT be resumed (the run could not be saved: ' . $unsaved->getMessage() . '); start a new Task instead';
+        }
+
+        return sprintf(
+            'Resume it by calling Task again with "resume": "%s" and agent "%s"%s',
+            $id,
+            $agentName,
+            $resumes > 0 ? sprintf(' (it has been resumed %d time%s)', $resumes, $resumes === 1 ? '' : 's') : '',
+        );
+    }
+
+    private function suspendedStore(): SuspendedDelegations
+    {
+        return $this->suspended ?? SuspendedDelegations::new();
     }
 
     /**

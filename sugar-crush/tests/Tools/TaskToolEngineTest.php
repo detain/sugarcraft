@@ -7,20 +7,20 @@ namespace SugarCraft\Crush\Tests\Tools;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\SuspendedDelegations;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
+use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
-use SugarCraft\Crush\Providers\EmbeddingsRequest;
-use SugarCraft\Crush\Providers\EmbeddingsResponse;
-use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
 use SugarCraft\Crush\Tests\Support\RosterAgent;
+use SugarCraft\Crush\Tests\Support\ScriptedProvider;
 
 /**
  * The Task tool's ENGINE path: a delegated sub-agent is a whole agentic run
@@ -36,10 +36,28 @@ use SugarCraft\Crush\Tests\Support\RosterAgent;
  */
 final class TaskToolEngineTest extends TestCase
 {
+    private string $storeDir;
+
+    private SuspendedDelegations $store;
+
+    protected function setUp(): void
+    {
+        $this->storeDir = sys_get_temp_dir() . '/sc_task_resume_' . bin2hex(random_bytes(6));
+        $this->store = new SuspendedDelegations($this->storeDir);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (glob($this->storeDir . '/*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->storeDir);
+    }
+
     public function testABoundTaskRunsTheSubAgentThroughAToolLoopUntilItReports(): void
     {
         $probe = self::probe('probe');
-        $provider = self::scripted([
+        $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['path' => 'candy-core'])]),
             new CompleteResponse(content: 'the audit report'),
         ]);
@@ -63,7 +81,7 @@ final class TaskToolEngineTest extends TestCase
     public function testTheSubAgentNeverInheritsTheTaskToolItself(): void
     {
         $probe = self::probe('probe');
-        $provider = self::scripted([new CompleteResponse(content: 'nothing to delegate')]);
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'nothing to delegate')]);
         // No registry: the preset's grant resolves to "no narrowing", so the
         // sub-agent inherits the engine's own tools — minus Task.
         $manager = self::manager([], RosterAgent::named('coder'));
@@ -77,13 +95,13 @@ final class TaskToolEngineTest extends TestCase
     public function testASubAgentThatEndsWithoutAReportIsRefusedNamingTheStepCap(): void
     {
         $probe = self::probe('probe');
-        $provider = self::scripted([
+        $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
         ]);
         $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 1));
         $engine = EngineBackend::new($provider, 'm')->withTools([$probe]);
 
-        $result = (new TaskTool($manager))->withEngine($engine)->execute(self::call());
+        $result = (new TaskTool($manager, suspended: $this->store))->withEngine($engine)->execute(self::call());
 
         $this->assertTrue($result->isError());
         $this->assertStringContainsString('ended without a final report (step cap 1)', $result->content());
@@ -94,7 +112,7 @@ final class TaskToolEngineTest extends TestCase
     {
         // Named `Read` so the built-in ProtectFilesHook judges its file_path.
         $read = self::probe('Read');
-        $provider = self::scripted([
+        $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'Read', ['file_path' => '.env'])]),
             new CompleteResponse(content: 'could not read it'),
         ]);
@@ -115,7 +133,7 @@ final class TaskToolEngineTest extends TestCase
     public function testConcurrencyIsOfferedOnlyOnTheSelfBoundingEnginePath(): void
     {
         $manager = self::manager([], RosterAgent::named('coder'));
-        $engine = EngineBackend::new(self::scripted([]), 'm');
+        $engine = EngineBackend::new(new ScriptedProvider([]), 'm');
 
         $this->assertFalse((new TaskTool())->isParallelSafe());
         $this->assertFalse((new TaskTool($manager))->isParallelSafe(), 'the pool path stays a barrier');
@@ -126,7 +144,7 @@ final class TaskToolEngineTest extends TestCase
     {
         // One scripted provider serves both levels, in call order: the caller
         // delegates, the sub-agent answers, the caller wraps up.
-        $provider = self::scripted([
+        $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_task', 'Task', self::call())]),
             new CompleteResponse(content: 'sub-agent report'),
             new CompleteResponse(content: 'all done'),
@@ -149,14 +167,135 @@ final class TaskToolEngineTest extends TestCase
     public function testTheEngineExposesItsToolsUnbound(): void
     {
         $task = new TaskTool(self::manager([], RosterAgent::named('coder')));
-        $engine = EngineBackend::new(self::scripted([]), 'm')->withTools([$task]);
+        $engine = EngineBackend::new(new ScriptedProvider([]), 'm')->withTools([$task]);
 
         $this->assertSame([$task], $engine->tools(), 'binding happens per turn, never on the stored list');
     }
 
+    // =========================================================================
+    // Resume — a run that ended without a report continues, it does not restart
+    // =========================================================================
+
+    public function testARunThatHitItsStepCapResumesWithItsOwnTranscript(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['step' => 1])]),
+        ]);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 1));
+        $task = (new TaskTool($manager, suspended: $this->store))
+            ->withEngine(EngineBackend::new($provider, 'm')->withTools([$probe]));
+
+        $first = $task->execute(self::call());
+        $id = self::resumeId($first->content());
+
+        $provider->then(new CompleteResponse(content: 'the report, finished'));
+        $resumed = $task->execute(self::call(['resume' => $id, 'prompt' => 'carry on and report']));
+
+        $this->assertFalse($resumed->isError(), $resumed->content());
+        $this->assertSame('the report, finished', $resumed->content());
+        $this->assertCount(1, $probe->calls, 'the resumed run did not redo the finished step');
+
+        $turns = self::turns($provider->requests[1]);
+        $this->assertSame(['system', 'You are coder.'], $turns[0], 'the preset prompt was carried, not re-added');
+        $this->assertSame(['user', 'Audit candy-core and report the findings'], $turns[1]);
+        $this->assertSame('assistant', $turns[2][0]);
+        $this->assertSame(['tool', 'probe ok'], $turns[3], 'the earlier tool result is in the resumed context');
+        $this->assertSame(['user', 'carry on and report'], $turns[4]);
+        $this->assertNotNull(
+            $provider->requests[1]->messages[2]->toArray()['tool_calls'] ?? null,
+            'the earlier assistant step kept its tool call across the disk round-trip',
+        );
+        $this->assertNull($this->store->load($id), 'a report clears the suspension');
+    }
+
+    public function testARunInterruptedPartWayResumesFromItsLastCompletedStep(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['step' => 1])]),
+            new \RuntimeException('connection reset by peer'),
+        ]);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe']));
+        $task = (new TaskTool($manager, suspended: $this->store))
+            ->withEngine(EngineBackend::new($provider, 'm')->withTools([$probe]));
+
+        $first = $task->execute(self::call());
+
+        $this->assertTrue($first->isError());
+        $this->assertStringContainsString('failed: connection reset by peer', $first->content());
+        $id = self::resumeId($first->content());
+
+        $provider->then(new CompleteResponse(content: 'recovered report'));
+        $resumed = $task->execute(self::call(['resume' => $id]));
+
+        $this->assertSame('recovered report', $resumed->content());
+        $this->assertSame(
+            ['system', 'user', 'assistant', 'tool', 'user'],
+            array_column(self::turns($provider->requests[2]), 0),
+            'the completed step survived the failure; the failed call did not leave a half step behind',
+        );
+    }
+
+    public function testRepeatedResumesKeepOneIdAndCountThemselves(): void
+    {
+        $probe = self::probe('probe');
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+        ]);
+        $manager = self::manager([$probe], RosterAgent::named('coder', ['probe'], maxTurns: 1));
+        $task = (new TaskTool($manager, suspended: $this->store))
+            ->withEngine(EngineBackend::new($provider, 'm')->withTools([$probe]));
+
+        $id = self::resumeId($task->execute(self::call())->content());
+        $second = $task->execute(self::call(['resume' => $id]));
+        $third = $task->execute(self::call(['resume' => $id]));
+
+        $this->assertSame($id, self::resumeId($second->content()));
+        $this->assertStringContainsString('resumed 1 time)', $second->content());
+        $this->assertSame($id, self::resumeId($third->content()));
+        $this->assertStringContainsString('resumed 2 times)', $third->content());
+    }
+
+    public function testAnUnknownResumeIdSaysPlainlyThatItCannotBeResumed(): void
+    {
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'unreachable')]);
+        $task = (new TaskTool(self::manager([], RosterAgent::named('coder')), suspended: $this->store))
+            ->withEngine(EngineBackend::new($provider, 'm'));
+
+        foreach (['0123456789abcdef', '../../etc/passwd'] as $id) {
+            $result = $task->execute(self::call(['resume' => $id]));
+
+            $this->assertTrue($result->isError());
+            $this->assertStringContainsString('CANNOT be resumed', $result->content());
+        }
+        $this->assertSame([], $provider->requests);
+    }
+
+    public function testAResumeMustNameTheAgentThatWasSuspended(): void
+    {
+        $id = $this->store->save('reviewer', [new UserMessage('the task')], 0);
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'unreachable')]);
+        $task = (new TaskTool(self::manager([], RosterAgent::named('coder')), suspended: $this->store))
+            ->withEngine(EngineBackend::new($provider, 'm'));
+
+        $result = $task->execute(self::call(['resume' => $id]));
+
+        $this->assertStringContainsString('belongs to agent "reviewer", not "coder"', $result->content());
+        $this->assertSame([], $provider->requests);
+    }
+
+    public function testTheUnboundPoolPathRefusesToResume(): void
+    {
+        $result = (new TaskTool(self::manager([], RosterAgent::named('coder')), suspended: $this->store))
+            ->execute(self::call(['resume' => '0123456789abcdef']));
+
+        $this->assertStringContainsString('resume needs the engine-bound Task path', $result->content());
+    }
+
     public function testAnUnresolvableGrantIsRefusedBeforeAnyProviderCall(): void
     {
-        $provider = self::scripted([new CompleteResponse(content: 'unreachable')]);
+        $provider = new ScriptedProvider([new CompleteResponse(content: 'unreachable')]);
         $manager = self::manager([self::probe('probe')], RosterAgent::named('coder', ['Reed']));
         $engine = EngineBackend::new($provider, 'm');
 
@@ -168,15 +307,25 @@ final class TaskToolEngineTest extends TestCase
     }
 
     /**
+     * @param array<string, string> $overrides
+     *
      * @return array<string, string>
      */
-    private static function call(): array
+    private static function call(array $overrides = []): array
     {
-        return [
+        return $overrides + [
             'description' => 'Audit candy-core',
             'prompt' => 'Audit candy-core and report the findings',
             'agent' => 'coder',
         ];
+    }
+
+    private static function resumeId(string $refusal): string
+    {
+        self::assertMatchesRegularExpression('/"resume": "([0-9a-f]{16})"/', $refusal, 'the refusal names a resume id');
+        preg_match('/"resume": "([0-9a-f]{16})"/', $refusal, $m);
+
+        return $m[1];
     }
 
     /**
@@ -185,7 +334,7 @@ final class TaskToolEngineTest extends TestCase
     private static function manager(array $registry, Agent $agent): AgentManager
     {
         $manager = new AgentManager(
-            self::scripted([]),
+            new ScriptedProvider([]),
             new SkillRegistry(),
             toolRegistry: $registry === [] ? null : $registry,
             toolUniverse: $registry === [] ? null : $registry,
@@ -249,81 +398,6 @@ final class TaskToolEngineTest extends TestCase
                 $this->calls[] = $args;
 
                 return new ToolResult(toolCallId: $id, content: $this->name . ' ok');
-            }
-        };
-    }
-
-    /**
-     * A batch provider answering from a script, in call order, recording every
-     * request. Past the end of the script it repeats the last answer, so a run
-     * that loops longer than expected fails on an assertion, not a crash.
-     *
-     * @param list<CompleteResponse> $script
-     *
-     * @return ProviderInterface&object{requests: list<CompleteRequest>}
-     */
-    private static function scripted(array $script): ProviderInterface
-    {
-        return new class ($script) implements ProviderInterface {
-            /** @var list<CompleteRequest> */
-            public array $requests = [];
-
-            /** @param list<CompleteResponse> $script */
-            public function __construct(private array $script)
-            {
-            }
-
-            public function name(): string
-            {
-                return 'scripted';
-            }
-
-            public function supportsStreaming(): bool
-            {
-                return false;
-            }
-
-            public function supportsFunctionCalling(): bool
-            {
-                return true;
-            }
-
-            public function supportsVision(): bool
-            {
-                return false;
-            }
-
-            public function supportsJsonSchema(): bool
-            {
-                return false;
-            }
-
-            public function contextWindow(): int
-            {
-                return 100000;
-            }
-
-            public function costPer1kTokens(string $model, string $direction): float
-            {
-                return 0.0;
-            }
-
-            public function complete(CompleteRequest $request): CompleteResponse
-            {
-                $this->requests[] = $request;
-                $index = min(\count($this->requests), \count($this->script)) - 1;
-
-                return $this->script[$index] ?? new CompleteResponse(content: '');
-            }
-
-            public function completeStream(CompleteRequest $request): \Generator
-            {
-                yield $this->complete($request);
-            }
-
-            public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
-            {
-                return new EmbeddingsResponse([]);
             }
         };
     }

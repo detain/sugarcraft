@@ -178,6 +178,11 @@ final class HookContextFiles
     /**
      * THE INSPECTION BEHIND {@see dir()}, spelled against a full directory path.
      *
+     * Public because it is the one owner-only-directory verdict in the tree:
+     * {@see \SugarCraft\Crush\Agents\SuspendedDelegations} keeps resumable
+     * sub-agent transcripts (which hold whatever the sub-agent read) under the
+     * same rules rather than a second, weaker copy of them.
+     *
      * WHY THE SEAM TAKES A PATH AND NOT A BASE. The refusals this method decides
      * are statements about a directory, and the only foreign-owned directory a
      * test can obtain without root is one that already exists on the box — so the
@@ -202,7 +207,7 @@ final class HookContextFiles
      *
      * @throws \RuntimeException see {@see dir()} for the two codes.
      */
-    private static function verifiedDirectory(string $dir): string
+    public static function verifiedDirectory(string $dir): string
     {
         // RE-INSPECTED, NOT REMEMBERED. PHP caches `stat()` answers per path for
         // the life of the process, so a verdict computed here would survive an

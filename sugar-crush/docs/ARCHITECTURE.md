@@ -314,6 +314,12 @@ the preset's `maxTurns` and abandons its run once the turn that forked it is
 gone. While a group is outstanding the parent keeps writing heartbeat frames,
 so the turn's own idle ceiling does not kill a long delegation either.
 
+A delegation that ends without a report — step cap reached, or a failure
+part-way — is resumable: its typed transcript is saved on disk
+(`Agents\SuspendedDelegations`; memory would not survive, since every turn and
+every parallel `Task` runs in a fork) and the refusal names a `resume` id that
+continues the same conversation through `EngineBackend::completeTranscript()`.
+
 ---
 
 ## The gate chain

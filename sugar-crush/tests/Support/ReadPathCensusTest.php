@@ -165,6 +165,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'ClassLoader first. It used to do its own two-climb arithmetic, which '
                 . 'resolved only in a root-package checkout',
         ],
+        'Agents/SuspendedDelegations.php|glob' => [
+            'SELF_LOCATED — sweeps its own `*.run` files in the owner-only directory HookContextFiles::verifiedDirectory() accepted',
+        ],
+        'Agents/SuspendedDelegations.php|file_get_contents' => [
+            'SELF_LOCATED — a suspension this store wrote, named by a hex-only id in that same verified directory',
+        ],
         'Agents/TeamManager.php|file_get_contents' => [
             'SELF_LOCATED — the team registry this manager writes under `~/.sugar-crush`',
         ],

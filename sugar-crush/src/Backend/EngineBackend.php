@@ -706,6 +706,54 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): Message
     {
+        $transcript = [];
+
+        return $this->runTurn($this->toTypedMessages($history), $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript);
+    }
+
+    /**
+     * {@see complete()} over TYPED history, answering with the turn's whole
+     * transcript as well as its reply — every assistant step with its tool
+     * calls and every tool result, which the root-{@see Message} history
+     * {@see complete()} takes cannot carry. It exists so a delegated run can
+     * be RESUMED: {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool} persists
+     * the transcript of a run that ended without a report and feeds it back
+     * here to continue exactly where it stopped.
+     *
+     * A failure mid-turn is re-thrown as {@see TurnInterrupted}, carrying the
+     * transcript up to the last step that COMPLETED (a half-finished step's
+     * calls are dropped, so the resumed model redoes that step rather than
+     * reading results for calls it cannot see).
+     *
+     * @param list<TypedMessage> $messages
+     *
+     * @throws TurnInterrupted
+     */
+    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): TranscriptTurn
+    {
+        $transcript = $messages;
+
+        try {
+            $reply = $this->runTurn($messages, null, $onEvent, $onReasoning, $onHeartbeat, $transcript);
+        } catch (\Throwable $failure) {
+            throw new TurnInterrupted($transcript, $failure);
+        }
+
+        return new TranscriptTurn($reply, $transcript);
+    }
+
+    /**
+     * The bounded agentic loop behind {@see complete()} and
+     * {@see completeTranscript()}. `$transcript` is kept current after every
+     * completed step, so it is meaningful even when this throws.
+     *
+     * @param list<TypedMessage> $messages
+     * @param list<TypedMessage> $transcript
+     */
+    private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript): Message
+    {
+        $transcript = $messages;
+
         // Read once and hand to both resolvers, so a turn touches the config
         // file at most one time however many settings are resolved off it.
         $userConfig = self::userConfig();
@@ -731,7 +779,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withInstructionLoader($this->instructionLoader)
             ->withRoot($this->root)
             ->withMemoryStore($this->memoryStore)
-            ->withMessages($this->toTypedMessages($history));
+            ->withMessages($messages);
 
         $lastAssistant = null;
         $lastImageBytes = null;
@@ -797,6 +845,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                     }
                 }
             }
+
+            // The step completed: whichever break below ends the loop, this
+            // is what the conversation now holds.
+            $transcript = [
+                ...$app->messages,
+                ...($assistant !== null ? [$assistant] : []),
+                ...$toolResults,
+            ];
 
             if ($assistant !== null) {
                 $lastAssistant = $assistant;
