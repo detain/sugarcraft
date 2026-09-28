@@ -426,7 +426,7 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.space', 'Ctrl+Space', 'Insert a blank character (modifier ignored)', $c),
             KeyBinding::new('chat.page', 'PgUp / PgDn', 'Scroll the transcript by a screenful', $c),
             KeyBinding::new('chat.palette', 'Ctrl+P', 'Open the command palette', $c),
-            KeyBinding::new('chat.tool-output', 'Ctrl+O', 'Expand or collapse the newest tool output', $c),
+            KeyBinding::new('chat.tool-output', 'Ctrl+O', 'Expand or collapse newest tool output/thought', $c),
             KeyBinding::new(
                 'chat.session-picker',
                 'Ctrl+R',

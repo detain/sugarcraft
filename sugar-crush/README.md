@@ -662,7 +662,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Esc` | Close the palette or the session picker |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
-| `Ctrl+O` | Expand/collapse the most recent tool call's output |
+| `Ctrl+O` | Expand/collapse the most recent tool call's output and thought |
 | `Ctrl+R` | Session picker (persisted across turns) — with the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
@@ -732,7 +732,7 @@ full height — and drag; no modifier key is needed (Esc mid-drag cancels).
 
 Focus decides who answers `Tab`, `Shift+Tab` and `Enter`; typing a printable
 character always reaches the chat draft regardless of focus, as do `Ctrl+O`
-(expand/collapse the newest tool output) and the other always-chat chords.
+(expand/collapse the newest tool output and thought) and the other always-chat chords.
 `Tab`/`Shift+Tab` walk the docked frame — chat, then the left column
 top-to-bottom, then the right — and wrap; `Esc` from any docked pane falls
 back to chat; `Enter` on an empty draft from a docked pane opens the command
@@ -961,7 +961,7 @@ rendered inline via candy-mosaic. Successful tool bodies are hidden by default
 its output — `$ <command>` for shell calls, `key: value` for other tools. The
 model's thinking streams in full while it thinks, then folds into a collapsed
 `💭 Thought` row once the reply (or a tool call) starts; click the row to open
-or close it. Context usage shows as both a token count and
+or close it (`Ctrl+O` toggles the newest one). Context usage shows as both a token count and
 a percentage, and the budget it is measured against is the **live model's own
 context window** as its provider reports it (a backend with no model behind it,
 such as the offline echo default, falls back to 100,000 estimated tokens). That
@@ -1210,10 +1210,10 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,219 tests / 172,740 assertions, 0 failures, 1 skipped** — the whole of
+**12,224 tests / 172,809 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-13m37s. Measured 2026-09-26. The pane-docking feature re-pinned the figure in stages,
+15m07s. Measured 2026-09-28. The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
 (`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
 lane, the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle

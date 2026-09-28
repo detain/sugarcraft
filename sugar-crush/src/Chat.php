@@ -1963,8 +1963,9 @@ final class Chat implements Model
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
                 => [$this->mutate(['palette' => PaletteState::root()]), null],
             // Ctrl+O expands/collapses the most recent tool call's output
-            // (crush_feat.md §1 E5) - successful tool bodies are hidden by
-            // default, and this is the only way to see one. Checked before
+            // (crush_feat.md §1 E5) and the most recent thought - successful
+            // tool bodies and settled thoughts are hidden by default, and with
+            // clicks off this is the only way to see one. Checked before
             // the generic Char arm below, or the literal "o" would be typed
             // into the input buffer instead - same reasoning as Ctrl+P above.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'o'
@@ -6261,17 +6262,45 @@ final class Chat implements Model
     }
 
     /**
-     * Toggle every id {@see latestToolResultIds()} returns as one unit, so a
-     * batch of parallel tool calls opens and closes together instead of
-     * needing one keypress each. The batch follows the FIRST id's current
-     * state so a half-expanded batch converges rather than inverting into a
-     * different half-expanded batch.
+     * The {@see $expanded} key of the newest thought on screen, or null when
+     * there is none: the in-flight thought ({@see Renderer::THOUGHT_LIVE_KEY})
+     * while one is being written, otherwise the newest history entry carrying
+     * reasoning - a settled reply, or a tool row (or its running placeholder)
+     * the thought was parked on. Public because {@see Renderer} offers the
+     * Ctrl+O hint on exactly the row this names.
+     */
+    public function latestThoughtKey(): ?string
+    {
+        if (trim($this->reasoningText) !== '') {
+            return Renderer::THOUGHT_LIVE_KEY;
+        }
+
+        foreach (array_reverse($this->history) as $msg) {
+            if ($msg->reasoning !== null && trim($msg->reasoning) !== '') {
+                return Renderer::thoughtKey($msg->reasoning);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Toggle every id {@see latestToolResultIds()} returns, plus the
+     * {@see latestThoughtKey()}, as one unit, so a batch of parallel tool
+     * calls and the thought beside them open and close together instead of
+     * needing one keypress each. The unit follows the FIRST id's current
+     * state so a half-expanded unit converges rather than inverting into a
+     * different half-expanded one.
      *
      * @return array{0: self, 1: null}
      */
     private function toggleLatestToolOutput(): array
     {
         $ids = $this->latestToolResultIds();
+        $thought = $this->latestThoughtKey();
+        if ($thought !== null) {
+            $ids[] = $thought;
+        }
         if ($ids === []) {
             return [$this, null];
         }

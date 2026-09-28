@@ -312,6 +312,61 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('echo red', $this->stripAnsi($open));
     }
 
+    /**
+     * The collapsed row Ctrl+O actually opens - the newest thought - says so;
+     * an older one does not, since the chord cannot reach it, and an opened
+     * row drops the promise.
+     */
+    public function testOnlyTheNewestCollapsedThoughtAdvertisesCtrlO(): void
+    {
+        $chat = $this->chat([
+            Message::user('why?', 0),
+            Message::assistant('Old.', 0, reasoning: 'an older thought'),
+            Message::user('and now?', 0),
+            Message::assistant('New.', 0, reasoning: 'the newest thought'),
+        ]);
+        $rows = $this->thoughtRows(Renderer::render($chat));
+
+        $this->assertCount(2, $rows);
+        $this->assertStringContainsString('click to expand', $rows[0]);
+        $this->assertStringNotContainsString('ctrl+o', $rows[0], 'Ctrl+O cannot reach an older thought, so it must not be offered there');
+        $this->assertStringContainsString('click or ctrl+o to expand', $rows[1]);
+
+        $open = $this->thoughtRows(Renderer::render($chat->toggleToolOutput(Renderer::thoughtKey('the newest thought'))));
+        $this->assertStringContainsString('click to collapse', $open[1]);
+        $this->assertStringNotContainsString('ctrl+o', $open[1]);
+    }
+
+    /** With clicks off, the chord is the only way in, and the only hint. */
+    public function testWithClicksOffTheNewestThoughtOffersOnlyCtrlO(): void
+    {
+        putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS=1');
+        try {
+            $rows = $this->thoughtRows(Renderer::render($this->chat([
+                Message::assistant('Old.', 0, reasoning: 'an older thought'),
+                Message::assistant('New.', 0, reasoning: 'the newest thought'),
+            ])));
+        } finally {
+            putenv('SUGARCRUSH_DISABLE_MOUSE_CLICKS');
+        }
+
+        $this->assertStringNotContainsString('click', $rows[0]);
+        $this->assertStringNotContainsString('ctrl+o', $rows[0]);
+        $this->assertStringContainsString('ctrl+o to expand', $rows[1]);
+        $this->assertStringNotContainsString('click', $rows[1]);
+    }
+
+    /**
+     * @return list<string> the frame's `💭 Thought` rows, SGR stripped, top to bottom
+     */
+    private function thoughtRows(string $frame): array
+    {
+        return array_values(array_filter(
+            explode("\n", $this->stripAnsi($frame)),
+            static fn(string $row): bool => str_contains($row, '💭 Thought'),
+        ));
+    }
+
     public function testOmitsReasoningLineWhenProviderDidNotSplitAny(): void
     {
         $out = Renderer::render($this->chat([

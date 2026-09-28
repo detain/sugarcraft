@@ -812,12 +812,16 @@ final class KeyBindingDriftTest extends TestCase
             // "Expand OR COLLAPSE": both halves, because a one-way arm reads
             // exactly like a toggle from the expand side alone.
             'chat.tool-output' => function (array $k): void {
-                $call = Message::assistant('done')->withToolResults([ToolResult::ok('Bash', 'output', 'call-1')]);
+                // "…and thought": the newest thought rides the same toggle.
+                $call = Message::assistant('done', null, 'a thought')->withToolResults([ToolResult::ok('Bash', 'output', 'call-1')]);
+                $thought = \SugarCraft\Crush\Renderer::thoughtKey('a thought');
                 [$expanded] = $this->chat([Message::user('run it'), $call])->update($k[0]);
                 $this->assertArrayHasKey('call-1', $expanded->expanded());
+                $this->assertArrayHasKey($thought, $expanded->expanded(), 'the newest thought must open with the tool output');
 
                 [$collapsed] = $expanded->update($k[0]);
                 $this->assertArrayNotHasKey('call-1', $collapsed->expanded(), 'the same key must collapse it again');
+                $this->assertArrayNotHasKey($thought, $collapsed->expanded(), 'and the thought with it');
             },
             'chat.session-picker' => function (array $k): void {
                 [$next] = $this->chatWithSessions(2)->update($k[0]);

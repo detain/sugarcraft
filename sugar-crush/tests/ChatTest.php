@@ -433,6 +433,56 @@ final class ChatTest extends TestCase
         $this->assertSame('', $next->inputBuf);
     }
 
+    /** With no tool call, Ctrl+O opens and closes the newest settled thought. */
+    public function testCtrlOTogglesTheLatestThought(): void
+    {
+        $chat = new Chat(history: [
+            Message::user('why?'),
+            Message::assistant('Old.', null, 'an older thought'),
+            Message::user('and now?'),
+            Message::assistant('New.', null, 'the newest thought'),
+        ]);
+        $key = \SugarCraft\Crush\Renderer::thoughtKey('the newest thought');
+
+        [$open, $cmd] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertNull($cmd);
+        $this->assertSame([$key => true], $open->expanded(), 'only the NEWEST thought opens');
+        $this->assertSame('', $open->inputBuf);
+
+        [$closed] = $open->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertSame([], $closed->expanded());
+    }
+
+    /**
+     * The newest thought and the newest tool batch toggle as one unit, whichever
+     * message each sits on.
+     */
+    public function testCtrlOTogglesTheLatestThoughtAndToolBatchTogether(): void
+    {
+        $toolMsg = Message::assistant('', reasoning: 'check the clock')->withToolResults([ToolResult::ok('clock', 'noon', 'call_1')]);
+        $chat = new Chat(history: [Message::user('time?'), $toolMsg, Message::assistant('Noon.', null, 'answer it')]);
+        $key = \SugarCraft\Crush\Renderer::thoughtKey('answer it');
+
+        [$open] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertSame(['call_1' => true, $key => true], $open->expanded());
+
+        [$closed] = $open->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+        $this->assertSame([], $closed->expanded());
+    }
+
+    /** Mid-turn, the in-flight thought is the newest one. */
+    public function testCtrlOTogglesTheLiveThoughtWhileOneIsBeingWritten(): void
+    {
+        $chat = new Chat(history: [Message::assistant('Old.', null, 'settled thought')], inFlight: true);
+        $chat->enqueueReasoning('still thinking');
+        [$chat] = $chat->update(new \SugarCraft\Crush\ToolEventPumpMsg());
+
+        [$open] = $chat->update(new KeyMsg(KeyType::Char, 'o', ctrl: true));
+
+        $this->assertSame([\SugarCraft\Crush\Renderer::THOUGHT_LIVE_KEY => true], $open->expanded());
+    }
+
     public function testToggleToolOutputReturnsANewChatAndFlipsBothWays(): void
     {
         $chat = new Chat();
