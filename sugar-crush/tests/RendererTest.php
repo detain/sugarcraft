@@ -367,6 +367,59 @@ final class RendererTest extends TestCase
         ));
     }
 
+    /** A Chat whose empty box has $suggestion latched, at $cols columns. */
+    private function suggested(string $suggestion, int $cols = 100): Chat
+    {
+        $history = [Message::user('fix it', 0), Message::assistant('Fixed.', 0)];
+        [$chat] = (new Chat(history: $history))->withSize($cols, 30)
+            ->update(new \SugarCraft\Crush\PromptSuggestionMsg($suggestion, 0, 2, null));
+
+        return $chat;
+    }
+
+    /** @return string the input box's text row, SGR stripped */
+    private function inputRow(string $frame): string
+    {
+        foreach (explode("\n", $this->stripAnsi($frame)) as $row) {
+            if (str_contains($row, '> ')) {
+                $found = $row;
+            }
+        }
+
+        return $found ?? '';
+    }
+
+    public function testAnEmptyBoxShowsTheSuggestionGrayedAfterTheCursor(): void
+    {
+        $frame = Renderer::render($this->suggested('run the tests'));
+
+        $this->assertStringContainsString('> █run the tests  (→ to accept)', $this->inputRow($frame));
+        $this->assertMatchesRegularExpression('/\x1b\[[0-9;]*2[;m][^\n]*run the tests/', $frame, 'the suggestion must be painted faint');
+    }
+
+    public function testTheSuggestionIsHiddenOnceTheUserTypes(): void
+    {
+        [$typed] = $this->suggested('run the tests')->update(new KeyMsg(KeyType::Char, 'x'));
+        $row = $this->inputRow(Renderer::render($typed));
+
+        $this->assertStringNotContainsString('run the tests', $row);
+        $this->assertStringContainsString('> x█', $row);
+
+        [$cleared] = $typed->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertStringContainsString('run the tests', $this->inputRow(Renderer::render($cleared)), 'clearing the draft brings the suggestion back');
+    }
+
+    /** One row, whatever the width: the hint goes first, then the text is cut. */
+    public function testALongSuggestionStaysOnOneRowOfTheInputBox(): void
+    {
+        $chat = $this->suggested(str_repeat('word ', 30), 40);
+        $frame = Renderer::render($chat);
+        $rows = array_values(array_filter(explode("\n", $this->stripAnsi($frame)), static fn(string $r): bool => str_contains($r, 'word')));
+
+        $this->assertCount(1, $rows, 'the suggestion wrapped onto a second row');
+        $this->assertLessThanOrEqual(40, Width::of($rows[0]));
+    }
+
     public function testOmitsReasoningLineWhenProviderDidNotSplitAny(): void
     {
         $out = Renderer::render($this->chat([

@@ -397,6 +397,7 @@ final class KeyBindingRegistry
             // asked for was invisible to the only in-app key list there is.
             KeyBinding::new('chat.slash-complete', 'Tab', 'Complete the highlighted "/" command', $c),
             KeyBinding::new('chat.recall', '↑', 'Recall your last message (empty input box)', $c),
+            KeyBinding::new('chat.accept-suggestion', '→', 'Take the grayed suggestion (empty input box)', $c),
             // ── the draft's own editing keyboard ─────────────────────────
             //
             // Everything from here to `chat.space` is answered by the draft

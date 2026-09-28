@@ -486,6 +486,12 @@ final class Renderer
      */
     private const INVOCATION_COMMAND_MAX_LINES = 200;
 
+    /** Trailer {@see renderInput()} paints after a grayed suggestion. */
+    private const SUGGESTION_ACCEPT_HINT = '  (→ to accept)';
+
+    /** Fewest suggestion columns worth keeping the accept hint for. */
+    private const SUGGESTION_MIN_COLS = 12;
+
     /**
      * Lines of any other argument value {@see renderInvocation()} paints
      * before it clips - see that method for why these are kept short.
@@ -4705,6 +4711,25 @@ final class Renderer
         // wrap at width 0.
         $indented = $inner > self::INPUT_PROMPT_COLS;
         $textWidth = $indented ? $inner - self::INPUT_PROMPT_COLS : $inner;
+
+        // An empty box shows the grayed guess at the next message after the
+        // cursor (→ accepts it, {@see Chat::promptSuggestion()}). Held to ONE
+        // row: it is a hint, and a hint that grew the box would shove the
+        // transcript up on every turn. The accept hint is the first thing
+        // dropped when room runs out, then the suggestion is cut.
+        $suggestion = $chat->inputBuf === '' ? $chat->promptSuggestion() : null;
+        if ($suggestion !== null) {
+            $ghost = self::untrusted($suggestion);
+            $room = $textWidth - Width::of($cursor);
+            $hint = Width::of($ghost) + Width::of(self::SUGGESTION_ACCEPT_HINT) <= $room
+                || $room - Width::of(self::SUGGESTION_ACCEPT_HINT) >= self::SUGGESTION_MIN_COLS
+                ? self::SUGGESTION_ACCEPT_HINT
+                : '';
+            $ghost = Width::truncate($ghost, max(0, $room - Width::of($hint)));
+            if (trim($ghost) !== '') {
+                $draft = $cursor . Style::new()->foreground($theme->systemLabel)->faint()->render($ghost . $hint);
+            }
+        }
 
         $rows = [];
         foreach (self::wrapToPane($draft, $textWidth) as $i => $row) {

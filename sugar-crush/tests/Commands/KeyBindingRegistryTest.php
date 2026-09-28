@@ -216,11 +216,11 @@ final class KeyBindingRegistryTest extends TestCase
 
     /**
      * The shape of the table, stated as numbers because prose elsewhere states
-     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "65 live rows
+     * them — {@see \SugarCraft\Crush\Chat::handleKeyHelpKey()}'s "66 live rows
      * across 9 contexts", the sweep counts in
      * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest}, and
      * {@see \SugarCraft\Crush\Tests\Commands\KeyBindingDriftTest}'s KEYISH
-     * docblock ("all 69 declared rows"). A prose number nobody measures is how
+     * docblock ("all 70 declared rows"). A prose number nobody measures is how
      * a reference goes stale; this is the measurement. Those three files are
      * the domain of that list: it is where `grep -rn` for the figures found
      * them, not a claim that no other file could grow one.
@@ -244,11 +244,14 @@ final class KeyBindingRegistryTest extends TestCase
      * era, listed by nothing), and `shell.pane-palette` declared the Enter door
      * — Enter on a docked pane with an empty draft opens the palette, the only
      * route from a read-only pane to the commands that change settings.
+     *
+     * 65 -> 66 live when `chat.accept-suggestion` was declared: → on an empty
+     * box takes the grayed next-message suggestion as the draft.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(69, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(65, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(70, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(66, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

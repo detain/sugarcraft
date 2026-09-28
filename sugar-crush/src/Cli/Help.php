@@ -183,6 +183,9 @@ Environment variables:
    SUGARCRUSH_DISABLE_PROMPT_CACHE
                           Any value other than empty or 0 switches off the
                           provider prompt-cache breakpoints.
+   SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS
+                          Any value other than empty or 0 stops the grayed
+                          next-message suggestion (→ takes it) after each turn.
    SUGARCRUSH_BACKGROUND  light or dark — forces what the adaptive theme
                           believes about the terminal background, skipping
                           the OSC 11 probe and COLORFGBG.

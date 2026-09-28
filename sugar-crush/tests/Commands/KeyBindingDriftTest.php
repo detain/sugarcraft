@@ -248,7 +248,7 @@ final class KeyBindingDriftTest extends TestCase
      * missed" claim was true and unasserted, so the tightening could be reverted
      * to its loose pre-fix form without a single test going red.
      *
-     * Zero false positives across all 69 declared rows — and THAT is the domain
+     * Zero false positives across all 70 declared rows — and THAT is the domain
      * of the zero. It says nothing about prose not yet written; it says those 69
      * rows are clean under this pattern.
      *
@@ -275,7 +275,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because five `*.move` rows describe arrow movement
-     * (eleven rows carry an arrow GLYPH in their label; both counts are asserted
+     * (twelve rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -511,9 +511,9 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            11,
+            12,
             $arrowLabelled,
-            'KEYISH\'s docblock says eleven rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twelve rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -694,6 +694,12 @@ final class KeyBindingDriftTest extends TestCase
             'chat.recall' => function (array $k): void {
                 [$next] = $this->chat([Message::user('earlier')])->update($k[0]);
                 $this->assertSame('earlier', $next->inputBuf);
+            },
+            'chat.accept-suggestion' => function (array $k): void {
+                $history = [Message::user('fix it'), Message::assistant('Fixed.')];
+                [$suggested] = $this->chat($history)->update(new \SugarCraft\Crush\PromptSuggestionMsg('run the tests', 0, count($history), null));
+                [$next] = $suggested->update($k[0]);
+                $this->assertSame('run the tests', $next->inputBuf);
             },
             'chat.backspace' => function (array $k): void {
                 [$next] = $this->chat([], 'ab')->update($k[0]);

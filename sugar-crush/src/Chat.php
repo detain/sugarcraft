@@ -353,6 +353,31 @@ final class Chat implements Model
     private const TITLE_MAX_CHARS = 100;
 
     /**
+     * The guess-the-next-prompt call's framing ({@see schedulePromptSuggestion()}).
+     * The request rides as a final USER turn, after the conversation, so a
+     * provider that wants the last word to be the user's gets it.
+     */
+    private const PROMPT_SUGGESTION_PROMPT = 'You predict what the user of a coding assistant will type next. '
+        . 'You are shown the recent conversation between the user and the assistant.';
+
+    private const PROMPT_SUGGESTION_REQUEST = 'Write the single message I (the user) am most likely to send next, '
+        . 'in my voice, as I would type it: one short line, under 15 words, no quotes, no explanation. '
+        . 'Prefer a concrete next step that follows from the last reply. '
+        . 'If there is no useful next message, reply with exactly: NONE';
+
+    /** The model's "nothing to suggest" answer; {@see sanitizePromptSuggestion()} maps it to ''. */
+    private const PROMPT_SUGGESTION_NONE = 'NONE';
+
+    /** Messages of recent history the suggestion call is shown. */
+    private const PROMPT_SUGGESTION_HISTORY = 12;
+
+    /** Characters of each of those messages it is shown. */
+    private const PROMPT_SUGGESTION_MESSAGE_CHARS = 2000;
+
+    /** Longest suggestion kept - it is one line of the input box. */
+    private const PROMPT_SUGGESTION_MAX_CHARS = 200;
+
+    /**
      * Set to any value other than empty or `0` to keep the "onToken observer
      * threw, detaching it for this turn" line on stderr (E175). The DETACH is
      * never gated — the environment decides whether anyone is TOLD about a
@@ -1245,6 +1270,18 @@ final class Chat implements Model
          * a transcript regression.
          */
         private readonly ?WebSearch $webSearch = null,
+        /**
+         * The grayed "you might say next" suggestion the empty input box
+         * shows (→ accepts it), with the conversation state it was written
+         * for: the turn `generation`, the `history` length and the session.
+         * {@see promptSuggestion()} answers null the moment any of those
+         * moves, so no reset site - a new turn, a /clear, a session switch,
+         * an appended notice - can leave a stale suggestion on screen.
+         * Written by {@see PromptSuggestionMsg} only.
+         *
+         * @var array{text: string, generation: int, historyCount: int, sessionId: ?string}|null
+         */
+        private readonly ?array $promptSuggestion = null,
     ) {
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
@@ -1496,7 +1533,7 @@ final class Chat implements Model
             // other post-prompt notice on this route takes), appended INSIDE
             // the settle so it lands in persisted history exactly once per
             // stopped turn and survives re-render.
-            return self::releaseQueuedPrompts([$settled->mutate([
+            [$done, $doneCmd] = self::releaseQueuedPrompts([$settled->mutate([
                 'history' => [
                     ...$this->history,
                     $message,
@@ -1505,6 +1542,16 @@ final class Chat implements Model
                 'inFlight' => false,
                 'inFlightCancellation' => null,
             ]), null]);
+
+            // The turn is over and nothing queued took its place: guess the
+            // user's next message in the background (→ accepts it). Batched
+            // beside, never before, whatever the drain scheduled.
+            $suggest = $done->inFlight ? null : $done->schedulePromptSuggestion();
+            if ($suggest === null) {
+                return [$done, $doneCmd];
+            }
+
+            return [$done, $doneCmd === null ? $suggest : Cmd::batch($doneCmd, $suggest)];
         }
         if ($msg instanceof ToolResultsMsg) {
             return $this->finishToolCalls($msg);
@@ -1559,6 +1606,26 @@ final class Chat implements Model
             }
 
             return $this->applyModelCompaction($msg);
+        }
+        if ($msg instanceof PromptSuggestionMsg) {
+            // Accounted first, on the rule every provider-call arm follows:
+            // the call was made on the user's key whatever becomes of it.
+            $this->accountUsage($msg->usage);
+
+            $text = self::sanitizePromptSuggestion($msg->suggestion);
+            $stale = $msg->generation !== $this->generation
+                || $msg->historyCount !== count($this->history)
+                || $msg->sessionId !== $this->currentSessionId;
+            if ($text === '' || $stale || $this->inFlight) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(['promptSuggestion' => [
+                'text' => $text,
+                'generation' => $msg->generation,
+                'historyCount' => $msg->historyCount,
+                'sessionId' => $msg->sessionId,
+            ]]), null];
         }
         if ($msg instanceof SessionTitledMsg) {
             // Accounted before either guard below, on the same rule the other
@@ -1957,6 +2024,13 @@ final class Chat implements Model
             // fills inputBuf with the last message the user actually sent.
             $msg->type === KeyType::Up && $this->inputBuf === ''
                 => [$this->withInputBuf($this->lastUserMessageContent()), null],
+            // → on an empty box takes the grayed suggestion as the draft,
+            // cursor at its end, ready to edit or send. With no suggestion
+            // showing it falls through to the editor, where it is the
+            // no-op cursor move it always was.
+            $msg->type === KeyType::Right && !$msg->alt && !$msg->ctrl && !$msg->shift
+                && $this->inputBuf === '' && $this->promptSuggestion() !== null
+                => [$this->withInputBuf((string) $this->promptSuggestion()), null],
             // Ctrl+P opens the command palette. Checked before the generic
             // Char arm below, or the literal "p" would be typed into the
             // input buffer instead - same reasoning as Ctrl+A just below.
@@ -2957,7 +3031,7 @@ final class Chat implements Model
      * reason a second Ctrl+P closes the palette rather than reopening it on
      * top of itself. Up/Down and PageUp/PageDown scroll, because the list is
      * taller than a terminal ({@see \SugarCraft\Crush\Commands\KeyBindingRegistry}
-     * declares 65 live rows across 9 contexts — 69 in all, four of them
+     * declares 66 live rows across 9 contexts — 70 in all, four of them
      * dormant and therefore unlisted) and clipping it with no way to reach the
      * rest would hide exactly the bindings this screen exists to disclose.
      *
@@ -6440,6 +6514,7 @@ final class Chat implements Model
             'promptEstimateAtDispatch' => $this->promptEstimateAtDispatch,
             'tokenEstimateCalibration' => $this->tokenEstimateCalibration,
             'webSearch' => $this->webSearch,
+            'promptSuggestion' => $this->promptSuggestion,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -8595,6 +8670,111 @@ final class Chat implements Model
             if ($line !== '') {
                 return trim(mb_substr($line, 0, self::TITLE_MAX_CHARS));
             }
+        }
+
+        return '';
+    }
+
+    /**
+     * The grayed suggestion the empty input box shows, or null when there is
+     * none to show: none has arrived, a turn is running, or the conversation
+     * has moved since it was written (see the `$promptSuggestion` docblock).
+     */
+    public function promptSuggestion(): ?string
+    {
+        $s = $this->promptSuggestion;
+        if (
+            $s === null
+            || $this->inFlight
+            || $s['generation'] !== $this->generation
+            || $s['historyCount'] !== count($this->history)
+            || $s['sessionId'] !== $this->currentSessionId
+        ) {
+            return null;
+        }
+
+        return $s['text'];
+    }
+
+    /**
+     * Build the fire-and-forget Cmd that asks the cheap title model to guess
+     * the user's next message, or null when this settle should not ask.
+     *
+     * Only ever the TOOL-LESS {@see $titleBackend}, never a fallback to the
+     * main conversation backend: that one carries tools, hooks and the
+     * permission gate, and a guess at a prompt must not be able to run Bash
+     * or raise a permission question. No title backend, no suggestion.
+     *
+     * Skipped once the spend cap is reached - unlike the once-per-session
+     * title this fires after every turn, so it is exactly the kind of
+     * call-on-the-app's-initiative a cap exists to stop - and when
+     * `SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS` is set. Only the last
+     * {@see PROMPT_SUGGESTION_HISTORY} messages go out, each clipped to
+     * {@see PROMPT_SUGGESTION_MESSAGE_CHARS}: the guess needs the drift of
+     * the conversation, not the whole of every tool dump in it.
+     */
+    private function schedulePromptSuggestion(): ?\Closure
+    {
+        $backend = $this->titleBackend;
+        if ($backend === null || self::envFlag('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS') || $this->spendCapReached()) {
+            return null;
+        }
+
+        $last = $this->history[count($this->history) - 1] ?? null;
+        if ($last === null || $last->role !== Role::Assistant || trim($last->content) === '') {
+            return null;
+        }
+
+        $tail = [];
+        foreach (array_slice($this->history, -self::PROMPT_SUGGESTION_HISTORY) as $message) {
+            if ($message->role === Role::System) {
+                continue;
+            }
+            $content = mb_substr($message->content, 0, self::PROMPT_SUGGESTION_MESSAGE_CHARS);
+            $tail[] = $message->role === Role::User ? Message::user($content) : Message::assistant($content);
+        }
+        $prompt = [
+            Message::system(self::PROMPT_SUGGESTION_PROMPT),
+            ...$tail,
+            Message::user(self::PROMPT_SUGGESTION_REQUEST),
+        ];
+        $generation = $this->generation;
+        $historyCount = count($this->history);
+        $sessionId = $this->currentSessionId;
+
+        return Cmd::promise(static function () use ($backend, $prompt, $generation, $historyCount, $sessionId): PromiseInterface {
+            return $backend->completeAsync($prompt)->then(
+                static fn(Message $msg): Msg => new PromptSuggestionMsg($msg->content, $generation, $historyCount, $sessionId, $msg->usage),
+                // Silent, like the titler: a missing suggestion is a
+                // non-event, and a rejection carries no cost to report.
+                static fn(\Throwable $e): ?Msg => null,
+            );
+        });
+    }
+
+    /**
+     * Reduce the model's guess to one safe line for the input box: `<think>`
+     * blocks dropped, every escape and control byte stripped, the first
+     * non-empty line only, a `User:` label or wrapping quotes peeled off, and
+     * the model's "nothing to suggest" answer turned into ''.
+     */
+    private static function sanitizePromptSuggestion(string $raw): string
+    {
+        $text = preg_replace('#<think>.*?</think>#is', '', $raw) ?? $raw;
+        $text = Sanitize::untrusted($text);
+
+        foreach (preg_split('/\r\n|\r|\n/', $text) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $line = trim((string) preg_replace('/^(?:user|me)\s*:\s*/i', '', $line));
+            $line = trim($line, " \"'`“”‘’");
+            if ($line === '' || strcasecmp($line, self::PROMPT_SUGGESTION_NONE) === 0) {
+                return '';
+            }
+
+            return trim(mb_substr($line, 0, self::PROMPT_SUGGESTION_MAX_CHARS));
         }
 
         return '';

@@ -40,6 +40,7 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\SessionTitledMsg;
+use SugarCraft\Crush\Usage;
 use SugarCraft\Crush\BackgroundSessionSpawnedMsg;
 use SugarCraft\Crush\BackgroundTickMsg;
 use SugarCraft\Crush\Sessions\BackgroundSession;
@@ -4145,6 +4146,174 @@ final class ChatTest extends TestCase
             $resolved = $msg;
         });
         return $resolved;
+    }
+
+    // ---------------------------------------------------------------
+    // Prompt suggestions: the grayed "you might say next" in the empty box
+    // ---------------------------------------------------------------
+
+    /** A cheap-model double that records what it was asked and answers $reply. */
+    private function suggestionBackend(string $reply): Backend
+    {
+        return new class ($reply) implements Backend {
+            /** @var list<list<Message>> */
+            public array $asked = [];
+
+            public function __construct(private readonly string $reply) {}
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                return Message::assistant($this->reply);
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                $this->asked[] = $history;
+
+                return \React\Promise\resolve(Message::assistant($this->reply)->withUsage(Usage::new(10, 0.001)));
+            }
+        };
+    }
+
+    /** Settle a turn on $chat and return [settled Chat, the Cmd it scheduled]. */
+    private function settleTurn(Chat $chat, string $reply = 'Fixed the bug.'): array
+    {
+        return $chat->update(new AssistantMsg(Message::assistant($reply)));
+    }
+
+    public function testASettledTurnAsksTheTitleModelForASuggestionAndShowsIt(): void
+    {
+        $backend = $this->suggestionBackend('run the tests');
+        [$settled, $cmd] = $this->settleTurn(new Chat(history: [Message::user('fix the bug')], inFlight: true, titleBackend: $backend));
+
+        $this->assertInstanceOf(\Closure::class, $cmd, 'a settled turn must schedule the suggestion call');
+        $this->assertNull($settled->promptSuggestion(), 'nothing is shown before the answer lands');
+
+        $landed = $this->resolveAsyncCmd($cmd);
+        $this->assertInstanceOf(\SugarCraft\Crush\PromptSuggestionMsg::class, $landed);
+        [$shown] = $settled->update($landed);
+
+        $this->assertSame('run the tests', $shown->promptSuggestion());
+        $this->assertEqualsWithDelta(0.001, $shown->spentUsd(), 1e-9, 'the suggestion call is on the user\'s key and must be accounted');
+    }
+
+    /**
+     * The request carries the recent conversation (system notices dropped) and
+     * ends on a USER turn asking for the next message.
+     */
+    public function testTheSuggestionRequestIsTheRecentConversationThenTheAsk(): void
+    {
+        $backend = $this->suggestionBackend('ok');
+        $chat = new Chat(history: [Message::user('fix the bug'), Message::system('_notice_')], inFlight: true, titleBackend: $backend);
+        [, $cmd] = $this->settleTurn($chat);
+        $this->resolveAsyncCmd($cmd);
+
+        $asked = $backend->asked[0];
+        $this->assertSame(Role::System, $asked[0]->role);
+        $this->assertSame(['fix the bug', 'Fixed the bug.'], array_map(static fn(Message $m): string => $m->content, array_slice($asked, 1, 2)));
+        $this->assertSame(Role::User, $asked[count($asked) - 1]->role);
+        $this->assertStringContainsString('most likely to send next', $asked[count($asked) - 1]->content);
+        foreach ($asked as $m) {
+            $this->assertStringNotContainsString('_notice_', $m->content, 'system notices are not conversation');
+        }
+    }
+
+    /**
+     * Never the main backend: it carries tools, hooks and the permission gate,
+     * and a guessed prompt must not be able to run anything.
+     */
+    public function testNoTitleBackendMeansNoSuggestionCall(): void
+    {
+        [, $cmd] = $this->settleTurn(new Chat(history: [Message::user('hi')], inFlight: true, backend: new EchoBackend()));
+
+        $this->assertNull($cmd);
+    }
+
+    public function testTheEnvironmentSwitchTurnsSuggestionsOff(): void
+    {
+        putenv('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS=1');
+        try {
+            [, $cmd] = $this->settleTurn(new Chat(history: [Message::user('hi')], inFlight: true, titleBackend: $this->suggestionBackend('x')));
+        } finally {
+            putenv('SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS');
+        }
+
+        $this->assertNull($cmd);
+    }
+
+    public function testNoSuggestionIsAskedForOnceTheSpendCapIsReached(): void
+    {
+        $chat = new Chat(history: [Message::user('hi')], inFlight: true, titleBackend: $this->suggestionBackend('x'), maxCostUsd: 0.5);
+        [, $cmd] = $chat->update(new AssistantMsg(Message::assistant('Done.')->withUsage(Usage::new(100, 1.0))));
+
+        $this->assertNull($cmd);
+    }
+
+    public function testRightOnAnEmptyBoxTakesTheSuggestionAsTheDraft(): void
+    {
+        $history = [Message::user('fix it'), Message::assistant('Fixed.')];
+        [$chat] = (new Chat(history: $history))->update(new \SugarCraft\Crush\PromptSuggestionMsg('run the tests', 0, 2, null));
+
+        [$taken, $cmd] = $chat->update(new KeyMsg(KeyType::Right, ''));
+
+        $this->assertNull($cmd);
+        $this->assertSame('run the tests', $taken->inputBuf);
+        $this->assertSame(mb_strlen('run the tests'), $taken->inputCursorOffset(), 'the cursor lands at the end, ready to edit or send');
+
+        // With a draft in the box, → is the cursor move it always was.
+        [$typed] = $chat->update(new KeyMsg(KeyType::Char, 'x'));
+        [$moved] = $typed->update(new KeyMsg(KeyType::Right, ''));
+        $this->assertSame('x', $moved->inputBuf);
+    }
+
+    public function testRightWithNoSuggestionLeavesTheEmptyBoxEmpty(): void
+    {
+        [$next] = (new Chat(history: [Message::user('hi'), Message::assistant('Hello.')]))->update(new KeyMsg(KeyType::Right, ''));
+
+        $this->assertSame('', $next->inputBuf);
+    }
+
+    /** A suggestion written for a conversation that has since moved is never shown. */
+    public function testASuggestionForAMovedConversationIsDropped(): void
+    {
+        $history = [Message::user('fix it'), Message::assistant('Fixed.')];
+        $chat = new Chat(history: $history, titleBackend: $this->suggestionBackend('x'));
+
+        [$wrongTurn] = $chat->update(new \SugarCraft\Crush\PromptSuggestionMsg('stale', 7, 2, null));
+        $this->assertNull($wrongTurn->promptSuggestion(), 'another turn\'s suggestion');
+        [$wrongLength] = $chat->update(new \SugarCraft\Crush\PromptSuggestionMsg('stale', 0, 1, null));
+        $this->assertNull($wrongLength->promptSuggestion(), 'a transcript that grew since');
+        [$wrongSession] = $chat->update(new \SugarCraft\Crush\PromptSuggestionMsg('stale', 0, 2, 'other-session'));
+        $this->assertNull($wrongSession->promptSuggestion(), 'another session\'s suggestion');
+
+        // Latched, then invalidated by the conversation moving on.
+        [$shown] = $chat->update(new \SugarCraft\Crush\PromptSuggestionMsg('run the tests', 0, 2, null));
+        $this->assertSame('run the tests', $shown->promptSuggestion());
+        [$typed] = $shown->update(new KeyMsg(KeyType::Char, 'x'));
+        [$sent] = $typed->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($sent->promptSuggestion(), 'sending a message retires the suggestion');
+    }
+
+    /**
+     * @return iterable<string, array{string, ?string}>
+     */
+    public static function suggestionAnswers(): iterable
+    {
+        yield 'plain' => ['run the tests', 'run the tests'];
+        yield 'think block and label' => ["<think>hmm</think>\nUser: \"now add a test\"", 'now add a test'];
+        yield 'first line only' => ["commit it\nand push", 'commit it'];
+        yield 'escape stripped' => ["show \x1b[31mred\x07 diff", 'show red diff'];
+        yield 'nothing to suggest' => ['NONE', null];
+        yield 'empty' => ["  \n ", null];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('suggestionAnswers')]
+    public function testTheModelsAnswerIsReducedToOneSafeLine(string $raw, ?string $expected): void
+    {
+        [$chat] = (new Chat(history: [Message::user('a'), Message::assistant('b')]))
+            ->update(new \SugarCraft\Crush\PromptSuggestionMsg($raw, 0, 2, null));
+
+        $this->assertSame($expected, $chat->promptSuggestion());
     }
 
     public function testSubmitBatchesTitleGenerationAlongsideTheCompletion(): void
