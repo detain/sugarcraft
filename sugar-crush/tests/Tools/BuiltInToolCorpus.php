@@ -43,8 +43,11 @@ use SugarCraft\Crush\Tools\Tool;
  * that {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationMap()}
  * pins BY NAME is the living record — a minority of files declare more than
  * their PSR-4 symbol, in whatever numbers the current census yields. What does
- * not rot is the argument itself: `src/App/App.php` alone declares twelve
- * (`Msg`, `Cmd`, `UserInputMsg`, …), and `src/ToolRegistry.php` once declared
+ * not rot is the argument itself: `src/App/App.php` once declared thirteen
+ * (`Msg`, `Cmd`, `UserInputMsg`, …) — which PSR-4 could not autoload, so a
+ * shard that built a `LayoutResetMsg` before anything loaded `App` died with
+ * "class not found", until they moved to one file each — and
+ * `src/ToolRegistry.php` once declared
  * `SugarCraft\Crush\Tool` — one `use` away from colliding with the tool
  * interface — until E14 moved the registry pair into
  * `SugarCraft\Crush\Registry` (`src/Registry/`), where

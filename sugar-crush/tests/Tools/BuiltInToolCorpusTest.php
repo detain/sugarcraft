@@ -595,7 +595,6 @@ final class BuiltInToolCorpusTest extends TestCase
 
         $this->assertSame(
             [
-                'App/App.php' => 13,
                 'Cli/ArgvParser.php' => 1,
                 'CommandParser.php' => 1,
                 'Compactor.php' => 1,

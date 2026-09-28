@@ -222,11 +222,11 @@ final class HostedFrameReadsThePaneTest extends TestCase
         );
 
         $this->assertSame(
-            ['src/App/App.php', 'src/Chat.php'],
+            ['src/App/App.php', 'src/App/SelectPaneMsg.php', 'src/Chat.php'],
             $mentions,
             'The set of production files that so much as name SelectPaneMsg has '
-            . 'changed. App.php declares it and answers it; Chat.php records it as a '
-            . 'dormant seam in selectPane()\'s docblock. A third file — or an alias '
+            . 'changed. SelectPaneMsg.php declares it, App.php answers it; Chat.php records it as a '
+            . 'dormant seam in selectPane()\'s docblock. A fourth file — or an alias '
             . 'import the producer regex above cannot see — means the seam moved.',
         );
     }
