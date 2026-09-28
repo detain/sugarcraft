@@ -33,11 +33,20 @@ final readonly class ProtectFilesHook implements HookInterface
      * The rest of `~/.sugar-crush` (the session database, the memory store) is
      * deliberately NOT listed: it is per-user data rather than policy, and
      * nothing there decides what this session may do.
+     *
+     * `composer.json` / `composer.lock` USED TO BE LISTED and are not any more.
+     * They are neither secrets (both are committed) nor policy (nothing in them
+     * decides what this session may do), and the entries were unanchored
+     * substrings judged against Read paths and whole Bash strings alike, so
+     * they refused `grep -c . candy-core/composer.json`, a `Read` of any
+     * manifest, and every `for d in candy-*; do [ -f "$d/composer.json" ]` loop — in
+     * a PHP monorepo, the most ordinary inspection there is. A model that
+     * wanted to abuse a manifest's `scripts` already holds Bash, so the deny
+     * contained nothing while blocking the audit and dependency work the
+     * agent is for.
      */
     public const DEFAULT_PROTECTED_PATTERNS = [
         '/(^|[\s\/])\.env(\s|$)/',
-        '/composer\.json\b/',
-        '/composer\.lock\b/',
         '/\.git\/config\b/',
         '/(^|\/)config\/[^\s]*\.php\b/',
         ...self::WRITE_ONLY_PATTERNS,

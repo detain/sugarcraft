@@ -249,8 +249,12 @@ The gate is not a replacement for them. Even under `bypass-permissions`,
 | Pattern | Applies to |
 |---|---|
 | `.env` | `Read`, `Edit`, `Write`, `Bash` — reading it *is* the leak |
-| `composer.json`, `composer.lock`, `.git/config`, `config/*.php` | all four |
+| `.git/config`, `config/*.php` | all four |
 | `.sugar-crush/hooks.yaml`, `.sugar-crush/config.json`, `.sugar-crush/agents/` | **writes only** |
+
+`composer.json` and `composer.lock` are deliberately absent: they are committed
+project files, neither secrets nor policy, and guarding them (as this table once
+did) refused even `grep` of a manifest in a Bash command.
 
 The last group is policy rather than secrets, and a decision is changed by
 *writing* it — so reads are allowed (opening `.sugar-crush/agents/reviewer.md`

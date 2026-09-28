@@ -55,24 +55,26 @@ final class ProtectFilesHookTest extends TestCase
         $this->assertStringContainsString('.env', $result->message);
     }
 
-    public function testDenyComposerJson(): void
+    /**
+     * Composer manifests are neither secrets nor policy, so no default pattern
+     * may refuse them — the session this regresses was an audit whose very
+     * first `[ -f "$d/composer.json" ]` probe came back "Hook denied".
+     */
+    public function testComposerManifestsAreNotProtectedByDefault(): void
     {
         $hook = new ProtectFilesHook();
-        $context = $this->createContext('Edit', 'composer.json');
 
-        $result = $hook->execute($context);
+        foreach (['composer.json', 'composer.lock', 'candy-core/composer.json'] as $path) {
+            foreach (['Read', 'Edit', 'Write'] as $tool) {
+                $this->assertTrue($hook->execute($this->createContext($tool, $path))->isAllowed(), "$tool $path");
+            }
+        }
 
-        $this->assertTrue($result->isDenied());
-    }
-
-    public function testDenyComposerLock(): void
-    {
-        $hook = new ProtectFilesHook();
-        $context = $this->createContext('Edit', 'composer.lock');
-
-        $result = $hook->execute($context);
-
-        $this->assertTrue($result->isDenied());
+        $this->assertTrue($hook->execute($this->createContext('Bash', 'grep -c . candy-core/composer.json'))->isAllowed());
+        $this->assertTrue($hook->execute($this->createContext(
+            'Bash',
+            'for d in candy-*; do [ -f "$d/composer.json" ] || echo "$d NO-MANIFEST"; done',
+        ))->isAllowed());
     }
 
     public function testDenyGitConfig(): void
@@ -368,7 +370,7 @@ final class ProtectFilesHookTest extends TestCase
         // The custom pattern denies its target...
         $this->assertTrue($hook->execute($this->createContext('Edit', 'secrets.yaml'))->isDenied());
         // ...and the built-in defaults are NOT applied (only the custom list is).
-        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isAllowed());
+        $this->assertTrue($hook->execute($this->createContext('Edit', '.git/config'))->isAllowed());
     }
 
     public function testWithProtectedPatternsIsImmutable(): void
@@ -376,11 +378,11 @@ final class ProtectFilesHookTest extends TestCase
         $hook = new ProtectFilesHook();
         $custom = $hook->withProtectedPatterns(['/secrets\.yaml\b/']);
 
-        // Original instance keeps the defaults (still denies composer.json).
-        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isDenied());
+        // Original instance keeps the defaults (still denies .git/config).
+        $this->assertTrue($hook->execute($this->createContext('Edit', '.git/config'))->isDenied());
         // New instance guards only the custom pattern.
         $this->assertTrue($custom->execute($this->createContext('Edit', 'secrets.yaml'))->isDenied());
-        $this->assertTrue($custom->execute($this->createContext('Edit', 'composer.json'))->isAllowed());
+        $this->assertTrue($custom->execute($this->createContext('Edit', '.git/config'))->isAllowed());
         $this->assertNotSame($hook, $custom);
     }
 
@@ -388,7 +390,7 @@ final class ProtectFilesHookTest extends TestCase
     {
         $hook = new ProtectFilesHook([]);
 
-        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isAllowed());
+        $this->assertTrue($hook->execute($this->createContext('Edit', '.git/config'))->isAllowed());
         $this->assertTrue($hook->execute($this->createContext('Bash', 'nano .env'))->isAllowed());
     }
 
@@ -400,7 +402,7 @@ final class ProtectFilesHookTest extends TestCase
             ProtectFilesHook::DEFAULT_PROTECTED_PATTERNS,
             $hook->protectedPatterns()
         );
-        $this->assertTrue($hook->execute($this->createContext('Edit', 'composer.json'))->isDenied());
+        $this->assertTrue($hook->execute($this->createContext('Edit', '.git/config'))->isDenied());
     }
 
     // =========================================================================
