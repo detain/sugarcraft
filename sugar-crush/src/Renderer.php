@@ -846,6 +846,14 @@ final class Renderer
     private static array $toolRowHeads = [];
 
     /**
+     * The {@see Chat::latestThoughtKey()} of the frame being built - the one
+     * thought Ctrl+O reaches, and so the only collapsed row
+     * {@see renderThought()} may advertise the chord on. Per-frame, set at the
+     * top of {@see renderView()} like the registries above.
+     */
+    private static ?string $ctrlOThoughtKey = null;
+
+    /**
      * Palette rows the current frame wants clickable, as the FULLY rendered
      * box lines they became (border + padding + row), collected by
      * {@see renderPalette()} and consumed by {@see markPaletteItems()} once
@@ -1258,6 +1266,7 @@ final class Renderer
         // $toolRowHeads for why the layout question and the click question are
         // answered from two registries rather than one.
         self::$toolRowHeads = [];
+        self::$ctrlOThoughtKey = $chat->latestThoughtKey();
         // One number, named once. Every producer that writes into $body below
         // is held to it, and fitToPane() is the backstop for the ones whose
         // own layout rules say otherwise (code blocks, tables, CJK runs).
@@ -2983,7 +2992,16 @@ final class Renderer
 
         $count = count($lines);
         $size = $count . ' line' . ($count === 1 ? '' : 's');
-        $hint = Chat::mouseClicksEnabled() ? ($isExpanded ? ' · click to collapse' : ' · click to expand') : '';
+        // The chord is offered on the collapsed row Ctrl+O actually opens, and
+        // only there: it reaches the newest thought alone, so promising it on
+        // an older row would be a hint that does nothing.
+        $clicks = Chat::mouseClicksEnabled();
+        $ctrlO = !$isExpanded && $key === self::$ctrlOThoughtKey;
+        $hint = match (true) {
+            $isExpanded => $clicks ? ' · click to collapse' : '',
+            $ctrlO      => $clicks ? ' · click or ctrl+o to expand' : ' · ctrl+o to expand',
+            default     => $clicks ? ' · click to expand' : '',
+        };
         $row = $head . $faint->render(($isExpanded ? ' ▾ ' : ' ▸ ') . $size . $hint);
 
         if (!$isExpanded) {

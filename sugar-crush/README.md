@@ -662,7 +662,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Esc` | Close the palette or the session picker |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
-| `Ctrl+O` | Expand/collapse the most recent tool call's output |
+| `Ctrl+O` | Expand/collapse the most recent tool call's output and thought |
 | `Ctrl+R` | Session picker (persisted across turns) — with the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
@@ -732,7 +732,7 @@ full height — and drag; no modifier key is needed (Esc mid-drag cancels).
 
 Focus decides who answers `Tab`, `Shift+Tab` and `Enter`; typing a printable
 character always reaches the chat draft regardless of focus, as do `Ctrl+O`
-(expand/collapse the newest tool output) and the other always-chat chords.
+(expand/collapse the newest tool output and thought) and the other always-chat chords.
 `Tab`/`Shift+Tab` walk the docked frame — chat, then the left column
 top-to-bottom, then the right — and wrap; `Esc` from any docked pane falls
 back to chat; `Enter` on an empty draft from a docked pane opens the command
@@ -961,7 +961,7 @@ rendered inline via candy-mosaic. Successful tool bodies are hidden by default
 its output — `$ <command>` for shell calls, `key: value` for other tools. The
 model's thinking streams in full while it thinks, then folds into a collapsed
 `💭 Thought` row once the reply (or a tool call) starts; click the row to open
-or close it. Context usage shows as both a token count and
+or close it (`Ctrl+O` toggles the newest one). Context usage shows as both a token count and
 a percentage, and the budget it is measured against is the **live model's own
 context window** as its provider reports it (a backend with no model behind it,
 such as the offline echo default, falls back to 100,000 estimated tokens). That

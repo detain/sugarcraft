@@ -8,7 +8,7 @@ sugar-crush/tests/LSP/LspClientDispatchPumpTest.php	20.237	2
 sugar-crush/tests/Backend/StreamingCommandBackendTest.php	19.439	31
 sugar-crush/tests/Support/DuplicatedTestHelperDriftTest.php	19.055	14
 sugar-crush/tests/LSP/LspConnectionFrameCapTest.php	18.724	7
-sugar-crush/tests/RendererTest.php	18.629	109
+sugar-crush/tests/RendererTest.php	18.629	111
 sugar-crush/tests/MCP/StdioMcpServerWriteBoundsTest.php	16.273	10
 sugar-crush/tests/LSP/LspConnectionShutdownTest.php	16.048	11
 sugar-crush/tests/Tui/ShellContrastTest.php	14.489	14
@@ -71,7 +71,7 @@ sugar-crush/tests/Support/AssertionSwallowingCatchTest.php	3.220	6
 sugar-crush/tests/Hooks/HookRegistryTest.php	3.196	71
 sugar-crush/tests/Support/FixtureLifetimeCensusTest.php	3.114	3
 sugar-crush/tests/Sessions/BackgroundSessionRunnerTest.php	3.090	25
-sugar-crush/tests/ChatTest.php	2.705	237
+sugar-crush/tests/ChatTest.php	2.705	240
 sugar-crush/tests/Config/ReadmeJsonErrorContractDriftTest.php	2.650	19
 sugar-crush/tests/Agents/AgentTest.php	2.595	40
 sugar-crush/tests/SessionTabClickTest.php	2.590	13
