@@ -1341,6 +1341,13 @@ final class Chat implements Model
         ) {
             $workflowEngine->setAgentManager($agentManager);
         }
+        // Same seam, same reason, for the BACKEND: a /workflow stage runs this
+        // Chat's engine tool loop (Agents\EngineExecutor). Re-bound on every
+        // construction rather than once, because a provider switch builds a
+        // Chat with a new backend while the engine is shared across mutate().
+        if ($workflowEngine instanceof WorkflowEngine && $backend instanceof \SugarCraft\Crush\Backend\EngineBackend) {
+            $workflowEngine->bindEngineBackend($backend);
+        }
         if ($maxCostUsd !== null && !self::isUsableSpendCap($maxCostUsd)) {
             throw new \InvalidArgumentException(sprintf(
                 'A spend cap must be a positive finite number of US dollars, or null for no cap; got %s. '

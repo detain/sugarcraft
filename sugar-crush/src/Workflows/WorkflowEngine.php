@@ -11,7 +11,9 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
+use SugarCraft\Crush\Agents\EngineExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\ToolDeclaration;
 use SugarCraft\Crush\Providers\CompleteRequest;
@@ -374,6 +376,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function agentManager(): ?AgentManager
     {
         return $this->agentManager;
+    }
+
+    /**
+     * Point this engine's stages at the session's CURRENT backend, so every
+     * stage agent runs that backend's real tool loop ({@see EngineExecutor}).
+     *
+     * Late and mutable for the same reason as {@see setAgentManager()}: the
+     * pool is built once at launch, while Chat replaces its backend on a
+     * provider switch — so Chat re-binds on every construction. A pool without
+     * an EngineExecutor (a test double, an embedder's own) is left untouched.
+     */
+    public function bindEngineBackend(EngineBackend $engine): void
+    {
+        $executor = $this->pool->forkedExecutor();
+        if ($executor instanceof EngineExecutor) {
+            $executor->bind($engine);
+        }
     }
 
     /**

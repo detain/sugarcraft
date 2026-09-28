@@ -48,6 +48,16 @@ happen to share the numbers 1–4.
   refusal counts them. `EngineBackend::completeTranscript()` is the new
   typed-history seam (`TranscriptTurn`, and `TurnInterrupted` carrying the
   transcript up to the last completed step); `complete()` is unchanged.
+- **`/workflow` stages run the real tool loop.** They dispatched through
+  `ProcessExecutor`'s one-call worker, the same defect `Task` had. The workflow
+  pool now carries `Agents\EngineExecutor` as its forked executor (only when the
+  launch has a provider), bound by `Chat`'s constructor to the chat's current
+  engine via `WorkflowEngine::bindEngineBackend()`; each stage agent runs that
+  engine's tool loop in the pool's forked child, per-call gated by the session's
+  hooks and permission gate. `AgentWorkerPool::executeOne()` now forks when a
+  forked executor is configured, so sequential stages no longer block the TUI.
+  The executor refuses an engine on the offline echo fallback (E663).
+  `Support\ParentProcessGuard` is the shared orphan check for it and `Task`.
 - **`composer.json` / `composer.lock` are no longer protected** by
   `ProtectFilesHook`. The unanchored patterns were judged against Read paths
   and whole Bash strings, so they denied even `grep -c . candy-core/composer.json`

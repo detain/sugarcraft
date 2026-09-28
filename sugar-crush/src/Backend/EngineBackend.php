@@ -371,6 +371,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     }
 
     /**
+     * The provider this engine completes against — read by
+     * {@see \SugarCraft\Crush\Agents\EngineExecutor} to refuse a workflow stage
+     * on the offline echo fallback rather than pass echoed text off as work.
+     */
+    public function provider(): ProviderInterface
+    {
+        return $this->provider;
+    }
+
+    /**
      * The tools this engine was built with, UNBOUND — the list a delegated
      * sub-agent inherits when its preset declares no grant of its own.
      *

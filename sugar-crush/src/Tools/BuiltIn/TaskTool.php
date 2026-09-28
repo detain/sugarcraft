@@ -13,6 +13,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\TurnInterrupted;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Support\ParentProcessGuard;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Tools\DelegatesToEngine;
 use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
@@ -384,7 +385,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
         $resumes = $suspension === null ? 0 : $suspension['resumes'] + 1;
 
-        $orphanGuard = self::orphanGuard();
+        $orphanGuard = ParentProcessGuard::capture('turn that delegated it');
         $heartbeat = $this->heartbeat;
         $onProgress = static function () use ($orphanGuard, $heartbeat): void {
             $orphanGuard();
@@ -474,30 +475,6 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     private function suspendedStore(): SuspendedDelegations
     {
         return $this->suspended ?? SuspendedDelegations::new();
-    }
-
-    /**
-     * A check that throws once the process this run started under is gone.
-     * Called from PHP-level progress sinks only (never from the provider's
-     * transport callback), so the throw unwinds the run cleanly: a forked Task
-     * whose turn was cancelled stops at its next chunk or tool event instead
-     * of editing the tree for nobody.
-     *
-     * @return \Closure(): void
-     */
-    private static function orphanGuard(): \Closure
-    {
-        if (!function_exists('posix_getppid')) {
-            return static function (): void {};
-        }
-
-        $parent = posix_getppid();
-
-        return static function () use ($parent): void {
-            if (posix_getppid() !== $parent) {
-                throw new \RuntimeException('the turn that delegated it is gone (parent process exited), so the run was abandoned');
-            }
-        };
     }
 
     private function settle(SubAgent $subAgent, string $status, string $output, ?string $error): void

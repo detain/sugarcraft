@@ -509,10 +509,35 @@ final class AgentWorkerPool
     }
 
     /**
-     * Execute a single agent and return the result immediately.
+     * Execute a single agent and return its result.
+     *
+     * WITH A {@see $forkedExecutor} THIS FORKS, exactly as {@see executeAll()}
+     * does for a batch of one. That executor is the engine-backed one
+     * ({@see EngineExecutor}), whose run is a whole agentic loop measured in
+     * minutes, and a `/workflow` sequential stage calls this from a Fiber in
+     * the TUI process: executed inline it froze the screen for the whole
+     * stage, while the forking path runs it in a child and yields to the Fiber
+     * on every poll ({@see waitForCompletion()}). Every other construction
+     * keeps the direct call it always made. The request is forwarded verbatim —
+     * the per-agent rebuild in executeAll() yields the same user turn, tools
+     * and system prompt a single-agent caller already put on it.
      */
     public function executeOne(SubAgent $agent, CompleteRequest $request): AgentResult
     {
+        if ($this->forkedExecutor !== null && !$this->customExecutor) {
+            foreach ($this->executeAll([$agent], $request) as $result) {
+                return $result;
+            }
+
+            return new AgentResult(
+                agentId: $agent->id,
+                status: AgentStatus::Stopped,
+                error: new \RuntimeException('cancelled before it produced a result'),
+                startedAt: $agent->startedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
         $executor = $this->executor ?? $this->createDefaultExecutor();
         return $executor->execute($agent, $request);
     }

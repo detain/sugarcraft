@@ -1529,9 +1529,19 @@ final class Bootstrap
 
         return new WorkflowEngine(
             $registry,
+            // forkedExecutor: every stage agent is a real tool loop through
+            // the session engine (bound late by Chat's constructor), run in
+            // the pool's forked child so a long stage never blocks the TUI.
+            // ONLY WITH A PROVIDER: a launch with none degrades the CHAT to the
+            // offline echo backend, and a stage run through that engine would
+            // "succeed" with echoed text — so a spec-less pool keeps the
+            // worker that fails closed naming the absence (E663). A spec whose
+            // provider then fails to build lands on the same echo engine;
+            // EngineExecutor refuses that one itself at run time.
             pool: (new \SugarCraft\Crush\Agents\AgentWorkerPool(
                 maxConcurrent: $poolConfig->maxConcurrent,
                 workerProvider: $poolConfig->workerProvider,
+                forkedExecutor: $poolConfig->workerProvider === null ? null : new \SugarCraft\Crush\Agents\EngineExecutor(),
             ))->withStopOnFirstFailure($poolConfig->stopOnFirstFailure),
             model: $model,
             provider: $provider,

@@ -146,6 +146,21 @@ except that its sub-agents now genuinely consult the model in the child.
 *WHY EARNS PLACE:* `/workflow status` is an operator's audit trail; "Completed"
 has to mean "a model saw this prompt", and pre-E652 it provably could not.
 
+**2026-09-28: a stage now does the agents' work.** *WHAT SAID:* the E663 worker
+above consults the model in the child — ONCE. It advertises the stage's tools
+and executes none of them, so a stage whose first move was a tool call (for any
+real task, every stage) finished with empty output. *WHAT TRUE NOW:* on a launch
+with a provider the pool's forked executor is `Agents\EngineExecutor`, bound by
+`Chat` to the chat's own engine, and every stage agent runs that engine's tool
+loop in the forked child — the hook chain and the session `PermissionGate` see
+each tool call as it is made, the stage's `tools:` is its tool list (`Task`
+withheld), and the step cap is 50. Sequential, pipeline and verification stages
+fork too now (`AgentWorkerPool::executeOne()` takes the forking path whenever a
+forked executor is configured), so no stage type blocks the TUI for its
+duration. *WHY THE E663 RULE STILL HOLDS:* a launch with no provider keeps the
+refusing worker, and an engine on the offline echo fallback is refused by the
+executor — "Completed" still means a model did the work.
+
 Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted
 does not pause into a directory nobody vetted.

@@ -13,7 +13,9 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 /**
  * A batch provider answering from a script, in call order, recording every
  * request it was sent. A script entry that is a {@see \Throwable} is THROWN
- * from that call, which is how a test interrupts a turn part-way. Past the end
+ * from that call, which is how a test interrupts a turn part-way; a
+ * {@see \Closure} entry is called with the request and answers at call time
+ * (e.g. to report which process it ran in). Past the end
  * of the script it repeats the last answer, so a run that loops longer than
  * expected fails on an assertion rather than on a crash.
  */
@@ -23,7 +25,7 @@ final class ScriptedProvider implements ProviderInterface
     public array $requests = [];
 
     /**
-     * @param list<CompleteResponse|\Throwable> $script
+     * @param list<CompleteResponse|\Throwable|\Closure(CompleteRequest): CompleteResponse> $script
      */
     public function __construct(private array $script)
     {
@@ -33,7 +35,7 @@ final class ScriptedProvider implements ProviderInterface
      * Append more answers — for a test that drives a second run (a resume)
      * through the same provider after the first has used up its script.
      */
-    public function then(CompleteResponse|\Throwable ...$answers): void
+    public function then(CompleteResponse|\Throwable|\Closure ...$answers): void
     {
         array_push($this->script, ...$answers);
     }
@@ -81,6 +83,9 @@ final class ScriptedProvider implements ProviderInterface
 
         if ($answer instanceof \Throwable) {
             throw $answer;
+        }
+        if ($answer instanceof \Closure) {
+            return $answer($request);
         }
 
         return $answer;

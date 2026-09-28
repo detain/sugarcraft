@@ -136,6 +136,40 @@ final class WorkflowProviderHandoffTest extends TestCase
         }
     }
 
+    /**
+     * With a provider, the launched engine's stages run the real tool loop:
+     * the pool's forked executor is an EngineExecutor bound to the SAME
+     * backend the chat itself runs on (Chat's constructor does the binding).
+     * Without one, there is no engine executor at all — the next test's
+     * fail-closed worker is what runs.
+     */
+    public function testTheLaunchedEngineRunsStagesThroughTheChatsOwnEngine(): void
+    {
+        $restore = $this->isolateLaunchEnvironment(['SUGARCRUSH_PROVIDER' => 'anthropic']);
+
+        try {
+            $chat = \SugarCraft\Crush\Cli\Bootstrap::chat($this->launchRepo);
+            $engine = $chat->workflowEngine();
+            $this->assertInstanceOf(WorkflowEngine::class, $engine);
+
+            $executor = $this->enginePool($engine)->forkedExecutor();
+            $this->assertInstanceOf(\SugarCraft\Crush\Agents\EngineExecutor::class, $executor);
+            $this->assertSame($chat->backend(), $executor->engine(), 'stages run on the chat\'s own backend');
+        } finally {
+            $this->restoreLaunchEnvironment($restore);
+        }
+
+        $restore = $this->isolateLaunchEnvironment([]);
+
+        try {
+            $engine = \SugarCraft\Crush\Cli\Bootstrap::chat($this->launchRepo)->workflowEngine();
+            $this->assertInstanceOf(WorkflowEngine::class, $engine);
+            $this->assertNull($this->enginePool($engine)->forkedExecutor(), 'no provider, no engine standing in for one');
+        } finally {
+            $this->restoreLaunchEnvironment($restore);
+        }
+    }
+
     public function testTheLaunchedEngineWithoutAnyProviderStillFailsClosedOnARun(): void
     {
         $restore = $this->isolateLaunchEnvironment([]);
