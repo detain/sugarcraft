@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\EngineExecutor;
@@ -13,6 +14,7 @@ use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Messages\Message as TypedMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tests\Support\RosterAgent;
 use SugarCraft\Crush\Tests\Support\ScriptedProvider;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
@@ -98,9 +100,7 @@ final class EngineExecutorTest extends TestCase
         $executor->bind($engine);
 
         $this->assertSame($engine, $executor->engine());
-        $stream = iterator_to_array($executor->executeStream(self::subAgent(), self::request()), false);
-        $this->assertCount(1, $stream);
-        $this->assertSame('bound now', $stream[0]->output);
+        $this->assertSame('bound now', $executor->execute(self::subAgent(), self::request())->output);
     }
 
     public function testTheOfflineEchoFallbackIsRefusedNotPassedOffAsWork(): void
@@ -111,6 +111,152 @@ final class EngineExecutorTest extends TestCase
 
         $this->assertSame(AgentStatus::Failed, $result->status);
         $this->assertStringContainsString('No provider configured', $result->error?->getMessage() ?? '');
+    }
+
+    public function testTheStreamIsAnActivityLogFollowedByTheFinalAnswer(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'looking first', toolCalls: [new ToolCall('call_1', 'probe', ['path' => "src/\nA.php"])]),
+            new CompleteResponse(content: 'the answer'),
+        ]);
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'm')->withTools([self::probe()]));
+
+        $results = iterator_to_array($executor->executeStream(self::subAgent(), self::request()), false);
+        $final = array_pop($results);
+        $streamed = implode('', array_map(static fn ($r): string => (string) $r->output, $results));
+
+        $this->assertSame(AgentStatus::Completed, $final->status);
+        $this->assertSame('the answer', $final->output, 'the terminal result is the answer alone');
+        foreach ($results as $partial) {
+            $this->assertSame(AgentStatus::Streaming, $partial->status);
+        }
+        // describeToolCall() JSON-encodes values, so the newline arrives as
+        // the two characters `\n` and the tool line stays one line.
+        $this->assertSame("looking first\n▸ probe(path: \"src\\/\\nA.php\")\nthe answer", $streamed);
+    }
+
+    public function testTokenDeltasAreCoalescedRatherThanAppendedOneByOne(): void
+    {
+        // A streaming provider's many tiny chunks: every delta inside one flush
+        // window must leave as ONE streamed result, not fifty file appends.
+        $chunky = new ScriptedProvider(
+            [array_fill(0, 50, new CompleteResponse(content: 't'))],
+            streams: true,
+        );
+        $results = iterator_to_array(
+            (new EngineExecutor(EngineBackend::new($chunky, 'm')))->executeStream(self::subAgent(), self::request()),
+            false,
+        );
+
+        $this->assertCount(2, $results, 'one coalesced partial, then the terminal result');
+        $this->assertSame(str_repeat('t', 50), $results[0]->output);
+    }
+
+    /**
+     * THE PANE'S VIEW, through the real forking pool: the parent's SubAgent
+     * carries the running agent's partial output WHILE the child is still
+     * working, not only once it has finished. The pool is driven inside a
+     * Fiber so its idle() suspends on every poll — exactly how the TUI's
+     * workflow Fiber drives it — and the sample is taken between polls.
+     */
+    public function testAStageAgentsPartialOutputReachesTheParentBeforeItFinishes(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('forking needs ext-pcntl');
+        }
+
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'surveying the lib', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+            static function (): CompleteResponse {
+                usleep(800_000);
+
+                return new CompleteResponse(content: 'finished report');
+            },
+        ]);
+        $pool = new AgentWorkerPool(forkedExecutor: new EngineExecutor(EngineBackend::new($provider, 'm')->withTools([self::probe()])));
+        $subAgent = self::subAgent();
+
+        $results = [];
+        $fiber = new \Fiber(static function () use ($pool, $subAgent, &$results): void {
+            foreach ($pool->executeAll([$subAgent], self::request()) as $result) {
+                $results[] = $result;
+            }
+        });
+
+        $liveSamples = [];
+        $fiber->start();
+        $deadline = microtime(true) + 20.0;
+        while (!$fiber->isTerminated() && microtime(true) < $deadline) {
+            if ($results === [] && $subAgent->output !== '') {
+                $liveSamples[] = $subAgent->output;
+            }
+            usleep(20_000);
+            $fiber->resume();
+        }
+
+        $this->assertTrue($fiber->isTerminated(), 'the run settled');
+        $this->assertNotSame([], $liveSamples, 'partial output was visible before the agent finished');
+        $this->assertStringContainsString('surveying the lib', $liveSamples[0]);
+        // The final step's prose streams too, so the LAST sample may hold it;
+        // what matters is a sample taken inside the 800ms tool-then-think window.
+        $midRun = array_filter(
+            $liveSamples,
+            static fn (string $s): bool => str_contains($s, '▸ probe()') && !str_contains($s, 'finished report'),
+        );
+        $this->assertNotSame([], $midRun, 'the pane saw the tool call while the agent was still thinking');
+        $this->assertSame('finished report', $results[0]->output ?? null);
+    }
+
+    /**
+     * A SEQUENTIAL stage is visible to the pane too: it now dispatches through
+     * the workflow's AgentManager, whose liveOutputs() is what the pane reads,
+     * so its partial output shows there while the stage is still running.
+     */
+    public function testASequentialStagesLiveOutputReachesTheManagerThePaneReads(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('forking needs ext-pcntl');
+        }
+
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'reading the lib', toolCalls: [new ToolCall('call_1', 'probe', [])]),
+            static function (): CompleteResponse {
+                usleep(800_000);
+
+                return new CompleteResponse(content: 'sequential report');
+            },
+        ]);
+        $manager = new AgentManager($provider, new SkillRegistry());
+        $registry = new WorkflowRegistry();
+        $workflows = new WorkflowEngine($registry, new AgentWorkerPool(forkedExecutor: new EngineExecutor()));
+        $workflows->setAgentManager($manager);
+        $workflows->bindEngineBackend(EngineBackend::new($provider, 'm')->withTools([self::probe()]));
+        $registry->register(
+            (new WorkflowBuilder())
+                ->name('live-seq')
+                ->description('one sequential stage that pauses mid-run')
+                ->stage('only', Tasks::agent('coder')->prompt('look'))
+                ->build(),
+        );
+
+        $result = null;
+        $fiber = new \Fiber(static function () use ($workflows, &$result): void {
+            $result = $workflows->run('live-seq');
+        });
+
+        $live = [];
+        $fiber->start();
+        $deadline = microtime(true) + 20.0;
+        while (!$fiber->isTerminated() && microtime(true) < $deadline) {
+            $live[] = $manager->liveOutputs()['coder'] ?? '';
+            usleep(20_000);
+            $fiber->resume();
+        }
+
+        $this->assertTrue($result?->isSuccess() ?? false);
+        $this->assertSame('sequential report', $result->stageResults[0]->output);
+        $midRun = array_filter($live, static fn (string $o): bool => str_contains($o, '▸ probe()') && !str_contains($o, 'sequential report'));
+        $this->assertNotSame([], $midRun, 'the sequential stage painted live, not only at the end');
     }
 
     /**

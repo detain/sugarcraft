@@ -1103,7 +1103,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         // Execute via pool
-        $agentResult = $this->pool->executeOne($subAgent, $request);
+        $agentResult = $this->dispatchOne($subAgent, $request);
 
         // Store agent result in context for {{agentName.results}} interpolation
         $agentName = $task->name ?? $task->agentType;
@@ -1213,7 +1213,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 systemPrompt: $agent->systemPrompt(),
             );
 
-            $agentResult = $this->pool->executeOne($subAgent, $request);
+            $agentResult = $this->dispatchOne($subAgent, $request);
 
             // Track timing
             if ($firstStartedAt === null) {
@@ -1314,7 +1314,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             systemPrompt: $taskAgent->systemPrompt(),
         );
 
-        $taskResult = $this->pool->executeOne($taskSubAgent, $taskRequest);
+        $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest);
 
         // If task itself fails, the whole stage fails immediately
         if ($taskResult->status === AgentStatus::Failed || $taskResult->status === AgentStatus::TimedOut) {
@@ -1357,7 +1357,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             systemPrompt: $verifierAgent->systemPrompt(),
         );
 
-        $verifierResult = $this->pool->executeOne($verifierSubAgent, $verifierRequest);
+        $verifierResult = $this->dispatchOne($verifierSubAgent, $verifierRequest);
 
         // Verifier failure marks the whole stage as failed
         if ($verifierResult->status === AgentStatus::Failed || $verifierResult->status === AgentStatus::TimedOut) {
@@ -1376,6 +1376,34 @@ final class WorkflowEngine implements WorkflowEngineInterface
             agents: $allAgents,
             startedAt: $taskResult->startedAt ?? $stageStartedAt,
             completedAt: $verifierResult->completedAt ?? new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * Run one agent for a sequential, pipeline or verification stage.
+     *
+     * THROUGH THE MANAGER WHEN THERE IS ONE, as {@see executeParallelStage()}
+     * already does: the live-agent pane and the status strip read
+     * {@see AgentManager::liveOutputs()}, which only sees sub-agents the
+     * manager dispatched. A stage run straight on the pool was invisible there
+     * however much it streamed — so only parallel stages ever painted a tile.
+     * Refusals propagate exactly as they do for a parallel stage.
+     */
+    private function dispatchOne(SubAgent $subAgent, CompleteRequest $request): AgentResult
+    {
+        if ($this->agentManager === null) {
+            return $this->pool->executeOne($subAgent, $request);
+        }
+
+        foreach ($this->agentManager->executeAll([$subAgent], $request, $this->pool) as $result) {
+            return $result;
+        }
+
+        return new AgentResult(
+            agentId: $subAgent->id,
+            status: AgentStatus::Stopped,
+            error: new \RuntimeException('cancelled before it produced a result'),
+            completedAt: new \DateTimeImmutable(),
         );
     }
 

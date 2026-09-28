@@ -48,6 +48,17 @@ happen to share the numbers 1–4.
   refusal counts them. `EngineBackend::completeTranscript()` is the new
   typed-history seam (`TranscriptTurn`, and `TurnInterrupted` carrying the
   transcript up to the last completed step); `complete()` is unchanged.
+- **Workflow stages stream live.** `EngineExecutor::executeStream()` runs the
+  engine turn inside a `\Fiber` whose token and tool-event sinks suspend each
+  coalesced delta (≤ one per 250ms; a tool call flushes at once) out to the
+  generator the pool's forked child already drains into its progress file — so
+  the live-agent pane fills with the stage's prose and a `▸ Tool(args)` line per
+  call while it works, instead of staying blank until it finishes. The terminal
+  result is still the final answer alone. `EngineBackend::completeTranscript()`
+  gained an optional `$onToken`. Sequential, pipeline and verification stages
+  now dispatch through the workflow's `AgentManager` (as parallel stages
+  already did), because `AgentManager::liveOutputs()` — what the pane reads —
+  only sees agents the manager ran; before, those stages never had a tile.
 - **`/workflow` stages run the real tool loop.** They dispatched through
   `ProcessExecutor`'s one-call worker, the same defect `Task` had. The workflow
   pool now carries `Agents\EngineExecutor` as its forked executor (only when the

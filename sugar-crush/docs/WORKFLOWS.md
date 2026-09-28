@@ -161,6 +161,14 @@ duration. *WHY THE E663 RULE STILL HOLDS:* a launch with no provider keeps the
 refusing worker, and an engine on the offline echo fallback is refused by the
 executor — "Completed" still means a model did the work.
 
+While it works, an engine-run stage streams to the live-agent pane: its prose
+as it arrives and a `▸ Tool(args)` line per tool call (`EngineExecutor::executeStream()`
+runs the turn in a Fiber whose sinks hand each coalesced delta out to the pool's
+progress file). The pane shows that activity log; the stage's result is the
+final answer only. Every stage type dispatches through the session's
+`AgentManager` (`WorkflowEngine::dispatchOne()`), which is what makes a
+sequential stage's tile appear at all.
+
 Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted
 does not pause into a directory nobody vetted.

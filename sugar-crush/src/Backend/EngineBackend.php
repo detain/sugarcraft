@@ -735,16 +735,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * calls are dropped, so the resumed model redoes that step rather than
      * reading results for calls it cannot see).
      *
+     * `$onToken` receives the turn's prose deltas across EVERY step, the same
+     * contract {@see complete()}'s has — which is what lets a delegated run be
+     * shown live ({@see \SugarCraft\Crush\Agents\EngineExecutor::executeStream()}).
+     *
      * @param list<TypedMessage> $messages
      *
      * @throws TurnInterrupted
      */
-    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): TranscriptTurn
+    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null): TranscriptTurn
     {
         $transcript = $messages;
 
         try {
-            $reply = $this->runTurn($messages, null, $onEvent, $onReasoning, $onHeartbeat, $transcript);
+            $reply = $this->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript);
         } catch (\Throwable $failure) {
             throw new TurnInterrupted($transcript, $failure);
         }

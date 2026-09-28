@@ -15,7 +15,9 @@ use SugarCraft\Crush\Providers\ProviderInterface;
  * request it was sent. A script entry that is a {@see \Throwable} is THROWN
  * from that call, which is how a test interrupts a turn part-way; a
  * {@see \Closure} entry is called with the request and answers at call time
- * (e.g. to report which process it ran in). Past the end
+ * (e.g. to report which process it ran in). Constructed with `streams: true`
+ * it is a STREAMING provider, and an entry may then be a list of chunks that
+ * {@see completeStream()} yields one by one — how a test sends many tiny deltas. Past the end
  * of the script it repeats the last answer, so a run that loops longer than
  * expected fails on an assertion rather than on a crash.
  */
@@ -25,9 +27,9 @@ final class ScriptedProvider implements ProviderInterface
     public array $requests = [];
 
     /**
-     * @param list<CompleteResponse|\Throwable|\Closure(CompleteRequest): CompleteResponse> $script
+     * @param list<CompleteResponse|\Throwable|\Closure(CompleteRequest): CompleteResponse|list<CompleteResponse>> $script
      */
-    public function __construct(private array $script)
+    public function __construct(private array $script, private bool $streams = false)
     {
     }
 
@@ -47,7 +49,7 @@ final class ScriptedProvider implements ProviderInterface
 
     public function supportsStreaming(): bool
     {
-        return false;
+        return $this->streams;
     }
 
     public function supportsFunctionCalling(): bool
@@ -77,6 +79,27 @@ final class ScriptedProvider implements ProviderInterface
 
     public function complete(CompleteRequest $request): CompleteResponse
     {
+        $answer = $this->next($request);
+        if (\is_array($answer)) {
+            return new CompleteResponse(content: implode('', array_map(static fn (CompleteResponse $c): string => $c->content, $answer)));
+        }
+
+        return $answer;
+    }
+
+    public function completeStream(CompleteRequest $request): \Generator
+    {
+        $answer = $this->next($request);
+        foreach (\is_array($answer) ? $answer : [$answer] as $chunk) {
+            yield $chunk;
+        }
+    }
+
+    /**
+     * @return CompleteResponse|list<CompleteResponse>
+     */
+    private function next(CompleteRequest $request): CompleteResponse|array
+    {
         $this->requests[] = $request;
         $index = min(\count($this->requests), \count($this->script)) - 1;
         $answer = $this->script[$index] ?? new CompleteResponse(content: '');
@@ -89,11 +112,6 @@ final class ScriptedProvider implements ProviderInterface
         }
 
         return $answer;
-    }
-
-    public function completeStream(CompleteRequest $request): \Generator
-    {
-        yield $this->complete($request);
     }
 
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
