@@ -275,7 +275,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because five `*.move` rows describe arrow movement
-     * (twelve rows carry an arrow GLYPH in their label; both counts are asserted
+     * (thirteen rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -511,9 +511,9 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            12,
+            13,
             $arrowLabelled,
-            'KEYISH\'s docblock says twelve rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says thirteen rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -694,6 +694,17 @@ final class KeyBindingDriftTest extends TestCase
             'chat.recall' => function (array $k): void {
                 [$next] = $this->chat([Message::user('earlier')])->update($k[0]);
                 $this->assertSame('earlier', $next->inputBuf);
+            },
+            'chat.recall-next' => function (array $k): void {
+                $up = new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Up);
+                [$recalled] = $this->chat([Message::user('first'), Message::user('second')])->update($up);
+                [$recalled] = $recalled->update($up);
+                $this->assertSame('first', $recalled->inputBuf, 'fixture: two presses walk back to the older prompt');
+
+                [$next] = $recalled->update($k[0]);
+                $this->assertSame('second', $next->inputBuf);
+                [$draft] = $next->update($k[0]);
+                $this->assertSame('', $draft->inputBuf, 'past the newest prompt the (empty) draft comes back');
             },
             'chat.accept-suggestion' => function (array $k): void {
                 $history = [Message::user('fix it'), Message::assistant('Fixed.')];

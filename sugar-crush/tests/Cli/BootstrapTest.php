@@ -12,6 +12,7 @@ use SugarCraft\Core\View;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
+use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Renderer as LiveRenderer;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
@@ -173,15 +174,38 @@ final class BootstrapTest extends TestCase
         $this->assertSame([$sessionId], array_column($store->listSessions(), 'id'));
     }
 
-    public function testChatReusesTheSeededSessionOnASecondLaunch(): void
+    /**
+     * A launch with no session flag opens a NEW session, so two terminals never
+     * share a conversation; `--continue` reopens the most recent one, and puts
+     * its saved transcript back in front of the model.
+     */
+    public function testASecondLaunchOpensANewSessionAndContinueReopensTheLastOne(): void
     {
         $home = $this->isolatedHome();
 
         $first = Bootstrap::chat($home);
         $second = Bootstrap::chat($home);
 
-        $this->assertSame($first->currentSessionId(), $second->currentSessionId());
-        $this->assertCount(1, $second->sessionStore()?->listSessions() ?? []);
+        $this->assertNotSame($first->currentSessionId(), $second->currentSessionId());
+        $this->assertCount(2, $second->sessionStore()?->listSessions() ?? []);
+
+        $store = $second->sessionStore();
+        $this->assertInstanceOf(\SugarCraft\Crush\Session\EnhancedSessionStore::class, $store);
+        $store->saveTranscript((string) $second->currentSessionId(), [Message::user('remember me'), Message::assistant('I will.')]);
+
+        try {
+            Bootstrap::useSessionLaunch(true);
+            $continued = Bootstrap::chat($home);
+        } finally {
+            Bootstrap::useSessionLaunch(false);
+        }
+
+        $this->assertSame($second->currentSessionId(), $continued->currentSessionId());
+        $this->assertCount(2, $continued->sessionStore()?->listSessions() ?? [], '--continue must not create a row');
+        $this->assertSame(
+            ['remember me', 'I will.'],
+            array_map(static fn(Message $m): string => $m->content, array_slice($continued->history, 0, 2)),
+        );
     }
 
     /**
@@ -212,10 +236,11 @@ final class BootstrapTest extends TestCase
         $this->assertSame([$first->sessionId], array_column($rows, 'id'));
 
         // Re-seeding inside app() instead of reusing chat()'s seeding would
-        // show up here as a second row (and a new id) on every launch.
+        // show up here as a THIRD row after two launches.
         $second = Bootstrap::app($home);
-        $this->assertSame($first->sessionId, $second->sessionId);
-        $this->assertCount(1, $second->chat?->sessionStore()?->listSessions() ?? []);
+        $this->assertNotSame($first->sessionId, $second->sessionId);
+        $this->assertSame($second->chat?->currentSessionId(), $second->sessionId);
+        $this->assertCount(2, $second->chat?->sessionStore()?->listSessions() ?? []);
     }
 
     public function testAppPopulatesTheShellsOwnPanes(): void

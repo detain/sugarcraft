@@ -295,6 +295,29 @@ putenv('TMPDIR=' . $sandbox);
 AuditHook::pinDefaultLogDirectory($sandbox . '/audit');
 
 /*
+ * The ↑/↓ prompt history, pinned into the sandbox for the same reason as the
+ * audit log above: a test that presses Enter on a Bootstrap::chat()-built Chat
+ * appends its prompt, and without the pin that lands in the developer's own
+ * ~/.sugar-crush/prompt_history.jsonl and resurfaces under their next ↑. Per
+ * process and cleared at start, so one run's prompts never seed the next.
+ */
+$promptHistoryPin = $sandbox . '/prompt_history.' . getmypid() . '.jsonl';
+if (is_file($promptHistoryPin)) {
+    unlink($promptHistoryPin);
+}
+$GLOBALS['__sugarcrushPromptHistoryPin'] = $promptHistoryPin;
+\SugarCraft\Crush\Cli\Bootstrap::pinPromptHistoryPath($promptHistoryPin);
+// Owner-pid guarded: suites that pcntl_fork() run shutdown functions in every
+// child too, and a child deleting the file would pull it out from under the
+// runner that is still using it.
+$promptHistoryOwner = getmypid();
+register_shutdown_function(static function () use ($promptHistoryPin, $promptHistoryOwner): void {
+    if (getmypid() === $promptHistoryOwner && is_file($promptHistoryPin)) {
+        unlink($promptHistoryPin);
+    }
+});
+
+/*
  * The suite never reads the runner's own descriptor 0 (E212).
  *
  * `NonInteractive::run()` — the `-p "<prompt>"` one-shot path — calls

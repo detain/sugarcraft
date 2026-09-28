@@ -1080,7 +1080,7 @@ final class KeyHelpTest extends TestCase
         // of 80 - 2 - 2 - 1 = 75 no longer holds 80 lines, while 90 gives 85 and
         // does. The 0 below is what measures that, so the "fits" half of this
         // test cannot quietly become a second overflow case.
-        foreach ([[100, 30, 58], [100, 90, 0]] as [$cols, $rows, $expectedOverflow]) {
+        foreach ([[100, 30, 59], [100, 90, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -3407,7 +3407,7 @@ final class KeyHelpTest extends TestCase
         // breaks that rule.
         ksort($byMethod, SORT_STRING);
         $this->assertSame(
-            ['applyBackendToolEvent', 'finishToolCalls', 'requestPermission', 'update'],
+            ['applyBackendToolEvent', 'finishToolCalls', 'requestPermission', 'route'],
             array_keys($byMethod),
             'the generation guard is spelled out per-site; if the SET of sites changed, '
             . "Chat::requestPermission()'s mutation table names one of them and must be re-measured. "
@@ -3428,7 +3428,7 @@ final class KeyHelpTest extends TestCase
 
         $ambiguous = array_keys(array_filter($bodies, static fn(string $body): bool => $body === $bare));
         $this->assertSame(
-            ['finishToolCalls', 'requestPermission', 'update'],
+            ['finishToolCalls', 'requestPermission', 'route'],
             $ambiguous,
             'these are the guard sites a mutation cannot tell apart by text, so a mutation aimed at one of '
             . 'them must be anchored by line number. If this set changed, re-read the table in '

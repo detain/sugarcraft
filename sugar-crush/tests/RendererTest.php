@@ -1197,7 +1197,7 @@ final class RendererTest extends TestCase
         $theme = $chat->theme();
         $out = Renderer::render($chat);
 
-        $gutterStyle = Style::new()->foreground($theme->systemLabel)->faint();
+        $gutterStyle = Style::new()->foreground($theme->systemLabel);
         $this->assertStringContainsString(
             $gutterStyle->render('  1│ ') . Style::new()->foreground(Color::ansi(2))->render('+here'),
             $out,
@@ -1773,7 +1773,7 @@ final class RendererTest extends TestCase
         $out = Renderer::render($chat);
 
         $this->assertStringContainsString(
-            Style::new()->foreground($theme->systemLabel)->faint()->strikethrough()->render('🔧 tool: bash'),
+            Style::new()->foreground($theme->systemLabel)->strikethrough()->render('🔧 tool: bash'),
             $out,
         );
         $this->assertStringContainsString(
@@ -1819,7 +1819,7 @@ final class RendererTest extends TestCase
         $out = Renderer::render($chat);
 
         $this->assertStringContainsString(
-            Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash'),
+            Style::new()->foreground($theme->systemLabel)->render('🔧 tool: bash'),
             $out,
         );
         $this->assertStringContainsString('✗ error', $out);
@@ -1972,12 +1972,12 @@ final class RendererTest extends TestCase
         $theme = $chat->theme();
 
         $out = Renderer::render($chat);
-        $label = Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash')
+        $label = Style::new()->foreground($theme->systemLabel)->render('🔧 tool: bash')
             . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok');
 
         $this->assertStringContainsString($label, $out);
         $this->assertStringContainsString(
-            $label . Style::new()->foreground($theme->systemLabel)->faint()->render(' — bash(command: "ls -la")'),
+            $label . Style::new()->foreground($theme->systemLabel)->render(' — bash(command: "ls -la")'),
             $out,
         );
     }
@@ -1993,7 +1993,7 @@ final class RendererTest extends TestCase
         $out = Renderer::render($chat);
 
         $this->assertStringContainsString(
-            Style::new()->foreground($theme->systemLabel)->faint()->render('🔧 tool: bash')
+            Style::new()->foreground($theme->systemLabel)->render('🔧 tool: bash')
                 . ' ' . Style::new()->foreground($theme->assistantLabel)->bold()->render('✓ ok'),
             $out,
         );

@@ -1042,6 +1042,8 @@ final class Subcommands
         '--config' => ['short' => null, 'value' => 'file', 'desc' => 'Read settings and permissions from <file>'],
         '--model' => ['short' => null, 'value' => 'text', 'desc' => 'Conversation model name (not a provider)'],
         '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'Permission mode to run under'],
+        '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'Continue the most recent session'],
+        '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'Resume a stored session by id or name'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'Show the help screen'],
         '--version' => ['short' => '-v', 'value' => null, 'desc' => 'Show the installed version'],
     ];

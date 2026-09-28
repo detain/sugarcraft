@@ -200,8 +200,8 @@ use SugarCraft\Crush\Tests\Support\SplitsTopLevelArgumentsTrait;
  * {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
  * it — TWENTY-NINE call sites in `src/Cli/Bootstrap.php`, each producing a
- * distinct `sugarcrush: ` line, against a channel-4 credit of four for that
- * file. Off by roughly four times, in the blind direction.
+ * distinct `sugarcrush: ` line, against a channel-4 credit of six for that
+ * file. Off by roughly five times, in the blind direction.
  *
  * IT WAS NOT A THEORY. Round 45's review added one
  * `self::warnPermissionConfigOnce('a brand new user visible warning nobody
@@ -391,8 +391,13 @@ final class StderrEmitterCensusTest extends TestCase
         // construction, and MEASURED to do so when the literals were written.
         'src/Agents/AgentWorkerPool.php' => 3,
         'src/Agents/ForeignAgentPresetRegistry.php' => 2,
-        'src/Cli/ArgvParser.php' => 14,
-        'src/Cli/Bootstrap.php' => 4,
+        // +2 each for the session-launch flags: ArgvParser's two refusals
+        // (--continue with --resume, either with -p) and Bootstrap's two
+        // --resume target errors. All four are pre-launch usage errors printed
+        // by NonInteractive::failUsage() at exit 2 — stderr alone, because no
+        // session exists yet for a transcript row to land in.
+        'src/Cli/ArgvParser.php' => 16,
+        'src/Cli/Bootstrap.php' => 6,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         'src/Cli/NonInteractive.php' => 7,
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,

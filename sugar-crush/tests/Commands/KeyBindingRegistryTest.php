@@ -247,11 +247,15 @@ final class KeyBindingRegistryTest extends TestCase
      *
      * 65 -> 66 live when `chat.accept-suggestion` was declared: → on an empty
      * box takes the grayed next-message suggestion as the draft.
+     *
+     * 66 -> 67 live (70 -> 71 all) when `chat.recall-next` was declared: ↓
+     * steps forward through recalled prompts and then gives the draft back,
+     * once ↑ recall became a walk over the cross-session prompt history.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(70, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(66, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(71, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(67, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(4, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(9, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

@@ -120,6 +120,9 @@ final class ArgvParser
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
+        $continueSession = false;
+        $resumeSession = null;
+        $resumeRequested = false;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -467,6 +470,42 @@ final class ArgvParser
                 continue;
             }
 
+            // -c / --continue: reopen the most recently used session, with
+            // its transcript, instead of starting a new one.
+            if ($arg === '--continue' || $arg === '-c') {
+                $continueSession = true;
+                ++$i;
+                continue;
+            }
+
+            // --resume=<id|name>
+            if (\str_starts_with($arg, '--resume=')) {
+                $value = \substr($arg, 9); // length of "--resume="
+                $resumeRequested = true;
+                $resumeSession = $value === '' ? null : $value;
+                ++$i;
+                continue;
+            }
+
+            // --resume [<id|name>]: the value is OPTIONAL, and that is the one
+            // way this differs from --model's strict shape. Bare, or followed
+            // by another option, it opens the session picker at launch rather
+            // than being a usage error — "resume, but let me choose" is a
+            // request of its own. A following non-flag token is always the
+            // value, so the directory to open goes before the flag
+            // (`sugarcrush ./app --resume`) or in --root.
+            if ($arg === '--resume') {
+                $resumeRequested = true;
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next) || $next === '') {
+                    $i += $next === '' ? 2 : 1;
+                    continue;
+                }
+                $resumeSession = $next;
+                $i += 2;
+                continue;
+            }
+
             // Unrecognised flag — recorded, never applied. bin/sugarcrush
             // turns a non-empty list into a usage error (exit 2); dropping it
             // here is what let `--version` boot the TUI.
@@ -525,6 +564,23 @@ final class ArgvParser
             }
         }
 
+        // --continue and --resume both choose the session a TUI launch opens,
+        // so they cannot both win, and neither means anything to a one-shot
+        // run, which opens no session at all. Refused rather than ignored: a
+        // `-c -p "…"` that silently ran without the earlier conversation
+        // would look like a model that forgot everything.
+        if ($usageError === null && $continueSession && $resumeRequested) {
+            $usageError = 'sugarcrush: --continue and --resume both pick the session to open; use one of them';
+            $usageHint = 'Use --continue for the most recent session, or --resume <id|name> for a specific one.';
+        }
+        if ($usageError === null && $promptRequested && ($continueSession || $resumeRequested)) {
+            $usageError = \sprintf(
+                'sugarcrush: %s reopens an interactive session and cannot be combined with -p/run',
+                $continueSession ? '--continue' : '--resume',
+            );
+            $usageHint = 'Drop -p to continue the conversation in the TUI.';
+        }
+
         // Assign first positional that looks like a path to root
         if ($root === null) {
             foreach ($positional as $pos) {
@@ -535,7 +591,7 @@ final class ArgvParser
             }
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested);
     }
 
     /**
@@ -843,6 +899,12 @@ final readonly class ParsedArgs
         /** The RAW string `--permission-mode` named, or null. Validated by
          *  {@see \SugarCraft\Crush\Cli\Bootstrap::permissionGate()}, not here. */
         public ?string $permissionMode = null,
+        /** `-c`/`--continue`: open the most recently used session. */
+        public bool $continueSession = false,
+        /** The id or name `--resume` named, or null (bare `--resume` opens the picker). */
+        public ?string $resumeSession = null,
+        /** Whether `--resume` appeared at all, with or without a value. */
+        public bool $resumeRequested = false,
     ) {
     }
 
@@ -869,7 +931,10 @@ final readonly class ParsedArgs
         array $subcommandArgs = [],
         ?string $model = null,
         ?string $permissionMode = null,
+        bool $continueSession = false,
+        ?string $resumeSession = null,
+        bool $resumeRequested = false,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested);
     }
 }

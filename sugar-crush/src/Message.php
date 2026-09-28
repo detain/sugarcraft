@@ -14,7 +14,7 @@ namespace SugarCraft\Crush;
  * cheap to build (every keystroke updates the in-flight user
  * message) and keeps the backend adapter API ASCII-only.
  */
-final class Message
+final class Message implements \JsonSerializable
 {
     /**
      * @param list<Attachment> $attachments
@@ -449,5 +449,157 @@ final class Message
             );
         }
         return $wire;
+    }
+
+    /**
+     * The persisted shape: every field, keyed by its property name, so a saved
+     * transcript row resumes as the message it was ({@see fromArray()}).
+     *
+     * EXPLICIT rather than json_encode()'s default walk of the public
+     * properties, which is what checkpoints used to get and which lost data
+     * two ways: {@see AttachmentType} is a pure enum, so any message holding an
+     * attachment made the encode THROW and the whole checkpoint was skipped;
+     * and raw image bytes are binary, so `JSON_INVALID_UTF8_SUBSTITUTE` turned
+     * them into U+FFFD soup. Attachments now travel by case name, and image
+     * bytes as base64 under `imageBytesBase64` - the raw `imageBytes` key is
+     * never written. The keys `role`, `content` and `pendingToolCallId` keep
+     * their old spelling, which is all the `/rewind` reviver reads.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return [
+            'role' => $this->role->value,
+            'content' => $this->content,
+            'createdAt' => $this->createdAt,
+            // A foreign element (the arrays are typed by docblock only) is
+            // handed to json_encode() as it is rather than refused: it may be
+            // JsonSerializable itself, and a checkpoint is no place to throw.
+            'attachments' => array_map(
+                static fn(mixed $a): mixed => $a instanceof Attachment
+                    ? ['path' => $a->path, 'type' => $a->type->name]
+                    : $a,
+                $this->attachments,
+            ),
+            'toolCalls' => array_map(
+                static fn(mixed $c): mixed => $c instanceof ToolCall
+                    ? ['name' => $c->name, 'arguments' => $c->arguments, 'id' => $c->id]
+                    : $c,
+                $this->toolCalls,
+            ),
+            'toolResults' => array_map(
+                static fn(mixed $r): mixed => !$r instanceof ToolResult ? $r : [
+                    'name' => $r->name,
+                    'result' => $r->result,
+                    'error' => $r->error,
+                    'id' => $r->id,
+                    'imageBytesBase64' => $r->imageBytes === null ? null : base64_encode($r->imageBytes),
+                    'imagePath' => $r->imagePath,
+                    'imageProtocol' => $r->imageProtocol,
+                    'diff' => $r->diff,
+                    'durationMs' => $r->durationMs,
+                    'description' => $r->description,
+                    'arguments' => $r->arguments,
+                ],
+                $this->toolResults,
+            ),
+            'pendingToolCallId' => $this->pendingToolCallId,
+            'reasoning' => $this->reasoning,
+            'imageBytesBase64' => $this->imageBytes === null ? null : base64_encode($this->imageBytes),
+            'imageProtocol' => $this->imageProtocol,
+            'usage' => $this->usage,
+            'lengthStopped' => $this->lengthStopped,
+            'pendingToolArguments' => $this->pendingToolArguments,
+        ];
+    }
+
+    /**
+     * Rebuild a message from {@see jsonSerialize()}'s shape - or from any
+     * older row that carries a subset of it.
+     *
+     * Tolerant field by field, because the rows come off disk: a missing or
+     * mistyped field takes its default rather than failing the whole
+     * transcript, an unknown role is read as `user` (what the `/rewind`
+     * reviver has always done), and an attachment, tool call or tool result
+     * without its required parts is dropped. A pending placeholder is returned
+     * AS a placeholder; whether it should be healed into an "interrupted" row
+     * is the caller's decision, see {@see Chat::reviveTranscriptMessage()}.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function fromArray(array $row): self
+    {
+        $string = static fn(mixed $v): ?string => \is_string($v) ? $v : null;
+        $bytes = static function (mixed $v): ?string {
+            if (!\is_string($v)) {
+                return null;
+            }
+            $decoded = base64_decode($v, true);
+
+            return $decoded === false ? null : $decoded;
+        };
+
+        $attachments = [];
+        foreach (\is_array($row['attachments'] ?? null) ? $row['attachments'] : [] as $a) {
+            if (!\is_array($a) || !\is_string($a['path'] ?? null)) {
+                continue;
+            }
+            $type = match ($a['type'] ?? null) {
+                'Image' => AttachmentType::Image,
+                'File' => AttachmentType::File,
+                default => null,
+            };
+            if ($type !== null) {
+                $attachments[] = new Attachment($a['path'], $type);
+            }
+        }
+
+        $toolCalls = [];
+        foreach (\is_array($row['toolCalls'] ?? null) ? $row['toolCalls'] : [] as $c) {
+            if (\is_array($c) && \is_string($c['name'] ?? null)) {
+                $toolCalls[] = new ToolCall(
+                    $c['name'],
+                    \is_array($c['arguments'] ?? null) ? $c['arguments'] : [],
+                    $string($c['id'] ?? null),
+                );
+            }
+        }
+
+        $toolResults = [];
+        foreach (\is_array($row['toolResults'] ?? null) ? $row['toolResults'] : [] as $r) {
+            if (!\is_array($r) || !\is_string($r['name'] ?? null)) {
+                continue;
+            }
+            $toolResults[] = new ToolResult(
+                name: $r['name'],
+                result: $string($r['result'] ?? null) ?? '',
+                error: $string($r['error'] ?? null),
+                id: $string($r['id'] ?? null),
+                imageBytes: $bytes($r['imageBytesBase64'] ?? null),
+                imagePath: $string($r['imagePath'] ?? null),
+                imageProtocol: $string($r['imageProtocol'] ?? null),
+                diff: $string($r['diff'] ?? null),
+                durationMs: \is_int($r['durationMs'] ?? null) ? $r['durationMs'] : null,
+                description: $string($r['description'] ?? null),
+                arguments: \is_array($r['arguments'] ?? null) ? $r['arguments'] : [],
+            );
+        }
+
+        return new self(
+            role: Role::tryFrom(\is_string($row['role'] ?? null) ? $row['role'] : '') ?? Role::User,
+            content: $string($row['content'] ?? null) ?? '',
+            createdAt: \is_int($row['createdAt'] ?? null) ? $row['createdAt'] : time(),
+            attachments: $attachments,
+            toolCalls: $toolCalls,
+            toolResults: $toolResults,
+            pendingToolCallId: $string($row['pendingToolCallId'] ?? null),
+            reasoning: $string($row['reasoning'] ?? null),
+            imageBytes: $bytes($row['imageBytesBase64'] ?? null),
+            imageProtocol: $string($row['imageProtocol'] ?? null),
+            usage: Usage::fromArray($row['usage'] ?? null),
+            lengthStopped: ($row['lengthStopped'] ?? false) === true,
+            pendingToolArguments: \is_array($row['pendingToolArguments'] ?? null) ? $row['pendingToolArguments'] : [],
+        );
     }
 }
