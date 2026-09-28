@@ -32,6 +32,8 @@ use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
+use SugarCraft\Crush\Tui\TextSelection;
+use SugarCraft\Crush\Support\SystemClipboard;
 use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Agents\AgentManager;
@@ -1665,6 +1667,10 @@ final class Chat implements Model
             // The one authoritative size - see the constructor docblock on
             // $rows/$cols for why Renderer must read these instead of
             // querying terminal size itself.
+            // A reflow moves every cell, so a highlight measured on the old
+            // frame would sit over text it never selected.
+            self::$textSelection = null;
+
             return [$this->mutate(['rows' => $msg->rows, 'cols' => $msg->cols]), null];
         }
         if ($msg instanceof MouseMsg) {
@@ -1719,6 +1725,18 @@ final class Chat implements Model
 
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
+        }
+        // A key dismisses a mouse selection's lingering highlight. Ctrl+C
+        // over one is the "copy" reflex every terminal user has, and the text
+        // is ALREADY on the clipboard (the release copied it), so that press
+        // only dismisses — quitting out from under a fresh copy would be the
+        // most surprising answer the chord could give.
+        $selection = self::$textSelection;
+        if ($selection !== null) {
+            self::$textSelection = null;
+            if ($selection->settled && $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'c') {
+                return [$this, null];
+            }
         }
         // BOTH encodings of Ctrl+C. candy-core's InputReader normalizes every
         // control byte 0x01-0x1a into (Char, chr(0x60 + code), ctrl: true), so
@@ -4832,6 +4850,149 @@ final class Chat implements Model
      */
     private function handleMouse(MouseMsg $msg): array
     {
+        $copy = $this->trackTextSelection($msg);
+        [$next, $cmd] = $this->handlePointer($msg);
+
+        if ($copy === null) {
+            return [$next, $cmd];
+        }
+
+        return [$next, $cmd === null ? $copy : Cmd::batch($cmd, $copy)];
+    }
+
+    /**
+     * The mouse text selection in progress or just copied, or null.
+     *
+     * Static for {@see $pressGesture}'s reason — the gesture spans several
+     * `update()` calls on an immutable Chat — and public because the renderer
+     * paints its highlight and the pane shell routes a drag's release here
+     * even when it lands over chrome ({@see textSelectionInProgress()}).
+     */
+    public static function textSelection(): ?TextSelection
+    {
+        return self::$textSelection;
+    }
+
+    /** True between a press that anchored a selection and its release. */
+    public static function textSelectionInProgress(): bool
+    {
+        return self::$textSelection !== null && !self::$textSelection->settled;
+    }
+
+    /** Drop any selection; for tests and for hosts that stop painting the chat. */
+    public static function clearTextSelection(): void
+    {
+        self::$textSelection = null;
+    }
+
+    /** @see textSelection() */
+    private static ?TextSelection $textSelection = null;
+
+    /**
+     * Drag-to-select and copy-on-release over the transcript.
+     *
+     * The comment this replaces ended §8 E8's drag guard with "so the
+     * terminal's own copy-on-select is what the gesture accomplishes" — but
+     * with SGR mouse tracking on, the terminal runs no selection of its own:
+     * every press, drag and release is reported to the app instead. So the
+     * sweep the E8 guard carefully declines to treat as a click did nothing
+     * at all. This is the gesture, owned here the way tmux copy-mode, crush
+     * and opencode own it:
+     *
+     *  - a left PRESS inside the transcript's text region (as the last frame
+     *    measured it, {@see Renderer::selectableRegion()}) anchors a
+     *    selection; a press anywhere else — chrome, the input box, an overlay
+     *    frame (which publishes no region) — anchors nothing, and every press
+     *    drops the previous selection's highlight;
+     *  - MOTION with the button held moves its head, and once the pointer
+     *    has strayed past {@see CLICK_DRAG_TOLERANCE_CELLS} (the SAME drift
+     *    that stops the release dispatching a click) the covered cells are
+     *    highlighted on every repaint;
+     *  - the RELEASE reads the covered text off the frame on screen and
+     *    copies it: OSC 52 through the frame's own clipboard relay, plus the
+     *    host's clipboard tool ({@see SystemClipboard}, which is what reaches
+     *    the clipboard from inside tmux). The highlight stays up as the
+     *    record of what was copied until the next press, key, wheel notch or
+     *    resize.
+     *
+     * Runs BEFORE {@see handlePointer()} and changes nothing it decides: the
+     * click tracker still sees every event, and a drag still dispatches no
+     * click. Drift is folded in here too — {@see recordPressDrift()} is a
+     * running maximum, so recording the same cell twice changes nothing.
+     */
+    private function trackTextSelection(MouseMsg $msg): ?\Closure
+    {
+        if ($msg instanceof MouseWheelMsg) {
+            if (self::$textSelection?->settled === true) {
+                self::$textSelection = null;
+            }
+
+            return null;
+        }
+
+        if ($msg->button !== MouseButton::Left) {
+            return null;
+        }
+
+        // zoneSpace() keeps the SGR report's 1-based cells (the zone scanner
+        // speaks the same base); the selection indexes the frame's lines and
+        // cells from 0.
+        [$col, $row] = self::zoneSpace($msg->x, $msg->y);
+        [$col, $row] = [$col - 1, $row - 1];
+
+        if ($msg instanceof MouseClickMsg) {
+            $region = Renderer::selectableRegion();
+            self::$textSelection = $region !== null && self::mouseClicksEnabled()
+                ? TextSelection::at($col, $row, $region)
+                : null;
+
+            return null;
+        }
+
+        $selection = self::$textSelection;
+        if ($selection === null || $selection->settled) {
+            return null;
+        }
+
+        self::recordPressDrift($msg->x, $msg->y);
+        $selection = $selection->withHead($col, $row);
+        if ((self::$pressGesture[2] ?? 0) > self::CLICK_DRAG_TOLERANCE_CELLS) {
+            $selection = $selection->withDragging();
+        }
+
+        if (!$msg instanceof MouseReleaseMsg) {
+            self::$textSelection = $selection;
+
+            return null;
+        }
+
+        $text = $selection->dragging ? $selection->extract(Renderer::selectableLines()) : '';
+        if ($text === '') {
+            self::$textSelection = null;
+
+            return null;
+        }
+
+        self::$textSelection = $selection->withSettled(mb_strlen($text, 'UTF-8'));
+
+        return Cmd::batch(
+            $this->relayWidgetCmd(Cmd::setClipboard($text)),
+            static function () use ($text): ?Msg {
+                SystemClipboard::copy($text);
+
+                return null;
+            },
+        );
+    }
+
+    /**
+     * Everything {@see handleMouse()} did before text selection existed:
+     * clicks, wheel scrolling, and the §8 E8 drag guard.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function handlePointer(MouseMsg $msg): array
+    {
         if ($msg instanceof MouseWheelMsg) {
             // E744 WS4: while the session picker is up, the wheel belongs to
             // the picker's rows — the list under the pointer is the scroll
@@ -4914,8 +5075,8 @@ final class Chat implements Model
 
         // §8 E8. The pair is clean by zone, but the pointer travelled far
         // enough across it that the user was sweeping out a text selection,
-        // not pointing at a control — dispatch nothing so the terminal's own
-        // copy-on-select is what the gesture accomplishes.
+        // not pointing at a control — dispatch nothing; the selection itself
+        // was copied by {@see trackTextSelection()}.
         if ($drift > self::CLICK_DRAG_TOLERANCE_CELLS) {
             return [$this, null];
         }

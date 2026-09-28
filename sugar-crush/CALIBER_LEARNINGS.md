@@ -61,6 +61,30 @@ allocate out of U+E000–U+F8FF. `Renderer::maskImageMarkers()` exists solely to
 mask that block out of the copy the mouse `Scanner` reads, so an image is not
 parsed as a zone. Any new rendered glyph must stay outside U+E000–U+F8FF.
 
+## Mouse tracking means the app owns text selection — and pasted newlines are CR
+
+- **With SGR mouse tracking on, the terminal runs NO copy-on-select.** Every
+  press/drag/release is reported to the app. The §8 E8 drag guard used to say
+  "dispatch nothing so the terminal's own copy-on-select is what the gesture
+  accomplishes" — there was no such thing, so drag-selecting did nothing.
+  `Tui\TextSelection` + `Chat::trackTextSelection()` own the gesture now;
+  `Renderer::selectableRegion()` limits it to the transcript's text column so
+  borders never reach the clipboard.
+- **SGR mouse x/y stay 1-based through `Chat::zoneSpace()`** (candy-mouse
+  zones are 1-based too). Anything that indexes frame lines/cells must
+  subtract 1 — the first live run of the selection highlighted one row and one
+  column off.
+- **Inside tmux an app's OSC 52 is ignored** under the default
+  `set-clipboard external`. `Support\SystemClipboard` pipes the text to
+  `tmux load-buffer -w -` (or pbcopy/wl-copy/xclip/xsel outside tmux).
+  `tests/bootstrap.php` pins its runner off so no test run overwrites the
+  developer's clipboard.
+- **Terminals and `tmux paste-buffer` deliver a pasted newline as `\r`.** A CR
+  left in the draft is painted raw and the rest of the row restarts at column
+  0 — over the sidebar. candy-forms `TextArea::insertString()` now folds
+  CR/CRLF into LF (Bubbles' `ReplaceNewlines`). Reproduce pastes live with
+  `tmux set-buffer` + `tmux paste-buffer -p`, which does the same conversion.
+
 ## `Chat` is immutable — thread every field through `mutate()`
 
 `Chat::mutate()` rebuilds the object from a `constructorProps` map. A new

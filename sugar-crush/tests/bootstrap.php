@@ -602,3 +602,15 @@ if (!stream_isatty(\STDIN)) {
  * fallback constant directly, with the probe armed by an explicit reset.
  */
 TuiRenderer::setSize(200, 60);
+
+/*
+ * No test may reach the developer's real clipboard. A mouse selection's
+ * release returns a Cmd that, once evaluated, hands the text to the host's
+ * clipboard tool ({@see \SugarCraft\Crush\Support\SystemClipboard}) — and on a
+ * workstation that is `tmux load-buffer -w` or `xclip`, so any test that runs
+ * the Cmd would overwrite whatever the person running the suite last copied.
+ * The seam is pinned to "no tool accepted it" for the whole process;
+ * `tests/Support/SystemClipboardTest.php` re-arms it around the one test that
+ * drives a real spawn against a stub binary.
+ */
+\SugarCraft\Crush\Support\SystemClipboard::useRunnerForTesting(static fn (): bool => false);

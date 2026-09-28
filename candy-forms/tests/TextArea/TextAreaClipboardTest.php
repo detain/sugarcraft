@@ -230,6 +230,20 @@ final class TextAreaClipboardTest extends TestCase
         $this->assertSame(1, $next->col); // caret at the end of the payload
     }
 
+    public function testPastedCarriageReturnsBreakLinesInsteadOfStayingInThem(): void
+    {
+        // Terminals and tmux's paste-buffer send a pasted newline as CR. Left
+        // in a line, the CR reaches the terminal on the next paint and the
+        // rest of the row is drawn from column 0, over whatever sits left of
+        // the box. Mirrors Bubbles' runeutil ReplaceNewlines.
+        foreach (["one\rtwo\rthree", "one\r\ntwo\r\nthree", "one\ntwo\r\nthree"] as $payload) {
+            [$next, ] = $this->focused('')->update(new PasteMsg($payload));
+            $this->assertSame("one\ntwo\nthree", $next->value(), json_encode($payload));
+            $this->assertSame(3, $next->lineCount());
+            $this->assertStringNotContainsString("\r", $next->view());
+        }
+    }
+
     public function testPasteDroppedWhenUnfocused(): void
     {
         $t = TextArea::new()->setValue('z');

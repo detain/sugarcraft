@@ -317,7 +317,8 @@ one, so an empty map is not "this file is clean".
 | Symptom | Try |
 |---|---|
 | the theme is wrong on a light terminal | `SUGARCRUSH_BACKGROUND=light`, which outranks both OSC 11 and `COLORFGBG` |
-| my terminal's own text selection stopped working | `SUGARCRUSH_DISABLE_MOUSE=1`, or `SUGARCRUSH_DISABLE_MOUSE_CLICKS=1` to keep wheel scrolling |
+| my terminal's own text selection stopped working | drag inside the transcript — sugar-crush selects and copies on release itself; most terminals also bypass app mouse mode with Shift+drag. `SUGARCRUSH_DISABLE_MOUSE=1` hands the mouse back entirely, or `SUGARCRUSH_DISABLE_MOUSE_CLICKS=1` to keep wheel scrolling |
+| a drag-copy highlights but the clipboard is empty | inside tmux the copy goes through `tmux load-buffer -w`, which reaches the outer terminal only when that terminal accepts OSC 52 (the text is still in tmux's paste buffer: `prefix ]`); outside tmux install `wl-copy`/`xclip`/`xsel`, or enable OSC 52 clipboard writes in the terminal |
 | a stderr line is painted inside a frame | a construction-time notice landed after the alt screen came up; the content is also readable from `Bootstrap::projectTierRefusals()` / `skillSkips()` |
 | `--help`, a subcommand, or a one-shot opened the TUI | it should not — `--help`, `--version`, all five subcommands **and** the `-p`/`run` one-shot are dispatched before `Program::run()`. This has been a real bug before, and flag order was enough to cause it: `--output-format json run` once parsed to `promptRequested=false` and fell through into the blocking full-screen TUI (`Cli\ArgvParser` line 175 records it). File a bug with the **exact** argv, order included |
 

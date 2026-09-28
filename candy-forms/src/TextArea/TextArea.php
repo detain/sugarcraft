@@ -700,9 +700,17 @@ final class TextArea implements Model
     /**
      * Insert a string at the cursor; embedded newlines split lines.
      * Mirrors Bubbles' `InsertString` / `InsertRune`.
+     *
+     * `\r\n` and a lone `\r` are line breaks too — Bubbles' runeutil
+     * sanitizer (`ReplaceNewlines`) makes the same substitution. Bracketed
+     * paste is where they come from: terminals (and tmux's `paste-buffer`)
+     * send a pasted newline as CR, and a CR left inside a line reaches the
+     * terminal on the next paint as a carriage return, so the rest of the
+     * row is drawn from column 0 — over whatever sits left of the box.
      */
     public function insertString(string $text): self
     {
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
         $next = $this;
         $first = true;
         foreach (explode("\n", $text) as $segment) {

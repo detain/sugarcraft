@@ -1207,6 +1207,14 @@ final class App implements Model
             return $this->advancePaneDrag($drag, $msg);
         }
 
+        // A text selection the chat anchored owns the gesture until its
+        // release, wherever the pointer wanders: a release over a sidebar or
+        // the menu bar would otherwise be swallowed as a cancelled chrome
+        // click, leaving the selection neither copied nor finished.
+        if (!$msg instanceof MouseClickMsg && Chat::textSelectionInProgress()) {
+            return $this->delegateToChat($msg);
+        }
+
         $press = $msg instanceof MouseClickMsg;
         $release = $msg instanceof MouseReleaseMsg;
 

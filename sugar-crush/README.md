@@ -708,6 +708,15 @@ clicking a palette/picker row selects it, and clicking the menu bar opens a
 menu. Click-vs-drag is
 discriminated so a text-selection drag does not fire the zone underneath it.
 
+Dragging across the transcript selects text: the covered rows highlight as
+you drag, and releasing copies the selection — OSC 52 to the terminal, plus
+the host clipboard tool (`tmux load-buffer -w` inside tmux, where an app's own
+OSC 52 is ignored by default; otherwise `pbcopy`, `wl-copy`, `xclip` or
+`xsel`). The status bar confirms `✓ copied N chars`, and the highlight stays up
+until the next click, key, wheel notch or resize (Ctrl+C over it just dismisses
+it). Only the transcript's text column is selectable, so borders and padding
+never land on the clipboard.
+
 ### Pane docking
 
 Five panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**
@@ -1211,7 +1220,7 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,246 tests / 173,950 assertions, 0 failures, 1 skipped** — the whole of
+**12,274 tests / 173,950 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 15m52s. Measured 2026-09-28. The pane-docking feature re-pinned the figure in stages,

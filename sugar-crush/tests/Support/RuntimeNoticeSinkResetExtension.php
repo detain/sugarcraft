@@ -10,6 +10,7 @@ use PHPUnit\Runner\Extension\Extension;
 use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 
 /**
@@ -59,6 +60,10 @@ final class RuntimeNoticeSinkResetExtension implements Extension
             public function notify(PreparationStarted $event): void
             {
                 RuntimeNoticeSink::reset();
+                // Same process-wide-static shape: a drag a previous test
+                // released leaves its copied highlight (and the status bar's
+                // "copied" segment) on every later frame.
+                Chat::clearTextSelection();
             }
         });
     }

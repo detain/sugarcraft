@@ -738,6 +738,12 @@ final class Renderer
      */
     private static array $zoneOrigin = [0, 0];
 
+    /** @var array{0:int,1:int,2:int,3:int}|null @see selectableRegion() */
+    private static ?array $selectableRegion = null;
+
+    /** @var list<string> @see selectableLines() */
+    private static array $selectableLines = [];
+
     /**
      * Declare where the frame {@see scanRoot()} just scanned ended up on the
      * terminal, in 0-based column/row deltas.
@@ -809,6 +815,8 @@ final class Renderer
     public static function clearZones(): void
     {
         self::scanner()->clear();
+        self::$selectableRegion = null;
+        self::$selectableLines = [];
         self::$zoneOrigin = [0, 0];
         self::$paletteAbandoned = false;
     }
@@ -1414,9 +1422,11 @@ final class Renderer
         $contentLines = explode("\n", $content);
         $overflow = max(0, count($contentLines) - $available);
         self::$maxScrollOffset = $overflow;
+        $sliceStart = 0;
         if ($overflow > 0) {
             $offset = max(0, min($chat->scrollOffset(), $overflow));
-            $contentLines = array_slice($contentLines, $overflow - $offset, $available);
+            $sliceStart = $overflow - $offset;
+            $contentLines = array_slice($contentLines, $sliceStart, $available);
         } else {
             while (count($contentLines) < $available) {
                 $contentLines[] = '';
@@ -1526,7 +1536,82 @@ final class Renderer
             $frame = self::markSessionRows($frame);
         }
 
-        return new View(self::scanRoot($frame, $chat->cols()), images: $images->placements());
+        $frame = self::scanRoot($frame, $chat->cols());
+
+        // Mouse text selection (see {@see selectableRegion()}). Measured on
+        // THIS frame, after the tail clip and the scroll window, because a
+        // selection is made against what is painted — and withheld while an
+        // overlay owns the frame: a drag over the palette is not a request to
+        // copy the transcript dimmed underneath it.
+        self::$selectableRegion = $overlay === ''
+            ? self::transcriptTextRegion($tabStrip, $shell, $sliceStart, $available)
+            : null;
+        self::$selectableLines = explode("\n", $frame);
+
+        $selection = Chat::textSelection();
+        if ($selection !== null && ($selection->dragging || $selection->settled)) {
+            $frame = implode("\n", $selection->highlight(
+                self::$selectableLines,
+                Style::new()->reverse(),
+            ));
+        }
+
+        return new View($frame, images: $images->placements());
+    }
+
+    /**
+     * The rectangle of the last frame a mouse drag may select text in, as
+     * inclusive `[rowFrom, rowTo, colFrom, colTo]` cells of that frame, or
+     * null when nothing on it is selectable.
+     *
+     * It is the transcript shell's TEXT column — inside its rounded border
+     * and horizontal padding — over the shell's rows that survived the tail
+     * clip and scroll window. Not the whole frame: a whole-row selection
+     * clamped to the frame would copy the box's `│  ` gutter before every
+     * line (see {@see \SugarCraft\Crush\Tui\TextSelection}).
+     *
+     * @return array{0:int,1:int,2:int,3:int}|null
+     */
+    public static function selectableRegion(): ?array
+    {
+        return self::$selectableRegion;
+    }
+
+    /**
+     * The last frame's lines, unhighlighted — what a finished selection is
+     * read from. Static for {@see scanner()}'s reason: the release that
+     * copies arrives between frames and can only read the one on screen.
+     *
+     * @return list<string>
+     */
+    public static function selectableLines(): array
+    {
+        return self::$selectableLines;
+    }
+
+    /**
+     * @see selectableRegion()
+     * @return array{0:int,1:int,2:int,3:int}|null
+     */
+    private static function transcriptTextRegion(string $tabStrip, string $shell, int $sliceStart, int $available): ?array
+    {
+        $shellTop = $tabStrip === '' ? 0 : substr_count($tabStrip, "\n") + 1;
+        $shellRows = substr_count($shell, "\n") + 1;
+        $shellWidth = Width::string(self::stripZoneMarkers(explode("\n", $shell, 2)[0]));
+        $inset = intdiv(self::SHELL_CHROME_COLS, 2);
+
+        // Border row excluded at both ends; the padding rows stay in, so a
+        // drag that begins just above the first line still starts there.
+        $rowFrom = max(0, $shellTop + 1 - $sliceStart);
+        $rowTo = min($available - 1, $shellTop + $shellRows - 2 - $sliceStart);
+        $colFrom = $inset;
+        $colTo = $shellWidth - 1 - $inset;
+
+        if ($rowTo < $rowFrom || $colTo < $colFrom) {
+            return null;
+        }
+
+        return [$rowFrom, $rowTo, $colFrom, $colTo];
     }
 
     /**
@@ -1678,6 +1763,18 @@ final class Renderer
         $queued = count($chat->queuedPrompts());
         if ($queued > 0) {
             $segment = sprintf(' · %d queued', $queued);
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            if ($floor <= $chat->cols()) {
+                $processing .= $segment;
+            }
+        }
+        // The answer to a mouse selection's release: without it a copy is
+        // invisible (the clipboard does not announce itself). Present only
+        // while the copied highlight is up, and held to the queue segment's
+        // fit rule so it can never be the piece that widens the bar.
+        $selection = Chat::textSelection();
+        if ($selection !== null && $selection->settled) {
+            $segment = sprintf(' · ✓ copied %d chars', $selection->copiedChars);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $chat->cols()) {
                 $processing .= $segment;

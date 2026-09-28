@@ -266,4 +266,25 @@ final class PasteIngestTest extends TestCase
             array_map(static fn ($m): string => $m->role->name . '|' . $m->content, $twice->history),
         );
     }
+
+    public function testACarriageReturnPasteNeverPaintsACarriageReturn(): void
+    {
+        // A user report: a pasted multi-line block ran "beyond the chat text
+        // boundary and wrapped the screen". Terminals (and tmux's
+        // paste-buffer) send a pasted newline as CR; kept in the draft, the
+        // CR reached the terminal and every row after it was drawn from
+        // column 0, over the sidebar. The editor now reads CR / CRLF as the
+        // line break it is.
+        $long = str_repeat('word ', 30);
+        [$chat] = $this->pasteBox(cols: 60)->update(new PasteMsg("first {$long}\rsecond\r\nthird"));
+
+        $this->assertSame("first {$long}\nsecond\nthird", $chat->inputBuf);
+
+        $view = $chat->view();
+        $body = is_string($view) ? $view : $view->body;
+        $this->assertStringNotContainsString("\r", $body);
+        foreach (explode("\n", $body) as $row) {
+            $this->assertLessThanOrEqual(60, \SugarCraft\Core\Util\Width::string($row), 'no row wider than the pane');
+        }
+    }
 }
