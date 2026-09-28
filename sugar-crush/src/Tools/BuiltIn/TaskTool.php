@@ -7,7 +7,13 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
+use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Tools\DelegatesToEngine;
+use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
+use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -49,23 +55,84 @@ use SugarCraft\Crush\Tools\ToolResult;
  *    itself on the next turn instead of hallucinating one.
  *
  * COARSE BY DECISION: the tool surfaces as one ordinary ToolStarted/ToolFinished
- * pair; the sub-agent's streamed partials stay inside the worker. Upstream's
+ * pair; the sub-agent's own tool events and streamed partials stay inside the
+ * delegated run (they feed only its liveness heartbeat). Upstream's
  * Task tool behaves the same way from the parent model's point of view — one
  * call, one final report — and the live-progress surfaces (pane, status strip)
  * keep their own feed through Chat/WorkflowEngine, which this path does not
  * duplicate.
+ *
+ * THE SUB-AGENT IS A WHOLE AGENTIC RUN, NOT ONE COMPLETION. The pool path
+ * below is a single provider call in a `php -r` worker that advertises the
+ * grant and executes nothing, so a sub-agent whose first move was a tool call
+ * — which, for any real task, is every sub-agent — came back as "completed
+ * without any output text" in 2-13s. Measured in a live session: ten audit
+ * delegations in a row, all refused that way. When the running
+ * {@see EngineBackend} is bound ({@see DelegatesToEngine}, which it does for
+ * itself every turn), the sub-agent instead runs through that engine's own
+ * bounded tool loop: the SAME provider, hook chain (ProtectFilesHook and the
+ * trusted project hooks), permission gate, approver, spend cap and root as
+ * the turn that called it, with the tool list narrowed to the preset's grant
+ * ({@see AgentManager::grantedToolsFor()}), its prompt and skills as a system
+ * turn ({@see AgentManager::systemPromptFor()}), and `maxTurns` as the step
+ * cap. `Task` itself is withheld from the sub-agent, so delegation is one
+ * level deep. The pool path stays as the unbound fallback.
+ *
+ * THE PROVIDER AND MODEL ARE THE SESSION'S. A preset's `model:` (`sonnet`,
+ * `inherit`, …) is not re-resolved on the engine path: the sub-agent talks to
+ * whatever provider the calling turn is on, because a preset alias has no
+ * meaning to, say, a self-hosted SGLang endpoint — sending it there is a
+ * failed request, not a model choice.
+ *
+ * THE PERMISSION MODE IS THE SESSION'S. A preset's `permissionMode:` is not
+ * applied on the engine path: the session's gate governs every call the
+ * sub-agent makes, exactly as it governs the caller's own, and the preset's
+ * `tools:` grant is what narrows it. A delegation can therefore never do more
+ * than the session that asked for it could.
+ *
+ * SEVERAL TASK CALLS IN ONE MESSAGE RUN CONCURRENTLY. Bound, this tool is
+ * {@see ParallelSafe}, which the interface's rule 1 would forbid for a tool
+ * that edits files — and that is the point of delegating: the caller asked
+ * for parallel workers and owns keeping them off each other's files. The two
+ * hazards that rule guards are closed here instead. The 90s group deadline
+ * would kill every run, so the tool is {@see ExemptFromParallelDeadline} and
+ * bounds itself by `maxTurns`; and a forked run that outlives a cancelled turn
+ * would keep editing the tree, so every chunk and tool event checks the
+ * parent pid it started under and abandons the run once that process is gone.
  *
  * Mirrors the delegation role of sugar-crush's plan P8.13 (`Task` tool) over
  * the in-tree {@see AgentManager}/{@see AgentWorkerPool} machinery; see
  * {@see AgentWorkerPool::executeAll()} for what a dispatched worker actually
  * carries across the fork.
  */
-final readonly class TaskTool implements Tool
+final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelDeadline, DelegatesToEngine
 {
+    /** Step cap for a preset that declares no `maxTurns`. */
+    public const DEFAULT_MAX_TURNS = 50;
+
+    /**
+     * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
+     */
     public function __construct(
         private ?AgentManager $agentManager = null,
         private ?AgentWorkerPool $workerPool = null,
+        private ?EngineBackend $engine = null,
+        private ?\Closure $heartbeat = null,
     ) {}
+
+    public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null): self
+    {
+        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat);
+    }
+
+    /**
+     * Only the engine path forks safely: it bounds itself and watches for its
+     * parent's death. The unbound pool path keeps the barrier it always had.
+     */
+    public function isParallelSafe(): bool
+    {
+        return $this->engine !== null && $this->agentManager !== null;
+    }
 
     public function name(): string
     {
@@ -77,9 +144,11 @@ final readonly class TaskTool implements Tool
         return 'Delegate one self-contained task to a sub-agent from the agent roster and return that agent\'s final text.'
             . ' The sub-agent does not see this conversation, so the prompt must carry every path, constraint and'
             . ' expected output the task needs; the tool returns once the sub-agent finishes, not as it works.'
+            . ' The sub-agent works with its own tools until it has an answer; several Task calls in one message run'
+            . ' concurrently, so keep parallel agents off each other\'s files.'
             . ' Do not reach for it for work you can do directly in one call, and never parallelise a dependency with'
-            . ' it — the delegated agent runs under the roster entry\'s own tool grants and permission gate, so a'
-            . ' narrower agent cannot be widened by phrasing.'
+            . ' it — the delegated agent runs under the roster entry\'s own tool grants and this session\'s permission'
+            . ' policy, so a narrower agent cannot be widened by phrasing.'
             . ' The result is the sub-agent\'s report or a loud failure naming why; it is not a diff, and the working'
             . ' tree may have moved underneath by the time it returns.';
     }
@@ -153,6 +222,10 @@ final readonly class TaskTool implements Tool
             return $this->refusal($toolCallId, $refusal->getMessage());
         }
 
+        if ($this->engine !== null) {
+            return $this->runOnEngine($this->engine, $this->agentManager, $subAgent, $toolCallId, $startedAt);
+        }
+
         $request = new CompleteRequest(
             model: $subAgent->agent->model,
             messages: [],
@@ -209,6 +282,129 @@ final readonly class TaskTool implements Tool
             isError: false,
             durationMs: $durationMs,
         );
+    }
+
+    /**
+     * Run $subAgent to completion through the bound engine's tool loop — see
+     * the class doc for what it inherits and what it is narrowed to.
+     */
+    private function runOnEngine(
+        EngineBackend $engine,
+        AgentManager $manager,
+        SubAgent $subAgent,
+        string $toolCallId,
+        float $startedAt,
+    ): ToolResult {
+        $agentName = $subAgent->agent->name;
+
+        try {
+            $granted = $manager->grantedToolsFor($subAgent);
+            $systemPrompt = $manager->systemPromptFor($subAgent);
+        } catch (\RuntimeException $refusal) {
+            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $refusal->getMessage());
+
+            return $this->refusal($toolCallId, $refusal->getMessage());
+        }
+
+        $tools = array_values(array_filter(
+            $granted ?? $engine->tools(),
+            static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,
+        ));
+        $maxTurns = max(1, $subAgent->agent->maxTurns ?? self::DEFAULT_MAX_TURNS);
+
+        $history = trim($systemPrompt) === '' ? [] : [Message::system($systemPrompt)];
+        $history[] = Message::user($subAgent->task);
+
+        $orphanGuard = self::orphanGuard();
+        $heartbeat = $this->heartbeat;
+        $onProgress = static function () use ($orphanGuard, $heartbeat): void {
+            $orphanGuard();
+            if ($heartbeat !== null) {
+                $heartbeat();
+            }
+        };
+
+        $subAgent->status = SubAgent::STATUS_RUNNING;
+        $subAgent->startedAt = new \DateTimeImmutable();
+
+        try {
+            $reply = $engine
+                ->withTools($tools)
+                ->withMaxSteps($maxTurns)
+                ->complete(
+                    $history,
+                    onEvent: static function () use ($onProgress): void {
+                        $onProgress();
+                    },
+                    onReasoning: static function () use ($onProgress): void {
+                        $onProgress();
+                    },
+                    onHeartbeat: $heartbeat,
+                );
+        } catch (\Throwable $failure) {
+            $why = sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
+            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+
+            return $this->refusal($toolCallId, $why, self::elapsedMs($startedAt));
+        }
+
+        $content = trim($reply->content);
+        $this->settle($subAgent, SubAgent::STATUS_COMPLETE, $content, null);
+        $subAgent->tokensUsed += $reply->usage?->totalTokens ?? 0;
+        $subAgent->costUsd += $reply->usage?->costUsd ?? 0.0;
+
+        if ($content === '') {
+            return $this->refusal($toolCallId, sprintf(
+                'sub-agent "%s" ended without a final report (step cap %d); any work it did is in the tree'
+                . ' but was not summarised — inspect the working tree, or re-run it with a narrower task',
+                $agentName,
+                $maxTurns,
+            ), self::elapsedMs($startedAt));
+        }
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: $content,
+            isError: false,
+            durationMs: self::elapsedMs($startedAt),
+        );
+    }
+
+    /**
+     * A check that throws once the process this run started under is gone.
+     * Called from PHP-level progress sinks only (never from the provider's
+     * transport callback), so the throw unwinds the run cleanly: a forked Task
+     * whose turn was cancelled stops at its next chunk or tool event instead
+     * of editing the tree for nobody.
+     *
+     * @return \Closure(): void
+     */
+    private static function orphanGuard(): \Closure
+    {
+        if (!function_exists('posix_getppid')) {
+            return static function (): void {};
+        }
+
+        $parent = posix_getppid();
+
+        return static function () use ($parent): void {
+            if (posix_getppid() !== $parent) {
+                throw new \RuntimeException('the turn that delegated it is gone (parent process exited), so the run was abandoned');
+            }
+        };
+    }
+
+    private function settle(SubAgent $subAgent, string $status, string $output, ?string $error): void
+    {
+        $subAgent->status = $status;
+        $subAgent->output = $output;
+        $subAgent->error = $error;
+        $subAgent->completedAt = new \DateTimeImmutable();
+    }
+
+    private static function elapsedMs(float $startedAt): int
+    {
+        return (int) round((microtime(true) - $startedAt) * 1000);
     }
 
     /**

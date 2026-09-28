@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
@@ -20,6 +19,7 @@ use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\BuiltIn\Read;
 use SugarCraft\Crush\Tools\BuiltIn\TaskTool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tests\Support\RosterAgent;
 
 /**
  * The P8.13 Task tool: one model-callable delegation, answered honestly.
@@ -95,27 +95,12 @@ final class TaskToolTest extends TestCase
             toolRegistry: $registryTools === [] ? null : $registryTools,
             toolUniverse: $universeTools === [] ? null : $universeTools,
         );
-        $manager->register(self::agent('coder', tools: ['Read', 'Grep']));
-        $manager->register(self::agent('reviewer'));
+        $manager->register(RosterAgent::named('coder', tools: ['Read', 'Grep']));
+        $manager->register(RosterAgent::named('reviewer'));
 
         $pool = new AgentWorkerPool(maxConcurrent: 1, executor: $executor);
 
         return [new TaskTool($manager, $pool), $manager, $executor];
-    }
-
-    private static function agent(string $name, array $tools = []): Agent
-    {
-        return new Agent(
-            name: $name,
-            description: "test agent {$name}",
-            prompt: "You are {$name}.",
-            model: 'test-model',
-            provider: 'test',
-            tools: $tools,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-        );
     }
 
     /**

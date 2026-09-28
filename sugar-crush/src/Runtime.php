@@ -32,6 +32,7 @@ use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
+use SugarCraft\Crush\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\PromptGuidance;
@@ -1456,7 +1457,7 @@ final class Runtime
         yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped);
 
         if ($toolCalls !== []) {
-            foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest) as $msg) {
+            foreach ($this->executeToolCalls($toolCalls, $app, $onEvent, $onPermissionRequest, self::toolWaitHeartbeat($request, $onProgress)) as $msg) {
                 yield $msg;
             }
         }
@@ -1564,7 +1565,7 @@ final class Runtime
         );
 
         if ($response->toolCalls !== null && $response->toolCalls !== []) {
-            foreach ($this->executeToolCalls($response->toolCalls, $app, $onEvent, $onPermissionRequest) as $msg) {
+            foreach ($this->executeToolCalls($response->toolCalls, $app, $onEvent, $onPermissionRequest, self::toolWaitHeartbeat($request, $onProgress)) as $msg) {
                 yield $msg;
             }
         }
@@ -1649,6 +1650,7 @@ final class Runtime
         App $app,
         ?callable $onEvent = null,
         ?callable $onPermissionRequest = null,
+        ?\Closure $heartbeat = null,
     ): \Generator {
         foreach ($this->segments($toolCalls, $app) as $segment) {
             if (count($segment) === 1) {
@@ -1657,10 +1659,30 @@ final class Runtime
                 continue;
             }
 
-            foreach ($this->executeConcurrently($segment, $app, $onEvent, $onPermissionRequest) as $message) {
+            foreach ($this->executeConcurrently($segment, $app, $onEvent, $onPermissionRequest, $heartbeat) as $message) {
                 yield $message;
             }
         }
+    }
+
+    /**
+     * The liveness sink for the time this turn spends waiting on a forked tool
+     * group: the request's bare batch beat when the caller armed one, else an
+     * EMPTY progress delta (E456's "alive, nothing to show" frame). Without it
+     * a group that includes a long delegated `Task` is silent on the
+     * completion child's socket for the whole wait, and
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()} kills
+     * the turn as hung at its idle ceiling.
+     */
+    private static function toolWaitHeartbeat(CompleteRequest $request, ?callable $onProgress): ?\Closure
+    {
+        if ($request->onHeartbeat !== null) {
+            return $request->onHeartbeat;
+        }
+
+        return $onProgress === null ? null : static function () use ($onProgress): void {
+            $onProgress('');
+        };
     }
 
     /**
@@ -1831,6 +1853,7 @@ final class Runtime
         App $app,
         ?callable $onEvent,
         ?callable $onPermissionRequest,
+        ?\Closure $heartbeat = null,
     ): \Generator {
         $jobs = [];
 
@@ -1972,6 +1995,7 @@ final class Runtime
 
             // Phase 3 — reap, then release in provider order.
             $deadline = microtime(true) + $this->parallelToolDeadlineSeconds;
+            $lastBeat = microtime(true);
 
             while ($next < $total) {
                 foreach ($jobs as $index => $job) {
@@ -2000,8 +2024,12 @@ final class Runtime
                 }
 
                 if (microtime(true) >= $deadline) {
+                    $killed = false;
                     foreach ($jobs as $index => $job) {
-                        if ($job['settled'] || $job['pid'] === null) {
+                        // An ExemptFromParallelDeadline job (a delegated Task)
+                        // is an agentic run, not a seconds-scale tool, and is
+                        // left to bound itself; its siblings keep the deadline.
+                        if ($job['settled'] || $job['pid'] === null || $job['tool'] instanceof ExemptFromParallelDeadline) {
                             continue;
                         }
                         // A tool that never returns would otherwise wedge the turn
@@ -2012,9 +2040,20 @@ final class Runtime
                         }
                         self::reapKilled($job['pid']);
                         $jobs[$index]['settled'] = true;
+                        $killed = true;
                     }
 
-                    continue;
+                    // Only re-poll at once when the kill settled something to
+                    // release; with only exempt jobs left, fall through to the
+                    // sleep rather than spin on an expired deadline.
+                    if ($killed) {
+                        continue;
+                    }
+                }
+
+                if ($heartbeat !== null && microtime(true) - $lastBeat >= 1.0) {
+                    $heartbeat();
+                    $lastBeat = microtime(true);
                 }
 
                 if (!$released) {

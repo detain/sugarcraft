@@ -305,6 +305,15 @@ implements `Tools\CarriesSessionState`, because a child's writes are invisible t
 the parent. `LspTool` is the worked example of a tool that is deliberately *not*
 parallel-safe.
 
+`Task` is the one mutating tool that opts in, because concurrent delegation is
+what it is for: several `Task` calls in one message run side by side, each a
+full agentic run through the calling turn's own engine (see
+`Tools\DelegatesToEngine`). It is also `Tools\ExemptFromParallelDeadline`, so the
+90s deadline kills its seconds-scale siblings but not it; it bounds itself by
+the preset's `maxTurns` and abandons its run once the turn that forked it is
+gone. While a group is outstanding the parent keeps writing heartbeat frames,
+so the turn's own idle ceiling does not kill a long delegation either.
+
 ---
 
 ## The gate chain

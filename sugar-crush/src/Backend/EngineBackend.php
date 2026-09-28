@@ -31,6 +31,8 @@ use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tools\DelegatesToEngine;
+use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
 /**
@@ -366,6 +368,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
     public function withTools(array $tools): self
     {
         return new self($this->provider, $this->model, $tools, $this->skills, $this->hookManager, $this->maxSteps, $this->hooksDisabled, $this->skillRegistry, $this->instructionLoader, $this->root, $this->permissionGate, $this->permissionApprover, $this->memoryStore, $this->rulesState, $this->spendCapUsd, $this->sessionSpendAtStartUsd);
+    }
+
+    /**
+     * The tools this engine was built with, UNBOUND — the list a delegated
+     * sub-agent inherits when its preset declares no grant of its own.
+     *
+     * @return array<int, Tool>
+     */
+    public function tools(): array
+    {
+        return $this->tools;
     }
 
     /**
@@ -706,7 +719,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         );
 
         $app = App::new($this->provider, $this->model)
-            ->withTools($this->tools)
+            ->withTools($this->turnTools($onReasoning, $onHeartbeat))
             ->withEnabledSkills($this->skills)
             // The P6.S3 rulebook toggle set, on the same per-turn carry the enabled
             // skills ride. Read here rather than cached into the App at
@@ -910,6 +923,48 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             ->withImage($lastImageBytes, $lastImageProtocol)
             ->withUsage(Usage::sum($stepUsages))
             ->withLengthStopped($lengthStopped);
+    }
+
+    /**
+     * This turn's tool list, with every {@see DelegatesToEngine} tool bound to
+     * THIS engine — see that interface for why the binding has to happen here,
+     * per turn, rather than at construction.
+     *
+     * The heartbeat prefers the bare batch beat (`$onHeartbeat`) and falls back
+     * to an EMPTY reasoning delta, which is the same "alive, nothing to show"
+     * frame E456 established, so neither channel paints anything. Rate-limited
+     * to one beat a second because a delegated run reports every provider
+     * chunk, and bound to the current pid because a forked tool child must not
+     * write onto a socket its parent is also writing to (the parent beats for
+     * its forked group itself — {@see Runtime}'s concurrent wait loop).
+     *
+     * @return list<Tool>
+     */
+    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat): array
+    {
+        $heartbeat = null;
+        if ($onHeartbeat !== null || $onReasoning !== null) {
+            $pid = getmypid();
+            $lastBeat = 0.0;
+            $heartbeat = static function () use ($pid, $onHeartbeat, $onReasoning, &$lastBeat): void {
+                if (getmypid() !== $pid) {
+                    return;
+                }
+                $now = microtime(true);
+                if ($now - $lastBeat < 1.0) {
+                    return;
+                }
+                $lastBeat = $now;
+                $onHeartbeat !== null ? $onHeartbeat() : $onReasoning('');
+            };
+        }
+
+        $tools = [];
+        foreach ($this->tools as $tool) {
+            $tools[] = $tool instanceof DelegatesToEngine ? $tool->withEngine($this, $heartbeat) : $tool;
+        }
+
+        return $tools;
     }
 
     /**

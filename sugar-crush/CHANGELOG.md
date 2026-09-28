@@ -19,6 +19,30 @@ Note on numbering: these waves are a *separate* pass from the
 `crush_code_update.md` remediation waves recorded further down this file, which
 happen to share the numbers 1–4.
 
+### Sub-agent delegation and manifest access (2026-09)
+
+- **`Task` sub-agents now actually work.** The tool used to dispatch through
+  `ProcessExecutor`'s worker, which makes ONE provider call, advertises the
+  grant and executes nothing — so every sub-agent whose first move was a tool
+  call ended "completed without any output text" within seconds (measured: ten
+  audit delegations in a row, all refused). A bound `TaskTool` now runs the
+  sub-agent through the calling turn's own `EngineBackend` tool loop: same
+  provider, hook chain, permission gate, approver and root, narrowed to the
+  preset's `tools:` grant, with its prompt/skills as a system turn and
+  `maxTurns` (default 50) as the step cap. `Task` is withheld from sub-agents.
+  `EngineBackend::complete()` binds itself into every `Tools\DelegatesToEngine`
+  tool per turn; the pool path remains the unbound fallback.
+- **Parallel `Task` calls.** Several `Task` calls in one message now run
+  concurrently (they used to serialise: `TaskTool` was not `ParallelSafe`).
+  `Runtime`'s group deadline is now per job and skips
+  `Tools\ExemptFromParallelDeadline` tools; the parent heartbeats while it
+  waits so `completeAsync()`'s idle ceiling does not kill a long delegation;
+  a forked delegation abandons its run once its parent process is gone.
+- **`composer.json` / `composer.lock` are no longer protected** by
+  `ProtectFilesHook`. The unanchored patterns were judged against Read paths
+  and whole Bash strings, so they denied even `grep -c . candy-core/composer.json`
+  and `[ -f "$d/composer.json" ]`. Neither file is a secret or policy.
+
 ### Wave 1 — provider correctness, context, skills, CLI (2026-08)
 
 - **Provider/wire fixes** — corrected streaming tool-call parsing; added

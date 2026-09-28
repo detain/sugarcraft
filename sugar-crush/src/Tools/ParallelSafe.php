@@ -26,6 +26,13 @@ namespace SugarCraft\Crush\Tools;
  *     Without this, "announce this file's CLAUDE.md once per session" silently
  *     becomes "once per tool call" as soon as the call is forked.
  *
+ * ONE DELIBERATE EXCEPTION to rule 1: {@see BuiltIn\TaskTool}, whose body is
+ * a delegated agentic run that may edit files. Concurrent delegation is the
+ * whole reason to delegate, so the caller that asks for parallel sub-agents
+ * owns keeping them off each other's files; the orphan hazard below is closed
+ * inside the tool instead (it abandons its run once its parent is gone), and
+ * {@see ExemptFromParallelDeadline} keeps the group deadline off it.
+ *
  * NOT implementing this interface is the safe default: an unknown or
  * user-supplied tool is treated as a barrier and executed alone, in
  * provider order, exactly as it is today.

@@ -335,6 +335,35 @@ final class AgentManager
     }
 
     /**
+     * The tools $subAgent's own declaration grants, resolved against this
+     * session's registry exactly the way {@see executeAll()} resolves a batch
+     * member (E644), for a caller that runs the sub-agent itself rather than
+     * through the worker pool — {@see \SugarCraft\Crush\Tools\BuiltIn\TaskTool}'s
+     * engine path. Null means "no narrowing" (no registry, or the agent
+     * declared nothing), never "grant nothing".
+     *
+     * @return ?list<Tool>
+     * @throws \RuntimeException on a grant that does not resolve — the same
+     *         refusal a batch gets, so the in-process path cannot be the lax one.
+     */
+    public function grantedToolsFor(SubAgent $subAgent): ?array
+    {
+        return $this->resolveBatchGrants([$subAgent])[$subAgent->id] ?? null;
+    }
+
+    /**
+     * $subAgent's own prompt with its granted skills spliced in — the assembly
+     * {@see executeAll()} hands the pool (E654), fail-closed on a skill this
+     * session's registry does not resolve (E643).
+     *
+     * @throws \RuntimeException on an unresolvable granted skill.
+     */
+    public function systemPromptFor(SubAgent $subAgent): string
+    {
+        return $this->resolveBatchSystemPrompts([$subAgent], null)[$subAgent->id] ?? $subAgent->agent->prompt;
+    }
+
+    /**
      * Create a PermissionGate from a PermissionMode using the configured factory,
      * or return a default gate if no factory is configured.
      */
