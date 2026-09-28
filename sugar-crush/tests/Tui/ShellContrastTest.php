@@ -15,6 +15,7 @@ use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\AgentDisplayState;
 use SugarCraft\Crush\Tui\AgentViewPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
+use SugarCraft\Crush\Tui\Components\PaneFrame;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\Renderer;
 use SugarCraft\Crush\Tui\TerminalBackground;
@@ -123,6 +124,37 @@ final class ShellContrastTest extends TestCase
             TerminalBackground::ENV_OVERRIDE . ' must be unset for this suite to measure what it claims',
         );
         $this->assertFalse(getenv('COLORFGBG'), 'COLORFGBG must be unset for this suite');
+        // Either one forces TrueColor through the pipe and switches PaneFrame's
+        // fade on - see tests/bootstrap.php. The truecolour terminal is covered
+        // explicitly instead, by underEveryTerminal().
+        $this->assertFalse(getenv('FORCE_COLOR'), 'FORCE_COLOR must be unset for this suite; truecolour is exercised explicitly');
+        $this->assertFalse(getenv('CLICOLOR_FORCE'), 'CLICOLOR_FORCE must be unset for this suite; truecolour is exercised explicitly');
+    }
+
+    /**
+     * Run `$check` once per terminal the frame can be painted for: a pipe (how
+     * the suite, and CI, see it - PaneFrame's side fade off) and a truecolour
+     * terminal (how most users see it - the fade on). The truecolour half is
+     * forced here rather than inherited from whoever runs the suite, because
+     * inheriting it is what made two real bugs visible only from some shells:
+     * the `ansi` theme's focused frame fading through invented truecolour, and
+     * a fade between two legible colours dipping below the floor (#83f0f0 on
+     * #666666 at 4.29:1).
+     *
+     * @param \Closure(string): void $check receives the terminal's label
+     */
+    private function underEveryTerminal(\Closure $check): void
+    {
+        $check('a pipe');
+
+        putenv('FORCE_COLOR=1');
+        PaneFrame::resetProfileCacheForTesting();
+        try {
+            $check('a truecolour terminal');
+        } finally {
+            putenv('FORCE_COLOR');
+            PaneFrame::resetProfileCacheForTesting();
+        }
     }
 
     protected function tearDown(): void
@@ -155,34 +187,36 @@ final class ShellContrastTest extends TestCase
      */
     public function testEveryColourTheShellPaintsIsLegibleAgainstTheRealTerminalBackground(string $themeName): void
     {
-        foreach (self::BACKGROUNDS as $hex) {
-            $background = Color::hex($hex);
-            TerminalBackground::forget();
-            TerminalBackground::observe(new BackgroundColorMsg($background->r, $background->g, $background->b));
+        $this->underEveryTerminal(function (string $terminal) use ($themeName): void {
+            foreach (self::BACKGROUNDS as $hex) {
+                $background = Color::hex($hex);
+                TerminalBackground::forget();
+                TerminalBackground::observe(new BackgroundColorMsg($background->r, $background->g, $background->b));
 
-            // Every pane in turn: the sidebars, boxes and status colours differ
-            // per pane, and a focused box is a different token from an
-            // unfocused one.
-            foreach (Pane::cases() as $pane) {
-                $app = $this->app($themeName, $pane);
+                // Every pane in turn: the sidebars, boxes and status colours differ
+                // per pane, and a focused box is a different token from an
+                // unfocused one.
+                foreach (Pane::cases() as $pane) {
+                    $app = $this->app($themeName, $pane);
 
-                // Menu 1 open, so the dropdown panel — the reported surface —
-                // is part of the frame being measured.
-                MenuBar::openMenu(1);
-                $this->assertFrameIsLegible(
-                    Renderer::render($app, self::COLS, self::ROWS),
-                    $background,
-                    "{$themeName} on {$hex}, pane {$pane->name}, menu open",
-                );
-                MenuBar::closeMenu();
+                    // Menu 1 open, so the dropdown panel — the reported surface —
+                    // is part of the frame being measured.
+                    MenuBar::openMenu(1);
+                    $this->assertFrameIsLegible(
+                        Renderer::render($app, self::COLS, self::ROWS),
+                        $background,
+                        "{$themeName} on {$hex} via {$terminal}, pane {$pane->name}, menu open",
+                    );
+                    MenuBar::closeMenu();
 
-                $this->assertFrameIsLegible(
-                    Renderer::render($app, self::COLS, self::ROWS),
-                    $background,
-                    "{$themeName} on {$hex}, pane {$pane->name}",
-                );
+                    $this->assertFrameIsLegible(
+                        Renderer::render($app, self::COLS, self::ROWS),
+                        $background,
+                        "{$themeName} on {$hex} via {$terminal}, pane {$pane->name}",
+                    );
+                }
             }
-        }
+        });
     }
 
     /**
@@ -464,18 +498,20 @@ final class ShellContrastTest extends TestCase
     {
         TerminalBackground::observe(new BackgroundColorMsg(0, 0, 0));
 
-        $ansi = Renderer::render($this->app('ansi', Pane::Chat), self::COLS, self::ROWS);
+        $this->underEveryTerminal(function (string $terminal): void {
+            $ansi = Renderer::render($this->app('ansi', Pane::Chat), self::COLS, self::ROWS);
 
-        $this->assertDoesNotMatchRegularExpression('/\e\[[0-9;]*[34]8;2;/', $ansi, 'truecolor leaked');
-        $this->assertDoesNotMatchRegularExpression('/\e\[[0-9;]*[34]8;5;/', $ansi, '256-cube leaked');
-        // ...and it is still coloured: at least one 4-bit palette code.
-        $this->assertMatchesRegularExpression('/\e\[(?:3[0-7]|4[0-7]|9[0-7]|10[0-7])m/', $ansi);
+            $this->assertDoesNotMatchRegularExpression('/\e\[[0-9;]*[34]8;2;/', $ansi, "truecolor leaked via {$terminal}");
+            $this->assertDoesNotMatchRegularExpression('/\e\[[0-9;]*[34]8;5;/', $ansi, "256-cube leaked via {$terminal}");
+            // ...and it is still coloured: at least one 4-bit palette code.
+            $this->assertMatchesRegularExpression('/\e\[(?:3[0-7]|4[0-7]|9[0-7]|10[0-7])m/', $ansi);
 
-        // The control: a hex-built palette does emit absolute colour, so the
-        // assertions above are about the palette slots and not about the shell
-        // having gone monochrome.
-        $dark = Renderer::render($this->app('dark', Pane::Chat), self::COLS, self::ROWS);
-        $this->assertMatchesRegularExpression('/\e\[38;2;/', $dark);
+            // The control: a hex-built palette does emit absolute colour, so the
+            // assertions above are about the palette slots and not about the shell
+            // having gone monochrome.
+            $dark = Renderer::render($this->app('dark', Pane::Chat), self::COLS, self::ROWS);
+            $this->assertMatchesRegularExpression('/\e\[38;2;/', $dark);
+        });
     }
 
     /**

@@ -101,6 +101,22 @@ putenv('SUGARCRUSH_BACKGROUND');
 putenv('COLORFGBG');
 
 /*
+ * The same hermeticity for the colour TIER. On a pipe candy-core's
+ * ColorProfile::detect() answers NoTty, and PaneFrame's side-frame fade stays
+ * off - unless `FORCE_COLOR` or `CLICOLOR_FORCE` is truthy, which forces
+ * TrueColor through the pipe. Some shells export `FORCE_COLOR=3`, and a suite
+ * run from one was a different suite: MEASURED 2026-09-28, ShellContrastTest's
+ * two `ansi` cases went red under it and green without it. The truecolour
+ * terminal is not left untested by clearing these: ShellContrastTest renders
+ * under it ON PURPOSE (and restores it), which is how the two real bugs it
+ * exposed - a slot-to-slot fade inventing truecolour, and a fade dipping below
+ * the contrast floor - are held fixed. It asserts both are absent, so deleting
+ * these lines fails loudly.
+ */
+putenv('FORCE_COLOR');
+putenv('CLICOLOR_FORCE');
+
+/*
  * A temp directory for the suite's own throwaway files, and the two things that
  * keep `vendor/bin/phpunit` from garbage-collecting the developer's real /tmp.
  *
