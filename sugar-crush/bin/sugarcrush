@@ -127,8 +127,9 @@ declare(strict_types=1);
     // json here would make the broken checkout MORE permissive than the working
     // one); and the value-taking flags consume their token, in the two flavours
     // ArgvParser gives them — `--root` and `--output-format` take the next token
-    // unconditionally, while `-p`, `--prompt`, `--config`, `--model` and
-    // `--permission-mode` refuse a flag-shaped one and leave it for the loop.
+    // unconditionally, while `-p`, `--prompt`, `--config`, `--model`,
+    // `--permission-mode` and `--resume` refuse a flag-shaped one and leave it
+    // for the loop.
     //
     // WHAT IS NOT MIRRORED, deliberately — this is a format scan and not a
     // second parser. The `run` positional alias is not modelled, and modelling
@@ -151,7 +152,7 @@ declare(strict_types=1);
     // The strict set: ArgvParser refuses a flag-shaped value for each of these
     // (its looksLikeFlag() is "longer than one character and begins with -")
     // and leaves the token unconsumed for the next iteration to judge.
-    $strictValueFlags = ['-p', '--prompt', '--config', '--model', '--permission-mode'];
+    $strictValueFlags = ['-p', '--prompt', '--config', '--model', '--permission-mode', '--resume'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {
@@ -345,6 +346,7 @@ Bootstrap::useConfigPath($args->configPath);
 // which is why validation must happen inside the dispatch and not here.
 Bootstrap::useModel($args->model);
 Bootstrap::usePermissionMode($args->permissionMode);
+Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
 
 // The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
 // and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6). Dispatched
@@ -421,6 +423,17 @@ if ($args->promptRequested) {
 // SUGARCRUSH_DISABLE_MOUSE escape hatch) is decided next to the state that
 // uses it — see crush_feat.md section 8 E1. They belong to the hosted
 // content model, which is what reads the mouse events.
+// `--resume <id|name>` that names no stored session is a usage error here,
+// before Program takes the terminal, rather than a silent fresh session.
+$resumeError = Bootstrap::sessionLaunchError();
+if ($resumeError !== null) {
+    exit(NonInteractive::failUsage(
+        $resumeError,
+        $args->outputFormat,
+        'Run `sugarcrush session list` to see stored sessions, or `sugarcrush --resume` to pick one.',
+    ));
+}
+
 (new Program(Bootstrap::app($args->root), Chat::programOptions()))->run();
 
 // E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.

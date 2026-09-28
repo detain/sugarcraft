@@ -191,6 +191,21 @@ final class EnhancedSessionStore
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         ');
+
+        // The conversation as it stands NOW, one row per session, rewritten
+        // whenever the transcript changes — what a resume loads. Checkpoints
+        // cannot stand in for it: they are taken as a turn is SENT, so the
+        // newest one never holds the reply that turn produced. Messages are
+        // interned into checkpoint_blobs exactly as a checkpoint's are, so a
+        // save only writes what is new.
+        $this->pdo->exec('
+            CREATE TABLE IF NOT EXISTS session_transcripts (
+                session_id TEXT PRIMARY KEY,
+                state_data TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        ');
     }
 
     /**
@@ -837,6 +852,136 @@ final class EnhancedSessionStore
     }
 
     /**
+     * Store $messages as the session's current transcript, replacing the last
+     * one, and mark the session as just used.
+     *
+     * Marking it used is what makes "the most recent session" mean the one
+     * last WORKED in rather than the one last created: `updated_at` was only
+     * ever moved by a rename, so `--continue` would otherwise reopen whichever
+     * session happened to be started last.
+     *
+     * The session row is recreated if it has gone — deleted from another
+     * client by {@see pruneEmptySessions()} while this one sat idle — because
+     * the foreign key would otherwise refuse the write and the conversation
+     * the user is still having would never be saved.
+     *
+     * @param list<Message|array<string, mixed>> $messages
+     *
+     * @throws \JsonException on a message that cannot be encoded
+     */
+    public function saveTranscript(string $sessionId, array $messages): void
+    {
+        if ($this->sessionStore->getSession($sessionId) === null) {
+            $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
+        }
+
+        $stmt = $this->pdo->prepare('
+            INSERT OR REPLACE INTO session_transcripts (session_id, state_data, updated_at)
+            VALUES (?, ?, ?)
+        ');
+        $stmt->execute([
+            $sessionId,
+            $this->encodeCheckpoint($sessionId, ['messages' => array_values($messages)]),
+            gmdate('Y-m-d H:i:s'),
+        ]);
+
+        $this->sessionStore->updateSession($sessionId);
+    }
+
+    /**
+     * The session's transcript as raw message rows, oldest first, or null
+     * when there is nothing to resume.
+     *
+     * A session saved before transcripts existed has none, so the newest
+     * checkpoint stands in for it: that loses the final reply (a checkpoint
+     * is taken as a turn is sent) but keeps every earlier exchange, which is
+     * better than resuming such a session empty.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function loadTranscript(string $sessionId): ?array
+    {
+        $stmt = $this->pdo->prepare('SELECT state_data FROM session_transcripts WHERE session_id = ?');
+        $stmt->execute([$sessionId]);
+        $stateData = $stmt->fetchColumn();
+        $stmt->closeCursor();
+
+        $state = \is_string($stateData) ? $this->decodeCheckpoint($stateData) : null;
+        if ($state === null) {
+            $newest = $this->listCheckpoints($sessionId, 1)[0]['state_data'] ?? null;
+            $state = \is_array($newest) ? $newest : null;
+        }
+
+        $messages = $state['messages'] ?? null;
+        if (!\is_array($messages)) {
+            return null;
+        }
+
+        return array_values(array_filter($messages, '\\is_array'));
+    }
+
+    /**
+     * The most recently used session that holds a conversation — a saved
+     * transcript or at least one checkpoint — or null when none does.
+     *
+     * What `--continue` means. "The most recent row" is the wrong answer now
+     * that every launch opens a row of its own: a launch quit without typing
+     * is newer than the conversation the user wants back, and continuing it
+     * would open an empty chat.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function latestResumableSession(): ?array
+    {
+        $stmt = $this->pdo->query('
+            SELECT s.* FROM sessions s
+            WHERE EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)
+               OR EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = s.id)
+            ORDER BY s.updated_at DESC, s.rowid DESC
+            LIMIT 1
+        ');
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        return \is_array($row) ? $row : null;
+    }
+
+    /**
+     * Delete sessions that never held anything: unnamed, no transcript, no
+     * checkpoint, no stored message, and untouched for at least
+     * $minAgeSeconds. Returns how many went.
+     *
+     * Every launch now opens a session of its own, so a launch that was
+     * quit without typing leaves an empty row behind; without this the
+     * `/sessions` picker and the tab strip fill up with them. Nothing a user
+     * could want back is deleted — an empty row has no content by definition —
+     * and the age floor keeps it from taking the fresh row a client in
+     * another terminal opened moments ago. Rows go through
+     * {@see deleteSession()} so the session-list memo and the blob cache see
+     * the delete.
+     */
+    public function pruneEmptySessions(?string $exemptSessionId = null, int $minAgeSeconds = 3600): int
+    {
+        $stmt = $this->pdo->prepare('
+            SELECT s.id FROM sessions s
+            WHERE (s.name IS NULL OR s.name = \'\')
+              AND s.updated_at < ?
+              AND s.id != ?
+              AND NOT EXISTS (SELECT 1 FROM session_transcripts t WHERE t.session_id = s.id)
+              AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = s.id)
+              AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)
+        ');
+        $stmt->execute([gmdate('Y-m-d H:i:s', time() - max(0, $minAgeSeconds)), $exemptSessionId ?? '']);
+        $ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        foreach ($ids as $id) {
+            $this->deleteSession((string) $id);
+        }
+
+        return \count($ids);
+    }
+
+    /**
      * Retrieve a specific checkpoint by index.
      *
      * @param string $sessionId The session ID
@@ -929,8 +1074,16 @@ final class EnhancedSessionStore
      */
     private function collectCheckpointBlobs(string $sessionId): void
     {
-        $stmt = $this->pdo->prepare('SELECT state_data FROM checkpoints WHERE session_id = ?');
-        $stmt->execute([$sessionId]);
+        // The transcript row interns into the same blob table, so its ids are
+        // live too — without it a /rewind would collect the messages the
+        // resumable transcript still names, and the next resume would read
+        // back nothing.
+        $stmt = $this->pdo->prepare('
+            SELECT state_data FROM checkpoints WHERE session_id = ?
+            UNION ALL
+            SELECT state_data FROM session_transcripts WHERE session_id = ?
+        ');
+        $stmt->execute([$sessionId, $sessionId]);
 
         $live = [];
         foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $stateData) {

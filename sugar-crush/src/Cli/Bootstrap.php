@@ -41,6 +41,7 @@ use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Session\PromptHistory;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Skills\Skill;
@@ -620,6 +621,21 @@ final class Bootstrap
     private static ?string $modelOverride = null;
 
     /**
+     * Which session a TUI launch opens — see {@see useSessionLaunch()}.
+     * 'new' (the default), 'continue', or 'resume'.
+     */
+    private static string $sessionLaunchMode = 'new';
+
+    /** The id or name `--resume` named; null with 'resume' opens the picker. */
+    private static ?string $sessionLaunchTarget = null;
+
+    /**
+     * Where the ↑/↓ prompt history lives, when something other than
+     * `~/.sugar-crush/prompt_history.jsonl` — see {@see pinPromptHistoryPath()}.
+     */
+    private static ?string $promptHistoryPath = null;
+
+    /**
      * The RAW, UNVALIDATED string `--permission-mode` named, or null when the
      * flag was absent — see {@see usePermissionMode()} for why it is stored
      * unvalidated.
@@ -1082,7 +1098,9 @@ final class Bootstrap
         // is what makes /sessions, the tab strip, /branch and the auto-title
         // call reachable at all on a real run (crush_feat.md §5 E1).
         $sessionStore = self::sessionStore();
-        [$sessionId, $sessionName] = self::seedSession($sessionStore, ...self::selectedProviderLabel());
+        $opened = self::openSession($sessionStore, ...self::selectedProviderLabel());
+        $sessionId = $opened['id'];
+        $sessionName = $opened['name'];
 
         // ONE registry across the engine and the sub-agents, for the same
         // reason {@see tools()} shares one across Read/Edit/Glob: two
@@ -1175,6 +1193,9 @@ final class Bootstrap
         }
 
         $chat = new Chat(
+            // The resumed conversation (--continue / --resume <id>), or [] for
+            // a new session.
+            history: $opened['history'],
             backend: $backend,
             memoryStore: self::memoryStore(),
             sessionStore: $sessionStore,
@@ -1193,6 +1214,8 @@ final class Bootstrap
             themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
             onConfigChange: static fn(string $key, string $value) => self::writeUserConfig([$key => $value]),
             mosaic: ToolResult::mosaic(),
+            // The cross-session prompt file ↑/↓ recall walks and Enter appends to.
+            promptHistory: self::promptHistory(),
             // The same built-in guard chain backend()/backendFor() hand the
             // engine backend. Without it, Chat's own registerTool() calls
             // would still be the one unguarded tool path in the live binary
@@ -1373,7 +1396,11 @@ final class Bootstrap
         // pack ran out of room.
         self::drainNarrowedGrantWarnings($agentManager);
 
-        return $chat->withLaunchNotices(self::launchNotices());
+        $chat = $chat->withLaunchNotices(self::launchNotices());
+
+        // Bare `--resume`: the picker opens over the fresh session so choosing
+        // is the first thing the user does, and Esc leaves a usable chat.
+        return $opened['picker'] ? $chat->withSessionPickerOpen() : $chat;
     }
 
     /**
@@ -2984,6 +3011,144 @@ final class Bootstrap
     public static function useConfigPath(?string $path): void
     {
         self::$configPathOverride = $path;
+    }
+
+    /**
+     * Register the session `-c`/`--continue` or `--resume` asked for, for this
+     * process — the same process-wide seam as {@see useModel()}, and under the
+     * same clear-what-you-set test contract documented there.
+     *
+     * With neither flag a launch opens a NEW session: two terminals must never
+     * land on the same conversation now that each saves its transcript as it
+     * changes, and "start fresh, continue on request" is what every comparable
+     * agent CLI does. ↑ still reaches the previous session's prompts, because
+     * recall reads the cross-session {@see PromptHistory}, not the transcript.
+     */
+    public static function useSessionLaunch(bool $continue, bool $resume = false, ?string $target = null): void
+    {
+        self::$sessionLaunchMode = $resume ? 'resume' : ($continue ? 'continue' : 'new');
+        self::$sessionLaunchTarget = $resume && $target !== null && $target !== '' ? $target : null;
+    }
+
+    /**
+     * Point the prompt history at $path instead of `~/.sugar-crush`, or back at
+     * the default with null. For the test suite, which pins it into its sandbox
+     * so a test that presses Enter on a {@see chat()}-built Chat can never add
+     * its prompt to the developer's own ↑ history.
+     */
+    public static function pinPromptHistoryPath(?string $path): void
+    {
+        self::$promptHistoryPath = $path;
+    }
+
+    /** The cross-session prompt file ↑/↓ recall reads and Enter appends to. */
+    public static function promptHistory(): PromptHistory
+    {
+        return new PromptHistory(self::$promptHistoryPath ?? self::configDir() . '/prompt_history.jsonl');
+    }
+
+    /**
+     * Why the session `--resume <target>` named cannot be opened, or null when
+     * it can (or when no target was named). `bin/sugarcrush` asks before the
+     * TUI takes the terminal, so a typo is a usage error rather than a silent
+     * fresh session.
+     */
+    public static function sessionLaunchError(): ?string
+    {
+        if (self::$sessionLaunchMode !== 'resume' || self::$sessionLaunchTarget === null) {
+            return null;
+        }
+
+        try {
+            $found = self::findSession(self::sessionStore(false), self::$sessionLaunchTarget);
+        } catch (\Throwable $e) {
+            return 'sugarcrush: --resume: cannot open the session store: ' . $e->getMessage();
+        }
+
+        return $found === null
+            ? 'sugarcrush: --resume: no stored session has the id or name "' . self::$sessionLaunchTarget . '"'
+            : null;
+    }
+
+    /**
+     * The session row a `--resume` target names: an exact id, then an exact
+     * name, then an id PREFIX that matches exactly one session (ids are long
+     * hex strings; `session list` prints them whole, but nobody types sixteen
+     * characters when six are unique). Null when nothing, or more than one
+     * prefix match, answers.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function findSession(SessionStore|EnhancedSessionStore $store, string $target): ?array
+    {
+        $row = $store->getSession($target) ?? $store->getSessionByName($target);
+        if (\is_array($row)) {
+            return $row;
+        }
+
+        $matches = array_values(array_filter(
+            $store->listSessions(PHP_INT_MAX),
+            static fn(array $r): bool => str_starts_with((string) ($r['id'] ?? ''), $target),
+        ));
+
+        return \count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /**
+     * Open the session this launch runs in, as {@see useSessionLaunch()}
+     * registered it, with the conversation to put back on screen.
+     *
+     *  - new: a fresh row. Empty rows older than an hour that earlier launches
+     *    left behind are swept first ({@see EnhancedSessionStore::pruneEmptySessions()}).
+     *  - continue: the most recently used session that holds a conversation
+     *    ({@see EnhancedSessionStore::latestResumableSession()}), else
+     *    {@see seedSession()}.
+     *  - resume: the named session; with no target, a fresh row plus the
+     *    session picker open over it, so Esc still leaves a working chat.
+     *
+     * @return array{id: string, name: ?string, history: list<\SugarCraft\Crush\Message>, picker: bool}
+     */
+    public static function openSession(
+        SessionStore|EnhancedSessionStore $store,
+        string $provider = 'sugarcrush',
+        string $model = 'unknown',
+    ): array {
+        if (self::$sessionLaunchMode === 'continue') {
+            // The newest session WITH a conversation, not the newest row: a
+            // launch quit without typing is newer than the work the user wants
+            // back. seedSession() answers only when nothing has content yet.
+            $row = $store instanceof EnhancedSessionStore ? $store->latestResumableSession() : null;
+            if ($row !== null) {
+                $id = (string) $row['id'];
+                $name = \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null;
+            } else {
+                [$id, $name] = self::seedSession($store, $provider, $model);
+            }
+
+            return ['id' => $id, 'name' => $name, 'history' => Chat::loadTranscript($store, $id), 'picker' => false];
+        }
+
+        if (self::$sessionLaunchMode === 'resume' && self::$sessionLaunchTarget !== null) {
+            $row = self::findSession($store, self::$sessionLaunchTarget);
+            if ($row !== null) {
+                $id = (string) $row['id'];
+                $name = \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null;
+
+                return ['id' => $id, 'name' => $name, 'history' => Chat::loadTranscript($store, $id), 'picker' => false];
+            }
+        }
+
+        $id = bin2hex(random_bytes(8));
+        $store->createSession($id, $provider, $model);
+        if ($store instanceof EnhancedSessionStore) {
+            try {
+                $store->pruneEmptySessions($id);
+            } catch (\Throwable) {
+                // Housekeeping only; a launch never fails over it.
+            }
+        }
+
+        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => self::$sessionLaunchMode === 'resume'];
     }
 
     /**
@@ -7249,6 +7414,10 @@ final class Bootstrap
      * Give the CLI a real session row to run against, resuming the most
      * recent one when the store already has sessions and creating one when
      * it does not (crush_feat.md §5 E1's sketch).
+     *
+     * Since `-c`/`--continue` this is THAT flag's path, reached through
+     * {@see openSession()}; a launch with no session flag opens a new row
+     * instead, for the two-terminals reason on {@see useSessionLaunch()}.
      *
      * This is the capstone gap that whole feature area was blocked on: no
      * production path — not this method's caller, not `Chat::init()`, not

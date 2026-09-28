@@ -139,18 +139,30 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     /**
-     * Seeding must RESUME the most recent row rather than create one per
-     * launch: a create-always seed would still satisfy the test above while
-     * growing the store unboundedly and orphaning every previous run's
-     * /rewind checkpoints.
+     * A plain launch opens a session of its OWN — two terminals must never
+     * share a conversation now that each saves its transcript as it changes —
+     * and `--continue` is what resumes the previous one, rather than a third
+     * row. The unbounded growth a create-per-launch seed used to risk is
+     * answered by EnhancedSessionStore::pruneEmptySessions(), which the
+     * launch runs over rows that never held anything.
      */
-    public function testASecondLaunchResumesTheSeededSessionInsteadOfAddingARow(): void
+    public function testASecondLaunchOpensItsOwnRowAndContinueResumesIt(): void
     {
         $first = Bootstrap::chat($this->tempDir . '/repo');
         $second = Bootstrap::chat($this->tempDir . '/repo');
 
-        $this->assertSame($first->currentSessionId(), $second->currentSessionId());
-        $this->assertCount(1, $second->sessionStore()?->listSessions() ?? []);
+        $this->assertNotSame($first->currentSessionId(), $second->currentSessionId());
+        $this->assertCount(2, $second->sessionStore()?->listSessions() ?? []);
+
+        try {
+            Bootstrap::useSessionLaunch(true);
+            $continued = Bootstrap::chat($this->tempDir . '/repo');
+        } finally {
+            Bootstrap::useSessionLaunch(false);
+        }
+
+        $this->assertSame($second->currentSessionId(), $continued->currentSessionId());
+        $this->assertCount(2, $continued->sessionStore()?->listSessions() ?? []);
     }
 
     /**

@@ -396,7 +396,8 @@ final class KeyBindingRegistry
             // "focuses the next pane" full stop, and the completion the user
             // asked for was invisible to the only in-app key list there is.
             KeyBinding::new('chat.slash-complete', 'Tab', 'Complete the highlighted "/" command', $c),
-            KeyBinding::new('chat.recall', '↑', 'Recall your last message (empty input box)', $c),
+            KeyBinding::new('chat.recall', '↑', 'Walk back through past prompts (empty box)', $c),
+            KeyBinding::new('chat.recall-next', '↓', 'Walk forward again, then back to your draft', $c),
             KeyBinding::new('chat.accept-suggestion', '→', 'Take the grayed suggestion (empty input box)', $c),
             // ── the draft's own editing keyboard ─────────────────────────
             //

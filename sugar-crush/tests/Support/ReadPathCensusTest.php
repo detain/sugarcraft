@@ -358,6 +358,12 @@ final class ReadPathCensusTest extends TestCase
         'Runtime.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
         ],
+        'Session/PromptHistory.php|file' => [
+            'SELF_LOCATED — ~/.sugar-crush/prompt_history.jsonl, the path Bootstrap::promptHistory() names',
+        ],
+        'Session/PromptHistory.php|fopen' => [
+            'SELF_LOCATED — the same file, opened c+ under an exclusive lock to append',
+        ],
         'Sessions/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child',
             'SELF_LOCATED — the same buffer, re-read while streaming',

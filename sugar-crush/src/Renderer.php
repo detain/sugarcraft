@@ -1347,7 +1347,7 @@ final class Renderer
             // Visible in the chat window itself, not just the status bar -
             // a spinner-only status line is easy to miss; this sits right
             // where the reply is about to appear.
-            $thinking = Style::new()->foreground($theme->assistantLabel)->faint()->render('⠴ assistant is thinking…');
+            $thinking = Style::new()->foreground($theme->assistantLabel)->render('⠴ assistant is thinking…');
             $body = $body === '' ? $thinking : $body . "\n\n" . $thinking;
         }
         // Everything above wrote into $body; this is the single choke point
@@ -2980,7 +2980,7 @@ final class Renderer
             $blocks[] = match ($msg->role) {
                 Role::User      => Style::new()->foreground($theme->userLabel)->bold()->render('user>') . " " . self::untrusted($msg->content),
                 Role::Assistant => self::renderAssistantTurn($msg, $theme, $md, $expanded),
-                Role::System    => Style::new()->foreground($theme->systemLabel)->faint()->render("system: " . self::untrusted($msg->content)),
+                Role::System    => self::dim($theme)->render("system: " . self::untrusted($msg->content)),
             };
         }
         return implode("\n\n", $blocks);
@@ -3087,9 +3087,9 @@ final class Renderer
     {
         $lines = self::thoughtLines($reasoning);
         $isExpanded = ($expanded[$key] ?? false) === true;
-        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+        $faint = self::dim($theme);
 
-        $head = Style::new()->foreground($theme->systemLabel)->faint()->italic()->render(self::THOUGHT_ROW_LABEL);
+        $head = self::dim($theme)->italic()->render(self::THOUGHT_ROW_LABEL);
         self::$toolRowHeads[] = $head;
         self::recordToolCallZone($key, $head);
 
@@ -3144,8 +3144,8 @@ final class Renderer
             $rows += $cost;
         }
 
-        $faint = Style::new()->foreground($theme->systemLabel)->faint();
-        $marker = Style::new()->foreground($theme->systemLabel)->faint()->italic()->render('💭 Thinking…');
+        $faint = self::dim($theme);
+        $marker = self::dim($theme)->italic()->render('💭 Thinking…');
         if (count($kept) < $total) {
             $marker .= $faint->render(' ' . sprintf(self::THINKING_LIVE_TRAILER, count($kept), $total));
         }
@@ -3283,7 +3283,7 @@ final class Renderer
             // PaneWidthInvariantTest::testTheNarrowestToolRowKeepsAtLeastOneCellOfItsName().
             $labelRoom = $width - Width::of(self::TOOL_ROW_PREFIX) - Width::of($status) - 1;
             $name = Width::truncate(self::untrusted($result->name), max(1, $labelRoom));
-            $head = Style::new()->foreground($theme->systemLabel)->faint()->strikethrough($stopped)->render(self::TOOL_ROW_PREFIX . $name);
+            $head = self::dim($theme)->strikethrough($stopped)->render(self::TOOL_ROW_PREFIX . $name);
             $label = $head . ' ' . $status;
             // Recorded for the LAYOUT question, before and regardless of
             // whether this row can also become a click zone: fitToPane() has to
@@ -3386,7 +3386,7 @@ final class Renderer
             return '';
         }
 
-        return Style::new()->foreground($theme->systemLabel)->faint()->render($separator . $text);
+        return self::dim($theme)->render($separator . $text);
     }
 
     /**
@@ -3440,7 +3440,7 @@ final class Renderer
 
         $text = Width::truncate('🖼 ' . $dimensions . $protocol . 'image hidden (ctrl+o)', max(1, $width));
 
-        return Style::new()->foreground($theme->systemLabel)->faint()->render($text);
+        return self::dim($theme)->render($text);
     }
 
     /**
@@ -3503,7 +3503,7 @@ final class Renderer
             try {
                 $hit = ['ok' => true, 'body' => $mosaic->render(ImageSource::fromString($bytes), $cols, $rows)];
             } catch (\Throwable $e) {
-                $hit = ['ok' => false, 'body' => Style::new()->foreground($theme->systemLabel)->faint()
+                $hit = ['ok' => false, 'body' => self::dim($theme)
                     ->render('🖼 image unavailable: ' . Sanitize::untrusted($e->getMessage()))];
             }
 
@@ -3566,7 +3566,7 @@ final class Renderer
             $count = substr_count($body, "\n") + 1;
             $hint = "… {$count} line" . ($count === 1 ? '' : 's') . ' hidden (ctrl+o)';
 
-            return Style::new()->foreground($theme->systemLabel)->faint()->render($hint);
+            return self::dim($theme)->render($hint);
         }
 
         $collapsed = self::collapseToolOutput($body, self::TOOL_OUTPUT_MAX_LINES, self::TOOL_OUTPUT_MAX_CHARS);
@@ -3575,7 +3575,7 @@ final class Renderer
         }
 
         return $collapsed['output'] . "\n"
-            . Style::new()->foreground($theme->systemLabel)->faint()->render('… output truncated (ctrl+o to expand)');
+            . self::dim($theme)->render('… output truncated (ctrl+o to expand)');
     }
 
     /**
@@ -3691,7 +3691,7 @@ final class Renderer
         $headers = DiffGutter::fileHeaders($rows);
 
         $body = $inner - $gutter->width;
-        $gutterStyle = Style::new()->foreground($theme->systemLabel)->faint();
+        $gutterStyle = self::dim($theme);
 
         $painted = [];
         foreach ($rows as $i => $row) {
@@ -3711,6 +3711,26 @@ final class Renderer
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $painted));
+    }
+
+    /**
+     * The subdued colour for transcript chrome: thoughts, tool rows, tool-body
+     * hints, the running placeholder, invocation args and the diff gutter.
+     *
+     * The theme's `systemLabel` WITHOUT SGR 2 (faint). Faint used to be layered
+     * on top, and it is applied by the terminal after the fact — roughly halving
+     * the colour's brightness — so the text landed far under the
+     * {@see Theme::CONTRAST_MIN} that `systemLabel` was projected to clear, where
+     * no contrast test could see it. On dracula that turned thinking and tool
+     * rows into a barely-legible slate. The projected colour alone is already
+     * the subordinate grey; the terminal does not get to darken it further.
+     *
+     * Menu hints and the input's ghost suggestion keep their faint on purpose:
+     * they are placeholders, not content the user has to read back.
+     */
+    private static function dim(Theme $theme): Style
+    {
+        return Style::new()->foreground($theme->systemLabel);
     }
 
     /**
@@ -3742,7 +3762,7 @@ final class Renderer
             return Style::new()->foreground(Color::ansi(1));
         }
 
-        return Style::new()->foreground($theme->systemLabel)->faint();
+        return self::dim($theme);
     }
 
     /**
@@ -3755,7 +3775,7 @@ final class Renderer
     private static function renderPendingToolCall(Message $msg, Theme $theme, array $expanded = []): string
     {
         $spinner = Style::new()->foreground($theme->assistantLabel)->render('⠴');
-        $running = $spinner . ' ' . Style::new()->foreground($theme->systemLabel)->faint()->render('running: ' . self::untrusted($msg->content));
+        $running = $spinner . ' ' . self::dim($theme)->render('running: ' . self::untrusted($msg->content));
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $running;
@@ -3791,7 +3811,7 @@ final class Renderer
             return '';
         }
 
-        $faint = Style::new()->foreground($theme->systemLabel)->faint();
+        $faint = self::dim($theme);
         $out = [];
 
         $command = $args['command'] ?? null;

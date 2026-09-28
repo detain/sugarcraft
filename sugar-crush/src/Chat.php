@@ -89,6 +89,7 @@ use SugarCraft\Crush\Memory\MemoryStore;
 use SugarCraft\Crush\Memory\ForeignMemoryImporter;
 use SugarCraft\Crush\Support\ContainedPath;
 use SugarCraft\Crush\Session\EnhancedSessionStore;
+use SugarCraft\Crush\Session\PromptHistory;
 use SugarCraft\Crush\Session\SessionStore;
 use SugarCraft\Crush\Util\TokenTracker;
 
@@ -224,6 +225,20 @@ final class Chat implements Model
      * @var array<string, CommandSpec>
      */
     private readonly array $customCommands;
+
+    /**
+     * Every prompt ↑/↓ can recall, oldest first: the {@see $promptHistory}
+     * file as it stood at launch — so a fresh client's first ↑ lands on the
+     * last prompt of the PREVIOUS session — plus each prompt sent through
+     * Enter since. Loaded once and carried by {@see mutate()}, for the same
+     * one-read-per-process reason as {@see $customCommands}.
+     *
+     * Empty, and unused, when no {@see $promptHistory} is wired: recall then
+     * reads the transcript's own user rows, see {@see recallEntries()}.
+     *
+     * @var list<string>
+     */
+    private readonly array $inputHistory;
 
     /**
      * This session's running PROVIDER-COUNTED spend, fed one entry per settled
@@ -1284,7 +1299,26 @@ final class Chat implements Model
          * @var array{text: string, generation: int, historyCount: int, sessionId: ?string}|null
          */
         private readonly ?array $promptSuggestion = null,
+        /**
+         * The cross-session prompt file ↑/↓ recall reads at launch and every
+         * Enter appends to. Null — tests and embedders — keeps recall on the
+         * transcript's user rows, exactly as before the file existed;
+         * {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} wires the real one.
+         */
+        private readonly ?PromptHistory $promptHistory = null,
+        /** Pre-resolved {@see $inputHistory}; null reads {@see $promptHistory}. */
+        ?array $inputHistory = null,
+        /**
+         * Index into {@see recallEntries()} of the entry ↑/↓ last put in the
+         * box, or null when the user is not walking history. Walking stops by
+         * itself the moment the draft stops matching that entry — see
+         * {@see isWalkingHistory()} — so no edit path has to clear it.
+         */
+        private readonly ?int $inputHistoryCursor = null,
+        /** The draft the box held when the walk began; ↓ past the newest entry gives it back. */
+        private readonly string $inputHistoryDraft = '',
     ) {
+        $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
         // The widget is the source of truth; $inputBuf is its projection.
         // Seeding via setValue() lands the cursor at the end of the draft,
         // which is what every "replace the draft" route wants (a submit
@@ -1440,6 +1474,155 @@ final class Chat implements Model
     }
 
     public function update(Msg $msg): array
+    {
+        [$next, $cmd] = $this->route($msg);
+
+        if ($next instanceof self && $next !== $this) {
+            $next->persistTranscript($this);
+        }
+
+        return [$next, $cmd];
+    }
+
+    /**
+     * Save the transcript whenever a message changed it, so the session can be
+     * resumed later exactly as it stood ({@see switchToSession()},
+     * `sugarcrush --continue`).
+     *
+     * Keyed on the history ARRAY changing, which is an identity check on the
+     * common path: {@see mutate()} hands an untouched history through as the
+     * same array, so a keystroke costs one pointer comparison and no write.
+     * Mid-turn writes are deliberate — a tool row landing is exactly the state
+     * a crash would otherwise lose, and a "running" placeholder saved that way
+     * is healed into an "interrupted" row when it is resumed
+     * ({@see reviveTranscriptMessage()}).
+     *
+     * A side effect inside update(), like the submit-time checkpoint it sits
+     * beside and for the same reason: it must happen before the next message is
+     * handled, and a failure is swallowed rather than costing the user the turn.
+     */
+    private function persistTranscript(self $previous): void
+    {
+        if ($this->currentSessionId === null
+            || !$this->sessionStore instanceof EnhancedSessionStore
+            || $this->history === $previous->history
+        ) {
+            return;
+        }
+
+        try {
+            $this->sessionStore->saveTranscript($this->currentSessionId, $this->history);
+        } catch (\Throwable) {
+            // Best effort - see the docblock.
+        }
+    }
+
+    /**
+     * Rebuild one saved transcript row for a resume: every field
+     * {@see Message::fromArray()} can restore - tool calls and results,
+     * reasoning, usage - with one repair. A "running" placeholder in a saved
+     * transcript is a tool call whose process is gone, so it comes back as the
+     * same "interrupted" error row {@see reviveCheckpointMessage()} makes for
+     * `/rewind`; left as a placeholder it would spin forever for a result that
+     * cannot arrive.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function reviveTranscriptMessage(array $row): Message
+    {
+        $pendingId = $row['pendingToolCallId'] ?? null;
+        if (\is_string($pendingId) && $pendingId !== '') {
+            return self::reviveCheckpointMessage($row);
+        }
+
+        return Message::fromArray($row);
+    }
+
+    /**
+     * The saved transcript of $sessionId as Messages, or [] when the store
+     * has none (or cannot say).
+     *
+     * @return list<Message>
+     */
+    public static function loadTranscript(
+        \SugarCraft\Crush\Session\SessionStore|EnhancedSessionStore|null $store,
+        string $sessionId,
+    ): array {
+        if (!$store instanceof EnhancedSessionStore) {
+            return [];
+        }
+
+        try {
+            $rows = $store->loadTranscript($sessionId) ?? [];
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return array_map(static fn(array $row): Message => self::reviveTranscriptMessage($row), $rows);
+    }
+
+    /**
+     * Make $sessionId the current session AND put its conversation back on
+     * screen - the one route every session switch takes (the picker's Enter,
+     * a tab click, Ctrl+Tab).
+     *
+     * Switching the id alone was the old behaviour and it was worse than a
+     * no-op: the model kept the previous session's transcript under the new
+     * id, so "resuming" a conversation continued a different one, and with
+     * transcripts now saved on change it would also have written that
+     * conversation over the resumed session's own.
+     *
+     * Everything tied to the transcript being replaced is released with it:
+     * an outstanding `/compact` summary, the scroll position, and any queued
+     * prompts typed for the old conversation.
+     */
+    private function switchToSession(string $sessionId, ?string $name): self
+    {
+        $history = self::loadTranscript($this->sessionStore, $sessionId);
+
+        return $this->mutate([
+            'currentSessionId' => $sessionId,
+            'currentSessionName' => $name,
+            'history' => [...$history, Message::system(
+                '_Resumed session ' . ($name ?? $sessionId) . '._',
+            )],
+            'pendingCompactionId' => null,
+            'queuedPrompts' => [],
+            'scrollOffset' => 0,
+        ]);
+    }
+
+    /**
+     * The name the store holds for $sessionId, or null when it has none.
+     */
+    private function storedSessionName(string $sessionId): ?string
+    {
+        if ($this->sessionStore === null) {
+            return null;
+        }
+
+        $row = $this->sessionStore->getSession($sessionId);
+        $stored = \is_array($row) ? (string) ($row['name'] ?? '') : '';
+
+        return $stored !== '' ? $stored : null;
+    }
+
+    /**
+     * Open the session picker over the chat, as Ctrl+R and `/sessions` do -
+     * the launch-time door for `sugarcrush --resume` with no id. Unchanged
+     * when there is no store or nothing to pick.
+     */
+    public function withSessionPickerOpen(): self
+    {
+        $picker = $this->buildSessionPicker();
+
+        return $picker === null ? $this : $this->mutate(['sessionPicker' => $picker]);
+    }
+
+    /**
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    private function route(Msg $msg): array
     {
         if ($msg instanceof AssistantMsg) {
             // Account the turn FIRST - before the staleness guard, before the
@@ -1996,7 +2179,15 @@ final class Chat implements Model
             $msg->type === KeyType::Enter
                 => $this->slashMenuShouldIntercept()
                     ? $this->completeSlashMenuSelection()
-                    : $this->submit(),
+                    : $this->recordInputHistory()->submit(),
+            // Walking prompt history (↑ on an empty box started it, see the
+            // recall arm below) outranks the "/" popup: a recalled `/sessions`
+            // opens the popup, and without this ↑ would start browsing it
+            // instead of stepping on to the prompt before.
+            !$msg->ctrl && !$msg->alt && $msg->type === KeyType::Up && $this->isWalkingHistory()
+                => [$this->walkHistory(-1), null],
+            !$msg->ctrl && !$msg->alt && $msg->type === KeyType::Down && $this->isWalkingHistory()
+                => [$this->walkHistory(1), null],
             // Up/Down navigate the "/" popup while it's showing (see
             // slashMenuMatches()); otherwise fall through to the default
             // no-op arm below, unchanged from before this popup existed.
@@ -2039,9 +2230,12 @@ final class Chat implements Model
                 => $this->completeSlashMenuSelection(),
             // Shell-history-style recall: Up on an empty input box (and no
             // "/" popup showing - the arm above already claimed that case)
-            // fills inputBuf with the last message the user actually sent.
+            // fills inputBuf with the last prompt the user sent - from this
+            // session or, on a fresh launch, the previous one - and starts a
+            // walk that further ↑/↓ presses continue (the arms above Enter's
+            // neighbours).
             $msg->type === KeyType::Up && $this->inputBuf === ''
-                => [$this->withInputBuf($this->lastUserMessageContent()), null],
+                => [$this->walkHistory(-1), null],
             // → on an empty box takes the grayed suggestion as the draft,
             // cursor at its end, ready to edit or send. With no suggestion
             // showing it falls through to the editor, where it is the
@@ -2118,8 +2312,9 @@ final class Chat implements Model
             // are the only two of trim()'s six bytes a keystroke lands, and that
             // whole map is asserted byte by byte in the test named above.
             //
-            // Untypeable is not unreachable. The Up arm above copies
-            // lastUserMessageContent() in VERBATIM, and
+            // Untypeable is not unreachable. The Up arm above copies a
+            // recallEntries() row in VERBATIM - on a Chat with no prompt file
+            // wired those are the transcript's user rows - and
             // Chat::reviveCheckpointMessage() turns a checkpoint row whose role is
             // neither 'assistant' nor 'system' -- a 'tool' row, whose output is full
             // of tabs -- into a user message with its content unchanged. ('system'
@@ -2391,7 +2586,7 @@ final class Chat implements Model
 
         $nextIndex = ($currentIndex + $direction + $count) % $count;
 
-        return [$this->withCurrentSessionId($ids[$nextIndex]), null];
+        return [$this->switchToSession($ids[$nextIndex], $this->storedSessionName($ids[$nextIndex])), null];
     }
 
     /**
@@ -5766,7 +5961,7 @@ final class Chat implements Model
             return $this->refuseInFlightAction('Switch session');
         }
 
-        return [$this->withCurrentSessionId($id), null];
+        return [$this->switchToSession($id, $this->storedSessionName($id)), null];
     }
 
     /**
@@ -6676,6 +6871,10 @@ final class Chat implements Model
             'tokenEstimateCalibration' => $this->tokenEstimateCalibration,
             'webSearch' => $this->webSearch,
             'promptSuggestion' => $this->promptSuggestion,
+            'promptHistory' => $this->promptHistory,
+            'inputHistory' => $this->inputHistory,
+            'inputHistoryCursor' => $this->inputHistoryCursor,
+            'inputHistoryDraft' => $this->inputHistoryDraft,
         ];
 
         // The two write routes into the draft, kept from fighting.
@@ -11700,14 +11899,7 @@ final class Chat implements Model
             }
         }
 
-        return [$this->mutate([
-            'sessionPicker' => null,
-            'currentSessionId' => $sessionId,
-            'currentSessionName' => $name,
-            'history' => [...$this->history, Message::system(
-                '_Resumed session ' . ($name ?? $sessionId) . '._',
-            )],
-        ]), null];
+        return [$this->mutate(['sessionPicker' => null])->switchToSession($sessionId, $name), null];
     }
 
     /**
@@ -13897,8 +14089,14 @@ final class Chat implements Model
         $this->sessionStore->createSession($sessionId, 'sugarcrush', 'unknown');
 
         return [$this->mutate([
-            'history' => [...$this->history, Message::assistant("New session created: {$sessionId}")],
+            // A new session starts from an empty transcript. Carrying the old
+            // one across would send it to the model under the new id and, now
+            // that transcripts are saved on change, store it there as well.
+            'history' => [Message::assistant("New session created: {$sessionId}")],
             'currentSessionId' => $sessionId,
+            'currentSessionName' => null,
+            'queuedPrompts' => [],
+            'scrollOffset' => 0,
             // Released for the same reason `/clear` and `/rewind` release it: a
             // `/compact` issued against the OLD session's transcript must not
             // rewrite whatever is in front of the user under a new session id.
@@ -13929,20 +14127,123 @@ final class Chat implements Model
     }
 
     /**
-     * The content of the most recently sent (Role::User) message in
-     * history, or '' if none exists yet - backs the shell-history-style Up
-     * arrow recall in update(). Only ever looks at real user turns, so it
-     * skips over assistant replies and tool-result/system messages.
+     * What ↑/↓ recall walks, oldest first.
+     *
+     * With a {@see $promptHistory} wired that is {@see $inputHistory}: every
+     * prompt typed, across sessions. Without one it is the transcript's own
+     * user rows, read live, which is what the recall answered before the file
+     * existed and what a Chat built in a test still gets. Only real user
+     * turns either way - assistant replies and tool/system rows are skipped.
+     *
+     * @return list<string>
      */
-    private function lastUserMessageContent(): string
+    private function recallEntries(): array
     {
-        for ($i = count($this->history) - 1; $i >= 0; $i--) {
-            if ($this->history[$i]->role === Role::User) {
-                return $this->history[$i]->content;
+        if ($this->promptHistory !== null) {
+            return $this->inputHistory;
+        }
+
+        $entries = [];
+        foreach ($this->history as $message) {
+            if ($message->role === Role::User) {
+                $entries[] = $message->content;
             }
         }
 
-        return '';
+        return $entries;
+    }
+
+    /**
+     * Whether the box still holds the entry ↑/↓ last recalled, unedited.
+     *
+     * Derived rather than latched, so every edit path - a typed character, a
+     * paste, a completion, a submit - ends the walk without having to know it
+     * exists: the moment the draft differs from the recalled entry, ↑/↓ go
+     * back to being the editor's (or the popup's) keys.
+     */
+    private function isWalkingHistory(): bool
+    {
+        if ($this->inputHistoryCursor === null) {
+            return false;
+        }
+
+        $entries = $this->recallEntries();
+
+        return isset($entries[$this->inputHistoryCursor])
+            && $entries[$this->inputHistoryCursor] === $this->inputBuf;
+    }
+
+    /**
+     * Step the recall one entry older ($step = -1) or newer (+1).
+     *
+     * ↑ from outside a walk stashes the current draft and lands on the newest
+     * entry; ↑ on the oldest stays there. ↓ past the newest entry ends the
+     * walk and gives back the stashed draft, the way a shell returns you to
+     * the line you were typing.
+     */
+    private function walkHistory(int $step): self
+    {
+        $entries = $this->recallEntries();
+        if ($entries === []) {
+            return $this;
+        }
+
+        $walking = $this->isWalkingHistory();
+        $draft = $walking ? $this->inputHistoryDraft : $this->inputBuf;
+        $from = $walking ? (int) $this->inputHistoryCursor : count($entries);
+        $to = $from + $step;
+
+        if ($to < 0) {
+            return $this;
+        }
+
+        if ($to >= count($entries)) {
+            return $this->mutate([
+                'inputBuf' => $draft,
+                'inputHistoryCursor' => null,
+                'inputHistoryDraft' => '',
+            ]);
+        }
+
+        return $this->mutate([
+            'inputBuf' => $entries[$to],
+            'inputHistoryCursor' => $to,
+            'inputHistoryDraft' => $draft,
+        ]);
+    }
+
+    /**
+     * Add the draft Enter is about to send to the recall list, and to the
+     * cross-session file, before {@see submit()} consumes it.
+     *
+     * Recorded as TYPED - a slash command included, a custom command before its
+     * expansion - because recall gives back what the user wrote, not what the
+     * model received. An exact repeat of the newest entry is not added twice
+     * (the file applies the same rule to what is already on disk). With no
+     * file wired this only ends the walk; the transcript row submit() appends
+     * is what recall will read.
+     */
+    private function recordInputHistory(): self
+    {
+        $text = trim($this->inputBuf);
+        $changes = [];
+        if ($this->inputHistoryCursor !== null || $this->inputHistoryDraft !== '') {
+            $changes = ['inputHistoryCursor' => null, 'inputHistoryDraft' => ''];
+        }
+
+        // `/exit` and `/quit` are how a session ENDS, so recording them would
+        // make the leaving command the first thing ↑ offers in every new one.
+        if ($text !== '' && $text !== '/exit' && $text !== '/quit' && $this->promptHistory !== null) {
+            $this->promptHistory->append($text);
+            $newest = $this->inputHistory === [] ? null : $this->inputHistory[array_key_last($this->inputHistory)];
+            if ($newest !== $text) {
+                $changes['inputHistory'] = [...$this->inputHistory, $text];
+            }
+        }
+
+        // No clone when nothing moved: an Enter on an empty box must still
+        // hand back the receiver itself, as submit() does.
+        return $changes === [] ? $this : $this->mutate($changes);
     }
 
     /**

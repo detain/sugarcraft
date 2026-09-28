@@ -113,6 +113,31 @@ Both flags apply to the TUI and to `-p`/`run` alike.
 are jailed to and where `CLAUDE.md`/`AGENTS.md` and `.sugar-crush/skills` are
 looked for.
 
+### Sessions: new, continue, resume
+
+Every launch opens a **new** session. The conversation is saved as it changes —
+every message, tool call, tool result and thought — so any session can be picked
+up again later, with the model seeing the whole earlier exchange:
+
+```sh
+sugarcrush                  # a new session (Up still recalls prompts from earlier ones)
+sugarcrush --continue       # reopen the most recently used session (short: -c)
+sugarcrush --resume 3f9a    # reopen one by id, unique id prefix, or name
+sugarcrush --resume         # open the session picker at launch
+```
+
+`--resume <id>` also accepts `--resume=<id>`; ids come from `sugarcrush session
+list` or the picker. A target that names no stored session is a usage error
+(exit 2) before the TUI starts. `--continue` and `--resume` cannot be combined
+with each other or with `-p`/`run`. Inside the TUI, `Ctrl+R` (or `/sessions`)
+opens the same picker and `Enter` loads the chosen session's transcript;
+`Ctrl+Tab` and the tab strip switch the same way. A tool call that was still
+running when its session was last saved comes back marked interrupted.
+
+Launches that were quit without typing leave empty sessions behind; the next
+launch deletes the ones older than an hour (unnamed, with no transcript and no
+checkpoint — nothing that could be wanted back).
+
 ### Settings files
 
 Four files are read, and the **highest one that mentions a key wins** for that
@@ -653,7 +678,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 
 | Key | Does |
 |-----|------|
-| `?` (blank input) | Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only two of those six bytes can be typed — space, and `NUL` via `Ctrl`+`Space`. A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other three (tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way — **`/rewind` to a checkpoint whose transcript contains a tool result.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; `↑` then recalls that revived message verbatim. That is the whole mechanism, and it is the only one: after a `/rewind` a draft can hold a byte no key emits. Same for the form feed in the non-blank list above — `Ctrl`+`L` types the letter `l`, not `U+000C`. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
+| `?` (blank input) | Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only two of those six bytes can be typed — space, and `NUL` via `Ctrl`+`Space`. A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other three (tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way, and not in the shipped binary — **`/rewind` to a checkpoint whose transcript contains a tool result, in a `Chat` embedded without a prompt-history file.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; with no prompt file wired, `↑` recalls from the transcript's user rows and so returns that revived message verbatim. `bin/sugarcrush` always wires `~/.sugar-crush/prompt_history.jsonl`, whose entries are prompts you typed and sent (trimmed), so there `↑` never produces such a draft. Same for the form feed in the non-blank list above — `Ctrl`+`L` types the letter `l`, not `U+000C`. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone) |
 | `?` `?` | Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed — the box has no cursor movement, so `?` on a blank line would otherwise make one impossible. Works after leading whitespace too: `␣??` leaves `␣?` |
 | `/keys` | The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works |
 | `Enter` | Send |
@@ -666,7 +691,8 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+R` | Session picker (persisted across turns) — with the picker up the wheel browses, a click selects, and `Enter` resumes; browsing onto the last loaded row fetches the next page |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
-| `Up` (empty input) | Recall the last message you sent |
+| `Up` (empty input) | Recall the last prompt you sent — press again to walk further back, into earlier sessions too (a fresh launch's first `Up` is the previous session's last prompt). History lives in `~/.sugar-crush/prompt_history.jsonl`; editing a recalled prompt ends the walk |
+| `Down` (while recalling) | Step forward through recalled prompts; past the newest one, the draft you were typing comes back |
 | `Right` (empty input) | Take the grayed suggestion — after each turn the empty box shows a guess at your next message (`SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS=1` turns it off) |
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
 | `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead: completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
@@ -1220,7 +1246,7 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,274 tests / 174,318 assertions, 0 failures, 1 skipped** — the whole of
+**12,331 tests / 174,717 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
 16m03s. Measured 2026-09-28. The pane-docking feature re-pinned the figure in stages,

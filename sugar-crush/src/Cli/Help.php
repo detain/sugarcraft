@@ -41,6 +41,8 @@ SugarCrush — AI coding assistant for the terminal.
 Usage:
   sugarcrush                       Start the interactive TUI (default)
   sugarcrush <dir>                 Start the TUI rooted at <dir>
+  sugarcrush -c                    Continue the most recent session
+  sugarcrush --resume [<id>]       Resume a stored session (picker if no id)
   sugarcrush -p <prompt>           Run a single prompt and exit (one-shot)
   sugarcrush run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)
   sugarcrush --output-format json  Output machine-readable JSON (one-shot)
@@ -103,6 +105,15 @@ Options:
                          the permissionMode config key. One of: default,
                          accept-edits, plan, auto, dont-ask,
                          bypass-permissions.
+  -c, --continue         Reopen the most recently used session, transcript
+                         and all, instead of starting a new one. Without it
+                         every launch opens a new session; Up in an empty
+                         input box still recalls prompts from earlier ones.
+      --resume [<id|name>]
+                         Reopen a stored session by id, unique id prefix or
+                         name (see `session list`). With no value, open the
+                         session picker at launch. Also accepts
+                         --resume=<id>. Not combinable with --continue or -p.
   -h, --help             Show this help message
   -v, --version          Show the installed version and exit
       --                 End of options: every later argument is positional,
