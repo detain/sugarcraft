@@ -667,6 +667,7 @@ all one candy-core `Model` tree — not two parallel UIs.
 | `Ctrl+A` | Same dispatch as typing `/agents` |
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last message you sent |
+| `Right` (empty input) | Take the grayed suggestion — after each turn the empty box shows a guess at your next message (`SUGARCRUSH_DISABLE_PROMPT_SUGGESTIONS=1` turns it off) |
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
 | `Tab` | Cycle focus over the **docked** panes — left column first top-to-bottom, then the right column, chat always first. While chat itself holds focus with the `/` popup open, `Tab` completes the highlighted command instead: completion answers to chat's focus, so a `Tab` from a docked pane cycles even with the popup open |
 | `Shift+Tab` | Cycle pane focus backwards (same docked list) |
@@ -1210,10 +1211,10 @@ final class MyProvider implements ProviderInterface
 cd sugar-crush && composer install && vendor/bin/phpunit
 ```
 
-**12,224 tests / 172,809 assertions, 0 failures, 1 skipped** — the whole of
+**12,244 tests / 172,884 assertions, 0 failures, 1 skipped** — the whole of
 `sugar-crush/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-15m07s. Measured 2026-09-28. The pane-docking feature re-pinned the figure in stages,
+15m07s. Measured 2026-09-28 (FORCE_COLOR unset). The pane-docking feature re-pinned the figure in stages,
 one commit each — the five `Dock*` suites (`3c90855aa`), the drag-gesture test pair
 (`37c50e389`), the review-fix round (`b4a5a11e7`), the docking crash/resize fix
 lane, the menu-bar pane tabs with their click-toggle, dock-scoped focus cycle
