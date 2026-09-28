@@ -6698,6 +6698,12 @@ final class Bootstrap
      * drift risk is E675's documented seam — if Chat's inline shape changes
      * (executor ctor args, clamp order), this method must follow in-step.
      *
+     * ONE DELIBERATE DIFFERENCE: Chat's pool now carries an
+     * {@see \SugarCraft\Crush\Agents\EngineExecutor} when the chat runs on a
+     * real engine, and this one does not. This pool only ever runs on TaskTool's
+     * UNBOUND fallback — a bound TaskTool runs its sub-agent through the calling
+     * turn's engine and never reaches a pool — so there is no engine to hand it.
+     *
      * @param \SugarCraft\Crush\Agents\AgentPoolConfig $config the session's pool config
      *
      * @return \SugarCraft\Crush\Agents\AgentWorkerPool the governed, stop-on-first-failure pool

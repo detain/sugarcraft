@@ -59,6 +59,12 @@ happen to share the numbers 1–4.
   now dispatch through the workflow's `AgentManager` (as parallel stages
   already did), because `AgentManager::liveOutputs()` — what the pane reads —
   only sees agents the manager ran; before, those stages never had a tile.
+- **`Chat::executeAgents()` runs the chat's engine too.** The pool it builds
+  from `AgentPoolConfig` now carries an `Agents\EngineExecutor` bound to the
+  chat's own backend whenever that backend is an `EngineBackend` over a real
+  (non-echo) provider, so each agent is a forked tool loop, same as a workflow
+  stage. Echo and command backends keep `ProcessExecutor`'s fail-closed worker;
+  an explicit `withWorkerPool()` pool is used as given.
 - **`/workflow` stages run the real tool loop.** They dispatched through
   `ProcessExecutor`'s one-call worker, the same defect `Task` had. The workflow
   pool now carries `Agents\EngineExecutor` as its forked executor (only when the

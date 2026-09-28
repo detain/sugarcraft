@@ -6343,6 +6343,16 @@ final class Chat implements Model
      * Otherwise, if $agentPoolConfig was set via withAgentPoolConfig(), a pool is
      * built from that config. If neither is set, throws \RuntimeException.
      *
+     * THE BUILT POOL RUNS THIS CHAT'S ENGINE when there is a real one. On an
+     * {@see Backend\EngineBackend} over any provider but the offline echo,
+     * each agent is a whole tool loop through that engine
+     * ({@see \SugarCraft\Crush\Agents\EngineExecutor}, run in the pool's
+     * forked child) — the same executor `/workflow` stages use. Otherwise the
+     * pool keeps {@see \SugarCraft\Crush\Agents\ProcessExecutor}'s worker,
+     * which consults `workerProvider` once and fails closed without one: an
+     * echo or command backend is not a model an agent should be run against
+     * as though it were (E663).
+     *
      * The resolved pool is then driven THROUGH {@see AgentManager::executeAll()}
      * whenever an AgentManager is configured, rather than being iterated
      * directly. The manager registers each SubAgent and mirrors the pool's
@@ -6378,15 +6388,25 @@ final class Chat implements Model
             // has one. A null spec stays null: the worker then FAILS naming the
             // absence rather than fabricating, which is the point of E641-era
             // fail-closed behaviour this wiring preserves.
-            $executor = new \SugarCraft\Crush\Agents\ProcessExecutor(
-                timeoutSeconds: $this->agentPoolConfig->defaultTimeoutSeconds,
-                workerProvider: $this->agentPoolConfig->workerProvider,
-            );
-            $pool = (new \SugarCraft\Crush\Agents\AgentWorkerPool(
-                maxConcurrent: $this->agentPoolConfig->maxConcurrent,
-                executor: $executor,
-                workerProvider: $this->agentPoolConfig->workerProvider,
-            ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+            if ($this->backend instanceof Backend\EngineBackend
+                && !$this->backend->provider() instanceof \SugarCraft\Crush\Providers\EchoProvider
+            ) {
+                $pool = (new \SugarCraft\Crush\Agents\AgentWorkerPool(
+                    maxConcurrent: $this->agentPoolConfig->maxConcurrent,
+                    workerProvider: $this->agentPoolConfig->workerProvider,
+                    forkedExecutor: new \SugarCraft\Crush\Agents\EngineExecutor($this->backend),
+                ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+            } else {
+                $executor = new \SugarCraft\Crush\Agents\ProcessExecutor(
+                    timeoutSeconds: $this->agentPoolConfig->defaultTimeoutSeconds,
+                    workerProvider: $this->agentPoolConfig->workerProvider,
+                );
+                $pool = (new \SugarCraft\Crush\Agents\AgentWorkerPool(
+                    maxConcurrent: $this->agentPoolConfig->maxConcurrent,
+                    executor: $executor,
+                    workerProvider: $this->agentPoolConfig->workerProvider,
+                ))->withStopOnFirstFailure($this->agentPoolConfig->stopOnFirstFailure);
+            }
         }
 
         if ($this->agentManager !== null) {
