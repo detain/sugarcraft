@@ -355,7 +355,7 @@ sugar-crush/tests/Providers/CacheBreakpointsTest.php	0.017	24
 sugar-crush/tests/MouseWiringTest.php	0.017	16
 sugar-crush/tests/Support/HomeDirectoryTest.php	0.016	27
 sugar-crush/tests/MCP/McpAuthStoreTest.php	0.016	19
-sugar-crush/tests/Tui/Components/PaneFrameTest.php	0.016	13
+sugar-crush/tests/Tui/Components/PaneFrameTest.php	0.016	15
 sugar-crush/tests/Cli/BootstrapMcpLivenessTest.php	0.016	11
 sugar-crush/tests/Tools/BuiltIn/WriteTest.php	0.016	22
 sugar-crush/tests/UsageTest.php	0.016	37

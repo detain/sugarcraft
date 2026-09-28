@@ -7,6 +7,8 @@ namespace SugarCraft\Crush\Tui\Components;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Crush\Theme;
+use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -88,6 +90,15 @@ final class PaneFrame
         if ($top->toHex() === $side->toHex()) {
             return $frame;
         }
+        // Two 16-colour palette slots have nothing between them: the user's
+        // palette is 16 colours, and a blend would have to invent absolute
+        // ones - which is precisely what a palette-slot theme (`ansi`) exists
+        // to never paint, and what ShellContrastTest measured failing the
+        // contrast floor on a truecolour terminal. So a slot-to-slot frame
+        // keeps today's bytes; a fade needs at least one real colour.
+        if (self::isPaletteSlot($top) && self::isPaletteSlot($side)) {
+            return $frame;
+        }
 
         $rows = explode("\n", $frame);
         if (count($rows) < 3) {
@@ -102,6 +113,14 @@ final class PaneFrame
         $trim = strlen($leftRune) + strlen($rightRune);
 
         $stops = self::gradientRows(count($rows));
+        // The fade must never read worse than the two colours it runs between.
+        // When the theme made both legible on this terminal, every in-between
+        // colour is held to the same floor (contrast is not linear in the
+        // blend); endpoints that were not legible to begin with are left to
+        // the plain blend, since there is no floor they promised to keep.
+        $background = TerminalBackground::color();
+        $holdFloor = Theme::contrast($top, $background) >= Theme::CONTRAST_MIN
+            && Theme::contrast($side, $background) >= Theme::CONTRAST_MIN;
         for ($i = 1; $i < count($rows) - 1; $i++) {
             $row = $rows[$i];
             if (strlen($row) < $trim
@@ -114,6 +133,9 @@ final class PaneFrame
             }
 
             $colour = self::fadeColour($top, $side, $i - 1, $stops);
+            if ($holdFloor) {
+                $colour = Theme::legibleOn($colour, $background);
+            }
             $sgr = $colour->toFg($profile);
             $rows[$i] = $sgr . $border->left . Ansi::reset()
                 . substr($row, strlen($leftRune), strlen($row) - $trim)
@@ -121,6 +143,12 @@ final class PaneFrame
         }
 
         return implode("\n", $rows);
+    }
+
+    /** Whether $colour was named as one of the terminal's own 16 palette slots. */
+    private static function isPaletteSlot(Color $colour): bool
+    {
+        return $colour->ansiIndex !== null && $colour->ansiIndex < 16;
     }
 
     /**

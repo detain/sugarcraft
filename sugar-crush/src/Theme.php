@@ -564,6 +564,32 @@ final class Theme
             >= self::contrast(Color::rgb(0, 0, 0), $background);
     }
 
+    /**
+     * `$colour` if it already reaches {@see CONTRAST_MIN} on `$background`,
+     * else the same colour nudged along its own HSL lightness axis, away from
+     * the background, until it does - the background-only half of
+     * {@see project()}'s nudge, for a colour a theme did not declare.
+     *
+     * Its caller is {@see \SugarCraft\Crush\Tui\Components\PaneFrame}'s side
+     * fade: contrast is not linear in the blend, so two legible endpoints can
+     * have illegible colours between them - MEASURED, `ansi` on a #666666
+     * terminal faded through #83f0f0 at 4.29:1. Returns the SAME instance when
+     * it already clears, so a palette slot keeps its slot spelling.
+     */
+    public static function legibleOn(Color $colour, Color $background): Color
+    {
+        if (self::contrast($colour, $background) >= self::CONTRAST_MIN) {
+            return $colour;
+        }
+        foreach (self::steps($colour, self::towardsWhite($background)) as $candidate) {
+            if (self::contrast($candidate, $background) >= self::CONTRAST_MIN) {
+                return $candidate;
+            }
+        }
+
+        return self::extreme($colour, self::towardsWhite($background));
+    }
+
     public static function default(): self
     {
         return self::byName('dark');

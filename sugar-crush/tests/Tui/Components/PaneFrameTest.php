@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tui\Components;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Crush\Theme;
 use SugarCraft\Crush\Tui\Components\PaneFrame;
+use SugarCraft\Crush\Tui\TerminalBackground;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 
@@ -294,8 +297,9 @@ final class PaneFrameTest extends TestCase
     {
         // blend(t=0) and blend(t=1) are already exact, but the promise this
         // pins is stronger: the endpoint rows emit the ORIGINAL Color's own
-        // toFg spelling, which is what preserves ansi-slot palette codes.
-        $top = Color::ansi(4);
+        // toFg spelling, which is what preserves an ansi-slot palette code.
+        // One end is a real colour: two slot ends do not fade at all (below).
+        $top = Color::hex('#ff8700');
         $side = Color::ansi(9);
         $st = self::frameStyle($top);
         $rows = explode("\n", PaneFrame::render($st, self::body(20), $side, ColorProfile::TrueColor));
@@ -303,7 +307,51 @@ final class PaneFrameTest extends TestCase
 
         self::assertStringStartsWith($top->toFg(ColorProfile::TrueColor), $rows[1]);
         self::assertStringStartsWith($side->toFg(ColorProfile::TrueColor), $rows[1 + $stops - 1]);
-        // A slot-4 colour stays a slot-4 spelling even at the TrueColor tier.
-        self::assertStringNotContainsString('38;2;', explode(Ansi::reset(), $rows[1])[0]);
+        // A slot-9 colour stays a slot-9 spelling even at the TrueColor tier.
+        self::assertStringNotContainsString('38;2;', explode(Ansi::reset(), $rows[1 + $stops - 1])[0]);
+    }
+
+    /**
+     * Two 16-colour palette slots have no colours between them in the user's
+     * palette, so a slot-to-slot frame (the `ansi` theme's) keeps today's
+     * bytes even on a truecolour terminal - a fade would have to invent
+     * absolute colours, which that theme exists never to paint.
+     */
+    public function testTwoPaletteSlotEndsKeepTodaysBytesEvenAtTrueColor(): void
+    {
+        $st = self::frameStyle(Color::ansi(6));
+        $body = self::body(20);
+
+        self::assertSame($st->render($body), PaneFrame::render($st, $body, Color::ansi(8), ColorProfile::TrueColor));
+    }
+
+    /**
+     * Contrast is not linear in the blend: on #666666, #00ffff (4.58:1) and
+     * #e5e5e5 (4.56:1) both clear the floor while their plain midpoint does
+     * not. When both ends are legible, every in-between row must be too.
+     */
+    public function testTheFadeIsNeverLessLegibleThanTheTwoColoursItRunsBetween(): void
+    {
+        $background = Color::hex('#666666');
+        $top = Color::hex('#00ffff');
+        $side = Color::hex('#e5e5e5');
+        $mid = Color::rgb(intdiv($top->r + $side->r, 2), intdiv($top->g + $side->g, 2), intdiv($top->b + $side->b, 2));
+        self::assertLessThan(Theme::CONTRAST_MIN, Theme::contrast($mid, $background), 'fixture: the plain blend must dip, or this proves nothing');
+
+        TerminalBackground::observe(new BackgroundColorMsg($background->r, $background->g, $background->b));
+        try {
+            $rows = explode("\n", PaneFrame::render(self::frameStyle($top), self::body(20), $side, ColorProfile::TrueColor));
+        } finally {
+            TerminalBackground::forget();
+        }
+
+        $checked = 0;
+        foreach (array_slice($rows, 1, -1) as $i => $row) {
+            self::assertSame(1, preg_match('/^\x1b\[38;2;(\d+);(\d+);(\d+)m/', $row, $m), "row {$i} lost its side colour");
+            $colour = Color::rgb((int) $m[1], (int) $m[2], (int) $m[3]);
+            self::assertGreaterThanOrEqual(Theme::CONTRAST_MIN, Theme::contrast($colour, $background), "row {$i} {$colour->toHex()} dips below the floor");
+            $checked++;
+        }
+        self::assertGreaterThan(2, $checked);
     }
 }
