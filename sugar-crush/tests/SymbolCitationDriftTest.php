@@ -878,8 +878,11 @@ final class SymbolCitationDriftTest extends TestCase
             $labels,
             'the file whose dangling citation prompted this census is no longer scraped at all',
         );
+        // ParsedArgs.php, not ArgvParser.php: the two citations of the
+        // ArgvParser test class belong to ParsedArgs' constants and moved with
+        // it when it left ArgvParser.php for its own PSR-4 file.
         $this->assertContains(
-            'src/Cli/ArgvParser.php',
+            'src/Cli/ParsedArgs.php',
             $labels,
             'a src/ file that cites the suite through {@see} is no longer scraped at all. '
             . '(This row does NOT control the bare self-citation shape, whatever an earlier '

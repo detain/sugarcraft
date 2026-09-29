@@ -565,12 +565,16 @@ final class BuiltInToolCorpusTest extends TestCase
      * than `class_exists()`, because a secondary symbol is not autoloadable by
      * its own name.
      *
-     * PINNED PER FILE, WHICH IS THE POINT: this map NAMES the eight files that
-     * declare more than their own PSR-4 symbol, so a second declaration
-     * arriving in a scanned file reds this test with the file named. It is not
-     * a cardinality over `src/` — adding a source file that declares one type
-     * does not move a single row — so it survives the merge that a count does
-     * not.
+     * PINNED EMPTY, WHICH IS THE POINT: this map used to NAME the files that
+     * declared more than their own PSR-4 symbol (`App/App.php` with thirteen,
+     * then six files with one each). Every one of those types now lives in its
+     * own file, because a secondary type is not autoloadable by its own name —
+     * `App\LayoutResetMsg` really died "class not found" once shard order put
+     * the unloaded case first. So the expectation is `[]`, and a second
+     * declaration arriving in any scanned file reds this test with the file
+     * named. It is not a cardinality over `src/` — adding a source file that
+     * declares one type does not move it — so it survives the merge that a
+     * count does not.
      *
      * WHAT THIS DOC-BLOCK SAID: a running narrative of two figures (files and
      * top-level declarations) that it had spelled "288" and "307" for two
@@ -594,15 +598,9 @@ final class BuiltInToolCorpusTest extends TestCase
         $secondary = $this->secondaryDeclarations($this->srcDir, 'SugarCraft\\Crush\\');
 
         $this->assertSame(
-            [
-                'Cli/ArgvParser.php' => 1,
-                'CommandParser.php' => 1,
-                'Compactor.php' => 1,
-                'MCP/McpAuthStore.php' => 1,
-                'MCP/OAuthClientRegistration.php' => 1,
-                'Tui/StallDetector.php' => 1,
-            ],
+            [],
             array_map('count', $secondary),
+            'a src/ file declares a type besides its own PSR-4 symbol; move it to its own file — Composer cannot autoload it by name',
         );
 
         $this->assertArrayNotHasKey('ToolRegistry.php', $secondary);
