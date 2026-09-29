@@ -100,7 +100,7 @@ final class MosaicBuilderTest extends TestCase
     public function testBuildDitherOverridesExplicitSixelRendererDither(): void
     {
         // When a SixelRenderer is passed explicitly but the builder also has
-        // a dither set, the builder dither wins (Mosaic.php:553-556).
+        // a dither set, the builder dither wins (MosaicBuilder::build()).
         $mosaic = Mosaic::builder()
             ->withRenderer(new SixelRenderer(Dither::None))
             ->withDither(Dither::Stucki)
