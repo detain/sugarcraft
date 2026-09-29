@@ -13,18 +13,6 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Horizontal alignment of a border title within its allocated space.
- *
- * @internal Used by Style to position titles on the border line.
- */
-enum TitleSgr
-{
-    case Left;
-    case Center;
-    case Right;
-}
-
-/**
  * Immutable styled-text builder. Each setter returns a new Style.
  *
  * Render pipeline (innermost to outermost):
