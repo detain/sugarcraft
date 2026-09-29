@@ -391,16 +391,3 @@ final readonly class Lexer
         };
     }
 }
-
-/**
- * A single token from the lexer.
- */
-final readonly class Token
-{
-    public function __construct(
-        public string $type,
-        public string $value,
-        public int $line,
-    ) {
-    }
-}

@@ -285,16 +285,3 @@ final class Decompiler
         return rtrim(rtrim(sprintf('%.6f', $value), '0'), '.');
     }
 }
-
-/**
- * Marker for a payload that should fold into the current Type group rather
- * than emitting its own directive line. Internal to {@see Decompiler}.
- *
- * @internal
- */
-final readonly class DecompilerTypeChunk
-{
-    public function __construct(public string $text)
-    {
-    }
-}
