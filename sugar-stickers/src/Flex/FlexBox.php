@@ -6,20 +6,6 @@ namespace SugarCraft\Stickers\Flex;
 
 use SugarCraft\Core\Util\Ansi;
 
-/** {@see FlexBox} main-axis direction — equivalent to CSS `flex-direction`. */
-enum Direction {
-    case Row;     // horizontal
-    case Column;  // vertical
-}
-
-/** {@see FlexBox} cross-axis item alignment — equivalent to CSS `align-items`. */
-enum Align {
-    case Start;
-    case Center;
-    case End;
-    case Stretch;
-}
-
 /**
  * CSS flexbox-like layout for terminal UIs.
  *
