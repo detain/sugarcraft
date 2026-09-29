@@ -269,10 +269,3 @@ final class AsyncOps
         };
     }
 }
-
-/**
- * Thrown when an async operation times out.
- */
-final class TimeoutException extends \RuntimeException
-{
-}
