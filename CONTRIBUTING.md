@@ -57,11 +57,11 @@ verify no injected entries leaked in:
 php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 ```
 
-That is one of **five** gates `.github/workflows/ci.yml` runs without a
+That is one of **seven** gates `.github/workflows/ci.yml` runs without a
 `composer install`, and until recently this file documented only two of them —
 so a contributor could pass everything CONTRIBUTING asked for and still be
 failed by CI on a check they had never been told about. They live in two jobs:
-the first command below is the `tools-guards` job, and the other four are
+the first command below is the `tools-guards` job, and the other six are
 `path-repo-check`, which `needs:` it. Run the whole set before you push; each
 must exit 0:
 
@@ -73,9 +73,16 @@ php tools/check-path-repos.php --unused                 # no path-repo dep nothi
 php tools/check-path-repos.php --fix --strict-closure \
   && php tools/check-path-repos.php --strict-closure \
   && git checkout -- '*/composer.json'                  # injection restores a full local closure
+php tools/check-child-lifetimes.php                     # every exposed proc_open child is accounted for
+php tools/check-one-type-per-file.php                   # every PSR-4 file declares only its own type
 ```
 
-The last one is the only entry that writes to your tree, and the revert is
+The last gate exists because Composer's PSR-4 autoloader finds a type only in
+the file named after it: a second class, enum or interface declared inside
+another class's file resolves only if that file was loaded first, and is
+"class not found" otherwise. Give every type its own file.
+
+The injection line is the only entry that writes to your tree, and the revert is
 narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in
 a throwaway checkout and would eat your uncommitted work here. MEASURED on this
 tree: `--fix --strict-closure` dirties `*/composer.json` and NOTHING else — no

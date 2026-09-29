@@ -219,6 +219,7 @@ reproduce.
     php tools/check-path-repos.php
     php tools/check-path-repos.php --unused
     php tools/check-child-lifetimes.php
+    php tools/check-one-type-per-file.php
     php tools/check-path-repos.php --fix --strict-closure \
       && php tools/check-path-repos.php --strict-closure \
       ; git checkout -- .                          # the injection is SCRATCH
