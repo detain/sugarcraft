@@ -238,6 +238,28 @@ final class ThemeTest extends TestCase
         $this->assertSame($s, $built->muted);
     }
 
+    /**
+     * ThemeBuilder lives in its own file so PSR-4 can autoload it BY NAME. It
+     * used to be a second class inside Theme.php, which resolved only if
+     * something had loaded Theme first — so a fresh process asking for it
+     * (a type check, a direct construction) got "class not found". Probed in a
+     * child PHP process, because in this one Theme is already loaded and would
+     * mask the defect.
+     */
+    public function testThemeBuilderAutoloadsWithoutThemeBeingLoadedFirst(): void
+    {
+        $autoload = \dirname(__DIR__) . '/vendor/autoload.php';
+        $probe = 'require ' . var_export($autoload, true) . ';'
+            . 'echo class_exists(\'SugarCraft\\Kit\\ThemeBuilder\') ? "found" : "missing",'
+            . ' class_exists(\'SugarCraft\\Kit\\Theme\', false) ? " theme-loaded" : " theme-not-loaded";';
+
+        $output = [];
+        exec(escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($probe), $output, $exit);
+
+        $this->assertSame(0, $exit);
+        $this->assertSame(['found theme-not-loaded'], $output);
+    }
+
     /** Build throws on the first missing field (in declaration order). */
     public function testThemeBuilderBuildThrowsOnFirstMissingField(): void
     {
