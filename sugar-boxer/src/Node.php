@@ -30,11 +30,6 @@ use SugarCraft\Sprinkles\VAlign;
  * @property VAlign|null           $alignV       Vertical text alignment
  */
 
-/**
- * Sentinel for "do not change" vs explicit null.
- */
-final class Preserve {}
-
 final class Node
 {
     public const LEAF       = 'leaf';
