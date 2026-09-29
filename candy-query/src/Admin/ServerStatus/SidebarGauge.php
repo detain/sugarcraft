@@ -10,18 +10,6 @@ use SugarCraft\Dash\Foundation\Threshold;
 use SugarCraft\Dash\Plot\Chart\Gauge;
 
 /**
- * Gauge types supported in the sidebar.
- */
-enum GaugeType: string
-{
-    case Connections   = 'connections';
-    case Traffic       = 'traffic';
-    case KeyEfficiency = 'key_efficiency';
-    case Qps           = 'qps';
-    case InnoDB        = 'innodb';
-}
-
-/**
  * A single sidebar gauge displaying a metric with threshold coloring.
  *
  * Renders gauges as horizontal bars with threshold coloring.
