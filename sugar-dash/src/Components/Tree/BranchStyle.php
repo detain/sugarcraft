@@ -161,14 +161,3 @@ final class BranchStyle
         };
     }
 }
-
-/**
- * Branch line patterns.
- */
-enum BranchPattern: string
-{
-    case Solid = 'solid';
-    case Dashed = 'dashed';
-    case Dotted = 'dotted';
-    case Double = 'double';
-}

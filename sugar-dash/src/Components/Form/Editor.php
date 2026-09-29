@@ -10,16 +10,6 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Cursor blinking states.
- */
-enum CursorState
-{
-    case Visible;
-    case Hidden;
-    case Blink;
-}
-
-/**
  * A multi-line text editor component with cursor support.
  *
  * Features:

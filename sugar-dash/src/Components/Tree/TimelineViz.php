@@ -312,16 +312,3 @@ final class TimelineViz implements \SugarCraft\Dash\Foundation\Sizer
         return $clone;
     }
 }
-
-/**
- * An event in a timeline.
- */
-final readonly class TimelineEvent
-{
-    public function __construct(
-        public string $time,
-        public string $title,
-        public ?string $description = null,
-        public string $type = 'default',
-    ) {}
-}

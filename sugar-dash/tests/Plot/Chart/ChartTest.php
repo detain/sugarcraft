@@ -683,17 +683,6 @@ final class ChartTest extends TestCase
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * ChartDataPoint/ChartType are declared inside Chart.php (no PSR-4 file
-     * of their own). PSR-4 cannot resolve them when a --filter run touches
-     * them as arguments before any Chart reference, so warm the defining
-     * file once for the class.
-     */
-    public static function setUpBeforeClass(): void
-    {
-        class_exists(Chart::class);
-    }
-
-    /**
      * Plain-content factory: no colors (zero ANSI), no grid — every byte
      * reaching bufferFromOutput is renderable text, so the rebuilt grid is
      * fully predictable (CJK labels + 3-byte '█' bar runes).

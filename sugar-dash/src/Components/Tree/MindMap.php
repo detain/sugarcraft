@@ -9,61 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Connection line styles for mind map branches.
- */
-enum ConnectionStyle: string
-{
-    case Straight = 'straight';
-    case Curved = 'curved';
-    case Rounded = 'rounded';
-}
-
-/**
- * Layout direction for mind map branches.
- */
-enum MindMapDirection: string
-{
-    case LeftRight = 'lr';
-    case RightLeft = 'rl';
-    case TopBottom = 'tb';
-    case BottomTop = 'bt';
-}
-
-/**
- * A mind map node with optional children.
- */
-final class MindMapNode
-{
-    /** @var list<MindMapNode> */
-    public array $children = [];
-
-    public function __construct(
-        public readonly string $text,
-        public readonly ?Color $color = null,
-        public readonly ?string $icon = null,
-    ) {}
-
-    /**
-     * Add a child node.
-     */
-    public function withChild(MindMapNode $child): self
-    {
-        $clone = clone $this;
-        $clone->children[] = $child;
-        return $clone;
-    }
-
-    /**
-     * Create a new child node and add it.
-     */
-    public function addChild(string $text, ?Color $color = null, ?string $icon = null): self
-    {
-        $child = new MindMapNode($text, $color, $icon);
-        return $this->withChild($child);
-    }
-}
-
-/**
  * A mind map component for hierarchical data visualization.
  *
  * Features:

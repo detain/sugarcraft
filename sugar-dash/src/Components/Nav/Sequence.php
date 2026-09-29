@@ -9,57 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A message sent between participants in a sequence diagram.
- */
-final class SequenceMessage
-{
-    public function __construct(
-        public readonly string $id,
-        public readonly string $from,
-        public readonly string $to,
-        public readonly string $label,
-        public readonly bool $isReply = false,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a reply message.
-     */
-    public static function reply(string $id, string $from, string $to, string $label, ?Color $color = null): self
-    {
-        return new self($id, $from, $to, $label, true, $color);
-    }
-}
-
-/**
- * A participant (object/actor) in a sequence diagram.
- */
-final class SequenceParticipant
-{
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create an actor participant.
-     */
-    public static function actor(string $id, string $label): self
-    {
-        return new self($id, $label, Color::hex('#CBA6F7'));
-    }
-
-    /**
-     * Create an object participant.
-     */
-    public static function object(string $id, string $label): self
-    {
-        return new self($id, $label, Color::hex('#89B4FA'));
-    }
-}
-
-/**
  * A sequence diagram component for visualizing object interactions.
  *
  * Features:

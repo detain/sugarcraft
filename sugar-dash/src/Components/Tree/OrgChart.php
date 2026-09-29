@@ -9,52 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Organizational chart layout style.
- */
-enum OrgChartStyle: string
-{
-    case TopDown = 'topdown';
-    case LeftRight = 'leftright';
-    case Tree = 'tree';
-}
-
-/**
- * An organizational chart node with optional reports.
- */
-final class OrgChartNode
-{
-    /** @var list<OrgChartNode> */
-    public array $reports = [];
-
-    public function __construct(
-        public readonly string $name,
-        public readonly ?string $title = null,
-        public readonly ?string $department = null,
-        public readonly ?Color $color = null,
-        public readonly ?string $avatar = null,
-    ) {}
-
-    /**
-     * Add a direct report.
-     */
-    public function withReport(OrgChartNode $report): self
-    {
-        $clone = clone $this;
-        $clone->reports[] = $report;
-        return $clone;
-    }
-
-    /**
-     * Add a direct report by name.
-     */
-    public function withReportByName(string $name, ?string $title = null, ?string $department = null): self
-    {
-        $report = new OrgChartNode($name, $title, $department, $this->color);
-        return $this->withReport($report);
-    }
-}
-
-/**
  * An organizational chart component for hierarchy visualization.
  *
  * Features:

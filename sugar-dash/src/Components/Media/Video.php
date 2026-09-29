@@ -9,27 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Video playback state.
- */
-enum PlaybackState: string
-{
-    case Stopped = 'stopped';
-    case Playing = 'playing';
-    case Paused = 'paused';
-    case Buffering = 'buffering';
-}
-
-/**
- * Video player controls display mode.
- */
-enum ControlsStyle: string
-{
-    case Auto = 'auto';
-    case Always = 'always';
-    case Hidden = 'hidden';
-}
-
-/**
  * A video player component with playback controls and progress bar.
  *
  * Features:

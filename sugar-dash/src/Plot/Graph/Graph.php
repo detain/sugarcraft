@@ -9,27 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Graph types.
- */
-enum GraphType: string
-{
-    case Line = 'line';
-    case Bar = 'bar';
-    case Area = 'area';
-    case Scatter = 'scatter';
-}
-
-/**
- * Graph axis labels position.
- */
-enum AxisPosition: string
-{
-    case Left = 'left';
-    case Right = 'right';
-    case Both = 'both';
-}
-
-/**
  * A graph/chart component for displaying data visualizations.
  *
  * Features:

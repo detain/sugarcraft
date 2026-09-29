@@ -9,17 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Waveform visualization style.
- */
-enum WaveformStyle: string
-{
-    case Bars = 'bars';
-    case Line = 'line';
-    case Blocks = 'blocks';
-    case Dots = 'dots';
-}
-
-/**
  * An audio player component with waveform visualization.
  *
  * Features:

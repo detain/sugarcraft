@@ -9,58 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A node in a Sankey diagram.
- */
-final class SankeyNode
-{
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly float $value,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a copy with a different color.
-     */
-    public function withColor(?Color $color): self
-    {
-        return new self(
-            $this->id,
-            $this->label,
-            $this->value,
-            $color,
-        );
-    }
-}
-
-/**
- * A flow connection between two nodes in a Sankey diagram.
- */
-final class SankeyFlow
-{
-    public function __construct(
-        public readonly string $source,
-        public readonly string $target,
-        public readonly float $value,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a copy with a different color.
-     */
-    public function withColor(?Color $color): self
-    {
-        return new self(
-            $this->source,
-            $this->target,
-            $this->value,
-            $color,
-        );
-    }
-}
-
-/**
  * A Sankey diagram component for flow visualization.
  *
  * Features:
