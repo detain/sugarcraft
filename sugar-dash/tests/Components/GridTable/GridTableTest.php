@@ -19,6 +19,28 @@ use PHPUnit\Framework\TestCase;
 
 final class GridTableTest extends TestCase
 {
+    /**
+     * SortDirection used to be declared TWICE — in its own file and again
+     * inside Sort.php — so touching SortDirection (as GridTable's sorting
+     * does) and then loading Sort was a fatal "Cannot declare enum …, because
+     * the name is already in use". Probed in a child process: in this one both
+     * may already be loaded, which would hide the order that crashed.
+     */
+    public function testSortDirectionThenSortLoadsWithoutARedeclarationFatal(): void
+    {
+        $autoload = \dirname(__DIR__, 3) . '/vendor/autoload.php';
+        $probe = 'require ' . var_export($autoload, true) . ';'
+            . '$d = \\SugarCraft\\Dash\\Components\\GridTable\\SortDirection::Asc;'
+            . 'new \\SugarCraft\\Dash\\Components\\GridTable\\Sort();'
+            . 'echo "loaded";';
+
+        $output = [];
+        exec(escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($probe) . ' 2>&1', $output, $exit);
+
+        $this->assertSame(0, $exit, implode("\n", $output));
+        $this->assertSame(['loaded'], $output);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Interface conformance
     // ═══════════════════════════════════════════════════════════════

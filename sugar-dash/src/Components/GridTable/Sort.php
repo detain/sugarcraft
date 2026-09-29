@@ -7,14 +7,9 @@ namespace SugarCraft\Dash\Components\GridTable;
 /**
  * Sort state and logic for data grid tables.
  *
- * Tracks which column is sorted and the sort direction.
+ * Tracks which column is sorted and the sort direction ({@see SortDirection},
+ * declared once, in its own file).
  */
-enum SortDirection
-{
-    case Asc;
-    case Desc;
-}
-
 final class Sort
 {
     public function __construct(
