@@ -25,14 +25,48 @@ final class ChipGroup implements \SugarCraft\Dash\Foundation\SizedItem
     private ?int $width = null;
     private ?int $height = null;
 
+    /** @var list<Chip> */
+    private readonly array $chips;
+
     /**
      * @param list<Chip> $chips
+     *
+     * @throws \InvalidArgumentException on a non-Chip element
      */
     public function __construct(
-        private readonly array $chips = [],
+        array $chips = [],
         private readonly int $gap = 1,
         private readonly bool $wrap = false,
-    ) {}
+    ) {
+        $this->chips = self::parseChips($chips);
+    }
+
+    /**
+     * Parse the chip list at the boundary (audit family of finding #2,
+     * re-audit at 7860dbba9): renderWrapped()/calculateNaturalWidth()/
+     * calculateWrappedSize() call getInnerSize() on every element, trusting
+     * the list<Chip> docblock. Chip itself implements SizedItem natively, so
+     * an instanceof gate here is the whole fix — a bare-Sizer element can
+     * never reach those reads.
+     *
+     * @param array<array-key, mixed> $chips
+     *
+     * @return list<Chip>
+     */
+    private static function parseChips(array $chips): array
+    {
+        foreach ($chips as $index => $chip) {
+            if (!$chip instanceof Chip) {
+                throw new \InvalidArgumentException(sprintf(
+                    'ChipGroup expects every element to be a Chip, %s given at index %d.',
+                    get_debug_type($chip),
+                    $index,
+                ));
+            }
+        }
+
+        return $chips;
+    }
 
     /**
      * Create a new chip group from a list of labels.

@@ -743,6 +743,35 @@ final class DonutTest extends TestCase
         );
     }
 
+    public function testNonNumericSegmentValueIsRefusedAtTheFactoryDoor(): void
+    {
+        // Re-audit at 7860dbba9: max(0.0, $value) without a cast KEEPS a
+        // non-numeric string (numeric-vs-string comparison casts the number
+        // to string), so "abc" rode into the segments and warned later at
+        // array_sum(). The door now throws.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut segment value "abc"');
+
+        Donut::new([['label' => 'a', 'value' => 'abc']]);
+    }
+
+    public function testMochaDoorRefusesNonNumericSegmentValuesToo(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut segment value array');
+
+        Donut::mocha([['label' => 'a', 'value' => []], ['label' => 'b', 'value' => 2]]);
+    }
+
+    public function testNumericStringSegmentValueStillPassesTheDoor(): void
+    {
+        // Polarity pair: is_numeric admits numeric strings, which max() and
+        // array_sum() already handle warning-free — they must NOT be refused.
+        $chart = Donut::new([['label' => 'a', 'value' => '12.5'], ['label' => 'b', 'value' => '7']]);
+
+        $this->assertIsString($chart->withSize(14)->render());
+    }
+
     public function testWithAspectRejectsPositiveInfinity(): void
     {
         $this->expectException(\InvalidArgumentException::class);

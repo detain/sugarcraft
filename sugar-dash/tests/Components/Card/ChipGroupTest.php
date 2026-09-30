@@ -8,6 +8,7 @@ use SugarCraft\Dash\Components\Card\Chip;
 use SugarCraft\Dash\Components\Card\ChipGroup;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use PHPUnit\Framework\TestCase;
 
 final class ChipGroupTest extends TestCase
@@ -260,5 +261,55 @@ final class ChipGroupTest extends TestCase
         $rendered = $group->render();
 
         $this->assertStringContainsString('Only', $rendered);
+    }
+
+    public function testNonChipElementIsRefusedAtTheDoor(): void
+    {
+        // Re-audit at 7860dbba9 (finding #2 family): the wrap/measure paths
+        // called getInnerSize() on every element trusting the list<Chip>
+        // docblock — any foreign element passed the raw-array door and fataled
+        // at render time. The ctor now parses, naming the offending index.
+        $intruder = new class implements SizedItem {
+            public function render(): string
+            {
+                return 'xx';
+            }
+
+            public function setSize(int $width, int $height): Sizer
+            {
+                return $this;
+            }
+
+            public function getInnerSize(): array
+            {
+                return [2, 1];
+            }
+        };
+        $this->assertFalse($intruder instanceof Chip, 'the double must not be a Chip');
+
+        try {
+            new ChipGroup([Chip::new('ok'), $intruder]);
+            $this->fail('the ctor accepted a non-Chip element');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('to be a Chip', $e->getMessage());
+            $this->assertStringContainsString('index 1', $e->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('to be a Chip, string given at index 0');
+        ChipGroup::fromLabels(['A'])->withChips(['B']);
+    }
+
+    public function testGenuineChipListPassesTheElementDoor(): void
+    {
+        $chips = [Chip::new('A'), Chip::new('B')];
+        $group = new ChipGroup($chips);
+
+        $this->assertStringContainsString('A', $group->render());
+        $this->assertStringContainsString('B', $group->render());
+
+        [$w, $h] = $group->getInnerSize();
+        $this->assertGreaterThan(0, $w);
+        $this->assertSame(1, $h);
     }
 }

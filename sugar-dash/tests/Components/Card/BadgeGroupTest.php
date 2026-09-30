@@ -8,6 +8,7 @@ use SugarCraft\Dash\Components\Card\Badge;
 use SugarCraft\Dash\Components\Card\BadgeGroup;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use PHPUnit\Framework\TestCase;
 
 final class BadgeGroupTest extends TestCase
@@ -260,5 +261,53 @@ final class BadgeGroupTest extends TestCase
         $rendered = $group->render();
 
         $this->assertStringContainsString('Only', $rendered);
+    }
+
+    public function testNonBadgeElementIsRefusedAtTheDoor(): void
+    {
+        // Sibling hole of the ChipGroup door pin: BadgeGroup measures through
+        // getInnerSize() in four places (wrap render, natural width, wrapped
+        // size, max-height) yet its raw-array door accepted anything.
+        $foreign = new class implements SizedItem {
+            public function render(): string
+            {
+                return 'yy';
+            }
+
+            public function setSize(int $width, int $height): Sizer
+            {
+                return $this;
+            }
+
+            public function getInnerSize(): array
+            {
+                return [2, 3];
+            }
+        };
+        $this->assertFalse($foreign instanceof Badge);
+
+        try {
+            new BadgeGroup([Badge::new('ok'), $foreign]);
+            $this->fail('the ctor accepted a non-Badge element');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('to be a Badge', $e->getMessage());
+            $this->assertStringContainsString('index 1', $e->getMessage());
+        }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('to be a Badge, int given at index 0');
+        BadgeGroup::success(['A'])->withBadges([7]);
+    }
+
+    public function testGenuineBadgeListPassesTheElementDoor(): void
+    {
+        $group = new BadgeGroup([Badge::new('P'), Badge::new('Q')]);
+
+        $this->assertStringContainsString('P', $group->render());
+        $this->assertStringContainsString('Q', $group->render());
+
+        [$w, $h] = $group->getInnerSize();
+        $this->assertGreaterThan(0, $w);
+        $this->assertGreaterThan(0, $h);
     }
 }

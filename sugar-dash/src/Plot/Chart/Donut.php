@@ -149,6 +149,8 @@ final class Donut implements \SugarCraft\Dash\Foundation\SizedItem
      * Create a new donut chart with the given data.
      *
      * @param list<array{label: string, value: float, color?: string|Color|null}> $data
+     *
+     * @throws \InvalidArgumentException on a non-numeric segment value
      */
     public static function new(array $data): self
     {
@@ -159,7 +161,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\SizedItem
             }
             return [
                 'label' => $item['label'],
-                'value' => max(0.0, $item['value']),
+                'value' => max(0.0, self::parseSegmentValue($item['value'])),
                 'color' => $color,
             ];
         }, $data);
@@ -184,6 +186,8 @@ final class Donut implements \SugarCraft\Dash\Foundation\SizedItem
      * Create a donut chart with default Catppuccin Mocha theme colors.
      *
      * @param list<array{label: string, value: float}> $data
+     *
+     * @throws \InvalidArgumentException on a non-numeric segment value
      */
     public static function mocha(array $data): self
     {
@@ -203,7 +207,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\SizedItem
             $colorIndex++;
             return [
                 'label' => $item['label'],
-                'value' => max(0.0, $item['value']),
+                'value' => max(0.0, self::parseSegmentValue($item['value'])),
                 'color' => $color,
             ];
         }, $data);
@@ -224,6 +228,37 @@ final class Donut implements \SugarCraft\Dash\Foundation\SizedItem
             fillStyle: self::FILL_FOREGROUND,
             renderMode: self::RENDER_FILLED,
         );
+    }
+
+    /**
+     * Parse one wire segment value at the factory door (re-audit at
+     * 7860dbba9): max(0.0, $value) without a cast lets a non-numeric string
+     * survive untouched — PHP compares numerics against non-numeric strings
+     * by casting the number to string, so max(0.0, "abc") returns "abc",
+     * which later warns inside array_sum(). Fail loud at the boundary
+     * instead (house law), mirroring the withAspect() throw precedent.
+     * NaN/INF stay numeric and keep riding the existing max()/empty-ring
+     * sanitisation pinned by DonutTest.
+     *
+     * @param mixed $value
+     */
+    private static function parseSegmentValue(mixed $value): float|int
+    {
+        if (!is_numeric($value)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Invalid donut segment value %s; expected a numeric value.',
+                get_debug_type($value) === 'string' ? '"' . $value . '"' : get_debug_type($value)
+            ));
+        }
+
+        // Numeric strings parse to their number here: under strict_types the
+        // return type would reject the string, and casting also stops a
+        // "12" riding into array_sum() as text.
+        if (is_string($value)) {
+            return $value + 0.0;
+        }
+
+        return $value;
     }
 
     /**

@@ -25,14 +25,48 @@ final class BadgeGroup implements \SugarCraft\Dash\Foundation\SizedItem
     private ?int $width = null;
     private ?int $height = null;
 
+    /** @var list<Badge> */
+    private readonly array $badges;
+
     /**
      * @param list<Badge> $badges
+     *
+     * @throws \InvalidArgumentException on a non-Badge element
      */
     public function __construct(
-        private readonly array $badges = [],
+        array $badges = [],
         private readonly int $gap = 1,
         private readonly bool $wrap = false,
-    ) {}
+    ) {
+        $this->badges = self::parseBadges($badges);
+    }
+
+    /**
+     * Parse the badge list at the boundary (audit family of finding #2,
+     * re-audit at 7860dbba9): renderWrapped()/calculateNaturalWidth()/
+     * calculateWrappedSize()/getMaxBadgeHeight() call getInnerSize() on
+     * every element, trusting the list<Badge> docblock. Badge itself
+     * implements SizedItem natively, so an instanceof gate here is the
+     * whole fix — a bare-Sizer element can never reach those reads.
+     *
+     * @param array<array-key, mixed> $badges
+     *
+     * @return list<Badge>
+     */
+    private static function parseBadges(array $badges): array
+    {
+        foreach ($badges as $index => $badge) {
+            if (!$badge instanceof Badge) {
+                throw new \InvalidArgumentException(sprintf(
+                    'BadgeGroup expects every element to be a Badge, %s given at index %d.',
+                    get_debug_type($badge),
+                    $index,
+                ));
+            }
+        }
+
+        return $badges;
+    }
 
     /**
      * Create a new badge group from a list of labels.

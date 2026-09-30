@@ -30,7 +30,11 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\SizedItem
     private readonly int $rowGap;
 
     /**
-     * @param list<GridItem> $items
+     * GridLayout walks the plain array positionally — the GridItem wrapper
+     * class is never read here. Every element is used as a bare Item
+     * (render(), setSize()/getInnerSize() behind instanceof guards).
+     *
+     * @param list<\SugarCraft\Dash\Foundation\Item> $items
      */
     public function __construct(
         private readonly array $items = [],
@@ -53,7 +57,7 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\SizedItem
     /**
      * Create a new grid layout with the specified columns.
      *
-     * @param list<GridItem> $items
+     * @param list<\SugarCraft\Dash\Foundation\Item> $items
      */
     public static function columns(int $columns, array $items = []): self
     {
@@ -69,7 +73,7 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\SizedItem
     /**
      * Create a new grid layout with fixed rows.
      *
-     * @param list<GridItem> $items
+     * @param list<\SugarCraft\Dash\Foundation\Item> $items
      */
     public static function rows(int $rows, array $items = []): self
     {
@@ -357,7 +361,7 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\SizedItem
     /**
      * Set the items in this grid layout.
      *
-     * @param list<GridItem> $items
+     * @param list<\SugarCraft\Dash\Foundation\Item> $items
      */
     public function withItems(array $items): self
     {
