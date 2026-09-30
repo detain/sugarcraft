@@ -65,6 +65,7 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `Ctrl+Tab`      | Cycle to next tab                                        |
 | `Ctrl+Shift+Tab`| Cycle to previous tab                                    |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
+| `Ctrl+y`        | Redo last undone operation                               |
 
 ## Architecture
 
@@ -75,17 +76,23 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Entry`             | Value object: name, isDir, size, mtime, isLink, isHidden                |
 | `Sort`              | Enum (NameAsc/NameDesc/MtimeAsc/MtimeDesc/SizeAsc/SizeDesc) + comparator |
 | `Pane`              | One pane: cwd, entries, cursor, selection set, sort, showHidden          |
-| `ConfirmState`      | Pending-confirmation enum (None / DeleteSelected)                        |
+| `ConfirmState`      | Pending-confirmation enum (None / Delete / Copy / Move / Rename selected)     |
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
 | `Renderer`          | Pure view function — two pane boxes side-by-side + status line           |
 | `AsyncOps`          | Async copy via React\Promise + futureTick (move/rename available but sync) |
+| `UndoAction`        | Immutable undo record (delete/rename/move/copy) consumed by the undo stacks |
+| `ManagerBuilder`    | Fluent builder for `Manager` — avoids 16-argument positional construction   |
+| `Msg/CopyCompleted` | Async-copy completion Msg dispatched by the Program into `Manager::update()` |
 
 ## Test plan
 
-- 36 tests / 65 assertions
-- Pure-state coverage: `Entry` (size formatting, parent sentinel), `Sort` (every order × dirs-first × cycle), `Pane` (open / navigate / move / select / sort / hidden toggle / parent-path / join)
-- `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status
+- 193 tests / 716 assertions
+- Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / navigate / move / select / sort / hidden toggle / parent-path / join)
+- `Manager` integration: Tab swap (incl. `t <path>` landing on the given directory), key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status
+- Async copy end-to-end: the `c`/`y` command is executed against the real event loop and its `CopyCompletedMsg` re-enters `update()` — status, undo entry and refreshed destination pane are all asserted, plus the error-count path
+- Renderer: cell-width math for CJK names (size column stays aligned), tab-bar clipping never splits a codepoint, search echo is sanitized
+- `LangCoverageTest` enforces translation-key coverage in both directions (every used key exists; no unused key lingers)
 
 ## Demos
 
@@ -119,7 +126,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Constructing Manager
 
-`Manager` has 15 constructor parameters. Use the fluent builder for readability and to avoid parameter-order mistakes:
+`Manager` has 16 constructor parameters. Use the fluent builder for readability and to avoid parameter-order mistakes:
 
 ```php
 $manager = Manager::builder()
@@ -134,7 +141,6 @@ $manager = Manager::builder()
     ->withSearchCursor(0)
     ->withTabs([])
     ->withTabIndex(0)
-    ->withShowTabBar(false)
     ->withUndoStack([])
     ->withRedoStack([])
     ->withPendingOpDest(null)
@@ -146,4 +152,4 @@ The direct constructor is kept for backward compatibility only — new code shou
 
 ## Status
 
-Phase 10 entry — copy / move / rename / undo are wired. Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+Phase 10 entry — copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.

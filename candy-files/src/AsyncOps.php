@@ -13,7 +13,11 @@ use React\Promise\PromiseInterface;
  * Wraps copy/move/rename operations in promises so long-running
  * file I/O does not block the TUI event loop.
  *
- * Mirrors charmbracelet/superfile.asyncOps.
+ * Mirrors yorukot/superfile.asyncOps.
+ *
+ * Disclosure: copies are content-only. PHP's copy() does not preserve the
+ * source file mode (destination gets default-permission bits) and copied
+ * directories are created 0755 (umask-filtered) regardless of the source.
  */
 final class AsyncOps
 {

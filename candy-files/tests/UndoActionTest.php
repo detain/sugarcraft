@@ -123,44 +123,6 @@ final class UndoActionTest extends TestCase
         $this->assertSame(UndoActionType::Copy, $action->type);
     }
 
-    public function testMkdirCreatesMkdirAction(): void
-    {
-        $paths = ['/tmp/newdir'];
-        $action = UndoAction::mkdir($paths);
-
-        $this->assertSame('mkdir 1 item(s)', $action->description);
-        $this->assertCount(1, $action->items);
-        $this->assertSame('/tmp/newdir', $action->items[0]['path']);
-        $this->assertTrue($action->items[0]['isDir']);
-        $this->assertSame(UndoActionType::Insert, $action->type);
-    }
-
-    public function testMkdirMultiplePaths(): void
-    {
-        $paths = ['/tmp/dir1', '/tmp/dir2', '/tmp/dir3'];
-        $action = UndoAction::mkdir($paths);
-
-        $this->assertSame('mkdir 3 item(s)', $action->description);
-        $this->assertCount(3, $action->items);
-        foreach ($action->items as $item) {
-            $this->assertTrue($item['isDir']);
-        }
-        $this->assertSame(UndoActionType::Insert, $action->type);
-    }
-
-    public function testMkdirTransformsPathsToItemsFormat(): void
-    {
-        $paths = ['/tmp/mydir'];
-        $action = UndoAction::mkdir($paths);
-
-        // mkdir transforms simple paths into the full item format
-        $this->assertArrayHasKey('path', $action->items[0]);
-        $this->assertArrayHasKey('isDir', $action->items[0]);
-        $this->assertSame('/tmp/mydir', $action->items[0]['path']);
-        $this->assertTrue($action->items[0]['isDir']);
-        $this->assertSame(UndoActionType::Insert, $action->type);
-    }
-
     public function testEmptyDeleteAction(): void
     {
         $action = UndoAction::delete([]);
@@ -195,15 +157,6 @@ final class UndoActionTest extends TestCase
         $this->assertSame('copy 0 item(s)', $action->description);
         $this->assertSame([], $action->items);
         $this->assertSame(UndoActionType::Copy, $action->type);
-    }
-
-    public function testEmptyMkdirAction(): void
-    {
-        $action = UndoAction::mkdir([]);
-
-        $this->assertSame('mkdir 0 item(s)', $action->description);
-        $this->assertSame([], $action->items);
-        $this->assertSame(UndoActionType::Insert, $action->type);
     }
 
     public function testDescriptionIsReadonly(): void

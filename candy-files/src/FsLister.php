@@ -9,6 +9,12 @@ namespace SugarCraft\Files;
  * filesystem via `scandir` + `lstat`. The whole rest of the app
  * accepts a `Closure(string $path): list<Entry>` so tests can
  * substitute a deterministic in-memory fake.
+ *
+ * Consistency disclosure: size/mtime come from `lstat()` (the link's own
+ * inode for symlinks), while `isDir` deliberately FOLLOWS the link so a
+ * symlinked directory stays navigable. A symlink to a directory therefore
+ * reports isDir=true with the link's own size — intentional, not a mismatch
+ * to "fix" by switching to stat().
  */
 final class FsLister
 {

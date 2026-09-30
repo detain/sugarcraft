@@ -24,4 +24,14 @@ $home = getenv('HOME') ?: '/';
 $leftCwd  = $argv[1] ?? $cwd;
 $rightCwd = $argv[2] ?? $home;
 
+// Fail fast with a clear message instead of launching a TUI over an empty
+// pane list (FsLister returns [] for a missing directory, which reads as a
+// mysterious "no entries" rather than "you passed a bogus path").
+foreach (['left' => $leftCwd, 'right' => $rightCwd] as $side => $dir) {
+    if (!is_dir($dir)) {
+        fwrite(STDERR, "candyfiles: {$side} directory does not exist: {$dir}\n");
+        exit(1);
+    }
+}
+
 (new Program(Manager::start($leftCwd, $rightCwd), new ProgramOptions(useAltScreen: true)))->run();

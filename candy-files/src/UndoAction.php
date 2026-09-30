@@ -12,12 +12,12 @@ use SugarCraft\Core\Undo\UndoActionType;
  * Each action stores enough information to reverse itself.
  * The undo system maintains stacks of these actions.
  *
- * @see Mirrors charmbracelet/superfile/undo.Action
+ * @see Mirrors yorukot/superfile/undo.Action
  */
 final class UndoAction
 {
     /**
-     * @param list<array{path:string,isDir:bool,content:?string,stat:array}> $items Items that were deleted (for delete/mkdir)
+     * @param list<array{path:string,isDir:bool,content:?string,stat:array}> $items Items the action operates on (for delete)
      * @param array<string,string> $renames Map of old path => new path (for rename)
      * @param array<string,string> $moves Map of original path => new path (for move)
      * @param array<string,string> $copies Map of source => destination (for copy)
@@ -82,20 +82,6 @@ final class UndoAction
             UndoActionType::Copy,
             sprintf('copy %d item(s)', count($copies)),
             $copies,
-        );
-    }
-
-    /**
-     * Create a mkdir action that can remove the created directory.
-     *
-     * @param list<string> $paths Directories that were created
-     */
-    public static function mkdir(array $paths): self
-    {
-        return new self(
-            UndoActionType::Insert,
-            sprintf('mkdir %d item(s)', count($paths)),
-            array_map(fn(string $p) => ['path' => $p, 'isDir' => true], $paths),
         );
     }
 }

@@ -158,6 +158,35 @@ final class ManagerDeleteTest extends TestCase
         );
     }
 
+    /**
+     * Redo of a delete whose target has ALREADY vanished (delete -> undo ->
+     * external rm -> redo) must not count an error: the delete's goal state
+     * holds, so the item is a no-op success. Pre-fix, redoDelete() tried to
+     * rename a nonexistent source (impossible), fell through to removePath()
+     * (false for missing paths), and reported "redo ... with 1 error(s)".
+     */
+    public function testRedoOfAlreadyGoneFileIsNotAnError(): void
+    {
+        $file = $this->tmpDir . '/gone-once.txt';
+        file_put_contents($file, 'bye');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'd'));
+        [$deleted] = $m->update(new KeyMsg(KeyType::Char, 'y'));
+        [$undone] = $deleted->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertFileExists($file, 'undo must restore before the external rm');
+
+        unlink($file);
+
+        [$redone] = $undone->update(new KeyMsg(KeyType::Char, 'y', false, true));
+
+        $this->assertFileDoesNotExist($file);
+        $this->assertStringNotContainsString('error', $redone->status, 'status: ' . $redone->status);
+        $this->assertStringContainsString('redone', $redone->status, 'status: ' . $redone->status);
+    }
+
     /** Content of the first trashed file matching $needle, or '' if none is found. */
     private function findInTrash(string $needle): string
     {

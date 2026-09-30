@@ -70,22 +70,45 @@ final class LangCoverageTest extends TestCase
         $this->assertArrayHasKey('pane.hidden_suffix', $translations);
     }
 
-    public function testAllSortKeysPresent(): void
+    /**
+     * Reverse direction of testAllLangKeysUsedInSrcExistInEnPhp(): every key
+     * declared in lang/en.php must be referenced by a Lang::t('key') literal
+     * in src/ or bin/. Ten keys rotted unused for rounds before this arm
+     * existed — an unused translation is dead code that locales must still
+     * maintain, so it is deleted, not carried.
+     */
+    public function testNoUnusedKeysLingerInEnPhp(): void
     {
-        $translations = require __DIR__ . '/../lang/en.php';
-        $this->assertArrayHasKey('sort.name_asc', $translations);
-        $this->assertArrayHasKey('sort.name_desc', $translations);
-        $this->assertArrayHasKey('sort.mtime_asc', $translations);
-        $this->assertArrayHasKey('sort.mtime_desc', $translations);
-        $this->assertArrayHasKey('sort.size_asc', $translations);
-        $this->assertArrayHasKey('sort.size_desc', $translations);
-    }
+        $used = [];
+        $sources = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(__DIR__ . '/../src', \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if ($file->getExtension() === 'php') {
+                $sources[] = $file->getPathname();
+            }
+        }
+        $sources[] = __DIR__ . '/../bin/candyfiles';
 
-    public function testAllEntryKeysPresent(): void
-    {
-        $translations = require __DIR__ . '/../lang/en.php';
-        $this->assertArrayHasKey('entry.dir', $translations);
-        $this->assertArrayHasKey('entry.link', $translations);
+        foreach ($sources as $source) {
+            $content = \file_get_contents($source);
+            $this->assertIsString($content, "unreadable source: {$source}");
+            if (\preg_match_all("/Lang::t\\('([a-z0-9_.]+)'/", $content, $m)) {
+                foreach ($m[1] as $key) {
+                    $used[$key] = true;
+                }
+            }
+        }
+
+        $this->assertNotEmpty($used, 'no Lang::t() literals found — the scan is broken');
+
+        $unused = array_diff(self::$translationKeys, array_keys($used));
+        $this->assertSame(
+            [],
+            $unused,
+            'lang/en.php declares keys no code references: ' . \implode(', ', $unused)
+        );
     }
 
     /**

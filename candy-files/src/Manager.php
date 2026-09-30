@@ -1143,8 +1143,10 @@ final class Manager implements Model
             UndoActionType::Delete => $errors = $this->redoDelete($action->items),
             UndoActionType::Move => $errors = $this->redoMove($action->items),
             UndoActionType::Rename => $errors = $this->redoRename($action->items),
-            // Insert (mkdir): re-create the directory
-            UndoActionType::Insert => $errors = $this->redoInsert($action->items),
+            // This program never produces Insert (mkdir) undo actions — the
+            // dead UndoAction::mkdir factory was removed. Arm kept explicit
+            // for enum exhaustiveness; treat like the un-redoable group.
+            UndoActionType::Insert,
             // Copy cannot be redone meaningfully — original is still there
             UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => $errors = 0,
         };
@@ -1159,42 +1161,21 @@ final class Manager implements Model
                 continue;
             }
             $path = $item['path'];
-            if (!file_exists($path)) {
-                // File doesn't exist — re-delete by moving to trash (it was restored by undo)
-                $trashPath = $this->trashPath($path);
-                if ($trashPath !== null && @rename($path, $trashPath)) {
-                    continue;
-                }
-                // Trash unavailable (null) or rename failed — fall back to
-                // permanent removal, exactly as performDelete() degrades under a
-                // broken filesystem, instead of passing null into rename().
-                if (!self::removePath($path)) {
-                    $errors++;
-                }
-            } elseif (isset($item['isDir']) && $item['isDir']) {
-                // Directory still exists — re-delete by moving to trash
-                $trashPath = $this->trashPath($path);
-                if ($trashPath !== null && @rename($path, $trashPath)) {
-                    continue;
-                }
-                // Trash unavailable (null) or rename failed — fall back to
-                // permanent removal, exactly as performDelete() degrades under a
-                // broken filesystem, instead of passing null into rename().
-                if (!self::removePath($path)) {
-                    $errors++;
-                }
-            } else {
-                // File exists — re-delete by moving to trash
-                $trashPath = $this->trashPath($path);
-                if ($trashPath !== null && @rename($path, $trashPath)) {
-                    continue;
-                }
-                // Trash unavailable (null) or rename failed — fall back to
-                // permanent removal, exactly as performDelete() degrades under a
-                // broken filesystem, instead of passing null into rename().
-                if (!self::removePath($path)) {
-                    $errors++;
-                }
+            if (!file_exists($path) && !is_link($path)) {
+                // Already gone — the delete's goal state holds, so this is a
+                // no-op success, not an error. (A broken symlink still exists
+                // as a link and falls through to be re-trashed below.)
+                continue;
+            }
+            $trashPath = $this->trashPath($path);
+            if ($trashPath !== null && @rename($path, $trashPath)) {
+                continue;
+            }
+            // Trash unavailable (null) or rename failed — fall back to
+            // permanent removal, exactly as performDelete() degrades under a
+            // broken filesystem, instead of passing null into rename().
+            if (!self::removePath($path)) {
+                $errors++;
             }
         }
         return $errors;
@@ -1233,21 +1214,6 @@ final class Manager implements Model
         return $errors;
     }
 
-    private function redoInsert(array $items): int
-    {
-        $errors = 0;
-        foreach ($items as $item) {
-            if (!isset($item['path'])) {
-                continue;
-            }
-            $path = $item['path'];
-            if (!is_dir($path) && !@mkdir($path, 0755, true)) {
-                $errors++;
-            }
-        }
-        return $errors;
-    }
-
     /** Reverse an undo action (for restore on redo) */
     private function reverseAction(UndoAction $action): int
     {
@@ -1257,8 +1223,9 @@ final class Manager implements Model
             UndoActionType::Delete => $errors = $this->reverseDelete($action->items),
             UndoActionType::Move => $errors = $this->reverseMove($action->items),
             UndoActionType::Rename => $errors = $this->reverseRename($action->items),
-            // Insert (mkdir): items is list<array{path:string,isDir:bool}> — same reverse as delete
-            UndoActionType::Insert => $errors = $this->reverseDelete($action->items),
+            // No mkdir actions are produced anymore (factory removed); the
+            // arm only exists to keep the enum match exhaustive.
+            UndoActionType::Insert,
             // Copy cannot be undone — original still exists
             UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => $errors = 0,
         };
