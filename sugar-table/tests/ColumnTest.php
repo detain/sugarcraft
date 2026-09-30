@@ -149,8 +149,9 @@ final class ColumnTest extends TestCase
         $col = Column::new('name', 'Name', 5);
         $cell = $col->renderCell('Christopher');
 
-        // Default alignment is right-align, truncates from end
-        $this->assertSame('Chris', $cell[0]);
+        // Default alignment is right-align; the clip is marked with an
+        // ellipsis so truncated content never passes for the whole value.
+        $this->assertSame('Chri…', $cell[0]);
     }
 
     public function testRenderCellWithObjectHavingToString(): void
@@ -173,9 +174,10 @@ final class ColumnTest extends TestCase
         $col = Column::new('status', 'Status', 10)->withStyle('1;32');
         $cell = $col->renderCell('Active');
 
-        $this->assertStringStartsWith("\x1b[1;32m", $cell[0]);
-        $this->assertStringEndsWith("\x1b[0m", $cell[0]);
-        $this->assertStringContainsString('Active', $cell[0]);
+        // renderCell returns PLAIN text: styles ride as metadata and the
+        // Table composes base < column < row < cell into the buffer cell at
+        // write time (audit #2). SGR must never be embedded in the string.
+        $this->assertSame('    Active', $cell[0]);
     }
 
     public function testRenderCellEmptyForNonScalarWithoutToString(): void

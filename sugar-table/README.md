@@ -789,7 +789,8 @@ Column::new('code', 'Code', 5)->withWrapMode(WrapMode::Character);
 
 
 
-Expand rows to display full content without column width truncation:
+Expand a row to render it as one full-width detail line spanning the table
+(clip marks at the table edge only when even that cannot fit):
 
 ```php
 use SugarCraft\Table\{Table, Column, Row, RowData};
@@ -814,8 +815,9 @@ $t = Table::fromColumns([
     ->withExpandedRows([0]);              // expand row 0 (Alice)
 
 echo $t->View();
-// Row 0 (Alice): full description visible — not truncated to 15 chars
-// Row 1 (Bob):   normal truncation applies
+// Row 0 (Alice): one joined detail line across the table width —
+//                not squeezed into the 15-char Desc column
+// Row 1 (Bob):   normal per-column truncation applies
 ```
 
 ### Toggle Expansion

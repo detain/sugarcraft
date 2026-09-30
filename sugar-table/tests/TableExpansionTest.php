@@ -275,7 +275,7 @@ final class TableExpansionTest extends TestCase
     {
         $t = $this->makeTableWith20Rows()
             ->withPageSize(10)
-            ->withPage(10); // Beyond available pages
+            ->withRows([]); // withPage beyond-range now CLAMPS (audit #9); the truly-empty view is the honest empty page
 
         $this->expectException(\OutOfBoundsException::class);
         $t->toggleExpanded(0);
@@ -285,7 +285,7 @@ final class TableExpansionTest extends TestCase
     {
         $t = $this->makeTableWith20Rows()
             ->withPageSize(10)
-            ->withPage(10); // Beyond available pages
+            ->withRows([]); // withPage beyond-range now CLAMPS (audit #9); the truly-empty view is the honest empty page
 
         $this->expectException(\OutOfBoundsException::class);
         $t->isExpanded(0);
@@ -295,7 +295,7 @@ final class TableExpansionTest extends TestCase
     {
         $t = $this->makeTableWith20Rows()
             ->withPageSize(10)
-            ->withPage(10); // Beyond available pages
+            ->withRows([]); // withPage beyond-range now CLAMPS (audit #9); the truly-empty view is the honest empty page
 
         $this->expectException(\OutOfBoundsException::class);
         $t->withExpandedRows([0]);

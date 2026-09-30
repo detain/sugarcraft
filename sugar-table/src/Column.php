@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -137,10 +136,18 @@ final class Column
     }
 
     /**
-     * Render a cell value as one or more lines, applying wrapping based on WrapMode.
+     * Render a cell value as one or more PLAIN-TEXT lines, applying wrapping
+     * based on WrapMode.
+     *
+     * Styling contract: the column's ANSI style is never embedded into the
+     * returned text. It travels as style metadata — Table composes
+     * base < column < row < cell into a buffer Cell style at write time.
+     * Embedding raw SGR bytes here would let fillCellContent measure and
+     * write the escape characters as literal cells, destroying the content
+     * (audit finding #2).
      *
      * @param mixed $value
-     * @return list<string> One or more lines
+     * @return list<string> One or more plain-text lines, padded to $w
      */
     public function renderCell(mixed $value, int $width = 0): array
     {
@@ -159,11 +166,7 @@ final class Column
             $wrappingOccurred = $lineCount > 1;
             $isLastLine = $idx === $lastIdx;
             $skipPad = $this->wrapMode === WrapMode::Character && $wrappingOccurred && $isLastLine;
-            $padded = $skipPad ? $line : $this->pad($line, $w, $this->alignLeft);
-            if ($this->style !== '') {
-                $padded = $this->ansi($padded, $this->style);
-            }
-            $result[] = $padded;
+            $result[] = $skipPad ? $line : $this->pad($line, $w, $this->alignLeft);
         }
         return $result;
     }
@@ -183,19 +186,40 @@ final class Column
     }
 
     /**
-     * No wrapping — truncate to column width.
+     * No wrapping — truncate to column width with an ellipsis marker.
+     *
+     * The cut is announced with '…' (U+2026, 1 cell) so truncated content is
+     * never silent, matching the maxWidth-cap truncation the table applies to
+     * over-wide columns (audit finding #7).
      *
      * @return list<string>
      */
     private function wrapNone(string $text, int $width): array
     {
+        return [self::clipToWidth($text, $width)];
+    }
+
+    /**
+     * Clamp one line of text to a display-width budget, announcing the cut
+     * with '…' (U+2026, 1 cell) so truncated content is never silent.
+     *
+     * Single source of truth for the clip rule: Column's no-wrap path AND
+     * Table's single-line rows (WrapMode governs multiline rows only —
+     * clamping wrapped content to one line IS a truncation and must be
+     * marked) both route through here (audit findings #6/#7/#8).
+     */
+    public static function clipToWidth(string $text, int $width): string
+    {
         if ($width <= 0) {
-            return [''];
+            return '';
         }
         if (Width::of($text) <= $width) {
-            return [$text];
+            return $text;
         }
-        return [Width::truncate($text, $width)];
+        if ($width === 1) {
+            return '…';
+        }
+        return Width::truncate($text, $width - 1) . '…';
     }
 
     /**
@@ -270,13 +294,5 @@ final class Column
         return $leftAlign
             ? Width::padRight($text, $width)
             : Width::padLeft($text, $width);
-    }
-
-    private function ansi(string $text, string $codes): string
-    {
-        if ($codes === '') {
-            return $text;
-        }
-        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
     }
 }

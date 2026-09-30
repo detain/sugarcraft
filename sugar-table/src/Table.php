@@ -36,7 +36,7 @@ final class Table
     /** @var list<Row> */
     private array $rows = [];
 
-    /** Index of selected row in the current view (filtered+sorted+paged). */
+    /** Index of the selected row in the page-GLOBAL filtered+sorted view. */
     private int $selectedIndex = 0;
 
     /** Base style applied to every cell before column/row/cell overrides. */
@@ -127,7 +127,11 @@ final class Table
     /** When true, renderRowLines outputs all wrapped cell lines (multi-line rows). */
     private bool $multilineMode = false;
 
-    /** Indices of expanded rows (show full content without truncation). @var list<int> */
+    /**
+     * Row indexes rendered as expanded detail lines: one full-width row
+     * carrying every visible column's content, clipped at the table edge.
+     * @var list<int>
+     */
     private array $expandedRows = [];
 
     /** Cached computed column widths from the last render pass. @var array<int, int>|null */
@@ -203,11 +207,37 @@ final class Table
     {
         $clone = clone $this;
         $clone->rows    = $rows;
-        $clone->selectedIndex = 0;
-        // Invalidate cached computations that depend on rows
-        $clone->filteredSortedCache = null;
-        $clone->widthSolveCache = [];
+        $clone->resetCursor();
+        $clone->invalidateRenderCaches();
         return $clone;
+    }
+
+    /**
+     * Drop the two render memos — the filtered/sorted view (built from rows
+     * and column keys) and the width solve (content-measuring columns react
+     * to rows; padding and pinned widths change the solve). Every method that
+     * mutates any input to those computations MUST call this on its clone,
+     * otherwise a post-render append renders stale, cache-sized data
+     * (audit finding #1).
+     */
+    private function invalidateRenderCaches(): void
+    {
+        $this->filteredSortedCache = null;
+        $this->widthSolveCache = [];
+    }
+
+    /**
+     * Park the cursor on the first row of the first page (on a clone). Any
+     * change that rebuilds the view — rows replaced, sort flipped, filter or
+     * search edited — re-anchors here: a selection index chosen against the
+     * old view has no meaning in the new one, and a page beyond the shrunken
+     * result would render an empty table (audit #5/#9: one cursor domain,
+     * always inside the view).
+     */
+    private function resetCursor(): void
+    {
+        $this->selectedIndex = 0;
+        $this->page = 0;
     }
 
     /**
@@ -224,8 +254,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->columns = $columns;
-        $clone->filteredSortedCache = null;
-        $clone->widthSolveCache = [];
+        $clone->invalidateRenderCaches();
         return $clone;
     }
 
@@ -265,31 +294,77 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Navigate to a page, clamped to the valid range, and park the cursor on
+     * that page's first row (audit finding #9: an out-of-range page used to
+     * leak — a negative page made array_slice count from the END).
+     */
     public function withPage(int $n): self
     {
+        return $this->gotoPage($n);
+    }
+
+    /**
+     * Single implementation of page navigation shared by withPage() and
+     * SelectPage(). One page means one semantic: the page clamps to
+     * [0, TotalPages-1] and the selection snaps to the page's first row in
+     * the filtered/sorted view (page-global index = page * pageSize, itself
+     * clamped when the last page is short).
+     */
+    private function gotoPage(int $page): self
+    {
+        $clamped = \max(0, \min($page, $this->TotalPages() - 1));
+        $snapTo  = $this->pageSize > 0 ? $clamped * $this->pageSize : 0;
+
+        $view = $this->filteredSortedRows();
+        if ($view !== []) {
+            $snapTo = \min($snapTo, \count($view) - 1);
+        }
+
         $clone = clone $this;
-        $clone->page = $n;
+        $clone->page          = $clamped;
+        $clone->selectedIndex = $snapTo;
         return $clone;
     }
 
     /**
      * Pin columns by index so they remain visible during horizontal scroll.
      *
-     * Frozen columns are always rendered, regardless of scrollX offset.
-     * Non-frozen columns become visible starting at index count(frozenCols) + scrollX.
+     * Only a CONTIGUOUS PREFIX starting at column 0 can be frozen: the scroll
+     * window is computed as `count(frozenCols) + scrollX`, so a sparse set
+     * (e.g. [2] alone) silently blanks the pinned left edge instead of
+     * freezing the intended column (audit finding #3 — fail loud with
+     * guidance rather than render the lie).
      *
-     * @param list<int> $indices Column indices to freeze (pin to the left)
+     * @param list<int> $indices Column indices 0..n-1 to freeze (pin to the
+     *                           left edge, in column order)
+     * @throws \InvalidArgumentException If the set is not a contiguous prefix
+     *                                   of the columns, or overlaps hidden ones
      */
     public function withFrozenCols(array $indices): self
     {
-        $overlap = \array_intersect($indices, $this->hiddenCols);
+        $sorted = $indices;
+        \sort($sorted);
+        $sorted = \array_values(\array_unique($sorted));
+
+        if ($sorted !== ($sorted === [] ? [] : \range(0, \count($sorted) - 1))
+            || \count($sorted) > \count($this->columns)
+        ) {
+            throw new \InvalidArgumentException(
+                'Frozen columns must be a contiguous prefix starting at index 0; got ['
+                . \implode(',', $sorted) . ']. Reorder the columns so the frozen block is leftmost,'
+                . ' or hide unwanted columns with withHiddenCols().'
+            );
+        }
+
+        $overlap = \array_intersect($sorted, $this->hiddenCols);
         if ($overlap !== []) {
             throw new \InvalidArgumentException(
                 'Frozen column indices [' . \implode(',', $overlap) . '] cannot be hidden'
             );
         }
         $clone = clone $this;
-        $clone->frozenCols = $indices;
+        $clone->frozenCols = $sorted;
         return $clone;
     }
 
@@ -439,8 +514,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->cellPadding = \max(0, $padding);
-        $clone->filteredSortedCache = null;
-        $clone->widthSolveCache = [];
+        $clone->invalidateRenderCaches();
         return $clone;
     }
 
@@ -467,8 +541,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->targetWidth = \max(0, $cols);
-        $clone->filteredSortedCache = null;
-        $clone->widthSolveCache = [];
+        $clone->invalidateRenderCaches();
         return $clone;
     }
 
@@ -501,8 +574,12 @@ final class Table
     /**
      * Set which rows are expanded on the current page.
      *
-     * Expanded rows display their full content without truncation,
-     * overriding the normal column width constraints.
+     * An expanded row renders as ONE row-height detail line spanning the
+     * table's full visible width: every visible column's text joined into a
+     * single run, clipped with '…' at the table edge when even that cannot
+     * fit (audit finding #8 — it used to be documented as "full content
+     * without truncation" while the renderer silently drew the normal
+     * per-column clipped row instead).
      *
      * @param list<int> $indices 0-based row indices relative to the current page
      * @throws \OutOfBoundsException If any index is invalid for the current page
@@ -565,10 +642,9 @@ final class Table
     }
 
     /**
-     * Check if a specific row object is expanded (internal helper for rendering).
-     *
-     * Mirrors charmbracelet/bubbletea.Table.isExpandedByRow.
-     * Uses object identity to check if the row is in the expandedRows list.
+     * Expand affordance analogue of Evertras/bubble-table's WithRowExpanded
+     * family (identity check of a row object against the expanded set;
+     * upstream has no per-row predicate method to mirror).
      *
      * @param Row $row The row object to check (identity-based, not index-based)
      * @return bool True if the row is currently expanded
@@ -586,6 +662,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->rows[] = $row;
+        $clone->invalidateRenderCaches();
         return $clone;
     }
 
@@ -595,6 +672,7 @@ final class Table
         foreach ($rows as $row) {
             $clone->rows[] = $row;
         }
+        $clone->invalidateRenderCaches();
         return $clone;
     }
 
@@ -618,6 +696,7 @@ final class Table
 
         $clone = clone $this;
         $clone->selectedIndex = \min(\count($view) - 1, $clone->selectedIndex + 1);
+        $clone->page = $this->pageForIndex($clone->selectedIndex);
         return $clone;
     }
 
@@ -631,14 +710,30 @@ final class Table
 
         $clone = clone $this;
         $clone->selectedIndex = \max(0, $clone->selectedIndex - 1);
+        $clone->page = $this->pageForIndex($clone->selectedIndex);
         return $clone;
     }
 
     /**
-     * Move the selection directly to a 0-based row index, clamped to the
-     * filtered/sorted view. Mirrors Bubbles' table.SetCursor — lets a caller
-     * that tracks its own cursor (e.g. an external Model) drive the highlight
-     * without looping SelectNext/SelectPrevious.
+     * The page that shows a page-global view index. With pagination off the
+     * single page is always 0; with it on, the cursor's page follows the
+     * cursor (audit finding #5: the highlight compared a page-local slot
+     * against a page-global index, so any cursor past page 0 rendered dead).
+     */
+    private function pageForIndex(int $index): int
+    {
+        if ($this->pageSize <= 0) {
+            return 0;
+        }
+        return \max(0, \min(\intdiv($index, $this->pageSize), $this->TotalPages() - 1));
+    }
+
+    /**
+     * Move the selection directly to a 0-based index in the PAGE-GLOBAL
+     * filtered/sorted view, clamped to it, and auto-page so the cursor stays
+     * visible (page = intdiv(index, pageSize)) — exactly what a caller
+     * tracking its own cursor needs. Mirrors Bubbles' table.SetCursor, which
+     * likewise scrolls the viewport to reveal the cursor.
      */
     public function withSelectedIndex(int $index): self
     {
@@ -648,15 +743,17 @@ final class Table
         }
         $clone = clone $this;
         $clone->selectedIndex = \max(0, \min(\count($view) - 1, $index));
+        $clone->page = $this->pageForIndex($clone->selectedIndex);
         return $clone;
     }
 
+    /**
+     * Jump to a page and park the cursor on its first row. Same semantics as
+     * {@see withPage()} — both route through the single page-navigation path.
+     */
     public function SelectPage(int $page): self
     {
-        $clone = clone $this;
-        $clone->page = $page;
-        $clone->selectedIndex = 0;
-        return $clone;
+        return $this->gotoPage($page);
     }
 
     public function NextPage(): self
@@ -790,7 +887,7 @@ final class Table
             }
         }
 
-        $clone->selectedIndex = 0;
+        $clone->resetCursor();
         $clone->filteredSortedCache = null;
         return $clone;
     }
@@ -827,7 +924,7 @@ final class Table
         } else {
             $clone->filterText[$colKey] = $text;
         }
-        $clone->selectedIndex = 0;
+        $clone->resetCursor();
         $clone->filteredSortedCache = null;
         return $clone;
     }
@@ -841,7 +938,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->filterText = [];
-        $clone->selectedIndex = 0;
+        $clone->resetCursor();
         $clone->filteredSortedCache = null;
         return $clone;
     }
@@ -866,7 +963,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->searchText = $text;
-        $clone->selectedIndex = 0;
+        $clone->resetCursor();
         $clone->filteredSortedCache = null;
         return $clone;
     }
@@ -1063,14 +1160,22 @@ final class Table
             return $rows;
         }
 
-        $offset = $this->page * $this->pageSize;
+        // Defensive: a negative offset would make array_slice count from the
+        // END and leak tail rows (audit #9 — gotoPage clamps now; this guards
+        // any future untyped entry point).
+        $offset = \max(0, $this->page * $this->pageSize);
         return \array_slice($rows, $offset, $this->pageSize);
     }
 
+    /**
+     * The selected row in the PAGE-GLOBAL filtered/sorted view (audit #5:
+     * it used to index the page-local slice while withSelectedIndex clamped
+     * globally — a cursor past page 0 read null). The page follows the
+     * cursor via withSelectedIndex()/gotoPage().
+     */
     public function CurrentRow(): ?Row
     {
-        $paged = $this->pagedRows();
-        return $paged[$this->selectedIndex] ?? null;
+        return $this->filteredSortedRows()[$this->selectedIndex] ?? null;
     }
 
     public function CurrentRowData(): ?RowData
@@ -1079,9 +1184,9 @@ final class Table
     }
 
     /**
-     * The currently selected Row from the paged view, or null when the page
-     * is empty. Naming alias of CurrentRow() that pairs with SelectedIndex().
-     * Mirrors Evertras/bubble-table.Model.HighlightedRow.
+     * The currently selected Row from the filtered/sorted view, or null when
+     * the view is empty. Naming alias of CurrentRow() that pairs with
+     * SelectedIndex(). Mirrors Evertras/bubble-table.Model.HighlightedRow.
      */
     public function SelectedRow(): ?Row
     {
@@ -1258,6 +1363,17 @@ final class Table
             }
         }
 
+        // maxWidth is a hard ceiling on every column kind, applied after the
+        // slack distribution above: an explicit cap the caller set outranks
+        // exact-sum cosmetics (the row simply renders narrower than target,
+        // same as an over-wide Content column already does). Audit finding 6
+        // — before this the knob was parsed, fluent-carried, and never read.
+        foreach ($this->columns as $i => $col) {
+            if ($col->maxWidth > 0 && $widths[$i] > $col->maxWidth) {
+                $widths[$i] = $col->maxWidth;
+            }
+        }
+
         return $widths;
     }
 
@@ -1349,34 +1465,39 @@ final class Table
         // Avoids O(rows×cols) repeated isColumnVisible() calls.
         $visibleColumnIndices = $this->getVisibleColumnIndices();
 
-        // When multilineMode is enabled, pre-calculate row heights
+        // When multilineMode is enabled, pre-calculate row heights. Expanded
+        // rows are a single full-width detail line — one buffer row each —
+        // regardless of their wrapped height (audit #8).
         $rowHeights = [];
         if ($this->multilineMode) {
             foreach ($rows as $ri => $row) {
-                $rowHeights[$ri] = $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices);
+                $rowHeights[$ri] = $this->isExpandedByRow($row)
+                    ? 1
+                    : $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices);
             }
             $totalRowHeight = \array_sum($rowHeights);
         } else {
             $totalRowHeight = $rowCount;
         }
 
+        // Every row — border, header, data, footer — spans exactly the
+        // content width the columns actually render into. Deriving the border
+        // from a different width than the data (the old scrollX-only branch)
+        // desynced the frame from its gutters (audit #4); hidden and
+        // scrolled-away columns are dropped from the layout entirely instead
+        // of leaving blank cells, and an over-subscribed fixed set is clamped
+        // back to the pinned width so no line can exceed the frame.
+        $visibleWidth = $this->contentSpanWidth($this->computedColumnWidths);
+
         $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $footerRows + $bottomBorderRows;
         // Borderless drops the +2 left/right border columns, so the buffer is
-        // exactly the content width (every line == $totalWidth cells).
-        $bufferWidth = $totalWidth + ($this->borderless ? 0 : 2);
-
-        // When scrollX > 0, compute visible width for border rows
-        // so borders align with visible content rather than extending beyond it
-        if ($this->scrollX > 0) {
-            $visibleWidth = $this->computeVisibleContentWidth($this->computedColumnWidths);
-        } else {
-            $visibleWidth = $totalWidth;
-        }
+        // exactly the content width (every line == $visibleWidth cells).
+        $bufferWidth = $visibleWidth + ($this->borderless ? 0 : 2);
 
         $buffer = Buffer::new($bufferWidth, $bufferHeight);
         $bufferRow = 0;
 
-        // Top border - use visibleWidth so border spans only visible content when scrolled
+        // Top border
         if (!$this->borderless) {
             $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'top');
             $bufferRow++;
@@ -1384,22 +1505,28 @@ final class Table
 
         // Header
         if ($this->showHeader) {
-            $buffer = $this->fillHeaderRow($buffer, $bufferRow, $totalWidth, $this->computedColumnWidths);
+            $buffer = $this->fillHeaderRow($buffer, $bufferRow, $visibleWidth, $this->computedColumnWidths);
             $bufferRow++;
             $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
 
-        // Data rows
+        // Data rows. The selection index is PAGE-GLOBAL; the render loop
+        // walks one page, so the highlight compares against the same domain
+        // by offsetting the slot by the page start (audit #5).
+        $pageOffset = $this->pageSize > 0 ? $this->page * $this->pageSize : 0;
         if ($rows === [] && !$this->showHeader) {
             // Render no_data message centered in the content area
-            $buffer = $this->fillNoDataRow($buffer, $bufferRow, $totalWidth);
+            $buffer = $this->fillNoDataRow($buffer, $bufferRow, $visibleWidth);
             $bufferRow++;
         } else {
             foreach ($rows as $ri => $row) {
-                $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
-                if ($this->multilineMode) {
-                    $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
+                $isSelected = (($pageOffset + $ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
+                if ($this->isExpandedByRow($row)) {
+                    $buffer = $this->fillExpandedRow($buffer, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices);
+                    $bufferRow++;
+                } elseif ($this->multilineMode) {
+                    $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
                     $bufferRow += $rowHeights[$ri];
                 } else {
                     $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
@@ -1410,7 +1537,7 @@ final class Table
 
         // Footer
         if ($this->showFooter && $this->pageSize > 0) {
-            $buffer = $this->fillFooterRow($buffer, $bufferRow, $totalWidth);
+            $buffer = $this->fillFooterRow($buffer, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
 
@@ -1484,6 +1611,23 @@ final class Table
             $lastVisibleCi = $ci;
         }
         return $width;
+    }
+
+    /**
+     * The single content width every row of one render pass must fill: the
+     * visible columns laid out contiguously, never exceeding a pinned
+     * withWidth() frame. Borders, header rules, data, no-data and footer all
+     * take their span from here (audit #4: the border used to be drawn from a
+     * different measure than the data row when scrollX was 0, so gutters and
+     * frame disagreed).
+     */
+    private function contentSpanWidth(array $computedWidths): int
+    {
+        $span = $this->computeVisibleContentWidth($computedWidths);
+        if ($this->targetWidth > 0 && $span > $this->targetWidth) {
+            return $this->targetWidth;
+        }
+        return $span;
     }
 
     /**
@@ -1563,16 +1707,13 @@ final class Table
         [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
         $visibleColumnIndices = $this->getVisibleColumnIndices();
+        $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
 
-        // Header cells - render only visible columns
-        foreach ($this->columns as $ci => $column) {
+        // Header cells - visible columns laid out contiguously (hidden and
+        // scrolled-away columns take no space, audit #4).
+        foreach ($visibleColumnIndices as $ci) {
+            $column = $this->columns[$ci];
             $colWidth = $computedWidths[$ci] ?? $column->width;
-
-            // Skip hidden columns (non-frozen before scrollX offset)
-            if (!\in_array($ci, $visibleColumnIndices, true)) {
-                $col += $colWidth;
-                continue;
-            }
 
             // Account for cell padding in header width
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
@@ -1581,16 +1722,8 @@ final class Table
             $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator - only drawn between actual visible columns.
-            // A separator is needed after ci if:
-            // - ci is frozen (always marks boundary even when next is hidden), OR
-            // - ci is visible AND the next column (ci+1) is also visible
-            if ($ci < \count($this->columns) - 1) {
-                $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
-                if ($ciFrozen || $nextVisible) {
-                    [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
-                }
+            if ($ci !== $lastCi) {
+                [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
             }
         }
 
@@ -1630,15 +1763,12 @@ final class Table
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
         [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
-        // Data cells - render only visible columns
-        foreach ($this->columns as $ci => $column) {
+        // Data cells - visible columns laid out contiguously (hidden and
+        // scrolled-away columns take no space, audit #4).
+        $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
+        foreach ($visibleColumnIndices as $ci) {
+            $column = $this->columns[$ci];
             $colWidth = $computedWidths[$ci] ?? $column->width;
-
-            // Skip hidden columns (non-frozen before scrollX offset)
-            if (!\in_array($ci, $visibleColumnIndices, true)) {
-                $col += $colWidth;
-                continue;
-            }
 
             $val = $rowData->data->get($column->key);
 
@@ -1680,41 +1810,74 @@ final class Table
 
             $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
 
-            // For expanded rows, show full content without column-width truncation.
-            // Use the content's display width as cellWidth so fillCellContent
-            // receives enough budget for the full text (the buffer is pre-sized
-            // to at least totalWidth so there is room to write it).
-            if ($this->isExpandedByRow($rowData)) {
-                $effectiveWidth = Width::of($cellStr);
-                $displayText = $column->alignLeft
-                    ? Width::padRight($cellStr, $effectiveWidth)
-                    : Width::padLeft($cellStr, $effectiveWidth);
-            } else {
-                // Account for cell padding: effective content width = colWidth - 2*padding
-                $effectiveWidth = $colWidth - (2 * $this->cellPadding);
-                $effectiveWidth = \max(1, $effectiveWidth); // At least 1 char for content
-                $displayText = $column->alignLeft
-                    ? \SugarCraft\Core\Util\Width::padRight($cellStr, $effectiveWidth)
-                    : \SugarCraft\Core\Util\Width::padLeft($cellStr, $effectiveWidth);
-            }
+            // Single-line rows clamp to the cell's effective width with an
+            // ellipsis (audit #7: WrapMode/ellipsis routing never reached the
+            // non-multiline path, so overlong content silently overflowed).
+            $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+            $effectiveWidth = \max(1, $effectiveWidth); // At least 1 char for content
+            $clipped = Column::clipToWidth($cellStr, $effectiveWidth);
+            $displayText = $column->alignLeft
+                ? Width::padRight($clipped, $effectiveWidth)
+                : Width::padLeft($clipped, $effectiveWidth);
 
             $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator - only drawn between actual visible columns.
-            // A separator is needed after ci if:
-            // - ci is frozen (always marks boundary even when next is hidden), OR
-            // - ci is visible AND the next column (ci+1) is also visible
-            if ($ci < \count($this->columns) - 1) {
-                $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
-                if ($ciFrozen || $nextVisible) {
-                    [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
-                }
+            if ($ci !== $lastCi) {
+                [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
             }
         }
 
         return $this->writeRightEdge($buffer, $row, $col, $sepStyle);
+    }
+
+    /**
+     * Expanded row: ONE full-width detail line spanning the table's visible
+     * content (audit #8 — the old branch kept per-cell column budgets, so
+     * "expanded" rows rendered identically to collapsed ones). All visible
+     * cells' text is joined with a two-space gap and clipped to the table
+     * width with '…' when even the full span overflows. Row-level styling
+     * (row style, zebra, selection reverse) applies to the whole line; cell
+     * styles do not, because the line is no longer cell-structured.
+     */
+    private function fillExpandedRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, bool $isSelected, int $contentWidth, array $visibleColumnIndices): Buffer
+    {
+        $rowStyle = '';
+        if ($rowData->style !== '') {
+            $rowStyle = $rowData->style;
+        }
+        if ($this->zebraEnabled) {
+            $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
+            if ($zebra !== '') {
+                $rowStyle = $zebra;
+            }
+        }
+        if ($isSelected) {
+            $rowStyle = '7';
+        } // reverse
+
+        $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
+        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+
+        $parts = [];
+        foreach ($visibleColumnIndices as $ci) {
+            $column = $this->columns[$ci];
+            $val = $rowData->data->get($column->key);
+            if ($val === null) {
+                $val = $this->missingIndicator;
+            }
+            $raw = $val instanceof StyledCell ? $val->value : $val;
+            $text = \is_object($raw) && method_exists($raw, '__toString')
+                ? (string) $raw
+                : (\is_scalar($raw) ? (string) $raw : '');
+            $parts[] = Sanitize::value($text, false);
+        }
+        $detail = Column::clipToWidth(\implode('  ', $parts), $contentWidth);
+
+        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
+        $buffer = $this->fillCellContent($buffer, $row, $col, $detail, $contentWidth, $style);
+
+        return $this->writeRightEdge($buffer, $row, $col + $contentWidth, $sepStyle);
     }
 
     /**
@@ -1789,10 +1952,8 @@ final class Table
         // Collect cell lines for each column (only visible columns)
         $cellLines = [];
         $colWidths = [];
-        foreach ($this->columns as $ci => $column) {
-            if (!\in_array($ci, $visibleColumnIndices, true)) {
-                continue;
-            }
+        foreach ($visibleColumnIndices as $ci) {
+            $column = $this->columns[$ci];
 
             $colWidth = $computedWidths[$ci] ?? $column->width;
             $colWidths[$ci] = $colWidth;
@@ -1835,16 +1996,11 @@ final class Table
 
             $parsedStyle = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
 
-            // For expanded rows, show full content without column-width truncation
-            if ($this->isExpandedByRow($row)) {
-                // Split full content by newlines for multiline display
-                $lines = $cellStr === '' ? [''] : \explode("\n", $cellStr);
-            } else {
-                // Account for cell padding in content width
-                $effectiveWidth = $colWidth - (2 * $this->cellPadding);
-                $effectiveWidth = \max(1, $effectiveWidth);
-                $lines = $column->renderCell($cellStr, $effectiveWidth);
-            }
+            // Account for cell padding in content width. Expanded rows never
+            // reach here — renderToBuffer routes them to fillExpandedRow.
+            $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+            $effectiveWidth = \max(1, $effectiveWidth);
+            $lines = $column->renderCell($cellStr, $effectiveWidth);
             $cellLines[$ci] = ['lines' => $lines, 'style' => $parsedStyle, 'width' => $colWidth];
         }
 
@@ -1855,13 +2011,9 @@ final class Table
             // Left border (full height)
             [$buffer, $col] = $this->writeLeftEdge($buffer, $bufferRow, $style);
 
-            // Render each visible cell
-        foreach ($this->columns as $ci => $_column) {
-                if (!\in_array($ci, $visibleColumnIndices, true)) {
-                    $col += $computedWidths[$ci] ?? $column->width;
-                    continue;
-                }
-
+            // Render each visible cell, laid out contiguously (audit #4).
+            $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
+            foreach ($visibleColumnIndices as $ci) {
                 $colWidth = $colWidths[$ci];
                 $cellData = $cellLines[$ci];
                 $lines = $cellData['lines'];
@@ -1880,16 +2032,8 @@ final class Table
                 $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
                 $col += $colWidth;
 
-                // Column separator - only drawn between actual visible columns.
-                // A separator is needed after ci if:
-                // - ci is frozen (always marks boundary even when next is hidden), OR
-                // - ci is visible AND the next column (ci+1) is also visible
-                if ($ci < \count($this->columns) - 1) {
-                    $ciFrozen = \in_array($ci, $this->frozenCols, true);
-                    $nextVisible = \in_array($ci + 1, $visibleColumnIndices, true);
-                    if ($ciFrozen || $nextVisible) {
-                        [$buffer, $col] = $this->writeColumnSeparator($buffer, $bufferRow, $col, $style, $sepStyle);
-                    }
+                if ($ci !== $lastCi) {
+                    [$buffer, $col] = $this->writeColumnSeparator($buffer, $bufferRow, $col, $style, $sepStyle);
                 }
             }
 
@@ -1910,27 +2054,7 @@ final class Table
             FooterType::Both => $this->PageFooter() . '  |  ' . $this->RowsFooter(),
         };
 
-        $labelLen = \strlen($label);
-
-        // Handle narrow tables where label exceeds content width
-        if ($labelLen >= $contentWidth) {
-            // Truncate label to fit, ensuring at least 1 char
-            $displayLabel = \substr($label, 0, \max(1, $contentWidth));
-            $displayLen = \strlen($displayLabel);
-            $remaining = $contentWidth - $displayLen;
-            $padLeft = (int) \floor($remaining / 2);
-            $padRight = $remaining - $padLeft;
-            $padLeft = \max(0, $padLeft);
-            $padRight = \max(0, $padRight);
-        } else {
-            $padLeft = (int) \floor(($contentWidth - $labelLen) / 2);
-            $padRight = $contentWidth - $padLeft - $labelLen;
-            $padLeft = \max(0, $padLeft);
-            $padRight = \max(0, $padRight);
-            $displayLabel = $label;
-        }
-
-        $content = \str_repeat(' ', $padLeft) . $displayLabel . \str_repeat(' ', $padRight);
+        $content = $this->centeredLabel($label, $contentWidth);
 
         [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
         $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
@@ -1940,30 +2064,34 @@ final class Table
     }
 
     /**
+     * Center one label in a display-width budget (floor bias to the left),
+     * truncating with candy-core Width first when it overflows. Shared by the
+     * footer and the empty-state row — the footer used to center by BYTE count
+     * (strlen/substr), which skewed anything non-ASCII out of the middle.
+     */
+    private function centeredLabel(string $label, int $contentWidth): string
+    {
+        if ($contentWidth <= 0) {
+            return '';
+        }
+        $labelWidth = Width::of($label);
+        if ($labelWidth > $contentWidth) {
+            $label = Width::truncate($label, $contentWidth);
+            $labelWidth = Width::of($label);
+        }
+        $padLeft = \intdiv($contentWidth - $labelWidth, 2);
+        $padRight = $contentWidth - $labelWidth - $padLeft;
+
+        return \str_repeat(' ', $padLeft) . $label . \str_repeat(' ', $padRight);
+    }
+
+    /**
      * Render the "no data" empty state message centered in the content area.
      */
     private function fillNoDataRow(Buffer $buffer, int $row, int $contentWidth): Buffer
     {
         $style = $this->parseAnsiToStyle($this->footerStyle);
-        $label = Lang::t('no_data');
-        $labelWidth = Width::of($label);
-
-        // Center the label horizontally
-        if ($labelWidth >= $contentWidth) {
-            $displayLabel = Width::truncate($label, $contentWidth);
-            $displayWidth = Width::of($displayLabel);
-            $remaining = $contentWidth - $displayWidth;
-            $padLeft = (int) \floor($remaining / 2);
-            $padRight = $remaining - $padLeft;
-        } else {
-            $padLeft = (int) \floor(($contentWidth - $labelWidth) / 2);
-            $padRight = $contentWidth - $padLeft - $labelWidth;
-            $displayLabel = $label;
-        }
-        $padLeft = \max(0, $padLeft);
-        $padRight = \max(0, $padRight);
-
-        $content = \str_repeat(' ', $padLeft) . $displayLabel . \str_repeat(' ', $padRight);
+        $content = $this->centeredLabel(Lang::t('no_data'), $contentWidth);
 
         [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
         $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
@@ -1980,13 +2108,34 @@ final class Table
         $clusters = $this->graphemeClusters($text);
         $bufWidth = $buffer->width();
         $col = $startCol;
+        $lastCol = null;
+        $lastCluster = '';
+        $lastGw = 1;
 
         foreach ($clusters as $cluster) {
             if ($col >= $bufWidth) {
                 break; // never write past the buffer (defensive: too-narrow width)
             }
-            $gw = $this->graphemeWidth($cluster);
-            $gw = $gw === 0 ? 1 : $gw; // Minimum 1 cell
+            // Candy-core Width is the single EAW oracle for the whole monorepo
+            // (audit finding #10 — this file used to carry its own codepoint
+            // range tables, which silently drifted from the canonical one).
+            // A zero-width cluster (combining mark, ZWJ, variation selector)
+            // occupies no slot of its own: it is appended to the cell it
+            // follows instead of being inflated to a full cell, which keeps
+            // the buffer's cell count in lockstep with the Width::of totals
+            // that sized the column.
+            $gw = Width::of($cluster);
+            if ($gw === 0) {
+                if ($lastCol !== null) {
+                    $buffer = $buffer->withCellAt(
+                        $lastCol,
+                        $row,
+                        new Cell($lastCluster . $cluster, $style, null, $lastGw)
+                    );
+                    $lastCluster .= $cluster;
+                }
+                continue;
+            }
 
             // Clamp to remaining width
             $remaining = $cellWidth - ($col - $startCol);
@@ -1998,6 +2147,9 @@ final class Table
             }
 
             $buffer = $buffer->withCellAt($col, $row, new Cell($cluster, $style, null, $gw));
+            $lastCol = $col;
+            $lastCluster = $cluster;
+            $lastGw = $gw;
 
             // A wide grapheme occupies two slots: the display-width-2 cell at $col
             // plus a continuation marker at $col + 1 (NOT $col + 2 — advancing by
@@ -2268,98 +2420,6 @@ final class Table
             return \mb_str_split($text, 1, 'UTF-8');
         }
         return \preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    }
-
-    /**
-     * Get the display width of a single grapheme cluster.
-     */
-    private function graphemeWidth(string $cluster): int
-    {
-        if ($cluster === '') {
-            return 0;
-        }
-        $cp = $this->firstCodepoint($cluster);
-        if ($cp === 0) {
-            return 0;
-        }
-        if ($this->isZeroWidth($cp)) {
-            return 0;
-        }
-        if ($this->isWide($cp)) {
-            return 2;
-        }
-        return 1;
-    }
-
-    private function firstCodepoint(string $g): int
-    {
-        $b1 = \ord($g[0]);
-        if ($b1 < 0x80) {
-            return $b1;
-        }
-        if (($b1 & 0xe0) === 0xc0 && \strlen($g) >= 2) {
-            return (($b1 & 0x1f) << 6) | (\ord($g[1]) & 0x3f);
-        }
-        if (($b1 & 0xf0) === 0xe0 && \strlen($g) >= 3) {
-            return (($b1 & 0x0f) << 12) | ((\ord($g[1]) & 0x3f) << 6) | (\ord($g[2]) & 0x3f);
-        }
-        if (($b1 & 0xf8) === 0xf0 && \strlen($g) >= 4) {
-            return (($b1 & 0x07) << 18) | ((\ord($g[1]) & 0x3f) << 12)
-                | ((\ord($g[2]) & 0x3f) << 6) | (\ord($g[3]) & 0x3f);
-        }
-        return 0;
-    }
-
-    private function isZeroWidth(int $cp): bool
-    {
-        if ($cp < 0x20) {
-            return true;
-        }
-        if ($cp >= 0x7f && $cp < 0xa0) {
-            return true;
-        }
-        if ($cp === 0x200b || $cp === 0x200c || $cp === 0x200d || $cp === 0xfeff) {
-            return true;
-        }
-        if ($cp >= 0x0300 && $cp <= 0x036f) {
-            return true;
-        }
-        if ($cp >= 0x1dc0 && $cp <= 0x1dff) {
-            return true;
-        }
-        if ($cp >= 0x20d0 && $cp <= 0x20ff) {
-            return true;
-        }
-        if ($cp >= 0xfe00 && $cp <= 0xfe0f) {
-            return true;
-        }
-        if ($cp >= 0xfe20 && $cp <= 0xfe2f) {
-            return true;
-        }
-        return false;
-    }
-
-    private function isWide(int $cp): bool
-    {
-        if ($cp < 0x1100) {
-            return false;
-        }
-        return ($cp <= 0x115f)
-            || ($cp >= 0x2e80 && $cp <= 0x303e)
-            || ($cp >= 0x3041 && $cp <= 0x33ff)
-            || ($cp >= 0x3400 && $cp <= 0x4dbf)
-            || ($cp >= 0x4e00 && $cp <= 0x9fff)
-            || ($cp >= 0xa000 && $cp <= 0xa4cf)
-            || ($cp >= 0xac00 && $cp <= 0xd7a3)
-            || ($cp >= 0xf900 && $cp <= 0xfaff)
-            || ($cp >= 0xfe30 && $cp <= 0xfe4f)
-            || ($cp >= 0xff00 && $cp <= 0xff60)
-            || ($cp >= 0xffe0 && $cp <= 0xffe6)
-            || ($cp >= 0x1f300 && $cp <= 0x1f64f)
-            || ($cp >= 0x1f680 && $cp <= 0x1f6ff)
-            || ($cp >= 0x1f900 && $cp <= 0x1f9ff)
-            || ($cp >= 0x20000 && $cp <= 0x2fffd)
-            || ($cp >= 0x30000 && $cp <= 0x3fffd);
     }
 
     // -------------------------------------------------------------------------

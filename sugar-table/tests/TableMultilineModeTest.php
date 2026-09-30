@@ -61,8 +61,10 @@ final class TableMultilineModeTest extends TestCase
 
         $view = $t->View();
         $this->assertIsString($view);
-        // Should contain first 5 chars truncated
-        $this->assertStringContainsString('ABCDE', $view);
+        // multilineMode off clamps the value to the cell on ONE line, and the
+        // clip is announced with an ellipsis (audit #7: the single-line path
+        // used to overflow unmarked).
+        $this->assertStringContainsString('ABCD…', $view);
     }
 
     public function testMultilineModeRowHeightEqualsMaxCellHeight(): void

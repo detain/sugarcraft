@@ -867,7 +867,9 @@ final class TableTest extends TestCase
 
     public function testWithHiddenColsNonOverlappingIsAllowed(): void
     {
-        $t = $this->makeTable()->withHiddenCols([0])->withFrozenCols([1]);
+        // Frozen must stay a contiguous prefix (audit #3); hiding a column
+        // that is not frozen still composes: frozen [0], hidden [2].
+        $t = $this->makeTable()->withHiddenCols([2])->withFrozenCols([0]);
         $this->assertSame(3, $t->TotalRows()); // no exception
     }
 
@@ -1023,9 +1025,13 @@ final class TableTest extends TestCase
         $t = $t->SelectPage(1);
         $this->assertSame('doe', $t->SelectedRow()?->data->get('name'));
 
-        // Selection index past the short page falls off → null, like CurrentRow()
-        // (withSelectedIndex AFTER SelectPage — SelectPage resets the index to 0)
-        $this->assertNull($t->withSelectedIndex(1)->SelectedRow());
+        // withSelectedIndex is page-global and auto-pages (audit #5, mirroring
+        // Bubbles table.SetCursor): index 1 lands on 'dog' on page 0 — the
+        // page follows the cursor instead of the selection falling off a
+        // short page into null.
+        $moved = $t->withSelectedIndex(1);
+        $this->assertSame('dog', $moved->SelectedRow()?->data->get('name'));
+        $this->assertSame(0, $moved->CurrentPage());
     }
 
     // -------------------------------------------------------------------------

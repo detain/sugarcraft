@@ -458,7 +458,7 @@ final class TableFrozenColsTest extends TestCase
         ])->withRows([
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice', 'city' => 'NYC', 'note' => 'Test note'])),
             Row::new(RowData::from(['id' => '2', 'name' => 'Bob',   'city' => 'LA',   'note' => 'Another'])),
-        ])->withFrozenCols([0, 2])  // Non-consecutive frozen columns
+        ])->withFrozenCols([0, 1])  // Contiguous frozen prefix (sparse sets throw, audit #3)
           ->withScrollX(1)
           ->withZebra();
 
@@ -466,9 +466,9 @@ final class TableFrozenColsTest extends TestCase
 
         $this->assertIsString($view);
         $this->assertNotEmpty($view);
-        // Should contain the frozen column ID and frozen column City
+        // Should contain the frozen column ID and next column Name
         $this->assertTrue(\str_contains($view, 'ID'));
-        $this->assertTrue(\str_contains($view, 'City'));
+        $this->assertTrue(\str_contains($view, 'Name'));
     }
 
     // =========================================================================

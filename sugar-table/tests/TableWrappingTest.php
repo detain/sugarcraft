@@ -69,7 +69,8 @@ final class TableWrappingTest extends TestCase
         $lines = $col->renderCell('Christopher');
 
         $this->assertCount(1, $lines);
-        $this->assertSame('Chris', $lines[0]);
+        // Clip is announced (audit #6/#7): 4 kept cells + the ellipsis.
+        $this->assertSame('Chri…', $lines[0]);
     }
 
     public function testWrapModeImmutability(): void
@@ -103,8 +104,12 @@ final class TableWrappingTest extends TestCase
             ->withStyle('1;31')
             ->withWrapMode(WrapMode::Character);
 
+        // renderCell is plain text end to end (audit #2): the column style is
+        // metadata the Table composes into the buffer cell at write time, so
+        // wrapping can never scatter raw SGR bytes across the grid.
         $lines = $col->renderCell('RedText');
-        $this->assertStringStartsWith("\x1b[1;31m", $lines[0]);
+        $this->assertSame(['   RedText'], $lines);
+        $this->assertStringNotContainsString("\x1b", $lines[0]);
     }
 
     public function testWordWrapPreservesFullWords(): void
@@ -152,11 +157,12 @@ final class TableWrappingTest extends TestCase
         $this->assertCount(1, $lines);
         $this->assertSame('日本語', $lines[0]); // exactly fills 6 cells, no padding
 
-        // "日本語学習" = 5 chars × 2 = 10 cells, truncated to 6
+        // "日本語学習" = 5 chars × 2 = 10 cells, truncated to 6:
+        // the budget minus the ellipsis (5) fits only 日本 (4 cells),
+        // right-aligned to 6 → " 日本…".
         $lines = $col->renderCell('日本語学習');
         $this->assertCount(1, $lines);
-        // Width::truncate preserves full graphemes, so 3 CJK chars = 6 cells
-        $this->assertSame('日本語', $lines[0]);
+        $this->assertSame(' 日本…', $lines[0]);
     }
 
     public function testRenderCellEmojiTruncatedByDisplayWidth(): void
@@ -183,9 +189,9 @@ final class TableWrappingTest extends TestCase
         // "Hello日本語" = 5 + 6 = 11 cells, truncated to 8
         $lines = $col->renderCell('Hello日本語');
         $this->assertCount(1, $lines);
-        // "Hello日" = 5 + 2 = 7 cells, then padLeft to 8 adds 1 leading space
+        // "Hello日" = 7 cells + the 1-cell ellipsis exactly fills 8.
         $this->assertSame(8, \SugarCraft\Core\Util\Width::of($lines[0]));
-        $this->assertSame(' Hello日', $lines[0]);
+        $this->assertSame('Hello日…', $lines[0]);
     }
 
     public function testWordWrapWithCjkCharacters(): void
@@ -233,7 +239,8 @@ final class TableWrappingTest extends TestCase
 
         $view = $t->View();
         $this->assertIsString($view);
-        // Should be truncated to " 日本語" (display width 6)
-        $this->assertStringContainsString('日本語', $view);
+        // 10 display cells truncated to the 6-cell budget: '日本' (4 cells)
+        // + '…' (1) is the widest honest clip, right-aligned inside the cell.
+        $this->assertStringContainsString(' 日本…', $view);
     }
 }
