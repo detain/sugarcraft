@@ -207,4 +207,28 @@ final class HslTest extends TestCase
         $this->assertNotNull($color);
         $this->assertSame(255, $color->r);
     }
+
+    public function testParseGarbageComponentsReturnNullNotBlack(): void
+    {
+        // filter_var() rejects every component below. Casting its `false`
+        // result to float before the guard used to turn rejected garbage
+        // into a silent 0 — so "abc" produced black instead of null.
+        $this->assertNull(Hsl::parse('hsl(abc, def, ghi)'));
+        $this->assertNull(Hsl::parse('hsl(10x, 50%, 50%)'));
+        $this->assertNull(Hsl::parse('hsl(10, 50y%, 50%)'));
+        $this->assertNull(Hsl::parse('hsl(10, 50%, 50q)'));
+        $this->assertNull(Hsl::parse('hsl(--5, 50%, 50%)'));
+    }
+
+    public function testParseStillAcceptsLegitimateNumericShapes(): void
+    {
+        // Positive control: the rejection above must not cost valid grammar.
+        $blue = Hsl::parse('hsl(240, 100%, 50%)');
+        $this->assertNotNull($blue);
+        $this->assertSame('#0000ff', $blue->toHex());
+        $decimal = Hsl::parse('hsl(120.5, 50.5%, 50%)');
+        $this->assertNotNull($decimal);
+        $negativeHue = Hsl::parse('hsl(-10, 50%, 50%)');
+        $this->assertNotNull($negativeHue);
+    }
 }

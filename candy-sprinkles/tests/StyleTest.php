@@ -10,6 +10,8 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\AdaptiveColor;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Border\BorderTitle;
+use SugarCraft\Sprinkles\Border\TitleAnchor;
 use SugarCraft\Sprinkles\CompleteAdaptiveColor;
 use SugarCraft\Sprinkles\CompleteColor;
 use SugarCraft\Sprinkles\LightDark;
@@ -1134,6 +1136,121 @@ final class StyleTest extends TestCase
         $patcher = Style::new()->bold();
         $merged = $base->patch($patcher);
         $this->assertSame('original', $merged->value());
+    }
+
+    // Array-shaped props (padding, margin, borderSides, per-side border
+    // colours) ALWAYS hold a fixed-shape array — even the never-touched
+    // constructor default — so patch() must consult propsSet for them
+    // instead of probing the value; otherwise a patcher that never set the
+    // prop squashes the receiver's array with its default.
+
+    public function testPatchPreservesPaddingWhenOtherNeverSetIt(): void
+    {
+        $base = Style::new()->padding(2, 3, 4, 5);
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertSame([2, 3, 4, 5], $merged->getPadding());
+    }
+
+    public function testPatchPreservesMarginWhenOtherNeverSetIt(): void
+    {
+        $base = Style::new()->margin(1, 2, 3, 4);
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertSame([1, 2, 3, 4], $merged->getMargin());
+    }
+
+    public function testPatchPreservesBorderSidesWhenOtherNeverSetThem(): void
+    {
+        $base = Style::new()->borderTop(false);
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertSame([false, true, true, true], $merged->getBorderSides());
+    }
+
+    public function testPatchPreservesPerSideBorderColorsWhenOtherNeverSetThem(): void
+    {
+        $base = Style::new()->border(Border::rounded())->borderLeftForeground(Color::rgb(255, 0, 0));
+        $merged = $base->patch(Style::new()->bold());
+        $this->assertStringContainsString('38;2;255;0;0', $merged->render('x'));
+    }
+
+    public function testPatchAppliesArrayPropsExplicitlySetInOther(): void
+    {
+        $base    = Style::new()->padding(9, 9, 9, 9)->borderTop(false);
+        $patcher = Style::new()->padding(1, 1, 1, 1)->borderBottom(false);
+        $merged  = $base->patch($patcher);
+        $this->assertSame([1, 1, 1, 1], $merged->getPadding());
+        // Array props merge at whole-array granularity (mirrors lipgloss):
+        // the patcher's fully-set borderSides replaces the receiver's.
+        $this->assertSame([true, true, false, true], $merged->getBorderSides());
+    }
+
+    // ---- border title row width regressions (bottom vs top alignment) ----
+
+    public function testBottomBorderRowWithLeftTitleMatchesTopWidth(): void
+    {
+        $border = Border::rounded()
+            ->withTitle('Hi', TitleAnchor::TopLeft)
+            ->withTitle('Lo', TitleAnchor::BottomLeft);
+        $out = Style::new()->width(10)->border($border)->render('x');
+        [$top, , $bottom] = explode("\n", $out);
+        $this->assertSame('╭Hi────────╮', $top);
+        $this->assertSame('╰Lo────────╯', $bottom);
+    }
+
+    public function testTopAndBottomBorderRowsKeepEqualWidthForEveryTitleCombination(): void
+    {
+        // The defect: a bottom row with a left title, right side enabled and
+        // no right title was one cell short of its top twin. Sweep every
+        // combination of title positions against both side toggles.
+        foreach ([[], ['L'], ['C'], ['R'], ['L', 'R'], ['L', 'C'], ['C', 'R'], ['L', 'C', 'R']] as $positions) {
+            foreach ([false, true] as $leftSide) {
+                foreach ([false, true] as $rightSide) {
+                    $border = Border::rounded();
+                    $anchors = [
+                        'L' => [TitleAnchor::TopLeft, TitleAnchor::BottomLeft, 'L'],
+                        'C' => [TitleAnchor::TopCenter, TitleAnchor::BottomCenter, 'C'],
+                        'R' => [TitleAnchor::TopRight, TitleAnchor::BottomRight, 'R'],
+                    ];
+                    foreach ($positions as $p) {
+                        [$topAnchor, $bottomAnchor] = $anchors[$p];
+                        $border = $border
+                            ->withTitle($p, $topAnchor)
+                            ->withTitle($p, $bottomAnchor);
+                    }
+                    $style = Style::new()->width(14)->border($border)
+                        ->borderLeft($leftSide)->borderRight($rightSide);
+                    [$top, , $bottom] = explode("\n", $style->render('x'));
+                    $expected = 14 + ($leftSide ? 1 : 0) + ($rightSide ? 1 : 0);
+                    $label = sprintf('titles=[%s] left=%d right=%d', implode(',', $positions), $leftSide, $rightSide);
+                    $this->assertSame($expected, Width::string($top), "top width — $label");
+                    $this->assertSame($expected, Width::string($bottom), "bottom width — $label");
+                }
+            }
+        }
+    }
+
+    // ---- multi-title anchor separators ------------------------------------
+
+    public function testMultiTitleAnchorGluesEachGapWithThePrecedingTitlesSeparator(): void
+    {
+        $titles = [
+            TitleAnchor::TopLeft->name => [
+                new BorderTitle('A', TitleAnchor::TopLeft, separator: ' - '),
+                new BorderTitle('B', TitleAnchor::TopLeft, separator: ' + '),
+                new BorderTitle('C', TitleAnchor::TopLeft),
+            ],
+        ];
+        $border = new Border('─', '─', '│', '│', '╭', '╮', '╰', '╯', titles: $titles);
+        [$top] = explode("\n", Style::new()->width(20)->border($border)->render('x'));
+        $this->assertStringContainsString('A - B + C', $top);
+    }
+
+    public function testMultiTitleAnchorDefaultsToSingleSpaceSeparator(): void
+    {
+        $border = Border::rounded()
+            ->withTitle('A', TitleAnchor::TopLeft)
+            ->withTitle('B', TitleAnchor::TopLeft);
+        [$top] = explode("\n", Style::new()->width(20)->border($border)->render('x'));
+        $this->assertStringContainsString('A B', $top);
     }
 
     /**

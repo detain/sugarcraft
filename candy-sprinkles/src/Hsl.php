@@ -65,30 +65,35 @@ final class Hsl
             return null;
         }
 
-        // Parse H value (no suffix)
+        // Parse H value (no suffix). The raw result must be tested for
+        // `false` BEFORE any float cast — casting first turns rejected
+        // garbage into 0.0 and silences the guard.
         $hStr = trim($parts[0]);
-        $h = (float) filter_var($hStr, FILTER_VALIDATE_FLOAT);
-        if ($h === false || $hStr === '') {
+        $hRaw = filter_var($hStr, FILTER_VALIDATE_FLOAT);
+        if ($hRaw === false || $hStr === '') {
             return null;
         }
+        $h = (float) $hRaw;
 
         // Parse S value (may have % suffix)
         $sStr = trim($parts[1]);
         $sHasPercent = str_ends_with($sStr, '%');
         $sStrClean = $sHasPercent === true ? rtrim($sStr, '%') : $sStr;
-        $s = (float) filter_var($sStrClean, FILTER_VALIDATE_FLOAT);
-        if ($s === false || $sStrClean === '') {
+        $sRaw = filter_var($sStrClean, FILTER_VALIDATE_FLOAT);
+        if ($sRaw === false || $sStrClean === '') {
             return null;
         }
+        $s = (float) $sRaw;
 
         // Parse L value (may have % suffix)
         $lStr = trim($parts[2]);
         $lHasPercent = str_ends_with($lStr, '%');
         $lStrClean = $lHasPercent ? rtrim($lStr, '%') : $lStr;
-        $l = (float) filter_var($lStrClean, FILTER_VALIDATE_FLOAT);
-        if ($l === false || $lStrClean === '') {
+        $lRaw = filter_var($lStrClean, FILTER_VALIDATE_FLOAT);
+        if ($lRaw === false || $lStrClean === '') {
             return null;
         }
+        $l = (float) $lRaw;
 
         return self::color($h, $s, $l);
     }

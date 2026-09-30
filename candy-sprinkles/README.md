@@ -166,7 +166,8 @@ echo Tree::new()
   via `Style::border*`.
 - **`BorderGradientBlend`** — `fromColors(Color ...$colors)` accepts 1–5
   colors and returns a blend whose `sides(): list<Color>` (top / right / bottom /
-  left) are interpolated around the perimeter. Use with `Style::borderColor()`.
+  left) are interpolated around the perimeter. Apply via
+  `Style::borderForegroundBlend()` or the per-side `Style::border*Foreground()`.
 - **`AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor`** — pick the
   right concrete colour at render time per `ColorProfile` (TrueColor / 256 /
   Ansi) or per dark-vs-light background.

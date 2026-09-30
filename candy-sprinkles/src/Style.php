@@ -850,6 +850,12 @@ final class Style
      */
     public function patch(self $other): self
     {
+        // Value-based probe: only sound for nullable slots whose "unset"
+        // representation IS null. Array-shaped props (padding, margin,
+        // borderSides, borderSideFg/Bg) always hold a non-empty fixed-shape
+        // array — even the constructor default — so they must be consulted
+        // through propsSet instead, or an untouched patcher's defaults would
+        // squash the receiver's values.
         $applied = fn(string $p, mixed $otherValue): mixed =>
             $otherValue !== null && $otherValue !== [] && $otherValue !== false
                 ? $otherValue
@@ -871,8 +877,8 @@ final class Style
         $mergedReverse      = $other->isSet('reverse')       ? $other->reverse      : null;
         $mergedOverline     = $other->isSet('overline')      ? $other->overline     : null;
         $mergedInvisible    = $other->isSet('invisible')     ? $other->invisible   : null;
-        $mergedPadding      = $applied('padding', $other->padding);
-        $mergedMargin       = $applied('margin', $other->margin);
+        $mergedPadding      = $other->isSet('padding')      ? $other->padding      : null;
+        $mergedMargin       = $other->isSet('margin')       ? $other->margin       : null;
         $mergedWidth        = $applied('width', $other->width);
         $mergedHeight       = $applied('height', $other->height);
         $mergedMaxWidth     = $applied('maxWidth', $other->maxWidth);
@@ -880,11 +886,11 @@ final class Style
         $mergedAlignH       = $other->isSet('alignH')        ? $other->alignH       : null;
         $mergedAlignV       = $other->isSet('alignV')        ? $other->alignV       : null;
         $mergedBorder       = $applied('border', $other->border);
-        $mergedBorderSides   = $applied('borderSides', $other->borderSides);
+        $mergedBorderSides   = $other->isSet('borderSides') ? $other->borderSides   : null;
         $mergedBorderFg     = $applied('borderFg', $other->borderFg);
         $mergedBorderBg     = $applied('borderBg', $other->borderBg);
-        $mergedBorderSideFg = $applied('borderSideFg', $other->borderSideFg);
-        $mergedBorderSideBg = $applied('borderSideBg', $other->borderSideBg);
+        $mergedBorderSideFg = $other->isSet('borderSideFg') ? $other->borderSideFg : null;
+        $mergedBorderSideBg = $other->isSet('borderSideBg') ? $other->borderSideBg : null;
         $mergedProfile      = $other->isSet('profile')      ? $other->profile      : null;
         $mergedInline       = $other->isSet('inline')        ? $other->inline       : null;
         $mergedMarginBg     = $applied('marginBg', $other->marginBg);
@@ -1398,10 +1404,10 @@ final class Style
             $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
         } elseif ($available > 0) {
             // No center title: fill with the border BOTTOM character.
-            // Subtract 1 for the right corner if the right border side is enabled
-            // AND there is no right title. When there IS a right title the corner
-            // is already in $rightSection and its width was already subtracted.
-            $centerTitle2 = str_repeat($b->bottom, $available - ($right && $rightTitle === '' ? 1 : 0));
+            // The available width already accounts for contentWidth which includes
+            // padding but NOT the corner characters. The right corner (if enabled)
+            // is added separately via $rightSection, so we do NOT subtract 1 here.
+            $centerTitle2 = str_repeat($b->bottom, $available);
         }
 
         return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
@@ -1421,14 +1427,21 @@ final class Style
         if ($titleList === []) {
             return '';
         }
-        $parts = [];
+        // Each gap between two titles is glued by the separator of the
+        // title it follows (the last title's separator has no gap to glue,
+        // so it is unused) — titles may therefore carry distinct separators.
+        // The SGR escapes stay in the returned string; Width::string() is
+        // ANSI-aware, so callers measure the print width without stripping.
+        $rendered = '';
+        $previous = null;
         foreach ($titleList as $title) {
-            $parts[] = $titleSgr . $title->text . $titleReset;
+            if ($previous !== null) {
+                $rendered .= $previous->separator;
+            }
+            $rendered .= $titleSgr . $title->text . $titleReset;
+            $previous = $title;
         }
-        $joined = implode($titleList[0]->separator ?? ' ', $parts);
-        // Strip ANSI for width measurement; the ANSI sequences are preserved
-        // in the returned string so they render in the terminal.
-        return $joined;
+        return $rendered;
     }
 
     private function buildContentSgr(): string
@@ -1454,8 +1467,10 @@ final class Style
         $sgr = $codes === [] ? '' : Ansi::sgr(...$codes);
 
         // Sub-styled underline — SGR `4:N` where N is the line shape.
-        // Emitted alongside SGR 4 for terminals that don't grok the
-        // sub-parameter (kitty, WezTerm, recent xterm honour it).
+        // Only `4:N` is emitted: plain SGR 4 is gated to
+        // UnderlineStyle::None above, so no fallback sequence accompanies
+        // the sub-parameter (kitty, WezTerm, recent xterm honour it;
+        // terminals that don't grok it render no underline at all).
         if ($this->underline && $this->underlineStyle !== UnderlineStyle::None) {
             $sgr .= "\x1b[4:" . $this->underlineStyle->value . 'm';
         }
