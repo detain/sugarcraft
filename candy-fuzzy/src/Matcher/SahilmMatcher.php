@@ -108,19 +108,9 @@ final class SahilmMatcher implements FuzzyMatcher
      */
     public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
     {
-        if ($query === '') {
-            return;
-        }
-
-        $results = [];
-        foreach ($candidates as $candidate) {
-            $result = $this->compute($query, $candidate);
-            if ($result !== null && $result->score >= $minScore) {
-                $results[] = $result;
-            }
-        }
-
-        foreach (MatchResultSorter::sortAndSlice($results, $limit) as $result) {
+        // Ranking barrier: reuse matchAll so the two paths cannot drift
+        // (same discipline as SmithWatermanMatcher::matchAllGenerator()).
+        foreach ($this->matchAll($query, $candidates, $limit, $minScore) as $result) {
             yield $result;
         }
     }
@@ -137,13 +127,13 @@ final class SahilmMatcher implements FuzzyMatcher
             return null;
         }
 
-        $queryLower = $this->caseSensitive ? $query : mb_strtolower($query, 'UTF-8');
-        $candidateLower = $this->caseSensitive ? $candidate : mb_strtolower($candidate, 'UTF-8');
-
-        // Pre-split once — eliminates per-iteration mb_substr in the hot loop.
-        $qLow = mb_str_split($queryLower);
-        $cLow = mb_str_split($candidateLower);
-        $cOrig = mb_str_split($candidate);
+        // Per-char folded split, 1:1 with the ORIGINAL code points. Lowercasing
+        // the whole string first would expand U+0130 (İ → i + U+0307), shifting
+        // every later index and mis-addressing the $cOrig bonus reads below
+        // (see CharFold). Case-sensitive mode compares original chars directly.
+        $qLow = $this->caseSensitive ? mb_str_split($query, 1, 'UTF-8') : CharFold::foldSplit($query);
+        $cLow = $this->caseSensitive ? mb_str_split($candidate, 1, 'UTF-8') : CharFold::foldSplit($candidate);
+        $cOrig = mb_str_split($candidate, 1, 'UTF-8');
 
         $indices = [];
         $score = 0;

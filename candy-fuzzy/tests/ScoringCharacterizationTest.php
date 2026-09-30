@@ -41,6 +41,11 @@ final class ScoringCharacterizationTest extends TestCase
             'camelCase' => ['query' => 'fb', 'candidate' => 'fooBar', 'expectedScore' => 4, 'expectedIndices' => [0, 3]],
             'no-match' => ['query' => 'xyz', 'candidate' => 'abc', 'expectedScore' => null, 'expectedIndices' => null],
             'query longer than candidate' => ['query' => 'hello', 'candidate' => 'hi', 'expectedScore' => 3, 'expectedIndices' => [0]],
+            // İstanbul family: mb_strtolower expands U+0130 to i + U+0307; indices
+            // must address the ORIGINAL code points (MAJOR-1 characterization rows).
+            'İstanbul partial folds after expansion' => ['query' => 'ist', 'candidate' => 'İstanbul', 'expectedScore' => 11, 'expectedIndices' => [1, 2]],
+            'İstanbul composed query matches itself' => ['query' => 'İstan', 'candidate' => 'İstanbul', 'expectedScore' => 35, 'expectedIndices' => [0, 1, 2, 3, 4]],
+            'İstanbul tail reachable' => ['query' => 'bul', 'candidate' => 'İstanbul', 'expectedScore' => 19, 'expectedIndices' => [5, 6, 7]],
         ];
     }
 
@@ -59,6 +64,11 @@ final class ScoringCharacterizationTest extends TestCase
             'camelCase' => ['query' => 'fb', 'candidate' => 'fooBar', 'expectedScore' => 18, 'expectedIndices' => [0, 3]],
             'no-match' => ['query' => 'xyz', 'candidate' => 'abc', 'expectedScore' => null, 'expectedIndices' => null],
             'query longer than candidate' => ['query' => 'hello', 'candidate' => 'hi', 'expectedScore' => null, 'expectedIndices' => null],
+            // İstanbul family (MAJOR-1): 'sta' lands on original chars s,t,a after
+            // the expanded İ; 'bul' proves the tail char is reachable (pre-fix null).
+            'İstanbul after expansion' => ['query' => 'sta', 'candidate' => 'İstanbul', 'expectedScore' => 26, 'expectedIndices' => [1, 2, 3]],
+            'İstanbul tail reachable' => ['query' => 'bul', 'candidate' => 'İstanbul', 'expectedScore' => 16, 'expectedIndices' => [5, 6, 7]],
+            'İstanbul exact composed' => ['query' => 'İstanbul', 'candidate' => 'İstanbul', 'expectedScore' => 75, 'expectedIndices' => [0, 1, 2, 3, 4, 5, 6, 7]],
         ];
     }
 

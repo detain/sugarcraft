@@ -44,6 +44,22 @@ final class ScoringProfileTest extends TestCase
     }
 
     #[Test]
+    public function testNewFactoryForwardsEverythingToTheConstructor(): void
+    {
+        // audit finding 6 (LOW): new() must not re-list the defaults — the
+        // constructor's promoted defaults are the single source. Unset named
+        // params therefore resolve through the constructor signature.
+        $this->assertEquals(new ScoringProfile(), ScoringProfile::new());
+        $this->assertEquals(
+            new ScoringProfile(matchScore: 4, gapExtend: -2),
+            ScoringProfile::new(matchScore: 4, gapExtend: -2),
+        );
+
+        $this->expectException(\TypeError::class);
+        ScoringProfile::new(matchScore: 'not-an-int');
+    }
+
+    #[Test]
     public function testStrictValues(): void
     {
         $p = ScoringProfile::strict();

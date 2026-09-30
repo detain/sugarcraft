@@ -15,7 +15,12 @@ final class MatchResult
      * @param string     $needle        The search query that was matched
      * @param string     $haystack      The candidate string that was matched
      * @param int        $score         Numeric score (higher = better match)
-     * @param list<int>  $matchedIndices 0-based character indices of matched chars in haystack
+     * @param list<int>  $matchedIndices 0-based CODE-POINT indices into the ORIGINAL
+     *                                   haystack (never the lowercased comparison space),
+     *                                   each naming a char the query genuinely matched
+     *                                   (the Smith-Waterman traceback omits mismatch
+     *                                   diagonals from this list under exotic profiles
+     *                                   whose mismatch penalty is non-negative)
      */
     public function __construct(
         public readonly string $needle,

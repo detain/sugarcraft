@@ -17,9 +17,10 @@ namespace SugarCraft\Fuzzy;
  * so passing the default profile (or none) preserves existing matcher output
  * byte-for-byte.
  *
- * Ports `SugarCraft\Lister\ScoringProfile` — the API surface (constructor named
- * params + default()/strict()/lenient()) is a superset of candy-lister's so the
- * later consumer-migration batch can alias candy-lister's copy to this class.
+ * This class is the scoring SSOT for the ecosystem: `SugarCraft\Lister\ScoringProfile`
+ * is now a `class_alias` to it, and the deprecated
+ * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` shim delegates to
+ * {@see \SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher}, which defaults here.
  */
 final class ScoringProfile
 {
@@ -40,15 +41,15 @@ final class ScoringProfile
 
     /**
      * Root factory (repo convention). Equivalent to the constructor.
+     *
+     * Forwards ALL arguments — positional or named — so the constructor's
+     * promoted defaults stay the single source of the canonical profile;
+     * re-listing them here would let the two literal sets silently fork.
+     * Wrong arity or types fail in the constructor with a TypeError.
      */
-    public static function new(
-        int $matchScore = 3,
-        int $mismatchPenalty = -3,
-        int $gapOpen = -5,
-        int $gapExtend = -1,
-        int $adjacentBonus = 5,
-    ): self {
-        return new self($matchScore, $mismatchPenalty, $gapOpen, $gapExtend, $adjacentBonus);
+    public static function new(mixed ...$arguments): self
+    {
+        return new self(...$arguments);
     }
 
     /**

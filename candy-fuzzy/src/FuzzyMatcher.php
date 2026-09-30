@@ -12,7 +12,9 @@ namespace SugarCraft\Fuzzy;
  * The key feature: ranked matches WITH scored matched character indices,
  * so UI filter highlighting becomes possible.
  *
- * Mirrors charmbracelet/fuzzy.Candidate pattern used by bubble tea filter models.
+ * Mirrors the `Candidate` (string + score + matched rune positions) shape of
+ * the upstream `sahilm/fuzzy` (Go) recorded in docs/MATCHUPS.md, combined with
+ * the internal Smith-Waterman port; used by bubble tea-style filter models.
  *
  * @see https://github.com/sahilm/fuzzy
  * @see https://github.com/charmbracelet/bubbletea

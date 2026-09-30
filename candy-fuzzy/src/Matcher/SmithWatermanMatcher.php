@@ -123,10 +123,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             return $this->fallback()->match($query, $candidate)?->score ?? 0;
         }
 
-        // Pre-split + lowercase once (equivalent to per-char folding) — keeps the
-        // hot loop free of mb_substr/mb_strtolower calls.
-        $q = mb_str_split(mb_strtolower($query, 'UTF-8'));
-        $c = mb_str_split(mb_strtolower($candidate, 'UTF-8'));
+        // Per-char folded split — 1:1 with ORIGINAL code points so every matrix
+        // index names the same char in the haystack (whole-string lowercasing
+        // expands U+0130 and desyncs the index space; see CharFold).
+        $q = CharFold::foldSplit($query);
+        $c = CharFold::foldSplit($candidate);
 
         $matchScore = $this->profile->matchScore;
         $mismatchPenalty = $this->profile->mismatchPenalty;
@@ -235,8 +236,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      *                           attainable score cannot reach the threshold —
      *                           avoids allocating the quadratic matrix for a
      *                           candidate that would be filtered out anyway.
-     *                           Result-preserving (the pruned score is provably
-     *                           below the threshold).
+     *                           Result-preserving: the ceiling only prunes when
+     *                           it provably dominates every alignment step
+     *                           (see {@see self::ceilingPruneIsSound()});
+     *                           profiles whose shape breaks that bound skip
+     *                           the prune and pay full matrix cost instead.
      */
     private function compute(string $query, string $candidate, ?int $minScore = null): ?MatchResult
     {
@@ -255,8 +259,9 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         // Early-exit prune: the best possible local-alignment score is at most
         // min(queryLen, candidateLen) match/adjacency steps. If even that ceiling
         // is below the caller's threshold, this candidate cannot qualify — skip
-        // the matrix entirely. (Never removes a real match: actual <= ceiling.)
-        if ($minScore !== null) {
+        // the matrix entirely. (Never removes a real match: actual <= ceiling,
+        // but only under the sign conditions ceilingPruneIsSound() checks.)
+        if ($minScore !== null && $this->ceilingPruneIsSound()) {
             $perStepCeiling = max(0, $this->profile->matchScore + $this->profile->adjacentBonus);
             $ceiling = min($queryLen, $candidateLen) * $perStepCeiling;
             if ($ceiling < $minScore) {
@@ -264,10 +269,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             }
         }
 
-        // Pre-split once — lowercasing the whole string once is equivalent to
-        // lowercasing each char; eliminates per-cell mb_substr/mb_strtolower in the hot loop.
-        $q = mb_str_split(mb_strtolower($query, 'UTF-8'));
-        $c = mb_str_split(mb_strtolower($candidate, 'UTF-8'));
+        // Per-char folded split — 1:1 with ORIGINAL code points, so traceback
+        // indices and bonus lookups address the same char the caller sees
+        // (whole-string lowercasing expands U+0130 and shifts the tail; see CharFold).
+        $q = CharFold::foldSplit($query);
+        $c = CharFold::foldSplit($candidate);
 
         $matchScore = $this->profile->matchScore;
         $mismatchPenalty = $this->profile->mismatchPenalty;
@@ -333,7 +339,7 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         }
 
         // Traceback to find matched indices
-        $indices = $this->traceback($traceback, $maxI, $maxJ);
+        $indices = $this->traceback($traceback, $q, $c, $maxI, $maxJ);
 
         return new MatchResult(
             needle: $query,
@@ -341,6 +347,27 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             score: $maxScore,
             matchedIndices: $indices,
         );
+    }
+
+    /**
+     * Whether the early-exit ceiling `min(len) * max(0, matchScore + adjacentBonus)`
+     * provably dominates every alignment step.
+     *
+     * It does when adjacency can only ADD (adjacentBonus >= 0) and every other
+     * step type is non-positive (mismatch/gap penalties <= 0): then any path of
+     * k <= min(queryLen, candidateLen) diagonal steps scores at most
+     * k * max(0, matchScore + adjacentBonus). Any other public profile shape
+     * breaks the bound — e.g. matchScore 3 with adjacentBonus -5 makes the best
+     * step a BARE match (3 > 3-5), so the naive ceiling would collapse and
+     * prune real matches. Unsound shapes skip the prune; correctness over the
+     * matrix-allocation shortcut.
+     */
+    private function ceilingPruneIsSound(): bool
+    {
+        return $this->profile->adjacentBonus >= 0
+            && $this->profile->mismatchPenalty <= 0
+            && $this->profile->gapOpen <= 0
+            && $this->profile->gapExtend <= 0;
     }
 
     /**
@@ -354,12 +381,21 @@ final class SmithWatermanMatcher implements FuzzyMatcher
     /**
      * Traceback from max score position to get matched character indices.
      *
+     * Emits an index only for diagonal steps whose chars genuinely match.
+     * Under profiles where a mismatch diagonal can win a cell (e.g.
+     * mismatchPenalty >= 0), the alignment PATH may cross such a step — the
+     * score keeps counting it, but highlighting a char the query never asked
+     * for would lie, so matchedIndices become a strict subset of the path
+     * there. Canonical profiles (negative mismatch) provably never hit this.
+     *
      * @param array<array<int>> $traceback Origin matrix
+     * @param list<string>      $q         Folded query (1:1 with query code points)
+     * @param list<string>      $c         Folded candidate (1:1 with haystack code points)
      * @param int             $i          Row of max score
      * @param int             $j          Column of max score
-     * @return list<int> Character indices of matched chars
+     * @return list<int> Character indices of matched chars, in ORIGINAL haystack space
      */
-    private function traceback(array $traceback, int $i, int $j): array
+    private function traceback(array $traceback, array $q, array $c, int $i, int $j): array
     {
         $indices = [];
         $currentI = $i;
@@ -369,8 +405,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             $origin = $traceback[$currentI][$currentJ];
 
             if ($origin === 1) {
-                // Diagonal - we have a match at position (currentI-1, currentJ-1) in the original strings
-                $indices[] = $currentJ - 1;
+                // Diagonal — a real char match at ($currentI-1, $currentJ-1) of the
+                // ORIGINAL strings (folded arrays are 1:1 with code points).
+                if ($q[$currentI - 1] === $c[$currentJ - 1]) {
+                    $indices[] = $currentJ - 1;
+                }
                 $currentI--;
                 $currentJ--;
             } elseif ($origin === 2) {

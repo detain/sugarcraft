@@ -126,20 +126,21 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 ## Canonical matcher & consumer migration
 
 `candy-fuzzy` is the single source of truth for fuzzy matching across the
-ecosystem. Consumer migration is in progress and NOT yet complete:
+ecosystem. Consumer migration is **complete** — no duplicate scoring core
+remains outside this library:
 
-- **`sugar-prompt`** — already delegates: `SugarCraft\Prompt\Fuzzy\FuzzyMatcher`
-  is a `class_alias` to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`.
-- **`candy-forms`** — `SugarCraft\Forms\Fuzzy\FuzzyMatcher` is marked
-  `@deprecated` but still ships its own standalone copy (its `Select` field
-  already uses candy-fuzzy's `SmithWatermanMatcher` directly). Conversion to a
-  shim is tracked for a follow-up batch.
-- **`candy-lister`** — `SugarCraft\Lister\FuzzyMatch` and its `ScoringProfile`
-  remain independent copies; this library's `ScoringProfile` is a superset port
-  of candy-lister's, so the follow-up batch can alias it here.
+- **`sugar-prompt`** — `SugarCraft\Prompt\Fuzzy\FuzzyMatcher` is a
+  `class_alias` to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`.
+- **`candy-forms`** — `SugarCraft\Forms\Fuzzy\FuzzyMatcher` is a
+  `@deprecated` shim whose former hand-rolled DP core was removed; every score
+  now delegates to `SmithWatermanMatcher` with the default `ScoringProfile`
+  (bit-equivalent to the historical constants).
+- **`candy-lister`** — `SugarCraft\Lister\ScoringProfile` is a `class_alias` to
+  this library's `ScoringProfile`, and `SugarCraft\Lister\FuzzyMatch` is a thin
+  delegating shim over `SmithWatermanMatcher` (keeping candy-lister's own
+  `\Stringable`-item contract and input-order tiebreak).
 
-Until those follow-ups land, treat the copies above as duplicates pending
-removal — new code should depend on `SugarCraft\Fuzzy\*` directly.
+New code should depend on `SugarCraft\Fuzzy\*` directly.
 
 ## Security note
 

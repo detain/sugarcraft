@@ -35,6 +35,9 @@ final class SsotBehaviorTest extends TestCase
             'camelCase' => ['fb', 'fooBar', 4, [0, 3]],
             'no-match' => ['xyz', 'abc', null, null],
             'query longer' => ['hello', 'hi', 3, [0]],
+            // MAJOR-1: indices stay in ORIGINAL code-point space across U+0130 expansion.
+            'İstanbul expansion' => ['ist', 'İstanbul', 11, [1, 2]],
+            'İstanbul tail' => ['bul', 'İstanbul', 19, [5, 6, 7]],
         ];
     }
 
@@ -227,6 +230,41 @@ final class SsotBehaviorTest extends TestCase
                 $this->assertGreaterThanOrEqual($minScore, $r->score);
             }
         }
+    }
+
+    // ---- Ceiling prune soundness + traceback honesty ----
+
+    #[Test]
+    public function testNegativeAdjacentBonusPruneGuardFindsRealBestMatch(): void
+    {
+        // audit finding 4 (LOW): with matchScore 3 / adjacentBonus -5 the naive
+        // per-step ceiling collapses to max(0, 3 + -5) = 0 and a minScore >= 1
+        // prune would drop EVERY candidate — yet the real best match scores 3.
+        // The ceiling now only prunes when provably sound, so 'a' surfaces.
+        $m = new SmithWatermanMatcher(ScoringProfile::new(matchScore: 3, adjacentBonus: -5));
+
+        $pruned = $m->matchAll('a', ['a', 'z'], minScore: 1);
+        $this->assertCount(1, $pruned);
+        $this->assertSame('a', $pruned[0]->haystack);
+        $this->assertSame(3, $pruned[0]->score);
+
+        // Sound profiles keep the fast path: default ceiling 8/step still prunes.
+        $this->assertSame([], (new SmithWatermanMatcher())->matchAll('app', ['apple'], minScore: 10_000));
+    }
+
+    #[Test]
+    public function testTracebackEmitsOnlyGenuineCharMatches(): void
+    {
+        // audit finding 5 (LOW): under a mismatchPenalty >= 0 profile a mismatch
+        // diagonal can win traceback cells. Decision = fix the emit site (clamp
+        // to real matches): the score still counts the mismatch step, but a
+        // highlighted char must be one the query asked for. 'X' is excluded.
+        $m = new SmithWatermanMatcher(ScoringProfile::new(matchScore: 3, mismatchPenalty: 1));
+        $result = $m->match('abc', 'abXc');
+
+        $this->assertNotNull($result);
+        $this->assertSame(17, $result->score);
+        $this->assertSame([0, 1], $result->indices());
     }
 
     // ---- matchAllGenerator parity ----
