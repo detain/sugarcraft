@@ -17,6 +17,12 @@ return [
     'config.yaml_continuation' => "wishlist yaml: continuación antes de cualquier bloque '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: línea no analizable: {line}',
     'config.entry_missing_field' => 'entrada wishlist sin campo requerido: name o host',
+    'config.field_not_scalar'  => 'entrada de wishlist: el campo [{field}] debe ser un escalar, se obtuvo {type}',
+
+    // endpoint security
+    'endpoint.option_injection' => 'endpoint de wishlist: el campo [{field}] tiene un valor no seguro con guion inicial [{value}]',
+    'endpoint.port_invalid'     => 'endpoint de wishlist [{host}]: puerto no válido [{port}] — debe ser un entero de 1 a 65535',
+
 
     // bin/wishlist
     'cli.usage'         => 'Uso: wishlist [--config <ruta>] [--ssh <binario-ssh>]',
@@ -24,4 +30,5 @@ return [
     'cli.no_config'     => 'wishlist: no se encontró configuración. Pase --config <ruta>.',
     'cli.error'         => 'wishlist: {message}',
     'cli.cancelled'     => 'wishlist: cancelado.',
+    'cli.ssh_not_executable' => 'wishlist: binario ssh no encontrado o no ejecutable: {bin}',
 ];

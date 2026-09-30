@@ -6,11 +6,14 @@ declare(strict_types=1);
 /**
  * `wishlist` — SSH endpoint picker.
  *
- *   wishlist [--config <path>] [--ssh <ssh-binary>]
+ *   wishlist [--config <path>] [--ssh <ssh-binary>] [--help]
  *
- * Defaults to `~/.config/wishlist.yml` (also tries `wishlist.yml`
- * and `wishlist.json` in the current directory). On Enter, replaces
- * the current process with `ssh` connecting to the chosen entry.
+ * Without `--config` the search order is: `wishlist.yml`,
+ * `wishlist.yaml`, `wishlist.json` in the CURRENT DIRECTORY first,
+ * then `~/.config/wishlist.{yml,yaml,json}`. `--ssh` must be an
+ * absolute path to the ssh binary (`pcntl_exec` does not search
+ * `$PATH`). On Enter, replaces the current process with `ssh`
+ * connecting to the chosen entry; Esc exits 130.
  */
 
 use SugarCraft\Wishlist\Config;
@@ -21,7 +24,7 @@ use SugarCraft\Wishlist\Picker;
 // ---------------------------------------------------------------------------
 // Autoloader
 // ---------------------------------------------------------------------------
-(static function (array $argv): void {
+(static function (): void {
     foreach ([
         __DIR__ . '/../vendor/autoload.php',
         __DIR__ . '/../../vendor/autoload.php',
@@ -34,14 +37,42 @@ use SugarCraft\Wishlist\Picker;
     }
     fwrite(STDERR, "wishlist: could not find composer autoloader\n");
     exit(1);
-})($argv);
+})();
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
+// PHP's getopt() silently stops at the first unrecognised option, so a
+// typo like `--confg` would be ignored and the run would proceed with
+// defaults. Scan the raw argv first: every `-`-prefixed token must be
+// one of the three known flags (value may be glued with `=`), and
+// `--help` short-circuits with the usage line on stdout.
+$allowed = ['--config', '--ssh'];
+foreach (array_slice($argv, 1) as $arg) {
+    if (!str_starts_with($arg, '-')) {
+        continue;
+    }
+    $name = $arg;
+    $eq = strpos($arg, '=');
+    if ($eq !== false) {
+        $name = substr($arg, 0, $eq);
+    }
+    if ($name === '--help') {
+        // Handled here rather than via getopt(): getopt's treatment of a
+        // valueless long flag given as `--help=1` is version-flaky, and
+        // help must win before anything else can fail.
+        fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+        exit(0);
+    }
+    if (!in_array($name, $allowed, true)) {
+        fwrite(STDERR, Lang::t('cli.unknown_arg', ['arg' => $arg]) . "\n");
+        exit(2);
+    }
+}
+
 $opts = getopt('', ['config:', 'ssh:']);
 $cfgPath = $opts['config'] ?? '';
-$sshBin = $opts['ssh'] ?? '/usr/bin/ssh';
+$sshBin = $opts['ssh'] ?? Launcher::DEFAULT_SSH;
 
 // ---------------------------------------------------------------------------
 // Config file search (with HOME guard)

@@ -7,13 +7,15 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-wishlist)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-wishlist)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-wishlist?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-wishlist)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
 ![demo](.vhs/picker.gif)
 
-PHP port of [`charmbracelet/wishlist`](https://github.com/charmbracelet/wishlist) — a TUI directory of SSH endpoints. Launch `wishlist`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
+A PHP take on the concept of [`charmbracelet/wishlist`](https://github.com/charmbracelet/wishlist) (Charmed's SSH host directory, itself inspired by Charlie Gleason's original `wishlist`) — a TUI directory of SSH endpoints. Launch `wishlist`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
+
+This is a re-implementation, not a format-compatible port: the config schema here is a **flat top-level list** of endpoint objects. Upstream's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly with `wishlist yaml: unparseable line`, never silently.
 
 ```
 ── wishlist ──
@@ -36,13 +38,17 @@ composer require sugarcraft/sugar-wishlist
 
 ## Configure
 
-`wishlist` looks for, in order:
+`wishlist` resolves its config in this order:
 
-1. `--config <path>` (CLI flag)
-2. `~/.config/wishlist.yml`
-3. `~/.config/wishlist.yaml`
-4. `~/.config/wishlist.json`
-5. `wishlist.{yml,yaml,json}` in the current directory
+1. `--config <path>` (CLI flag) — wins outright
+2. `wishlist.yml` / `wishlist.yaml` / `wishlist.json` in the **current directory** (first that exists)
+3. `~/.config/wishlist.yml` / `.yaml` / `.json` (only when `$HOME` is set)
+
+So a config in the directory you launch from takes precedence over your home config. Other flags:
+
+* `--ssh <binary>` — absolute path to the ssh executable (default `/usr/bin/ssh`). `pcntl_exec` does
+  not search `$PATH`, so a bare `ssh` will be rejected; the path must exist and be executable.
+* `--help` — print the usage line and exit 0. Unrecognised `--flags` exit 2 naming the offending arg.
 
 ### YAML
 
@@ -93,20 +99,6 @@ read config → render picker → read keys → choose → pcntl_exec(ssh, argv)
 
 That last `pcntl_exec` is the critical line: it **replaces** the PHP process with `ssh`. File descriptors, environment, and the controlling tty all flow through unchanged, so the user sees a normal `ssh` session — host-key prompts, agent forwarding, MOTD, exit status, all native. We never proxy bytes; we get out of the way.
 
-## Programmatic use
-
-```php
-use SugarCraft\Wishlist\Config;
-use SugarCraft\Wishlist\Picker;
-use SugarCraft\Wishlist\Launcher;
-
-$endpoints = Config::load('/etc/wishlist.yml');
-$picked    = (new Picker())->pick($endpoints);
-if ($picked !== null) {
-    (new Launcher())->dispatch($picked);
-}
-```
-
 ## Import from SSH Config
 
 `wishlist` can import endpoints directly from your OpenSSH config file (`~/.ssh/config`):
@@ -128,9 +120,9 @@ The parser handles:
 | `IdentityFile <path>` | `identityFiles[]` |
 | `ProxyJump <host>`   | `proxyJump`       |
 
-`Host *` global defaults are inherited by all subsequent host blocks. Host patterns are used as the endpoint name (when no `HostName` is specified, the pattern itself becomes the host).
+Precedence follows `ssh_config(5)`: *for each parameter, the first obtained value will be used.* A `Host *` block wins only where it appears before any matching specific block — conventionally it is written last and therefore acts as a fallback. `IdentityFile` is the documented exception and accumulates in file order. Host patterns are used as the endpoint name (when no `HostName` is specified, the pattern itself becomes the host).
 
-## Programmatic Use
+## Programmatic use
 
 ```php
 use SugarCraft\Wishlist\Config;
@@ -149,8 +141,8 @@ $sshEndpoints = Config::importFromSshConfig('/home/user/.ssh/config');
 
 ## Shared foundations
 
-sugar-wishlist uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker now surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched grapheme clusters) for ranked, highlighted filter results.
+sugar-wishlist uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker now surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched characters) for ranked, highlighted filter results.
 
 ## Status
 
-Phase 10.28 — SSH config import. 69 tests / 176 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
+Phase 10.28 — SSH config import. 257 tests / 1160 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
