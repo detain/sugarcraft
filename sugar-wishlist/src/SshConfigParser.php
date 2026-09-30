@@ -4,42 +4,45 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wishlist;
 
-use SugarCraft\Wishlist\Endpoint;
-
 /**
  * Parses an OpenSSH config file (~/.ssh/config) into a list of Endpoints.
  *
  * Handles:
- * - `Host <pattern>` blocks (including `Host *` for global defaults)
+ * - `Host <pattern>` blocks (including `Host *`, which matches every host)
  * - Per-host options: HostName, User, Port, IdentityFile, ProxyJump
- * - Global options from `Host *` that apply to all subsequent hosts
- * - Pattern matching (first match wins per SSH config rules)
+ * - Multi-pattern Host lines ("Host a b c") become one endpoint per pattern
  *
- * Mirrors openssh-client/ssh_config.5 behavior: options set in a Host block
- * apply to the first Host pattern that matches; `Host *` provides defaults
- * that are overridden by more specific host blocks.
+ * Precedence mirrors openssh-client/ssh_config.5 exactly: "For each
+ * parameter, the first obtained value will be used." Resolution walks ALL
+ * blocks in file order and, for each endpoint, takes the first value a
+ * matching block defines. `Host *` is therefore NOT a subordinate defaults
+ * section — it is simply conventionally written last, which is what makes
+ * it lose. A `Host *` written FIRST in the file wins over every later
+ * specific block, exactly as OpenSSH would honour it.
+ * IdentityFile is the documented exception: values accumulate across
+ * matching blocks in file order (ssh tries them in that order).
  */
 final class SshConfigParser
 {
-    /** @var array<string,array<string,string|list<string>>> */
-    private array $globalOptions = [];
-
-    /** @var list<array{host:string,line:int}> */
-    private array $hostBlocks = [];
+    /**
+     * Every Host block in file order — wildcard blocks included, because
+     * precedence is positional, not categorical.
+     *
+     * @var list<array{patterns:list<string>, options:array<string,string|list<string>>}>
+     */
+    private array $blocks = [];
 
     /**
      * @return list<Endpoint>
      */
     public function parse(string $raw): array
     {
-        $this->globalOptions = [];
-        $this->hostBlocks = [];
+        $this->blocks = [];
 
         /** @var list<string>|null $currentHostPatterns */
         $currentHostPatterns = null;
         /** @var array<string,string|list<string>> $currentOptions */
         $currentOptions = [];
-        $inGlobalBlock = false;
 
         foreach (explode("\n", $raw) as $rawLine) {
             $line = preg_replace('/\s+#.*$/', '', $rawLine) ?? $rawLine;
@@ -51,22 +54,16 @@ final class SshConfigParser
             // Host keyword opens a new block
             if (preg_match('/^host\s+(.+)$/i', $line, $m)) {
                 if ($currentHostPatterns !== null) {
-                    $this->storeHostBlock($currentHostPatterns, $currentOptions);
+                    $this->blocks[] = ['patterns' => $currentHostPatterns, 'options' => $currentOptions];
                 }
                 // Split multi-pattern Host lines (e.g. "Host a b c") into
-                // individual patterns. First-match-wins ordering: preserve
-                // left-to-right order.
+                // individual patterns, preserving left-to-right order.
                 $rawPatterns = preg_split('/\s+/', trim($m[1]));
                 $currentHostPatterns = array_values(array_filter(
                     $rawPatterns,
                     static fn(string $p) => $p !== ''
                 ));
                 $currentOptions = [];
-                // Check if ANY pattern is '*' to determine global block
-                $inGlobalBlock = in_array('*', $currentHostPatterns, true);
-                if ($inGlobalBlock) {
-                    $currentOptions = $this->globalOptions;
-                }
                 continue;
             }
 
@@ -81,26 +78,10 @@ final class SshConfigParser
 
         // Flush final block
         if ($currentHostPatterns !== null) {
-            $this->storeHostBlock($currentHostPatterns, $currentOptions);
+            $this->blocks[] = ['patterns' => $currentHostPatterns, 'options' => $currentOptions];
         }
 
         return $this->buildEndpoints();
-    }
-
-    /**
-     * @param list<string> $hostPatterns
-     * @param array<string,string|list<string>> $options
-     */
-    private function storeHostBlock(array $hostPatterns, array $options): void
-    {
-        foreach ($hostPatterns as $pattern) {
-            if (strtolower($pattern) === '*') {
-                // Host * sets global options only; no endpoint is created.
-                $this->globalOptions = $options;
-                continue;
-            }
-            $this->hostBlocks[] = ['host' => $pattern, 'options' => $options, 'line' => 0];
-        }
     }
 
     /**
@@ -109,11 +90,13 @@ final class SshConfigParser
     private function applyKeyword(array &$options, string $key, string $value): void
     {
         match ($key) {
-            'hostname' => $options['hostname'] = $value,
-            'user' => $options['user'] = $value,
-            'port' => $options['port'] = $value,
+            // First-obtained-wins within the block too (ssh_config.5):
+            // a repeated scalar keyword keeps its first value.
+            'hostname' => $options['hostname'] ??= $value,
+            'user' => $options['user'] ??= $value,
+            'port' => $options['port'] ??= $value,
             'identityfile' => $this->appendList($options, 'identityfile', $value),
-            'proxyjump' => $options['proxyjump'] = $value,
+            'proxyjump' => $options['proxyjump'] ??= $value,
             default => null,
         };
     }
@@ -124,14 +107,56 @@ final class SshConfigParser
     private function buildEndpoints(): array
     {
         $endpoints = [];
-        foreach ($this->hostBlocks as $block) {
-            $merged = $this->globalOptions;
-            foreach ($block['options'] as $k => $v) {
-                $merged[$k] = $v;
+        foreach ($this->blocks as $block) {
+            foreach ($block['patterns'] as $pattern) {
+                if ($pattern === '*') {
+                    // A wildcard pattern never names an endpoint of its own;
+                    // it only contributes options (see resolveOptions).
+                    continue;
+                }
+                $endpoints[] = $this->makeEndpoint($pattern, $this->resolveOptions($pattern));
             }
-            $endpoints[] = $this->makeEndpoint($block['host'], $merged);
         }
         return array_values(array_filter($endpoints, fn(Endpoint $e) => $e->host !== ''));
+    }
+
+    /**
+     * Resolve the effective options for one host pattern by walking every
+     * block in file order (ssh_config.5 first-obtained-value semantics).
+     *
+     * @return array<string,string|list<string>>
+     */
+    private function resolveOptions(string $pattern): array
+    {
+        $resolved = [];
+        foreach ($this->blocks as $block) {
+            $applies = in_array('*', $block['patterns'], true)
+                || in_array($pattern, $block['patterns'], true);
+            if (!$applies) {
+                continue;
+            }
+            foreach ($block['options'] as $key => $value) {
+                if ($key === 'identityfile') {
+                    // Accumulates across matching blocks, first-seen first,
+                    // without duplicates — exactly what ssh(1) does.
+                    /** @var list<string> $existing */
+                    $existing = $resolved['identityfile'] ?? [];
+                    /** @var list<string> $incoming */
+                    $incoming = is_array($value) ? $value : [$value];
+                    foreach ($incoming as $file) {
+                        if (!in_array($file, $existing, true)) {
+                            $existing[] = $file;
+                        }
+                    }
+                    if ($existing !== []) {
+                        $resolved['identityfile'] = $existing;
+                    }
+                    continue;
+                }
+                $resolved[$key] ??= $value;
+            }
+        }
+        return $resolved;
     }
 
     /**
@@ -140,7 +165,11 @@ final class SshConfigParser
     private function makeEndpoint(string $hostPattern, array $options): Endpoint
     {
         $host = $options['hostname'] ?? $hostPattern;
-        $port = isset($options['port']) ? (int) $options['port'] : 22;
+        // parsePort enforces 1-65535 and refuses junk loudly, naming the
+        // host — an ssh_config "Port 99999" must not become a silent 0.
+        $port = isset($options['port'])
+            ? Endpoint::parsePort($hostPattern, $options['port'])
+            : 22;
         $user = $options['user'] ?? null;
 
         $identityFiles = [];

@@ -127,7 +127,9 @@ CONF;
         try {
             $endpoints = Config::importFromSshConfig($tmp);
             $this->assertCount(1, $endpoints);
-            $this->assertSame('localuser', $endpoints[0]->user);
+            // ssh_config.5 first-obtained-value: the `Host *` written BEFORE
+            // the specific block keeps User, exactly as ssh(1) would.
+            $this->assertSame('globaluser', $endpoints[0]->user);
             $this->assertSame([getenv('HOME') . '/.ssh/global'], $endpoints[0]->identityFiles);
         } finally {
             unlink($tmp);

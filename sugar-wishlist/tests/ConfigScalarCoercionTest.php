@@ -107,17 +107,43 @@ YAML;
         $this->assertIsInt($endpoints[0]->port);
     }
 
-    public function testYamlScalarNegativeInteger(): void
+    public function testYamlScalarNegativePortIsRefused(): void
     {
-        // Negative port (unusual but should parse)
+        // -1 is not a TCP port. The old (int)-cast pipeline pinned it as
+        // parsing fine; parsePort refuses out-of-range values by host name.
         $raw = <<<YAML
 - name: negport
   host: test.example.com
   port: -1
 YAML;
-        $endpoints = Config::parse($raw, 'wishlist.yml');
-        $this->assertCount(1, $endpoints);
-        $this->assertSame(-1, $endpoints[0]->port);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('negport');
+        Config::parse($raw, 'wishlist.yml');
+    }
+
+    public function testYamlScalarNonNumericPortIsRefused(): void
+    {
+        // "notanumber" used to coerce silently to port 0 via (int) cast.
+        $raw = <<<YAML
+- name: badport
+  host: test.example.com
+  port: notanumber
+YAML;
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('badport');
+        Config::parse($raw, 'wishlist.yml');
+    }
+
+    public function testYamlScalarOutOfRangePortIsRefused(): void
+    {
+        $raw = <<<YAML
+- name: hugeport
+  host: test.example.com
+  port: 99999999999
+YAML;
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('hugeport');
+        Config::parse($raw, 'wishlist.yml');
     }
 
     public function testYamlScalarTrueBoolean(): void

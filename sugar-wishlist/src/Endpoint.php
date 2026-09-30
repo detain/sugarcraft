@@ -17,8 +17,15 @@ use SugarCraft\Core\Concerns\Mutable;
 final class Endpoint
 {
     use Mutable;
+
+    /** Inclusive valid TCP port range for ssh(1) `-p`. */
+    public const MIN_PORT = 1;
+    public const MAX_PORT = 65535;
+
     /**
      * @param array<string> $identityFiles
+     *
+     * @throws \RuntimeException when $port is outside {@see MIN_PORT}-{@see MAX_PORT}
      */
     public function __construct(
         public readonly string        $name,
@@ -30,7 +37,51 @@ final class Endpoint
         public readonly ?string      $proxyJump = null,
         /** @var list<string> Extra `-o KEY=VALUE` options for ssh */
         public readonly array         $options = [],
-    ) {}
+    ) {
+        self::assertPort($name, $port);
+    }
+
+    /**
+     * Parse+validate a config-supplied port before it reaches the ctor.
+     * Accepts ints and unsigned decimal strings only — booleans, floats and
+     * anything `((int))` would silently mangle ("notanumber" → 0) are
+     * refused by name, not coerced.
+     *
+     * @throws \RuntimeException describing the offending host and value
+     */
+    public static function parsePort(string $host, mixed $raw): int
+    {
+        if (is_int($raw)) {
+            self::assertPort($host, $raw);
+            return $raw;
+        }
+        // Digit-only guard: rejects bool, float, '', '-1', ' 22', '22abc'.
+        if (!is_string($raw) || preg_match('/^\d{1,5}$/', $raw) !== 1) {
+            throw new \RuntimeException(
+                Lang::t('endpoint.port_invalid', [
+                    'host' => $host,
+                    'port' => is_scalar($raw) ? var_export($raw, true) : get_debug_type($raw),
+                ])
+            );
+        }
+        $port = (int) $raw;
+        self::assertPort($host, $port);
+        return $port;
+    }
+
+    /**
+     * @throws \RuntimeException when the port cannot address an ssh(1) peer
+     */
+    private static function assertPort(string $host, int $port): void
+    {
+        if ($port < self::MIN_PORT || $port > self::MAX_PORT) {
+            throw new \RuntimeException(
+                Lang::t('endpoint.port_invalid', ['host' => $host, 'port' => (string) $port])
+            );
+        }
+    }
+
+
 
     /**
      * Build the argv list for `ssh(1)`. The first element is the

@@ -93,7 +93,13 @@ CONF;
         $this->assertSame(22022, $endpoints[0]->port);
     }
 
-    public function testPerHostOverridesGlobal(): void
+    /**
+     * ssh_config.5: "For each parameter, the first obtained value will be
+     * used." A `Host *` written FIRST therefore beats every later specific
+     * block — the wildcard is not subordinate, it merely loses by the
+     * convention of being written last.
+     */
+    public function testWildcardFirstWinsUnderFirstObtainedSemantics(): void
     {
         $raw = <<<CONF
 Host *
@@ -108,9 +114,48 @@ Host specific
 CONF;
         $endpoints = $this->parse($raw);
         $this->assertCount(1, $endpoints);
+        $this->assertSame('globaluser', $endpoints[0]->user);
+        $this->assertSame(22022, $endpoints[0]->port);
+        $this->assertSame([getenv('HOME') . '/.ssh/global_key'], $endpoints[0]->identityFiles);
+        // HostName was never set by the wildcard — the specific block's
+        // value is the first obtained for that parameter.
+        $this->assertSame('specific.example.com', $endpoints[0]->host);
+    }
+
+    /**
+     * The mirror ordering: specific block first keeps its values and the
+     * trailing `Host *` only fills parameters the block never defined.
+     */
+    public function testSpecificBlockFirstWinsOverLaterWildcard(): void
+    {
+        $raw = <<<CONF
+Host specific
+    HostName specific.example.com
+    User specificuser
+    Port 2222
+
+Host *
+    User globaluser
+    Port 22022
+    IdentityFile ~/.ssh/global_key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
         $this->assertSame('specificuser', $endpoints[0]->user);
         $this->assertSame(2222, $endpoints[0]->port);
         $this->assertSame([getenv('HOME') . '/.ssh/global_key'], $endpoints[0]->identityFiles);
+    }
+
+    public function testRepeatedScalarKeywordKeepsFirstValueWithinBlock(): void
+    {
+        $raw = <<<CONF
+Host dup
+    HostName first.example.com
+    HostName second.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('first.example.com', $endpoints[0]->host);
     }
 
     public function testMultipleHosts(): void
@@ -219,11 +264,17 @@ CONF;
         $prod = $endpoints[0]->name === 'prod' ? $endpoints[0] : $endpoints[1];
         $staging = $endpoints[0]->name === 'staging' ? $endpoints[0] : $endpoints[1];
 
-        $this->assertSame([getenv('HOME') . '/.ssh/prod_key'], $prod->identityFiles);
+        // IdentityFile is the documented first-obtained exception: values
+        // ACCUMULATE across matching blocks in file order (ssh tries them
+        // in order), so prod keeps the wildcard default ahead of its own.
+        $this->assertSame(
+            [getenv('HOME') . '/.ssh/default', getenv('HOME') . '/.ssh/prod_key'],
+            $prod->identityFiles
+        );
         $this->assertSame([getenv('HOME') . '/.ssh/default'], $staging->identityFiles);
     }
 
-    public function testProxyJumpOverride(): void
+    public function testProxyJumpWildcardFirstWins(): void
     {
         $raw = <<<CONF
 Host *
@@ -232,6 +283,34 @@ Host *
 Host specific
     HostName specific.example.com
     ProxyJump specific-bastion
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('global-bastion', $endpoints[0]->proxyJump);
+    }
+
+    public function testJunkPortInSshConfigIsRefused(): void
+    {
+        // The parser feeds config ports through Endpoint::parsePort — an
+        // ssh_config "Port notanumber" must fail loudly, not (int)-cast to 0.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('badhost');
+        $this->parse(<<<CONF
+Host badhost
+    HostName bad.example.com
+    Port notanumber
+CONF);
+    }
+
+    public function testProxyJumpSpecificFirstWinsOverLaterWildcard(): void
+    {
+        $raw = <<<CONF
+Host specific
+    HostName specific.example.com
+    ProxyJump specific-bastion
+
+Host *
+    ProxyJump global-bastion
 CONF;
         $endpoints = $this->parse($raw);
         $this->assertCount(1, $endpoints);

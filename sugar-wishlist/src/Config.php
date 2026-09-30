@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Wishlist;
 
 use SugarCraft\Core\Util\Json;
-use SugarCraft\Wishlist\Lang;
 
 /**
  * Loads a wishlist directory from disk.
@@ -249,7 +248,9 @@ final class Config
         return new Endpoint(
             name:         (string) $row['name'],
             host:         (string) $row['host'],
-            port:         isset($row['port']) ? (int) $row['port'] : 22,
+            // parsePort (not a bare (int) cast) refuses "notanumber"→0,
+            // -1 and out-of-range values loudly, naming the host.
+            port:         isset($row['port']) ? Endpoint::parsePort((string) $row['name'], $row['port']) : 22,
             user:         isset($row['user']) ? (string) $row['user'] : null,
             identityFiles: $identityFiles,
             description:  isset($row['description']) ? (string) $row['description'] : null,

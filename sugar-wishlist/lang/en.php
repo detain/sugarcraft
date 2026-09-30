@@ -21,6 +21,7 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
+    'endpoint.port_invalid'     => 'wishlist endpoint [{host}]: invalid port [{port}] — must be an integer from 1 to 65535',
 
     // bin/wishlist
     'cli.usage'         => 'Usage: wishlist [--config <path>] [--ssh <ssh-binary>]',
