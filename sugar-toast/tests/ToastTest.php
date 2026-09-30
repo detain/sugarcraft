@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast\Tests;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Toast\{Alert, Position, SymbolSet, Toast, ToastType};
 use PHPUnit\Framework\TestCase;
 
@@ -179,7 +180,25 @@ final class ToastTest extends TestCase
         $bg = \str_repeat("line\n", 10);
         $result = $t->View($bg, 80, 10);
 
-        $this->assertStringContainsString('bottom right', $result);
+        // Audit M3/M4 (was a contains-string pin that stayed green while the
+        // box emitted BELOW the viewport at column 0): one 3-row toast on a
+        // 10-row frame sits with its base flush at the last row (top row 7)
+        // and its right edge flush at x = 80 − 50 = 30.
+        $rows = \explode("\n", $result);
+        if ($rows !== [] && \end($rows) === '') {
+            unset($rows[\count($rows) - 1]);
+            $rows = \array_values($rows);
+        }
+        $this->assertCount(10, $rows, 'a bottom toast must never grow the frame past the viewport');
+
+        $clean = \array_map(static fn (string $row): string => \rtrim(Ansi::strip($row), ' '), $rows);
+        $left = 'line' . \str_repeat(' ', 26);
+        $this->assertSame($left . '╭' . \str_repeat('─', 48) . '╮', $clean[7]);
+        $this->assertStringContainsString('bottom right', $clean[8]);
+        $this->assertSame($left . '╰' . \str_repeat('─', 48) . '╯', $clean[9]);
+        for ($row = 0; $row <= 6; $row++) {
+            $this->assertSame('line', $clean[$row], "row {$row} must stay untouched background");
+        }
     }
 
     public function testWordWrapLongMessage(): void

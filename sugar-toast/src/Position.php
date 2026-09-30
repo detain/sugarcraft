@@ -36,23 +36,29 @@ enum Position
     /**
      * Compute the Y offset in a viewport of given dimensions.
      *
-     * @param int $alertHeight  Number of lines the alert takes
+     * @param int $alertHeight  Number of lines this alert takes
      * @param int $viewportHeight  Total viewport height
-     * @param int $totalAlertLines  Total height of all stacked alerts at this position
+     * @param int $stackedHeightBefore  Cumulative height of the alerts placed
+     *                                  BEFORE this one: top families stack
+     *                                  downward from it, while bottom and
+     *                                  middle families stack UPWARD against
+     *                                  it (each further alert rides one box
+     *                                  higher, clamped to row 0 on short
+     *                                  viewports).
      */
-    public function yOffset(int $alertHeight, int $viewportHeight, int $totalAlertLines = 0): int
+    public function yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int
     {
         return match ($this) {
             self::TopLeft, self::TopCenter, self::TopRight
-                => $totalAlertLines,
+                => $stackedHeightBefore,
             // WHY: candy-buffer clamps negative y but the silent disappearance
             // (toast rendering at negative y = clipped) is the real defect.
             // Pinning to top edge (y=0) makes the toast visible rather than
             // vanishing when the viewport is too short for the requested stack.
             self::BottomLeft, self::BottomCenter, self::BottomRight
-                => \max(0, $viewportHeight - $alertHeight - $totalAlertLines),
+                => \max(0, $viewportHeight - $alertHeight - $stackedHeightBefore),
             self::MiddleLeft, self::MiddleCenter, self::MiddleRight
-                => \max(0, (int) \floor(($viewportHeight - $alertHeight) / 2) - $totalAlertLines),
+                => \max(0, (int) \floor(($viewportHeight - $alertHeight) / 2) - $stackedHeightBefore),
         };
     }
 }

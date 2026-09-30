@@ -477,47 +477,46 @@ final class Toast
         $bgLines = $this->splitLines($background);
         $bgRowCount = \count($bgLines);
 
-        // WHY: Bottom/Middle yOffset depends on the total height. We must
-        // decide the canonical height BEFORE computing any yOffset so both
-        // the sizing pass and placement pass agree on the same coordinate
-        // system. The viewport must be at least as tall as the background
-        // and the caller's viewportHeight.
-        $h = max($bgRowCount, $viewportHeight);
-
-        $cumulativeHeight = 0;
-        $lastAlertY = 0;
-        $lastAlertHeight = 0;
+        // Layout ONCE (audit M3): each box is rendered straight to its Buffer
+        // and its height feeds both the frame growth and the placement pass,
+        // so the two passes can no longer disagree about the coordinate
+        // system — the old sizing pass handed yOffset() the PREVIOUS
+        // cumulative height minus the alert height, which pushed every
+        // bottom-anchored toast below the emitted frame.
+        $boxes = [];
+        $stackHeight = 0;
         foreach ($active as $alert) {
-            $alertStr = $this->renderAlert($alert);
-            $alertLines = $this->splitLines($alertStr);
-            $alertHeight = \count($alertLines);
-            $lastAlertY = $this->position->yOffset($alertHeight, $h, $cumulativeHeight - $alertHeight);
-            $lastAlertHeight = $alertHeight;
-            $cumulativeHeight += $alertHeight;
+            $box = $this->renderAlertToBuffer($alert, $viewportWidth);
+            $boxes[] = $box;
+            $stackHeight += $box->height();
         }
 
-        // Use the canonical height as the base, growing only if alerts
-        // extend beyond it. Bottom/Middle anchored to this larger height
-        // will only move further down/center — no need to re-derive.
-        $contentHeight = max($h, $lastAlertY + $lastAlertHeight);
+        // The frame is the VIEWPORT canvas, not the box width (audit C2):
+        // every background column survives; only the alert box is capped at
+        // maxWidth (via renderAlert's $capWidth), and top-stacked alerts may
+        // grow the frame downward.
+        $frameWidth = max(1, $viewportWidth);
+        $contentHeight = max(max($bgRowCount, $viewportHeight), $stackHeight);
 
-        $contentWidth = min($this->maxWidth, $viewportWidth);
-
-        $viewport = Buffer::new($contentWidth, $contentHeight);
+        $viewport = Buffer::new($frameWidth, $contentHeight);
         $viewport = $this->fillViewportFromString($viewport, $bgLines);
 
-        $cumulativeHeight = 0;
-        foreach ($active as $alert) {
-            $alertBuf = $this->renderAlertToBuffer($alert, $contentWidth);
-            $alertHeight = $alertBuf->height();
-            $alertWidth = $alertBuf->width();
+        // xOffset()/yOffset() contract: the extra argument is the cumulative
+        // height of the boxes placed BEFORE this one (top families stack
+        // downward from it, bottom/middle stack upward against it), and the
+        // box's REAL width is passed to xOffset so centre/right offsets become
+        // non-zero — the old code always measured the full-canvas buffer,
+        // collapsing xOffset to 0 and making 6 of the 9 positions identical
+        // (audit M4). The region spans exactly the box, so nothing right of a
+        // narrow box is overwritten with blanks (audit M5).
+        $stackedBefore = 0;
+        foreach ($boxes as $box) {
+            $x = max(0, $this->position->xOffset($box->width(), $frameWidth));
+            $y = max(0, $this->position->yOffset($box->height(), $contentHeight, $stackedBefore));
 
-            $x = $this->position->xOffset($alertWidth, $contentWidth);
-            $y = $this->position->yOffset($alertHeight, $contentHeight, $cumulativeHeight);
-
-            $region = new Region(BufferPosition::new($x, $y), $alertWidth, $alertHeight);
-            $viewport = $viewport->withRegion($region, $alertBuf);
-            $cumulativeHeight += $alertHeight;
+            $region = new Region(BufferPosition::new($x, $y), $box->width(), $box->height());
+            $viewport = $viewport->withRegion($region, $box);
+            $stackedBefore += $box->height();
         }
 
         return $viewport->toAnsi();
@@ -539,12 +538,19 @@ final class Toast
     // Internal
     // -------------------------------------------------------------------------
 
-    private function renderAlert(Alert $alert): string
+    /**
+     * Lay out one alert as its bordered box string.
+     *
+     * @param int $capWidth Hard ceiling from the render canvas (the viewport
+     *                      width) — the box can never outgrow what it is
+     *                      drawn on, even when maxWidth is larger.
+     */
+    private function renderAlert(Alert $alert, int $capWidth): string
     {
         // Finding 10 / Item 3.1: null message renders as empty string — the
         // width probe must coalesce too, or Width::string(null) fatals on a
         // strict_types path before the `?? ''` guard further down ever runs.
-        $width = $this->resolveWidth(Width::string($alert->message ?? ''));
+        $width = $this->resolveWidth(Width::string($alert->message ?? ''), $capWidth);
         $icon  = $alert->type->icon($this->symbols);
         $color = $alert->type->color();
 
@@ -593,24 +599,27 @@ final class Toast
     }
 
     /**
-     * Render an alert into a Buffer.
+     * Render an alert into a Buffer sized to exactly its box.
      *
      * Parses the ANSI-encoded string from renderAlert() to extract SGR
      * sequences and builds cells with proper Buffer Style objects, so
      * toAnsi() produces correct styled output. Mirrors charmbracelet/bubbleup's
      * alert rendering pipeline.
      *
-     * @param int $clampedWidth Pre-clamped width (min(maxWidth, viewportWidth)) to avoid
-     *                          negative xOffset when maxWidth > viewportWidth.
+     * @param int $capWidth Ceiling from the render canvas (min of maxWidth is
+     *                      applied inside resolveWidth); the returned buffer's
+     *                      width equals the box's own cell width — never the
+     *                      canvas — so View() blits precisely the box (audit M5).
      */
-    private function renderAlertToBuffer(Alert $alert, int $clampedWidth): Buffer
+    private function renderAlertToBuffer(Alert $alert, int $capWidth): Buffer
     {
-        $alertStr = $this->renderAlert($alert);
+        $alertStr = $this->renderAlert($alert, $capWidth);
         $lines = $this->splitLines($alertStr);
 
         $height = \count($lines);
+        $boxWidth = max(1, Width::string($lines[0] ?? ''));
 
-        $buf = Buffer::new($clampedWidth, $height);
+        $buf = Buffer::new($boxWidth, $height);
         for ($row = 0; $row < $height; $row++) {
             $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
         }
@@ -721,7 +730,11 @@ final class Toast
                     }
                 }
                 $seq = \substr($s, $i + 2, $j - $i - 3);
-                $currentStyle = $this->sgrToBufferStyle($seq);
+                // Cumulative fold (audit M7): a sequence mutates only the
+                // facets it names — styles survive across sequences on the
+                // same run of cells, and a candy-buffer-emitted `\e[0;…m`
+                // preamble resets then rebuilds instead of erasing everything.
+                $currentStyle = $this->applySgr($currentStyle, $seq);
                 $i = $j;
                 continue;
             }
@@ -773,30 +786,161 @@ final class Toast
     }
 
     /**
-     * Convert ANSI SGR color code (e.g. "31" or "1;32") to a Buffer Style.
-     * SGR "0" means reset all attributes, returning null.
+     * Convert an ANSI SGR parameter list (e.g. "31" or "1;32") into a Buffer
+     * Style from a clean slate. SGR "0" resets everything, returning null.
+     *
+     * Thin single-sequence wrapper over {@see applySgr()} — kept as the
+     * historical entry point the renderer tests cite.
      */
     private function sgrToBufferStyle(string $sgr): ?Style
     {
-        $codes = \explode(';', $sgr);
-        foreach ($codes as $code) {
-            if ((int) $code === 0) {
-                return null;
+        return $this->applySgr(null, $sgr);
+    }
+
+    /**
+     * Fold one SGR parameter list onto an existing style with terminal-facet
+     * semantics (audit M7): every code mutates only the facet it names.
+     *
+     * The old decoder REPLACED the whole style per sequence and understood
+     * only fg-16/bold/reset, so 256-colour (`38;5;n`), truecolour
+     * (`38;2;r;g;b`), backgrounds and the underline/reverse/dim/overline
+     * family were silently dropped — and `38;2;10;20;30` even mis-parsed its
+     * payload as a palette index, painting text black. Supported now:
+     * 1-9/53 on, 22-29/55 off, 30-37/90-97/39 foreground, 40-47/100-107/49
+     * background, 38/48 extended colours (index 5 → candy-core's canonical
+     * xterm-256 table, index 2 → packed truecolor). An empty parameter list
+     * means SGR 0 (reset) per spec; a malformed extended-colour payload stops
+     * the walk fail-soft like a real terminal, and unknown codes are skipped
+     * without disturbing the state.
+     */
+    private function applySgr(?Style $base, string $sgr): ?Style
+    {
+        // explode(';', '') yields [''] → intval 0 → the spec's implicit reset.
+        $params = \array_map('intval', \explode(';', $sgr));
+        $count = \count($params);
+
+        $fg = $base?->fg();
+        $bg = $base?->bg();
+        $attrs = $base?->attrs() ?? 0;
+
+        for ($k = 0; $k < $count; $k++) {
+            $code = $params[$k];
+
+            if ($code === 38 || $code === 48) {
+                $rgb = $this->readExtendedColor($params, $k);
+                if ($rgb === null) {
+                    break; // malformed payload — stop consuming, like a terminal
+                }
+                if ($code === 38) {
+                    $fg = $rgb;
+                } else {
+                    $bg = $rgb;
+                }
+                continue;
             }
-        }
-        $fg = null;
-        $attrs = 0;
-        foreach ($codes as $code) {
-            $code = (int) $code;
-            if ($code >= 30 && $code <= 37) {
-                $fg = $this->ansiColorToRgb($code - 30, false);
-            } elseif ($code >= 90 && $code <= 97) {
-                $fg = $this->ansiColorToRgb($code - 90, true);
+
+            if ($code === 0) {
+                $fg = null;
+                $bg = null;
+                $attrs = 0;
             } elseif ($code === 1) {
                 $attrs |= Style::ATTR_BOLD;
+            } elseif ($code === 2) {
+                $attrs |= Style::ATTR_FAINT;
+            } elseif ($code === 3) {
+                $attrs |= Style::ATTR_ITALIC;
+            } elseif ($code === 4) {
+                $attrs |= Style::ATTR_UNDERLINE;
+            } elseif ($code === 5) {
+                $attrs |= Style::ATTR_BLINK;
+            } elseif ($code === 7) {
+                $attrs |= Style::ATTR_REVERSE;
+            } elseif ($code === 8) {
+                $attrs |= Style::ATTR_INVISIBLE;
+            } elseif ($code === 9) {
+                $attrs |= Style::ATTR_STRIKE;
+            } elseif ($code === 53) {
+                $attrs |= Style::ATTR_OVERLINE;
+            } elseif ($code === 22) {
+                $attrs &= ~(Style::ATTR_BOLD | Style::ATTR_FAINT);
+            } elseif ($code === 23) {
+                $attrs &= ~Style::ATTR_ITALIC;
+            } elseif ($code === 24) {
+                $attrs &= ~Style::ATTR_UNDERLINE;
+            } elseif ($code === 25) {
+                $attrs &= ~Style::ATTR_BLINK;
+            } elseif ($code === 27) {
+                $attrs &= ~Style::ATTR_REVERSE;
+            } elseif ($code === 28) {
+                $attrs &= ~Style::ATTR_INVISIBLE;
+            } elseif ($code === 29) {
+                $attrs &= ~Style::ATTR_STRIKE;
+            } elseif ($code === 55) {
+                $attrs &= ~Style::ATTR_OVERLINE;
+            } elseif ($code >= 30 && $code <= 37) {
+                $fg = $this->ansiColorToRgb($code - 30, false);
+            } elseif ($code === 39) {
+                $fg = null;
+            } elseif ($code >= 40 && $code <= 47) {
+                $bg = $this->ansiColorToRgb($code - 40, false);
+            } elseif ($code === 49) {
+                $bg = null;
+            } elseif ($code >= 90 && $code <= 97) {
+                $fg = $this->ansiColorToRgb($code - 90, true);
+            } elseif ($code >= 100 && $code <= 107) {
+                $bg = $this->ansiColorToRgb($code - 100, true);
             }
+            // unknown code: skipped without disturbing the state
         }
-        return new Style($fg, null, $attrs);
+
+        if ($fg === null && $bg === null && $attrs === 0) {
+            return null;
+        }
+        return new Style($fg, $bg, $attrs);
+    }
+
+    /**
+     * Decode the `5;n` / `2;r;g;b` payload trailing a 38/48 code at
+     * {@see $k}, advancing $k past every consumed parameter. Returns the
+     * packed 0xRRGGBB int, or null when the payload is missing, has an
+     * unsupported selector, or carries an out-of-range component.
+     *
+     * @param list<int> $params
+     */
+    private function readExtendedColor(array $params, int &$k): ?int
+    {
+        $selector = $params[$k + 1] ?? null;
+        if ($selector === 5) {
+            $idx = $params[$k + 2] ?? null;
+            if ($idx === null || $idx < 0 || $idx > 255) {
+                return null;
+            }
+            $k += 2;
+            return $this->ansi256ToRgb($idx);
+        }
+        if ($selector === 2) {
+            $r = $params[$k + 2] ?? null;
+            $g = $params[$k + 3] ?? null;
+            $b = $params[$k + 4] ?? null;
+            foreach ([$r, $g, $b] as $component) {
+                if ($component === null || $component < 0 || $component > 255) {
+                    return null;
+                }
+            }
+            $k += 4;
+            return ($r << 16) | ($g << 8) | $b;
+        }
+        return null;
+    }
+
+    /**
+     * xterm-256 index → packed RGB via candy-core's canonical table, so the
+     * 16-colour slots can never fork away from {@see ansiColorToRgb()}.
+     */
+    private function ansi256ToRgb(int $idx): int
+    {
+        $color = Color::ansi256($idx);
+        return ($color->r << 16) | ($color->g << 8) | $color->b;
     }
 
     /**
@@ -816,32 +960,23 @@ final class Toast
         return ($r << 16) | ($g << 8) | $b;
     }
 
+    /**
+     * Display width of one grapheme cluster in cells: 0, 1, or 2.
+     *
+     * Delegates to candy-core's canonical {@see Width} oracle (audit M8) — the
+     * old local fork measured emoji (U+1F300+) and other EAW-wide ranges as
+     * 1 cell, desynchronising box padding from every other SugarCraft
+     * renderer (a padded row then overflowed its own border by one cell).
+     * Two grid-specific divergences stay deliberate and documented: a TAB
+     * occupies ONE spacer cell (Width charges E69's TAB_WIDTH = 4, which a
+     * fixed cell grid cannot represent), and the result is clamped into the
+     * Cell contract's 0–2 so a multi-cell cluster can never blow the grid.
+     */
     private function graphemeWidth(string $g): int
     {
         if ($g === '') return 0;
-        $cp = \function_exists('mb_ord') ? \mb_ord($g, 'UTF-8') : \ord($g[0]);
-        if ($cp === false || $cp === 0) return 0;
-        // ASCII control chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) → 0
-        if (($cp <= 0x08) || ($cp >= 0x0E && $cp <= 0x1F) || ($cp === 0x7F)) {
-            return 0;
-        }
-        // Zero-width combining marks
-        if (($cp >= 0x0300 && $cp <= 0x036F)
-            || ($cp >= 0x0483 && $cp <= 0x0489)
-            || ($cp >= 0x200b && $cp <= 0x200f)
-            || ($cp >= 0x2028 && $cp <= 0x2029)
-            || ($cp >= 0x2060 && $cp <= 0x2064)
-            || ($cp === 0xfeff)) {
-            return 0;
-        }
-        // Wide East-Asian chars → 2
-        if (($cp >= 0x1100 && $cp <= 0x115f)
-            || ($cp >= 0x3040 && $cp <= 0xfe6f)
-            || ($cp >= 0xff00 && $cp <= 0xff60)
-            || ($cp >= 0x20000 && $cp <= 0x2fffd)) {
-            return 2;
-        }
-        return 1;
+        if ($g === "\t") return 1;
+        return (int) \min(2, \max(0, Width::string($g)));
     }
 
     /**
@@ -865,10 +1000,16 @@ final class Toast
         return '│' . $bar . '│';
     }
 
-    private function resolveWidth(int $messageLen): int
+    /**
+     * Box width for a message of $messageLen display cells, capped by BOTH
+     * maxWidth and the render canvas ($capWidth) — a box may never exceed the
+     * frame it is blitted onto (audit C2).
+     */
+    private function resolveWidth(int $messageLen, int $capWidth): int
     {
+        $cap = max(1, min($this->maxWidth, $capWidth));
         if ($this->minWidth <= 0) {
-            return $this->maxWidth;
+            return $cap;
         }
         // WHY: NerdFont/Unicode icons are 1 display cell; ASCII "[E]" is 3 cells.
         // The +1 accounts for the trailing space after the icon in renderAlert().
@@ -877,7 +1018,7 @@ final class Toast
             default => 1,
         } + 1;
         $needed = $messageLen + $iconSpace + 4;  // + borders + padding
-        return \max($this->minWidth, \min($needed, $this->maxWidth));
+        return max(1, min($cap, max($this->minWidth, min($needed, $this->maxWidth))));
     }
 
     private function wordWrap(string $text, int $width): array

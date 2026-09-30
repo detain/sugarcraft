@@ -34,8 +34,9 @@ final class ToastBorderTest extends TestCase
     private function topBorder(array $rows): string
     {
         foreach ($rows as $r) {
-            if (\str_starts_with(\ltrim($r), '╭')) {
-                return \ltrim($r);
+            $clean = \rtrim(Ansi::strip($r), ' ');
+            if (\str_starts_with($clean, '╭')) {
+                return $clean;
             }
         }
         $this->fail('No top border line found in rendered output.');
@@ -44,8 +45,9 @@ final class ToastBorderTest extends TestCase
     private function bottomBorder(array $rows): string
     {
         foreach ($rows as $r) {
-            if (\str_starts_with(\ltrim($r), '╰')) {
-                return \ltrim($r);
+            $clean = \rtrim(Ansi::strip($r), ' ');
+            if (\str_starts_with($clean, '╰')) {
+                return $clean;
             }
         }
         $this->fail('No bottom border line found in rendered output.');
@@ -121,8 +123,11 @@ final class ToastBorderTest extends TestCase
         }
         $this->assertNotNull($header, 'Header row not found.');
 
-        // After stripping ANSI the row is │ ... │ at exactly $width cells.
-        $clean = Ansi::strip($header);
+        // After stripping ANSI the row is │ ... │ at exactly $width cells;
+        // audit C2 makes the composited row canvas-wide (80 cells), so the
+        // trailing background padding right of the box is cut before the
+        // border assertions run.
+        $clean = \rtrim(Ansi::strip($header), ' ');
         $this->assertStringStartsWith('│', $clean);
         $this->assertStringEndsWith('│', $clean);
         $this->assertSame($width, Width::string($clean));
@@ -145,7 +150,7 @@ final class ToastBorderTest extends TestCase
         // Every row inside the box that carries a border edge keeps the
         // right '│' flush at the box column.
         foreach ($rows as $r) {
-            $clean = Ansi::strip(\ltrim($r));
+            $clean = \rtrim(Ansi::strip(\ltrim($r)), ' ');
             if (\str_starts_with($clean, '│') && \str_ends_with($clean, '│')) {
                 $this->assertSame($width, Width::string($clean), 'Body row width drifted: ' . $clean);
             }
@@ -181,6 +186,10 @@ final class ToastBorderTest extends TestCase
     {
         // Two stacked toasts at TopLeft must not overlap; an overlap left
         // stale trailing SGR resets harvested past the right border.
+        // Audit C2 makes the frame canvas-wide, so "nothing past the border"
+        // now means: no BOX GLYPHS past the box column — the cell exactly
+        // right of each body row's '│' must be blank canvas, and each body
+        // row must carry precisely its two border bars.
         $t = Toast::new(50)
             ->withPosition(Position::TopLeft)
             ->info('first toast')
@@ -189,11 +198,17 @@ final class ToastBorderTest extends TestCase
         $rows = $this->rows($t->View(\str_repeat("line\n", 20), 80, 20));
 
         foreach ($rows as $r) {
-            $clean = Ansi::strip(\ltrim($r));
+            $clean = Ansi::strip($r);
             if (\str_starts_with($clean, '│')) {
-                // A '│ … │' body row must end with '│' — nothing (visible or
-                // ANSI) leaks beyond it.
-                $this->assertStringEndsWith('│', $clean, 'Body row leaked content past border: ' . $clean);
+                $box = \rtrim($clean, ' ');
+                $this->assertStringEndsWith('│', $box, 'Body row leaked content past border: ' . $box);
+                $this->assertSame(50, Width::string($box), 'Body row box width drifted: ' . $box);
+                $this->assertSame(2, \substr_count($box, '│'), 'Stray border glyph inside canvas: ' . $box);
+                $this->assertSame(
+                    ' ',
+                    \substr($clean, \strlen($box), 1),
+                    'Canvas right of the box is not blank on a body row',
+                );
             }
         }
     }
