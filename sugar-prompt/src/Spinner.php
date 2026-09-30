@@ -6,8 +6,8 @@ namespace SugarCraft\Prompt;
 
 use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
 use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\TtyDetect;
-use SugarCraft\Prompt\Support\BoundedReaper;
 
 /**
  * Blocking "loading" prompt with a spinner. Mirrors huh's
@@ -212,11 +212,13 @@ final class Spinner
             $prevSigintHandler = pcntl_signal_get_handler(SIGINT);
             $prevSigtermHandler = pcntl_signal_get_handler(SIGTERM);
             pcntl_signal(SIGINT, function (int $signo) use ($pid, $isTty) {
-                // E711: bounded TERM→KILL ladder, never an unflagged wait —
-                // the child is free to ignore the SIGTERM this used to hand
-                // its fate to, and this handler is the parent's LAST chance
-                // to guarantee it does not outlive the spin.
-                BoundedReaper::escalatePid($pid);
+                // E711: the canonical bounded TERM→KILL ladder, never an
+                // unflagged wait — the child is free to ignore the SIGTERM
+                // this used to hand its fate to, and this handler is the
+                // parent's LAST chance to guarantee it does not outlive the
+                // spin. (Round-95 folded the per-lib BoundedReaper copy onto
+                // candy-core BoundedShutdown, the sugar-reel precedent.)
+                BoundedShutdown::terminatePidBounded($pid);
                 if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
@@ -227,7 +229,7 @@ final class Spinner
             });
             pcntl_signal(SIGTERM, function (int $signo) use ($pid, $isTty) {
                 // E711: same bounded ladder as the SIGINT arm above.
-                BoundedReaper::escalatePid($pid);
+                BoundedShutdown::terminatePidBounded($pid);
                 if ($isTty === TRUE) {
                     fwrite(STDERR, "\r\x1b[2K");
                 }
@@ -242,7 +244,7 @@ final class Spinner
         // child through the same bounded ladder the signal handlers use.
         $deadlineAt = microtime(true) + $this->maxRuntimeSeconds;
         $ceilingExpired = false;
-        $ceilingStatus = null;
+        $ceilingGone = false;
         while (true) {
             $glyph = $this->style->frames[$frame % count($this->style->frames)];
             if ($isTty === TRUE) {
@@ -261,7 +263,7 @@ final class Spinner
             }
             if (microtime(true) >= $deadlineAt) {
                 $ceilingExpired = true;
-                $ceilingStatus = BoundedReaper::escalatePid($pid);
+                $ceilingGone = BoundedShutdown::terminatePidBounded($pid);
                 break;
             }
             $frame++;
@@ -281,10 +283,10 @@ final class Spinner
         }
         if ($ceilingExpired === TRUE) {
             // E711: the action outlived its bound; the ladder already ran.
-            // A null status means even SIGKILL could not be delivered
+            // A false answer means even SIGKILL could not be delivered
             // (no ext-POSIX) or could not land (uninterruptible wait) —
             // the honest report is "abandoned", never a silent success.
-            if ($ceilingStatus === null) {
+            if ($ceilingGone === FALSE) {
                 throw new \RuntimeException('Spinner action exceeded its ' . $this->maxRuntimeSeconds . 's lifetime bound and could not be terminated (child abandoned, pid ' . $pid . ')');
             }
             throw new \RuntimeException('Spinner action exceeded its ' . $this->maxRuntimeSeconds . 's lifetime bound and was terminated');
