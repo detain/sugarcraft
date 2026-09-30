@@ -13,8 +13,9 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  * ({@see SmithWatermanMatcher}). candy-lister historically shipped a
  * bit-identical copy of the Smith-Waterman scorer; the DP core now lives in
  * candy-fuzzy, and the default {@see ScoringProfile} is bit-equivalent to the
- * classic constants, so scores and rankings are preserved byte-for-byte for
- * inputs within candy-fuzzy's DoS length caps.
+ * classic constants, so scores and rankings are preserved for inputs within
+ * candy-fuzzy's DoS length caps — apart from the per-codepoint case-fold
+ * deviations candy-fuzzy's CharFold now applies deliberately (see score()).
  *
  * The public API (constructor, withProfile(), score(), match()) is unchanged.
  * match() keeps candy-lister's own \Stringable-item contract and input-order
@@ -55,9 +56,13 @@ final class FuzzyMatch
      *
      * Only considers alignments where the query characters appear in ORDER
      * within the candidate (not necessarily contiguously). Delegates to the
-     * candy-fuzzy SSOT; case folding is locale-independent Unicode
-     * (mb_strtolower UTF-8) and the result matches candy-lister's historical
-     * scorer byte-for-byte.
+     * candy-fuzzy SSOT; case folding is per code point (CharFold: each code
+     * point lowercases individually and compares whole-element, keeping the
+     * fold 1:1 with the original string), so scores match candy-lister's
+     * historical whole-string mb_strtolower scorer on every input except the
+     * expansion/context-sensitive folds (U+0130, final sigma) where the old
+     * byte-for-byte match desynced match indices — there the deviation is
+     * intentional; see candy-fuzzy's CharFold contract.
      *
      * @param string $query     The search query (needle)
      * @param string $candidate The candidate string to score
