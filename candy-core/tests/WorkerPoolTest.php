@@ -44,7 +44,18 @@ final class WorkerPoolTest extends TestCase
         $pool = new WorkerPool($this->loop, 2);
         $promise = $pool->dispatch('pi');
         $this->assertInstanceOf(\React\Promise\PromiseInterface::class, $promise);
+
+        // stop() rejects every unsettled job (E716). Handle that rejection
+        // here: a discarded rejected promise dumps an unhandled-rejection
+        // stack trace over an otherwise green suite.
+        $rejected = null;
+        $promise->catch(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
         $pool->stop();
+
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertStringContainsString('Worker pool stopped before job 1 completed', $rejected->getMessage());
     }
 
     public function testPoolResolvesPromiseWithResult(): void

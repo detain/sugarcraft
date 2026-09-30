@@ -195,9 +195,19 @@ final class Program
      * Exposed for use by test utilities (e.g. ProgramSimulator) that need
      * to inspect or manipulate the model without using Reflection.
      */
-    public function getModel(): Model
+    public function model(): Model
     {
         return $this->model;
+    }
+
+    /**
+     * @deprecated since the bare-accessor naming sweep — use {@see model()}.
+     *             Kept as a delegating alias because candy-testing's
+     *             ProgramSimulator still calls this name across the monorepo.
+     */
+    public function getModel(): Model
+    {
+        return $this->model();
     }
 
     /**
@@ -801,6 +811,68 @@ final class Program
         return $lastResort;
     }
 
+    /**
+     * Read two capture pipes concurrently until both reach EOF.
+     *
+     * WHY NOT SEQUENTIALLY: each kernel pipe holds ~64 KiB. Reading stdout to
+     * EOF first deadlocks the moment the child also overflows stderr — stdout
+     * never sees EOF because the child is parked writing stderr, and stderr
+     * is never drained because the parent is parked reading stdout (audit
+     * 2026-09-30). Interleaving through stream_select keeps both buffers
+     * moving regardless of how much either stream carries.
+     *
+     * Non-blocking + a 1s select tick mirrors the writeOutput() short-write
+     * loop's shape: select failure (signal interrupt) abandons draining with
+     * what came through rather than looping blindly.
+     *
+     * @param  resource|null $stdoutPipe
+     * @param  resource|null $stderrPipe
+     * @return array{0: string, 1: string} captured [stdout, stderr]
+     */
+    private static function drainCapturedPipes($stdoutPipe, $stderrPipe): array
+    {
+        $stdout = '';
+        $stderr = '';
+        /** @var array<int, resource> $open */
+        $open = [];
+        foreach ([$stdoutPipe, $stderrPipe] as $pipe) {
+            if (is_resource($pipe)) {
+                @stream_set_blocking($pipe, false);
+                $open[(int) $pipe] = $pipe; // resource ids are unique among live streams
+            }
+        }
+
+        while ($open !== []) {
+            $read = $open;
+            $write = $except = null;
+            if (@stream_select($read, $write, $except, 1) === false) {
+                break;
+            }
+            foreach ($read as $stream) {
+                $chunk = fread($stream, 65536);
+                if ($chunk !== false && $chunk !== '') {
+                    if ($stream === $stdoutPipe) {
+                        $stdout .= $chunk;
+                    } else {
+                        $stderr .= $chunk;
+                    }
+                    continue;
+                }
+                if (feof($stream)) {
+                    unset($open[(int) $stream]);
+                }
+            }
+        }
+
+        foreach ([$stdoutPipe, $stderrPipe] as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+
+        return [$stdout, $stderr];
+    }
+
     private function runExec(ExecRequest $req): void
     {
         $this->teardownTerminal();
@@ -855,14 +927,7 @@ final class Program
                 ]));
             }
             if ($req->captureOutput === true) {
-                $stdout = is_resource($pipes[1]) === true ? (string) stream_get_contents($pipes[1]) : '';
-                $stderr = is_resource($pipes[2]) === true ? (string) stream_get_contents($pipes[2]) : '';
-                if (is_resource($pipes[1])) {
-                    fclose($pipes[1]);
-                }
-                if (is_resource($pipes[2])) {
-                    fclose($pipes[2]);
-                }
+                [$stdout, $stderr] = self::drainCapturedPipes($pipes[1] ?? null, $pipes[2] ?? null);
             }
             $exit = proc_close($proc);
         } catch (\Throwable $t) {

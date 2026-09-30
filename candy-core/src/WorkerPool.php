@@ -143,6 +143,12 @@ final class WorkerPool
         foreach ($pending as $jobId => $deferred) {
             $deferred->reject(new \RuntimeException("Worker pool stopped before job {$jobId} completed"));
         }
+
+        // A later dispatch() must flow through start() again to re-arm the tick
+        // timer. Leaving $started true resurrected workers whose stdout was
+        // never polled — jobs ran, promises never settled, and the child was
+        // reaped only whenever the next stop/destruct came along (audit 2026-09-30).
+        $this->started = false;
     }
 
     private function start(): void
@@ -242,7 +248,11 @@ final class WorkerPool
             }
         }
 
-        if ($result->error === null && $this->hasQueuedJob()) {
+        // Reconcile the queue on ANY completion — error or success. The worker
+        // is free either way, and nothing else pairs idle workers with queued
+        // jobs: tick() only polls stdout, so gating the hand-off on success
+        // stalled everything queued behind a failing job forever (audit 2026-09-30).
+        if ($this->hasQueuedJob()) {
             [$nextJobId, $nextTask] = array_shift($this->queue);
             $this->sendToWorker($worker, $nextJobId, $nextTask);
         } else {

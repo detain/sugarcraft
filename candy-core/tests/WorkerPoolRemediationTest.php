@@ -101,6 +101,83 @@ final class WorkerPoolRemediationTest extends TestCase
         $pool->stop();
     }
 
+    /**
+     * Audit 2026-09-30: an ERRORED completion must still reconcile the queue. Previously
+     * resolveJob() only handed the next queued job to the worker when the
+     * completion carried no error, so one failing job stalled everything
+     * queued behind it — nothing else pairs idle workers with queued jobs
+     * (tick() only polls stdout).
+     */
+    public function testQueuedJobIsHandedOffAfterAnErroredCompletion(): void
+    {
+        $pool = new WorkerPool($this->loop, 1);
+
+        // Job A fails inside the worker (concurrency 1, so the worker is busy).
+        $pool->dispatch('this_function_does_not_exist_anywhere')
+            ->catch(static function (): void {
+            });
+
+        // Job B queues behind A and must run the moment A's worker frees up.
+        $resolved = null;
+        $pool->dispatch('php_sapi_name')
+            ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
+                $resolved = $msg;
+                $this->loop->stop();
+            })
+            ->catch(function (\Throwable $e): void {
+                $this->loop->stop();
+                $this->fail('queued job rejected: ' . $e->getMessage());
+            });
+
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('queued job stalled behind an errored completion');
+        });
+
+        $this->loop->run();
+
+        $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
+        $this->assertSame('cli', $resolved->result);
+        $pool->stop();
+    }
+
+    /**
+     * Audit 2026-09-30: stop() must clear the started flag. Previously a later dispatch()
+     * skipped start() (no tick timer re-armed) yet still spawned a worker and
+     * wrote the job to its stdin — the child ran, its stdout was never polled,
+     * and the promise could never settle: a resurrected pool that only looks
+     * alive.
+     */
+    public function testDispatchAfterStopRestartsThePool(): void
+    {
+        $pool = new WorkerPool($this->loop, 1);
+        $pool->dispatch('php_sapi_name')->catch(static function (): void {
+        });
+        $pool->stop();
+
+        $resolved = null;
+        $pool->dispatch('php_sapi_name')
+            ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
+                $resolved = $msg;
+                $this->loop->stop();
+            })
+            ->catch(function (\Throwable $e): void {
+                $this->loop->stop();
+                $this->fail('post-stop dispatch rejected: ' . $e->getMessage());
+            });
+
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('post-stop dispatch never settled — the tick timer was not re-armed');
+        });
+
+        $this->loop->run();
+
+        $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
+        $this->assertSame('cli', $resolved->result);
+        $pool->stop();
+    }
+
     private function waitForResult(\React\Promise\PromiseInterface $promise): WorkerResultMsg
     {
         $result = null;
