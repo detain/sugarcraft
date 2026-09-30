@@ -6,10 +6,12 @@ namespace SugarCraft\Tetris\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\TickRequest;
 use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
+use SugarCraft\Tetris\LockDelayMsg;
 use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Score;
 use SugarCraft\Tetris\Tetromino;
@@ -20,6 +22,51 @@ final class GameTest extends TestCase
     private function deterministicGame(): Game
     {
         return Game::start(new Bag(static fn(int $_max): int => 0));
+    }
+
+    /** @return array<int, array<int, ?Tetromino>> */
+    private function emptyGrid(): array
+    {
+        $grid = [];
+        for ($row = 0; $row < Board::ROWS; $row++) {
+            $grid[$row] = array_fill(0, Board::COLS, null);
+        }
+        return $grid;
+    }
+
+    /**
+     * A T-Spin Double slot: a T piece rotating into (5,14) rotation 1 finds
+     * all four bounding corners filled — (5,13), (8,13), (5,17) and (8,17) —
+     * and the row-17 fill (cols 5-7) grounds the piece exactly at y=14.
+     *
+     * @return array<int, array<int, ?Tetromino>>
+     */
+    private function tspinSlotGrid(): array
+    {
+        $rows = $this->emptyGrid();
+        foreach ([5, 6, 7] as $col) {
+            $rows[17][$col] = Tetromino::I;
+        }
+        $rows[13][5] = Tetromino::I;
+        $rows[13][8] = Tetromino::I;
+        $rows[17][8] = Tetromino::I;
+        return $rows;
+    }
+
+    private function key(string $which): KeyMsg
+    {
+        return match ($which) {
+            'left' => new KeyMsg(KeyType::Left, ''),
+            'right' => new KeyMsg(KeyType::Right, ''),
+            'down' => new KeyMsg(KeyType::Down, ''),
+            'up' => new KeyMsg(KeyType::Up, ''),
+            default => new KeyMsg(KeyType::Char, $which),
+        };
+    }
+
+    private function gravity(): GravityMsg
+    {
+        return new GravityMsg();
     }
 
     public function testStartSpawnsFirstPiece(): void
@@ -37,10 +84,18 @@ final class GameTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
+    public function testStartArmsTheGravityChainOnce(): void
+    {
+        // The singleton guard: start() declares the chain in flight so no
+        // input path can stack a second gravity tick on top of init()'s.
+        $g = $this->deterministicGame();
+        $this->assertTrue($g->gravityPending);
+    }
+
     public function testQuitKeyDispatchesQuit(): void
     {
         $g = $this->deterministicGame();
-        [, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
+        [, $cmd] = $g->update($this->key('q'));
         $this->assertInstanceOf(\Closure::class, $cmd, 'q must dispatch a quit Cmd');
     }
 
@@ -48,7 +103,7 @@ final class GameTest extends TestCase
     {
         $g = $this->deterministicGame();
         $startX = $g->piece->x;
-        [$next] = $g->update(new KeyMsg(KeyType::Left, ''));
+        [$next] = $g->update($this->key('left'));
         $this->assertSame($startX - 1, $next->piece->x);
     }
 
@@ -56,7 +111,7 @@ final class GameTest extends TestCase
     {
         $g = $this->deterministicGame();
         $startX = $g->piece->x;
-        [$next] = $g->update(new KeyMsg(KeyType::Right, ''));
+        [$next] = $g->update($this->key('right'));
         $this->assertSame($startX + 1, $next->piece->x);
     }
 
@@ -64,7 +119,7 @@ final class GameTest extends TestCase
     {
         $g = $this->deterministicGame();
         $startRot = $g->piece->rotation;
-        [$next] = $g->update(new KeyMsg(KeyType::Up, ''));
+        [$next] = $g->update($this->key('up'));
         $this->assertSame(($startRot + 1) % 4, $next->piece->rotation);
     }
 
@@ -72,46 +127,46 @@ final class GameTest extends TestCase
     {
         $g = $this->deterministicGame();
         $startY = $g->piece->y;
-        [$next, $cmd] = $g->update(new GravityMsg());
+        [$next, $cmd] = $g->update($this->gravity());
         $this->assertSame($startY + 1, $next->piece->y);
         $this->assertInstanceOf(\Closure::class, $cmd, 'gravity must reschedule the next tick');
     }
 
-    public function testHardDropDispatchesNextTick(): void
+    public function testHardDropDoesNotStackGravityTickWhilePending(): void
     {
+        // CRIT regression (audit finding 1): the old hardDrop re-armed
+        // gravity even though init()'s tick was still in flight, permanently
+        // adding one timer per drop. The pending-singleton guard means the
+        // lock reuses the tick already scheduled — Cmd must come back null.
         $g = $this->deterministicGame();
-        [$next, $cmd] = $g->update(new KeyMsg(KeyType::Char, ' '));
-        // Piece locked + new piece spawned. Next-tick Cmd reschedules gravity.
-        $this->assertNotSame($g->piece, $next->piece);
-        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertTrue($g->gravityPending, 'start() leaves one tick in flight');
+        [$next, $cmd] = $g->update($this->key(' '));
+        $this->assertNotSame($g->piece, $next->piece, 'piece locked + new piece spawned');
+        $this->assertNull($cmd, 'a pending gravity tick must not be double-armed');
+        $this->assertTrue($next->gravityPending, 'the guard keeps the chain alive exactly once');
     }
 
     public function testPauseTogglesAndIgnoresMovementUntilUnpaused(): void
     {
         $g = $this->deterministicGame();
-        [$paused] = $g->update(new KeyMsg(KeyType::Char, 'p'));
+        [$paused] = $g->update($this->key('p'));
         $this->assertTrue($paused->paused);
 
         $startX = $paused->piece->x;
-        [$stillPaused] = $paused->update(new KeyMsg(KeyType::Left, ''));
+        [$stillPaused] = $paused->update($this->key('left'));
         $this->assertSame($startX, $stillPaused->piece->x, 'paused game ignores movement');
 
-        [$resumed] = $paused->update(new KeyMsg(KeyType::Char, 'p'));
+        [$resumed] = $paused->update($this->key('p'));
         $this->assertFalse($resumed->paused);
     }
 
     public function testGameOverOnlyHonorsQuit(): void
     {
-        // Force game-over by hand: build a Game with over=true.
         $g = $this->deterministicGame();
-        $over = new Game(
-            $g->board, $g->piece, $g->bag, $g->score,
-            over: true,
-            preLockRotation: $g->preLockRotation,
-        );
-        [$samePiece1] = $over->update(new KeyMsg(KeyType::Left, ''));
+        $over = $g->mutate(['over' => true]);
+        [$samePiece1] = $over->update($this->key('left'));
         $this->assertSame($over->piece, $samePiece1->piece);
-        [, $cmd] = $over->update(new KeyMsg(KeyType::Char, 'q'));
+        [, $cmd] = $over->update($this->key('q'));
         $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
@@ -138,13 +193,19 @@ final class GameTest extends TestCase
         $this->assertSame(1.5, Game::B2B_MULTIPLIER);
     }
 
+    public function testDefaultLockDelayConstants(): void
+    {
+        $this->assertSame(500, Game::DEFAULT_LOCK_DELAY_MS);
+        $this->assertSame(15, Game::LOCK_DELAY_RESET_CAP);
+    }
+
     public function testHoldKeyStoresPieceInHold(): void
     {
         $g = $this->deterministicGame();
         $this->assertNull($g->hold);
         $this->assertTrue($g->canHold);
 
-        [$next] = $g->update(new KeyMsg(KeyType::Char, 'c'));
+        [$next] = $g->update($this->key('c'));
 
         // After holding, the piece should be stored and a new piece spawned
         $this->assertNotNull($next->hold);
@@ -154,13 +215,13 @@ final class GameTest extends TestCase
 
     public function testHoldKeySwapWithExistingHold(): void
     {
-        // Create a game with lock delay to allow piece to be held twice
+        // Create a game with lock delay (500 ms) to allow piece to be held twice
         // Bag order with rand=0 is: O, T, S, Z, J, L, I
-        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 100);
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500);
         $this->assertSame(Tetromino::O, $g->piece->kind, 'First piece should be O');
 
         // First hold: piece O goes to hold, new piece T spawns
-        [$withHold] = $g->update(new KeyMsg(KeyType::Char, 'c'));
+        [$withHold] = $g->update($this->key('c'));
         $this->assertNotNull($withHold->hold);
         $this->assertSame(Tetromino::O, $withHold->hold, 'Held should be O');
         $this->assertSame(Tetromino::T, $withHold->piece->kind, 'Current piece should be T');
@@ -168,12 +229,12 @@ final class GameTest extends TestCase
 
         // Hard drop to lock the piece and re-enable hold
         // After lock, new piece S spawns (third from bag)
-        [$dropped] = $withHold->update(new KeyMsg(KeyType::Char, ' '));
+        [$dropped] = $withHold->update($this->key(' '));
         $this->assertTrue($dropped->canHold, 'Hold should be re-enabled after lock');
         $this->assertSame(Tetromino::S, $dropped->piece->kind, 'New piece after hard drop should be S');
 
         // Second hold: piece S goes to hold, held piece O spawns
-        [$swapped] = $dropped->update(new KeyMsg(KeyType::Char, 'c'));
+        [$swapped] = $dropped->update($this->key('c'));
         $this->assertSame(Tetromino::O, $swapped->piece->kind, 'Should swap to held piece O');
         $this->assertSame(Tetromino::S, $swapped->hold, 'Current piece S should now be held');
         $this->assertFalse($swapped->canHold);
@@ -182,118 +243,277 @@ final class GameTest extends TestCase
     public function testHoldDisabledAfterHoldUntilLock(): void
     {
         $g = $this->deterministicGame();
-        [$held] = $g->update(new KeyMsg(KeyType::Char, 'c'));
+        [$held] = $g->update($this->key('c'));
         $this->assertFalse($held->canHold);
 
         // Trying to hold again should not change anything
-        [$stillSame] = $held->update(new KeyMsg(KeyType::Char, 'c'));
+        [$stillSame] = $held->update($this->key('c'));
         $this->assertSame($held->piece, $stillSame->piece);
     }
 
-    public function testLockDelayPreventsImmediateLock(): void
+    public function testHoldIgnoredWhilePaused(): void
     {
-        // Start with lock delay of 3 ticks
-        // Hard drop should lock immediately (no lock delay on hard drop)
-        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 3);
-        $this->assertSame(3, $g->lockDelayTicks);
-
-        // Hard drop - should lock immediately, not wait for lock delay
-        [$dropped] = $g->update(new KeyMsg(KeyType::Char, ' '));
-        $this->assertNotSame($g->piece, $dropped->piece, 'Piece should have changed after hard drop');
-        // Hard drop bypasses lock delay
+        // MAJ(5): 'c' used to mutate BEFORE the pause guard ran.
+        $g = $this->deterministicGame();
+        [$paused] = $g->update($this->key('p'));
+        [$afterC] = $paused->update($this->key('c'));
+        $this->assertSame($paused->piece, $afterC->piece, 'paused hold must not swap the piece');
+        $this->assertNull($afterC->hold);
+        $this->assertTrue($afterC->canHold);
     }
 
-    public function testLockDelayCountsDownOnBottom(): void
+    public function testFirstHoldTopsOutWhenReplacementSpawnIsBlocked(): void
     {
-        // Start with lock delay of 2 ticks
-        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 2);
-        $this->assertSame(2, $g->lockDelayTicks);
-
-        // Manually set piece at bottom and call gravity until lock
-        // We need to call gravity repeatedly to trigger the lock delay countdown
-        $game = $g;
-        $lockDelaySeen = false;
-
-        // Simulate piece falling to bottom then gravity ticks counting down
-        for ($i = 0; $i < 30 && $lockDelaySeen === false; $i++) {
-            [$next] = $game->update(new GravityMsg());
-            if ($next->lockDelayTicks < $game->lockDelayTicks) {
-                $lockDelaySeen = true;
+        // MED(5): the empty-hold branch used to spawn with no fits() check.
+        // Fill the spawn zone (cols 3-5, rows 0-1) so the replacement O cannot
+        // fit — the hold must top out instead of silently spawning inside junk.
+        $rows = $this->emptyGrid();
+        for ($row = 0; $row < 2; $row++) {
+            foreach ([3, 4, 5] as $col) {
+                $rows[$row][$col] = Tetromino::I;
             }
-            $game = $next;
-            if ($next->over === true) break;
+        }
+        $g = $this->deterministicGame()
+            ->mutate(['board' => new Board($rows), 'piece' => new Piece(Tetromino::T, 0, 5, 15)]);
+        $this->assertFalse($g->over);
+        [$result] = $g->update($this->key('c'));
+        $this->assertTrue($result->over, 'holding into a blocked spawn zone must top out');
+        $this->assertNotNull($result->hold, 'the current piece is still recorded as held');
+    }
+
+    // ------------------------------------------------------------------
+    // Lock delay — real-time window (audit finding 8 half 1)
+    // ------------------------------------------------------------------
+
+    public function testLockDelayWindowOpensInsteadOfLockingOnGround(): void
+    {
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]); // grounded: cells on floor row 23
+        $this->assertSame(500, $g->lockDelayMs);
+
+        [$waiting, $cmd] = $g->update($this->gravity());
+        $this->assertSame($g->piece, $waiting->piece, 'a grounded piece with delay armed must wait');
+        $this->assertIsInt($waiting->lockWindowGeneration);
+        $this->assertFalse($waiting->gravityPending, 'the gravity chain parks while the window owns timing');
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $req = $cmd();
+        $this->assertInstanceOf(TickRequest::class, $req);
+        $this->assertSame(0.5, $req->seconds, 'the window is 500 ms of real time');
+        $produced = ($req->produce)();
+        $this->assertInstanceOf(LockDelayMsg::class, $produced);
+        $this->assertSame($waiting->lockWindowGeneration, $produced->generation);
+
+        [$locked, $rearm] = $waiting->update($produced);
+        $this->assertNotSame($waiting->piece, $locked->piece, 'the matching generation locks the piece');
+        $this->assertNull($locked->lockWindowGeneration, 'locking closes the window');
+        $this->assertTrue($locked->gravityPending, 'the lock re-arms the parked gravity chain');
+        $this->assertInstanceOf(\Closure::class, $rearm);
+    }
+
+    public function testLockDelayWindowIsRealTimeNotGravityUnits(): void
+    {
+        // MED(8): the old countdown ticked in GRAVITY units — 15 ticks was
+        // ~12 s at level 0 and ~50 ms at max speed. The window is now fixed
+        // wall-clock milliseconds regardless of gravity interval.
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]);
+        [$waiting, $cmd] = $g->update($this->gravity());
+        $req = $cmd();
+
+        $gravitySeconds = $waiting->score->gravityIntervalUs() / 1e6; // 0.800016 at level 0
+        $this->assertSame(800016, $waiting->score->gravityIntervalUs());
+        $this->assertSame(0.5, $req->seconds);
+        $this->assertLessThan($gravitySeconds, $req->seconds, 'lock window must not scale with gravity speed');
+    }
+
+    public function testMovementResetsLockDelayWindow(): void
+    {
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]);
+        [$waiting, $firstCmd] = $g->update($this->gravity());
+        $this->assertNotNull($firstCmd, 'grounding opens the window');
+        $gen1 = $waiting->lockWindowGeneration;
+
+        [$afterLeft, $leftCmd] = $waiting->update($this->key('left'));
+        $this->assertNotNull($leftCmd, 'a grounded successful move re-arms the full window');
+        $this->assertSame($gen1 + 1, $afterLeft->lockWindowGeneration);
+        $this->assertSame(1, $afterLeft->lockResets);
+
+        [$afterRight, $rightCmd] = $afterLeft->update($this->key('right'));
+        $this->assertNotNull($rightCmd);
+        $this->assertSame($gen1 + 2, $afterRight->lockWindowGeneration);
+        $this->assertSame(2, $afterRight->lockResets);
+    }
+
+    public function testLockDelayResetCapForcesLock(): void
+    {
+        // MED(8) infinity-spin cap: after 15 grounded resets no further input
+        // re-arms — the live window generation locks the piece.
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]);
+        [$state, $cmd] = $g->update($this->gravity());
+        $liveGen = $state->lockWindowGeneration;
+
+        $sequence = ['left', 'right']; // T at x 3↔2: every input is a grounded success
+        $nullsAfterCap = 0;
+        for ($i = 0; $i < 17; $i++) {
+            [$state, $cmd] = $state->update($this->key($sequence[$i % 2]));
+            if ($cmd === null) {
+                $nullsAfterCap++;
+            } else {
+                $liveGen = $state->lockWindowGeneration;
+            }
         }
 
-        $this->assertTrue($lockDelaySeen, 'Lock delay should decrement when piece is at bottom');
+        $this->assertSame(Game::LOCK_DELAY_RESET_CAP, $state->lockResets, 'reset budget clamps at 15');
+        $this->assertSame(2, $nullsAfterCap, 'inputs 16 and 17 return no new timer');
+        $this->assertSame(16, $liveGen, 'generation stopped advancing at the cap');
+
+        [$locked] = $state->update(new LockDelayMsg($liveGen));
+        $this->assertNotSame($state->piece, $locked->piece, 'the live window generation locks the piece');
     }
 
-    public function testMovementResetsLockDelay(): void
+    public function testAirborneInputClosesTheLockWindow(): void
     {
-        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 2);
-
-        // Move piece to bottom by hard drop (which preserves lock delay setting but doesn't trigger it)
-        // Actually, let's just verify the initial state and that hard drop works
-        $this->assertSame(2, $g->lockDelayTicks);
-
-        // Hard drop should lock piece and start fresh with new piece
-        [$dropped] = $g->update(new KeyMsg(KeyType::Char, ' '));
-        $this->assertNotSame($g->piece, $dropped->piece);
+        // Moving off a surface cancels the armed window; the still-queued
+        // stale LockDelayMsg is then inert (next test) and gravity resumes.
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['lockWindowGeneration' => 7, 'lockGeneration' => 7]); // spawn O is airborne at y=0
+        [$moved, $cmd] = $g->update($this->key('left'));
+        $this->assertNull($moved->lockWindowGeneration, 'floating off the surface closes the window');
+        $this->assertNull($cmd, 'gravity is still pending from start — no duplicate arm');
     }
+
+    public function testStaleLockDelayGenerationIsInert(): void
+    {
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]);
+        [$waiting, $cmd] = $g->update($this->gravity());
+        $this->assertNotNull($cmd);
+
+        [$same, $sameCmd] = $waiting->update(new LockDelayMsg(999));
+        $this->assertSame($waiting->piece, $same->piece, 'a stale generation must not lock the piece');
+        $this->assertNull($sameCmd);
+    }
+
+    public function testLockDelayWindowSurvivesPause(): void
+    {
+        // Paused mid-window: the pending timer extends by one full window
+        // instead of locking a frozen game out from under the player.
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 22)]);
+        [$waiting, $cmd] = $g->update($this->gravity());
+        $gen = $waiting->lockWindowGeneration;
+        [$paused] = $waiting->update($this->key('p'));
+
+        [$extended, $again] = $paused->update(new LockDelayMsg($gen));
+        $this->assertInstanceOf(\Closure::class, $again, 'a paused window re-arms, it never locks');
+        $this->assertSame($paused->piece, $extended->piece);
+        $this->assertSame($gen, $extended->lockWindowGeneration);
+    }
+
+    // ------------------------------------------------------------------
+    // Garbage rows — bottom-insert, content rides up (audit finding 6)
+    // ------------------------------------------------------------------
 
     public function testAddGarbageShiftsExistingRowsUp(): void
     {
-        // Create a game and manually place a row of blocks on the board
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
-        $rows = $g->board->rows();
-        // Place a complete row near the bottom (row 20, second-to-last visible row).
-        // With ROWS=24 and HIDDEN_ROWS=2, visible rows are 0-21. Row 20 is visible.
-        // After adding 1 garbage row, it shifts to row 21 (last visible row).
+        // MED(6): garbage now enters at the BOTTOM and lifts existing content
+        // up — the test name has finally become true. A full row at 20 rides
+        // to 19; the garbage fills row 23 with a hole at column 3.
+        $rows = $this->emptyGrid();
         for ($col = 0; $col < Board::COLS; $col++) {
             $rows[20][$col] = Tetromino::I;
         }
-        $boardWithRow = new Board($rows);
-        $gWithRow = $g->mutate(['board' => $boardWithRow]);
+        $g = $this->deterministicGame()->mutate(['board' => new Board($rows)]);
 
-        // Add 1 garbage row
-        $result = $gWithRow->addGarbageRows(1, static fn(int $_max): int => 3);
+        $result = $g->addGarbageRows(1, static fn(int $_max): int => 3);
         $resultRows = $result->board->rows();
 
-        // The previously placed row should now be at row 21 (shifted up by 1)
-        $this->assertNotNull($resultRows[21][0], 'Original row should be shifted up to row 21');
-        // The garbage row (row 0) should have a hole at column 3
-        $this->assertNull($resultRows[0][3], 'Garbage row should have a hole at column 3');
+        $this->assertCount(Board::ROWS, $resultRows, 'row count is preserved — nothing is destroyed');
+        foreach ($resultRows[19] as $cell) {
+            $this->assertNotNull($cell, 'the previously placed row must be lifted to row 19');
+        }
+        $this->assertNull($resultRows[23][3], 'the garbage row carries its hole at column 3');
+        $this->assertSame(1, count(array_filter($resultRows[23], static fn($c) => $c === null)));
+    }
+
+    public function testAddGarbageLiftsTheActivePiece(): void
+    {
+        // An airborne piece rides the lift; a piece that cannot be lifted
+        // (spawn row would leave the board) keeps its place instead.
+        $rows = $this->emptyGrid();
+        for ($col = 0; $col < Board::COLS; $col++) {
+            $rows[20][$col] = Tetromino::I;
+        }
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::I, 1, 0, 10),
+        ]);
+
+        $lifted = $g->addGarbageRows(1, static fn(int $_max): int => 3);
+        $this->assertSame(9, $lifted->piece->y, 'an airborne piece rides the garbage lift up one row');
+
+        $spawned = $this->deterministicGame()->mutate(['board' => new Board($g->board->rows())])
+            ->addGarbageRows(1, static fn(int $_max): int => 3);
+        $this->assertSame(0, $spawned->piece->y, 'a piece already at the ceiling keeps its row');
+        $this->assertFalse($spawned->over);
+    }
+
+    public function testAddGarbageNeverDestroysBottomRows(): void
+    {
+        // The old top-insert silently deleted the bottom rows. Under the
+        // lift design the bottom two full rows survive, pushed up one.
+        $rows = $this->emptyGrid();
+        for ($col = 0; $col < Board::COLS; $col++) {
+            $rows[Board::ROWS - 2][$col] = Tetromino::I;
+            $rows[Board::ROWS - 1][$col] = Tetromino::I;
+        }
+        $g = $this->deterministicGame()->mutate(['board' => new Board($rows)]);
+
+        $result = $g->addGarbageRows(1, static fn(int $_max): int => 3);
+        $resultRows = $result->board->rows();
+
+        foreach ([Board::ROWS - 3, Board::ROWS - 2] as $row) {
+            foreach ($resultRows[$row] as $cell) {
+                $this->assertNotNull($cell, "content row survived the lift at row {$row}");
+            }
+        }
+        $this->assertFalse($result->over);
     }
 
     public function testAddGarbageInsertsOneHolePerRow(): void
     {
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         // Use deterministic rand that returns 2 for the hole position
         $result = $g->addGarbageRows(2, static fn(int $_max): int => 2);
         $rows = $result->board->rows();
 
-        // Each garbage row should have exactly one null (the hole)
-        for ($r = 0; $r < 2; $r++) {
+        // Each garbage row sits at the BOTTOM with exactly one hole.
+        for ($b = Board::ROWS - 2; $b < Board::ROWS; $b++) {
             $holeCount = 0;
             $filledCount = 0;
-            foreach ($rows[$r] as $col => $cell) {
+            foreach ($rows[$b] as $col => $cell) {
                 if ($cell === null) {
                     $holeCount++;
-                    $this->assertSame(2, $col, "Hole should be at column 2 for row $r");
+                    $this->assertSame(2, $col, "Hole should be at column 2 for row $b");
                 } else {
                     $filledCount++;
                 }
             }
-            $this->assertSame(1, $holeCount, "Row $r should have exactly one hole");
-            $this->assertSame(Board::COLS - 1, $filledCount, "Row $r should have COLS-1 filled cells");
+            $this->assertSame(1, $holeCount, "Row $b should have exactly one hole");
+            $this->assertSame(Board::COLS - 1, $filledCount, "Row $b should have COLS-1 filled cells");
         }
     }
 
     public function testAddGarbageTopsOutWhenStackOverflows(): void
     {
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $rows = $g->board->rows();
 
-        // Fill rows 0 and 1 (the topmost rows that will be displaced by 2 garbage rows)
+        // Fill rows 0 and 1 (the topmost rows that would be displaced by 2
+        // garbage rows) — the lift has nowhere to put them.
         for ($r = 0; $r < 2; $r++) {
             for ($col = 0; $col < Board::COLS; $col++) {
                 $rows[$r][$col] = Tetromino::I;
@@ -303,15 +523,21 @@ final class GameTest extends TestCase
         $boardWithTopRows = new Board($rows);
         $gWithTopRows = $g->mutate(['board' => $boardWithTopRows]);
 
-        // Adding 2 garbage rows should top-out because rows 0 and 1 have content
         $result = $gWithTopRows->addGarbageRows(2, static fn(int $_max): int => 0);
 
-        $this->assertTrue($result->over, 'Adding garbage when top rows are filled should set over=true');
+        $this->assertTrue($result->over, 'garbage that would push content off the ceiling tops out');
+        $this->assertSame($boardWithTopRows, $result->board, 'the refused garbage leaves the board untouched');
+    }
+
+    public function testAddGarbageThrowsWhenCountTooLarge(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->deterministicGame()->addGarbageRows(Board::ROWS);
     }
 
     public function testAddGarbageZeroOrNegativeCountIsNoOp(): void
     {
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $originalBoard = $g->board;
 
         $resultZero = $g->addGarbageRows(0, static fn(int $_max): int => 0);
@@ -321,44 +547,6 @@ final class GameTest extends TestCase
         $this->assertSame($originalBoard, $resultNeg->board, 'addGarbageRows(-5) should return same board');
     }
 
-    public function testLockDelayReArmsOnMoveWhenGrounded(): void
-    {
-        // Use a simple approach: manually place the piece ON the floor (y where
-        // board->fits returns false for moved(0,1)) and verify re-arm.
-        // Tetromino::I at rotation 0 has cells at y=1 of the bounding box.
-        // With floor at row 23 and I height 1: I at y=22 → cells at row 23 (floor).
-        // So I at y=21 → cells at row 22 (one above floor), first gravity fits.
-        // I at y=22 → cells at row 23 (floor), can't move down → lock delay active.
-        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 2);
-
-        // Place I at y=22 (cells at floor row 23) with lockDelayTicks=1
-        $iAtFloor = new Piece(Tetromino::I, 0, 3, 22);
-        $game = $g->mutate(['piece' => $iAtFloor, 'lockDelayTicks' => 1]);
-        $this->assertSame(1, $game->lockDelayTicks);
-
-        // First gravity tick: piece can't move down, lock delay decrements to 0 → locks
-        [$afterGravity] = $game->update(new GravityMsg());
-        $this->assertSame(0, $afterGravity->lockDelayTicks,
-            'lock delay must decrement when piece is on floor');
-
-        // Now piece is locked. New piece spawns with lockDelayTicks=2.
-        // Move the new piece to y=22 (on floor) and decrement lock delay again.
-        $newPiece = $afterGravity->piece;
-        $pieceOnFloor = new Piece($newPiece->kind, $newPiece->rotation, $newPiece->x, 22);
-        $game2 = $afterGravity->mutate(['piece' => $pieceOnFloor, 'lockDelayTicks' => 1]);
-
-        // Gravity tick while on floor: lock delay decrements from 1 to 0
-        [$afterGravity2] = $game2->update(new GravityMsg());
-        $this->assertSame(0, $afterGravity2->lockDelayTicks,
-            'lock delay must decrement when new piece is on floor');
-
-        // Move the piece (now locked but game not over) with a successful left:
-        // Before fix: lockDelayTicks stays 0. After fix: re-arms to lockDelayMax.
-        [$afterMove] = $afterGravity2->update(new KeyMsg(KeyType::Left, ''));
-        $this->assertSame(2, $afterMove->lockDelayTicks,
-            'successful move while grounded must re-arm lock delay to max');
-    }
-
     public function testHardDropAwardsTwoPointsPerCell(): void
     {
         // Create a fresh game, manually position piece at y=0, then hard drop.
@@ -366,12 +554,12 @@ final class GameTest extends TestCase
         // Tetromino::O at rot 0 (height 2, cells at y=0,1) spawns at y=0.
         // It falls until bottom cell (y+1) hits floor at row 23 → lands at y=22.
         // Fall distance = 22 cells × 2 = 44 points.
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $pieceAtY0 = new Piece(Tetromino::O, 0, 3, 0);
         $game = $g->mutate(['piece' => $pieceAtY0, 'score' => new Score()]);
 
         $startPoints = $game->score->points;
-        [$dropped] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        [$dropped] = $game->update($this->key(' '));
 
         // Score increase = 2 × fall distance. Board is empty so no line-clear bonus.
         // O falls from y=0 to y=22 (floor) = 22 cells → 44 points.
@@ -383,14 +571,14 @@ final class GameTest extends TestCase
     {
         // Create a game and manually set piece at y=0, then soft drop one cell.
         // Verify 1 point is awarded when the move succeeds.
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $pieceAtY0 = new Piece(Tetromino::T, 0, 3, 0);
         $game = $g->mutate(['piece' => $pieceAtY0, 'score' => new Score()]);
 
         $startPoints = $game->score->points;
 
         // Soft drop one cell - piece is at y=0, cell at y=1 is free (empty board)
-        [$dropped] = $game->update(new KeyMsg(KeyType::Down, ''));
+        [$dropped] = $game->update($this->key('down'));
         $this->assertSame(1, $dropped->score->points - $startPoints,
             'Soft drop must award 1 point per cell successfully moved');
     }
@@ -402,7 +590,7 @@ final class GameTest extends TestCase
         // spawn zone so the *next* piece cannot fit after the current one
         // locks. Fill cols 1-9 of rows 0-1 (col 0 left empty → neither row is
         // full, so nothing clears on lock).
-        $g = Game::start(new Bag(static fn(int $_max): int => 0)); // bag: O, T, ...
+        $g = $this->deterministicGame(); // bag: O, T, ...
         $rows = $g->board->rows();
         for ($r = 0; $r < 2; $r++) {
             for ($col = 1; $col < Board::COLS; $col++) {
@@ -418,7 +606,7 @@ final class GameTest extends TestCase
 
         // Hard drop → lockAndSpawn → next piece (T) spawns into cols 3-5 of
         // rows 0-1 (all filled) → real top-out.
-        [$afterDrop, $cmd] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        [$afterDrop, $cmd] = $game->update($this->key(' '));
         $this->assertTrue($afterDrop->over, 'spawning into a blocked zone must top-out via lockAndSpawn');
         $this->assertNull($cmd, 'a topped-out game schedules no further gravity tick');
     }
@@ -427,7 +615,7 @@ final class GameTest extends TestCase
     {
         // End-to-end: complete a row by dropping a piece and assert the clear
         // propagates to Score (lines + points) via lockAndSpawn.
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $rows = $g->board->rows();
         // Fill the floor row everywhere except cols 1-2 — exactly where an O
         // piece dropped from x=0 lands (O rot0 occupies cols x+1, x+2).
@@ -443,7 +631,7 @@ final class GameTest extends TestCase
         $this->assertSame(0, $game->score->lines);
         $this->assertSame(0, $game->score->points);
 
-        [$after] = $game->update(new KeyMsg(KeyType::Char, ' ')); // hard drop
+        [$after] = $game->update($this->key(' ')); // hard drop
         $this->assertSame(1, $after->score->lines, 'completing the floor row must clear exactly one line');
         $this->assertGreaterThan(0, $after->score->points, 'a line clear must award points');
     }
@@ -454,7 +642,7 @@ final class GameTest extends TestCase
         // (where the naive rotation always fits). Here the naive clockwise
         // rotation of a T collides with a locked block, and only the SRS
         // [-1,0] kick fits → the piece must shift left by one column.
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $rows = $g->board->rows();
         $rows[12][5] = Tetromino::I; // blocks the naive rot-1 cell (5,12) only
         $board = new Board($rows);
@@ -464,8 +652,8 @@ final class GameTest extends TestCase
         // Naive CW rotation (no kick) collides with the block.
         $this->assertFalse($game->board->fits($t->rotated(1)), 'naive CW rotation must collide with the block');
 
-        // Rotate CW through the game: SRS must apply the [-1,0] kick.
-        [$rotated] = $game->update(new KeyMsg(KeyType::Up, ''));
+        // Rotate CW through the game: SRS must apply the [-1,0] wall kick.
+        [$rotated] = $game->update($this->key('up'));
         $this->assertSame(1, $rotated->piece->rotation, 'piece must have rotated clockwise');
         $this->assertSame(3, $rotated->piece->x, 'SRS must apply the [-1,0] wall kick (x: 4 → 3)');
         $this->assertSame(10, $rotated->piece->y, 'the [-1,0] kick must not change y');
@@ -475,7 +663,7 @@ final class GameTest extends TestCase
     public function testComboCounterIncreasesOnConsecutiveClears(): void
     {
         // Build a game with combo=2 and verify it increments on next clear
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $game = $g->mutate(['combo' => 2]);
 
         // Place a piece that will clear a line
@@ -490,35 +678,35 @@ final class GameTest extends TestCase
         $o = new Piece(Tetromino::O, 0, 0, 0);
         $game = $game->mutate(['board' => $board, 'piece' => $o, 'score' => new Score()]);
 
-        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        [$after] = $game->update($this->key(' '));
         $this->assertSame(3, $after->combo, 'Combo should increment from 2 to 3 after a line clear');
     }
 
     public function testComboResetsToZeroOnNoClear(): void
     {
         // Build a game with combo=5
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
         $game = $g->mutate(['combo' => 5]);
 
         // Hard drop without clearing any lines (place piece on empty area)
         $piece = new Piece(Tetromino::I, 0, 0, 0);
         $game = $game->mutate(['piece' => $piece]);
 
-        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        [$after] = $game->update($this->key(' '));
         $this->assertSame(0, $after->combo, 'Combo should reset to 0 when no lines are cleared');
     }
 
     public function testHoldSwapFailsWhenHeldPieceDoesNotFit(): void
     {
         // Create a game where hold is active and hold contains a piece
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
 
         // First hold to put something in hold
-        [$withHold] = $g->update(new KeyMsg(KeyType::Char, 'c'));
+        [$withHold] = $g->update($this->key('c'));
         $this->assertNotNull($withHold->hold);
 
         // Now hard drop and spawn new piece, then fill the board so held piece won't fit
-        [$dropped] = $withHold->update(new KeyMsg(KeyType::Char, ' '));
+        [$dropped] = $withHold->update($this->key(' '));
 
         // Fill the spawn zone (top rows) except one column
         $rows = $dropped->board->rows();
@@ -537,7 +725,7 @@ final class GameTest extends TestCase
 
         // Now hold should swap with held piece, but held piece (O) won't fit in column 0
         // because O needs 2 columns. So the hold swap should fail (return same game).
-        [$result] = $game->update(new KeyMsg(KeyType::Char, 'c'));
+        [$result] = $game->update($this->key('c'));
         $this->assertSame($game->piece, $result->piece, 'Hold swap should fail when held piece cannot fit');
         $this->assertTrue($result->canHold, 'canHold should remain true after failed swap (unchanged state)');
     }
@@ -545,7 +733,7 @@ final class GameTest extends TestCase
     public function testBackToBackAfterTetrisClear(): void
     {
         // Build a game with backToBack=false and clear a Tetris (4 lines)
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        $g = $this->deterministicGame();
 
         // Set up 4 complete rows at the bottom
         $rows = $g->board->rows();
@@ -560,17 +748,19 @@ final class GameTest extends TestCase
         $i = new Piece(Tetromino::I, 0, 0, 0);
         $game = $g->mutate(['board' => $board, 'piece' => $i, 'backToBack' => false]);
 
-        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        [$after] = $game->update($this->key(' '));
         $this->assertTrue($after->backToBack, 'Tetris clear should set backToBack=true');
     }
 
     public function testB2BBonusAppliedOnConsecutiveTetris(): void
     {
-        // Build a game with backToBack=true and clear a Tetris
-        // B2B multiplier should apply
-        $g = Game::start(new Bag(static fn(int $_max): int => 0));
+        // MED(9) de-vacuumed: exact arithmetic instead of "points > 0".
+        // Same Tetris setup as testBackToBackAfterTetrisClear, but B2B is
+        // already armed. The I from (0,0) rests with cells in row 19 (rows
+        // 20-23 pre-filled): 18 cells fallen = 36 drop points.
+        //   base tetris 1200 + b2b extra 1200*0.5=600 + combo 1*10=10 = 1846.
+        $g = $this->deterministicGame();
 
-        // Set up 4 complete rows at the bottom
         $rows = $g->board->rows();
         for ($row = Board::ROWS - 4; $row < Board::ROWS; $row++) {
             for ($col = 0; $col < Board::COLS; $col++) {
@@ -579,20 +769,109 @@ final class GameTest extends TestCase
         }
         $board = new Board($rows);
 
-        // B2B is already active, now clearing a Tetris
         $i = new Piece(Tetromino::I, 0, 0, 0);
         $game = $g->mutate(['board' => $board, 'piece' => $i, 'backToBack' => true]);
 
         $startPoints = $game->score->points;
-        [$after] = $game->update(new KeyMsg(KeyType::Char, ' '));
+        [$after] = $game->update($this->key(' '));
 
-        // With B2B active and Tetris (4 lines), the game should award B2B bonus
-        // Basic Tetris = 1200 * (level+1), with B2B multiplier of 1.5
-        // At minimum, should earn more than the non-B2B base
         $pointsEarned = $after->score->points - $startPoints;
-        // Base Tetris is 1200, with B2B it should be at least 1200 + some bonus
-        $this->assertGreaterThan(0, $pointsEarned, 'Tetris clear should award points');
+        $this->assertSame(1846, $pointsEarned,
+            '36 drop + 1200 base + 600 back-to-back + 10 combo (level 0)');
         $this->assertSame(4, $after->score->lines, 'Should have cleared 4 lines');
+    }
+
+    // ------------------------------------------------------------------
+    // T-Spin semantics — last successful input was a rotation (findings 3/4)
+    // ------------------------------------------------------------------
+
+    public function testRotationFlagTracksSuccessfulInputs(): void
+    {
+        $g = $this->deterministicGame();
+        $this->assertFalse($g->lastActionWasRotation, 'spawn starts with no rotation credit');
+        [$afterUp] = $g->update($this->key('up'));
+        $this->assertTrue($afterUp->lastActionWasRotation, 'a successful rotate arms the spin credit');
+        [$afterMove] = $afterUp->update($this->key('left'));
+        $this->assertFalse($afterMove->lastActionWasRotation, 'a later successful move disarms it');
+    }
+
+    public function testHumanTSpinScoresWhenRotationIsLastInput(): void
+    {
+        // MAJ(3): rotation → settle → lock through the REAL key path. The
+        // piece rotates at (5,12), gravity (not an input) settles it into the
+        // slot at (5,14) rotation 1 with all four corners filled.
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($this->tspinSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 0, 5, 12),
+            'score' => new Score(),
+        ]);
+        [$spun, $cmd] = $g->update($this->key('up'));
+        $this->assertSame(1, $spun->piece->rotation);
+        $this->assertTrue($spun->lastActionWasRotation);
+        $this->assertNull($cmd, 'airborne rotation keeps the pending gravity tick');
+
+        $startPoints = $spun->score->points;
+        $state = $spun;
+        for ($i = 0; $i < 30; $i++) {
+            [$state, $cmd] = $state->update($this->gravity());
+            if ($state->score->points !== $startPoints) {
+                break;
+            }
+        }
+        $this->assertSame(400, $state->score->points - $startPoints, 'a human T-Spin pays 400 at level 0');
+        $this->assertSame(0, $state->score->lines, 'the slot clear check is about the spin, not lines');
+        $this->assertTrue($state->backToBack, 'a full T-Spin arms back-to-back');
+    }
+
+    public function testMoveAfterRotationIsNotATSpin(): void
+    {
+        // Same slot, but the LAST successful input before settling is a move.
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($this->tspinSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 0, 5, 10),
+            'score' => new Score(),
+        ]);
+        [$spun] = $g->update($this->key('up'));
+        [$moved] = $spun->update($this->key('left'));
+        $this->assertFalse($moved->lastActionWasRotation);
+
+        $startPoints = $moved->score->points;
+        $state = $moved;
+        for ($i = 0; $i < 40; $i++) {
+            [$state, $cmd] = $state->update($this->gravity());
+            if ($state->score->points !== $startPoints) {
+                break;
+            }
+        }
+        $this->assertSame(0, $state->score->points - $startPoints, 'move-then-lock never earns T-Spin credit');
+    }
+
+    public function testAiRotateOnlyNeverTSpins(): void
+    {
+        // MAJ(4): the old delta-compare detector credited the AI's
+        // un-synced rotation on an empty floor/wall corner as +400. The flag
+        // is cleared before every AI lock, so the phantom is dead.
+        $g = $this->deterministicGame()->mutate(['score' => new Score()]);
+        $after = $g->applyAiMove(1, 0);
+        $this->assertSame(0, $after->score->points - $g->score->points,
+            'AI placement can never claim a T-Spin through applyAiMove');
+    }
+
+    public function testB2BTSpinRidesTheMultiplier(): void
+    {
+        // MED(7) implemented: README advertises B2B × T-Spin = base × 1.5.
+        // 400 × 1.5 = 600 at level 0 (spin award rides the multiplier; the
+        // T-Spin itself does not re-trigger the line-clear B2B extra term).
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($this->tspinSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 1, 5, 14), // pre-spun, grounded in the slot
+            'backToBack' => true,
+            'lastActionWasRotation' => true,
+            'score' => new Score(),
+        ]);
+        [$locked] = $g->update($this->gravity());
+        $this->assertSame(600, $locked->score->points - $g->score->points,
+            'back-to-back T-Spin = (int)(400 × 1.5) × (level+1)');
     }
 
     public function testViewReturnsRendererOutput(): void

@@ -47,7 +47,7 @@ final class Piece
     /**
      * All possible piece positions after rotation with SRS wall kicks.
      *
-     * Mirrors charmbracelet/bubbletea Tetris — SRS applies a series of
+     * Mirrors Broderick-Westrope/tetrigo rotation intent — SRS applies a series of
      * (dx, dy) offset candidates to the rotated piece and returns every
      * resulting position. Callers (e.g. Game) can test each candidate
      * for board validity and use the first that fits.

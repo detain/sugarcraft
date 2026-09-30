@@ -16,6 +16,27 @@ use PHPUnit\Framework\TestCase;
 
 final class VsGameTest extends TestCase
 {
+    private function key(string $which): KeyMsg
+    {
+        return match ($which) {
+            'left' => new KeyMsg(KeyType::Left, ''),
+            'right' => new KeyMsg(KeyType::Right, ''),
+            'down' => new KeyMsg(KeyType::Down, ''),
+            'up' => new KeyMsg(KeyType::Up, ''),
+            default => new KeyMsg(KeyType::Char, $which),
+        };
+    }
+
+    private function gravity(): GravityMsg
+    {
+        return new GravityMsg();
+    }
+
+    private function deterministicBag(): Bag
+    {
+        return new Bag(static fn(int $_max): int => 0);
+    }
+
     public function testStartCreatesTwoGames(): void
     {
         $vs = VsGame::start();
@@ -37,7 +58,7 @@ final class VsGameTest extends TestCase
     public function testQuitKeyDispatchesQuit(): void
     {
         $vs = VsGame::start();
-        [, $cmd] = $vs->update(new KeyMsg(KeyType::Char, 'q'));
+        [, $cmd] = $vs->update($this->key('q'));
 
         $this->assertInstanceOf(\Closure::class, $cmd, 'q must dispatch a quit Cmd');
     }
@@ -46,7 +67,7 @@ final class VsGameTest extends TestCase
     {
         $vs = VsGame::start();
 
-        [$paused] = $vs->update(new KeyMsg(KeyType::Char, 'p'));
+        [$paused] = $vs->update($this->key('p'));
 
         $this->assertTrue($paused->player->paused);
     }
@@ -56,46 +77,37 @@ final class VsGameTest extends TestCase
         $vs = VsGame::start();
         $playerStartX = $vs->player->piece->x;
 
-        [$next] = $vs->update(new KeyMsg(KeyType::Left, ''));
+        [$next] = $vs->update($this->key('left'));
 
         $this->assertSame($playerStartX - 1, $next->player->piece->x);
     }
 
     public function testGarbageRowPassingWhenPlayerClearsLines(): void
     {
-        // Create a VS game with deterministic bag
+        // MED(9) de-vacuumed: the old test asserted assertNotNull only —
+        // it passed even when zero garbage moved. Now the player genuinely
+        // clears a row through the VS loop and the computer's board is
+        // inspected for the arriving garbage line.
         $vs = VsGame::start();
 
-        // Clear a line on the player side by manipulating the game state
-        // Player clears 1 line, computer should receive garbage
+        // A full bottom row on the player side: the next lock clears it,
+        // which the VS loop converts into one garbage row for the computer.
         $playerWithLine = $this->createGameWithOneLine($vs->player);
-
-        // Simulate player clearing a line (the next update will detect lines cleared)
-        // We need to update to trigger the line clear detection
-        // First, hard drop to clear lines
         $vs = new VsGame($playerWithLine, $vs->computer);
 
-        // Manually set up a scenario where player score has increased
-        $playerWithScore = new Game(
-            $vs->player->board,
-            $vs->player->piece,
-            $vs->player->bag,
-            $vs->player->score->withLines(1), // Player cleared 1 line
-            false,
-            false,
-            $vs->player->hold,
-            $vs->player->canHold,
-            $vs->player->lockDelayTicks,
-        );
+        $computerBoardBefore = $vs->computer->board;
+        [$updated] = $vs->update($this->key(' ')); // hard drop → clear → transfer
 
-        $vs = new VsGame($playerWithScore, $vs->computer);
+        $this->assertSame($playerWithLine->score->lines + 1, $updated->player->score->lines,
+            'the player must really have cleared the line');
+        $this->assertNotSame($computerBoardBefore, $updated->computer->board,
+            'the computer board must change when garbage arrives');
 
-        // Clear player lines by hard drop
-        [$updated] = $vs->update(new KeyMsg(KeyType::Char, ' '));
-
-        // After player clears a line, computer should receive garbage
-        // The exact board state depends on game mechanics
-        $this->assertNotNull($updated);
+        $bottomRow = $updated->computer->board->rows()[Board::ROWS - 1];
+        $nulls = count(array_filter($bottomRow, static fn($c) => $c === null));
+        $filled = count(array_filter($bottomRow, static fn($c) => $c !== null));
+        $this->assertSame(1, $nulls, 'garbage row carries exactly one hole');
+        $this->assertSame(Board::COLS - 1, $filled, 'the rest of the garbage row is filled');
     }
 
     public function testOverStateWhenPlayerGameOver(): void
@@ -103,18 +115,12 @@ final class VsGameTest extends TestCase
         $vs = VsGame::start();
 
         // Set player's game to over
-        $overPlayer = new Game(
-            $vs->player->board,
-            $vs->player->piece,
-            $vs->player->bag,
-            $vs->player->score,
-            over: true,
-        );
+        $overPlayer = $vs->player->mutate(['over' => true]);
 
         $vs = new VsGame($overPlayer, $vs->computer);
 
         // Process a gravity tick to trigger win detection
-        [$result] = $vs->update(new GravityMsg());
+        [$result] = $vs->update($this->gravity());
 
         $this->assertTrue($result->over);
         $this->assertSame('COMPUTER', $result->winner);
@@ -125,18 +131,12 @@ final class VsGameTest extends TestCase
         $vs = VsGame::start();
 
         // Set computer's game to over
-        $overComputer = new Game(
-            $vs->computer->board,
-            $vs->computer->piece,
-            $vs->computer->bag,
-            $vs->computer->score,
-            over: true,
-        );
+        $overComputer = $vs->computer->mutate(['over' => true]);
 
         $vs = new VsGame($vs->player, $overComputer);
 
         // Process a gravity tick to trigger win detection
-        [$result] = $vs->update(new GravityMsg());
+        [$result] = $vs->update($this->gravity());
 
         $this->assertTrue($result->over);
         $this->assertSame('PLAYER', $result->winner);
@@ -148,7 +148,7 @@ final class VsGameTest extends TestCase
         $playerX = $vs->player->piece->x;
 
         // Quit should exit, not just move
-        [$next, $cmd] = $vs->update(new KeyMsg(KeyType::Char, 'q'));
+        [$next, $cmd] = $vs->update($this->key('q'));
 
         $this->assertInstanceOf(\Closure::class, $cmd);
         $this->assertSame($playerX, $next->player->piece->x, 'quit should not move piece');
@@ -165,36 +165,91 @@ final class VsGameTest extends TestCase
 
     public function testBothGamesIndependentUntilOver(): void
     {
-        $vs = VsGame::start();
+        // MED(9) de-vacuumed: the old pin compared a value to itself. Player
+        // input must move the player piece (wall-clamped at x=0) and leave the
+        // computer Game object literally untouched — keys never rebuild it.
+        $vs = new VsGame(Game::start($this->deterministicBag()), Game::start($this->deterministicBag()));
+        $start = $vs;
 
-        // Move player left multiple times
         for ($i = 0; $i < 5; $i++) {
-            [$vs] = $vs->update(new KeyMsg(KeyType::Left, ''));
+            [$vs] = $vs->update($this->key('left'));
         }
 
-        // Computer should still be in initial state or its own state
-        // Player moved left 5 times
-        $this->assertSame($vs->player->piece->x, $vs->player->piece->x);
+        $this->assertSame(-1, $vs->player->piece->x,
+            'the O spawn piece (cols x+1,x+2) clamps at x=-1 against the left wall');
+        $this->assertNotSame($start->player, $vs->player, 'the player side advanced');
+        $this->assertSame($start->computer, $vs->computer,
+            'key-only updates must not rebuild the computer side at all');
     }
 
-    public function testAdvanceComputerOnGravityTick(): void
+    public function testComputerTakesExactlyOneActionPerGravityTick(): void
     {
+        // MAJ(4): the old loop memo-stored the AI decision, dropped the memo
+        // on every mutate, and applied the whole placement (rotate+shift+drop
+        // +lock) in a single tick. The plan now lives in the model and each
+        // gravity tick spends exactly one input.
         $vs = VsGame::start();
+        $initialPiece = $vs->computer->piece;
 
-        // Get initial computer piece
-        $initialComputerPiece = $vs->computer->piece;
+        [$state] = $vs->update($this->gravity());
+        $this->assertTrue($state->hasComputerPlan, 'the first tick records the plan');
+        $this->assertSame($initialPiece, $state->computer->piece,
+            'the decision tick itself moves nothing');
+        $this->assertEmptyBoard($state->computer, 'nothing may lock before the plan is spent');
 
-        // Send multiple gravity ticks to allow computer to make progress
-        for ($i = 0; $i < 20; $i++) {
-            [$vs] = $vs->update(new GravityMsg());
-            if ($vs->over) {
-                break;
-            }
+        $rot = $initialPiece->rotation;
+        $x = $initialPiece->x;
+        $y = $initialPiece->y;
+        for ($i = 0; $i < 8; $i++) {
+            [$next] = $state->update($this->gravity());
+            $p = $next->computer->piece;
+            $dRot = abs($p->rotation - $rot);
+            $dX = abs($p->x - $x);
+            $dY = abs($p->y - $y);
+            $this->assertLessThanOrEqual(1, $dRot, "tick $i may rotate at most once");
+            $this->assertLessThanOrEqual(1, $dX, "tick $i may shift at most one column");
+            $this->assertLessThanOrEqual(1, $dY, "tick $i may drop at most one row");
+            $this->assertFalse(
+                ($dRot > 0) && ($dX > 0 || $dY > 0),
+                "tick $i mixes rotation and translation — one input per tick",
+            );
+            $state = $next;
+            $rot = $p->rotation;
+            $x = $p->x;
+            $y = $p->y;
+            $this->assertEmptyBoard($state->computer, 'the eight move ticks must still not lock');
+        }
+    }
+
+    public function testUpdateIsPureAcrossIdenticalChains(): void
+    {
+        // Determinism is the observable face of the purity fix: two chains
+        // fed the same messages must land on the same state. The old code
+        // wrote memos onto $this inside update() and reset-via-mutate, so
+        // the sequence of states depended on hidden object history.
+        $a = new VsGame(Game::start($this->deterministicBag()), Game::start($this->deterministicBag()));
+        $b = new VsGame(Game::start($this->deterministicBag()), Game::start($this->deterministicBag()));
+
+        for ($i = 0; $i < 6; $i++) {
+            [$a] = $a->update($this->gravity());
+            [$b] = $b->update($this->gravity());
         }
 
-        // Computer should have made some moves (piece may have changed or locked)
-        // We just verify the game continues without error
-        $this->assertNotNull($vs);
+        $this->assertEquals($a->computer->piece, $b->computer->piece);
+        $this->assertEquals($a->computer->board->rows(), $b->computer->board->rows());
+        $this->assertSame($a->hasComputerPlan, $b->hasComputerPlan);
+        $this->assertSame($a->computerRotationsLeft, $b->computerRotationsLeft);
+        $this->assertSame($a->computerShiftLeft, $b->computerShiftLeft);
+    }
+
+    public function testKeyMsgNeverReArmsTheGravityTick(): void
+    {
+        // The chain is gravity-driven: keys must not stack timers on top of
+        // the in-flight tick (same singleton discipline as Game).
+        $vs = new VsGame(Game::start($this->deterministicBag()), Game::start($this->deterministicBag()));
+        [$state, $cmd] = $vs->update($this->key('left'));
+        $this->assertNull($cmd, 'key input schedules nothing');
+        $this->assertTrue($state->player->gravityPending, 'the original tick is still the only one');
     }
 
     public function testPlayerWinnerDetectedWhenComputerOver(): void
@@ -202,18 +257,12 @@ final class VsGameTest extends TestCase
         $vs = VsGame::start();
 
         // Set computer game to over manually
-        $overComputer = new Game(
-            $vs->computer->board,
-            $vs->computer->piece,
-            $vs->computer->bag,
-            $vs->computer->score,
-            over: true,
-        );
+        $overComputer = $vs->computer->mutate(['over' => true]);
 
         $vs = new VsGame($vs->player, $overComputer);
 
         // Process gravity tick which should detect computer is over and set player as winner
-        [$result] = $vs->update(new GravityMsg());
+        [$result] = $vs->update($this->gravity());
 
         $this->assertTrue($result->over);
         $this->assertSame('PLAYER', $result->winner);
@@ -225,18 +274,12 @@ final class VsGameTest extends TestCase
         $vs = VsGame::start();
 
         // Set player game to over
-        $overPlayer = new Game(
-            $vs->player->board,
-            $vs->player->piece,
-            $vs->player->bag,
-            $vs->player->score,
-            over: true,
-        );
+        $overPlayer = $vs->player->mutate(['over' => true]);
 
         $vs = new VsGame($overPlayer, $vs->computer);
 
         // Send a message to trigger the detection
-        [$result] = $vs->update(new GravityMsg());
+        [$result] = $vs->update($this->gravity());
 
         $this->assertTrue($result->over);
         $this->assertSame('COMPUTER', $result->winner);
@@ -245,13 +288,12 @@ final class VsGameTest extends TestCase
 
     public function testQuitWhenOverReturnsQuitCommand(): void
     {
-        $vs = VsGame::start();
         $overVs = new VsGame(
             Game::start(), Game::start(),
             over: true, winner: 'PLAYER'
         );
 
-        [, $cmd] = $overVs->update(new KeyMsg(KeyType::Char, 'q'));
+        [, $cmd] = $overVs->update($this->key('q'));
 
         $this->assertInstanceOf(\Closure::class, $cmd);
     }
@@ -261,18 +303,39 @@ final class VsGameTest extends TestCase
         $vs = VsGame::start();
         $this->assertFalse($vs->player->paused);
 
-        [$paused] = $vs->update(new KeyMsg(KeyType::Char, 'p'));
+        [$paused] = $vs->update($this->key('p'));
         $this->assertTrue($paused->player->paused);
     }
 
     public function testPauseWhenAlreadyPausedKeepsPaused(): void
     {
         $vs = VsGame::start();
-        [$paused] = $vs->update(new KeyMsg(KeyType::Char, 'p'));
+        [$paused] = $vs->update($this->key('p'));
         $this->assertTrue($paused->player->paused);
 
-        [$stillPaused] = $paused->update(new KeyMsg(KeyType::Char, 'p'));
+        [$stillPaused] = $paused->update($this->key('p'));
         $this->assertFalse($stillPaused->player->paused);
+    }
+
+    public function testPausedVsKeepsGravityAliveAndFrozen(): void
+    {
+        $vs = VsGame::start();
+        [$paused] = $vs->update($this->key('p'));
+        $pieceBefore = $paused->player->piece;
+
+        [$held, $cmd] = $paused->update($this->gravity());
+        $this->assertSame($pieceBefore, $held->player->piece, 'gravity does not step a paused player');
+        $this->assertInstanceOf(\Closure::class, $cmd, 'but the chain keeps re-arming while paused');
+        $this->assertSame($paused->computer, $held->computer, 'the computer side stands down while paused');
+    }
+
+    private function assertEmptyBoard(Game $game, string $message): void
+    {
+        foreach ($game->board->rows() as $row) {
+            foreach ($row as $cell) {
+                $this->assertNull($cell, $message);
+            }
+        }
     }
 
     /**
@@ -288,19 +351,6 @@ final class VsGameTest extends TestCase
             $rows[$bottomRow][$col] = Tetromino::I;
         }
 
-        $newBoard = new Board($rows);
-
-        // Create new game with the modified board but same piece
-        return new Game(
-            $newBoard,
-            $game->piece,
-            $game->bag,
-            $game->score,
-            $game->over,
-            $game->paused,
-            $game->hold,
-            $game->canHold,
-            $game->lockDelayTicks,
-        );
+        return $game->mutate(['board' => new Board($rows)]);
     }
 }

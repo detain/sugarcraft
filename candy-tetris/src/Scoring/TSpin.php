@@ -9,13 +9,15 @@ use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Tetromino;
 
 /**
- * T-Spin detector using the "3-corner rule".
+ * T-Spin detector using the guideline rotation rule + corner rule.
  *
- * Mirrors charmbracelet/bubbletea Tetris T-Spin detection.
+ * Mirrors Broderick-Westrope/tetrigo T-Spin scoring intent, tightened to
+ * the SRS guideline: a T-Spin counts iff the piece's LAST SUCCESSFUL
+ * INPUT before lock was a rotation.
  *
  * A T-Spin is active when a T piece is locked AND:
- *   - The piece was rotated before locking (final piece position differs
- *     in rotation from $wasRotated), AND
+ *   - $lastActionWasRotation is true (a slide, soft drop, or hard drop
+ *     into the slot is NOT a spin; gravity steps never clear the flag), AND
  *   - 2 or more of the 4 diagonal "corner" cells around the T are
  *     already filled on the board (wall = filled).
  *
@@ -39,17 +41,18 @@ final class TSpin
      *                        state the T piece fell into, so corners reflect
      *                        already-locked cells)
      * @param Piece $piece    The locked piece position/rotation
-     * @param int   $wasRotated  Rotation index the piece had before the
-     *                           final rotation that led to locking
+     * @param bool  $lastActionWasRotation  Whether the piece's last
+     *                           successful player input before locking was
+     *                           a rotation (the SRS guideline T-Spin gate)
      */
-    public static function detect(Board $board, Piece $piece, int $wasRotated): self
+    public static function detect(Board $board, Piece $piece, bool $lastActionWasRotation): self
     {
         if ($piece->kind !== Tetromino::T) {
             return new self();
         }
 
-        if ($piece->rotation === $wasRotated) {
-            // No rotation occurred → not a spin
+        if ($lastActionWasRotation === false) {
+            // Last input was a move/drop (or none) → not a spin
             return new self();
         }
 

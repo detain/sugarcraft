@@ -9,7 +9,8 @@ use SugarCraft\Tetris\Tetromino;
 /**
  * Official Tetris Association Super Rotation System wall-kick offsets.
  *
- * Mirrors charmbracelet/bubbletea Tetris implementation — see
+ * Mirrors Broderick-Westrope/tetrigo rotation handling — the kick
+ * offsets themselves follow the Super Rotation System, see
  * https://tetris.fandom.com/wiki/SRS
  *
  * Two tables exist:

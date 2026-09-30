@@ -16,26 +16,26 @@ final class TSpinTest extends TestCase
     {
         $board = new Board();
         $piece = new Piece(Tetromino::I, 0, 5, 15);
-        $tspin = TSpin::detect($board, $piece, 0);
+        $tspin = TSpin::detect($board, $piece, false);
         $this->assertFalse($tspin->active);
         $this->assertFalse($tspin->mini);
     }
 
-    public function testNoRotationMeansNoSpin(): void
+    public function testLastInputNotRotationMeansNoSpin(): void
     {
         $board = new Board();
-        // T at rotation 0, no rotation occurred (wasRotated === 0)
+        // T at rotation 0, last input was not a rotation
         $piece = new Piece(Tetromino::T, 0, 5, 15);
-        $tspin = TSpin::detect($board, $piece, 0);
+        $tspin = TSpin::detect($board, $piece, false);
         $this->assertFalse($tspin->active);
     }
 
     public function testTPieceRotatedButCornersNotFilled(): void
     {
         $board = new Board();
-        // T was rotated from 0 to 1, but no corners are filled
+        // last input was a rotation, but no corners are filled
         $piece = new Piece(Tetromino::T, 1, 5, 15);
-        $tspin = TSpin::detect($board, $piece, 0);
+        $tspin = TSpin::detect($board, $piece, true);
         $this->assertFalse($tspin->active);
     }
 
@@ -56,7 +56,7 @@ final class TSpinTest extends TestCase
 
         $board = new Board($rows);
         $piece = new Piece(Tetromino::T, 2, 5, 15);
-        $tspin = TSpin::detect($board, $piece, 0);
+        $tspin = TSpin::detect($board, $piece, true);
         $this->assertTrue($tspin->active);
         $this->assertFalse($tspin->mini, '4 corners = full T-Spin, not mini');
     }
@@ -75,9 +75,9 @@ final class TSpinTest extends TestCase
         // BL and BR are NOT filled → only front corners = mini
 
         $board = new Board($rows);
-        // T at rotation 0, was rotated from rotation 1
+        // T at rotation 0, last input was the rotation
         $piece = new Piece(Tetromino::T, 0, 5, 15);
-        $tspin = TSpin::detect($board, $piece, 1);
+        $tspin = TSpin::detect($board, $piece, true);
         $this->assertTrue($tspin->active);
         $this->assertTrue($tspin->mini, 'Only front corners filled (rotation 0) = T-Spin Mini');
     }
@@ -102,7 +102,7 @@ final class TSpinTest extends TestCase
         $rows[4][3] = Tetromino::I;
         $rows[7][3] = Tetromino::I;
         $board2 = new Board($rows);
-        $tspin = TSpin::detect($board2, $piece, 1);
+        $tspin = TSpin::detect($board2, $piece, true);
         $this->assertTrue($tspin->active, 'OOB corners (wall) + filled internal corners should be T-Spin');
     }
 
@@ -119,9 +119,9 @@ final class TSpinTest extends TestCase
         $piece = new Piece(Tetromino::T, 0, 5, 15);
 
         for ($rot = 0; $rot <= 3; $rot++) {
-            for ($wasRot = 0; $wasRot <= 3; $wasRot++) {
+            foreach ([false, true] as $lastWasRotation) {
                 $pieceAtRot = new Piece(Tetromino::T, $rot, 5, 15);
-                $tspin = TSpin::detect($board, $pieceAtRot, $wasRot);
+                $tspin = TSpin::detect($board, $pieceAtRot, $lastWasRotation);
                 // Just verify it returns a valid TSpin object
                 $this->assertIsBool($tspin->active);
                 $this->assertIsBool($tspin->mini);

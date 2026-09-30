@@ -67,10 +67,15 @@ dims until the current piece locks.
 
 ### Lock delay
 
-A grounded piece does not lock instantly — you get a short window to slide or
-rotate it before it settles (the standard SRS lock delay, live in the binary
-via `Game::startWithLockDelay()`). A successful move or rotation while grounded
-re-arms the window; a hard drop bypasses it and locks immediately.
+A grounded piece does not lock instantly — you get a real-time window
+(~500 ms by default, independent of the gravity speed, so it stays a constant
+half-second even at level 29) to slide or rotate it before it settles. The
+binary arms it via `Game::startWithLockDelay()`. Every successful move or
+rotation while grounded re-arms the full window, up to the SRS-style 15-reset
+cap — once the budget is spent the open window locks on expiry and further
+inputs no longer extend it. Moving the piece back off a surface closes the
+window and hands timing back to gravity; a hard drop bypasses it and locks
+immediately. Pausing extends the window instead of locking a frozen game.
 
 ## Scoring
 
@@ -87,7 +92,10 @@ Level rises every 10 lines. Gravity speeds up at every level — by level 9 piec
 
 ### T-Spin scoring
 
-When a T piece is rotated into a position where two or more of its four diagonal corner cells are already filled (walls count as filled), it scores as a **T-Spin**:
+When the **last successful input before a T piece locks was a rotation** (moves,
+drops and the fall itself reset that flag — settling under gravity keeps it) and
+two or more of the piece's four diagonal corner cells are already filled (walls
+count as filled), it scores as a **T-Spin**:
 
 | Type     | Base points |
 |----------|-------------|
@@ -96,7 +104,13 @@ When a T piece is rotated into a position where two or more of its four diagonal
 
 T-Spin Mini is detected when exactly two front corners are filled (the side the piece entered from).
 
-**3-corner rule:** A T-Spin is active when the locked T piece's final position differs in rotation from its pre-lock rotation, AND at least two of the four diagonal corner cells around the T are occupied (wall/out-of-bounds = occupied). See `Scoring\TSpin::detect()`.
+**Last-input rule:** A T-Spin is active when the piece's last successful action
+before locking was a rotation (`Game::$lastActionWasRotation`, set by rotate,
+cleared by move/soft drop/hard drop — gravity steps leave it alone, so a
+rotate-then-settle spin is legal), AND at least two of the four diagonal corner
+cells around the T are occupied (wall/out-of-bounds = occupied). With exactly
+two filled corners and they are the front pair, it scores as a mini. See
+`Scoring\TSpin::detect()`.
 
 ### Back-to-Back (B2B) bonus
 
@@ -117,4 +131,4 @@ When all lines are cleared at once and the board becomes completely empty, an ad
 
 ## Shared foundations
 
-All game renderers build their playfield and score panel via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer). The 10×20 playfield is a canonical `Buffer` cell grid; per-tetromino background style and ghost-piece foreground style are applied per-cell. `Buffer::withRegion` composites the score panel over the playfield interior. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (starting board, T-spin completion, pause overlay).
+The single-player playfield is painted into a canonical [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are CandySprinkles cards joined with CandyLayout (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (starting board, T-spin completion, pause overlay).

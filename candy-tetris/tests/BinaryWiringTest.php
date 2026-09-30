@@ -53,7 +53,9 @@ final class BinaryWiringTest extends TestCase
         // The path the binary now takes: lock delay is armed (max > 0), so a
         // grounded piece gets a slide/rotate window before locking.
         $game = Game::startWithLockDelay();
-        $this->assertGreaterThan(0, $game->lockDelayMax, 'lock delay must be armed');
-        $this->assertSame($game->lockDelayMax, $game->lockDelayTicks, 'lock delay starts full');
+        $this->assertGreaterThan(0, $game->lockDelayMs, 'real-time lock delay must be armed');
+        $this->assertSame(Game::DEFAULT_LOCK_DELAY_MS, $game->lockDelayMs, 'default window is the SRS-style 500 ms');
+        $this->assertNull($game->lockWindowGeneration, 'no window is open at spawn');
+        $this->assertSame(0, $game->lockResets, 'reset budget starts untouched');
     }
 }

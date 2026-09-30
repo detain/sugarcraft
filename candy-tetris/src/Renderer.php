@@ -34,10 +34,13 @@ use SugarCraft\Sprinkles\Style as SprinklesStyle;
  *
  * Rendering uses a {@see Buffer} for the playfield interior:
  * each cell carries a per-tetromino style (background colour) for
- * crisp Buffer-backed ANSI output. The sidebar is rendered as a
- * sub-buffer and composited via {@see Buffer::withRegion()}.
+ * crisp Buffer-backed ANSI output. The sidebar is built from
+ * Sprinkles-styled cards stacked with Layout::joinVertical(), then
+ * composited beside the framed playfield with Layout::joinHorizontal().
  *
- * Mirrors charmbracelet/bubbletea — Tetris renderer.
+ * Mirrors Broderick-Westrope/tetrigo board/sidebar layout intent —
+ * playfield through candy-buffer, chrome through candy-sprinkles and
+ * candy-layout joins.
  */
 final class Renderer
 {
