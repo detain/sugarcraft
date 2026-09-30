@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-prompt",
-    "description": "PHP port of charmbracelet/huh \u2014 interactive form library (Note, Input, Confirm, Select, MultiSelect, Text, FilePicker) with multi-page Group support, 6 stock themes, and form-level KeyMap override per binding.",
+    "description": "PHP port of charmbracelet/huh \u2014 interactive form library (Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, Date, Slider, Color) with multi-page Group support, 7 stock themes, and form-level KeyMap override per binding.",
     "type": "library",
     "license": "MIT",
     "keywords": [

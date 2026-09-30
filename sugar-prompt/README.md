@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-prompt)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-prompt)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-prompt?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-prompt)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -45,27 +45,31 @@ $form = Form::new(
 
 ## Shared foundations
 
-sugar-prompt is built on top of five shared foundation packages:
+sugar-prompt is a thin facade over four direct dependencies:
 
 | Package | Role |
 | ------- | ---- |
-| `sugarcraft/candy-async` | Async/await engine — drives `withAsyncSuggestions` cancellable fetchers via `Async\Await` + `CancelledException` |
-| `sugarcraft/candy-buffer` | Ring-buffer output renderer — handles SGR sequence batching and viewport sync for the form viewport |
-| `sugarcraft/candy-fuzzy` | Smith-Waterman local-alignment fuzzy matcher — powers `withFuzzySuggestions()` on `Input` and `Select` fields |
-| `sugarcraft/candy-testing` | Test harness — provides `ProgramSimulator`, `ScriptedInput`, and golden-file tape helpers for TEA-program tests |
-| **Vim keybindings** | **Via candy-forms `VimKeyHandler`** — `TextInput` vim mode (Insert/Normal/Visual) is shared across all 4 libs; new bindings added to `VimAction` enum benefit sugar-prompt automatically |
+| `sugarcraft/candy-forms` | The canonical interactive form engine — every `Form`, field, and validator symbol in this package is a `class_alias` re-export of its `SugarCraft\Forms\*` twin |
+| `sugarcraft/candy-core` | TUI runtime — the Model/Update program loop `Form::run()` stands on, plus `Core\Util\Proc\BoundedShutdown` for the spinner child reaper |
+| `sugarcraft/sugar-bits` | Components facade whose widgets the underlying fields wrap (`SugarCraft\Bits\TextInput`, `SugarCraft\Bits\ItemList`, `SugarCraft\Bits\FilePicker`) |
+| `sugarcraft/candy-fuzzy` | Smith-Waterman local-alignment fuzzy matcher — powers `withFuzzySuggestions()` on `Input` and `Select` fields and backs the `Fuzzy\FuzzyMatcher` alias |
+
+Vim keybindings ride candy-forms' `VimKeyHandler`: `TextInput` vim mode
+(Insert/Normal/Visual) is shared ecosystem-wide, so bindings added to the
+`VimAction` enum benefit sugar-prompt automatically. `sugarcraft/candy-testing`
+is a dev-only dependency (test harness helpers).
 
 ## Field types
 
 | Field         | Description                                                 | Notable knobs |
 | ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarBits\TextInput`)              | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
+| `Input`       | Single-line text (wraps `SugarCraft\Bits\TextInput`)              | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withMaxLines`, `withShowLineNumbers`, `withValidator` |
 | `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
-| `Select`      | Single-choice list (wraps `SugarBits\ItemList`)             | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
+| `Select`      | Single-choice list (wraps `SugarCraft\Bits\ItemList`)             | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
 | `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
-| `FilePicker`  | Filesystem picker (wraps `SugarBits\FileTree`)              | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
+| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Bits\FilePicker`)              | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
 | `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withWidth`, `withValidator(\Closure)` |
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)                | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
 | `Color`       | Hex color picker with swatch preview                           | `withValue(string $hex)`, `withTruecolor(bool)`, `withValidator` |
@@ -106,7 +110,7 @@ Form::groups(
 | `withShowErrors(bool)` | Toggle the inline `! error` line on validation failures. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Auto-abort after `$ms` of wall clock. |
-| `keyMap(KeyMap)` / `withKeyMap(KeyMap)` | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. Mirrors upstream huh #272. |
+| `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. Mirrors upstream huh #272. |
 | `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use after `Form::run()` to collect cross-field validation failures that cannot be expressed per-field. |
 
 ### Reading values after submit
@@ -120,7 +124,7 @@ inspecting validation state during a run use `errors()`,
 
 Stock themes ship as static factories on `SugarCraft\Prompt\Theme`:
 `ansi()` (default), `plain()`, `charm()`, `dracula()`, `catppuccin()`,
-`base16()`. Pass one to `Form::withTheme(...)`. The accessibility
+`base16()`, `base()`. Pass one to `Form::withTheme(...)`. The accessibility
 mode flips the entire form to plain-text rendering — useful when you
 detect `NO_COLOR=1` or `TERM=dumb`.
 
@@ -228,18 +232,24 @@ For fine-grained control, use `FuzzyMatcher` directly:
 ```php
 use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
 
-$matcher = new FuzzyMatcher();
+$matcher = FuzzyMatcher::new();
 
 // Score a single candidate (higher = better match)
-$score = $matcher->score('js', 'JavaScript'); // 9
+$score = $matcher->score('js', 'JavaScript'); // 3
 
-// Rank all candidates — returns list<[string, int]> sorted by score desc
-$matches = $matcher->match('py', ['Python', 'PHP', 'Ruby', 'JavaScript']);
-// [['Python', 8], ['JavaScript', 1]]
+// Align a query against one candidate (null when there is no local match)
+$result = $matcher->match('py', 'Python');
+$result?->score; // 11
+
+// Rank a candidate pool — returns list<MatchResult> sorted by score desc
+$ranked = $matcher->matchAll('py', ['Python', 'PHP', 'Ruby', 'JavaScript']);
+$ranked[0]->haystack; // 'Python'
 ```
 
-Scoring constants: match=`+3`, mismatch=`-3`, gap open=`-5`, gap extend=`-1`,
-adjacent bonus=`+5` for consecutive matches.
+`FuzzyMatcher` is an alias of `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`
+(candy-fuzzy). Scoring defaults (`SugarCraft\Fuzzy\ScoringProfile`): match=`+3`,
+mismatch=`-3`, gap open=`-5`, gap extend=`-1`, adjacent bonus=`+5` for
+consecutive matches.
 
 ### Async suggestions
 
@@ -349,17 +359,6 @@ child process. This means:
 
 On hosts without `pcntl_fork`, the action runs inline (no animation, no
 fork) and exceptions propagate normally.
-
-## Snapshot tests
-
-Render output is covered by golden-file snapshot tests. Fixture files live
-in `tests/fixtures/` with a `.golden` extension and are compared against
-actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
-
-```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
-```
 
 ## Test
 
