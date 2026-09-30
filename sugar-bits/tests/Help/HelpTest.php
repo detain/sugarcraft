@@ -42,11 +42,17 @@ final class HelpTest extends TestCase
 
     public function testShortAliasesRenderByteIdenticalToWithForms(): void
     {
+        // The full columns carry a ragged 2×1 shape so fullView() joins two
+        // rendered rows — with an empty full map both sides collapse to '' and
+        // the fullSeparator leg would compare vacuously.
         $map = new FakeKeyMap([
             $this->b('alpha-key', 'alpha'),
             $this->b('beta-key',  'beta'),
             $this->b('q',         'quit'),
-        ], []);
+        ], [
+            [$this->b('alpha-key', 'alpha'), $this->b('beta-key', 'beta')],
+            [$this->b('q', 'quit')],
+        ]);
         $long  = (new Help())->withSeparator(' • ')->withEllipsis('...')->withFullSeparator("\n\n");
         $short = (new Help())->separator(' • ')->ellipsis('...')->fullSeparator("\n\n");
         // Width forces ellipsis truncation so the row exercises all three knobs.
