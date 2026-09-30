@@ -7,6 +7,8 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
+use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Range;
 
 /**
  * Waveline (XY-point) LineChart variant. Mirrors ntcharts'
@@ -42,6 +44,16 @@ final class Waveline
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('waveline.dim_nonneg'));
         }
+        // Audit F7: every door (new / withPoints / push / pushAll) rebuilds
+        // through here — one sweep rejects NaN/INF coordinates, which would
+        // otherwise index (int) casts into off-canvas positions silently.
+        foreach ($points as $p) {
+            Finite::assert($p[0]);
+            Finite::assert($p[1]);
+        }
+        // Audit F3: explicit ranges must be ordered; null ends are "auto".
+        Range::pin($xMin, $xMax, 'X');
+        Range::pin($yMin, $yMax, 'Y');
     }
 
     /** @param list<array{0:int|float,1:int|float}> $points */

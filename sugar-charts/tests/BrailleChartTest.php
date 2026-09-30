@@ -81,6 +81,49 @@ final class BrailleChartTest extends TestCase
         $this->assertNotEmpty($theme->background->toHex());
     }
 
+    /**
+     * Audit F11: with a canvas attached the series must actually render as
+     * braille — real U+2800-block runes in the plot area, not the ASCII
+     * '*'/'/' fallback (the old code threaded the canvas and ignored it).
+     */
+    public function testBrailleModeRendersBrailleRunes(): void
+    {
+        $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)
+            ->withCanvas(BrailleCanvas::new(80, 24));
+        $out = $chart->view();
+        $this->assertSame(1, preg_match('/[\x{2800}-\x{28FF}]/u', $out), 'expected at least one braille rune');
+        $this->assertStringNotContainsString('*', $out);
+    }
+
+    /**
+     * Audit F11: per-dataset colors must reach the strokes. The first
+     * named dataset cycles to 'red' — rendered as the xterm-256 derived
+     * truecolor SGR (38;2;205;0;0 = #cd0000); an unnamed primary series
+     * stays unstyled exactly like ASCII mode.
+     */
+    public function testBrailleModeHonoursPerDatasetColors(): void
+    {
+        $chart = LineChart::new([], 40, 8)
+            ->withDataset('up', [1, 4, 2, 8, 6, 3, 7])
+            ->withCanvas(BrailleCanvas::new(80, 24));
+        $out = $chart->view();
+        $this->assertSame(1, preg_match('/[\x{2800}-\x{28FF}]/u', $out));
+        $this->assertStringContainsString("\x1b[38;2;205;0;0m", $out, 'red SGR expected on the first dataset stroke');
+    }
+
+    /**
+     * Audit F11 (batched rasterizer law): the canvas instance handed to
+     * withCanvas is never mutated — the chart rasterizes internally and
+     * the object only selects the rendering mode (docblocked contract).
+     */
+    public function testBrailleModeDoesNotMutateTheGivenCanvas(): void
+    {
+        $canvas = BrailleCanvas::new(80, 24);
+        $before = $canvas->render();
+        LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)->withCanvas($canvas)->view();
+        $this->assertSame($before, $canvas->render());
+    }
+
     private function getThemeName(Theme $theme): string
     {
         // Check via hex values since themes don't expose a name property

@@ -9,6 +9,7 @@ use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style as BufferStyle;
 use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style as SprinklesStyle;
 
 /**
@@ -303,210 +304,49 @@ final class BufferHelperTest extends TestCase
     }
 
     /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::firstCodepoint
+     * Audit F6: width is answered by the shared candy-core table, not a
+     * forked private one. Delegation parity — every sample must agree
+     * with Width::of() exactly.
      */
-    public function testFirstCodepointAscii(): void
+    public static function widthCanonSamples(): iterable
     {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('firstCodepoint');
-        $method->setAccessible(true);
-
-        $this->assertSame(ord('a'), $method->invoke(null, 'a'));
-        $this->assertSame(ord('Z'), $method->invoke(null, 'Z'));
+        yield 'ascii'            => ['a'];
+        yield 'cjk'              => ["\u{65E5}"];
+        yield 'hangul'           => ["\u{D55C}"];
+        yield 'zero-width-space' => ["\u{200B}"];
+        yield 'combining'        => ["\u{0301}"];
+        yield 'zwj'              => ["\u{200D}"];
+        yield 'plane1-emoji'     => ["\u{1F300}"];
+        yield 'braille-dot'      => ["\u{2800}"];
+        yield 'box-drawing'      => ["\u{2500}"];
     }
 
     /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::firstCodepoint
+     * @dataProvider widthCanonSamples
      */
-    public function testFirstCodepoint2ByteUtf8(): void
+    public function testGraphemeWidthDelegatesToSharedCanon(string $cluster): void
     {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('firstCodepoint');
-        $method->setAccessible(true);
-
-        $this->assertSame(0x00A9, $method->invoke(null, "\xC2\xA9"));
-        $this->assertSame(0x00E9, $method->invoke(null, "\xC3\xA9"));
+        $this->assertSame(Width::of($cluster), BufferHelper::graphemeWidth($cluster));
     }
 
     /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::firstCodepoint
+     * The plane-1 emoji the old private table silently missed (its
+     * docblock claimed "emoji count as 2") must now report 2.
      */
-    public function testFirstCodepoint4ByteUtf8(): void
+    public function testGraphemeWidthCountsPlaneOneEmojiAsWide(): void
     {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('firstCodepoint');
-        $method->setAccessible(true);
-
-        $this->assertSame(0x1F600, $method->invoke(null, "\xF0\x9F\x98\x80"));
+        $this->assertSame(2, BufferHelper::graphemeWidth("\u{1F300}"));
     }
 
     /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::firstCodepoint
+     * SSOT pin: the forked width tables must not come back.
      */
-    public function testFirstCodepoint3ByteUtf8(): void
+    public function testForkedWidthInternalsWereRemoved(): void
     {
         $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('firstCodepoint');
-        $method->setAccessible(true);
-
-        $this->assertSame(0x0444, $method->invoke(null, "\xD1\x84"));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isZeroWidth
-     */
-    public function testIsZeroWidthControlCharacters(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isZeroWidth');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x0000));
-        $this->assertTrue($method->invoke(null, 0x001F));
-        $this->assertFalse($method->invoke(null, 0x0009));
-        $this->assertFalse($method->invoke(null, 0x000A));
-        $this->assertFalse($method->invoke(null, 0x000D));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isZeroWidth
-     */
-    public function testIsZeroWidthJoinersAndZWSP(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isZeroWidth');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x200B));
-        $this->assertTrue($method->invoke(null, 0x200C));
-        $this->assertTrue($method->invoke(null, 0x200D));
-        $this->assertTrue($method->invoke(null, 0xFEFF));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isZeroWidth
-     */
-    public function testIsZeroWidthCombiningDiacritics(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isZeroWidth');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x0300));
-        $this->assertTrue($method->invoke(null, 0x0301));
-        $this->assertTrue($method->invoke(null, 0x036F));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isZeroWidth
-     */
-    public function testIsZeroWidthNonZeroWidth(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isZeroWidth');
-        $method->setAccessible(true);
-
-        $this->assertFalse($method->invoke(null, ord('a')));
-        $this->assertFalse($method->invoke(null, 0x1100));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideHangulJamo(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x1100));
-        $this->assertTrue($method->invoke(null, 0x115F));
-        $this->assertFalse($method->invoke(null, 0x1100 - 1));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideCJK(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x4E00));
-        $this->assertTrue($method->invoke(null, 0x3041));
-        $this->assertTrue($method->invoke(null, 0xAC00));
-        $this->assertTrue($method->invoke(null, 0xD7A3));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideCJKUnifiedIdeographs(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x9000));
-        $this->assertTrue($method->invoke(null, 0xFAFF));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideHalfwidthAndFullwidthForms(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0xFF00));
-        $this->assertTrue($method->invoke(null, 0xFF60));
-        $this->assertTrue($method->invoke(null, 0xFFE0));
-        $this->assertTrue($method->invoke(null, 0xFFE6));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideSupplementaryPlanes(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x20000));
-        $this->assertTrue($method->invoke(null, 0x2FFFD));
-        $this->assertTrue($method->invoke(null, 0x30000));
-        $this->assertTrue($method->invoke(null, 0x3FFFD));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideAngleBrackets(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertTrue($method->invoke(null, 0x2329));
-        $this->assertTrue($method->invoke(null, 0x232A));
-        $this->assertFalse($method->invoke(null, 0x2328));
-    }
-
-    /**
-     * @covers \SugarCraft\Charts\Buffer\BufferHelper::isWide
-     */
-    public function testIsWideNonWide(): void
-    {
-        $reflector = new \ReflectionClass(BufferHelper::class);
-        $method = $reflector->getMethod('isWide');
-        $method->setAccessible(true);
-
-        $this->assertFalse($method->invoke(null, ord('a')));
-        $this->assertFalse($method->invoke(null, 0x0020));
-        $this->assertFalse($method->invoke(null, 0x303F));
+        foreach (['firstCodepoint', 'isZeroWidth', 'isWide'] as $gone) {
+            $this->assertFalse($reflector->hasMethod($gone), $gone . ' must not exist');
+        }
+        $this->assertFalse($reflector->hasConstant('ZERO_WIDTH'), 'ZERO_WIDTH table must not exist');
     }
 }

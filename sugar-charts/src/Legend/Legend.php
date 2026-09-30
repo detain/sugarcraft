@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Legend;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -104,7 +105,10 @@ final class Legend
         }
         $line = implode('  ', $parts);
         if ($this->showBorder) {
-            return '┌' . str_repeat('─', mb_strlen($line, 'UTF-8')) . '┐' . "\n" . $line . "\n" . '└' . str_repeat('─', mb_strlen($line, 'UTF-8')) . '┘';
+            // Audit F5: borders sized by DISPLAY width — the line carries
+            // SGR escapes whose bytes mb_strlen would count.
+            $w = Width::string($line);
+            return '┌' . str_repeat('─', $w) . '┐' . "\n" . $line . "\n" . '└' . str_repeat('─', $w) . '┘';
         }
         return $line;
     }
@@ -117,7 +121,7 @@ final class Legend
         }
         $line = implode('  ', $parts);
         if ($this->showBorder) {
-            return $line . "\n" . '┌' . str_repeat('─', mb_strlen($line, 'UTF-8')) . '┐';
+            return $line . "\n" . '┌' . str_repeat('─', Width::string($line)) . '┐';
         }
         return $line;
     }
@@ -129,7 +133,7 @@ final class Legend
             foreach ($this->items as $item) {
                 $lines[] = '│' . $this->coloredIndicator($item['color']) . ' ' . $item['label'] . '│';
             }
-            $width = max(array_map(fn($l) => mb_strlen($l, 'UTF-8'), $lines));
+            $width = max(array_map(fn($l) => Width::string($l), $lines));
             $border = '├' . str_repeat('─', $width) . '┤';
             array_unshift($lines, $border);
             $lines[] = $border;
@@ -149,7 +153,7 @@ final class Legend
             foreach ($this->items as $item) {
                 $lines[] = '│ ' . $this->coloredIndicator($item['color']) . ' ' . $item['label'] . ' │';
             }
-            $width = max(array_map(fn($l) => mb_strlen($l, 'UTF-8'), $lines));
+            $width = max(array_map(fn($l) => Width::string($l), $lines));
             $border = '├' . str_repeat('─', $width) . '┤';
             array_unshift($lines, $border);
             $lines[] = $border;
@@ -188,7 +192,9 @@ final class Legend
             return $code . $this->indicatorChar . Ansi::sgr(39);
         }
 
-        if (preg_match('/^#?[0-9a-fA-F]{6}$/', $color)) {
+        // Audit F24: shorthand 3-digit hex is a valid CSS color — Color::hex
+        // expands 'rgb' → 'rrggbb' itself, so only the gate needed widening.
+        if (preg_match('/^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $color)) {
             $hex = ltrim($color, '#');
             return Style::new()
                 ->foreground(Color::hex($hex))

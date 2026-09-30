@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests\Canvas;
 
+use InvalidArgumentException;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
 use PHPUnit\Framework\TestCase;
@@ -195,6 +196,63 @@ final class GraphTest extends TestCase
     {
         $ticks = Graph::niceNumbers(0.0, 1.0, 1);
         $this->assertGreaterThanOrEqual(2, count($ticks));
+    }
+
+    /**
+     * Audit F22: the ladder compared candidates against $step10 instead of
+     * the target spacing, so the first rung (m = 1) always won and every
+     * step collapsed to a bare power of ten — 0..3 with target 5 emitted
+     * 31 ticks. With the ladder fixed the same call answers 0,1,2,3.
+     */
+    public function testNiceNumbersLadderUsesOneTwoFive(): void
+    {
+        $this->assertSame([0.0, 1.0, 2.0, 3.0], Graph::niceNumbers(0.0, 3.0, 5));
+    }
+
+    /**
+     * Audit F1 (ceiling half): $targetTicks is clamped to MAX_TARGET_TICKS
+     * the same way it was already floored to 2, so a runaway request
+     * terminates with a bounded count instead of allocating forever.
+     */
+    public function testNiceNumbersTargetTicksIsClamped(): void
+    {
+        $ticks = Graph::niceNumbers(0.0, 100.0, 1_000_000);
+        $this->assertGreaterThan(1, count($ticks));
+        $this->assertLessThanOrEqual(Graph::MAX_TARGET_TICKS + 2, count($ticks));
+    }
+
+    /**
+     * Audit F1: finite endpoints whose difference overflows a double have
+     * no nice ladder — throw instead of feeding an unbounded loop.
+     */
+    public function testNiceNumbersRejectsOverflowingEndpoints(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Graph::niceNumbers(1.0e308, -1.0e308, 5);
+    }
+
+    /**
+     * Audit F1: subnormal ranges used to divide by a zero step
+     * (DivisionByZeroError). The fixed epsilon and step guards make the
+     * call terminate with a degenerate tick set instead.
+     */
+    public function testNiceNumbersSubnormalRangeTerminates(): void
+    {
+        $ticks = Graph::niceNumbers(0.0, 5.0e-324, 5);
+        $this->assertGreaterThanOrEqual(1, count($ticks));
+        $this->assertSame(0.0, $ticks[0]);
+    }
+
+    /**
+     * Audit F22: with a sane target the count tracks the target, proving
+     * the clamp is not silently truncating normal requests.
+     */
+    public function testNiceNumbersHonoursTargetInTheLadderWindow(): void
+    {
+        $ticks = Graph::niceNumbers(0.0, 100.0, 5);
+        // step 20 or 50 → between 3 and 6 ticks either way.
+        $this->assertGreaterThanOrEqual(3, count($ticks));
+        $this->assertLessThanOrEqual(6, count($ticks));
     }
 
     public function testGetFullCirclePointsWithLimitReturnsBoundedSet(): void

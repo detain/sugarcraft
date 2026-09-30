@@ -507,4 +507,16 @@ final class BarChartTest extends TestCase
             ->view();
         $this->assertSame("█\n█\n█\n█\n█", $out);
     }
+
+    /**
+     * Audit F9: withBarGap(null) used to no-op because copy() could not
+     * tell "reset" from "unchanged" — the barGapSet sentinel mirrors the
+     * barWidth twin so explicit null really resets to auto.
+     */
+    public function testWithBarGapNullResetsToAuto(): void
+    {
+        $chart = BarChart::new([['a', 1.0]], 10, 4)->withBarGap(2);
+        self::assertSame(2, $chart->barGap);
+        self::assertNull($chart->withBarGap(null)->barGap);
+    }
 }

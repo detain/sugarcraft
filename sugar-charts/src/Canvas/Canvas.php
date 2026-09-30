@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Canvas;
 
 use SugarCraft\Charts\Lang;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -34,6 +35,11 @@ final class Canvas
      * Write a single rune into cell ($x, $y). Out-of-range
      * coordinates are silently dropped (no exception).
      *
+     * Audit F6: the rune is measured with the shared candy-core display
+     * width. A wide (CJK / emoji) rune claims two columns — the next one
+     * receives a width-0 continuation cell — and a zero-width cluster
+     * claims none; ordinary single-cell runes behave exactly as before.
+     *
      * @return void
      */
     public function setCell(int $x, int $y, string $rune, ?Style $style = null): void
@@ -41,7 +47,18 @@ final class Canvas
         if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
             return;
         }
-        $this->cells[$y][$x] = new Cell($rune, $style);
+        $w = $rune === '' ? 1 : Width::of($rune);
+        if ($w === 0) {
+            return;
+        }
+        if ($w === 1) {
+            $this->cells[$y][$x] = new Cell($rune, $style, 1);
+            return;
+        }
+        $this->cells[$y][$x] = new Cell($rune, $style, 2);
+        if ($x + 1 < $this->width) {
+            $this->cells[$y][$x + 1] = new Cell('', null, 0);
+        }
     }
 
     /**
@@ -70,7 +87,7 @@ final class Canvas
             return;
         }
         $existing = $this->cells[$y][$x] ?? new Cell();
-        $this->cells[$y][$x] = new Cell($existing->rune, $style);
+        $this->cells[$y][$x] = new Cell($existing->rune, $style, $existing->width);
     }
 
     /**
@@ -88,15 +105,32 @@ final class Canvas
      * ntcharts' `SetRunes` when used per-row. Cells that fall outside
      * the canvas bounds are silently dropped.
      *
+     * Audit F6: advancement is by each rune's DISPLAY width, so a wide
+     * rune consumes two columns instead of nudging the rest of the row
+     * one cell to the left of where the terminal will paint it. A
+     * zero-width mark is MERGED into the cell just written (below 8.4
+     * `setString` falls back to codepoint splitting, and dropping the
+     * lone combining codepoint would silently lose the accent).
+     *
      * @param iterable<string> $runes
      * @return void
      */
     public function setRunes(int $x, int $y, iterable $runes, ?Style $style = null): void
     {
-        $i = 0;
+        $col = $x;
+        $prevCol = null;
         foreach ($runes as $r) {
-            $this->setCell($x + $i, $y, $r, $style);
-            $i++;
+            $w = $r === '' ? 1 : Width::of($r);
+            if ($w === 0) {
+                if ($prevCol !== null && isset($this->cells[$y][$prevCol])) {
+                    $existing = $this->cells[$y][$prevCol];
+                    $this->cells[$y][$prevCol] = new Cell($existing->rune . $r, $existing->style, $existing->width);
+                }
+                continue;
+            }
+            $this->setCell($col, $y, $r, $style);
+            $prevCol = $col;
+            $col += $w >= 2 ? 2 : 1;
         }
     }
 
@@ -273,10 +307,17 @@ final class Canvas
                     $row .= ' ';
                     continue;
                 }
+                if ($cell->width === 0) {
+                    // Right half of a wide cell: the left cell already emitted it.
+                    continue;
+                }
                 $rune = $cell->rune === '' ? ' ' : $cell->rune;
                 $row .= $cell->style !== null
                     ? $cell->style->render($rune)
                     : $rune;
+                if ($cell->width >= 2) {
+                    $x++; // the wide rune spans this column and the next
+                }
             }
             $rows[] = rtrim($row);
         }

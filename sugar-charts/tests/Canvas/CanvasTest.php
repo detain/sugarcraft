@@ -290,4 +290,35 @@ final class CanvasTest extends TestCase
         $cell2 = $c->getCell(-1, -1);
         $this->assertSame(' ', $cell2->rune);
     }
+
+    /**
+     * Audit F6: a double-width rune marks its own cell width 2 and covers
+     * the next column with a zero-width continuation; view() emits the
+     * rune once and the row keeps its true display width.
+     */
+    public function testWideCharOccupiesTwoColumns(): void
+    {
+        $c = new Canvas(4, 1);
+        $c->setCell(0, 0, "\u{3042}");
+        self::assertSame(2, $c->getCell(0, 0)->width);
+        self::assertSame(0, $c->getCell(1, 0)->width);
+        $c->setCell(2, 0, 'x');
+        self::assertSame("\u{3042}x", $c->view());
+        self::assertSame(3, \SugarCraft\Core\Util\Width::string($c->view()));
+    }
+
+    public function testAsciiCellsKeepWidthOne(): void
+    {
+        $c = new Canvas(2, 1);
+        $c->setCell(0, 0, 'a');
+        self::assertSame(1, $c->getCell(0, 0)->width);
+        self::assertSame(1, $c->getCell(1, 0)->width);
+    }
+
+    public function testZeroWidthMarkDoesNotConsumeAColumn(): void
+    {
+        $c = new Canvas(3, 1);
+        $c->setString(0, 0, "a\u{0301}b");
+        self::assertSame('a' . "\u{0301}" . 'b', $c->view());
+    }
 }

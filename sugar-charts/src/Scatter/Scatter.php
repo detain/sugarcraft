@@ -8,6 +8,7 @@ use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Legend\Legend;
 
@@ -60,6 +61,10 @@ final class Scatter
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('scatter.dim_nonneg'));
         }
+        // Audit F3: single door for every copy()/with* rebuild — pinned axis
+        // ranges must be finite and ordered; null ends stay legal ("auto").
+        Range::pin($minX, $maxX, 'X');
+        Range::pin($minY, $maxY, 'Y');
     }
 
     /** @param list<array{0:int|float,1:int|float}> $points */
@@ -193,6 +198,12 @@ final class Scatter
 
     // ─── Rendering ──────────────────────────────────────────────────────
 
+    /**
+     * Empty-data contract: returns '' (no canvas at all) when there are
+     * no points or the dimensions collapse — see BarChart::view() for
+     * the family of per-class empty shapes (pinned by
+     * EmptyRenderContractTest).
+     */
     public function view(): string
     {
         if ($this->points === [] || $this->width === 0 || $this->height === 0) {
@@ -235,12 +246,24 @@ final class Scatter
         foreach ($this->points as $p) {
             $x = (float) $p[0];
             $y = (float) $p[1];
-            $col = (int) round((($x - $minX) / ($maxX - $minX)) * ($this->width - 1));
+            // Clamped to the plot like LineChart::rowForValue — a point
+            // outside a manually pinned range lands on the edge column/row
+            // instead of being silently dropped off-canvas.
+            $col = (int) round(self::norm($x, $minX, $maxX) * ($this->width - 1));
             // Y is inverted so larger values sit at the top.
-            $row = (int) round((1.0 - (($y - $minY) / ($maxY - $minY))) * ($this->height - 1));
+            $row = (int) round((1.0 - self::norm($y, $minY, $maxY)) * ($this->height - 1));
             $canvas->setCell($col, $row, $this->rune);
         }
         return $canvas->view();
+    }
+
+    /**
+     * Normalized position of $value within [$min,$max], clamped to [0,1].
+     */
+    private static function norm(float $value, float $min, float $max): float
+    {
+        $t = ($value - $min) / ($max - $min);
+        return max(0.0, min(1.0, $t));
     }
 
     public function __toString(): string

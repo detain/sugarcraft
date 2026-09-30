@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\BarChart;
 use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Legend\Legend;
 
 /**
@@ -67,6 +68,8 @@ final class BarChart
         if ($barGap !== null && $barGap < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.bar_gap_nonneg'));
         }
+        // Audit F3: pinned value range must be finite and ordered.
+        Range::pin($min, $max, 'value');
     }
 
     /**
@@ -181,12 +184,13 @@ final class BarChart
 
     /**
      * Pin the gap between bars. Default null means "1-cell gap when
-     * width allows". `0` packs bars edge-to-edge. Mirrors ntcharts'
-     * `WithBarGap`.
+     * width allows". `0` packs bars edge-to-edge. `null` re-enables the
+     * auto gap (same explicit-null sentinel as {@see withBarWidth()}).
+     * Mirrors ntcharts' `WithBarGap`.
      */
     public function withBarGap(?int $gap): self
     {
-        return $this->copy(barGap: $gap);
+        return $this->copy(barGap: $gap, barGapSet: true);
     }
 
     /**
@@ -299,6 +303,12 @@ final class BarChart
 
     // ─── Rendering ──────────────────────────────────────────────────────
 
+    /**
+     * Empty-data contract: returns '' (no canvas at all) when there are
+     * no bars or the dimensions collapse. LineChart instead renders a
+     * blank width×height canvas and Sparkline renders spaces — the
+     * per-class shapes are pinned by EmptyRenderContractTest.
+     */
     public function view(): string
     {
         if ($this->bars === [] || $this->width === 0 || $this->height === 0) {
@@ -572,6 +582,7 @@ final class BarChart
         ?int $barWidth = null,
         bool $barWidthSet = false,
         ?int $barGap = null,
+        bool $barGapSet = false,
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
         ?string $legendIndicatorChar = null,
@@ -592,7 +603,7 @@ final class BarChart
             showAxis:           $showAxis           ?? $this->showAxis,
             fractionalHeights:  $fractionalHeights  ?? $this->fractionalHeights,
             barWidth:           $barWidthSet ? $barWidth : ($barWidth ?? $this->barWidth),
-            barGap:             $barGap             ?? $this->barGap,
+            barGap:             $barGapSet ? $barGap : ($barGap ?? $this->barGap),
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
             legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,

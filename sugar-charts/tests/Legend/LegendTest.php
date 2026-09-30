@@ -109,4 +109,31 @@ final class LegendTest extends TestCase
         $this->assertStringContainsString('A', $legend->view());
         $this->assertStringContainsString('■', $legend->view());
     }
+
+    /**
+     * Audit F5: borders are sized by DISPLAY width; with the old
+     * mb_strlen over ANSI the frame grew by one en-dash per escape byte.
+     * (The separator's dash count equals the walled content row's
+     * display width — the same structural geometry the ASCII path always
+     * had, now escape-blind.)
+     */
+    public function testBorderWidthIgnoresAnsiEscapes(): void
+    {
+        $out = Legend::new([['label' => 'Alpha', 'color' => 'red']])
+            ->withShowBorder(true)
+            ->view();
+        $rows = explode("\n", $out);
+        $borderRun = substr_count($rows[0], "\u{2500}");
+        self::assertSame(\SugarCraft\Core\Util\Width::string($rows[1]), $borderRun);
+    }
+
+    /**
+     * Audit F24: a 3-digit shorthand hex colors the indicator instead of
+     * silently falling back to unstyled output.
+     */
+    public function testThreeDigitHexColorsIndicator(): void
+    {
+        $out = Legend::new([['label' => 'Alpha', 'color' => '#abc']])->view();
+        self::assertStringContainsString('38;2;170;187;204', $out);
+    }
 }

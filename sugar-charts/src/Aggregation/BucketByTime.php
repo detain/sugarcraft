@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Aggregation;
 
 use DateTimeImmutable;
+use SugarCraft\Charts\Support\Finite;
 
 /**
  * Groups a list of timestamped values into time buckets, applying an
@@ -85,22 +86,32 @@ final class BucketByTime
             ->bucket($timestampedValues);
     }
 
-    public static function create(int $intervalSeconds, ?\Closure $aggregator = null, int $offsetSeconds = 0): self
+    /**
+     * Canonical factory — mirrors the SugarCraft `::new()` convention.
+     */
+    public static function new(int $intervalSeconds, ?\Closure $aggregator = null, int $offsetSeconds = 0): self
     {
         $aggregator ??= fn(array $v): int|float => array_sum(array_column($v, 'value'));
         return new self($intervalSeconds, $aggregator, $offsetSeconds);
     }
 
-    public static function new(int $intervalSeconds, ?\Closure $aggregator = null, int $offsetSeconds = 0): self
+    /**
+     * @deprecated Use {@see self::new()}; kept as an alias for callers of
+     *             the original spelling.
+     */
+    public static function create(int $intervalSeconds, ?\Closure $aggregator = null, int $offsetSeconds = 0): self
     {
-        return self::create($intervalSeconds, $aggregator, $offsetSeconds);
+        return self::new($intervalSeconds, $aggregator, $offsetSeconds);
     }
 
     /**
      * Add a single timestamped point.
+     *
+     * @throws \InvalidArgumentException when $value is NaN or ±INF
      */
     public function add(int $timestamp, int|float $value): self
     {
+        Finite::assert($value);
         $clone = clone $this;
         $clone->points[] = ['ts' => $timestamp, 'value' => $value];
         return $clone;
@@ -110,14 +121,27 @@ final class BucketByTime
      * Add multiple timestamped points at once.
      *
      * @param list<array{ts: int, value: int|float}> $timestampedValues
+     *
+     * @throws \InvalidArgumentException on the first non-finite value
      */
     public function addMany(array $timestampedValues): self
     {
+        self::assertPoints($timestampedValues);
         $clone = clone $this;
         foreach ($timestampedValues as $pt) {
             $clone->points[] = $pt;
         }
         return $clone;
+    }
+
+    /**
+     * @param list<array{ts: int, value: int|float}> $timestampedValues
+     */
+    private static function assertPoints(array $timestampedValues): void
+    {
+        foreach ($timestampedValues as $pt) {
+            Finite::assert($pt['value']);
+        }
     }
 
     /**
@@ -139,6 +163,8 @@ final class BucketByTime
         if ($timestampedValues === []) {
             return [];
         }
+
+        self::assertPoints($timestampedValues);
 
         /** @var array<int, list<array{ts: int, value: int|float}>> */
         $buckets = [];

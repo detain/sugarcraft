@@ -518,4 +518,41 @@ final class LineChartTest extends TestCase
         }
         return $runes;
     }
+
+    /**
+     * Audit F4: re-calling withDataset() with an existing label used to
+     * append a second legend entry (duplicate label) and shift the color
+     * cycle. Replace semantics now: values swap, the legend slot keeps
+     * its original color and position, only NEW labels consume a cycle.
+     */
+    public function testWithDatasetReplaceKeepsLegendSlot(): void
+    {
+        $chart = LineChart::new([], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withDataset('Series B', [1, 2, 3])
+            ->withDataset('Series A', [9, 8, 7]);
+
+        self::assertSame(['Series A', 'Series B'], array_keys($chart->datasets));
+        self::assertSame([9, 8, 7], $chart->datasets['Series A']);
+
+        $legend = (new \ReflectionProperty(\SugarCraft\Charts\Chart\Chart::class, 'legendItems'));
+        $legend->setAccessible(true);
+        /** @var list<array{label: string, color: string}> $items */
+        $items = $legend->getValue($chart);
+        self::assertSame(['Series A', 'Series B'], array_column($items, 'label'));
+        self::assertSame(['red', 'green'], array_column($items, 'color'));
+    }
+
+    public function testWithDatasetAppendStillWalksColorCycle(): void
+    {
+        $chart = LineChart::new([], 20, 5)
+            ->withDataset('Series A', [1])
+            ->withDataset('Series A', [2])   // replace, no cycle cost
+            ->withDataset('Series B', [3]);
+
+        $legend = (new \ReflectionProperty(\SugarCraft\Charts\Chart\Chart::class, 'legendItems'));
+        $legend->setAccessible(true);
+        $items = $legend->getValue($chart);
+        self::assertSame(['red', 'green'], array_column($items, 'color'));
+    }
 }

@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Heatmap;
 
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -55,6 +56,8 @@ final class Heatmap
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'));
         }
+        // Audit F3: pinned value range must be finite and ordered.
+        Range::pin($min, $max, 'value');
     }
 
     /** @param list<list<int|float>> $grid */
@@ -215,6 +218,11 @@ final class Heatmap
     /** Short-form alias for {@see withAutoValueRange()}. */
     public function autoValueRange(bool $on = true): self { return $this->withAutoValueRange($on); }
 
+    /**
+     * Empty-data contract: returns '' (no canvas at all) when the grid
+     * is empty or the dimensions collapse — see BarChart::view() for the
+     * family of per-class empty shapes (pinned by EmptyRenderContractTest).
+     */
     public function view(): string
     {
         if ($this->grid === [] || $this->width === 0 || $this->height === 0) {

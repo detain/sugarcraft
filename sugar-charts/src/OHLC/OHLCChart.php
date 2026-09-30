@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\OHLC;
 use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\Range;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Style;
@@ -72,6 +73,8 @@ final class OHLCChart
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('ohlc.dim_nonneg'));
         }
+        // Audit F3: pinned price range must be finite and ordered.
+        Range::pin($min, $max, 'Y');
     }
 
     /** @param list<Bar> $bars */
@@ -207,6 +210,11 @@ final class OHLCChart
 
     // ─── Rendering ──────────────────────────────────────────────────────
 
+    /**
+     * Empty-data contract: returns '' (no canvas at all) when there are
+     * no bars or the dimensions collapse — see BarChart::view() for the
+     * family of per-class empty shapes (pinned by EmptyRenderContractTest).
+     */
     public function view(): string
     {
         if ($this->bars === [] || $this->width === 0 || $this->height === 0) {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Aggregation;
 
+use SugarCraft\Charts\Support\Finite;
+
 /**
  * Resamples a list of timestamped values to a new target cadence
  * (upsampling or downsampling) using linear interpolation or
@@ -19,7 +21,14 @@ final class Resample
     private function __construct(
         public readonly int $targetIntervalSeconds,
         public readonly int $startTimestamp = 0,
-    ) {}
+    ) {
+        // The bucket-advance and upsample walks increment by this interval;
+        // zero or negative would spin their while loops forever. Siblings
+        // MovingAverage/BucketByTime already guard their interval doors.
+        if ($targetIntervalSeconds <= 0) {
+            throw new \InvalidArgumentException('Target interval must be positive');
+        }
+    }
 
     /**
      * Downsample by picking the last value in each target bucket.
@@ -73,21 +82,31 @@ final class Resample
             ->upsampleNearest($timestampedValues);
     }
 
-    public static function create(int $targetIntervalSeconds, int $startTimestamp = 0): self
+    /**
+     * Canonical factory — mirrors the SugarCraft `::new()` convention.
+     */
+    public static function new(int $targetIntervalSeconds, int $startTimestamp = 0): self
     {
         return new self($targetIntervalSeconds, $startTimestamp);
     }
 
-    public static function new(int $targetIntervalSeconds, int $startTimestamp = 0): self
+    /**
+     * @deprecated Use {@see self::new()}; kept as an alias for callers of
+     *             the original pandas-style spelling.
+     */
+    public static function create(int $targetIntervalSeconds, int $startTimestamp = 0): self
     {
-        return self::create($targetIntervalSeconds, $startTimestamp);
+        return self::new($targetIntervalSeconds, $startTimestamp);
     }
 
     /**
      * Add a single timestamped point.
+     *
+     * @throws \InvalidArgumentException when $value is NaN or ±INF
      */
     public function add(int $timestamp, int|float $value): self
     {
+        Finite::assert($value);
         $clone = clone $this;
         $clone->points[] = ['ts' => $timestamp, 'value' => $value];
         return $clone;
@@ -97,14 +116,27 @@ final class Resample
      * Add multiple timestamped points at once.
      *
      * @param list<array{ts: int, value: int|float}> $timestampedValues
+     *
+     * @throws \InvalidArgumentException on the first non-finite value
      */
     public function addMany(array $timestampedValues): self
     {
+        self::assertPoints($timestampedValues);
         $clone = clone $this;
         foreach ($timestampedValues as $pt) {
             $clone->points[] = $pt;
         }
         return $clone;
+    }
+
+    /**
+     * @param list<array{ts: int, value: int|float}> $timestampedValues
+     */
+    private static function assertPoints(array $timestampedValues): void
+    {
+        foreach ($timestampedValues as $pt) {
+            Finite::assert($pt['value']);
+        }
     }
 
     /**
@@ -140,6 +172,7 @@ final class Resample
             return [];
         }
 
+        self::assertPoints($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];
@@ -180,6 +213,7 @@ final class Resample
             return [];
         }
 
+        self::assertPoints($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];
@@ -224,6 +258,7 @@ final class Resample
             return $timestampedValues;
         }
 
+        self::assertPoints($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];
@@ -266,6 +301,7 @@ final class Resample
             return [];
         }
 
+        self::assertPoints($timestampedValues);
         usort($timestampedValues, fn(array $a, array $b) => $a['ts'] <=> $b['ts']);
 
         $result = [];

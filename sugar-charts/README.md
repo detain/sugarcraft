@@ -101,6 +101,12 @@ $ema = MovingAverage::ema(3, [1, 4, 2, 8, 6]);
 // → [1.0, 2.5, 2.25, 5.13, 5.56]
 
 // Resample: downsample to 30-second cadence (last value), or upsample (linear interp).
+$timestampedData = [
+    ['ts' => 0,  'value' => 1.0],
+    ['ts' => 10, 'value' => 2.0],
+    ['ts' => 40, 'value' => 3.0],
+    ['ts' => 70, 'value' => 4.0],
+];
 $down = Resample::last(30, $timestampedData);
 $up   = Resample::linear(30, $timestampedData);
 ```
@@ -157,7 +163,7 @@ plus coordinates in canvas (cell) space (top-left origin). Pair with
 use SugarCraft\Charts\Canvas\{Canvas, BrailleGrid, Graph};
 
 $canvas = new Canvas(40, 8);
-Graph::drawXYAxis($canvas, 1, 6, 38);
+Graph::drawXYAxis($canvas, 1, 6, 38, 5);
 Graph::drawString($canvas, 4, 0, 'Demo');
 
 // Sub-cell line via BrailleGrid.

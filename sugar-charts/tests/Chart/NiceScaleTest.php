@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests\Chart;
 
+use InvalidArgumentException;
 use SugarCraft\Charts\Chart\NiceScale;
 use PHPUnit\Framework\TestCase;
 
@@ -45,5 +46,33 @@ final class NiceScaleTest extends TestCase
     public function testFloorConstant(): void
     {
         self::assertSame(100.0, NiceScale::FLOOR);
+    }
+
+    /**
+     * Audit F2: `(string)(int)$max` saturated at PHP_INT_MAX, so
+     * ceiling(1e20) answered 8e18 — BELOW the input, silently clipping
+     * the axis. The widened-digit ceiling never under-reports.
+     */
+    public function testCeilingNeverClipsBeyondIntSaturation(): void
+    {
+        self::assertSame(2.0e20, NiceScale::ceiling(1.0e20));
+        self::assertGreaterThanOrEqual(9.5e18, NiceScale::ceiling(9.5e18));
+        self::assertGreaterThanOrEqual(1.0e18, NiceScale::ceiling(1.0e18));
+    }
+
+    /**
+     * Finite-domain choice (documented in ceiling()): near the double
+     * upper bound no representable "nice ceiling" exists, so the
+     * function throws instead of saturating to a wrong value.
+     */
+    public function testCeilingThrowsWhenNoFiniteCeilingExists(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        NiceScale::ceiling(1.0e308);
+    }
+
+    public function testCeilingStaysFiniteAtTheEdge(): void
+    {
+        self::assertSame(1.0e308, NiceScale::ceiling(9.99e307));
     }
 }

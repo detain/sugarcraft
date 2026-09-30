@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\LineChart;
 
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Range;
 
 /**
  * Streamline LineChart variant. Mirrors ntcharts'
@@ -178,6 +179,9 @@ final class Streamline
      */
     private function withRange(?float $min, ?float $max, string $point): self
     {
+        // Audit F3: funnel for withMin/withMax/withYRange — reject NaN/INF
+        // endpoints and inverted pairs before they reach the stored state.
+        Range::pin($min, $max, 'Y');
         return new self(
             $this->buffer,
             $this->head,

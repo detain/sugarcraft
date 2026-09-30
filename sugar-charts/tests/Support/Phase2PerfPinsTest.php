@@ -12,6 +12,7 @@ use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Picture\Sixel;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Pins for the E736 Phase-2/2.5 performance refactors (round 86, lane v4).
@@ -28,28 +29,22 @@ use SugarCraft\Core\Util\Color;
 final class Phase2PerfPinsTest extends TestCase
 {
     /**
-     * E736/2.2: the flipped ZERO_WIDTH set must answer identically to the
-     * old linear list at every boundary — members, neighbours just outside
-     * the ranges — and the public width path must agree.
+     * E736/2.2 superseded by audit F6 (round 86+): the private ZERO_WIDTH
+     * keyed set is gone — width now delegates to the shared candy-core
+     * table, so this pin asserts the SAME boundary answers through the
+     * canon plus the documented tab flip (1 → TAB_WIDTH=4, aligning the
+     * chart renderers with every other SugarCraft renderer's layout).
      */
-    public function testZeroWidthSetMembersAndNeighbours(): void
+    public function testWidthDelegatesToSharedCanonWithTabFlip(): void
     {
-        $set = (new ReflectionClass(BufferHelper::class))->getConstant('ZERO_WIDTH');
-        $this->assertIsArray($set);
-        $this->assertCount(124, $set, 'keyed set carries every former in_array member');
-
-        foreach ([0x200b, 0x2060, 0xfeff, 0x0300, 0x036f, 0x0483, 0x0489] as $member) {
-            $this->assertTrue(isset($set[$member]), sprintf('member 0x%04x', $member));
-        }
-        foreach ([0x2061, 0x02ff, 0x0370, 0x048a, 0xf900] as $outside) {
-            $this->assertFalse(isset($set[$outside]), sprintf('non-member 0x%04x', $outside));
-        }
-
         $this->assertSame(0, BufferHelper::graphemeWidth("\u{034f}"));
         $this->assertSame(1, BufferHelper::graphemeWidth("\u{0370}"));
-        $this->assertSame(0, BufferHelper::graphemeWidth("\u{0489}"));
+        $this->assertSame(Width::of("\u{0489}"), BufferHelper::graphemeWidth("\u{0489}"));
         $this->assertSame(1, BufferHelper::graphemeWidth("\u{048a}"));
-        $this->assertSame(1, BufferHelper::graphemeWidth("\t"));
+        $this->assertSame(Width::TAB_WIDTH, BufferHelper::graphemeWidth("\t"));
+        // The old table missed plane-1 emoji entirely despite promising
+        // "emoji count as 2" — the shared canon closes that hole.
+        $this->assertSame(2, BufferHelper::graphemeWidth("\u{1F300}"));
     }
 
     /**

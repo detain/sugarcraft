@@ -61,6 +61,11 @@ abstract class Chart
 
     /**
      * Compose and return the full chart output with legend, title, and labels.
+     *
+     * Empty-data contract (LineChart): with no data the composed output is
+     * a blank width×height canvas (right-trimmed empty rows), not '' — see
+     * BarChart::view() for the '' family and EmptyRenderContractTest for
+     * the pinned shapes.
      */
     public function view(): string
     {
@@ -162,7 +167,6 @@ abstract class Chart
      */
     private function addTitle(array $lines): array
     {
-        $titleLen = mb_strlen($this->title, 'UTF-8');
         $centered = str_pad($this->title, $this->width, ' ', STR_PAD_BOTH);
 
         return match ($this->titlePosition) {
@@ -237,8 +241,10 @@ abstract class Chart
      * Set the chart title.
      *
      * @param Position $position Where to render the title (Top or Bottom).
-     *                           Left/Right positions are accepted but
-     *                           rendered at Top for simplicity.
+     *                           Left/Right positions are accepted but not
+     *                           rendered — a horizontal composition has no
+     *                           title gutter, so the title is silently
+     *                           dropped for those values.
      */
     public function withTitle(string $title, Position $position = Position::Top): self
     {
@@ -246,10 +252,14 @@ abstract class Chart
     }
 
     /**
-     * Use a BrailleCanvas for higher-resolution rendering.
-     * When set, the chart renders using dot-matrix braille characters
-     * instead of standard character cells (2x horizontal, 4x vertical
-     * resolution). Mirrors sugar-dash Plot/Braille canvas mode.
+     * Select braille dot-matrix rendering (2x horizontal, 4x vertical
+     * resolution) instead of standard character cells.
+     *
+     * Honored by LineChart only; other chart classes ignore it. The
+     * canvas object is not mutated — the chart rasterizes into its own
+     * internal grid on every render and the instance merely selects the
+     * braille mode (its dimensions are not consulted). Mirrors sugar-dash
+     * Plot/Braille canvas mode.
      */
     public function withCanvas(BrailleCanvas $canvas): self
     {
@@ -293,7 +303,7 @@ abstract class Chart
      */
     public function withAnimationProgress(float $progress): self
     {
-        return $this->copy(animationProgress: $progress);
+        return $this->copy(animationProgress: max(0.0, min(1.0, $progress)));
     }
 
     /** Set animation duration in milliseconds (0 = instant, no animation). */

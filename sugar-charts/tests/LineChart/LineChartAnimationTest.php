@@ -154,4 +154,15 @@ final class LineChartAnimationTest extends TestCase
         // With 0 progress, we get just an empty canvas (axes not drawn without data)
         $this->assertSame(8, substr_count($out, "\n") + 1);
     }
+
+    /**
+     * Audit F14: the withAnimationProgress docblocks always promised a
+     * clamp the setter never performed. The door clamps now, so the
+     * stored value matches what the renderer has always behaved as.
+     */
+    public function testAnimationProgressIsClampedAtTheDoor(): void
+    {
+        self::assertSame(1.0, LineChart::new([1, 2, 3])->withAnimationProgress(5.0)->getAnimationProgress());
+        self::assertSame(0.0, LineChart::new([1, 2, 3])->withAnimationProgress(-2.0)->getAnimationProgress());
+    }
 }

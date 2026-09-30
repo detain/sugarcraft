@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Aggregation;
 
+use SugarCraft\Charts\Support\Finite;
+
 /**
  * Computes a simple (unweighted) moving average over a list of values.
  * Optionally produces a SMA for a second list at the same cadence (e.g.
@@ -43,21 +45,31 @@ final class MovingAverage
         return (new self($windowSize, true))->addMany($values)->computeSimple();
     }
 
-    public static function create(int $windowSize, bool $centered = false): self
+    /**
+     * Canonical factory — mirrors the SugarCraft `::new()` convention.
+     */
+    public static function new(int $windowSize, bool $centered = false): self
     {
         return new self($windowSize, $centered);
     }
 
-    public static function new(int $windowSize, bool $centered = false): self
+    /**
+     * @deprecated Use {@see self::new()}; kept as an alias for callers of
+     *             the original pandas-style spelling.
+     */
+    public static function create(int $windowSize, bool $centered = false): self
     {
-        return self::create($windowSize, $centered);
+        return self::new($windowSize, $centered);
     }
 
     /**
      * Append a single value.
+     *
+     * @throws \InvalidArgumentException when $value is NaN or ±INF
      */
     public function add(int|float $value): self
     {
+        Finite::assert($value);
         $clone = clone $this;
         $clone->values[] = $value;
         return $clone;
@@ -67,9 +79,12 @@ final class MovingAverage
      * Append multiple values at once.
      *
      * @param list<int|float> $values
+     *
+     * @throws \InvalidArgumentException on the first non-finite value
      */
     public function addMany(array $values): self
     {
+        Finite::assertAll($values);
         $clone = clone $this;
         foreach ($values as $v) {
             $clone->values[] = $v;
@@ -131,6 +146,7 @@ final class MovingAverage
             return [];
         }
 
+        Finite::assertAll($values);
         $alpha ??= 2.0 / ($windowSize + 1);
         $ema = (float) $values[0];
         $result = [$ema];

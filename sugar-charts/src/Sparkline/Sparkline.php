@@ -6,6 +6,8 @@ namespace SugarCraft\Charts\Sparkline;
 
 use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Range;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style as BufferStyle;
@@ -43,6 +45,12 @@ final class Sparkline
         if ($width < 0) {
             throw new \InvalidArgumentException(Lang::t('sparkline.width_nonneg'));
         }
+        // Audit F7: every ingestion door (new / withData / push / pushAll)
+        // rebuilds through this constructor, so one finite sweep covers the
+        // whole surface — a NaN glyph index silently picks the empty cell.
+        Finite::assertAll($data);
+        // Audit F3: an explicit range must be ordered; null ends are "auto".
+        Range::pin($min, $max, 'value');
     }
 
     /**
@@ -145,6 +153,11 @@ final class Sparkline
         return new self([], $this->width, $this->min, $this->max, $this->style, $this->autoMaxValue);
     }
 
+    /**
+     * Empty-data contract: with no samples renders a full row of spaces
+     * (GLYPHS[0]) — width×1, not '' — see BarChart::view() for the ''
+     * family and EmptyRenderContractTest for the pinned shapes.
+     */
     public function view(): string
     {
         $w = $this->width;

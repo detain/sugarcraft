@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Canvas;
 
+use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -18,6 +20,15 @@ use SugarCraft\Sprinkles\Style;
  */
 final class Graph
 {
+    /**
+     * Upper bound silently clamped onto `niceNumbers()`'s `$targetTicks`
+     * (audit F1 fix), mirroring the existing lower clamp to 2. A tick
+     * ladder is only ever rendered onto a terminal-sized axis; asking for
+     * more than this many is a caller bug, and clamping keeps the
+     * allocation bounded instead of throwing at a cosmetic argument.
+     */
+    public const MAX_TARGET_TICKS = 1000;
+
     /** Default light-line glyphs (matches the `runes.LineStyle` "thin" preset). */
     public const LINE_THIN = [
         'h'  => '─', 'v' => '│',
@@ -126,7 +137,9 @@ final class Graph
             for ($i = 0; $i < $count; $i++) {
                 $col = $xOrigin + (int) round($i * ($xLen - 1) / max(1, $count - 1));
                 $label = $xLabels[$i];
-                $labelLen = mb_strlen($label, 'UTF-8');
+                // Audit F6: anchor by DISPLAY width — mb_strlen charges an
+                // escape-free CJK/emoji rune 1, the terminal paints it 2.
+                $labelLen = Width::string($label);
                 if ($i === $count - 1 && $count > 1) {
                     // Right-anchor.
                     $col = max($xOrigin, $xOrigin + $xLen - $labelLen + 1);
@@ -143,7 +156,7 @@ final class Graph
             for ($i = 0; $i < $count; $i++) {
                 $row = $top + (int) round($i * ($yLen - 1) / max(1, $count - 1));
                 $label = $yLabels[$i];
-                $startCol = max(0, $xOrigin - mb_strlen($label, 'UTF-8') - 1);
+                $startCol = max(0, $xOrigin - Width::string($label) - 1);
                 self::drawString($c, $startCol, $row, $label, $style);
             }
         }
@@ -151,18 +164,14 @@ final class Graph
 
     /**
      * Place the characters of `$s` starting at (`$x`, `$y`), advancing
-     * one column per character. Multi-byte safe.
+     * by each grapheme's DISPLAY width (audit F6: one column per grapheme
+     * shifted everything after a CJK/emoji rune off its terminal column).
+     * Multi-byte safe. Delegates to {@see Canvas::setString()}, the single
+     * cluster-splitting walker.
      */
     public static function drawString(Canvas $c, int $x, int $y, string $s, ?Style $style = null): void
     {
-        $i = 0;
-        $clusters = function_exists('grapheme_str_split')
-            ? (grapheme_str_split($s) ?: mb_str_split($s, 1, 'UTF-8'))
-            : mb_str_split($s, 1, 'UTF-8');
-        foreach ($clusters as $cluster) {
-            $c->setCell($x + $i, $y, $cluster, $style);
-            $i++;
-        }
+        $c->setString($x, $y, $s, $style);
     }
 
     /**
@@ -550,12 +559,26 @@ final class Graph
      * (after a swap of inverted bounds) the raw `$min` is returned
      * unrounded as a single tick — there is no interval to make nice.
      *
+     * FINITE DOMAIN (audit F1/F22 fix): endpoints are rejected unless
+     * finite, an overflowing difference (`1e308 - -1e308 === INF`) and a
+     * zero-valued step throw instead of feeding an unbounded tick loop,
+     * and `$targetTicks` is silently clamped to
+     * {@see MAX_TARGET_TICKS} at the top the same way it was already
+     * clamped to 2 at the bottom. With a valid step the ladder picks the
+     * first of 1/2/5/10 at or above the target spacing, so the returned
+     * count is mathematically bounded by `$targetTicks + 2` — the loop
+     * guard below is belt-and-braces, unreachable by construction.
+     *
      * @return list<float>  ascending list of tick values
      */
     public static function niceNumbers(float $min, float $max, int $targetTicks = 5): array
     {
+        Finite::assert($min);
+        Finite::assert($max);
         if ($targetTicks < 2) {
             $targetTicks = 2;
+        } elseif ($targetTicks > self::MAX_TARGET_TICKS) {
+            $targetTicks = self::MAX_TARGET_TICKS;
         }
         if ($min > $max) {
             [$min, $max] = [$max, $min];
@@ -565,6 +588,13 @@ final class Graph
         }
 
         $range = $max - $min;
+        if (!is_finite($range)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Graph::niceNumbers(%s, %s): finite endpoints whose difference overflows a double have no nice tick ladder',
+                (string) $min,
+                (string) $max,
+            ));
+        }
         // Target spacing between adjacent ticks.
         $targetStep = $range / (float) ($targetTicks - 1);
 
@@ -573,14 +603,29 @@ final class Graph
         $step10 = pow(10.0, $exp);
 
         // Pick the nicest multiplier: 1, 2, 5, 10.
+        //
+        // Audit F22: the comparison used to be `$candidate >= $step10`,
+        // which the very first candidate (m = 1.0) always satisfied — the
+        // 2/5/10 rungs were dead code and every step collapsed to a bare
+        // power of ten (range 0..3 with target 5 emitted 31 ticks). The
+        // ladder must be measured against the TARGET spacing.
         $multipliers = [1.0, 2.0, 5.0, 10.0];
         $niceStep = $step10 * 10.0;
         foreach ($multipliers as $m) {
             $candidate = $step10 * $m;
-            if ($candidate >= $step10) {
+            if ($candidate >= $targetStep) {
                 $niceStep = $candidate;
                 break;
             }
+        }
+        if (!is_finite($niceStep) || $niceStep <= 0.0) {
+            throw new \InvalidArgumentException(sprintf(
+                'Graph::niceNumbers(%s, %s): range %.3g underflows the step ladder to %s; no finite nice step exists',
+                (string) $min,
+                (string) $max,
+                $range,
+                (string) $niceStep,
+            ));
         }
 
         // Round the minimum down to a nice tick boundary.
@@ -590,10 +635,23 @@ final class Graph
             $niceMin -= $niceStep;
         }
 
-        // Generate ticks until we exceed the maximum.
+        // Generate ticks until we exceed the maximum. The inclusion
+        // tolerance is relative to the step — the old absolute `1e-9`
+        // swallowed ranges smaller than itself (subnormal domains),
+        // which is what let the loop run away once the endpoint bounds
+        // above were added.
         $ticks = [];
-        for ($tick = $niceMin; $tick <= $max + 1e-9; $tick += $niceStep) {
+        for ($tick = $niceMin; $tick <= $max + $niceStep * 1e-9; $tick += $niceStep) {
             $ticks[] = $tick;
+            if (count($ticks) > $targetTicks + 2) {
+                throw new \LogicException(sprintf(
+                    'Graph::niceNumbers(%s, %s, %d): step %.3g produced more than targetTicks+2 ticks — bound violated',
+                    (string) $min,
+                    (string) $max,
+                    $targetTicks,
+                    $niceStep,
+                ));
+            }
         }
 
         return $ticks;

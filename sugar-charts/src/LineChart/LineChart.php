@@ -9,9 +9,14 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\Range;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Charts\Canvas\BrailleGrid;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Sprinkles\Theme;
 
 /**
@@ -100,6 +105,12 @@ final class LineChart extends Chart
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('linechart.dim_nonneg'));
         }
+        // Audit F3: every ingestion door (new / with* / lineChartCopy)
+        // rebuilds through this constructor, so one check pair covers both
+        // axes for NaN/INF endpoints and inverted ranges. `null` ends are
+        // legal and mean "auto" — including autoAdjustRange()'s all-null.
+        Range::pin($min, $max, 'Y');
+        Range::pin($xMin, $xMax, 'X');
     }
 
     /** @param list<int|float> $data */
@@ -126,11 +137,16 @@ final class LineChart extends Chart
 
     public function withMin(?float $m): self        { return $this->lineChartCopy(min: $m, minSet: true); }
     public function withMax(?float $m): self        { return $this->lineChartCopy(max: $m, maxSet: true); }
+
     public function withPoint(string $rune): self   { return $this->lineChartCopy(point: $rune); }
 
     /**
      * Y-axis data range as a `[min, max]` pair. Equivalent to chaining
      * `withMin($min)->withMax($max)`. Mirrors ntcharts' `SetYRange`.
+     *
+     * @throws \InvalidArgumentException on NaN/INF endpoints or min > max
+     *         (audit F3, enforced at the constructor door); `null` ends stay
+     *         legal and mean "auto".
      */
     public function withYRange(?float $min, ?float $max): self
     {
@@ -142,6 +158,10 @@ final class LineChart extends Chart
      * generating X tick labels. The data itself remains column-indexed;
      * the range is the conceptual `[xMin, xMax]` mapped across the
      * plot width. Mirrors ntcharts' `SetXRange`.
+     *
+     * @throws \InvalidArgumentException on NaN/INF endpoints or min > max
+     *         (audit F3, enforced at the constructor door); `null` ends stay
+     *         legal and mean "auto".
      */
     public function withXRange(?float $min, ?float $max): self
     {
@@ -190,8 +210,15 @@ final class LineChart extends Chart
     }
 
     /**
-     * Add or replace a named series. Automatically adds a legend item
-     * with an auto-assigned color.
+     * Add or replace a named series, auto-managing its legend entry.
+     *
+     * REPLACE semantics (audit F4 fix): re-calling with an existing name
+     * swaps that series' values and keeps its original legend slot and
+     * colour — the former code de-duplicated `datasets` by name but always
+     * APPENDED a legend item, so a re-call produced a duplicated label and
+     * shifted the colour cycle for every later series. A brand-new name
+     * appends its legend entry with the next colour in the cycle, exactly
+     * as before (append-only flows render byte-identically).
      *
      * @param list<int|float> $values
      */
@@ -201,10 +228,15 @@ final class LineChart extends Chart
         $sets = $this->datasets;
         $sets[$name] = array_values($values);
 
-        // Auto-add legend item with cycling colors
-        $colorIndex = count($this->datasets) % count(self::DATASET_COLORS);
+        // Auto-add legend item with cycling colors; on replace, update the
+        // existing slot in place so label order and colour assignment stay
+        // stable for the series' identity.
         $legendItems = $this->legendItems;
-        $legendItems[] = ['label' => $name, 'color' => self::DATASET_COLORS[$colorIndex]];
+        $slot = array_search($name, array_column($legendItems, 'label'), true);
+        if ($slot === false) {
+            $colorIndex = count($this->datasets) % count(self::DATASET_COLORS);
+            $legendItems[] = ['label' => $name, 'color' => self::DATASET_COLORS[$colorIndex]];
+        }
 
         return $this->lineChartCopy(datasets: $sets, legendItems: $legendItems);
     }
@@ -380,8 +412,10 @@ final class LineChart extends Chart
      * Set the chart title.
      *
      * @param Position $position Where to render the title (Top or Bottom).
-     *                           Left/Right positions are accepted but
-     *                           rendered at Top for simplicity.
+     *                           Left/Right positions are accepted but not
+     *                           rendered — a horizontal composition has no
+     *                           title gutter, so the title is silently
+     *                           dropped for those values.
      */
     public function withTitle(string $title, Position $position = Position::Top): self
     {
@@ -389,7 +423,10 @@ final class LineChart extends Chart
     }
 
     /**
-     * Use a BrailleCanvas for higher-resolution rendering.
+     * Render the series as braille dot-matrix (2x horizontal, 4x vertical
+     * resolution) instead of one cell per sample. The canvas object is not
+     * mutated — LineChart rasterizes into its own grid on every render and
+     * the instance merely selects braille mode (its dimensions are ignored).
      */
     public function withCanvas(BrailleCanvas $canvas): self
     {
@@ -423,7 +460,7 @@ final class LineChart extends Chart
      */
     public function withAnimationProgress(float $progress): self
     {
-        return $this->lineChartCopy(animationProgress: $progress);
+        return $this->lineChartCopy(animationProgress: max(0.0, min(1.0, $progress)));
     }
 
     /** Set animation duration in milliseconds (0 = instant, no animation). */
@@ -509,7 +546,8 @@ final class LineChart extends Chart
         if ($this->showAxes) {
             $maxYLabel = 0;
             foreach ($yLabels as $lbl) {
-                $maxYLabel = max($maxYLabel, mb_strlen($lbl, 'UTF-8'));
+                // Audit F6: gutter sized by DISPLAY width, not codepoint count.
+                $maxYLabel = max($maxYLabel, Width::string($lbl));
             }
             $gutterLeft   = max(2, $maxYLabel + 1);
             $gutterBottom = $xLabels !== [] ? 2 : 1;
@@ -519,47 +557,55 @@ final class LineChart extends Chart
 
         // Plot primary + named series on the same axes.
         $allSeries = ['_primary' => $this->data] + $this->datasets;
-        foreach ($allSeries as $name => $values) {
-            if ($values === []) {
-                continue;
-            }
-            $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
-            $count   = count($points);
-            $rune    = $name === '_primary'
-                ? $this->point
-                : ($this->datasetPoints[$name] ?? $this->point);
-
-            // Compute max point index based on animation progress
-            // Clamp to [0, count] to ensure we don't try to access beyond array bounds
-            $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
-
-            $coords = [];
-            foreach ($points as $i => $v) {
-                $col = $gutterLeft + ($count <= 1
-                    ? 0
-                    : (int) round($i * ($plotW - 1) / ($count - 1)));
-                $row = self::rowForValue((float) $v, (float) $min, (float) $max, $plotH);
-                $coords[] = [$col, $row];
-            }
-            // Only render up to maxPointIndex points (and connectors between them)
-            for ($i = 0; $i < $count; $i++) {
-                if ($i >= $maxPointIndex) {
-                    break;
+        if ($this->brailleCanvas !== null) {
+            // Audit F11: braille mode — series rasterize into a dot grid
+            // (2×4 dots per cell) so per-dataset legend colors reach the
+            // strokes. MarkLines and the axis frame still compose in cell
+            // space above/below the dot region.
+            $this->renderBrailleSeries($canvas, $allSeries, (float) $min, (float) $max, $gutterLeft, $plotW, $plotH, $progress);
+        } else {
+            foreach ($allSeries as $name => $values) {
+                if ($values === []) {
+                    continue;
                 }
-                [$x, $y] = $coords[$i];
-                $canvas->setCell($x, $y, $rune);
-                // Draw connector to next point if within animation bounds
-                if ($i + 1 < $maxPointIndex) {
-                    [$x2, $y2] = $coords[$i + 1];
-                    self::drawConnector($canvas, $x, $y, $x2, $y2, $this->unicodeConnectors);
+                $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
+                $count   = count($points);
+                $rune    = $name === '_primary'
+                    ? $this->point
+                    : ($this->datasetPoints[$name] ?? $this->point);
+
+                // Compute max point index based on animation progress
+                // Clamp to [0, count] to ensure we don't try to access beyond array bounds
+                $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
+
+                $coords = [];
+                foreach ($points as $i => $v) {
+                    $col = $gutterLeft + ($count <= 1
+                        ? 0
+                        : (int) round($i * ($plotW - 1) / ($count - 1)));
+                    $row = self::rowForValue((float) $v, (float) $min, (float) $max, $plotH);
+                    $coords[] = [$col, $row];
                 }
-                // Area fill: paint from baseline up to the point row.
-                if ($this->fill) {
-                    $baseline = $plotH - 1;
-                    $top = min($baseline, $y);
-                    $bottom = max($baseline, $y);
-                    for ($fy = $top; $fy <= $bottom; $fy++) {
-                        $canvas->setCell($x, $fy, $rune);
+                // Only render up to maxPointIndex points (and connectors between them)
+                for ($i = 0; $i < $count; $i++) {
+                    if ($i >= $maxPointIndex) {
+                        break;
+                    }
+                    [$x, $y] = $coords[$i];
+                    $canvas->setCell($x, $y, $rune);
+                    // Draw connector to next point if within animation bounds
+                    if ($i + 1 < $maxPointIndex) {
+                        [$x2, $y2] = $coords[$i + 1];
+                        self::drawConnector($canvas, $x, $y, $x2, $y2, $this->unicodeConnectors);
+                    }
+                    // Area fill: paint from baseline up to the point row.
+                    if ($this->fill) {
+                        $baseline = $plotH - 1;
+                        $top = min($baseline, $y);
+                        $bottom = max($baseline, $y);
+                        for ($fy = $top; $fy <= $bottom; $fy++) {
+                            $canvas->setCell($x, $fy, $rune);
+                        }
                     }
                 }
             }
@@ -603,6 +649,158 @@ final class LineChart extends Chart
     }
 
     /**
+     * Braille-mode series pass (audit F11). Rasterizes every series into a
+     * dot-matrix grid (2×4 dots per terminal cell) and paints each touched
+     * cell exactly once, carrying the series' legend color as the cell
+     * style — so dataset colors actually reach the strokes and the render
+     * is one batched walk instead of sugar-dash `BrailleCanvas::setPoint`'s
+     * copy-on-write-per-dot cost. The `$brailleCanvas` instance only
+     * selects this mode; its own buffer is never read or mutated.
+     *
+     * Animation cutoff and area fill mirror the ASCII loop: dots appear in
+     * the same sample order, and fill paints the vertical dot run from each
+     * sample down to the bottom dot row.
+     *
+     * @param array<string,list<int|float>> $allSeries
+     */
+    private function renderBrailleSeries(
+        Canvas $canvas,
+        array $allSeries,
+        float $min,
+        float $max,
+        int $gutterLeft,
+        int $plotW,
+        int $plotH,
+        float $progress,
+    ): void {
+        $grid = new BrailleGrid($plotW, $plotH);
+        [$dotW, $dotH] = $grid->dotSize();
+
+        /** @var array<string,string> label => color name/hex */
+        $colorByLabel = [];
+        foreach ($this->legendItems as $item) {
+            $colorByLabel[$item['label']] = $item['color'];
+        }
+        /** @var array<string,Style|null> color string => style memo */
+        $styleMemo = [];
+        /** @var array<int, array<int, Style|null>> [cellY][cellX] last series to touch wins */
+        $cellStyles = [];
+
+        foreach ($allSeries as $name => $values) {
+            if ($values === []) {
+                continue;
+            }
+            $points = count($values) > $dotW ? array_slice($values, -$dotW) : $values;
+            $count  = count($points);
+            $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
+
+            $colorName = $colorByLabel[$name] ?? null;
+            if ($colorName !== null && !array_key_exists($colorName, $styleMemo)) {
+                $styleMemo[$colorName] = self::styleForColor($colorName);
+            }
+            $style = $colorName === null ? null : $styleMemo[$colorName];
+
+            $coords = [];
+            foreach ($points as $i => $v) {
+                $dx = $count <= 1
+                    ? 0
+                    : (int) round($i * ($dotW - 1) / ($count - 1));
+                $dy = self::dotRowForValue((float) $v, $min, $max, $dotH);
+                $coords[] = [$dx, $dy];
+            }
+
+            for ($i = 0; $i < $maxPointIndex; $i++) {
+                [$dx, $dy] = $coords[$i];
+                $grid->set($dx, $dy);
+                $cellStyles[intdiv($dy, 4)][intdiv($dx, 2)] = $style;
+                if ($i + 1 < $maxPointIndex) {
+                    [$dx2, $dy2] = $coords[$i + 1];
+                    self::drawDotLine($grid, $dx, $dy, $dx2, $dy2, $style, $cellStyles);
+                }
+                if ($this->fill) {
+                    for ($fy = $dy; $fy < $dotH; $fy++) {
+                        $grid->set($dx, $fy);
+                        $cellStyles[intdiv($fy, 4)][intdiv($dx, 2)] = $style;
+                    }
+                }
+            }
+        }
+
+        // Single batched paint: only cells touched by some series are set;
+        // untouched cells keep the (blank) canvas underneath, matching
+        // BrailleGrid::paint's skip-empty behaviour.
+        foreach ($cellStyles as $cy => $row) {
+            foreach ($row as $cx => $style) {
+                $canvas->setCell($gutterLeft + $cx, (int) $cy, $grid->rune($cx, (int) $cy), $style);
+            }
+        }
+    }
+
+    /**
+     * Same mapping as {@see rowForValue()} at dot-row resolution.
+     */
+    private static function dotRowForValue(float $value, float $min, float $max, int $dotRows): int
+    {
+        $norm = ($value - $min) / ($max - $min);
+        $norm = max(0.0, min(1.0, $norm));
+        return (int) round((1.0 - $norm) * ($dotRows - 1));
+    }
+
+    /**
+     * Integer Bresenham in dot space; both endpoints are in-bounds by
+     * construction, so every intermediate dot is too. Records the owning
+     * series' style per touched cell (last writer wins, matching the
+     * painter's-order of the ASCII loop).
+     *
+     * @param array<int, array<int, Style|null>> $cellStyles
+     */
+    private static function drawDotLine(BrailleGrid $grid, int $x0, int $y0, int $x1, int $y1, ?Style $style, array &$cellStyles): void
+    {
+        $dx = abs($x1 - $x0);
+        $dy = -abs($y1 - $y0);
+        $sx = $x0 < $x1 ? 1 : -1;
+        $sy = $y0 < $y1 ? 1 : -1;
+        $err = $dx + $dy;
+
+        while (true) {
+            $grid->set($x0, $y0);
+            $cellStyles[intdiv($y0, 4)][intdiv($x0, 2)] = $style;
+            if ($x0 === $x1 && $y0 === $y1) {
+                break;
+            }
+            $e2 = 2 * $err;
+            if ($e2 >= $dy) {
+                $err += $dy;
+                $x0   += $sx;
+            }
+            if ($e2 <= $dx) {
+                $err += $dx;
+                $y0   += $sy;
+            }
+        }
+    }
+
+    /**
+     * Resolve a legend color entry (`#hex` or CSS name) into a foreground
+     * style. Unknown colors fail soft to unstyled — the same outcome as a
+     * legend entry that does not exist. Names are tried first so
+     * hex-lookalike words resolve to their CSS value.
+     */
+    private static function styleForColor(string $color): ?Style
+    {
+        try {
+            try {
+                $c = Color::parse($color);
+            } catch (\InvalidArgumentException) {
+                $c = Color::hex($color);
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+        return Style::new()->fg($c);
+    }
+
+    /**
      * Paint the {@see MarkLine} annotations. One horizontal glyph run per
      * mark spanning the full plot width at the row its value maps to;
      * marks outside the resolved range are skipped. A non-empty label
@@ -626,12 +824,12 @@ final class LineChart extends Chart
             for ($col = $gutterLeft; $col < $gutterLeft + $plotW; $col++) {
                 $canvas->setCell($col, $row, $glyph);
             }
-            $labelWidth = mb_strlen($mark->label, 'UTF-8');
+            $labelWidth = Width::string($mark->label);
             if ($mark->label !== '' && $plotW > $labelWidth + 2) {
                 $start = $gutterLeft + $plotW - $labelWidth;
-                foreach (mb_str_split($mark->label, 1, 'UTF-8') as $offset => $char) {
-                    $canvas->setCell($start + $offset, $row, $char);
-                }
+                // Width-aware placement (audit F6): one walker for every
+                // string the canvas receives, wide runes included.
+                $canvas->setString($start, $row, $mark->label);
             }
         }
     }

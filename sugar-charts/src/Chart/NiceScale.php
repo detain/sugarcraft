@@ -33,6 +33,15 @@ final class NiceScale
      * 9000 → 10000 (carry widens by one digit rather than wrapping to 0),
      * 45 → 100 (floor). Non-positive maxima, and any result below the floor,
      * return {@see FLOOR}.
+     *
+     * FINITE DOMAIN (audit F2 fix): the digit walk runs on a formatted
+     * decimal string and the scale is recombined as a FLOAT product, so the
+     * guarantee "result >= max" holds for every accepted input. The former
+     * `(string)(int)$max` saturated at PHP_INT_MAX — ceiling(1e20) answered
+     * 8e18, BELOW its own input, silently clipping live consumer axes — and
+     * the `(int)` concat overflowed for any ≥2^63 magnitude. Maxima so large
+     * that the widened round ceiling would overflow a double (above
+     * ~9e307) are rejected loudly rather than wrapped or clamped.
      */
     public static function ceiling(float $max): float
     {
@@ -44,14 +53,22 @@ final class NiceScale
             return self::FLOOR;
         }
 
-        $digits = (string) (int) $max;
+        // floor() keeps the "integer part" semantics of the old (int) cast:
+        // 9999.6 widens off 9999 → 10000, not off the rounded 10000 → 20000.
+        $digits = sprintf('%.0f', floor($max));
         $leading = (int) $digits[0] + 1;
         if ($leading > 9) {
             // 9xxx rolls over to 10xxx — widen rather than wrap the leading digit.
             $leading = 10;
         }
-        $scale = (int) ($leading . str_repeat('0', strlen($digits) - 1));
+        $scale = (float) $leading * (10.0 ** (strlen($digits) - 1));
+        if (!is_finite($scale)) {
+            throw new \InvalidArgumentException(sprintf(
+                'NiceScale::ceiling(%s) overflows the finite ceiling domain (max ~9e307); no finite round ceiling exists',
+                (string) $max,
+            ));
+        }
 
-        return max((float) $scale, self::FLOOR);
+        return max($scale, self::FLOOR);
     }
 }
