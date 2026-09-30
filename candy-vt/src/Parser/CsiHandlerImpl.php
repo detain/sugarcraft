@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor;
+use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Rendition;
 use SugarCraft\Vt\Theme;
 
@@ -42,6 +43,19 @@ final class CsiHandlerImpl implements CsiHandler
      */
     private ?int $fgTruecolor = null;
     private ?int $bgTruecolor = null;
+
+    /**
+     * Active OSC 8 hyperlink of the pen (ESC-2), written by
+     * {@see OscHandlerImpl::hyperlink()} through {@see setHyperlink()}.
+     *
+     * Deliberately NOT part of the SGR reset (`CSI 0 m` keeps the link — xterm
+     * scopes link state to the OSC 8 protocol itself, mirroring the emulator's
+     * {@see \SugarCraft\Vt\Handler\ScreenHandler::$currentHyperlink}, which
+     * only OSC 8-with-empty-URI and RIS clear). The saved-cursor slots skip it
+     * for the same reason: DECSC/DECRC save the rendition, not the link pen,
+     * on both engines.
+     */
+    private ?Hyperlink $hyperlink = null;
 
     /** Saved cursor for SCO SC/RC (CSI s / CSI u), with the pen. */
     private ?Cursor $savedCursor = null;
@@ -115,6 +129,21 @@ final class CsiHandlerImpl implements CsiHandler
     }
 
     /**
+     * Set the pen's active OSC 8 link ({@see $hyperlink}); null closes it.
+     * Called by {@see OscHandlerImpl} on every OSC 8 dispatch.
+     */
+    public function setHyperlink(?Hyperlink $hyperlink): void
+    {
+        $this->hyperlink = $hyperlink;
+    }
+
+    /** The pen's currently active OSC 8 link, or null when none is open. */
+    public function hyperlink(): ?Hyperlink
+    {
+        return $this->hyperlink;
+    }
+
+    /**
      * Receive the ECMA-48 sub-parameter continuation flags for the parameter
      * list about to be dispatched. {@see RendererHandler} — the renderer path's
      * push-reachable {@see \SugarCraft\Ansi\Parser\SubparamsAwareHandler} sink —
@@ -150,6 +179,13 @@ final class CsiHandlerImpl implements CsiHandler
             $host = $this->wrapPending ? $col : $col - 1;
             if ($host >= 0) {
                 $prev = $this->grid->cell($row, $host);
+                // A mark whose host is a wide glyph's phantom column is
+                // dropped, mirroring the emulator's
+                // ScreenHandler::attachCombiningChar continuation guard — the
+                // decoration belongs to the head half, never the tail.
+                if ($prev->continuation) {
+                    return;
+                }
                 $updated = new Cell(
                     char: $prev->char . $grapheme,
                     fg: $this->fg,
@@ -223,15 +259,22 @@ final class CsiHandlerImpl implements CsiHandler
             fgTruecolor: $this->fgTruecolor,
             bgTruecolor: $this->bgTruecolor,
             rendition: $rendition,
+            hyperlink: $this->hyperlink,
         );
         $this->grid->put($row, $col, $cell);
 
         // Write continuation cells for wide characters (e.g. CJK, emoji) and
-        // the DECDWL double-width bump. The natural-width tail blanks to the
-        // shared empty cell (as the renderer always has); the extra DECDWL
-        // column carries the line rendition so it stays observably wide.
+        // the DECDWL double-width bump. Both tails are Cell::continuation
+        // clones of the head (ESC-3): the emulator's eraseWidePartners,
+        // combining-guard and cursor-skip all key off the continuation FLAG,
+        // and the phantom column must carry the head's colours/rendition/link
+        // so a background-painted wide glyph stays visually one glyph on both
+        // engines. Historically the renderer blanked natural tails to the
+        // shared empty cell — a divergence that painted wide glyphs on coloured
+        // backgrounds with a default-coloured hole (mirrors
+        // ScreenHandler::printChar's twin loops).
         for ($i = 1; $i < $width; $i++) {
-            $this->grid->put($row, $col + $i, Cell::empty());
+            $this->grid->put($row, $col + $i, Cell::continuation($cell));
         }
         for ($i = 0; $i < $extra; $i++) {
             $this->grid->put($row, $col + $width + $i, Cell::continuation($cell));
@@ -1056,7 +1099,7 @@ final class CsiHandlerImpl implements CsiHandler
      * power-on value object (home + DECTCEM visible + default shape — the
      * emulator's `hardReset()` builds a `new Cursor()`; homing with
      * {@see Cursor::at()} kept a `CSI ? 25 l` hide across the reset), drops the
-     * pen (palette + truecolour + the DECSC slot) and the REP memory, restores
+     * pen (palette + truecolour + the OSC 8 link + the DECSC slot) and the REP memory, restores
      * the full-page scroll region and re-enables DECAWM — the renderer's
      * expressive-range match for the emulator's
      * {@see \SugarCraft\Vt\Handler\ScreenHandler::hardReset()}.
@@ -1079,6 +1122,10 @@ final class CsiHandlerImpl implements CsiHandler
         $this->attrs = 0;
         $this->fgTruecolor = null;
         $this->bgTruecolor = null;
+        // RIS drops the OSC 8 link pen too — the emulator's hardReset clears
+        // currentHyperlink identically (xterm "hard reset resets everything
+        // the protocols can set").
+        $this->hyperlink = null;
         $this->lastPrintable = '';
         $this->savedCursor = null;
         $this->savedFg = null;

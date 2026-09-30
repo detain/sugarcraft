@@ -52,7 +52,10 @@ final class Terminal
         $cursor = new Cursor();
 
         $csi = new CsiHandlerImpl($grid, $cursor, $theme);
-        $osc = new OscHandlerImpl();
+        // The OSC handler feeds the CSI pen: OSC 8 links must reach the cells
+        // printable() writes (ESC-2), mirroring the emulator's single-handler
+        // wiring where both live inside ScreenHandler.
+        $osc = new OscHandlerImpl($csi);
 
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
         // 64 KiB string-buffer cap (candy-ansi default) bounds OSC/DCS payload

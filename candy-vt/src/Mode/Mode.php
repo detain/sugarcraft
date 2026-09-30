@@ -14,6 +14,15 @@ namespace SugarCraft\Vt\Mode;
  * - ALT_NO_SAVE     = DECSET 47, 1047 — swap buffers, no cursor/SGR save
  * - ALT_CURSOR_ONLY = DECSET 1048 — save cursor only, no content restore
  * - ALT_FULL        = DECSET 1049 — save all (buffer + cursor + SGR), full restore
+ *
+ * Mouse state is split along xterm's own axis: WHICH tracking is on lives in
+ * the four orthogonal bits {@see $mouseHighlights} (DEC 1001), {@see $mouseAny}
+ * (1000), {@see $mouseCellMotion} (1002) and {@see $mouseExtended} (1003);
+ * HOW a report encodes its coordinates lives in the single
+ * {@see $mouseEncoding} value (DEC 1005/1006/1015 are mutually-alternative
+ * encoders, never simultaneous — the enum makes the illegal combination
+ * unrepresentable). "Is any report flowing at all" is
+ * {@see self::isMouseReporting()}, deliberately independent of the encoding.
  */
 final readonly class Mode
 {
@@ -26,7 +35,7 @@ final readonly class Mode
         public bool $altScreen = false,
         public bool $cursorVisible = true,
         public bool $bracketedPaste = false,
-        public bool $mouseSgr = false,
+        public MouseEncoding $mouseEncoding = MouseEncoding::Default,
         public bool $mouseAny = false,
         public bool $mouseHighlights = false,
         public bool $mouseCellMotion = false,
@@ -85,7 +94,7 @@ final readonly class Mode
             altScreen: $v,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -110,7 +119,7 @@ final readonly class Mode
             altScreen: $variant !== self::ALT_NONE,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -138,7 +147,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $v,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -152,13 +161,21 @@ final readonly class Mode
         );
     }
 
-    public function withMouseSgr(bool $v): self
+    /**
+     * Select the mouse report coordinate encoding (DEC 1005/1006/1015).
+     *
+     * Reset (passing {@see MouseEncoding::Default}) is what xterm does when
+     * any of those modes is turned off: reports fall back to the X10 vector
+     * encoding, they do not switch "off" per-mode — the encoders are one
+     * slot, last setter wins.
+     */
+    public function withMouseEncoding(MouseEncoding $v): self
     {
         return new self(
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $v,
+            mouseEncoding: $v,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -178,7 +195,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $v,
             mouseCellMotion: $this->mouseCellMotion,
@@ -198,7 +215,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $v,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -218,7 +235,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $v,
@@ -238,7 +255,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -252,13 +269,29 @@ final readonly class Mode
         );
     }
 
+    /**
+     * True while ANY mouse tracking mode is armed (DEC 1000/1001/1002/1003).
+     *
+     * Deliberately blind to {@see $mouseEncoding}: selecting an encoding with
+     * no tracking mode on changes nothing a terminal would emit (xterm keeps
+     * reporting off), so a consumer deciding "subscribe the mouse or not"
+     * must consult THIS predicate, not the encoding slot.
+     */
+    public function isMouseReporting(): bool
+    {
+        return $this->mouseAny
+            || $this->mouseHighlights
+            || $this->mouseCellMotion
+            || $this->mouseExtended;
+    }
+
     public function withBracketedPaste(bool $v): self
     {
         return new self(
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $v,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -278,7 +311,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -303,7 +336,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -328,7 +361,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -353,7 +386,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -378,7 +411,7 @@ final readonly class Mode
             altScreen: $this->altScreen,
             cursorVisible: $this->cursorVisible,
             bracketedPaste: $this->bracketedPaste,
-            mouseSgr: $this->mouseSgr,
+            mouseEncoding: $this->mouseEncoding,
             mouseAny: $this->mouseAny,
             mouseHighlights: $this->mouseHighlights,
             mouseCellMotion: $this->mouseCellMotion,
@@ -397,7 +430,7 @@ final readonly class Mode
         return $this->altScreen === $other->altScreen
             && $this->cursorVisible === $other->cursorVisible
             && $this->bracketedPaste === $other->bracketedPaste
-            && $this->mouseSgr === $other->mouseSgr
+            && $this->mouseEncoding === $other->mouseEncoding
             && $this->mouseAny === $other->mouseAny
             && $this->mouseHighlights === $other->mouseHighlights
             && $this->mouseCellMotion === $other->mouseCellMotion

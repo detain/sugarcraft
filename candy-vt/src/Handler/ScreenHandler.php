@@ -14,6 +14,7 @@ use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Msg\FocusInMsg;
 use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Mode\MouseEncoding;
 use SugarCraft\Vt\Rendition;
 use SugarCraft\Ansi\Parser\Handler;
 use SugarCraft\Ansi\Parser\SubparamsAwareHandler;
@@ -1155,11 +1156,17 @@ final class ScreenHandler implements SubparamsAwareHandler
             1048 => $on($this->mode->altScreenVariant === Mode::ALT_CURSOR_ONLY),
             1049 => $on($this->mode->altScreenVariant === Mode::ALT_FULL),
             1000 => $on($this->mode->mouseAny),
-            1001, 1005, 1015 => $on($this->mode->mouseHighlights),
+            1001 => $on($this->mode->mouseHighlights),
             1002 => $on($this->mode->mouseCellMotion),
             1003 => $on($this->mode->mouseExtended),
             1004 => $on($this->mode->reportFocusEvents),
-            1006 => $on($this->mode->mouseSgr),
+            // 1005/1006/1015 answer from the ONE encoding slot: DECRQM sees a
+            // mode on exactly while it is the selected encoder (ESC-1 split —
+            // they were previously merged onto mouseHighlights and all three
+            // answered together).
+            1005 => $on($this->mode->mouseEncoding === MouseEncoding::Utf8),
+            1006 => $on($this->mode->mouseEncoding === MouseEncoding::Sgr),
+            1015 => $on($this->mode->mouseEncoding === MouseEncoding::Urxvt),
             2004 => $on($this->mode->bracketedPaste),
             2026 => $on($this->mode->syncUpdate),
             default => 0,

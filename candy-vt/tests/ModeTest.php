@@ -6,6 +6,7 @@ namespace SugarCraft\Vt\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Mode\MouseEncoding;
 
 final class ModeTest extends TestCase
 {
@@ -15,7 +16,7 @@ final class ModeTest extends TestCase
         $this->assertFalse($m->altScreen);
         $this->assertTrue($m->cursorVisible);
         $this->assertFalse($m->bracketedPaste);
-        $this->assertFalse($m->mouseSgr);
+        $this->assertSame(MouseEncoding::Default, $m->mouseEncoding);
         $this->assertFalse($m->mouseAny);
         $this->assertFalse($m->mouseHighlights);
         $this->assertFalse($m->mouseCellMotion);
@@ -35,10 +36,10 @@ final class ModeTest extends TestCase
         $this->assertFalse($m->cursorVisible);
     }
 
-    public function testWithMouseSgr(): void
+    public function testWithMouseEncoding(): void
     {
-        $m = (new Mode())->withMouseSgr(true);
-        $this->assertTrue($m->mouseSgr);
+        $m = (new Mode())->withMouseEncoding(MouseEncoding::Sgr);
+        $this->assertSame(MouseEncoding::Sgr, $m->mouseEncoding);
     }
 
     public function testWithMouseHighlights(): void
@@ -55,9 +56,9 @@ final class ModeTest extends TestCase
 
     public function testEquals(): void
     {
-        $a = (new Mode())->withAltScreen(true)->withMouseSgr(true);
-        $b = (new Mode())->withAltScreen(true)->withMouseSgr(true);
-        $c = (new Mode())->withAltScreen(false)->withMouseSgr(true);
+        $a = (new Mode())->withAltScreen(true)->withMouseEncoding(MouseEncoding::Sgr);
+        $b = (new Mode())->withAltScreen(true)->withMouseEncoding(MouseEncoding::Sgr);
+        $c = (new Mode())->withAltScreen(false)->withMouseEncoding(MouseEncoding::Sgr);
         $this->assertTrue($a->equals($b));
         $this->assertFalse($a->equals($c));
     }
@@ -133,11 +134,30 @@ final class ModeTest extends TestCase
         $this->assertFalse($m->isAltScreen());
     }
 
-    public function testWithMouseSgrPreservesAltScreenVariant(): void
+    public function testWithMouseEncodingPreservesAltScreenVariant(): void
     {
-        $m = (new Mode())->withAltScreenVariant(Mode::ALT_FULL)->withMouseSgr(true);
+        $m = (new Mode())->withAltScreenVariant(Mode::ALT_FULL)->withMouseEncoding(MouseEncoding::Sgr);
         $this->assertSame(Mode::ALT_FULL, $m->altScreenVariant);
-        $this->assertTrue($m->mouseSgr);
+        $this->assertSame(MouseEncoding::Sgr, $m->mouseEncoding);
+    }
+
+    public function testIsMouseReportingPolarity(): void
+    {
+        // Reporting flows iff a TRACKING mode is on; the encoder slot alone
+        // must never claim reporting (xterm emits nothing for 1005h alone).
+        $this->assertFalse((new Mode())->isMouseReporting());
+        $this->assertFalse((new Mode())->withMouseEncoding(MouseEncoding::Sgr)->isMouseReporting());
+        foreach (['withMouseAny', 'withMouseHighlights', 'withMouseCellMotion', 'withMouseExtended'] as $setter) {
+            $this->assertTrue((new Mode())->$setter(true)->isMouseReporting(), $setter);
+        }
+    }
+
+    public function testEqualsDistinguishesEncoders(): void
+    {
+        $a = (new Mode())->withMouseEncoding(MouseEncoding::Utf8);
+        $b = (new Mode())->withMouseEncoding(MouseEncoding::Urxvt);
+        $this->assertFalse($a->equals($b));
+        $this->assertTrue($a->equals((new Mode())->withMouseEncoding(MouseEncoding::Utf8)));
     }
 
     public function testEqualsIncludesAltScreenVariant(): void

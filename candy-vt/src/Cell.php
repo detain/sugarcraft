@@ -262,7 +262,7 @@ final readonly class Cell
         if ($this->rendition !== $other->rendition) {
             return false;
         }
-        if (($this->hyperlink?->id ?? '') !== ($other->hyperlink?->id ?? '')) {
+        if (!self::hyperlinksEqual($this->hyperlink, $other->hyperlink)) {
             return false;
         }
 
@@ -275,6 +275,21 @@ final readonly class Cell
             && $this->attrs === $other->attrs
             && $this->fgTruecolor === $other->fgTruecolor
             && $this->bgTruecolor === $other->bgTruecolor;
+    }
+
+    /**
+     * Hyperlink equality is VALUE equality (ESC-2): two links with the same
+     * id AND uri match, any other pairing — including the same id carrying a
+     * different uri, which the old id-only comparison silently merged — does
+     * not. A null (unlinked) cell never equals a linked one.
+     */
+    private static function hyperlinksEqual(?Hyperlink $a, ?Hyperlink $b): bool
+    {
+        if ($a === null || $b === null) {
+            return $a === $b;
+        }
+
+        return $a->equals($b);
     }
 
     /**

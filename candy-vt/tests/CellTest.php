@@ -33,6 +33,25 @@ final class CellTest extends TestCase
         $this->assertSame('id1', $c->hyperlink->id);
     }
 
+    /**
+     * ESC-2: equality is hyperlink VALUE equality. The old compare keyed on
+     * id alone, silently merging same-id/different-uri links (and treating a
+     * null link as equal to any empty-id link).
+     */
+    public function testEqualsUsesHyperlinkValueSemantics(): void
+    {
+        $a = new Cell(grapheme: 'X', hyperlink: new Hyperlink('id', 'https://one.example'));
+        $b = new Cell(grapheme: 'X', hyperlink: new Hyperlink('id', 'https://one.example'));
+        $c = new Cell(grapheme: 'X', hyperlink: new Hyperlink('id', 'https://two.example'));
+        $d = new Cell(grapheme: 'X');
+
+        $this->assertTrue($a->equals($b), 'value-equal links compare equal');
+        $this->assertFalse($a->equals($c), 'same id, different uri must differ');
+        $this->assertFalse($a->equals($d), 'linked vs unlinked must differ');
+        $this->assertFalse($d->equals($a), 'and symmetric');
+        $this->assertTrue($d->equals(new Cell(grapheme: 'X')), 'unlinked vs unlinked equal');
+    }
+
     public function testContinuation(): void
     {
         $prev = new Cell(grapheme: '世', sgr: Sgr::empty()->withForeground(Color::indexed16(2)));

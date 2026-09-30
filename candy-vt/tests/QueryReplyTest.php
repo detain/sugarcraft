@@ -161,6 +161,30 @@ final class QueryReplyTest extends TestCase
         $this->assertSame(["\x1b[?1049;1\$y", "\x1b[?1000;1\$y"], $t->replies());
     }
 
+    public function testDecrqmMouseEncodersAnswerIndependently(): void
+    {
+        // ESC-1: 1005/1006/1015 were merged onto one bit and all three
+        // answered together; each DECRQM must now see only its own mode.
+        $t = Terminal::new(10, 3);
+        $t->feed("\x1b[?1005h");
+        foreach ([1001, 1005, 1006, 1015] as $mode) {
+            $t->feed("\x1b[?{$mode}\$p");
+        }
+        $this->assertSame(
+            ["\x1b[?1001;2\$y", "\x1b[?1005;1\$y", "\x1b[?1006;2\$y", "\x1b[?1015;2\$y"],
+            $t->replies(),
+        );
+    }
+
+    public function testDecrqm1001AnswersAloneWhenTrackingOn(): void
+    {
+        // DEC 1001 tracking sets no encoder; DECRQM 1005 must answer reset.
+        $t = Terminal::new(10, 3);
+        $t->feed("\x1b[?1001h");
+        $t->feed("\x1b[?1001\$p\x1b[?1005\$p");
+        $this->assertSame(["\x1b[?1001;1\$y", "\x1b[?1005;2\$y"], $t->replies());
+    }
+
     // ─── XTWINOPS ───────────────────────────────────────────────────────────
 
     public function testXtwinops18ReportsCellGeometry(): void
