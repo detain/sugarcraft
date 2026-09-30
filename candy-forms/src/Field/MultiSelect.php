@@ -151,7 +151,11 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         if (!$msg instanceof KeyMsg || !$this->focused) {
             return [$this, null];
         }
-        if ($this->isReadonly() && !self::isReadonlyNavigationKey($msg)) {
+        // Round-90 family gate: identical wording to Select's door. The
+        // mutating-set conjunct is tautological here (only KeyMsg got past
+        // the guard above) — it exists so every readonly gate in the lib
+        // reads the same and a future paste arm cannot slip past unrefused.
+        if ($this->isReadonly() && self::isReadonlyMutatingMsg($msg) && !self::isReadonlyNavigationKey($msg)) {
             return [$this, null];
         }
         return match (true) {

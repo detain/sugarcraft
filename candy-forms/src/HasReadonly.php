@@ -7,6 +7,8 @@ namespace SugarCraft\Forms;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Forms\TextArea\TextAreaEditedMsg;
 
 /**
  * Mixin trait for {@see Field} implementations: read-only mode. A read-only
@@ -25,15 +27,21 @@ use SugarCraft\Core\Msg\KeyMsg;
  * constructor signature. The TraitStateCarryFamilyTest census lists the
  * non-ctor slots EXACTLY, so a future fifth slot reds there first.
  *
- * Two refusal shapes:
+ * Two refusal shapes, both keyed on {@see isReadonlyMutatingMsg()} — the door
+ * closes on every message that can WRITE the value buffer, never just
+ * KeyMsg (a keys-only gate left read-only Text editable through the
+ * bracketed-paste envelope — round-90 audit):
  *  - value editors (Input, Text, Slider, Color, Date, Confirm, FilePicker)
- *    refuse every KeyMsg — their arrows adjust values, not a cursor;
- *    `consumes()` releases its claims so the form navigates over them.
- *  - pickers (Select, MultiSelect) keep the cursor-motion keys per the
- *    ruling (navigation accepted, mutating keys refused): {@see
- *    isReadonlyNavigationKey()} classifies exactly the motion arms their
- *    own update() matches — Space/Enter toggle, '/'-filter and typed text
- *    stay refused.
+ *    refuse the whole mutating set — their arrows adjust values, not a
+ *    cursor; `consumes()` releases its claims so the form navigates over them.
+ *  - pickers (Select, MultiSelect) additionally keep the cursor-motion keys
+ *    per the ruling (navigation accepted, mutating keys refused): {@see
+ *    isReadonlyNavigationKey()} classifies exactly the motion arms their own
+ *    update() matches — Space/Enter toggle, '/'-filter and typed text stay
+ *    refused. Mouse cursor placement is likewise sanctioned picker motion
+ *    (ItemList consumes MouseMsg before the keyboard door); because a
+ *    picker's value IS its highlighted entry, that motion drifts the
+ *    REPORTED value — the 5.10 ruling freezes mutation, not navigation.
  *
  * Render affordance: {@see readonlyTitleSuffix()} appends the Lang-keyed
  * `(read-only)` marker to the title line while the flag is on; the default
@@ -73,11 +81,36 @@ trait HasReadonly
     }
 
     /**
+     * The read-only mutation door: does `$msg` carry a payload that can WRITE
+     * this field's value buffer? Keys, bracketed paste (E736 5.13) and the
+     * external-editor round-trip ({@see TextAreaEditedMsg}) all do — a gate
+     * that only pattern-matches KeyMsg leaves the paste/editor writes wide
+     * open on a supposedly-frozen buffer, which is exactly the round-90 audit
+     * finding on {@see \SugarCraft\Forms\Field\Text}. Everything that merely
+     * animates (BlinkMsg), reports the environment, or delivers async
+     * results (SuggestionsReadyMsg, handled before any read-only gate) is
+     * inert and keeps flowing.
+     *
+     * MouseMsg is intentionally NOT classified here: within this lib the only
+     * consumer is ItemList, and there it places the picker cursor — the
+     * navigation the read-only ruling explicitly sanctions for pickers.
+     */
+    public static function isReadonlyMutatingMsg(Msg $msg): bool
+    {
+        return $msg instanceof KeyMsg
+            || $msg instanceof PasteMsg
+            || $msg instanceof TextAreaEditedMsg;
+    }
+
+    /**
      * Cursor-motion keys accepted while a picker is read-only: the exact
      * motion set ItemList's own arms and MultiSelect's match consume —
-     * Up/Down/Home/End/PageUp/PageDown and their vim runes j k g G.
-     * Nothing here changes a value; toggle and filter keys deliberately
-     * fall through to "not navigation".
+     * Up/Down/Home/End/PageUp/PageDown and their vim runes j k g G. These
+     * never toggle a selection, but for a picker whose value IS the
+     * highlighted item they still drift the reported value — accepted by the
+     * 5.10 ruling (navigation stays free while read-only; only mutation is
+     * frozen). Toggle and filter keys deliberately fall through as
+     * "not navigation".
      */
     public static function isReadonlyNavigationKey(Msg $msg): bool
     {

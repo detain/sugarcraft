@@ -202,7 +202,7 @@ final class Form implements Model
 
     /**
      * Replace the form's {@see KeyMap} — the bindings for next / prev /
-     * submit / abort. Pass null to fall back to {@see KeyMap::default()}.
+     * submit / abort. Pass null to fall back to {@see KeyMap::new()}.
      *
      * Mirrors upstream charmbracelet/huh #272 ("Overriding KeyMaps and
      * KeyBinds"). Use to rebind nav keys without forking the runtime —
@@ -212,7 +212,7 @@ final class Form implements Model
      *                            (E736 4.6: null-to-reset is the contract —
      *                            the set-sentinel distinguishes "cleared"
      *                            from "never configured", both resolving to
-     *                            {@see KeyMap::default()} via {@see activeKeyMap()})
+     *                            {@see KeyMap::new()} via {@see activeKeyMap()})
      */
     public function withKeyMap(?KeyMap $keyMap): self
     {
@@ -237,7 +237,7 @@ final class Form implements Model
     /** Resolved keymap — the configured override if set, else the default. */
     public function activeKeyMap(): KeyMap
     {
-        return $this->keyMap ?? KeyMap::default();
+        return $this->keyMap ?? KeyMap::new();
     }
 
     // Short-form aliases.

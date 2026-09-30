@@ -7,6 +7,11 @@ namespace SugarCraft\Forms\Tests\Field;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Forms\TextArea\TextAreaEditedMsg;
 use SugarCraft\Forms\Field\Color;
 use SugarCraft\Forms\Field\Confirm;
 use SugarCraft\Forms\Field\Date;
@@ -213,5 +218,84 @@ final class ReadonlyModeTest extends TestCase
         [$f, ] = $field->focus();
         self::assertTrue($f->blur()->isReadonly(), 'focus/blur dropped readonly');
         self::assertTrue($field->revalidate()->isReadonly(), 'revalidate (new self path) dropped readonly');
+    }
+
+    // ------------------------------------------------------------------
+    // Round-90 audit #1: the mutation door is the buffer-mutating MESSAGE
+    // set, not just KeyMsg. PasteMsg (bracketed paste, E736 5.13) and
+    // TextAreaEditedMsg (external-editor round-trip) wrote straight through
+    // a read-only Text via its inner TextArea while the gate pattern-matched
+    // keys only; HasReadonly::isReadonlyMutatingMsg() now closes the door at
+    // every field of the family.
+    // ------------------------------------------------------------------
+
+    /** Paste and editor results on a read-only Text: identity refusal, frozen buffer. */
+    public function testReadonlyTextRefusesPasteAndEditorWrites(): void
+    {
+        [$open, ] = Text::new('k')->withValue('seed')->focus();
+        [$pasted, ] = $open->update(new PasteMsg('pwned'));
+        self::assertSame('seedpwned', $pasted->value(), 'fixture: paste writes an open Text (else vacuous)');
+        [$edited, ] = $open->update(new TextAreaEditedMsg('editor-injected'));
+        self::assertSame('editor-injected', $edited->value(), 'fixture: editor result writes an open Text (else vacuous)');
+
+        [$ro, ] = Text::new('k')->withValue('seed')->withReadonly(true)->focus();
+        foreach ([new PasteMsg('pwned'), new TextAreaEditedMsg('editor-injected')] as $write) {
+            [$still, $cmd] = $ro->update($write);
+            self::assertSame($ro, $still, $write::class . ' must be refused by a read-only Text');
+            self::assertNull($cmd);
+            self::assertSame('seed', $still->value(), 'buffer must stay frozen against ' . $write::class);
+        }
+    }
+
+    /**
+     * Family door: every read-only field identity-refuses the paste envelope
+     * at the FIELD gate — no reliance on inner widgets ignoring it (the
+     * self-contained ones already did via their `!KeyMsg` guard; the
+     * delegating ones now refuse explicitly, round 90).
+     *
+     * @return array<string, array{0: object}>
+     */
+    public static function readonlyPasteDoorProvider(): array
+    {
+        return [
+            'Input'       => [Input::new('k')],
+            'Text'        => [Text::new('k')],
+            'FilePicker'  => [FilePicker::new('k')],
+            'Select'      => [Select::new('k')->withOptions('a', 'b')],
+            'MultiSelect' => [MultiSelect::new('k')->withOptions('a', 'b')],
+            'Confirm'     => [Confirm::new('k')],
+            'Date'        => [Date::new('k')],
+            'Slider'      => [Slider::new('k')],
+            'Color'       => [Color::new('k')],
+        ];
+    }
+
+    #[DataProvider('readonlyPasteDoorProvider')]
+    public function testReadonlyFieldsIdentityRefuseThePasteEnvelope(object $field): void
+    {
+        [$ro, ] = $field->withReadonly(true)->focus();
+        [$still, $cmd] = $ro->update(new PasteMsg('pwned'));
+        self::assertSame($ro, $still, $field::class . ' must identity-refuse paste while read-only');
+        self::assertNull($cmd);
+    }
+
+    /**
+     * Audit answer for "mouse?": the only widget in this lib consuming
+     * MouseMsg is ItemList, where it places the picker cursor — sanctioned
+     * NAVIGATION under the 5.10 ruling (a picker's value IS the highlighted
+     * entry, so motion drifts the reported value by accepted design). A
+     * read-only Text has no mouse path at all: its buffer stays frozen.
+     */
+    public function testMouseIsInertOnTextAndSanctionedAsNavigationOnSelect(): void
+    {
+        [$text, ] = Text::new('k')->withValue('seed')->withReadonly(true)->focus();
+        [$textAfter, ] = $text->update(new MouseWheelMsg(1, 1, MouseButton::WheelDown, MouseAction::Press));
+        self::assertSame('seed', $textAfter->value(), 'mouse must not write a read-only Text buffer');
+
+        [$select, ] = Select::new('k')->withOptions('a', 'b', 'c')->withReadonly(true)->focus();
+        [$moved, ] = $select->update(new MouseWheelMsg(1, 1, MouseButton::WheelDown, MouseAction::Press));
+        self::assertNotSame($select, $moved, 'wheel must still move a read-only picker cursor (sanctioned navigation)');
+        self::assertSame('b', $moved->value());
+        self::assertTrue($moved->isReadonly(), 'navigation must not clear the read-only flag');
     }
 }

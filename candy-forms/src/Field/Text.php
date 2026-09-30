@@ -142,7 +142,9 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
 
     public function update(Msg $msg): array
     {
-        if ($msg instanceof \SugarCraft\Core\Msg\KeyMsg && $this->isReadonly()) {
+        // Read-only: refuse every buffer write — keys AND bracketed paste /
+        // external-editor results, which the inner TextArea applies directly.
+        if ($this->isReadonly() && self::isReadonlyMutatingMsg($msg)) {
             return [$this, null];
         }
         [$a, $cmd] = $this->area->update($msg);

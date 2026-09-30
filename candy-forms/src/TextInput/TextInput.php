@@ -675,8 +675,11 @@ final class TextInput implements Model
     }
 
     /**
-     * Add an entry to the history. Called automatically when the user
-     * presses Enter (if history is enabled). You can also call this
+     * Add an entry to the history. NOT wired into Enter automatically —
+     * handleEnter only submits; the host app owns which submissions are
+     * worth remembering and calls this on its own submit path (round-90
+     * audit truth-flip: the old "called automatically when the user presses
+     * Enter" claim described no existing code path). You can also call it
      * manually to pre-populate history.
      *
      * New entries are added at the end (newest position) for chronological ordering.

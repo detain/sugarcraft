@@ -173,6 +173,133 @@ final class AsyncSuggestionCancelTimeoutTest extends TestCase
     }
 
     /**
+     * Round-90 audit #2: supersession follows the BUFFER, not the keystroke
+     * class. The re-arm door used to key on KeyType::Char, so a Backspace
+     * landing mid-fetch left the in-flight 'a' fetch alive — its stale
+     * suggestions surfaced over the edited (emptied) input. Now the
+     * non-Char edit cancels the pending fetch, re-arms one on the current
+     * value (mirroring Select's filterText-diff), and the superseded
+     * arrival resolves quietly with null.
+     */
+    public function testNonCharEditSupersedesInFlightFetch(): void
+    {
+        $inFlight = [];
+        $fetcher = static function (string $v) use (&$inFlight): PromiseInterface {
+            $d = new Deferred();
+            $inFlight[$v] = $d;
+            return $d->promise();
+        };
+
+        $f = Input::new('k')->withAsyncSuggestions($fetcher, 1);
+        [$f] = $f->focus();
+        [$f, $cmd1] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+        $first  = self::f2Capture(self::f2AsyncCmdFrom($cmd1));
+        self::f2RunLoopFor(0.05);
+        self::assertArrayHasKey('a', $inFlight, 'fixture: debounce fired and the fetch is in flight');
+
+        // Non-Char edit changes the buffer: this is where supersession must land.
+        [$f, $cmd2] = $f->update(new KeyMsg(KeyType::Backspace));
+        $second = self::f2Capture(self::f2AsyncCmdFrom($cmd2));
+
+        // The superseded fetch's late arrival must not surface as a Msg.
+        $inFlight['a']->resolve(['stale-for-a']);
+        self::f2RunLoopFor(0.05);
+        self::assertTrue($first['settled'], 'superseded fetch must settle, not hang');
+        self::assertNull($first['error']);
+        self::assertNull($first['value'], 'stale arrival must resolve null, never a SuggestionsReadyMsg');
+        self::assertFalse($second['settled'], 'the re-armed fetch awaits its own fetcher');
+        self::assertArrayHasKey('', $inFlight, 'Backspace must re-arm a fetch on the post-edit (empty) value');
+
+        // The re-armed fetch delivers.
+        $inFlight['']->resolve(['fresh-for-empty']);
+        self::f2RunLoopFor(0.05);
+        self::assertTrue($second['settled']);
+        self::assertInstanceOf(SuggestionsReadyMsg::class, $second['value']);
+        self::assertSame(['fresh-for-empty'], $second['value']->suggestions);
+    }
+
+    /**
+     * Polarity twin of the supersede pin: pure cursor motion leaves the
+     * buffer untouched, so the pending fetch is still valid — no cancel, no
+     * re-arm, and its arrival lands. (Guards the fix against over-widening
+     * to "cancel on any message".)
+     */
+    public function testCursorMovementKeepsInFlightFetchAlive(): void
+    {
+        $inFlight = [];
+        $fetcher = static function (string $v) use (&$inFlight): PromiseInterface {
+            $d = new Deferred();
+            $inFlight[$v] = $d;
+            return $d->promise();
+        };
+
+        $f = Input::new('k')->withAsyncSuggestions($fetcher, 1);
+        [$f] = $f->focus();
+        [$f, $cmd1] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+        $box = self::f2Capture(self::f2AsyncCmdFrom($cmd1));
+        self::f2RunLoopFor(0.05);
+        self::assertArrayHasKey('a', $inFlight, 'fixture: debounce fired and the fetch is in flight');
+
+        [$f, $cmd2] = $f->update(new KeyMsg(KeyType::Left));
+        self::assertNull($cmd2, 'cursor-only key must neither cancel nor re-arm (value unchanged)');
+
+        $inFlight['a']->resolve(['still-valid']);
+        self::f2RunLoopFor(0.05);
+        self::assertTrue($box['settled']);
+        self::assertInstanceOf(SuggestionsReadyMsg::class, $box['value'], 'arrival on unchanged text must land');
+        self::assertSame(['still-valid'], $box['value']->suggestions);
+    }
+
+    /**
+     * Pin the round-90 #3 cleanup contract: the schedule door lives in the
+     * value diff AND the monotonic increment still runs exactly once per
+     * schedule on the instance it was called from (the Phase-6 seq-gating
+     * seam must find the counter where the pre-cleanup code left it).
+     */
+    public function testPendingAsyncSeqIncrementStillFiresOncePerSchedule(): void
+    {
+        $fetcher = static fn(string $v): PromiseInterface => \React\Promise\resolve([$v]);
+
+        $f = Input::new('k')->withAsyncSuggestions($fetcher, 1);
+        [$f] = $f->focus();
+        $read = static fn(Input $field): int => (new \ReflectionProperty($field, 'pendingAsyncSeq'))->getValue($field);
+
+        self::assertSame(0, $read($f));
+        [$f2, $cmd] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+        self::assertSame(1, $read($f), 'the discarded schedule-from instance must carry the increment');
+        self::assertNotNull($cmd);
+        [$f3, $cmd2] = $f->update(new KeyMsg(KeyType::Char, 'b'));
+        self::assertSame(2, $read($f), 'increments are monotonic per schedule call');
+        self::assertNotNull($cmd2);
+        // Cursor-only key: no schedule, no increment.
+        [$f4, $cmd3] = $f->update(new KeyMsg(KeyType::Left));
+        self::assertSame(2, $read($f), 'unscheduled messages must not tick the counter');
+        self::assertNull($cmd3);
+    }
+
+    /**
+     * Attach a settle-capture to an AsyncCmd promise. The box is an
+     * ArrayObject, not an array: a by-value array would snapshot at return
+     * and never observe the later resolution (the settle handler needs a
+     * shared object, not a reference into this helper's frame).
+     */
+    private static function f2Capture(AsyncCmd $async): \ArrayObject
+    {
+        $box = new \ArrayObject(['settled' => false, 'value' => 'unsentinel', 'error' => null]);
+        $async->promise->then(
+            static function ($v) use ($box): void {
+                $box['settled'] = true;
+                $box['value']   = $v;
+            },
+            static function (\Throwable $e) use ($box): void {
+                $box['settled'] = true;
+                $box['error']   = $e;
+            },
+        );
+        return $box;
+    }
+
+    /**
      * Unwrap the AsyncCmd produced by an Input::update Cmd closure, whether
      * it was returned bare or inside a Cmd::batch (BatchMsg of closures).
      */

@@ -20,7 +20,7 @@ final class KeyMapTest extends TestCase
 {
     public function testDefaultKeyMapMatchesHuhStyleBindings(): void
     {
-        $km = KeyMap::default();
+        $km = KeyMap::new();
         $this->assertTrue($km->isNext(new KeyMsg(KeyType::Tab)));
         $this->assertTrue($km->isNext(new KeyMsg(KeyType::Down)));
         $this->assertTrue($km->isPrev(new KeyMsg(KeyType::Tab, alt: true)));
@@ -32,14 +32,14 @@ final class KeyMapTest extends TestCase
 
     public function testDefaultDoesNotMatchUnboundKeys(): void
     {
-        $km = KeyMap::default();
+        $km = KeyMap::new();
         $this->assertFalse($km->isNext(new KeyMsg(KeyType::Char, 'j')));
         $this->assertFalse($km->isAbort(new KeyMsg(KeyType::Char, 'q')));
     }
 
     public function testWithNextReplacesNextBindings(): void
     {
-        $km = KeyMap::default()->withNext([
+        $km = KeyMap::new()->withNext([
             ['type' => KeyType::Char, 'rune' => 'j'],
         ]);
         $this->assertTrue($km->isNext(new KeyMsg(KeyType::Char, 'j')));
@@ -58,7 +58,7 @@ final class KeyMapTest extends TestCase
 
     public function testFormWithCustomKeyMapHonorsTheOverride(): void
     {
-        $custom = KeyMap::default()->withNext([
+        $custom = KeyMap::new()->withNext([
             ['type' => KeyType::Char, 'rune' => 'j'],
         ]);
         $form = Form::new(Input::new('a')->title('A'), Confirm::new('b')->title('B'))
@@ -77,7 +77,7 @@ final class KeyMapTest extends TestCase
 
     public function testWithKeyMapNullRevertsToDefault(): void
     {
-        $custom = KeyMap::default()->withNext([
+        $custom = KeyMap::new()->withNext([
             ['type' => KeyType::Char, 'rune' => 'j'],
         ]);
         $form = Form::new(Input::new('a')->title('A'), Confirm::new('b')->title('B'))
@@ -98,7 +98,7 @@ final class KeyMapTest extends TestCase
 
     public function testCustomAbortKeyAborts(): void
     {
-        $custom = KeyMap::default()->withAbort([
+        $custom = KeyMap::new()->withAbort([
             ['type' => KeyType::Char, 'rune' => 'q'],
         ]);
         $form = Form::new(Input::new('a')->title('A'))->withKeyMap($custom);
@@ -110,7 +110,7 @@ final class KeyMapTest extends TestCase
     public function testKeyMapIgnoresModifierMismatch(): void
     {
         // Default abort: Ctrl-c only — bare 'c' should not abort.
-        $km = KeyMap::default();
+        $km = KeyMap::new();
         $this->assertFalse($km->isAbort(new KeyMsg(KeyType::Char, 'c'))); // no ctrl
         $this->assertTrue($km->isAbort(new KeyMsg(KeyType::Char, 'c', ctrl: true)));
     }

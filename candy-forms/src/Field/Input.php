@@ -69,7 +69,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /** @var int Debounce delay in ms for async suggestions */
     private int $asyncSuggestionsDebounceMs = 150;
 
-    /** @var int Sequence counter for pending async operations (for cancellation) */
+    /** @var int Monotonic count of scheduled async fetches. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit: the old "(for cancellation)" claim was false); increment order is load-bearing for the Phase-6 seq-gating seam. */
     private int $pendingAsyncSeq = 0;
 
     /** @var CancellationSource|null Cancellation source for the pending async operation */
@@ -511,7 +511,10 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             return [$next, null];
         }
 
-        if ($msg instanceof \SugarCraft\Core\Msg\KeyMsg && $this->isReadonly()) {
+        // Read-only: refuse the whole mutating set (the inner TextInput
+        // ignores paste payloads today, but the field-level door must not
+        // rely on that widget-internal fact — round-90 family consistency).
+        if ($this->isReadonly() && self::isReadonlyMutatingMsg($msg)) {
             return [$this, null];
         }
 
@@ -528,11 +531,16 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             $next = $next->validate();
         }
 
-        // Schedule async suggestions with debounce on Char keystroke
-        // Cancel any previously pending operation so only the latest keystroke fires
+        // Re-arm async suggestions whenever the BUFFER CHANGED, and cancel
+        // the previous pending fetch so only the latest edit lands.
+        // Round-90 audit: this door used to key on KeyType::Char, so a
+        // Backspace / Delete / ctrl+u landing mid-fetch left the in-flight
+        // suggestions for the PRE-edit text to surface over changed input.
+        // Mirrors Select::update()'s filterText-diff — the value, not the
+        // message class, decides staleness (pure cursor motion and inert
+        // plumbing keep the pending fetch alive: same text, still valid).
         if ($this->asyncSuggestionsFetcher !== null
-            && $msg instanceof \SugarCraft\Core\Msg\KeyMsg
-            && $msg->type === \SugarCraft\Core\KeyType::Char
+            && $ti->value !== $this->input->value
         ) {
             // Cancel previous pending async
             $this->pendingAsyncCancellation?->cancel();
@@ -571,11 +579,14 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $timeoutSeconds = $this->asyncSuggestionsFetchTimeoutSeconds;
-        $currentSeq = ++$this->pendingAsyncSeq;
+        ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
         $workerPool = $this->workerPool;
 
-        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $currentSeq, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        // (round-90 audit: the captured $currentSeq was never read by either
+        // closure — the seq VALUE gating is Phase-6 reserved state; the
+        // monotonic increment itself stays exactly where it was.)
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
@@ -592,7 +603,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $cancellationSource, $timeoutSeconds): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $cancellationSource, $timeoutSeconds): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;

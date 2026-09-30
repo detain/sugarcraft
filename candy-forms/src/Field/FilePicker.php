@@ -77,7 +77,9 @@ final class FilePicker implements \SugarCraft\Forms\Field
 
     public function update(Msg $msg): array
     {
-        if ($msg instanceof \SugarCraft\Core\Msg\KeyMsg && $this->isReadonly()) {
+        // Read-only: refuse every buffer write, not just keys (round-90
+        // family gate — see HasReadonly::isReadonlyMutatingMsg).
+        if ($this->isReadonly() && self::isReadonlyMutatingMsg($msg)) {
             return [$this, null];
         }
         [$p, $cmd] = $this->picker->update($msg);

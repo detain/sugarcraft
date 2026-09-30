@@ -13,7 +13,7 @@ use SugarCraft\Core\Msg\KeyMsg;
  *
  * Mirrors the long-requested upstream charmbracelet/huh #272
  * ("Overriding KeyMaps and KeyBinds"). Construct via the named-args
- * constructor (with sensible defaults from {@see KeyMap::default()})
+ * constructor (with sensible defaults from {@see KeyMap::new()})
  * and pass to {@see Form::withKeyMap()}.
  *
  * Every binding is a list of `KeyMsg`-shaped predicates: each entry
@@ -41,14 +41,16 @@ final class KeyMap
     ) {}
 
     /**
-     * Default huh-style bindings:
+     * Default huh-style bindings (the canonical factory — AGENTS.md naming:
+     * `::new()` default, never `::default()`; round-90 audit rename, no
+     * cross-lib callers existed):
      *
      *   next   — Tab, Down arrow
      *   prev   — Shift+Tab (Tab + alt), Up arrow
      *   submit — Enter (only effective on the last field of the last group)
      *   abort  — Escape, Ctrl-C
      */
-    public static function default(): self
+    public static function new(): self
     {
         return new self(
             next: [

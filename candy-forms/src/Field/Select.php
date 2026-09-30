@@ -49,7 +49,7 @@ final class Select implements \SugarCraft\Forms\Field
     /** @var int Debounce delay in ms for async suggestions */
     private int $asyncSuggestionsDebounceMs = 150;
 
-    /** @var int Sequence counter for pending async operations */
+    /** @var int Monotonic count of scheduled async fetches. Reserved sequence state with no reader today — CancellationSource drives the cancellation (round-90 audit; Input.php carries the identical note); increment order is load-bearing for the Phase-6 seq-gating seam. */
     private int $pendingAsyncSeq = 0;
 
     /** @var CancellationSource|null Cancellation source for the pending async operation */
@@ -300,7 +300,12 @@ final class Select implements \SugarCraft\Forms\Field
             return [$next, null];
         }
 
-        if ($msg instanceof KeyMsg && $this->isReadonly() && !self::isReadonlyNavigationKey($msg)) {
+        // Read-only: refuse the mutating message set — keys stay refused
+        // except the sanctioned cursor motion, and the paste / editor
+        // envelopes (never navigation) are refused at the field door too
+        // (round-90 audit). Mouse stays through: picker cursor placement is
+        // navigation by the 5.10 ruling.
+        if ($this->isReadonly() && self::isReadonlyMutatingMsg($msg) && !self::isReadonlyNavigationKey($msg)) {
             return [$this, null];
         }
 
@@ -370,13 +375,15 @@ final class Select implements \SugarCraft\Forms\Field
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $timeoutSeconds = $this->asyncSuggestionsFetchTimeoutSeconds;
-        $currentSeq = ++$this->pendingAsyncSeq;
+        ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
 
         // Store the filter text at time of scheduling for sequence tracking
         $scheduledFilterText = $filterText;
 
-        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $currentSeq, $fieldKey, $field, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
+        // (round-90 audit: the captured $currentSeq was never read by either
+        // closure — see the identical note in Input::scheduleAsyncSuggestions.)
+        return function () use ($fetcher, $debounceMs, $timeoutSeconds, $fieldKey, $field, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
             $token = $cancellationSource->token();
 
@@ -388,7 +395,7 @@ final class Select implements \SugarCraft\Forms\Field
             });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $scheduledFilterText, $timeoutSeconds): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $field, $deferred, $token, $scheduledFilterText, $timeoutSeconds): void {
                 // Check if cancelled before proceeding
                 if ($token->isCancelled()) {
                     return;
