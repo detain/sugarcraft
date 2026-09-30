@@ -6,7 +6,7 @@ namespace SugarCraft\Dash\Plugin;
 
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Dash\Module\LegacyModule;
-use SugarCraft\Dash\Output\Sanitize;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * Wraps an external binary as a Module.

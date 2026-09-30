@@ -8,7 +8,7 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Dash\Module\BaseModule;
-use SugarCraft\Dash\Output\Sanitize;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * Weather module that fetches live data from wttr.in and falls back to cache.

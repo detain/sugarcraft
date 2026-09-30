@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Modules\Generic;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
-use SugarCraft\Dash\Output\Sanitize;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * Generic module that runs an arbitrary shell command and displays output.
