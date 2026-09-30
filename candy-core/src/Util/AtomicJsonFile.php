@@ -197,7 +197,14 @@ final class AtomicJsonFile
             fclose($handle);
             $handle = null;
 
-            if (!rename($tmp, $this->path)) {
+            // @-silenced like every other syscall here: the RuntimeException
+            // below is the single loud failure. A bare rename() ALSO prints a
+            // raw PHP warning, double-reporting on stderr — and under this
+            // lib's failOnWarning="true" it would redden any test that
+            // exercises the publish-failure path. The structural pin in
+            // AtomicJsonFileTest matches the call by substring, so the '@'
+            // prefix keeps it green.
+            if (!@rename($tmp, $this->path)) {
                 throw new \RuntimeException("Failed to rename temp file onto: {$this->path}");
             }
         } catch (\Throwable $e) {
