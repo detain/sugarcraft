@@ -184,6 +184,19 @@ final class Style implements \JsonSerializable
     }
 
     /**
+     * Null-safe value equality: two optional styles are the same render
+     * state iff both are null, or both are non-null and value-equal.
+     *
+     * Canonicalizer for every style-transition decision in the encode and
+     * diff paths, so output bytes never depend on whether two equal styles
+     * happen to share a PHP instance (MAJOR: value equality, not identity).
+     */
+    public static function valuesEqual(?self $a, ?self $b): bool
+    {
+        return $a === null ? $b === null : ($b !== null && $a->equals($b));
+    }
+
+    /**
      * Serialization hook for caching/IPC use cases.
      *
      * @return array{fg: ?int, bg: ?int, attrs: int}

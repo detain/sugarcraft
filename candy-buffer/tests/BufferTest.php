@@ -1465,6 +1465,158 @@ final class BufferTest extends TestCase
         $this->assertTrue($buf->cellAt(0, 0)->style()->hasUnderline());
     }
 
+    // ─── instance-independent (value-equality) output ────────────────────
+
+    public function testToAnsiValueEqualUnsharedStylesEmitSingleSgr(): void
+    {
+        $shared = Style::new(null, null, Style::ATTR_BOLD);
+        $withShared = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('A', $shared))
+            ->withCellAt(1, 0, Cell::new('B', $shared))
+            ->withCellAt(2, 0, Cell::new('C', $shared));
+
+        $withFresh = Buffer::new(3, 1)
+            ->withCellAt(0, 0, Cell::new('A', Style::new(null, null, Style::ATTR_BOLD)))
+            ->withCellAt(1, 0, Cell::new('B', Style::new(null, null, Style::ATTR_BOLD)))
+            ->withCellAt(2, 0, Cell::new('C', Style::new(null, null, Style::ATTR_BOLD)));
+
+        // Identical bytes regardless of object identity (snapshot-flake cure).
+        $this->assertSame($withShared->toAnsi(), $withFresh->toAnsi());
+        // One SGR open for the run, not one per cell.
+        $this->assertSame(
+            "\x1b[0;1mABC\x1b[0m",
+            $withFresh->toAnsi(),
+        );
+    }
+
+    public function testToAnsiValueEqualUnsharedLinksDoNotNestOscOpens(): void
+    {
+        $link = Hyperlink::new('https://x.dev');
+        $withShared = Buffer::new(2, 1)
+            ->withCellAt(0, 0, Cell::new('A', null, $link))
+            ->withCellAt(1, 0, Cell::new('B', null, $link));
+        $withFresh = Buffer::new(2, 1)
+            ->withCellAt(0, 0, Cell::new('A', null, Hyperlink::new('https://x.dev')))
+            ->withCellAt(1, 0, Cell::new('B', null, Hyperlink::new('https://x.dev')));
+
+        $this->assertSame($withShared->toAnsi(), $withFresh->toAnsi());
+        // Exactly ONE open frame and ONE close frame — the old identity check
+        // re-opened per cell, nesting OSC 8 opens without a close between them.
+        $this->assertSame(1, substr_count($withFresh->toAnsi(), "\x1b]8;https"));
+        $this->assertSame(1, substr_count($withFresh->toAnsi(), "\x1b]8;;\x1b\\"));
+        $this->assertSame("\x1b]8;https://x.dev\x1b\\AB\x1b]8;;\x1b\\", $withFresh->toAnsi());
+    }
+
+    public function testDiffBytesIndependentOfStyleInstances(): void
+    {
+        $prev = Buffer::new(2, 1);
+        $shared = Style::new(0xFF0000);
+
+        $currShared = $prev
+            ->withCellAt(0, 0, Cell::new('A', $shared))
+            ->withCellAt(1, 0, Cell::new('B', $shared));
+        $currFresh = $prev
+            ->withCellAt(0, 0, Cell::new('A', Style::new(0xFF0000)))
+            ->withCellAt(1, 0, Cell::new('B', Style::new(0xFF0000)));
+
+        $encoder = new DiffEncoder();
+        $this->assertSame(
+            $encoder->encode($currShared->diff($prev)),
+            $encoder->encode($currFresh->diff($prev)),
+        );
+        // The fresh-instance diff emits ONE SetStyleOp for the pair, not two.
+        $styleOps = array_filter(
+            $currFresh->diff($prev),
+            fn ($op) => $op instanceof SetStyleOp
+        );
+        $this->assertCount(1, $styleOps);
+    }
+
+    // ─── OSC 8 identity (url + id) through the diff path ─────────────────
+
+    public function testDiffIdOnlyHyperlinkChangeReEmitsOsc(): void
+    {
+        $prev = Buffer::new(1, 1)
+            ->withCellAt(0, 0, Cell::new('A', null, Hyperlink::new('https://i.dev', 'v1')));
+        $curr = Buffer::new(1, 1)
+            ->withCellAt(0, 0, Cell::new('A', null, Hyperlink::new('https://i.dev', 'v2')));
+
+        // An id-only change IS a cell change now (Cell::equals covers id).
+        $this->assertFalse($prev->cellAt(0, 0)->equals($curr->cellAt(0, 0)));
+
+        $bytes = (new DiffEncoder())->encode($curr->diff($prev));
+
+        // Close + re-open carrying the new id: url-only tracking dropped this.
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $bytes);
+        $this->assertStringContainsString("\x1b]8;v2;https://i.dev\x1b\\", $bytes);
+        $this->assertStringNotContainsString("v1", $bytes);
+    }
+
+    // ─── fromString parse fixes ──────────────────────────────────────────
+
+    public function testFromStringSkipsOsc8FromLinkedToAnsiRoundTrip(): void
+    {
+        $src = Buffer::new(2, 1)
+            ->withCellAt(0, 0, Cell::new('A', null, Hyperlink::new('https://x.dev')))
+            ->withCellAt(1, 0, Cell::new('B', null, Hyperlink::new('https://x.dev')));
+
+        $parsed = Buffer::fromString($src->toAnsi(), 2, 1);
+
+        // OSC 8 bytes used to leak into the grid as garbage runes.
+        $this->assertSame('A', $parsed->cellAt(0, 0)->rune());
+        $this->assertSame('B', $parsed->cellAt(1, 0)->rune());
+        // Links are dropped by contract (lossy test-support factory).
+        $this->assertNull($parsed->cellAt(0, 0)->link());
+    }
+
+    public function testFromStringUnterminatedOscSwallowsRest(): void
+    {
+        $parsed = Buffer::fromString("AB\x1b]8;https://x.dev", 2, 1);
+
+        $this->assertSame('A', $parsed->cellAt(0, 0)->rune());
+        $this->assertSame('B', $parsed->cellAt(1, 0)->rune());
+    }
+
+    public function testFromStringAccumulatesMultiSegmentSgr(): void
+    {
+        // "\x1b[1m\x1b[31m" — last-segment-wins parsing dropped the bold.
+        $buf = Buffer::fromString("\x1b[1m\x1b[31mX", 1, 1);
+
+        $style = $buf->cellAt(0, 0)->style();
+        $this->assertNotNull($style);
+        $this->assertTrue($style->hasBold());
+        $this->assertSame(0xFF0000, $style->fg());
+    }
+
+    public function testFromStringResetInsideSequenceDiscardsCarry(): void
+    {
+        // toAnsi()/SgrEmitter prefix every open with '0;': the reset code
+        // must clear the carried style before applying the rest.
+        $buf = Buffer::fromString("\x1b[1;31mX\x1b[0;34mY", 2, 1);
+
+        $x = $buf->cellAt(0, 0)->style();
+        $this->assertTrue($x->hasBold());
+        $y = $buf->cellAt(1, 0)->style();
+        $this->assertNotNull($y);
+        $this->assertFalse($y->hasBold());
+        $this->assertSame(0x0000FF, $y->fg());
+    }
+
+    public function testFromStringParsesTruecolorSgrFromToAnsi(): void
+    {
+        // toAnsi emits 38;2;r;g;b; the parser used to understand only the
+        // 16-colour palette, so the inverse claim failed for styled buffers.
+        $src = Buffer::new(1, 1)
+            ->withCellAt(0, 0, Cell::new('A', Style::new(0x123456, 0x654321)));
+
+        $parsed = Buffer::fromString($src->toAnsi(), 1, 1);
+
+        $style = $parsed->cellAt(0, 0)->style();
+        $this->assertNotNull($style);
+        $this->assertSame(0x123456, $style->fg());
+        $this->assertSame(0x654321, $style->bg());
+    }
+
     // ─── copy() negative origin edge case ────────────────────────────────
 
     public function testCopyFullyNegativeOriginUsesAllBlankCells(): void

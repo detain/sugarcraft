@@ -65,9 +65,13 @@ final class DiffOptimiserTest extends TestCase
         ];
         $result = $this->optimiser->optimise($ops);
 
-        $this->assertCount(2, $result);
-        $this->assertCount(1, $result[0]->cells);
-        $this->assertCount(1, $result[1]->cells);
+        // Styled spans now merge: the first op seeds the span buffer (the
+        // old loop only ever merged ops whose style/link were null, so this
+        // pair passed through unmerged despite the same-value style).
+        $this->assertCount(1, $result);
+        $this->assertCount(2, $result[0]->cells);
+        $this->assertSame('A', $result[0]->cells[0]->rune());
+        $this->assertSame('B', $result[0]->cells[1]->rune());
     }
 
     public function testOptimiseDoesNotMergeDifferentStyles(): void
@@ -77,6 +81,45 @@ final class DiffOptimiserTest extends TestCase
         $ops = [
             new SetCellOp([Cell::new('A', $styleA)]),
             new SetCellOp([Cell::new('B', $styleB)]),
+        ];
+        $result = $this->optimiser->optimise($ops);
+
+        $this->assertCount(2, $result);
+    }
+
+    public function testOptimiseMergesCellSpansWithEqualLinks(): void
+    {
+        // Value-equal but unshared Hyperlink instances must merge: the old
+        // canMergeWithBuffer typed $bufferLink as ?string and compared a url
+        // against a Hyperlink object — never true, so linked spans never merged.
+        $ops = [
+            new SetCellOp([Cell::new('A', null, new \SugarCraft\Buffer\Hyperlink('https://m.dev'))]),
+            new SetCellOp([Cell::new('B', null, new \SugarCraft\Buffer\Hyperlink('https://m.dev'))]),
+        ];
+        $result = $this->optimiser->optimise($ops);
+
+        $this->assertCount(1, $result);
+        $this->assertCount(2, $result[0]->cells);
+    }
+
+    public function testOptimiseDoesNotMergeLinkIdOnlyDifferences(): void
+    {
+        // Same url, different id: a real link change (the OSC 8 id is part of
+        // the link identity), so the spans must stay separate.
+        $ops = [
+            new SetCellOp([Cell::new('A', null, new \SugarCraft\Buffer\Hyperlink('https://m.dev', 'v1'))]),
+            new SetCellOp([Cell::new('B', null, new \SugarCraft\Buffer\Hyperlink('https://m.dev', 'v2'))]),
+        ];
+        $result = $this->optimiser->optimise($ops);
+
+        $this->assertCount(2, $result);
+    }
+
+    public function testOptimiseDoesNotMergeLinkIntoUnlinkedSpan(): void
+    {
+        $ops = [
+            new SetCellOp([Cell::new('A')]),
+            new SetCellOp([Cell::new('B', null, new \SugarCraft\Buffer\Hyperlink('https://m.dev'))]),
         ];
         $result = $this->optimiser->optimise($ops);
 

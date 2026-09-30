@@ -46,19 +46,25 @@ final class Buffer implements \JsonSerializable
     /**
      * Build a Buffer from an ANSI-encoded string produced by {@see toAnsi()}.
      *
-     * This is the inverse of {@see toAnsi()} for rendering round-trips in
-     * tests. Because toAnsi() is lossy (hyperlink IDs are not round-tripped,
-     * attribute-only SGRs cannot be reconstructed faithfully), this is only
-     * suitable for testFixtures — not for accurate terminal state replay.
+     * Test-support factory — not for accurate terminal state replay. SGR
+     * sequences accumulate onto the live style (code 0 within a sequence
+     * resets it first), and OSC sequences — including the OSC 8 hyperlink
+     * opens/closes toAnsi() emits — are skipped without entering the cell
+     * grid, so even linked output round-trips as text. Restoration is
+     * lossy by contract: hyperlinks are never re-attached to cells, SGRs
+     * outside the parsed vocabulary are ignored, and multibyte runes are
+     * split byte-wise (one byte per cell).
+     *
+     * A printable count that differs from width×height is padded with
+     * blanks (too few) or truncated (too many) — lenient by design for
+     * hand-written fixtures.
      *
      * @param string|null $ansi  Raw ANSI output from toAnsi(), or null for a
      *                           blank width×height buffer.
      * @param int         $width  Frame width in cells
      * @param int         $height Frame height in rows
      *
-     * @throws \InvalidArgumentException when dimensions are non-positive or
-     *                                   the ANSI string does not contain
-     *                                   exactly width*height printable chars.
+     * @throws \InvalidArgumentException when either dimension is non-positive.
      */
     public static function fromString(?string $ansi, int $width, int $height): self
     {
@@ -71,11 +77,9 @@ final class Buffer implements \JsonSerializable
             return self::new($width, $height);
         }
 
-        // Strip SGR escape sequences and newlines; collect [rune, style, width] tuples.
+        // Parse escape-aware; collect [rune, style, width] tuples.
         $runs = [];
-        $currentStyle = null;
-        $styleMap = [0 => null]; // idx 0 = no style
-        $styleSeq = '';          // accumulates the raw SGR bytes for current style
+        $currentStyle = null; // live SGR state, accumulated across sequences
 
         $ansiLen = strlen($ansi);
         $idx = 0;
@@ -83,30 +87,37 @@ final class Buffer implements \JsonSerializable
         while ($idx < $ansiLen) {
             $ch = $ansi[$idx];
 
-            if ($ch === "\x1b" && isset($ansi[$idx + 1]) && $ansi[$idx + 1] === '[') {
-                // CSI SGR sequence: find its end (m) and extract params.
-                $end = strpos($ansi, 'm', $idx);
-                if ($end === false) {
-                    $idx++;
+            if ($ch === "\x1b" && isset($ansi[$idx + 1])) {
+                $next = $ansi[$idx + 1];
+
+                if ($next === ']') {
+                    // OSC sequence (e.g. toAnsi()'s OSC 8 hyperlink frames):
+                    // consume through its ST (ESC \) or BEL terminator so the
+                    // bytes never leak into the cell grid as garbage runes.
+                    $tail = $idx + 2 + strcspn($ansi, "\x07\x1b", $idx + 2);
+                    if ($tail < $ansiLen && $ansi[$tail] === "\x1b") {
+                        $idx = $tail + 2; // swallow ESC + the ST backslash
+                    } else {
+                        $idx = $tail + 1; // BEL consumed; unterminated OSC swallows the rest
+                    }
                     continue;
                 }
-                $seq = substr($ansi, $idx, $end - $idx + 1);
-                $params = substr($seq, 2, -1); // strip ESC [ and trailing m
 
-                if ($params === '' || $params === '0') {
-                    // Reset: clear current style
-                    $currentStyle = null;
-                    $styleSeq = '';
-                } else {
-                    // Append to style sequence and lookup/build style
-                    $styleSeq .= $seq;
-                    if (!isset($styleMap[$styleSeq])) {
-                        $styleMap[$styleSeq] = self::styleFromSgr($params);
+                if ($next === '[') {
+                    // CSI SGR sequence: find its end (m) and merge its params
+                    // onto the live style. Multi-segment styling such as
+                    // "\x1b[1m\x1b[31m" accumulates — the previous
+                    // last-segment-wins cache silently dropped bold.
+                    $end = strpos($ansi, 'm', $idx);
+                    if ($end === false) {
+                        $idx++;
+                        continue;
                     }
-                    $currentStyle = $styleMap[$styleSeq];
+                    $params = substr($ansi, $idx + 2, $end - $idx - 2);
+                    $currentStyle = self::styleFromSgr($params, $currentStyle);
+                    $idx = $end + 1;
+                    continue;
                 }
-                $idx = $end + 1;
-                continue;
             }
 
             if ($ch === "\n") {
@@ -123,19 +134,16 @@ final class Buffer implements \JsonSerializable
             // the parse, not fix it. fromString() is a test-support factory by
             // contract (see its docblock; repo-wide callers are the
             // candy-buffer and sugar-veil test suites only, zero production
-            // call sites). Real display-width handling exists upstream of
-            // here: SugarCraft\Core\Util\Width (candy-core — UAX isWide
-            // table, ANSI-aware) is the canonical primitive, deliberately NOT
-            // imported: candy-buffer is dependency-pure (runtime require:
-            // php only) and pulling candy-core in would drag ext-intl,
-            // ReactPHP and candy-pty (ext-ffi) onto every consumer of this
-            // lib — a dependency-drag, not a cycle (candy-core does not
-            // require candy-buffer). Wide characters are already correct
-            // where cells are actually constructed: Cell carries width 1/2
-            // with width-0 continuation cells, and diff() honours them —
-            // continuation skip at lines 458-461, REP merge guarded by
-            // width===1 at line 552. A full UTF-8 tokenizer for this
-            // byte-wise factory remains a separate future candidate.
+            // call sites). The canonical display-width primitive is
+            // SugarCraft\Core\Util\Width (candy-core — UAX isWide table,
+            // ANSI-aware); it is not consulted here because byte-wise width
+            // pinning is this fixture factory's documented contract, not an
+            // oversight. Wide characters are already correct where cells are
+            // actually constructed: Cell carries width 1/2 with width-0
+            // continuation cells, and diff() honours them — continuation
+            // skip in its inner loop, REP merge guarded by width===1. A full
+            // UTF-8 tokenizer for this byte-wise factory remains a separate
+            // future candidate.
             $runeWidth = 1;
             $runs[] = [$rune, $currentStyle, $runeWidth];
             $idx++;
@@ -144,9 +152,11 @@ final class Buffer implements \JsonSerializable
         $expected = $width * $height;
         $actual = count($runs);
 
-        // Lenient: accept any string length by truncating or padding with blanks.
-        // This is only for testFactories — production calls from toAnsi() always
-        // produce width*height printable chars.
+        // Lenient: accept any string length by truncating or padding with
+        // blanks (the contract documented on fromString()). Plain-ASCII
+        // toAnsi() output always yields exactly width*height printable
+        // bytes; multibyte runes land one byte per cell under this
+        // byte-wise parse, so they may overrun — truncation is deliberate.
         if ($actual !== $expected) {
             if ($actual < $expected) {
                 // Pad with blank cells
@@ -169,22 +179,32 @@ final class Buffer implements \JsonSerializable
     }
 
     /**
-     * Parse a single SGR parameter string into a Style.
+     * Merge one SGR parameter string into the live style.
      *
-     * Handles: 30-37 (fg), 40-47 (bg), 1 (bold), 4 (underline), 90-97 (bright fg), 100-107 (bright bg)
+     * Handles: 0 (full reset, discarding $carry), 30-37 (fg), 40-47 (bg),
+     * 1 (bold), 4 (underline), 90-97 (bright fg), 100-107 (bright bg),
+     * 38;2;r;g;b / 48;2;r;g;b truecolor (the form toAnsi() emits), the
+     * 39/49 default-colour codes, and attributes 2,3,5,7,8,9 (faint,
+     * italic, blink, reverse, invisible, strike).
      *
      * @param string $params Semicolon-separated SGR parameter numbers
+     * @param Style|null $carry Style in effect before this sequence
      */
-    private static function styleFromSgr(string $params): ?Style
+    private static function styleFromSgr(string $params, ?Style $carry = null): ?Style
     {
-        $fg = null;
-        $bg = null;
-        $attrs = [];
+        $codes = array_map('intval', explode(';', $params));
 
-        foreach (explode(';', $params) as $p) {
-            $p = (int) $p;
+        $fg = $carry?->fg();
+        $bg = $carry?->bg();
+        $attrs = $carry?->attrs() ?? 0;
+
+        $count = count($codes);
+        for ($i = 0; $i < $count; $i++) {
+            $p = $codes[$i];
             if ($p === 0) {
-                continue; // reset handled by caller
+                $fg = null;
+                $bg = null;
+                $attrs = 0;
             } elseif ($p >= 30 && $p <= 37) {
                 $fg = self::ansiColorToHex($p - 30);
             } elseif ($p >= 40 && $p <= 47) {
@@ -193,16 +213,45 @@ final class Buffer implements \JsonSerializable
                 $fg = self::ansiColorToHex($p - 90, true);
             } elseif ($p >= 100 && $p <= 107) {
                 $bg = self::ansiColorToHex($p - 100, true);
+            } elseif ($p === 39) {
+                $fg = null;
+            } elseif ($p === 49) {
+                $bg = null;
+            } elseif (($p === 38 || $p === 48)
+                && $i + 4 < $count
+                && $codes[$i + 1] === 2
+            ) {
+                $rgb = (($codes[$i + 2] & 0xFF) << 16)
+                    | (($codes[$i + 3] & 0xFF) << 8)
+                    | ($codes[$i + 4] & 0xFF);
+                if ($p === 38) {
+                    $fg = $rgb;
+                } else {
+                    $bg = $rgb;
+                }
+                $i += 4; // consumed 2;r;g;b
             } elseif ($p === 1) {
-                $attrs[] = Style::ATTR_BOLD;
+                $attrs |= Style::ATTR_BOLD;
+            } elseif ($p === 2) {
+                $attrs |= Style::ATTR_FAINT;
+            } elseif ($p === 3) {
+                $attrs |= Style::ATTR_ITALIC;
             } elseif ($p === 4) {
-                $attrs[] = Style::ATTR_UNDERLINE;
+                $attrs |= Style::ATTR_UNDERLINE;
+            } elseif ($p === 5) {
+                $attrs |= Style::ATTR_BLINK;
+            } elseif ($p === 7) {
+                $attrs |= Style::ATTR_REVERSE;
+            } elseif ($p === 8) {
+                $attrs |= Style::ATTR_INVISIBLE;
+            } elseif ($p === 9) {
+                $attrs |= Style::ATTR_STRIKE;
             }
             // Additional SGR params can be extended here
         }
 
-        return $fg !== null || $bg !== null || $attrs !== []
-            ? new Style($fg, $bg, array_sum($attrs))
+        return $fg !== null || $bg !== null || $attrs !== 0
+            ? new Style($fg, $bg, $attrs)
             : null;
     }
 
@@ -448,7 +497,7 @@ final class Buffer implements \JsonSerializable
         $lastEmittedCol = -1;
         $lastEmittedRow = -1;
         $pendingStyle = null;
-        $pendingLinkUrl = null;
+        $pendingLink = null; // tracked by VALUE (url+id), not object identity
 
         for ($row = 0; $row < $this->height; $row++) {
             for ($col = 0; $col < $this->width; $col++) {
@@ -471,29 +520,32 @@ final class Buffer implements \JsonSerializable
                     $lastEmittedRow = $row;
                 }
 
-                // Emit style transition if needed.
-                if ($currCell->style() !== $pendingStyle) {
+                // Emit style transition if needed (value equality, so output
+                // is independent of whether equal styles share an instance).
+                if (!Style::valuesEqual($currCell->style(), $pendingStyle)) {
                     $ops[] = new Diff\SetStyleOp($currCell->style());
                     $pendingStyle = $currCell->style();
                 }
 
-                // Emit hyperlink open/close if needed.
-                $currLinkUrl = $currCell->link()?->url();
-                if ($currLinkUrl !== $pendingLinkUrl) {
-                    if ($pendingLinkUrl !== null) {
+                // Emit hyperlink open/close if needed. Comparison covers url
+                // AND id: an id-only change must re-emit OSC 8, which the old
+                // url-string tracking silently dropped.
+                $currLink = $currCell->link();
+                if (!Hyperlink::valuesEqual($currLink, $pendingLink)) {
+                    if ($pendingLink !== null) {
                         $ops[] = new Diff\SetHyperlinkOp(null);
                     }
-                    if ($currLinkUrl !== null) {
-                        $ops[] = new Diff\SetHyperlinkOp($currCell->link());
+                    if ($currLink !== null) {
+                        $ops[] = new Diff\SetHyperlinkOp($currLink);
                     }
-                    $pendingLinkUrl = $currLinkUrl;
+                    $pendingLink = $currLink;
                 }
 
                 // Collect a run of consecutive changed cells with same style
                 // for repeat detection.
                 $run = [$currCell];
                 $runStyle = $currCell->style();
-                $runLinkUrl = $currLinkUrl;
+                $runLink = $currLink;
                 $runLen = 1;
                 $nextCol = $col + 1;
 
@@ -505,13 +557,10 @@ final class Buffer implements \JsonSerializable
                     }
                     $nextPrev = $previous->grid[$row * $this->width + $nextCol];
                     // Collect if cell differs AND has same pending style/link.
-                    // Style comparison by value, not identity.
-                    $nextStyle = $nextCell->style();
-                    $styleEqual = ($runStyle === null && $nextStyle === null)
-                        || ($runStyle !== null && $nextStyle !== null && $runStyle->equals($nextStyle));
+                    // Style and link compared by value, not identity.
                     if (!$nextPrev->equals($nextCell)
-                        && $styleEqual
-                        && $nextCell->link()?->url() === $runLinkUrl
+                        && Style::valuesEqual($nextCell->style(), $runStyle)
+                        && Hyperlink::valuesEqual($nextCell->link(), $runLink)
                     ) {
                         // This cell also differs AND has same style.
                         $run[] = $nextCell;
@@ -536,13 +585,10 @@ final class Buffer implements \JsonSerializable
                     $repeatWidth = $first->width() > 0 ? $first->width() : 1;
                     $allSame = true;
                     for ($i = 1; $i < $runLen; $i++) {
-                        $cellStyle = $run[$i]->style();
-                        // Style equality by value, not identity
-                        $styleEqual = ($runStyle === null && $cellStyle === null)
-                            || ($runStyle !== null && $cellStyle !== null && $runStyle->equals($cellStyle));
+                        // Style and link equality by value, not identity
                         if ($run[$i]->rune() !== $repeatRune
-                            || !$styleEqual
-                            || $run[$i]->link()?->url() !== $runLinkUrl
+                            || !Style::valuesEqual($run[$i]->style(), $runStyle)
+                            || !Hyperlink::valuesEqual($run[$i]->link(), $runLink)
                         ) {
                             $allSame = false;
                             break;
@@ -715,26 +761,28 @@ final class Buffer implements \JsonSerializable
                     continue;
                 }
 
-                // Close hyperlink when link changes or before new style.
-                if ($prevLink !== null && ($cell->link() === null || !$cell->link()->equals($prevLink))) {
+                // Close hyperlink when the link value changes (url+id compared
+                // by VALUE — instance-independent output, paired with the
+                // open decision below so equal-but-unshared links never
+                // produce nested OSC 8 opens without a close).
+                if ($prevLink !== null && !Hyperlink::valuesEqual($cell->link(), $prevLink)) {
                     $out .= "\x1b]8;;\x1b\\";
+                    $prevLink = null;
                 }
 
-                // Emit SGR only when style changes.
-                if ($cell->style() !== $prevStyle) {
+                // Emit SGR only when the style value changes.
+                if (!Style::valuesEqual($cell->style(), $prevStyle)) {
                     $out .= $this->emitSgr($cell->style());
                     $prevStyle = $cell->style();
                 }
 
-                // Open hyperlink when link appears.
-                if ($cell->link() !== null && $cell->link() !== $prevLink) {
+                // Open hyperlink when a link appears that is not already open.
+                if ($cell->link() !== null && !Hyperlink::valuesEqual($cell->link(), $prevLink)) {
                     $url = $cell->link()->url();
                     $id = $cell->link()->id();
                     $idPart = $id !== '' ? (";" . $id) : "";
                     $out .= "\x1b]8" . $idPart . ";" . $url . "\x1b\\";
                     $prevLink = $cell->link();
-                } elseif ($cell->link() === null) {
-                    $prevLink = null;
                 }
 
                 $out .= $cell->rune();

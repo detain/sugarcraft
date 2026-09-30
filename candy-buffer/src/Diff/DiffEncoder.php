@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Buffer\Diff;
 
 use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Hyperlink;
 use SugarCraft\Buffer\Style;
 
 /**
@@ -36,8 +37,8 @@ final class DiffEncoder
     /** Currently active SGR style (null = reset/default). */
     private ?Style $currentStyle = null;
 
-    /** Currently active hyperlink (null = none open). */
-    private ?string $currentLinkUrl = null;
+    /** Currently active hyperlink, tracked by VALUE (url+id) (null = none open). */
+    private ?Hyperlink $currentLink = null;
 
     /** Last emitted rune (used to validate REP sequences). */
     private ?string $lastRune = null;
@@ -54,7 +55,7 @@ final class DiffEncoder
         $this->cursorCol = 1;
         $this->cursorRow = 1;
         $this->currentStyle = null;
-        $this->currentLinkUrl = null;
+        $this->currentLink = null;
         $this->lastRune = null;
 
         $out = '';
@@ -64,9 +65,9 @@ final class DiffEncoder
         }
 
         // Close any open hyperlink + reset SGR.
-        if ($this->currentLinkUrl !== null) {
+        if ($this->currentLink !== null) {
             $out .= "\x1b]8;;\x1b\\";
-            $this->currentLinkUrl = null;
+            $this->currentLink = null;
         }
 
         return $out;
@@ -117,23 +118,21 @@ final class DiffEncoder
         $out = '';
 
         foreach ($op->cells as $cell) {
-            // Emit hyperlink open/close if changed.
-            $linkUrl = $cell->link()?->url();
-            if ($linkUrl !== $this->currentLinkUrl) {
-                if ($this->currentLinkUrl !== null) {
+            // Emit hyperlink open/close if the link VALUE (url+id) changed.
+            $cellLink = $cell->link();
+            if (!Hyperlink::valuesEqual($cellLink, $this->currentLink)) {
+                if ($this->currentLink !== null) {
                     $out .= "\x1b]8;;\x1b\\";
-                    $this->currentLinkUrl = null;
+                    $this->currentLink = null;
                 }
-                if ($linkUrl !== null) {
-                    $id = $cell->link()->id();
-                    $idPart = $id !== '' ? (';' . $id) : '';
-                    $out .= "\x1b]8{$idPart};{$linkUrl}\x1b\\";
-                    $this->currentLinkUrl = $linkUrl;
+                if ($cellLink !== null) {
+                    $out .= $this->openHyperlink($cellLink);
+                    $this->currentLink = $cellLink;
                 }
             }
 
-            // Emit SGR transition if style changed.
-            if ($cell->style() !== $this->currentStyle) {
+            // Emit SGR transition if style changed (by value, not identity).
+            if (!Style::valuesEqual($cell->style(), $this->currentStyle)) {
                 $out .= $this->emitSgr($cell->style());
                 $this->currentStyle = $cell->style();
             }
@@ -166,13 +165,15 @@ final class DiffEncoder
             return '';
         }
 
-        // REP repeats the last emitted rune. The diff algorithm guarantees
-        // a SetCellOp is emitted before any RepeatRunOp in the same diff,
-        // so $this->lastRune is set when REP is encountered.
-        // Validate the invariant; if violated the output would be wrong.
+        // REP repeats whatever glyph actually sits under the cursor. The
+        // diff algorithm guarantees a SetCellOp is emitted before any
+        // RepeatRunOp in the same diff, so $this->lastRune already matches
+        // $op->rune when REP is encountered. If a hand-built op stream
+        // violates that invariant, this fallback only RELABELS lastRune for
+        // downstream cursor bookkeeping — it does NOT write $op->rune, so
+        // the terminal would still repeat the preceding glyph. Defensive
+        // only; correct diff output never reaches this branch.
         if ($op->rune !== $this->lastRune) {
-            // Fallback: write the rune directly then repeat what was written.
-            // This should not happen with a correct diff algorithm.
             $this->lastRune = $op->rune;
         }
 
@@ -192,21 +193,29 @@ final class DiffEncoder
     private function encodeSetHyperlink(SetHyperlinkOp $op): string
     {
         if ($op->hyperlink === null) {
-            if ($this->currentLinkUrl !== null) {
-                $this->currentLinkUrl = null;
+            if ($this->currentLink !== null) {
+                $this->currentLink = null;
                 return "\x1b]8;;\x1b\\";
             }
 
             return '';
         }
 
-        $url = $op->hyperlink->url();
-        $id = $op->hyperlink->id();
+        $this->currentLink = $op->hyperlink;
+
+        return $this->openHyperlink($op->hyperlink);
+    }
+
+    /**
+     * OSC 8 open frame for a hyperlink (shared wire format for the cell
+     * and op paths so both emit byte-identical opens).
+     */
+    private function openHyperlink(Hyperlink $link): string
+    {
+        $id = $link->id();
         $idPart = $id !== '' ? (';' . $id) : '';
 
-        $this->currentLinkUrl = $url;
-
-        return "\x1b]8{$idPart};{$url}\x1b\\";
+        return "\x1b]8{$idPart};{$link->url()}\x1b\\";
     }
 
     /**

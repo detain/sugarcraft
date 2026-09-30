@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Buffer\Diff;
 
+use SugarCraft\Buffer\Hyperlink;
 use SugarCraft\Buffer\Style;
 
 /**
@@ -11,7 +12,8 @@ use SugarCraft\Buffer\Style;
  *
  * Optimizations applied:
  * 1. Adjacent SetStyleOps → keep only the last one (last-wins SGR).
- * 2. Adjacent SetCellOps with the same style → merge into one span.
+ * 2. Adjacent SetCellOps whose tail/head state matches by VALUE
+ *    (same style and same hyperlink) → merge into one span.
  * 3. EraseRunOp always overwrites all prior state; no need to
  *    optimize further at this layer.
  *
@@ -92,24 +94,42 @@ final class DiffOptimiser
         $bufferLink = null;
 
         foreach ($ops as $op) {
-            if ($op instanceof SetCellOp && $this->canMergeWithBuffer($op, $bufferStyle, $bufferLink)) {
+            if ($op instanceof SetCellOp
+                && ($buffer === [] || $this->canMergeWithBuffer($op, $bufferStyle, $bufferLink))
+            ) {
+                // First (or mergeable) span op: seed/extend the buffer. The
+                // old shape pushed non-null-style first ops straight through
+                // without seeding, so styled spans never began merging at all.
                 foreach ($op->cells as $cell) {
                     $buffer[] = $cell;
                 }
-                if (count($op->cells) > 0) {
+                if ($op->cells !== []) {
                     $lastCell = $op->cells[count($op->cells) - 1];
                     $bufferStyle = $lastCell->style();
                     $bufferLink = $lastCell->link();
                 }
-            } else {
-                if ($buffer !== []) {
-                    $out[] = new SetCellOp($buffer);
-                    $buffer = [];
-                    $bufferStyle = null;
-                    $bufferLink = null;
-                }
-                $out[] = $op;
+                continue;
             }
+
+            if ($buffer !== []) {
+                $out[] = new SetCellOp($buffer);
+                $buffer = [];
+                $bufferStyle = null;
+                $bufferLink = null;
+            }
+
+            if ($op instanceof SetCellOp) {
+                // Tail state refused the merge: this op starts the next span.
+                $buffer = $op->cells;
+                if ($op->cells !== []) {
+                    $lastCell = $op->cells[count($op->cells) - 1];
+                    $bufferStyle = $lastCell->style();
+                    $bufferLink = $lastCell->link();
+                }
+                continue;
+            }
+
+            $out[] = $op;
         }
 
         if ($buffer !== []) {
@@ -120,16 +140,20 @@ final class DiffOptimiser
     }
 
     /**
-     * @param list<Cell> $buffer
+     * A single-cell op merges iff its cell's style and hyperlink match the
+     * buffered tail state by VALUE. (bufferLink is the tail cell's Hyperlink
+     * object — comparing its url against a string made linked spans never
+     * merge, and matching by value keeps output instance-independent.)
      */
-    private function canMergeWithBuffer(SetCellOp $op, ?Style $bufferStyle, ?string $bufferLink): bool
+    private function canMergeWithBuffer(SetCellOp $op, ?Style $bufferStyle, ?Hyperlink $bufferLink): bool
     {
         if (empty($op->cells)) {
             return true;
         }
         if (count($op->cells) === 1) {
             $first = $op->cells[0];
-            return $first->style() === $bufferStyle && $first->link()?->url() === $bufferLink;
+            return Style::valuesEqual($first->style(), $bufferStyle)
+                && Hyperlink::valuesEqual($first->link(), $bufferLink);
         }
 
         return false;

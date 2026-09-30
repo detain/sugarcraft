@@ -53,7 +53,10 @@ echo $buf->height(); // 3
 Wide characters (CJK, many emoji) have a display width of 2. The next cell in the grid is reserved as an empty "continuation" cell (rune `''`, width 0):
 
 ```php
-$cell = Cell::new('中'); // width=2, next cell must be a continuation
+// Width is declared, never measured: pass width 2 explicitly and place a
+// continuation cell to the right.
+$cell = Cell::new('中', null, null, 2);
+$cont = Cell::continuation(); // rune '', width 0
 ```
 
 ## API
@@ -106,7 +109,7 @@ $curr = $prev
 
 $ops = $curr->diff($prev);
 // [MoveCursorOp(0,0), SetStyleOp(red), SetCellOp([A]),
-//  SetStyleOp(blue+bold), SetCellOp([B]), RepeatRunOp('B',2)]
+//  MoveCursorOp(1,0), SetStyleOp(blue+bold), SetCellOp([B]), RepeatRunOp('B',2)]
 
 $bytes = (new DiffEncoder())->encode($ops);
 ```
@@ -114,16 +117,19 @@ $bytes = (new DiffEncoder())->encode($ops);
 Emitted bytes (annotated):
 
 ```
-\x1b[1;1H           # CUP → col 0, row 0  (from MoveCursorOp)
-\x1b[38;2;255;0;0m  # SGR → red fg         (from SetStyleOp)
+\x1b[0;38;2;255;0;0m  # SGR → red fg        (MoveCursorOp skipped: encoder is already at 1;1)
 A                  # SetCellOp 'A'
-\x1b[38;2;0;0;255;1m  # SGR → blue fg + bold  (style transition)
+\x1b[0;38;2;0;0;255;1m  # SGR → blue fg + bold  (second MoveCursorOp skipped: cursor advanced past 'A')
 B                  # SetCellOp first 'B'
 \x1b[2b            # REP → repeat 'B' 2×   (from RepeatRunOp)
-\x1b[0m            # SGR reset             (DiffEncoder close)
 ```
 
-Total: ~38 bytes vs ~95 bytes for a full 5×2 repaint. The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` equals `$curr`.
+Total: 41 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which
+also emits one trailing SGR reset the delta stream does not need). Cell styles in
+the example are equal-by-value instances; the stream is instance-independent —
+sharing one `Style` object across the three `B` cells yields the identical bytes.
+The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` renders
+byte-identically to `$curr` via `toAnsi()`.
 
 ## Upstream
 
