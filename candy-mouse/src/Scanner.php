@@ -50,7 +50,8 @@ final class Scanner
      *
      * @param string $rendered The rendered string containing zone sentinels.
      * @param int|null $width  Optional terminal viewport width.  When set,
-     *                         zone end columns are clamped to this value.
+     *                         zone start/end columns are clamped into
+     *                         [1, width].
      */
     public function scan(string $rendered, ?int $width = null): self
     {

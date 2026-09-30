@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mouse\Scan;
 use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
@@ -242,8 +243,9 @@ final class ScanTest extends TestCase
     }
 
     /**
-     * When a width is supplied, endCol must not exceed that boundary.
-     * startCol is left unclamped (where the zone began is unaffected).
+     * When a width is supplied, no zone column may exceed that boundary.
+     * An in-viewport startCol (1 here) passes through the two-sided clamp
+     * untouched — only starts beyond the right edge are pulled back.
      */
     public function testParseWithWidthClampsEndCol(): void
     {
@@ -279,6 +281,60 @@ final class ScanTest extends TestCase
         $zone = $zones['normal'];
         self::assertSame(1, $zone->startCol);
         self::assertSame(5, $zone->endCol); // Full width, unclamped.
+    }
+
+    /**
+     * A zone that opens entirely beyond the right edge used to keep its raw
+     * startCol while only the endCol was clamped — an inverted bbox
+     * (endCol < startCol, width() = -2) that candy-zone / relative-math
+     * consumers read as negative extents.  Both ends now clamp into
+     * [1, width], collapsing the zone to a degenerate single column pinned
+     * at the right edge — non-negative by construction.
+     */
+    public function testParseWithWidthZoneBeyondRightEdgeCollapsesToEdgeColumn(): void
+    {
+        $mark = new Mark();
+        // Five visible cells first: 'off' opens at col 6, content spans
+        // cols 6–7 — wholly outside a 3-column viewport.
+        $rendered = '     ' . $mark->wrap('off', 'AB');
+
+        $zones = (new Scan())->parse($rendered, 3);
+
+        self::assertArrayHasKey('off', $zones);
+        $zone = $zones['off'];
+        self::assertSame(3, $zone->startCol);
+        self::assertSame(3, $zone->endCol);
+        self::assertGreaterThanOrEqual(1, $zone->width());
+        self::assertSame(1, $zone->height());
+
+        // hit() semantics survive the collapse: the degenerate zone is
+        // reachable exactly at the edge column, nowhere beyond it.
+        $scanner = (new Scanner())->scan($rendered, 3);
+        self::assertSame('off', $scanner->hit(3, 1)?->id);
+        self::assertNull($scanner->hit(4, 1));
+    }
+
+    /**
+     * Same collapse for a multi-row zone that opens beyond the right edge:
+     * the columns degenerate to the edge while the row span stays honest —
+     * extents never go negative on either axis.
+     */
+    public function testParseWithWidthOffscreenMultiRowZoneStaysNonNegative(): void
+    {
+        $mark = new Mark();
+        // Opens at col 6 (outside a 3-col viewport), wraps to row 2.
+        $rendered = '     ' . $mark->wrap('tall', "AB\nC");
+
+        $zones = (new Scan())->parse($rendered, 3);
+
+        self::assertArrayHasKey('tall', $zones);
+        $zone = $zones['tall'];
+        self::assertSame(3, $zone->startCol);
+        self::assertSame(3, $zone->endCol);
+        self::assertSame(1, $zone->startRow);
+        self::assertSame(2, $zone->endRow);
+        self::assertGreaterThanOrEqual(1, $zone->width());
+        self::assertGreaterThanOrEqual(1, $zone->height());
     }
 
     // ─── [BUG] duplicate zone id rejection ──────────────────────────────────

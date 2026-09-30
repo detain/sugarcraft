@@ -48,13 +48,22 @@ Source: step-05 ai/candy-mouse-new
 - If async TUI use cases emerge, consider an async variant of the scanner.
 Source: plan_candy-mouse.md — Item 5.1
 
-## O(n) Scanner::hit() — spatial index opportunity
+## Scanner::hit() — grid-bucket spatial index
 
-- `Scanner::hit()` performs a linear O(n) scan over all zones.
-- For n > 100 interactive zones (tables, lists), consider a grid-based
-  spatial index or sorting zones by area as a heuristic.
-- This is a known limitation documented in `Scanner.php:83-86`.
-Source: plan_candy-mouse.md — Item 5.2
+- `Scanner::hit()` is backed by a lazily built grid-bucket index
+  (`GRID_BUCKET` = 32 cells): each zone is hashed into every bucket its
+  bounding box overlaps, so a lookup scans only the (usually tiny)
+  candidate list of the queried bucket — sub-linear for the dense
+  table/list/grid UIs bubblezone targets.
+- Buckets are populated in zone insertion order, so among overlapping
+  zones the earliest-registered still wins — identical result to the old
+  O(n) linear scan.
+- The index is invalidated on every `scan()`/`clear()` and rebuilt on the
+  next `hit()` (`Scanner.php:115-162`).
+- **Stale-warning for this file's history:** an earlier entry claimed
+  hit() was an unindexed O(n) scan citing `Scanner.php:83-86`; that was
+  superseded when the index landed (index-invalidation tests included).
+Source: plan_candy-mouse.md — Item 5.2 (closed: index shipped)
 
 ## Memoization opportunity for repeated scans
 

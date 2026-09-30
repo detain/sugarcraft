@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Mouse;
 
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Mouse\Sentinel;
 
 /**
  * Parse zone sentinels from a rendered string and compute bounding boxes
@@ -36,10 +35,13 @@ final class Scan
      * zones.
      *
      * @param string $rendered The rendered string containing zone sentinels.
-     * @param int|null $width  When provided, endCol is clamped to this
-     *                         terminal width.  Useful when rendering in a
-     *                         known viewport to prevent zones from extending
-     *                         past the visible area.  null = no clamp (default).
+     * @param int|null $width  When provided, both startCol and endCol are
+     *                         clamped into [1, width].  Useful when rendering
+     *                         in a known viewport: zones cannot extend past
+     *                         the visible area, and a zone that opens beyond
+     *                         the right edge collapses to a degenerate
+     *                         column at the edge instead of an inverted bbox.
+     *                         null = no clamp (default).
      *
      * @return array<string, Zone> id => Zone
      */
@@ -108,7 +110,16 @@ final class Scan
                                 $endRow = max($endRow, $maxRow);
                             }
                             if ($width !== null) {
-                                $endCol = min($endCol, $width);
+                                // Clamp BOTH ends into the viewport.  A zone
+                                // that opens past the right edge would
+                                // otherwise keep an unclamped startCol above
+                                // a clamped endCol — an inverted bbox with a
+                                // negative width().  Clamping both sides
+                                // monotonically leaves in-viewport zones
+                                // untouched and collapses fully-offscreen
+                                // ones to a degenerate column at the edge.
+                                $startCol = max(1, min($startCol, $width));
+                                $endCol   = max(1, min($endCol, $width));
                             }
                             $this->zones[$id] = new Zone($id, $startCol, $startRow, $endCol, $endRow);
                             unset($this->open[$id]);

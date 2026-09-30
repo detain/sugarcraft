@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mouse;
 
-use SugarCraft\Mouse\Sentinel;
-
 /**
  * Wrap $content with invisible zone markers so {@see Scanner} can later
  * extract bounding boxes without any external Manager wiring.

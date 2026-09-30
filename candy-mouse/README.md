@@ -13,10 +13,14 @@ Replaces the model where consumers wire `candy-zone`'s `Manager` externally. Eac
 ## Quickstart
 
 ```php
+<?php
+
+require 'vendor/autoload.php';
+
 use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\ZoneClickTracker;
-use SugarCraft\Mouse\MouseEvent;
 
 // 1. Wrap interactive content with invisible zone markers.
 $rendered = Mark::zone('btn-ok', '  OK  ')
@@ -25,14 +29,16 @@ $rendered = Mark::zone('btn-ok', '  OK  ')
 // 2. Scan after rendering to populate the zone registry.
 $scanner = Scanner::new()->scan($rendered);
 
-// 3. Reverse-lookup on mouse events.
-$zone = $scanner->hit($mouseX, $mouseY); // ?Zone
+// 3. Reverse-lookup on mouse events ('  OK  ' spans cols 1-6 on row 1).
+$zone = $scanner->hit(4, 1); // Zone 'btn-ok'
 
-// 4. Deduplicate clicks so each press+release pair emits one click.
+// 4. A click emits only when the release lands on the pressed zone,
+//    so track the full Press+Release pair.
 $tracker = new ZoneClickTracker();
-$result = $tracker->track(new MouseEvent(5, 1, 0, MouseAction::Release));
-if ($result !== null) {
-    echo "Clicked zone: " . $result->zone->id;
+$tracker->track(MouseEvent::press(4, 1), $zone);
+$click = $tracker->track(MouseEvent::release(4, 1), $zone);
+if ($click !== null) {
+    echo "Clicked zone: " . $click->zone->id . "\n"; // btn-ok
 }
 ```
 
@@ -49,7 +55,7 @@ if ($result !== null) {
 
 ## Sentinel design
 
-Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they never collide with ANSI SGR sequences or regular text. Scanning strips them from output.
+Sentinels use private-use codepoints U+E000 (open) and U+E001 (close) — they never collide with ANSI SGR sequences or regular text, and terminal emulators render them invisibly. Scanning *reads* them from the rendered string to compute zone bounding boxes; it does not modify the string. Stripping the sentinels from the bytes actually written to the terminal is the consumer's job (e.g. sugar-crush's renderer scans, then strips).
 
 ## Multi-row zones
 
