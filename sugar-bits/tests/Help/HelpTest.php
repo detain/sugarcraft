@@ -40,6 +40,26 @@ final class HelpTest extends TestCase
         $this->assertSame('↑/k up • ↓/j down • q quit', (new Help())->shortView($map));
     }
 
+    public function testShortAliasesRenderByteIdenticalToWithForms(): void
+    {
+        $map = new FakeKeyMap([
+            $this->b('alpha-key', 'alpha'),
+            $this->b('beta-key',  'beta'),
+            $this->b('q',         'quit'),
+        ], []);
+        $long  = (new Help())->withSeparator(' • ')->withEllipsis('...')->withFullSeparator("\n\n");
+        $short = (new Help())->separator(' • ')->ellipsis('...')->fullSeparator("\n\n");
+        // Width forces ellipsis truncation so the row exercises all three knobs.
+        $this->assertSame(
+            $long->width(24)->showAll(false)->shortView($map),
+            $short->width(24)->showAll(false)->shortView($map),
+        );
+        $this->assertSame(
+            $long->showAll(true)->fullView($map),
+            $short->showAll(true)->fullView($map),
+        );
+    }
+
     public function testShortViewSkipsDisabledAndUnlabeled(): void
     {
         $map = new FakeKeyMap([

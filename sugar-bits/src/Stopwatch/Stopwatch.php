@@ -24,8 +24,8 @@ final class Stopwatch implements Model
      * This is intentional — stable, predictable IDs aid debugging when
      * tracing tick routing in a live application.
      *
-     * Test suites that need isolated ID state may call resetIdCounter()
-     * via Reflection to ensure deterministic ID sequences.
+     * Test suites that need isolated ID state may call the public
+     * static resetIdCounter() to ensure deterministic ID sequences.
      */
     private static int $nextId = 0;
 

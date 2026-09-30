@@ -28,9 +28,9 @@ final class FilterTest extends TestCase
     public function testFilterDisabledByDefault(): void
     {
         $t = $this->table();
-        $this->assertFalse($t->getFilterable());
-        $this->assertSame('', $t->getFilter());
-        $this->assertNull($t->getFilterPredicate());
+        $this->assertFalse($t->filterable());
+        $this->assertSame('', $t->filter());
+        $this->assertNull($t->filterPredicate());
     }
 
     public function testWithFilterableEnablesFiltering(): void
@@ -38,9 +38,9 @@ final class FilterTest extends TestCase
         $t = $this->table();
         $t2 = $t->withFilterable(true);
         $this->assertNotSame($t, $t2);
-        $this->assertTrue($t2->getFilterable());
+        $this->assertTrue($t2->filterable());
         // Original unchanged
-        $this->assertFalse($t->getFilterable());
+        $this->assertFalse($t->filterable());
     }
 
     public function testWithFilterSetsQuery(): void
@@ -48,9 +48,9 @@ final class FilterTest extends TestCase
         $t = $this->table();
         $t2 = $t->withFilter('Alice');
         $this->assertNotSame($t, $t2);
-        $this->assertSame('Alice', $t2->getFilter());
+        $this->assertSame('Alice', $t2->filter());
         // Original unchanged
-        $this->assertSame('', $t->getFilter());
+        $this->assertSame('', $t->filter());
     }
 
     public function testEmptyFilterShowsAllRowsWhenFilterable(): void
@@ -159,7 +159,7 @@ final class FilterTest extends TestCase
             ->withFilterPredicate(static fn(array $_row): bool => true);
 
         $t2 = $t->withFilterPredicate(null);
-        $this->assertNull($t2->getFilterPredicate());
+        $this->assertNull($t2->filterPredicate());
         // Still filterable but predicate is cleared
     }
 

@@ -254,7 +254,7 @@ final class TabsTest extends TestCase
 
     public function testWithKeyMap(): void
     {
-        $km = TabsKeyMap::noWrap();
+        $km = TabsKeyMap::new();
         $t = $this->tabs()->withKeyMap($km);
         $this->assertSame($km, $t->keyMap);
         // The bindings exist; wrap is controlled by Tabs, not KeyMap
@@ -283,7 +283,7 @@ final class TabsTest extends TestCase
             activeStyle: \SugarCraft\Sprinkles\Style::new(),
             inactiveStyle: \SugarCraft\Sprinkles\Style::new(),
             divider: ' │ ',
-            keyMap: TabsKeyMap::default(),
+            keyMap: TabsKeyMap::new(),
             focused: false,
             wrap: true,
             width: 80,
@@ -301,7 +301,7 @@ final class TabsTest extends TestCase
             activeStyle: \SugarCraft\Sprinkles\Style::new(),
             inactiveStyle: \SugarCraft\Sprinkles\Style::new(),
             divider: ' │ ',
-            keyMap: TabsKeyMap::default(),
+            keyMap: TabsKeyMap::new(),
             focused: false,
             wrap: true,
             width: 80,
@@ -319,7 +319,7 @@ final class TabsTest extends TestCase
             activeStyle: \SugarCraft\Sprinkles\Style::new(),
             inactiveStyle: \SugarCraft\Sprinkles\Style::new(),
             divider: ' │ ',
-            keyMap: TabsKeyMap::default(),
+            keyMap: TabsKeyMap::new(),
             focused: false,
             wrap: true,
             width: 80,
@@ -334,36 +334,36 @@ final class TabsTest extends TestCase
 
     public function testKeyMapDefaultHasNextAndPrevBindings(): void
     {
-        $km = TabsKeyMap::default();
+        $km = TabsKeyMap::new();
         $this->assertTrue($km->nextTab->enabled());
         $this->assertTrue($km->prevTab->enabled());
         $this->assertCount(9, $km->jumpBindings);
     }
 
-    public function testKeyMapNoWrapHasBindings(): void
+    public function testKeyMapBindingsAreEnabled(): void
     {
-        $km = TabsKeyMap::noWrap();
+        $km = TabsKeyMap::new();
         $this->assertTrue($km->nextTab->enabled());
         $this->assertTrue($km->prevTab->enabled());
     }
 
     public function testJumpBindingKeys(): void
     {
-        $km = TabsKeyMap::default();
-        $this->assertSame('1', $km->jumpBindings[0]->getKeys()[0]);
-        $this->assertSame('9', $km->jumpBindings[8]->getKeys()[0]);
+        $km = TabsKeyMap::new();
+        $this->assertSame('1', $km->jumpBindings[0]->keys[0]);
+        $this->assertSame('9', $km->jumpBindings[8]->keys[0]);
     }
 
     public function testShortHelp(): void
     {
-        $km = TabsKeyMap::default();
+        $km = TabsKeyMap::new();
         $help = $km->shortHelp();
         $this->assertCount(2, $help);
     }
 
     public function testFullHelp(): void
     {
-        $km = TabsKeyMap::default();
+        $km = TabsKeyMap::new();
         $help = $km->fullHelp();
         $this->assertNotEmpty($help);
     }

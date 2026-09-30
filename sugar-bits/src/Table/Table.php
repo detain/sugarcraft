@@ -61,7 +61,7 @@ final class Table implements Model
      * Memoized visibleRows() projection (sorted → filtered) for this
      * immutable instance — E736/3.3. view(), selectedRow(), moveCursor()
      * rebuild the projection through this cache so one render cycle does the
-     * sort+filter once; getPaginator() still rebuilds it inline (not
+     * sort+filter once; paginator() still rebuilds it inline (not
      * memo-served - r86 weld docblock truth; routing it would be behavior change). Every state
      * change flows through mutate(), which constructs a fresh instance
      * with a null cache, so the projection can never go stale.
@@ -228,7 +228,7 @@ final class Table implements Model
         return $this->mutate(styles: $styles, stylesSet: true);
     }
 
-    public function getStyles(): ?Styles { return $this->styles; }
+    public function styles(): ?Styles { return $this->styles; }
 
     /**
      * Per-cell styling callback. The closure receives `(int $row, int $col)`
@@ -252,6 +252,11 @@ final class Table implements Model
         return $this->mutate(styleFunc: $fn, styleFuncSet: true);
     }
 
+    /**
+     * Accessor for the styling callback. The bare name `styleFunc()` is taken
+     * by the fluent setter above (AGENTS factory/setter convention), so this
+     * getter keeps the `get` prefix to avoid a signature collision.
+     */
     public function getStyleFunc(): ?\Closure { return $this->styleFunc; }
 
     /** @return list<string> */
@@ -278,7 +283,7 @@ final class Table implements Model
         return [$this->mutate(focused: true), null];
     }
 
-    /** Release focus; companion to { focus()}. */
+    /** Release focus; companion to {@see focus()}. */
     public function blur(): self
     {
         return $this->mutate(focused: false);
@@ -351,7 +356,7 @@ final class Table implements Model
     }
 
     /** @return bool */
-    public function getFilterable(): bool
+    public function filterable(): bool
     {
         return $this->filterable;
     }
@@ -367,7 +372,7 @@ final class Table implements Model
     }
 
     /** @return string */
-    public function getFilter(): string
+    public function filter(): string
     {
         return $this->filter;
     }
@@ -386,7 +391,7 @@ final class Table implements Model
     }
 
     /** @return ?\Closure(list<string> $row): bool */
-    public function getFilterPredicate(): ?\Closure
+    public function filterPredicate(): ?\Closure
     {
         return $this->filterPredicate;
     }
@@ -405,13 +410,13 @@ final class Table implements Model
     }
 
     /** @return int */
-    public function getPageSize(): int
+    public function pageSize(): int
     {
         return $this->pageSize;
     }
 
     /** @return int */
-    public function getCurrentPage(): int
+    public function currentPage(): int
     {
         return $this->currentPage;
     }
@@ -421,7 +426,7 @@ final class Table implements Model
      * The Paginator can drive page navigation; call {@see withPage()}
      * to apply a new page to the table.
      */
-    public function getPaginator(): Paginator
+    public function paginator(): Paginator
     {
         $sortedRows   = $this->sortedRows();
         $filteredRows = $this->filteredRows($sortedRows);
@@ -440,7 +445,7 @@ final class Table implements Model
      */
     public function withPage(int $page): self
     {
-        $paginator = $this->getPaginator()->withPage($page);
+        $paginator = $this->paginator()->withPage($page);
         $newPage   = $paginator->page;
         if ($newPage === $this->currentPage) {
             return $this;
@@ -464,7 +469,7 @@ final class Table implements Model
         if ($this->pageSize <= 0) {
             return $this->moveCursor(PHP_INT_MAX);
         }
-        $last = max(0, $this->getPaginator()->totalPages() - 1);
+        $last = max(0, $this->paginator()->totalPages() - 1);
         return $this->withPage($last);
     }
 
@@ -493,7 +498,7 @@ final class Table implements Model
     }
 
     /** @return SortState */
-    public function getSortState(): SortState
+    public function sortState(): SortState
     {
         return $this->sortState ?? SortState::empty();
     }

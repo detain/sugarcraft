@@ -99,7 +99,7 @@ final class Tabs implements Model
             activeStyle: Style::new()->bold(),
             inactiveStyle: Style::new(),
             divider: ' │ ',
-            keyMap: TabsKeyMap::default(),
+            keyMap: TabsKeyMap::new(),
             focused: false,
             wrap: true,
             width: $width,
@@ -328,8 +328,9 @@ final class Tabs implements Model
     }
 
     /**
-     * Manually set the scroll offset (first visible tab index).
-     * Use `null` to auto-scroll to keep the active tab visible.
+     * Manually set the scroll offset (first visible tab index), clamped to
+     * the tab list. Auto-scroll that keeps the active tab visible is driven
+     * internally by {@see update()} — this setter pins an explicit offset.
      */
     public function withScrollOffset(int $offset): self
     {

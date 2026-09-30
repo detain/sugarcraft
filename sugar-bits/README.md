@@ -112,6 +112,11 @@ final class Search implements Model
         }
         return $body;
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
 
 [$ti, $cmd] = TextInput::new()
@@ -208,7 +213,7 @@ $t = $table->thenSortBy('Age', SortDirection::Desc);
 $t = $table->clearSort();
 
 // Inspect current sort criteria
-$state = $t->getSortState(); // SortState
+$state = $t->sortState(); // SortState
 foreach ($state->criteria as [$colIndex, $dir]) {
     // $colIndex is an int, $dir is SortDirection::Asc or SortDirection::Desc
 }
@@ -241,7 +246,7 @@ Immutable list of sort criteria — each entry is a `(column index, direction)` 
 | `withSort(string $column, SortDirection $dir = Asc)` | Set primary sort — clears any prior sort chain |
 | `thenSortBy(string $column, SortDirection $dir = Asc)` | Add a secondary (or further) tiebreaker criterion |
 | `clearSort()` | Remove all sort criteria, restoring insertion order |
-| `getSortState(): SortState` | Return the current sort criteria (readonly accessor) |
+| `sortState(): SortState` | Return the current sort criteria (readonly accessor) |
 
 Sorting throws `\InvalidArgumentException` with message `table.sort_unknown_column` when the column name is not found. The exception message is localizable.
 
@@ -262,9 +267,9 @@ $t = $table->withFilterPredicate(fn(array $row): bool =>
 );
 
 // Inspect current filter state
-$isFilterable = $t->getFilterable();   // bool
-$query        = $t->getFilter();        // string
-$predicate    = $t->getFilterPredicate(); // ?Closure(list<string>): bool
+$isFilterable = $t->filterable();   // bool
+$query        = $t->filter();        // string
+$predicate    = $t->filterPredicate(); // ?Closure(list<string>): bool
 ```
 
 When `withFilterPredicate()` is set, it overrides the default substring-match behaviour. Pass `null` to restore the default.
@@ -276,9 +281,9 @@ When `withFilterPredicate()` is set, it overrides the default substring-match be
 | `withFilterable(bool $filterable)` | Enable or disable the filter feature |
 | `withFilter(string $query)` | Set the filter query string (non-empty enables filtering) |
 | `withFilterPredicate(?Closure(list<string>): bool $predicate)` | Custom filter callable — `null` restores the default |
-| `getFilterable(): bool` | Return whether filtering is enabled |
-| `getFilter(): string` | Return the current filter query string |
-| `getFilterPredicate(): ?Closure` | Return the current custom predicate |
+| `filterable(): bool` | Return whether filtering is enabled |
+| `filter(): string` | Return the current filter query string |
+| `filterPredicate(): ?Closure` | Return the current custom predicate |
 
 The default filter applies case-insensitive substring matching across all visible columns.
 
@@ -298,12 +303,12 @@ $t = $t->pageFirst();
 $t = $t->pageLast();
 
 // Inspect pagination state
-$pageSize   = $t->getPageSize();      // int — rows per page (0 = pagination disabled)
-$current   = $t->getCurrentPage();   // int — zero-based current page
-$totalPages = $t->getTotalPages();  // int — 1 when pagination is disabled
+$pageSize   = $t->pageSize();      // int — rows per page (0 = pagination disabled)
+$current   = $t->currentPage();   // int — zero-based current page
+$totalPages = $t->paginator()->totalPages();  // int — 1 when pagination is disabled
 
 // Wire a Paginator to the table for UI rendering
-$paginator = $t->getPaginator();    // Paginator instance
+$paginator = $t->paginator();    // Paginator instance
 ```
 
 ### Table pagination builders
@@ -316,10 +321,10 @@ $paginator = $t->getPaginator();    // Paginator instance
 | `prevPage()` | Retreat one page |
 | `pageFirst()` | Jump to the first page |
 | `pageLast()` | Jump to the last page |
-| `getPageSize(): int` | Return rows per page (`0` = pagination off) |
-| `getCurrentPage(): int` | Return the current zero-based page |
-| `getTotalPages(): int` | Return the total page count (`1` when pagination is disabled) |
-| `getPaginator(): Paginator` | Return a `Paginator` instance wired to the table's current page state |
+| `pageSize(): int` | Return rows per page (`0` = pagination off) |
+| `currentPage(): int` | Return the current zero-based page |
+| `paginator()->totalPages(): int` | Return the total page count (`1` when pagination is disabled) |
+| `paginator(): Paginator` | Return a `Paginator` instance wired to the table's current page state |
 
 Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
 

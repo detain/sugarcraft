@@ -13,6 +13,8 @@ use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Text;
 use SugarCraft\Forms\Form;
+use SugarCraft\Forms\TextArea\TextArea as TextAreaWidget;
+use SugarCraft\Forms\TextInput\TextInput as TextInputWidget;
 use SugarCraft\Forms\Group;
 
 /**
@@ -43,6 +45,30 @@ final class ShortAliasesTest extends TestCase
             ->title('T')->desc('D')->placeholder('P')
             ->width(40)->height(5)->view();
         $this->assertSame($long, $short);
+    }
+
+    public function testTextInputWidgetAliases(): void
+    {
+        $long  = TextInputWidget::new()->withPlaceholder('p')->withCharLimit(8)->withWidth(20);
+        $short = TextInputWidget::new()->placeholder('p')->charLimit(8)->width(20);
+        $this->assertSame($long->view(), $short->view());
+    }
+
+    public function testTextInputWidgetValidatorAlias(): void
+    {
+        $fn = fn(string $v): ?string => $v === '' ? 'required' : null;
+        $long  = TextInputWidget::new()->withValidator($fn);
+        $short = TextInputWidget::new()->validator($fn);
+        // validateOn defaults to None → the validator runs at attach time.
+        $this->assertSame('required', $long->err());
+        $this->assertSame($long->err(), $short->err());
+    }
+
+    public function testTextAreaWidgetAliases(): void
+    {
+        $long  = TextAreaWidget::new()->withPlaceholder('p')->withCharLimit(100)->withWidth(40)->withHeight(5);
+        $short = TextAreaWidget::new()->placeholder('p')->charLimit(100)->width(40)->height(5);
+        $this->assertSame($long->view(), $short->view());
     }
 
     public function testConfirmAliases(): void

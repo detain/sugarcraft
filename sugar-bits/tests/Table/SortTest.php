@@ -127,7 +127,7 @@ final class SortTest extends TestCase
         $t2 = $t->withSort('Name', SortDirection::Asc);
         $t3 = $t2->clearSort();
         // clearSort should reset sort state
-        $this->assertTrue($t3->getSortState()->isEmpty());
+        $this->assertTrue($t3->sortState()->isEmpty());
         // rowsList should be unchanged (original order)
         $this->assertSame($t->rowsList(), $t3->rowsList());
     }
@@ -151,14 +151,14 @@ final class SortTest extends TestCase
     public function testSortStateIsEmptyOnNewTable(): void
     {
         $t = Table::new(['Name'], [['Alice']]);
-        $this->assertTrue($t->getSortState()->isEmpty());
+        $this->assertTrue($t->sortState()->isEmpty());
     }
 
     public function testSortGetSortStateAfterWithSort(): void
     {
         $t = Table::new(['Name'], [['Alice']]);
         $t2 = $t->withSort('Name', SortDirection::Asc);
-        $state = $t2->getSortState();
+        $state = $t2->sortState();
         $this->assertFalse($state->isEmpty());
         $this->assertSame([[0, SortDirection::Asc]], $state->criteria);
     }
@@ -167,7 +167,7 @@ final class SortTest extends TestCase
     {
         $t = Table::new(['Name', 'Age'], [['Alice', '30']]);
         $t2 = $t->withSort('Age', SortDirection::Asc)->thenSortBy('Name', SortDirection::Desc);
-        $state = $t2->getSortState();
+        $state = $t2->sortState();
         $this->assertSame([
             [1, SortDirection::Asc],
             [0, SortDirection::Desc],

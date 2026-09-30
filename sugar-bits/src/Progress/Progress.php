@@ -24,7 +24,8 @@ use SugarCraft\Core\Util\Width;
  * the filled and empty cells with the same foreground SGR (downsampled
  * via the supplied {@see ColorProfile}); set it to `null` for plain text.
  *
- * Spring-physics interpolation (via HoneyBounce) lands in a follow-up.
+ * For spring-physics interpolated fills (HoneyBounce-driven), see
+ * {@see AnimatedProgress} — shipped alongside this component.
  */
 final class Progress
 {

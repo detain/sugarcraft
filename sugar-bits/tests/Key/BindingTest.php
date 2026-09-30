@@ -54,16 +54,16 @@ final class BindingTest extends TestCase
     {
         $b = new Binding(['up'], new Help('↑', 'up'));
         $b2 = $b->setKeys(['k']);
-        $this->assertSame(['k'], $b2->getKeys());
-        $this->assertSame(['up'], $b->getKeys()); // immutable
+        $this->assertSame(['k'], $b2->keys);
+        $this->assertSame(['up'], $b->keys); // immutable
     }
 
     public function testSetHelpAlias(): void
     {
         $b = new Binding(['up']);
         $b2 = $b->setHelp('↑/k', 'move up');
-        $this->assertSame('↑/k',     $b2->getHelp()->key);
-        $this->assertSame('move up', $b2->getHelp()->desc);
+        $this->assertSame('↑/k',     $b2->help->key);
+        $this->assertSame('move up', $b2->help->desc);
     }
 
     public function testEnabledReflectsDisabledFlag(): void
@@ -87,8 +87,8 @@ final class BindingTest extends TestCase
     {
         $b = new Binding(['up', 'k'], new Help('↑/k', 'up'));
         $u = $b->unbind();
-        $this->assertSame([], $u->getKeys());
-        $this->assertSame('↑/k', $u->getHelp()->key);
+        $this->assertSame([], $u->keys);
+        $this->assertSame('↑/k', $u->help->key);
     }
 
     public function testAnyMatchesAcrossBindings(): void
@@ -117,15 +117,15 @@ final class BindingTest extends TestCase
     {
         $b = Binding::withDisabled(['?'], new Help('?', 'help'));
         $this->assertFalse($b->enabled());
-        $this->assertSame(['?'], $b->getKeys());
-        $this->assertSame('?', $b->getHelp()->key);
+        $this->assertSame(['?'], $b->keys);
+        $this->assertSame('?', $b->help->key);
         $this->assertFalse($b->matches(new KeyMsg(KeyType::Char, '?')));
     }
 
     public function testNewFactoryAcceptsDefaults(): void
     {
         $b = Binding::new();
-        $this->assertSame([], $b->getKeys());
+        $this->assertSame([], $b->keys);
         $this->assertTrue($b->enabled());
 
         $c = Binding::new(keys: ['ctrl+c'], help: new Help('ctrl+c', 'quit'));

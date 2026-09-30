@@ -160,7 +160,7 @@ final class TableTest extends TestCase
         $t = Table::new(['x'], [['a']])
             ->withStyles(new Styles(header: Style::new()->bold()))
             ->withStyles(null);
-        $this->assertNull($t->getStyles());
+        $this->assertNull($t->styles());
     }
 
     public function testFocusAndBlur(): void
@@ -236,7 +236,7 @@ final class TableTest extends TestCase
     public function testWithFilterable(): void
     {
         $t = Table::new(['x'], [['a']])->withFilterable(true);
-        $this->assertTrue($t->getFilterable());
+        $this->assertTrue($t->filterable());
     }
 
     public function testInitReturnsNull(): void

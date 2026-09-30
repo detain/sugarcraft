@@ -32,14 +32,14 @@ final class PaginationTest extends TestCase
     public function testPaginationDisabledByDefault(): void
     {
         $t = $this->table();
-        $this->assertSame(0, $t->getPageSize());
-        $this->assertSame(0, $t->getCurrentPage());
+        $this->assertSame(0, $t->pageSize());
+        $this->assertSame(0, $t->currentPage());
     }
 
     public function testWithPageSizeSetsPagination(): void
     {
         $t = $this->table()->withPageSize(3);
-        $this->assertSame(3, $t->getPageSize());
+        $this->assertSame(3, $t->pageSize());
         $this->assertNotSame($t, $t->withPageSize(3));
     }
 
@@ -52,7 +52,7 @@ final class PaginationTest extends TestCase
     public function testZeroPageSizeDisablesPagination(): void
     {
         $t = $this->table()->withPageSize(3)->withPageSize(0);
-        $this->assertSame(0, $t->getPageSize());
+        $this->assertSame(0, $t->pageSize());
         // All rows visible when pagination disabled
         $view = $t->view();
         $this->assertStringContainsString('Alice', $view);
@@ -62,7 +62,7 @@ final class PaginationTest extends TestCase
     public function testGetPaginatorReturnsCorrectState(): void
     {
         $t = $this->table()->withPageSize(3);
-        $p = $t->getPaginator();
+        $p = $t->paginator();
         $this->assertSame(3, $p->perPage);
         $this->assertSame(8, $p->totalItems);
         $this->assertSame(3, $p->totalPages());
@@ -105,51 +105,51 @@ final class PaginationTest extends TestCase
     public function testPageClampedToLast(): void
     {
         $t = $this->table()->withPageSize(3)->withPage(99);
-        $this->assertSame(2, $t->getCurrentPage());
+        $this->assertSame(2, $t->currentPage());
     }
 
     public function testPageClampedToZero(): void
     {
         $t = $this->table()->withPageSize(3)->withPage(-5);
-        $this->assertSame(0, $t->getCurrentPage());
+        $this->assertSame(0, $t->currentPage());
     }
 
     public function testNextPageAdvances(): void
     {
         $t = $this->table()->withPageSize(3);
-        $this->assertSame(0, $t->getCurrentPage());
+        $this->assertSame(0, $t->currentPage());
         $t2 = $t->nextPage();
-        $this->assertSame(1, $t2->getCurrentPage());
+        $this->assertSame(1, $t2->currentPage());
         $t3 = $t2->nextPage();
-        $this->assertSame(2, $t3->getCurrentPage());
+        $this->assertSame(2, $t3->currentPage());
         // Can't go past last page
         $t4 = $t3->nextPage();
-        $this->assertSame(2, $t4->getCurrentPage());
+        $this->assertSame(2, $t4->currentPage());
     }
 
     public function testPrevPageGoesBack(): void
     {
         $t = $this->table()->withPageSize(3)->withPage(2);
-        $this->assertSame(2, $t->getCurrentPage());
+        $this->assertSame(2, $t->currentPage());
         $t2 = $t->prevPage();
-        $this->assertSame(1, $t2->getCurrentPage());
+        $this->assertSame(1, $t2->currentPage());
         $t3 = $t2->prevPage();
-        $this->assertSame(0, $t3->getCurrentPage());
+        $this->assertSame(0, $t3->currentPage());
         // Can't go before first page
         $t4 = $t3->prevPage();
-        $this->assertSame(0, $t4->getCurrentPage());
+        $this->assertSame(0, $t4->currentPage());
     }
 
     public function testPageFirstGoesToFirstPage(): void
     {
         $t = $this->table()->withPageSize(3)->withPage(2)->pageFirst();
-        $this->assertSame(0, $t->getCurrentPage());
+        $this->assertSame(0, $t->currentPage());
     }
 
     public function testPageLastGoesToLastPage(): void
     {
         $t = $this->table()->withPageSize(3)->pageLast();
-        $this->assertSame(2, $t->getCurrentPage());
+        $this->assertSame(2, $t->currentPage());
     }
 
     public function testPaginationNoOpWhenDisabled(): void
@@ -166,8 +166,8 @@ final class PaginationTest extends TestCase
         $t = $this->table()->withPageSize(3);
         $t2 = $t->nextPage();
         $this->assertNotSame($t, $t2);
-        $this->assertSame(0, $t->getCurrentPage());
-        $this->assertSame(1, $t2->getCurrentPage());
+        $this->assertSame(0, $t->currentPage());
+        $this->assertSame(1, $t2->currentPage());
     }
 
     public function testPaginationChainsWithFilter(): void
@@ -178,7 +178,7 @@ final class PaginationTest extends TestCase
             ->withFilter('e')  // matches Alice, Carol, Dave, Eve, Grace
             ->withPageSize(2);
 
-        $p = $t->getPaginator();
+        $p = $t->paginator();
         $this->assertSame(5, $p->totalItems);
         $this->assertSame(3, $p->totalPages());
 
@@ -193,7 +193,7 @@ final class PaginationTest extends TestCase
             ->withSort('Age')
             ->withPageSize(3);
 
-        $p = $t->getPaginator();
+        $p = $t->paginator();
         $this->assertSame(8, $p->totalItems);
 
         // Sort: Bob(25), Eve(28), Alice(30), Grace(32), Dave(35), Carol(40), Frank(45), Henry(27... wait no)
@@ -223,8 +223,8 @@ final class PaginationTest extends TestCase
     public function testGetPaginatorReturnsFreshInstance(): void
     {
         $t = $this->table()->withPageSize(3)->withPage(1);
-        $p1 = $t->getPaginator();
-        $p2 = $t->getPaginator();
+        $p1 = $t->paginator();
+        $p2 = $t->paginator();
         $this->assertNotSame($p1, $p2);
         $this->assertSame(1, $p1->page);
         $this->assertSame(1, $p2->page);
@@ -235,8 +235,8 @@ final class PaginationTest extends TestCase
         $t = $this->table();
         $t2 = $t->withPageSize(5);
         $this->assertNotSame($t, $t2);
-        $this->assertSame(0, $t->getPageSize());
-        $this->assertSame(5, $t2->getPageSize());
+        $this->assertSame(0, $t->pageSize());
+        $this->assertSame(5, $t2->pageSize());
     }
 
     public function testViewOnEmptyTableWithPagination(): void
@@ -250,15 +250,15 @@ final class PaginationTest extends TestCase
     public function testSliceBoundsFromPaginator(): void
     {
         $t = $this->table()->withPageSize(3);
-        $p = $t->getPaginator();
+        $p = $t->paginator();
         $this->assertSame([0, 3], $p->sliceBounds());
 
         $t2 = $t->withPage(1);
-        $p2 = $t2->getPaginator();
+        $p2 = $t2->paginator();
         $this->assertSame([3, 6], $p2->sliceBounds());
 
         $t3 = $t->withPage(2);
-        $p3 = $t3->getPaginator();
+        $p3 = $t3->paginator();
         $this->assertSame([6, 8], $p3->sliceBounds());
     }
 
@@ -266,9 +266,9 @@ final class PaginationTest extends TestCase
     {
         // Fewer rows than pageSize = single page
         $t = $this->table()->withPageSize(10);
-        $this->assertSame(0, $t->getCurrentPage());
+        $this->assertSame(0, $t->currentPage());
         $t2 = $t->nextPage();
         // Still on page 0 (can't advance past only page)
-        $this->assertSame(0, $t2->getCurrentPage());
+        $this->assertSame(0, $t2->currentPage());
     }
 }

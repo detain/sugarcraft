@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-bits",
-    "description": "PHP port of charmbracelet/bubbles \u2014 15 pre-built TUI components (text input, dynamic-height textarea, list, table with per-cell styleFunc, tree, viewport, file picker, progress, spinner, etc.) for SugarCraft.",
+    "description": "PHP port of charmbracelet/bubbles \u2014 17 pre-built TUI components (text input, dynamic-height textarea, list, table with per-cell styleFunc, tree, viewport, file picker, progress, spinner, etc.) for SugarCraft.",
     "type": "library",
     "license": "MIT",
     "keywords": [

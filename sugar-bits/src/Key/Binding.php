@@ -98,12 +98,6 @@ final class Binding
         return new self(array_values($keys), $this->help, $this->disabled);
     }
 
-    /** @return list<string> */
-    public function getKeys(): array
-    {
-        return $this->keys;
-    }
-
     /**
      * Replace the help label. Mirrors upstream `SetHelp` — `withHelp`
      * returns the same shape, kept as the historical name.
@@ -111,11 +105,6 @@ final class Binding
     public function setHelp(string $key, string $desc): self
     {
         return $this->withHelp($key, $desc);
-    }
-
-    public function getHelp(): Help
-    {
-        return $this->help;
     }
 
     /**

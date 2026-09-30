@@ -52,7 +52,7 @@ final class Help
         return $this->copy(styles: $styles, stylesSet: true);
     }
 
-    /** Read-only accessor. */
+    /** Read-only accessor; the bare name `styles()` is taken by the fluent setter below. */
     public function getStyles(): ?Styles { return $this->styles; }
 
     public function withSeparator(string $s): self
@@ -84,7 +84,7 @@ final class Help
         return $this->copy(maxWidth: $cells);
     }
 
-    /** Read-only accessor for the configured max width. */
+    /** Read-only accessor for the configured max width; the bare name `width()` is the setter above. */
     public function getWidth(): int { return $this->maxWidth; }
 
     /** Truncation glyph appended when the short row exceeds {@see $maxWidth}. */

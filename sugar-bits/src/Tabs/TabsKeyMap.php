@@ -33,23 +33,7 @@ final class TabsKeyMap implements KeyMap
     /**
      * Default keymap: Tab / Shift+Tab for navigation, 1-9 for direct jump.
      */
-    public static function default(): self
-    {
-        return new self(
-            nextTab: Binding::new(
-                keys: ['tab'],
-                help: new Help('tab', 'next tab'),
-            ),
-            prevTab: Binding::new(
-                keys: ['shift+tab'],
-                help: new Help('shift+tab', 'prev tab'),
-            ),
-            jumpBindings: self::jumpBindings(),
-        );
-    }
-
-    /** Keymap with wrap disabled: Tab/Shift+Tab clamp at edges instead of wrapping. */
-    public static function noWrap(): self
+    public static function new(): self
     {
         return new self(
             nextTab: Binding::new(
