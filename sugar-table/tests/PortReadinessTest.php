@@ -126,6 +126,34 @@ final class PortReadinessTest extends TestCase
         $this->assertSame('DescReddishwrappingvalue', $letters);
     }
 
+    /**
+     * Re-audit companion for finding #2: an embedded newline in a multiline
+     * cell must become a REAL hard line break. Pre-fix the raw \n survived
+     * renderCell, rode into one buffer cell as a zero-width cluster
+     * attachment, and toAnsi() painted a literal line break — desyncing
+     * every border below the row and truncating the second segment
+     * ("beta" rendered "be…").
+     */
+    public function testMultilineEmbeddedNewlineBecomesHardBreak(): void
+    {
+        $t = Table::fromColumns([
+            Column::new('id', 'ID', 4)->withAlignLeft(),
+            Column::new('desc', 'Desc', 8)->withAlignLeft()->withStyle('1;31'),
+        ])->withRows([
+            Row::new(RowData::from(['id' => '1', 'desc' => "alpha\nbeta"])),
+        ])
+            ->withMultilineMode(true)
+            ->withSelectable(false);
+
+        $lines = self::viewLines($t->View());
+        $this->assertCount(6, $lines, 'hard break must occupy its own buffer line');
+        $this->assertStringContainsString('alpha', $lines[3]);
+        $this->assertStringContainsString('beta', $lines[4]);
+        $this->assertStringEndsWith('│', $lines[3]);
+        $this->assertStringEndsWith('│', $lines[4]);
+        $this->assertStringStartsWith('└', $lines[5]);
+    }
+
     // ---- finding #3 (MAJOR): frozen columns must be a contiguous prefix -----
 
     public function testSparseFrozenColsThrowsNamingTheRule(): void

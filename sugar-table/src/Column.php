@@ -153,10 +153,21 @@ final class Column
     {
         $w = $width > 0 ? $width : $this->width;
         $str = \is_object($value) && method_exists($value, '__toString') ? (string) $value : (\is_scalar($value) ? (string) $value : '');
-        // Sanitize before wrapping (multiline context preserves \n for explode callers)
+        // Sanitize before wrapping; \n is PRESERVED here because renderCell
+        // itself is the newline authority: each "\n" segment is a hard line
+        // break, wrapped independently. Letting a raw \n survive into the
+        // returned "line" strings would leak it into a buffer cell, where
+        // toAnsi() paints a real newline and desyncs the whole frame
+        // (re-audit finding on the fix wave, same family as audit #2).
         $str = Sanitize::value($str, true);
 
-        $lines = $this->wrapText($str, $w);
+        $segments = \explode("\n", $str);
+        $lines = [];
+        foreach ($segments as $segment) {
+            foreach ($this->wrapText($segment, $w) as $line) {
+                $lines[] = $line;
+            }
+        }
         $result = [];
         $lineCount = \count($lines);
         $lastIdx = $lineCount - 1;
