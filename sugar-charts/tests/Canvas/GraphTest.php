@@ -255,6 +255,42 @@ final class GraphTest extends TestCase
         $this->assertLessThanOrEqual(6, count($ticks));
     }
 
+    /**
+     * Review follow-up (round 90): with `$max` within one tolerance of
+     * DBL_MAX the inclusion tolerance itself overflows to INF, which
+     * re-armed the runaway the bound doors were meant to retire — a
+     * valid finite call died on the LogicException belt. The tolerance
+     * now falls back to the bare `$max`, so the ladder stays finite and
+     * within the documented count bound.
+     */
+    public function testNiceNumbersNearMaxFloatTerminatesWithFiniteTicks(): void
+    {
+        $ticks = Graph::niceNumbers(1.7e308, PHP_FLOAT_MAX, 10);
+        $this->assertGreaterThan(1, count($ticks));
+        $this->assertLessThanOrEqual(10 + 2, count($ticks));
+        $this->assertLessThanOrEqual(1.7e308, $ticks[0]);
+        $sorted = $ticks;
+        sort($sorted);
+        $this->assertSame($sorted, $ticks);
+        foreach ($ticks as $tick) {
+            $this->assertTrue(is_finite($tick));
+        }
+    }
+
+    /**
+     * Review follow-up (round 90) — mirror image: with `$min` near
+     * -DBL_MAX the grid point at-or-below the minimum lives outside the
+     * double domain (`floor($min / $step) * $step === -INF`) and the
+     * loop would never end. The door throws a descriptive
+     * InvalidArgumentException like the other finite-domain refusals.
+     */
+    public function testNiceNumbersRejectsFirstTickBelowFiniteDomain(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('below the finite double domain');
+        Graph::niceNumbers(-PHP_FLOAT_MAX, -1.7e308, 10);
+    }
+
     public function testGetFullCirclePointsWithLimitReturnsBoundedSet(): void
     {
         $pts = Graph::getFullCirclePointsWithLimit(0, 0, 5, 8);

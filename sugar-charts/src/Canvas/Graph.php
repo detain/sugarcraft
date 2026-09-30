@@ -564,10 +564,14 @@ final class Graph
      * zero-valued step throw instead of feeding an unbounded tick loop,
      * and `$targetTicks` is silently clamped to
      * {@see MAX_TARGET_TICKS} at the top the same way it was already
-     * clamped to 2 at the bottom. With a valid step the ladder picks the
-     * first of 1/2/5/10 at or above the target spacing, so the returned
-     * count is mathematically bounded by `$targetTicks + 2` — the loop
-     * guard below is belt-and-braces, unreachable by construction.
+     * clamped to 2 at the bottom. Round 90 review closed the two mirror
+     * overflow doors at the DBL_MAX boundary: a first tick that would
+     * round below the domain throws, and an inclusion tolerance that
+     * overflows past DBL_MAX falls back to the bare `$max`. With those
+     * doors the ladder picks the first of 1/2/5/10 at or above the
+     * target spacing, so the returned count is mathematically bounded
+     * by `$targetTicks + 2` — the loop guard below is belt-and-braces,
+     * unreachable by construction.
      *
      * @return list<float>  ascending list of tick values
      */
@@ -634,14 +638,43 @@ final class Graph
         if ($niceMin > $min) {
             $niceMin -= $niceStep;
         }
+        // Review follow-up (round 90): mirror image of the upper-bound
+        // overflow fixed below. With `$min` near -DBL_MAX the grid point
+        // at-or-below the minimum lives OUTSIDE the double domain and
+        // `$niceMin` arrives here as -INF — the first rung of a loop
+        // that never ends, because `-INF <= $limit` is always true. No
+        // nice ladder exists in the finite domain, so this throws like
+        // the INF-range and underflow doors above instead of letting a
+        // valid-input call die on the LogicException belt.
+        if (!is_finite($niceMin)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Graph::niceNumbers(%s, %s): step %.3g pushes the first tick below the finite double domain; no nice ladder exists',
+                (string) $min,
+                (string) $max,
+                $niceStep,
+            ));
+        }
 
         // Generate ticks until we exceed the maximum. The inclusion
         // tolerance is relative to the step — the old absolute `1e-9`
         // swallowed ranges smaller than itself (subnormal domains),
         // which is what let the loop run away once the endpoint bounds
         // above were added.
+        //
+        // Review follow-up (round 90): when `$max` sits within one
+        // tolerance of DBL_MAX (e.g. `niceNumbers(1.7e308, PHP_FLOAT_MAX)`)
+        // the addition itself overflows to INF, re-arming the very
+        // runaway the bound check was meant to retire — every overflowing
+        // `$tick += $niceStep` then satisfies `tick <= INF`. A tolerance
+        // that overflows buys nothing, so it falls back to the bare
+        // `$max`: `$tick += $niceStep` overflowing to INF fails the
+        // finite upper bound and the loop ends.
+        $limit = $max + $niceStep * 1e-9;
+        if (!is_finite($limit)) {
+            $limit = $max;
+        }
         $ticks = [];
-        for ($tick = $niceMin; $tick <= $max + $niceStep * 1e-9; $tick += $niceStep) {
+        for ($tick = $niceMin; $tick <= $limit; $tick += $niceStep) {
             $ticks[] = $tick;
             if (count($ticks) > $targetTicks + 2) {
                 throw new \LogicException(sprintf(
