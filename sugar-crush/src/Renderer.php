@@ -1190,34 +1190,26 @@ final class Renderer
     }
 
     /**
-     * {@see Sanitize::untrusted()} plus zone-sentinel removal, for every
-     * string that originated outside this process (model replies, tool
-     * output, pasted keystrokes).
+     * The canonical marked-frame policy — {@see Sanitize::untrustedForMarkedFrames()}
+     * — for every string that originated outside this process (model replies,
+     * tool output, pasted keystrokes).
      *
-     * The sentinel strip is the security half. `Sanitize::untrusted()` only
-     * removes ANSI/C0/C1/DEL; `U+E000`/`U+E001` are well-formed 3-byte UTF-8
-     * Private-Use codepoints, so they survive it untouched and would reach
-     * {@see scanRoot()}'s parser verbatim. A model reply — or any tool output
-     * echoed into a message: a file read, a web fetch, a shell command run in
-     * a hostile repo — could then either crash the render (duplicate ids make
-     * `Scan::parse()` throw) or, worse, register attacker-chosen boxes in the
-     * hit-test registry {@see Chat::zoneAt()} reads, hijacking clicks meant
-     * for real UI. Stripping at the boundary keeps the invariant that only
-     * {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the scan.
+     * The sentinel strip is the security half. `Sanitize::untrusted()` alone
+     * removes only ANSI/C0/C1/DEL; `U+E000`/`U+E001` are well-formed 3-byte
+     * UTF-8 Private-Use codepoints, so they survive it untouched and would
+     * reach {@see scanRoot()}'s parser verbatim. A model reply — or any tool
+     * output echoed into a message: a file read, a web fetch, a shell command
+     * run in a hostile repo — could then either crash the render (duplicate
+     * ids make `Scan::parse()` throw) or, worse, register attacker-chosen
+     * boxes in the hit-test registry {@see Chat::zoneAt()} reads, hijacking
+     * clicks meant for real UI. Stripping at the boundary keeps the invariant
+     * that only {@see \SugarCraft\Mouse\Mark}-emitted markers ever reach the
+     * scan. candy-core composes the two sweeps so the predicate lives in one
+     * audited place rather than re-rolled per application.
      */
     private static function untrusted(string $text): string
     {
-        return self::stripSentinels(Sanitize::untrusted($text));
-    }
-
-    /**
-     * Remove bare zone sentinels, for content that must NOT go through
-     * {@see untrusted()} — assistant Markdown, which CandyShine renders into
-     * legitimate SGR that `Sanitize::untrusted()` would strip back out.
-     */
-    private static function stripSentinels(string $text): string
-    {
-        return str_replace([Sentinel::OPEN, Sentinel::CLOSE], '', $text);
+        return Sanitize::untrustedForMarkedFrames($text);
     }
 
     /**
@@ -3003,7 +2995,7 @@ final class Renderer
         // Sentinels stripped BEFORE CandyShine, not after: the rendered output
         // is legitimate SGR that untrusted() would destroy, but the model's
         // raw text can still smuggle U+E000/U+E001 into the frame.
-        $body = trim($md->render(self::stripSentinels($msg->content)));
+        $body = trim($md->render(Sanitize::stripZoneSentinels($msg->content)));
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $label . "\n" . $body;
@@ -3043,7 +3035,7 @@ final class Renderer
         // Sentinels stripped BEFORE the renderer, same order and reason as
         // renderAssistantTurn(): the model's raw text can smuggle
         // U+E000/U+E001 into the frame and break the mouse-zone scan.
-        $raw = self::stripSentinels($partial);
+        $raw = Sanitize::stripZoneSentinels($partial);
 
         try {
             $body = rtrim((new Markdown($theme->markdown, wrapWidth: $width))->render($raw));

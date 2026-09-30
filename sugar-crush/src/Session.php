@@ -83,7 +83,7 @@ final class Session
      */
     public function save(): void
     {
-        $store = AtomicJsonFile::new(self::sessionFilePath());
+        $store = AtomicJsonFile::new(self::sessionFilePath())->withPermissions(0600);
 
         $data = [
             'cwd' => $this->cwd,
@@ -96,23 +96,20 @@ final class Session
 
         // AtomicJsonFile persists via a same-dir temp + flock + rename, so a
         // reader never sees a torn file, and it creates the parent dir 0700.
-        // What it does NOT do is chmod the data file: this session file records
-        // the user's working directory, selections and filter history — private
-        // data that must stay owner-only (a security requirement from #1232).
-        // The restrictive umask makes the temp file AtomicJsonFile creates
-        // owner-only AT BIRTH, closing any world-readable window before rename;
-        // the trailing chmod re-asserts 0600 as belt-and-suspenders (and covers
-        // filesystems that ignore umask). save() is best-effort — a persistence
-        // failure must never disrupt the session — so AtomicJsonFile's throw is
+        // This session file records the user's working directory, selections
+        // and filter history — private data that must stay owner-only (a
+        // security requirement from #1232) — which withPermissions(0600) now
+        // guarantees structurally: the mode lands on the temp inode BEFORE any
+        // payload byte and before the publishing rename, so no world-readable
+        // window ever exists and a replace of an already-loose file tightens
+        // it. save() is best-effort — a persistence failure must never disrupt
+        // the session — so AtomicJsonFile's throw (including a failed chmod,
+        // the fail-closed direction: nothing is published with loose bits) is
         // swallowed, matching the prior @file_put_contents contract.
-        $previousUmask = umask(0077);
         try {
             $store->write($data);
-            @chmod($store->path(), 0600);
         } catch (\Throwable) {
             // Silent: save failures do not surface to the user.
-        } finally {
-            umask($previousUmask);
         }
     }
 
