@@ -685,9 +685,9 @@ $output = $style->render('Hello');
 
 ### Table + Paginator
 
-Table exposes `getPaginator()` for UI rendering:
+Table exposes `paginator()` for UI rendering:
 ```php
-$paginator = $table->getPaginator();
+$paginator = $table->paginator();
 echo $paginator->view();  // "● ○ ○ ○ ○" or "3/8"
 ```
 
