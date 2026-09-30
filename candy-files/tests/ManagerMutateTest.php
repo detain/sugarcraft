@@ -65,7 +65,6 @@ final class ManagerMutateTest extends TestCase
             searchCursor: 2,
             tabs: [$tab],
             tabIndex: 0,
-            showTabBar: true,
             undoStack: [UndoAction::rename(['/a' => '/b'])],
             redoStack: [UndoAction::rename(['/c' => '/d'])],
             pendingOpDest: '/pending/dest',
@@ -182,12 +181,12 @@ final class ManagerMutateTest extends TestCase
             'openNewTab' => [
                 'base' => fn() => $this->richManager(),
                 'apply' => fn(Manager $m) => $m->openNewTab('/'),
-                'changed' => ['tabs', 'tabIndex', 'showTabBar'],
+                'changed' => ['tabs', 'tabIndex'],
             ],
             'duplicateTab' => [
                 'base' => fn() => $this->richManager(),
                 'apply' => fn(Manager $m) => $m->duplicateTab(),
-                'changed' => ['tabs', 'tabIndex', 'showTabBar'],
+                'changed' => ['tabs', 'tabIndex'],
             ],
             'switchTab' => [
                 'base' => fn() => $this->richManager()->openNewTab('/'), // 2 tabs, tabIndex 1
@@ -197,7 +196,7 @@ final class ManagerMutateTest extends TestCase
             'closeTab' => [
                 'base' => fn() => $this->richManager()->openNewTab('/'), // 2 tabs, tabIndex 1
                 'apply' => fn(Manager $m) => $m->closeTab(),
-                'changed' => ['tabs', 'tabIndex', 'showTabBar'],
+                'changed' => ['tabs', 'tabIndex'],
             ],
         ];
 
@@ -250,7 +249,6 @@ final class ManagerMutateTest extends TestCase
         $after = $base->openNewTab('/');
         $this->assertCount(count($base->tabs) + 1, $after->tabs);
         $this->assertSame(count($after->tabs) - 1, $after->tabIndex);
-        $this->assertTrue($after->showTabBar);
     }
 
     public function testSwitchTabChangesOnlyIndex(): void

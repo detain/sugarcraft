@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Files;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Style;
@@ -34,10 +35,8 @@ final class Renderer
         }
         $parts = [];
         foreach ($m->tabs as $i => $tab) {
-            $label = $tab['left']->cwd;
-            if (strlen($label) > 20) {
-                $label = '…' . substr($label, -17);
-            }
+            // cwd is filesystem data like any name — sanitize before render.
+            $label = self::truncate(Entry::sanitizeName($tab['left']->cwd), 20);
             $prefix = $i === $m->tabIndex ? '[' : ' ';
             $suffix = $i === $m->tabIndex ? ']' : ' ';
             $parts[] = "{$prefix}{$label}{$suffix}";
@@ -54,7 +53,7 @@ final class Renderer
 
         $header = sprintf(
             "%s  [%s%s]",
-            self::truncate($pane->cwd, 30),
+            self::truncate(Entry::sanitizeName($pane->cwd), 30),
             $pane->sort->value,
             $pane->showHidden ? ' ' . Lang::t('pane.hidden_suffix') : '',
         );
@@ -66,7 +65,9 @@ final class Renderer
             $name    = $entry->isDir ? $entry->name . '/' : $entry->name;
             $name    = Entry::sanitizeName($name);
             $size    = $entry->displaySize();
-            $rows[] = sprintf("%s%s %-26s %7s", $arrow, $marker, self::truncate($name, 26), $size);
+            // Cell-accurate column: `%-26s` pads bytes, which drifts the
+            // size column for every double-width (CJK/emoji) name.
+            $rows[] = sprintf("%s%s %s %7s", $arrow, $marker, Width::padRight(self::truncate($name, 26), 26), $size);
         }
 
         $body = $header . "\n" . str_repeat('─', 36) . "\n" . implode("\n", $rows);
@@ -91,7 +92,10 @@ final class Renderer
             return '';
         }
         $lines = [];
-        $lines[] = Ansi::sgr(Ansi::BOLD) . "Search: {$m->searchQuery}" . Ansi::reset();
+        // The query is typed at the keyboard today, but it reaches view()
+        // through the same Model field any injected string would — sanitize
+        // it like every other untrusted render.
+        $lines[] = Ansi::sgr(Ansi::BOLD) . 'Search: ' . Entry::sanitizeName($m->searchQuery) . Ansi::reset();
         $lines[] = '';
         $total = count($m->searchResults);
         foreach ($m->searchResults as $i => $entry) {
@@ -108,11 +112,18 @@ final class Renderer
         return implode("\n", $lines) . "\n\n";
     }
 
-    private static function truncate(string $s, int $n): string
+    /**
+     * Clip $s to $cells DISPLAY cells keeping the tail (the leaf of a path
+     * or the extension of a name is the meaningful end), prefixed with the
+     * one-cell ellipsis. Byte math (strlen/substr) drifted CJK names by
+     * their double-width cells and could split a codepoint mid-sequence.
+     */
+    private static function truncate(string $s, int $cells): string
     {
-        if (strlen($s) <= $n) {
+        $width = Width::of($s);
+        if ($width <= $cells) {
             return $s;
         }
-        return '…' . substr($s, -($n - 1));
+        return '…' . Width::dropAnsi($s, $width - ($cells - 1));
     }
 }

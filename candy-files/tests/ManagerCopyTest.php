@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files\Tests;
 
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Entry;
 use SugarCraft\Files\Manager;
+use SugarCraft\Files\Msg\CopyCompletedMsg;
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
 
 final class ManagerCopyTest extends TestCase
 {
@@ -71,43 +76,132 @@ final class ManagerCopyTest extends TestCase
         $this->assertSame('copy', $armed->pendingOpType);
     }
 
-    public function testCopyConfirmedWithY(): void
+    /**
+     * End-to-end copy through the async chain — the audit's HIGH item.
+     *
+     * Before the fix this test was tautological: it never executed the Cmd,
+     * asserted the SOURCE files still existed, and `canUndo() || $cmd` was
+     * true by construction. CopyCompletedMsg also implemented no Core\Msg,
+     * so Program's `?Msg` dispatch TypeError'd on resolution and update()
+     * additionally returned `self` where `array` was declared — completion
+     * NEVER reached the Model. This test now mirrors candy-core Program's
+     * AsyncCmd wiring exactly (promise->then(?Msg -> update()), then
+     * Loop::run() drains the futureTick I/O) and pins the whole chain:
+     * files land, pane refreshes, undo finalizes, honest status.
+     */
+    public function testCopyConfirmedWithYCompletesEndToEnd(): void
     {
-        // Create source dir with subdirs and files
         $srcDir = $this->tmpDir . '/source';
-        mkdir($srcDir, 0755, true);
-        file_put_contents($srcDir . '/file1.txt', 'content1');
-        file_put_contents($srcDir . '/file2.txt', 'content2');
-        mkdir($srcDir . '/subdir', 0755);
+        $dstDir = $this->tmpDir . '/dest';
+        mkdir($srcDir . '/subdir', 0755, true);
+        mkdir($dstDir, 0755, true);
         file_put_contents($srcDir . '/subdir/nested.txt', 'nested');
 
-        $m = Manager::start($srcDir, $this->tmpDir, $this->lister);
-        // Move cursor past '..' parent sentinel
+        $m = Manager::start($srcDir, $dstDir, $this->lister);
+        // Cursor: '..' sentinel → file1 slot… walk down onto 'subdir'.
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
-        // Select it
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));
-        // Arm copy
+        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));  // select subdir
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame(ConfirmState::CopySelected, $armed->confirm);
+
+        [$pending, $cmd] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $async = $cmd();                       // Program runs the Cmd closure…
+        $this->assertInstanceOf(AsyncCmd::class, $async); // …and dispatches an AsyncCmd
+        // Nothing has been copied yet — the work is deferred to the loop.
+        $this->assertFileDoesNotExist($dstDir . '/subdir/nested.txt');
+
+        // …then feed the resolution back through update(), like the
+        // promise->then(?Msg -> dispatch) hop in candy-core Program.
+        // Pre-fix, CopyCompletedMsg was not a Msg and this very step threw.
+        $this->extractResolved($async);
+        $finalState = null;
+        $async->promise->then(function (?Msg $resolved) use ($pending, &$finalState): void {
+            if ($resolved !== null) {
+                [$finalState] = $pending->update($resolved);
+            }
+        });
+        Loop::run();
+
+        $this->assertInstanceOf(Manager::class, $finalState);
+        // 1. The bytes really landed in the destination.
+        $this->assertFileExists($dstDir . '/subdir/nested.txt');
+        $this->assertSame('nested', file_get_contents($dstDir . '/subdir/nested.txt'));
+        // 2. Honest completion status (not the optimistic arm-time one).
+        $this->assertSame('copied 1 entries', $finalState->status);
+        $this->assertSame(ConfirmState::None, $finalState->confirm);
+        // 3. Undo finalized — the dead performCopy used to push this.
+        $this->assertTrue($finalState->canUndo());
+        $top = $finalState->undoStack[array_key_last($finalState->undoStack)];
+        $this->assertSame(UndoActionType::Copy, $top->type);
+        $this->assertArrayHasKey($srcDir . '/subdir', $top->items);
+        // 4. Both panes re-read: the destination listing shows the copy.
+        $dstNames = array_map(static fn(Entry $e): string => $e->name, $finalState->right->entries);
+        $this->assertContains('subdir', $dstNames, 'destination pane must refresh after completion');
+    }
+
+    /** Drive one futureTick round and capture what the promise resolves to. */
+    private function extractResolved(AsyncCmd $async): void
+    {
+        $resolved = null;
+        $delivered = false;
+        $async->promise->then(static function (?Msg $m) use (&$resolved, &$delivered): void {
+            $delivered = true;
+            $resolved = $m;
+        });
+        Loop::run();
+        $this->assertTrue($delivered, 'copy promise never delivered to the dispatcher');
+        $this->assertInstanceOf(Msg::class, $resolved, 'Program dispatches through ?Msg — a null/non-Msg resolution throws');
+    }
+
+    /**
+     * The audit's ":712 errors discarded" half: per-file failures counted
+     * by the promise chain must surface in the final status instead of
+     * vanishing. Source removed between arm and loop drain ⇒ 1 error.
+     */
+    public function testCopyErrorsSurfaceInCompletionStatus(): void
+    {
+        $srcDir = $this->tmpDir . '/src2';
+        $dstDir = $this->tmpDir . '/dst2';
+        mkdir($srcDir, 0755, true);
+        mkdir($dstDir, 0755, true);
+        file_put_contents($srcDir . '/vanishing.txt', 'x');
+
+        $m = Manager::start($srcDir, $dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
         [$m] = $m->update(new KeyMsg(KeyType::Char, 'c'));
-        $this->assertSame(ConfirmState::CopySelected, $m->confirm);
-        // Confirm with y - returns [Manager, Cmd] for async copy
-        [$done, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'y'));
+        [$pending, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'y'));
+        $async = $cmd();
 
-        // Verify the Cmd is returned (proving async deferral)
-        $this->assertNotNull($cmd, 'copy should return a Cmd for async execution');
+        // Deferred I/O has not run yet (futureTick) — pull the rug out.
+        unlink($srcDir . '/vanishing.txt');
 
-        // Pending state should have confirm cleared and status set
-        $this->assertSame(ConfirmState::None, $done->confirm);
-        $this->assertStringContainsString('copied', $done->status);
+        $finalState = null;
+        $async->promise->then(function (?Msg $resolved) use ($pending, &$finalState): void {
+            if ($resolved !== null) {
+                [$finalState, $followUp] = $pending->update($resolved);
+                $this->assertNull($followUp, 'completion must not spawn further commands');
+            }
+        });
+        Loop::run();
 
-        // Verify files exist in destination (sync copy still happens via performCopy)
-        $this->assertFileExists($this->tmpDir . '/source');
-        $this->assertFileExists($this->tmpDir . '/source/file1.txt');
-        $this->assertFileExists($this->tmpDir . '/source/file2.txt');
-        $this->assertFileExists($this->tmpDir . '/source/subdir/nested.txt');
-        // With async, canUndo check is deferred to when Cmd completes
-        $this->assertTrue($done->canUndo() || $cmd !== null, 'should have undo entry or pending cmd');
+        $this->assertInstanceOf(Manager::class, $finalState);
+        $this->assertStringContainsString('copied with 1 errors', $finalState->status);
+        $this->assertFileDoesNotExist($dstDir . '/vanishing.txt');
+    }
+
+    /**
+     * Type-level pin of the HIGH defect: the completion message crosses
+     * candy-core's `?Msg`-typed dispatch closure, so it MUST be a Msg —
+     * the class shipped without the interface and the copy path died with
+     * an "Unhandled promise rejection" TypeError.
+     */
+    public function testCopyCompletedMsgIsACoreMsg(): void
+    {
+        $msg = new CopyCompletedMsg([], 0, [], '/dst');
+        $this->assertInstanceOf(Msg::class, $msg);
     }
 
     public function testCopyCancelledWithN(): void

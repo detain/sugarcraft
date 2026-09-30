@@ -310,7 +310,6 @@ final class ManagerTest extends TestCase
         $m = $m->duplicateTab();
         $this->assertCount(2, $m->tabs);
         $this->assertSame(1, $m->tabIndex);
-        $this->assertTrue($m->showTabBar);
     }
 
     public function testCloseTabReducesCount(): void
@@ -337,14 +336,6 @@ final class ManagerTest extends TestCase
         $this->assertSame(2, $m->tabIndex);
         $m = $m->switchTab(0);
         $this->assertSame(0, $m->tabIndex);
-    }
-
-    public function testTabsModeDetectedWhenMultipleTabs(): void
-    {
-        $m = $this->start();
-        $this->assertFalse($m->showTabBar);
-        $m = $m->duplicateTab();
-        $this->assertTrue($m->showTabBar);
     }
 
     public function testCtrlTabDuplicatesFirstTab(): void
@@ -519,16 +510,42 @@ final class ManagerTest extends TestCase
         $m = $m->openNewTab('/home');
         $this->assertCount(2, $m->tabs);
         $this->assertSame(1, $m->tabIndex);
-        $this->assertTrue($m->showTabBar);
     }
 
     public function testOpenNewTabWithDefaultPath(): void
     {
         $m = $this->start()->openNewTab();
         $this->assertCount(2, $m->tabs);
-        // Should use current pane's cwd or fallback to '/'
-        $newTab = $m->tabs[1];
-        $this->assertNotNull($newTab['left']->cwd);
+        // The default argument is '/' — and it is now honoured, not ignored.
+        $this->assertSame('/', $m->tabs[1]['left']->cwd);
+        $this->assertSame('/', $m->tabs[1]['right']->cwd);
+    }
+
+    /**
+     * HIGH audit item: openNewTab($path) used to duplicate the current
+     * pane's cwd and drop $path entirely. The tab MUST land on the path
+     * the caller asked for.
+     */
+    public function testOpenNewTabLandsOnTheGivenPath(): void
+    {
+        $dir = sys_get_temp_dir() . '/candyfiles-tab-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        try {
+            $m = $this->start()->openNewTab($dir);
+            $this->assertSame($dir, $m->tabs[1]['left']->cwd, 'tab must land on the requested path');
+            $this->assertSame($dir, $m->tabs[1]['right']->cwd);
+            $this->assertSame(1, $m->tabIndex, 'new tab must be focused');
+        } finally {
+            rmdir($dir);
+        }
+    }
+
+    public function testOpenNewTabFallsBackToCurrentCwdForNonDirectory(): void
+    {
+        $m = $this->start()->openNewTab('/definitely/not/a/real/path-' . bin2hex(random_bytes(4)));
+        // A bogus path must not open a dead listing: fall back to the
+        // current pane's cwd (the pre-fix behaviour) instead.
+        $this->assertSame($m->tabs[0]['left']->cwd, $m->tabs[1]['left']->cwd);
     }
 
     public function testInitReturnsNull(): void
@@ -584,15 +601,6 @@ final class ManagerTest extends TestCase
         $m = $this->start()->duplicateTab();
         $unchanged = $m->switchTab(-1);
         $this->assertSame($m->tabIndex, $unchanged->tabIndex);
-    }
-
-    public function testOpenNewTabMaintainsShowTabBar(): void
-    {
-        $m = $this->start();
-        $this->assertFalse($m->showTabBar);
-
-        $m = $m->openNewTab();
-        $this->assertTrue($m->showTabBar);
     }
 
     public function testCloseTabWithSpecificIndex(): void

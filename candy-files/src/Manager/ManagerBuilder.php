@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files\Manager;
 
-use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\ConfirmState;
 use SugarCraft\Files\Entry;
 use SugarCraft\Files\FsLister;
@@ -14,24 +13,11 @@ use SugarCraft\Files\UndoAction;
 /**
  * Fluent builder for Manager.
  *
- * Mirrors charmbracelet/superfile.Manager.builder
+ * Mirrors yorukot/superfile.Manager.builder
  *
- * @method self withLeft(Pane $left)
- * @method self withRight(Pane $right)
- * @method self withActiveIdx(int $activeIdx)
- * @method self withStatus(string $status)
- * @method self withConfirm(ConfirmState $confirm)
- * @method self withLister(\Closure $lister)
- * @method self withSearchQuery(?string $searchQuery)
- * @method self withSearchResults(array $searchResults)
- * @method self withSearchCursor(int $searchCursor)
- * @method self withTabs(array $tabs)
- * @method self withTabIndex(int $tabIndex)
- * @method self withShowTabBar(bool $showTabBar)
- * @method self withUndoStack(array $undoStack)
- * @method self withRedoStack(array $redoStack)
- * @method self withPendingOpDest(?string $pendingOpDest)
- * @method self withPendingOpType(?string $pendingOpType)
+ * Every `with*()` below is a real declared method returning a clone; there is
+ * no magic __call, so no @method annotations are needed (a previous stale
+ * block advertised signatures that drifted from the declared ones).
  */
 final class ManagerBuilder
 {
@@ -48,7 +34,6 @@ final class ManagerBuilder
     private int $searchCursor = 0;
     private array $tabs = [];
     private int $tabIndex = 0;
-    private bool $showTabBar = false;
     /** @var list<UndoAction> */
     private array $undoStack = [];
     /** @var list<UndoAction> */
@@ -145,13 +130,6 @@ final class ManagerBuilder
         return $clone;
     }
 
-    public function withShowTabBar(bool $showTabBar): self
-    {
-        $clone = clone $this;
-        $clone->showTabBar = $showTabBar;
-        return $clone;
-    }
-
     /**
      * @param list<UndoAction> $undoStack
      */
@@ -211,7 +189,6 @@ final class ManagerBuilder
             $this->searchCursor,
             $this->tabs,
             $this->tabIndex,
-            $this->showTabBar,
             $this->undoStack,
             $this->redoStack,
             $this->pendingOpDest,

@@ -49,7 +49,17 @@ final class Manager implements Model
 
     private const UNDO_LIMIT = 50;
 
-    /** Per-process trash directory, created lazily on first delete. @see trashRoot() */
+    /**
+     * Per-process trash directory, created lazily on first delete. @see trashRoot()
+     *
+     * DESIGN NOTE (deliberate, pre-1.0): this trash is EPHEMERAL. The
+     * shutdown handler registered in start() removes the whole directory
+     * when the process exits, so `delete` is recoverable via undo (u)
+     * ONLY within the same sugar-files session — quit, crash, or reboot
+     * and the deleted bytes are gone for good. A persistent, XDG-trash
+     * spec-compatible bin with cross-session restore is a separate
+     * feature, intentionally not built here.
+     */
     private static ?string $trashRoot = null;
 
     /**
@@ -70,7 +80,6 @@ final class Manager implements Model
         public readonly int $searchCursor = 0,
         public readonly array $tabs = [],
         public readonly int $tabIndex = 0,
-        public readonly bool $showTabBar = false,
         public readonly array $undoStack = [],
         public readonly array $redoStack = [],
         public readonly ?string $pendingOpDest = null,
@@ -114,7 +123,6 @@ final class Manager implements Model
             lister: $lister,
             tabs: [$initialTab],
             tabIndex: 0,
-            showTabBar: false,
             undoStack: [],
             redoStack: [],
             pendingOpDest: null,
@@ -138,13 +146,11 @@ final class Manager implements Model
 
     public function update(Msg $msg): array
     {
-        // Handle async copy completion
+        // Async copy completion: the Cmd ran on the loop, files landed in the
+        // destination pane's directory. Re-read both listings, report the
+        // honest outcome (per-file errors included), and finalize undo state.
         if ($msg instanceof CopyCompletedMsg) {
-            $msg = $msg;  // unused for now, state already updated by the Cmd
-            // Refresh pane and finalize undo state
-            return $this
-                ->withActivePane(fn(Pane $p) => Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, '');
+            return [$this->handleCopyCompleted($msg), null];
         }
 
         if (($msg instanceof KeyMsg) === false) {
@@ -167,6 +173,49 @@ final class Manager implements Model
         }
 
         return [$this->dispatch($msg), null];
+    }
+
+    /**
+     * Finalize an async copy that the Cmd completed on the event loop.
+     *
+     * The pre-completion state armed by performCopyAsync() is optimistic
+     * ("copied N"); this is where the truth from the wire lands: per-file
+     * failures counted by the promise chain surface in the status instead of
+     * being discarded, the copy enters the undo history (the dead sync
+     * `performCopy()` used to push this and never ran), and BOTH panes
+     * re-read — the destination pane is the one whose listing actually
+     * changed.
+     */
+    private function handleCopyCompleted(CopyCompletedMsg $msg): self
+    {
+        $status = $msg->errors === 0
+            ? Lang::t('status.copied', ['count' => count($msg->names)])
+            : Lang::t('status.copied_with_errors', ['errors' => $msg->errors]);
+        $newUndoStack = $this->undoStack;
+        if ($msg->copiedItems !== []) {
+            $newUndoStack[] = UndoAction::copy($msg->copiedItems);
+        }
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        return $this->refreshAllPanes()
+            ->withConfirm(ConfirmState::None, $status)
+            ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
+    }
+
+    /**
+     * Re-read both pane listings from the filesystem, preserving each
+     * pane's cwd / sort / hidden state and the tab they live in.
+     */
+    private function refreshAllPanes(): self
+    {
+        $lister = $this->lister;
+        $reopen = static fn(Pane $p): Pane => Pane::open($p->cwd, $lister, $p->sort, $p->showHidden);
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            $newTab = ['left' => $reopen($tab['left']), 'right' => $reopen($tab['right']), 'activeIdx' => $tab['activeIdx']];
+            $newTabs = $this->tabs;
+            $newTabs[$this->tabIndex] = $newTab;
+            return $this->mutate(['left' => $newTab['left'], 'right' => $newTab['right'], 'tabs' => $newTabs]);
+        }
+        return $this->mutate(['left' => $reopen($this->left), 'right' => $reopen($this->right)]);
     }
 
     public function view(): string
@@ -474,7 +523,7 @@ final class Manager implements Model
         );
     }
 
-    /** Arm copy confirmation — next KeyMsg triggers performCopy or cancel. */
+    /** Arm copy confirmation — next KeyMsg triggers performCopyAsync or cancel. */
     private function armCopy(): self
     {
         $pane = $this->activePane();
@@ -628,43 +677,6 @@ final class Manager implements Model
             }
         }
         return true;
-    }
-
-    private function performCopy(): self
-    {
-        $pane = $this->activePane();
-        $names = $pane->selected !== []
-            ? array_keys($pane->selected)
-            : [$pane->currentEntry()?->name];
-        $dst = $this->pendingOpDest;
-        if ($dst === null) {
-            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
-        }
-        $errors = 0;
-        $copiedItems = [];
-        foreach ($names as $name) {
-            if ($name === null || $name === '..' || $name === '') {
-                continue;
-            }
-            $src = Pane::join($pane->cwd, $name);
-            $target = Pane::join($dst, $name);
-            $copiedItems[$src] = $target;
-            if (!$this->copy($src, $target)) {
-                $errors++;
-            }
-        }
-        $msg = $errors === 0
-            ? Lang::t('status.copied', ['count' => count($names)])
-            : Lang::t('status.copied_with_errors', ['errors' => $errors]);
-        $newUndoStack = $this->undoStack;
-        if ($copiedItems !== []) {
-            $newUndoStack[] = UndoAction::copy($copiedItems);
-        }
-        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-            ->withConfirm(ConfirmState::None, $msg)
-            ->withUndoRedoStacks($newUndoStack, []);
     }
 
     /**
@@ -984,13 +996,21 @@ final class Manager implements Model
         return @rmdir($path);
     }
 
-    /** Open a new tab with a given directory path */
+    /**
+     * Open a new tab landing on $path.
+     *
+     * The argument is honoured: a caller asking for /var/log gets /var/log.
+     * A path that is not a readable directory falls back to duplicating the
+     * current pane's cwd (the previous behaviour) rather than opening a tab
+     * on a listing that can never render.
+     */
     public function openNewTab(string $path = '/'): self
     {
         $current = $this->currentTabs();
-        $cwd = $current !== null
-            ? ($this->tabs[$this->tabIndex]['left']->cwd ?? $path)
-            : ($this->left->cwd ?? $path);
+        $fallback = $current !== null
+            ? $current['left']->cwd
+            : $this->left->cwd;
+        $cwd = is_dir($path) ? $path : $fallback;
         $newTab = [
             'left' => Pane::open($cwd, $this->lister),
             'right' => Pane::open($cwd, $this->lister),
@@ -1000,7 +1020,6 @@ final class Manager implements Model
         return $this->mutate([
             'tabs' => $newTabs,
             'tabIndex' => count($newTabs) - 1,
-            'showTabBar' => $newTabs !== [],
         ]);
     }
 
@@ -1017,7 +1036,6 @@ final class Manager implements Model
         return $this->mutate([
             'tabs' => $newTabs,
             'tabIndex' => $newIndex,
-            'showTabBar' => $newTabs !== [],
         ]);
     }
 
@@ -1046,7 +1064,6 @@ final class Manager implements Model
         return $this->mutate([
             'tabs' => $newTabs,
             'tabIndex' => count($newTabs) - 1,
-            'showTabBar' => $newTabs !== [],
         ]);
     }
 
