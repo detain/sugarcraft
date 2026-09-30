@@ -319,8 +319,10 @@ final class BoundedShutdown
             return null;
         }
 
+        // is_resource() above is the whole defense: a live resource yields
+        // the fixed-shape status array with 'pid' always keyed.
         $status = \proc_get_status($process);
-        $pid = (int) ($status['pid'] ?? 0);
+        $pid = (int) $status['pid'];
         if ($pid <= 0) {
             return null;
         }
@@ -448,7 +450,10 @@ final class BoundedShutdown
      * The is_resource guard is not defensive padding: `proc_get_status()` on
      * a resource `proc_close()` already consumed is a TypeError, and this
      * class is called from `__destruct()` paths where a double teardown is
-     * normal.
+     * normal. It is also the ONLY defense the poll needs: once the resource
+     * is proven live, proc_get_status() answers the full fixed-shape array
+     * (a mid-reap poll says running=false with exitcode filled, it never
+     * drops an offset), so the keys are read directly.
      */
     private static function exited(mixed $process, ?int &$exitCode): bool
     {
@@ -457,11 +462,11 @@ final class BoundedShutdown
         }
 
         $status = \proc_get_status($process);
-        if (($status['running'] ?? false) === true) {
+        if ($status['running'] === true) {
             return false;
         }
 
-        $exitCode = (int) ($status['exitcode'] ?? -1);
+        $exitCode = (int) $status['exitcode'];
 
         return true;
     }

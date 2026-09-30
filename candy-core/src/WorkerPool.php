@@ -549,19 +549,30 @@ PHP;
      * proc_get_status() reaps internally once the child is gone, so a false
      * 'running' here means proc_close() cannot block afterwards.
      *
+     * 'running' is read without a `??` fallback on purpose: every call site
+     * hands in a resource that is closed only after the ladder finishes, and
+     * proc_get_status() on a live resource always answers the fixed-shape
+     * array — the race this poll lives through is exit-not-yet-observed
+     * (running stays true), never a missing offset.
+     *
      * @param resource $process
      */
     private function hasExited($process, float $seconds): bool
     {
         $deadline = microtime(true) + $seconds;
         do {
-            if (!(bool) (proc_get_status($process)['running'] ?? false)) {
+            if (!proc_get_status($process)['running']) {
                 return true;
             }
             usleep(self::REAP_TICK_MICROS);
         } while (microtime(true) < $deadline);
 
-        return !(bool) (proc_get_status($process)['running'] ?? false);
+        // Fresh snapshot under its own name, not a repeat of the loop's
+        // expression: the tick budget expired and the child may have exited
+        // inside exactly that window, so this answer must be re-read.
+        $finalStatus = proc_get_status($process);
+
+        return !$finalStatus['running'];
     }
 
     public function __destruct()

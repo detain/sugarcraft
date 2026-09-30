@@ -303,10 +303,17 @@ final class Clipboard
             $seconds = (int) $remaining;
             $micros = (int) (($remaining - $seconds) * 1_000_000);
 
-            if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
+            $ready = @stream_select($read, $write, $except, $seconds, $micros);
+            if ($ready === false) {
                 return false;
             }
-            if ($write === []) {
+            // Judge readiness on select()'s documented return count, not on
+            // the by-reference $write it rewrites: $write === [] and
+            // $ready === 0 are the same fact here (one stream in one set),
+            // but the count is what the signature promises. Zero means the
+            // select timed out with no ready writer — loop so the deadline
+            // guard at the top of the iteration can end the wait.
+            if ($ready === 0) {
                 continue;
             }
 
@@ -329,9 +336,14 @@ final class Clipboard
     private static function waitForExit($process, float $deadline): ?int
     {
         while (true) {
+            // The resource is alive until the caller's proc_close() runs
+            // after this returns, and proc_get_status() on a live resource
+            // always answers the full fixed-shape array — mid-reap polls
+            // report running=false with exitcode filled, never a missing
+            // offset. Read the keys directly.
             $status = proc_get_status($process);
-            if (($status['running'] ?? false) !== true) {
-                return (int) ($status['exitcode'] ?? -1);
+            if ($status['running'] !== true) {
+                return (int) $status['exitcode'];
             }
 
             if (\hrtime(true) / 1_000_000_000 >= $deadline) {
