@@ -47,6 +47,43 @@ final class FrameTest extends TestCase
     }
 
     /**
+     * Fix wave: widths under the 4-cell floor (two border caps + one content
+     * cell minimum) used to OVERFLOW — a 1-col frame emitted a 2-cell rule,
+     * a 2-col frame a 3-cell title row — forcing terminal wraps that desync
+     * the diff renderer. render() now clamps $cols up to 4 (fail-safe: the
+     * host clips excess rather than re-flowing it), so every emitted line is
+     * exactly 4 cells for any cols in 1..4.
+     *
+     * @dataProvider tinyCols
+     */
+    public function testTinyColsClampToFourCellFloor(int $cols): void
+    {
+        $out = Frame::new()
+            ->withTitle('T')
+            ->withStatus('S')
+            ->render('body', $cols, 8);
+
+        $lines = explode("\n", $out);
+        self::assertCount(8, $lines, 'row contract holds unchanged under the clamp');
+        foreach ($lines as $i => $line) {
+            self::assertSame(
+                4,
+                Width::string($line),
+                "cols={$cols}: line $i must be exactly the clamped 4-cell floor",
+            );
+        }
+    }
+
+    /** @return iterable<string, array{int}> */
+    public static function tinyCols(): iterable
+    {
+        yield 'cols=1' => [1];
+        yield 'cols=2' => [2];
+        yield 'cols=3' => [3];
+        yield 'cols=4' => [4];
+    }
+
+    /**
      * Line count stays constant (= $rows) regardless of how much body content
      * is supplied — empty, a few lines, or far more than fits.
      *

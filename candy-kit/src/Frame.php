@@ -93,7 +93,12 @@ final class Frame
      * Render the framed body at exactly $cols × $rows cells.
      *
      * The returned string is always exactly $rows lines and every line is
-     * exactly $cols display cells wide.
+     * exactly max($cols, 4) display cells wide. Widths below 4 cannot host
+     * the two border caps plus at least one content cell without overflowing
+     * (a 1-col frame would emit a 2-cell rule, forcing a wrap that desyncs
+     * the diff renderer), so the width is clamped up to a 4-cell floor —
+     * the fail-safe direction: the host terminal clips the excess rather
+     * than re-flows it.
      *
      * @throws \InvalidArgumentException when $rows < {@see OVERHEAD}: there is
      *         no room for the border/title/divider/status chrome, so the frame
@@ -111,6 +116,11 @@ final class Frame
             );
         }
 
+        // Fail-safe floor (see render() docblock): below 4 cells the two border
+        // caps alone leave no room for even a 1-cell content column, and the
+        // rule/title lines would overflow $cols and force a terminal wrap.
+        // Clamping up keeps every emitted line exactly max($cols, 4) wide.
+        $cols = max(4, $cols);
         $inner = max(0, $cols - 2);
         $contentHeight = max(0, $rows - self::OVERHEAD);
 

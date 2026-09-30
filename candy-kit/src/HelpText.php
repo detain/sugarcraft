@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kit;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Internal\SafeText;
 use SugarCraft\Sprinkles\Style;
 
@@ -65,10 +66,10 @@ final class HelpText
         $keys  = array_map(static fn ($k): string => SafeText::line((string) $k), array_keys($rows));
         $descs = array_map(static fn (string $d): string => SafeText::line($d), array_values($rows));
         $maxKey = array_reduce($keys, static fn (int $max, string $k): int
-            => max($max, mb_strlen($k, 'UTF-8')), 0);
+            => max($max, Width::string($k)), 0);
         return implode("\n", array_map(
             static fn (string $key, string $desc) => '  ' . $theme->prompt->render(
-                $key . str_repeat(' ', max(0, $maxKey - mb_strlen($key, 'UTF-8')))
+                Width::padRight($key, $maxKey)
             ) . '  ' . $desc,
             $keys,
             $descs,

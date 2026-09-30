@@ -6,6 +6,7 @@ namespace SugarCraft\Kit\Tests;
 
 use SugarCraft\Kit\HelpText;
 use SugarCraft\Kit\Theme;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class HelpTextTest extends TestCase
@@ -58,6 +59,40 @@ final class HelpTextTest extends TestCase
         $this->assertNotFalse($aPos);
         $this->assertNotFalse($abcPos);
         $this->assertSame($aPos, $abcPos);
+    }
+
+    /**
+     * Display-CELL alignment (fix wave): the old mb_strlen math counted
+     * codepoints, so a 2-glyph CJK key occupying 4 cells pulled its
+     * description one column left of the ASCII rows. Under Theme::plain()
+     * there is no SGR, so byte offsets precede the description exactly;
+     * measure the cell width of that prefix per row.
+     */
+    public function testCjkKeyDescriptionsStartAtSameDisplayColumn(): void
+    {
+        $out = HelpText::renderRows([
+            '-h'          => 'ascii row',
+            '帮助'         => 'cjk row',
+            '--long-name' => 'long row',
+        ], Theme::plain());
+
+        $columns = [];
+        foreach (['ascii row', 'cjk row', 'long row'] as $desc) {
+            $line = $this->plainLineContaining($out, $desc);
+            $columns[] = Width::string(substr($line, 0, strpos($line, $desc)));
+        }
+        // 2-cell left margin + widest key '--long-name' (11 cells) + 2-cell gutter.
+        $this->assertSame([15, 15, 15], $columns);
+    }
+
+    private function plainLineContaining(string $out, string $needle): string
+    {
+        foreach (explode("\n", $out) as $line) {
+            if (str_contains($line, $needle)) {
+                return $line;
+            }
+        }
+        $this->fail("no rendered line contains '{$needle}'");
     }
 
     /**

@@ -20,74 +20,20 @@ use SugarCraft\Sprinkles\Style;
 final class Theme
 {
     /**
-     * @param Style|null $success
-     * @param Style|null $error
-     * @param Style|null $warn
-     * @param Style|null $info
-     * @param Style|null $prompt
-     * @param Style|null $accent
-     * @param Style|null $muted
+     * All seven slots are non-nullable: a theme without a style for a level
+     * is an illegal state, so the type system enforces it at the boundary
+     * (strict_types turns a null argument into a TypeError) instead of a
+     * hand-rolled constructor loop.
      */
     public function __construct(
-        public readonly ?Style $success,
-        public readonly ?Style $error,
-        public readonly ?Style $warn,
-        public readonly ?Style $info,
-        public readonly ?Style $prompt,
-        public readonly ?Style $accent,
-        public readonly ?Style $muted,
-    ) {
-        // Fail-fast: illegal states (null Style fields) must halt immediately
-        // with a descriptive exception rather than a generic TypeError.
-        foreach (['success' => $success, 'error' => $error, 'warn' => $warn,
-                  'info' => $info, 'prompt' => $prompt, 'accent' => $accent, 'muted' => $muted] as $name => $style) {
-            if ($style === null) {
-                throw new \InvalidArgumentException("Theme::{$name} cannot be null");
-            }
-        }
-    }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function success(): Style { return $this->success; }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function error(): Style { return $this->error; }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function warn(): Style { return $this->warn; }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function info(): Style { return $this->info; }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function prompt(): Style { return $this->prompt; }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function accent(): Style { return $this->accent; }
-
-    /**
-     * @return Style
-     * @since 1.0.0
-     */
-    public function muted(): Style { return $this->muted; }
+        public readonly Style $success,
+        public readonly Style $error,
+        public readonly Style $warn,
+        public readonly Style $info,
+        public readonly Style $prompt,
+        public readonly Style $accent,
+        public readonly Style $muted,
+    ) {}
 
     public static function ansi(): self
     {
@@ -114,23 +60,23 @@ final class Theme
      *
      * The TEA program sends {@see \SugarCraft\Core\Cmd::requestBackgroundColor()}
      * during init, receives a {@see BackgroundColorMsg} in its update loop, and
-     * passes it here to select the appropriate palette. If no msg is supplied,
-     * the stored last-detected value is used (set by the update loop).
-     * As a fallback when no detection has occurred, {@see ansi()} is returned.
+     * passes it here to select the appropriate palette. Theme itself keeps no
+     * state — the program owns the detection — so calling this with no msg
+     * simply returns the {@see ansi()} fallback.
      *
      * Dark terminals get the {@see nord()} palette; light terminals get
      * {@see catppuccin()}.
      *
-     * @param BackgroundColorMsg|null $bg  parsed OSC-11 reply, or null to use
-     *                                     the stored last-detected value
+     * @param BackgroundColorMsg|null $bg  parsed OSC-11 reply; null (or a
+     *                                     reply that never arrived) falls back
+     *                                     to {@see ansi()}
      */
     public static function auto(?BackgroundColorMsg $bg = null): self
     {
         if ($bg !== null) {
             return $bg->isDark() ? self::nord() : self::catppuccin();
         }
-        // No msg supplied: caller should have stored the detection result.
-        // Fall back to ansi() until the program has received a reply.
+        // Stateless: without a msg in hand there is nothing to detect from.
         return self::ansi();
     }
 
@@ -211,16 +157,15 @@ final class Theme
     }
 
     /**
-     * Resolve a theme by name. Presets: `'ansi'`, `'plain'`, `'charm`,
-     * `'dracula'`, `'nord'`, `'catppuccin'`. Case-insensitive.
+     * Resolve a theme by name. Presets: `'ansi'`, `'plain'`, `'charm'`,
+     * `'dracula'`, `'nord'`, `'catppuccin'`, and `'auto'` (the adaptive
+     * factory with no background msg — the {@see ansi()} fallback).
+     * Case-insensitive.
      *
-     * @throws \InvalidArgumentException if the name is not a string or not recognised
+     * @throws \InvalidArgumentException if the name is not a recognised preset
      */
     public static function byName(string $name): self
     {
-        if (\is_string($name) === false) {
-            throw new \InvalidArgumentException('Theme name must be a string, ' . \gettype($name) . ' given');
-        }
         return match (strtolower($name)) {
             'ansi'        => self::ansi(),
             'plain'       => self::plain(),

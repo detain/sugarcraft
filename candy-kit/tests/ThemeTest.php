@@ -182,9 +182,12 @@ final class ThemeTest extends TestCase
         Theme::build()->success(Style::new())->build();
     }
 
+    /** Parse-don't-validate: the non-nullable Style props enforce slot presence
+     *  at the boundary — a null becomes a TypeError under strict_types, no
+     *  hand-rolled constructor loop needed. */
     public function testConstructorRejectsNullStyle(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\TypeError::class);
         new Theme(
             Style::new(), Style::new(), Style::new(),
             Style::new(), Style::new(), Style::new(), null,

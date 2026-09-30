@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-kit)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-kit)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-kit?label=packagist)](https://packagist.org/packages/sugarcraft/candy-kit)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -48,8 +48,10 @@ echo StatusLine::error('connection refused'), "\n";
 - **`Logo`** — ASCII-art logo renderer with `Logo::sugarcraft()` built-in
   preset and `Logo::fromAscii($art)` for custom art. Chain
   `->withColor($hex)` to apply foreground color.
-- **`Section`** — styled section with title and body content, themeable.
-- **`Stage`** — multi-section presentation container.
+- **`Section`** — one-line themed dividers: `header()` label + fill rule,
+  bare `rule()`, and indented `subHeader()` for nesting under a parent.
+- **`Stage`** — per-line step renderers for progressive CLI output:
+  `step()` (numbered), `subStep()`, and `subStepWithProgress()` (bar or spinner).
 - **`HelpText`** — formatted help output.
 - **`Frame`** — full-screen application chrome: a double-line box that
   fills the terminal exactly (`Frame::new()->withTitle($bar)
@@ -64,18 +66,6 @@ echo StatusLine::error('connection refused'), "\n";
 
 ![cli-page](.vhs/cli-page.gif)
 
-### Logo
-
-![logo](.vhs/logo.gif)
-
-### Section
-
-![section](.vhs/section.gif)
-
-### Stage
-
-![stage](.vhs/stage.gif)
-
 ## Test
 
 ```sh
@@ -85,5 +75,6 @@ cd candy-kit && composer install && vendor/bin/phpunit
 ## Snapshot tests
 
 Presenter output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
-snapshots. Any change to the ANSI slide output must be intentional — re-record the
-fixture with `--update-golden` to accept a new canonical render.
+snapshots. Any change to the ANSI slide output must be intentional — re-record
+the fixtures with `UPDATE_GOLDENS=1 vendor/bin/phpunit` to accept a new
+canonical render.

@@ -79,7 +79,9 @@ final class Section
      * @param string $label     sub-section label; empty = divider line only
      * @param Theme|null $theme
      * @param int $indent       left margin in cells (default 4)
-     * @param int|null $width   total width; null = fill to terminal
+     * @param int|null $width   total display width; null emits no fill run —
+     *                          just the indent, label and one trailing rune
+     *                          (no terminal width is ever queried)
      * @param string $rune      divider rune between label and end fill
      */
     public static function subHeader(

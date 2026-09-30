@@ -21,7 +21,7 @@ use SugarCraft\Testing\Snapshot\Assertions;
  * Captures the byte-exact output of Stage::step() and other renderers
  * to detect regressions in themed CLI output.
  *
- * @see Mirrors charmbracelet/fang output rendering
+ * Output styling mirrors the spirit of charmbracelet/fang's help pages.
  */
 final class GoldenRenderTest extends TestCase
 {

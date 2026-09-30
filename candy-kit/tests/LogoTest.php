@@ -6,10 +6,37 @@ namespace SugarCraft\Kit\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Kit\Logo;
 
 final class LogoTest extends TestCase
 {
+    /**
+     * Regression pin (fix wave): every line of the built-in preset shares one
+     * display width, so the right rail forms a straight column. The original
+     * figlet rows overflowed the box (widths 63,63,63,65,64,65,65,63); a
+     * re-flowed preset that breaks alignment reddens here before a careless
+     * golden re-roll could hide it.
+     */
+    public function testSugarcraftPresetIsUniformDisplayWidth(): void
+    {
+        $lines = explode("\n", Logo::sugarcraft()->render());
+        self::assertCount(8, $lines);
+        $widths = array_map(static fn (string $l): int => Width::string($l), $lines);
+        self::assertSame(
+            [$widths[0]],
+            array_values(array_unique($widths)),
+            'logo lines must all share one display width, got: ' . implode(', ', $widths),
+        );
+        foreach ($lines as $i => $line) {
+            self::assertContains(
+                mb_substr($line, -1),
+                ['╗', '║', '╝'],
+                "line $i must terminate on the box rail",
+            );
+        }
+    }
+
     public function testFromAsciiReturnsRawString(): void
     {
         $logo = Logo::fromAscii("hello\nworld");
