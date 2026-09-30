@@ -237,6 +237,16 @@ final class Expect
             $maxNeedleLen = \max($maxNeedleLen, \strlen($needle));
         }
 
+        // Fail loud: a literal needle longer than the buffer cap could
+        // never survive the per-read trim, so the match is impossible by
+        // construction. Reject the configuration instead of spinning
+        // until timeout with a silently amnesic buffer.
+        if ($this->maxBuffer !== null && $this->maxBuffer < $maxNeedleLen) {
+            throw new \InvalidArgumentException(
+                "Expect::expectAny maxBuffer ({$this->maxBuffer}) is smaller than the longest needle ({$maxNeedleLen}); the needle could never match",
+            );
+        }
+
         while (true) {
             $bestPos = null;
             $bestNeedle = null;
@@ -429,13 +439,23 @@ final class Expect
      *
      * When `$needleLen` is 0 (e.g. waiting for EOF), only the max
      * buffer cap is applied.
+     *
+     * Retention is floored at `$needleLen`: the old arithmetic
+     * `max(0, maxBuffer - needleLen)` collapsed to `keep = 0` whenever
+     * `maxBuffer <= needleLen`, and `substr($buffer, -0)` returns the
+     * WHOLE buffer — silently defeating the cap and letting the buffer
+     * grow unbounded while the needle could never match. `expectAny`
+     * rejects that configuration at entry (fail loud); the floor here
+     * is defense-in-depth for `expectPattern`'s fixed 1 KiB heuristic,
+     * which may softly exceed a tighter `maxBuffer` (bounded by the
+     * heuristic) rather than run away.
      */
     private function trimBuffer(string $buffer, int $needleLen): string
     {
         if ($this->maxBuffer === null || \strlen($buffer) <= $this->maxBuffer) {
             return $buffer;
         }
-        $keep = \max(0, $this->maxBuffer - $needleLen);
+        $keep = \max($needleLen, $this->maxBuffer - $needleLen);
         if ($keep >= \strlen($buffer)) {
             return $buffer;
         }

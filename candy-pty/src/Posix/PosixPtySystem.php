@@ -122,12 +122,22 @@ final class PosixPtySystem implements PtySystem
                     $master->attachAnchorSlaveFd($slaveFd);
                 }
             }
-            try {
-                $master->resize($cols, $rows);
-            } catch (\SugarCraft\Pty\PtyException) {
-                // Fall through; later resize calls (e.g. SlavePty::spawn
-                // with controllingTerminal:true) get another chance.
-            }
+        }
+
+        // Apply the requested winsize at open on EVERY platform, after
+        // the Darwin anchor is attached (xnu drops TIOCSWINSZ on a
+        // zero-slave-count pty). Before this ran on Darwin only, a
+        // Linux `open(120, 40)` left the kernel winsize at 0×0 until
+        // some later controlling-terminal spawn — `size()` and any
+        // child `stty size` reported `0 0` despite the caller asking
+        // for a real geometry. Linux takes the plain ioctl; the
+        // arm64-Darwin stty+dup fallback inside setSizeViaLibc stays
+        // untouched.
+        try {
+            $master->resize($cols, $rows);
+        } catch (\SugarCraft\Pty\PtyException) {
+            // Fall through; later resize calls (e.g. SlavePty::spawn
+            // with controllingTerminal:true) get another chance.
         }
 
         return new PosixPtyPair($master, $slavePath);

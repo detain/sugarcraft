@@ -50,7 +50,7 @@ interface Termios
     /**
      * True when the file descriptor refers to a terminal device.
      *
-     * @see portable-pty.Termios.IsAty()
+     * @see portable-pty.Termios.IsTty()
      */
     public function isAtty(): bool;
 }

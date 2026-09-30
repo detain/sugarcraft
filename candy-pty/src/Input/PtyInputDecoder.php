@@ -50,6 +50,15 @@ final class PtyInputDecoder
      * Convenience: read events with a blocking wait until at least
      * one event is available.
      *
+     * WARNING: passing `null` (the default) blocks INDEFINITELY — the
+     * poll loop re-arms with no deadline and only returns once at least
+     * one event decodes. A caller whose input stream can stall (child
+     * waiting on a prompt, pipe with no writer) will hang here rather
+     * than fail, which is exactly the shape this lib's HangWatchdog
+     * exists to catch in tests. In unattended or deadline-bound
+     * contexts, always pass an explicit `$timeout` and handle the empty
+     * list it yields on expiry.
+     *
      * @return list<Event>
      */
     public function readEventsBlocking(?float $timeout = null): array

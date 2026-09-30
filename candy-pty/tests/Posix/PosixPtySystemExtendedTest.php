@@ -148,4 +148,60 @@ final class PosixPtySystemExtendedTest extends TestCase
         $this->assertTrue($caps['termios']);
         $this->assertTrue($caps['signal']);
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // F1 (audit round): open() must propagate the requested winsize
+    // on Linux too — the resize used to sit inside the Darwin-only
+    // anchor block, so a Linux pty kept the kernel's 0×0 winsize
+    // until some later controlling-terminal spawn.
+    // ─────────────────────────────────────────────────────────────
+
+    public function testOpenAppliesRequestedSizeOnLinux(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('Linux winsize-propagation pin.');
+        }
+
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open(120, 40);
+
+        try {
+            $size = $pair->master()->size();
+            $this->assertSame(120, $size['cols']);
+            $this->assertSame(40, $size['rows']);
+        } finally {
+            $pair->master()->close();
+        }
+    }
+
+    public function testOpenSizeSurvivesNonControllingSpawnOnLinux(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('Linux winsize-propagation pin.');
+        }
+
+        $this->requirePtySyscalls();
+
+        if (!\is_executable('/bin/true')) {
+            $this->markTestSkipped('/bin/true is required for spawn tests.');
+        }
+
+        $system = new PosixPtySystem();
+        $pair = $system->open(132, 43);
+
+        try {
+            $child = $pair->slave()->spawn(['/bin/true']);
+            $child->wait();
+
+            // Non-controlling spawn performs no resize of its own; the
+            // size written at open must still stand.
+            $size = $pair->master()->size();
+            $this->assertSame(132, $size['cols']);
+            $this->assertSame(43, $size['rows']);
+        } finally {
+            $pair->master()->close();
+        }
+    }
 }

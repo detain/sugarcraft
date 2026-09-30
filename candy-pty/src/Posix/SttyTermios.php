@@ -79,7 +79,7 @@ final class SttyTermios implements Termios
     }
 
     /**
-     * @see portable-pty.Termios.IsAty()
+     * @see portable-pty.Termios.IsTty()
      */
     public function isAtty(): bool
     {
