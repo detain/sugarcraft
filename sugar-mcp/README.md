@@ -72,6 +72,11 @@ cd sugar-mcp && composer install && vendor/bin/phpunit
 The suite spawns real short-lived PHP child servers over stdio
 (`tests/Fixtures/`) — bounded, reaped, no network access.
 
+## Assets
+
+`media/icons/sugar-mcp.png` is a shared monorepo placeholder (currently
+byte-identical to sugar-diff's icon) pending a dedicated glyph.
+
 ## License
 
 MIT

@@ -44,6 +44,12 @@
   the hard boundary a preset's explicit allow cannot out-vote. Empty allow-list
   = allow-all (distinct from restrict-to-nothing); blank/non-string allow-list
   entries throw — refuse rather than read a rule that matches nothing.
+- **Deny specs carry two legal spellings** — `pattern => 'deny'` (the
+  sugar-crush config shape, `McpClient::setDenyPatterns(array<string,string>)`)
+  and `pattern => ['action' => 'deny']` — normalised once in the constructor,
+  unrecognised shapes throw THERE. Reading a bare string as a spec array made
+  every incoming deny rule inert (`'deny'['action'] ?? ''` is `''`); an inert
+  deny is a WIDENED boundary, the same failure the allow side refuses loudly.
 - **`__destruct` → stop()** is the library-level orphan guarantee; sugar-crush
   had process-lifetime as the implicit backstop, a library cannot assume it.
 

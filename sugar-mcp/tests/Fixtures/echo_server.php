@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 $flood = in_array('--flood', $argv, true);
 if ($flood) {
+    fwrite(STDERR, 'HEAD-OF-FLOOD-MARKER ');
     fwrite(STDERR, str_repeat('diagnostic noise 0123456789abcdef', 8192)); // ~224KiB
 }
 

@@ -47,6 +47,58 @@ final class StdioMcpServerRoundTripTest extends TestCase
         return $server;
     }
 
+    /** The OS pid of the wrapper's live child, captured while it is still ours. */
+    private static function childPid(StdioMcpServer $server): ?int
+    {
+        $property = new \ReflectionProperty(StdioMcpServer::class, 'process');
+        $property->setAccessible(true);
+        $process = $property->getValue($server);
+
+        return is_resource($process) ? (int) proc_get_status($process)['pid'] : null;
+    }
+
+    private static function stderrTailOf(StdioMcpServer $server): string
+    {
+        $property = new \ReflectionProperty(StdioMcpServer::class, 'stderrTail');
+        $property->setAccessible(true);
+
+        return (string) $property->getValue($server);
+    }
+
+    /**
+     * Pids of STILL-RUNNING children of this test process whose cmdline contains
+     * $needle. Zombies do not count: proc_close reaps them, and a zombie is a
+     * reaped child, not an orphan. A TERM-ignoring survivor (cmdline readable,
+     * ppid ours) is precisely the orphan the ladder must prevent.
+     *
+     * @return list<int>
+     */
+    private static function liveChildrenRunning(string $needle): array
+    {
+        $pids = [];
+        foreach (glob('/proc/[0-9]*/cmdline') ?: [] as $file) {
+            $line = @file_get_contents($file);
+            if ($line === false || !str_contains($line, $needle)) {
+                continue;
+            }
+
+            $pid = (int) basename(\dirname($file));
+            $stat = @file_get_contents('/proc/' . $pid . '/stat');
+            if ($stat === false) {
+                continue;
+            }
+
+            // comm (field 2) may contain spaces and parens; fields after it
+            // start one space past the LAST ')'.
+            $fields = explode(' ', substr($stat, strrpos($stat, ')') + 2));
+            if ((int) ($fields[1] ?? 0) === getmypid()) {
+                $pids[] = $pid;
+            }
+        }
+
+        return $pids;
+    }
+
     public function testAWellBehavedServerCompletesTheHandshakeAndAnswersToolCalls(): void
     {
         $server = $this->spawn('probe', 'prompt_server.php');
@@ -158,14 +210,18 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
         self::assertNotNull($caught);
         self::assertStringContainsString('Failed to start MCP server: noisy', $caught->getMessage());
+        // The capture must actually ride along — a prefix-only assertion would
+        // green even if the diagnostics half of the message were dropped.
+        self::assertStringContainsString('boom-on-stderr', $caught->getMessage());
     }
 
     public function testStopEscalatesPastATermTrappingChildWithoutOrphaningIt(): void
     {
         // The stubborn fixture ignores SIGTERM: the BoundedShutdown ladder
-        // must reach KILL. The whole exchange stays bounded by test-timeout
-        // discipline; the assertion is that stop() RETURNS bounded and the
-        // child is gone.
+        // must reach KILL. The ladder runs inside start()'s failure gate (the
+        // measured stop() below is a no-op second pass), so the load-bearing
+        // assertions are the /proc census — the direct proof the child is
+        // DEAD, not merely detached from the wrapper — plus the wall bound.
         if (!function_exists('pcntl_signal')) {
             self::markTestSkipped('the stubborn fixture needs pcntl to trap SIGTERM');
         }
@@ -189,8 +245,35 @@ final class StdioMcpServerRoundTripTest extends TestCase
         $total = microtime(true) - $startedAt;
 
         self::assertFalse($server->isUp());
+        self::assertSame(
+            [],
+            self::liveChildrenRunning('stubborn_server.php'),
+            'a TERM-ignoring child must be KILL-reaped, never left running',
+        );
         self::assertLessThan(self::BOUND_SECONDS, $stopElapsed, 'TERM-ignoring children must be KILL-reaped');
         self::assertLessThan(2 * self::BOUND_SECONDS, $total);
+    }
+
+    public function testAnExplicitStopReapsAHealthyChildAtTheProcessLevel(): void
+    {
+        if (!function_exists('posix_kill')) {
+            self::markTestSkipped('this pin asserts process-level death via posix_kill');
+        }
+
+        $server = $this->spawn('probe', 'prompt_server.php');
+        $server->start();
+        $pid = self::childPid($server);
+        self::assertNotNull($pid, 'a started server owns a live child');
+
+        $startedAt = microtime(true);
+        $server->stop();
+
+        self::assertLessThan(
+            2.0,
+            microtime(true) - $startedAt,
+            'close-pipes-first lets a well-behaved child exit on stdin EOF without paying the signal ladder',
+        );
+        self::assertFalse(posix_kill($pid, 0), 'isUp() going false is bookkeeping; the pid going dead is the promise');
     }
 
     public function testAFullStderrPipeNeverDeadlocksTheHandshake(): void
@@ -217,6 +300,25 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
         $flooded->pumpStderr();
         self::assertTrue($flooded->isUp(), 'pumping must never disturb a live session');
+
+        // The 64KiB law on OUR side too: the capture is tail-bounded, so a
+        // server that shouts cannot grow our memory without bound AND cannot
+        // push its recent (most diagnostic) output out of the buffer. The
+        // fixture stamps a one-off head marker before the flood; after full
+        // drain it must be gone while the cap is exactly reached.
+        $cap = (int) (new \ReflectionClass(StdioMcpServer::class))
+            ->getReflectionConstant('MAX_STDERR_BYTES')
+            ->getValue();
+        $tail = self::stderrTailOf($flooded);
+        for ($pass = 0; strlen($tail) < $cap && $pass < 64; $pass++) {
+            $flooded->pumpStderr();
+            $tail = self::stderrTailOf($flooded);
+        }
+
+        self::assertSame(65536, $cap, 'the cap itself is the 64KiB law');
+        self::assertSame($cap, strlen($tail), 'stderr capture is capped at 64KiB');
+        self::assertStringNotContainsString('HEAD-OF-FLOOD-MARKER', $tail, 'the TAIL is kept, not the head');
+        self::assertStringContainsString('diagnostic noise', $tail);
     }
 
     /** @return list<array{mixed, array<string,mixed>|string}> */
@@ -257,15 +359,26 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
     public function testDestructStopsWhatTheTestForgotToStop(): void
     {
+        if (!function_exists('posix_kill')) {
+            self::markTestSkipped('this pin asserts process-level death via posix_kill');
+        }
+
         $server = new StdioMcpServer('probe', PHP_BINARY, [self::fixture('prompt_server.php')]);
         $server->start();
+        $pid = self::childPid($server);
+        self::assertNotNull($pid);
         self::assertTrue($server->isUp());
 
         $server = null; // __destruct must reap without an explicit stop()
+        gc_collect_cycles();
 
-        // Nothing left to assert on the object itself; prove no survivor:
-        // a lingering php fixture child would outlive this test by design
-        // (30s backstop), so instead assert the fresh instance's lifecycle.
+        $deadline = microtime(true) + 5.0;
+        while (microtime(true) < $deadline && posix_kill($pid, 0)) {
+            usleep(50000);
+        }
+
+        self::assertFalse(posix_kill($pid, 0), 'dropping the last reference must reap the child, not orphan it');
+
         $watched = new StdioMcpServer('probe', PHP_BINARY, [self::fixture('prompt_server.php')]);
         self::assertFalse($watched->isUp(), 'construction alone never spawns');
     }

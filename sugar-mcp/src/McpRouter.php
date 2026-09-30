@@ -24,14 +24,43 @@ namespace SugarCraft\Mcp;
  */
 final class McpRouter
 {
+    /** @var array<string,string> pattern => action, normalised once in the constructor */
+    private readonly array $denyActions;
+
     /**
      * @param array<string,McpServer> $servers keyed by server name
-     * @param array<string,array{action?:string}> $denyPatterns pattern => spec; only action "deny" applies
+     * @param array<string,string|array{action?:string}> $denyPatterns pattern =>
+     *        action string (the sugar-crush config spelling, e.g. 'fs-*' => 'deny')
+     *        or a spec array carrying "action"; only "deny" applies, other
+     *        actions are ignored. Any other shape throws at construction: a
+     *        deny rule that silently reads as no rule widens the boundary,
+     *        and the allow-list side of this class already refuses to guess.
      */
     public function __construct(
         private readonly array $servers,
-        private readonly array $denyPatterns = [],
+        array $denyPatterns = [],
     ) {
+        $actions = [];
+        foreach ($denyPatterns as $pattern => $spec) {
+            if (is_string($spec)) {
+                $actions[(string) $pattern] = $spec;
+                continue;
+            }
+
+            if (is_array($spec) && (!isset($spec['action']) || is_string($spec['action']))) {
+                /** @var array{action?:string} $spec */
+                $actions[(string) $pattern] = $spec['action'] ?? '';
+                continue;
+            }
+
+            throw new \RuntimeException(sprintf(
+                'MCP deny pattern "%s" must map to an action string or an array with a string "action", got %s.',
+                (string) $pattern,
+                get_debug_type($spec),
+            ));
+        }
+
+        $this->denyActions = $actions;
     }
 
     /**
@@ -72,7 +101,7 @@ final class McpRouter
      */
     private function applyDenyPatterns(array $servers): array
     {
-        if ($this->denyPatterns === []) {
+        if ($this->denyActions === []) {
             return $servers;
         }
 
@@ -103,10 +132,11 @@ final class McpRouter
 
     private function matchesAnyDenyPattern(string $name): bool
     {
-        foreach ($this->denyPatterns as $pattern => $spec) {
-            // A pattern spec whose action is not "deny" is not a deny rule;
-            // ignore it rather than guess its intent.
-            if (($spec['action'] ?? '') !== 'deny') {
+        foreach ($this->denyActions as $pattern => $action) {
+            // A pattern whose action is not "deny" is not a deny rule;
+            // ignore it rather than guess its intent. Shapes that carry no
+            // action at all were already refused in the constructor.
+            if ($action !== 'deny') {
                 continue;
             }
 

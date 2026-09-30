@@ -192,4 +192,53 @@ final class McpRouterTest extends TestCase
             }
         }
     }
+
+    public function testTheCrushConfigSpellingOfStringDenySpecsBlocks(): void
+    {
+        // sugar-crush feeds deny rules as pattern => action STRING (its
+        // McpRouter docblock and McpClient::setDenyPatterns(array<string,
+        // string>)). Reading that spelling as a spec array turned every
+        // incoming deny rule inert — a silently WIDENED boundary, the exact
+        // failure this class throws for on the allow side. It must deny.
+        $servers = [
+            'fs-read' => self::server('fs-read', ['r']),
+            'fs-write' => self::server('fs-write', ['w']),
+            'other' => self::server('other', ['o']),
+        ];
+
+        self::assertSame(['o'], self::toolNames($servers, [], ['fs-*' => 'deny']));
+        // Both spellings compose in one map, and the deny still out-votes an
+        // explicit allow.
+        self::assertSame(
+            ['o'],
+            self::toolNames($servers, ['fs-read', 'other'], ['fs-read' => 'deny', 'fs-*' => ['action' => 'deny']]),
+        );
+    }
+
+    public function testANonDenyStringActionIsIgnored(): void
+    {
+        // 'warn'-style entries ride the same map; only 'deny' acts.
+        $servers = ['alpha' => self::server('alpha', ['a1'])];
+
+        self::assertSame(['a1'], self::toolNames($servers, [], ['alpha' => 'warn']));
+    }
+
+    public function testAGarbageDenySpecIsRefusedAtConstruction(): void
+    {
+        // Fail-fast law: an unrecognised spec shape must halt at the boundary,
+        // not filter as if absent at resolution time.
+        $servers = ['x' => self::server('x', ['t'])];
+
+        foreach ([42, null, ['action' => 42], new \stdClass()] as $bad) {
+            $caught = null;
+            try {
+                new McpRouter($servers, ['x' => $bad]);
+            } catch (\RuntimeException $thrown) {
+                $caught = $thrown;
+            }
+
+            self::assertNotNull($caught, 'deny spec ' . get_debug_type($bad) . ' must be refused');
+            self::assertStringContainsString('deny pattern "x"', $caught->getMessage());
+        }
+    }
 }
