@@ -832,7 +832,7 @@
         "depth": "truecolor",
         "colors": 615,
         "description": "grand terraced farm: rainbow CANDY FILES banner, glowing sun, nine crop terraces",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-files/candy-files-4-tc-l-2.ansi": {
@@ -844,7 +844,7 @@
         "depth": "truecolor",
         "colors": 332,
         "description": "orbital du census: truecolor radial heat districts from the preview pane at altitude",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-files/candy-files-4-tc-m-1.ansi": {
@@ -856,7 +856,7 @@
         "depth": "truecolor",
         "colors": 62,
         "description": "directory apartment block at dusk: gradient sky, warm window lights, street lamps",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-4-tc-m-2.ansi": {
@@ -868,8 +868,10 @@
         "depth": "truecolor",
         "colors": 56,
         "description": "gradient steam locomotive hauling inode freight over a sunset viaduct",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-4-tc-s-1.ansi": {
         "name": "candy-files-4-tc-s-1.ansi",
@@ -880,7 +882,7 @@
         "depth": "truecolor",
         "colors": 53,
         "description": "symlink portal ring in a full hue wheel with gradient path labels",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-4-tc-s-2.ansi": {
@@ -892,7 +894,7 @@
         "depth": "truecolor",
         "colors": 39,
         "description": "dotfile club badge lit by a single candle's radial truecolor glow",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-files/candy-files-5-16-l-1.ansi": {
@@ -1068,8 +1070,10 @@
         "depth": "truecolor",
         "colors": 160,
         "description": "Rotunda of extended specimens: star-dome over six spotlit format cases, wayfinding, wall plaque",
-        "rating": null,
-        "tags": []
+        "rating": 5,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-5-tc-l-2.ansi": {
         "name": "candy-files-5-tc-l-2.ansi",
@@ -1080,8 +1084,10 @@
         "depth": "truecolor",
         "colors": 70,
         "description": "Great catalog hall: receding cabinet bank, card cascade, carrels, rolling ladder and filing ticker",
-        "rating": null,
-        "tags": []
+        "rating": 5,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-5-tc-m-1.ansi": {
         "name": "candy-files-5-tc-m-1.ansi",
@@ -1092,8 +1098,10 @@
         "depth": "truecolor",
         "colors": 217,
         "description": "Dawn du census: interpolated sunrise sky, rose/violet /photos balloon, lit city windows, flight log",
-        "rating": null,
-        "tags": []
+        "rating": 5,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-5-tc-m-2.ansi": {
         "name": "candy-files-5-tc-m-2.ansi",
@@ -1104,8 +1112,10 @@
         "depth": "truecolor",
         "colors": 15,
         "description": "Cabinet of release: violet curtain gradients part around the archive, escaped files glow under lamps",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-5-tc-s-1.ansi": {
         "name": "candy-files-5-tc-s-1.ansi",
@@ -1116,8 +1126,10 @@
         "depth": "truecolor",
         "colors": 89,
         "description": "Midnight harbor truecolor: lighthouse lamp beams to each mount, layered sea, one stale sshfs",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-5-tc-s-2.ansi": {
         "name": "candy-files-5-tc-s-2.ansi",
@@ -1128,8 +1140,10 @@
         "depth": "truecolor",
         "colors": 15,
         "description": "Reclaim line 02: glowing conveyor, files sorted to restore/compost/melt with per-shift totals",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-6-16-l-1.ansi": {
         "name": "candy-files-6-16-l-1.ansi",
@@ -1294,8 +1308,10 @@
         "depth": "truecolor",
         "colors": 58,
         "description": "Speleological atlas CF6: rock gradient, carved passage tree, six chamber mounts, sumps, compass rose, scale bar",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-6-tc-l-2.ansi": {
         "name": "candy-files-6-tc-l-2.ansi",
@@ -1306,8 +1322,10 @@
         "depth": "truecolor",
         "colors": 69,
         "description": "Grand clocktower: dusk gradient, brass gears and pendulum, hot/warm/cold/dirty rails, page ledger",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-6-tc-m-1.ansi": {
         "name": "candy-files-6-tc-m-1.ansi",
@@ -1318,7 +1336,7 @@
         "depth": "truecolor",
         "colors": 37,
         "description": "Cave survey in limestone gradient: carved tree of passages, sump, stalactites",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-6-tc-m-2.ansi": {
@@ -1330,7 +1348,7 @@
         "depth": "truecolor",
         "colors": 43,
         "description": "Clocktower dial with meshing cache gears over sunset gradient, hit/miss rail",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-6-tc-s-1.ansi": {
@@ -1342,7 +1360,7 @@
         "depth": "truecolor",
         "colors": 19,
         "description": "Gradient-sky lift pass: black-diamond run /var/media/photos, gate gondola-2",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-6-tc-s-2.ansi": {
@@ -1354,7 +1372,7 @@
         "depth": "truecolor",
         "colors": 27,
         "description": "Cache dial in brass gear ring over dusk gradient, hot/cold page readout",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-7-16-l-1.ansi": {
@@ -1520,7 +1538,7 @@
         "depth": "truecolor",
         "colors": 117,
         "description": "Star-atlas dome: constellations over /, catalogue margins NGC-docs..Orion-cfg",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-7-tc-l-2.ansi": {
@@ -1532,7 +1550,7 @@
         "depth": "truecolor",
         "colors": 54,
         "description": "Mill floor: infeed oak.log, circular saw, graded plank bins by extension",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-files/candy-files-7-tc-m-1.ansi": {
@@ -1544,7 +1562,7 @@
         "depth": "truecolor",
         "colors": 46,
         "description": "Radio dish array: parabolic feeds, packet waterfall locked to bands",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-files/candy-files-7-tc-m-2.ansi": {
@@ -1556,7 +1574,7 @@
         "depth": "truecolor",
         "colors": 16,
         "description": "Ship hold manifest: crate grid with tarred lots DOC/IMG/BIN/LOG",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-7-tc-s-1.ansi": {
@@ -1568,7 +1586,7 @@
         "depth": "truecolor",
         "colors": 55,
         "description": "Observatory dome slit: gradient arc, magnitude scale, 2048 star-files",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-7-tc-s-2.ansi": {
@@ -1580,8 +1598,10 @@
         "depth": "truecolor",
         "colors": 19,
         "description": "Saw-pit timber: oak/pine/birch logs split to planks, grain=extension",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-8-16-l-1.ansi": {
         "name": "candy-files-8-16-l-1.ansi",
@@ -1742,8 +1762,10 @@
         "depth": "truecolor",
         "colors": 257,
         "description": "Souk of extensions: hanging bundles, ten spice mounds, merchant haggling by inode",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-files/candy-files-8-tc-l-2.ansi": {
         "name": "candy-files-8-tc-l-2.ansi",
@@ -1754,7 +1776,7 @@
         "depth": "truecolor",
         "colors": 58,
         "description": "Guild hall of keys: 24-keyway spectrum wall, lock cases, workbench, failure shelf",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-8-tc-m-1.ansi": {
@@ -1766,7 +1788,7 @@
         "depth": "truecolor",
         "colors": 226,
         "description": "Banding bench: mist-net, calipers, dawn window, logbook of seven file-specimens",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-8-tc-m-2.ansi": {
@@ -1778,7 +1800,7 @@
         "depth": "truecolor",
         "colors": 8,
         "description": "Knitting circle: cable chart knitted as a layout, row counter at 2048",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-8-tc-s-1.ansi": {
@@ -1790,7 +1812,7 @@
         "depth": "truecolor",
         "colors": 7,
         "description": "Bird-banding card: Passer.pngitus finch, band #4612, wing 80x25, released intact",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-8-tc-s-2.ansi": {
@@ -1802,7 +1824,7 @@
         "depth": "truecolor",
         "colors": 16,
         "description": "Compression brewery flight: three oak barrels shrinking 4.2G -> 1.1G -> 380M",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-9-16-l-1.ansi": {
@@ -1958,7 +1980,7 @@
         "depth": "truecolor",
         "colors": 162,
         "description": "Potter's kiln: three glowing fire-mouths on heat gradient, pyrometric cone gauge, drying shelf of dir-vessels",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-9-tc-l-2.ansi": {
@@ -1970,7 +1992,7 @@
         "depth": "truecolor",
         "colors": 156,
         "description": "Marionette theatre of tabs: control bars with string-edges to tab puppets, curtained proscenium, footlight gradient",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-9-tc-m-1.ansi": {
@@ -1982,7 +2004,7 @@
         "depth": "truecolor",
         "colors": 30,
         "description": "Stained-glass rose window: twelve leaded format-petals, central boss, tracery ring, jewel legend",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-9-tc-m-2.ansi": {
@@ -1994,7 +2016,7 @@
         "depth": "truecolor",
         "colors": 55,
         "description": "Pyrotechnic index rebuild: extension-named shells bursting into radial sparks over a night gradient, F-key launch rack",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-9-tc-s-1.ansi": {
@@ -2006,7 +2028,7 @@
         "depth": "truecolor",
         "colors": 75,
         "description": "Blacksmith forge: glowing inode billet on the anvil, coal-bed heat gradient, hammer, quench steam",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-9-tc-s-2.ansi": {
@@ -2018,7 +2040,7 @@
         "depth": "truecolor",
         "colors": 73,
         "description": "Confectioner tempering slab: marble gloss gradient, tempered couverture pool with sheen, cocoa% ganache wells, thermometer",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-files/candy-files-10-16-l-1.ansi": {
@@ -2296,7 +2318,7 @@
         "depth": "16",
         "colors": 10,
         "description": "Confirm gate dialog with radio choice under a night sky",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-1-16-s-2.ansi": {
@@ -2308,7 +2330,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Text input close-up with glowing block cursor and hint line",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-1-16-s-3.ansi": {
@@ -2320,7 +2342,7 @@
         "depth": "16",
         "colors": 10,
         "description": "Password field, segmented strength meter, validator tick row",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-1-256-l-1.ansi": {
@@ -2346,7 +2368,7 @@
         "depth": "256",
         "colors": 75,
         "description": "Election-ballot scene: punch holes, candy referenda, half-block ballot edges",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-forms/candy-forms-1-256-m-1.ansi": {
@@ -2358,7 +2380,7 @@
         "depth": "256",
         "colors": 29,
         "description": "Open Select dropdown with fuzzy filter highlighting the matched prefix",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-1-256-m-2.ansi": {
@@ -2370,7 +2392,7 @@
         "depth": "256",
         "colors": 21,
         "description": "Validator gauntlet: pass/fail verdicts, red squiggle, rejection stamp",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-1-256-m-3.ansi": {
@@ -2382,7 +2404,7 @@
         "depth": "256",
         "colors": 31,
         "description": "TextArea editor: gutter line numbers, scrollbar rail, vim INSERT badge",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-1-256-s-1.ansi": {
@@ -2394,7 +2416,7 @@
         "depth": "256",
         "colors": 25,
         "description": "Spinner holding screen: candy dots, gradient progress bar, field roll-call",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-1-256-s-2.ansi": {
@@ -2406,7 +2428,7 @@
         "depth": "256",
         "colors": 16,
         "description": "Exploding required-asterisk starburst in hot magenta",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-1-tc-l-1.ansi": {
@@ -2432,7 +2454,7 @@
         "depth": "truecolor",
         "colors": 605,
         "description": "Garden scene: beds of input fields sprouting checkboxes, rain of keystrokes, signboard",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-1-tc-m-1.ansi": {
@@ -2444,7 +2466,7 @@
         "depth": "truecolor",
         "colors": 151,
         "description": "Candy factory: forms hopper, gears and rollers, conveyor of candy-colored fields",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-1-tc-m-2.ansi": {
@@ -2456,7 +2478,7 @@
         "depth": "truecolor",
         "colors": 72,
         "description": "Aurora night sky over an input box with a glowing fuzzy autocomplete dropdown",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-1-tc-m-3.ansi": {
@@ -2468,7 +2490,7 @@
         "depth": "truecolor",
         "colors": 59,
         "description": "Split panel of vim INSERT vs NORMAL modes with text-object buffer diagram",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-1-tc-s-1.ansi": {
@@ -2480,7 +2502,7 @@
         "depth": "truecolor",
         "colors": 150,
         "description": "Rainbow-bordered sign-in card with glowing cursor and candy button",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-1-tc-s-2.ansi": {
@@ -2492,7 +2514,7 @@
         "depth": "truecolor",
         "colors": 57,
         "description": "Range slider with rainbow track and glowing knob at 73 percent",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-l-1.ansi": {
@@ -2504,7 +2526,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Widget zoo: CANDY FORMS banner over eight boxed primitive exhibits",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-l-2.ansi": {
@@ -2516,7 +2538,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Three-act validation drama from cascading red errors to a green curtain call",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-m-1.ansi": {
@@ -2528,7 +2550,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Sign-up gauntlet: inputs, radios, checkboxes, candy meter, submit",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-m-2.ansi": {
@@ -2540,7 +2562,7 @@
         "depth": "16",
         "colors": 5,
         "description": "Open select dropdown: cursor row, underlined fuzzy match, scrollbar",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-m-3.ansi": {
@@ -2552,7 +2574,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Confirm cascade: five yes/no forks with default-letter grammar",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-s-1.ansi": {
@@ -2564,7 +2586,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Block CANDY FORMS wordmark above focused name and password inputs",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-16-s-2.ansi": {
@@ -2576,7 +2598,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Validator ticket strip with one bitter MaxLength failure",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-256-l-1.ansi": {
@@ -2588,7 +2610,7 @@
         "depth": "256",
         "colors": 23,
         "description": "Theme console: sidebar navigation beside a Nocturne palette editor",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-256-l-2.ansi": {
@@ -2600,7 +2622,7 @@
         "depth": "256",
         "colors": 15,
         "description": "Vim keybindings poster: mode ring diagram plus text-object grammar table",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-256-m-1.ansi": {
@@ -2612,7 +2634,7 @@
         "depth": "256",
         "colors": 12,
         "description": "MultiSelect checklist with fuzzy filter, scrollbar and Smith-Waterman scores",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-256-m-2.ansi": {
@@ -2624,7 +2646,7 @@
         "depth": "256",
         "colors": 11,
         "description": "FilePicker tree: type-colored files, cursor row, path bar",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-256-s-1.ansi": {
@@ -2636,7 +2658,7 @@
         "depth": "256",
         "colors": 19,
         "description": "Masked password with 256-color strength ramp and validator line",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-256-s-2.ansi": {
@@ -2648,7 +2670,7 @@
         "depth": "256",
         "colors": 36,
         "description": "Spinner frame parade: braille dots, moons, cadence meter, async wait",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-2-tc-l-1.ansi": {
@@ -2660,8 +2682,10 @@
         "depth": "truecolor",
         "colors": 404,
         "description": "Giant CANDY FORMS gradient banner crowning a completed truecolor form",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-forms/candy-forms-2-tc-l-2.ansi": {
         "name": "candy-forms-2-tc-l-2.ansi",
@@ -2672,8 +2696,10 @@
         "depth": "truecolor",
         "colors": 352,
         "description": "Keystroke-to-submit dataflow with per-character live validation trace",
-        "rating": null,
-        "tags": []
+        "rating": 4,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-forms/candy-forms-2-tc-m-1.ansi": {
         "name": "candy-forms-2-tc-m-1.ansi",
@@ -2684,7 +2710,7 @@
         "depth": "truecolor",
         "colors": 179,
         "description": "TextArea panel: gradient frame, line gutter, tinted rows, scrollbar",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-tc-m-2.ansi": {
@@ -2696,7 +2722,7 @@
         "depth": "truecolor",
         "colors": 43,
         "description": "Async autocomplete: gradient prefix matches, live spinner, cancel note",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-tc-s-1.ansi": {
@@ -2708,7 +2734,7 @@
         "depth": "truecolor",
         "colors": 101,
         "description": "Truecolor CandyForms wordmark over twin hue-swept gradient bars",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-tc-s-2.ansi": {
@@ -2720,7 +2746,7 @@
         "depth": "truecolor",
         "colors": 28,
         "description": "Email field close-up: gradient glyphs, glowing @ sigil, green checks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-2-tc-s-3.ansi": {
@@ -2732,7 +2758,7 @@
         "depth": "truecolor",
         "colors": 132,
         "description": "Sweetness index: four truecolor gradient meters, tart to molten",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-l-1.ansi": {
@@ -2744,7 +2770,7 @@
         "depth": "16",
         "colors": 7,
         "description": "full blueprint: field lifecycle + form orchestration + transition ledger table",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-l-2.ansi": {
@@ -2756,7 +2782,7 @@
         "depth": "16",
         "colors": 8,
         "description": "tab-order panorama: CANDY FORMS block banner over numbered 9-field sheet",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-m-1.ansi": {
@@ -2768,7 +2794,7 @@
         "depth": "16",
         "colors": 7,
         "description": "form state machine: idle→editing→validating→submit→done with error edge",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-m-2.ansi": {
@@ -2780,7 +2806,7 @@
         "depth": "16",
         "colors": 7,
         "description": "key-to-focus travel map: keyboard left, field rail right, arrow glossary",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-m-3.ansi": {
@@ -2792,7 +2818,7 @@
         "depth": "16",
         "colors": 7,
         "description": "submission timeline lanes: keystrokes/validators/focus/network beats",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-s-1.ansi": {
@@ -2804,7 +2830,7 @@
         "depth": "16",
         "colors": 7,
         "description": "TAB focus-travel loop: six field chips ringed by forward/rewind arrows",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-s-2.ansi": {
@@ -2816,7 +2842,7 @@
         "depth": "16",
         "colors": 7,
         "description": "error-correction arc: squiggle field, sine-hop to a green fixed card",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-16-s-3.ansi": {
@@ -2828,7 +2854,7 @@
         "depth": "16",
         "colors": 5,
         "description": "compact three-field focus map with shift-tab rewind note",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-l-1.ansi": {
@@ -2840,7 +2866,7 @@
         "depth": "256",
         "colors": 19,
         "description": "five-panel wizard panorama with gradient rail and per-step state ledger",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-l-2.ansi": {
@@ -2852,7 +2878,7 @@
         "depth": "256",
         "colors": 22,
         "description": "autocomplete constellation: orbit rings, scored chips, rank bars",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-m-1.ansi": {
@@ -2864,7 +2890,7 @@
         "depth": "256",
         "colors": 19,
         "description": "multiselect heat lattice: option scores beside sine-heated combo grid",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-m-2.ansi": {
@@ -2876,7 +2902,7 @@
         "depth": "256",
         "colors": 19,
         "description": "error-correction arc panorama: attempt 1 fails, arc climbs to attempt 2",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-s-1.ansi": {
@@ -2888,7 +2914,7 @@
         "depth": "256",
         "colors": 14,
         "description": "password entropy dots: ramp196→46 across masked glyphs, bits readout",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-s-2.ansi": {
@@ -2900,7 +2926,7 @@
         "depth": "256",
         "colors": 6,
         "description": "wizard step rail: five medallions, done/current/locked in 256 hues",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-256-s-3.ansi": {
@@ -2912,7 +2938,7 @@
         "depth": "256",
         "colors": 7,
         "description": "validator tick strip chips with chain short-circuit note",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-l-1.ansi": {
@@ -2924,7 +2950,7 @@
         "depth": "truecolor",
         "colors": 429,
         "description": "CANDYFORMS block wordmark in pink→gold gradient over aurora + mini form",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-l-2.ansi": {
@@ -2936,7 +2962,7 @@
         "depth": "truecolor",
         "colors": 1141,
         "description": "form state machine painted over a truecolor aurora field with legend",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-m-1.ansi": {
@@ -2948,7 +2974,7 @@
         "depth": "truecolor",
         "colors": 186,
         "description": "password entropy art: per-glyph heat diamonds over a grain-noise field",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-m-2.ansi": {
@@ -2960,7 +2986,7 @@
         "depth": "truecolor",
         "colors": 167,
         "description": "wizard ribbon: sine-wave gradient band threading five step knots",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-m-3.ansi": {
@@ -2972,7 +2998,7 @@
         "depth": "truecolor",
         "colors": 170,
         "description": "textarea with gradient frame, fading cursor trail, resize corner",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-s-1.ansi": {
@@ -2984,7 +3010,7 @@
         "depth": "truecolor",
         "colors": 121,
         "description": "gradient SUBMIT pill with half-cell shine and melting shadow",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-3-tc-s-2.ansi": {
@@ -2996,7 +3022,7 @@
         "depth": "truecolor",
         "colors": 12,
         "description": "half-cell focus glow: cyan ring bleeds through ▀▄ around focused input",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-16-l-1.ansi": {
@@ -3008,7 +3034,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Block CANDY FORMS wordmark over a sixteen-pen field-creature menagerie",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-4-16-l-2.ansi": {
@@ -3020,7 +3046,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Avalanche mural: a whole mountainside of fields sliding into the SUBMIT gate",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-16-m-1.ansi": {
@@ -3032,7 +3058,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Widget petting zoo: fenced pens of field-creatures (blink-cat, tick-toad...)",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-16-m-2.ansi": {
@@ -3044,7 +3070,7 @@
         "depth": "16",
         "colors": 7,
         "description": "The Great Submit avalanche: a slope of fields tumbling into SUBMIT",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-16-s-1.ansi": {
@@ -3056,7 +3082,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Placeholder dreamscape: an empty field asleep under a crescent moon",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-4-16-s-2.ansi": {
@@ -3068,7 +3094,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Validation border patrol mini-gate clearing and denying field values",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-4-256-l-1.ansi": {
@@ -3080,7 +3106,7 @@
         "depth": "256",
         "colors": 63,
         "description": "256-color block wordmark over a 24-enclosure petting zoo of field creatures",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-256-l-2.ansi": {
@@ -3092,7 +3118,7 @@
         "depth": "256",
         "colors": 12,
         "description": "Border-control hall: six inspector lanes above a stamped arrivals ledger",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-256-m-1.ansi": {
@@ -3104,7 +3130,7 @@
         "depth": "256",
         "colors": 13,
         "description": "Border-patrol checkpoint: inspector booths over a queue of stamped values",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-256-m-2.ansi": {
@@ -3116,7 +3142,7 @@
         "depth": "256",
         "colors": 15,
         "description": "Password blacksmith at the forge: furnace, anvil, hammer, tempering ramp",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-256-s-1.ansi": {
@@ -3128,7 +3154,7 @@
         "depth": "256",
         "colors": 9,
         "description": "Password blacksmith mini-forge: glowing bar on anvil, heat-strength meter",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-256-s-2.ansi": {
@@ -3140,7 +3166,7 @@
         "depth": "256",
         "colors": 12,
         "description": "Tab-key pinball mini-board: focus ball ricocheting between field bumpers",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-l-1.ansi": {
@@ -3152,7 +3178,7 @@
         "depth": "truecolor",
         "colors": 239,
         "description": "Truecolor forge epic: gradient wordmark over furnace, anvil, tempering ramp",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-l-2.ansi": {
@@ -3164,7 +3190,7 @@
         "depth": "truecolor",
         "colors": 1431,
         "description": "Dreamscape mural: sleeping cursor, moon, and empty-field islands on gradient clouds",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-m-1.ansi": {
@@ -3176,7 +3202,7 @@
         "depth": "truecolor",
         "colors": 42,
         "description": "Tab-key pinball playfield: ball of focus ricochets off glowing field bumpers",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-m-2.ansi": {
@@ -3188,7 +3214,7 @@
         "depth": "truecolor",
         "colors": 247,
         "description": "Placeholder dreamscape: empty fields adrift on a moonlit cloud of ghost text",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-s-1.ansi": {
@@ -3200,7 +3226,7 @@
         "depth": "truecolor",
         "colors": 61,
         "description": "Gradient SUBMIT rocket lifting off through a shower of sparks",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-4-tc-s-2.ansi": {
@@ -3212,7 +3238,7 @@
         "depth": "truecolor",
         "colors": 97,
         "description": "CANDY FORMS wordmark woven from stacked truecolor field bars",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-5-16-l-1.ansi": {
@@ -3224,7 +3250,7 @@
         "depth": "16",
         "colors": 6,
         "description": "form wizard as fifteen-tile serpentine board game with pawn and die",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-16-l-2.ansi": {
@@ -3236,7 +3262,7 @@
         "depth": "16",
         "colors": 5,
         "description": "owl oracle at maze gate lighting the prefix corridor of suggestions",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-16-m-1.ansi": {
@@ -3248,7 +3274,7 @@
         "depth": "16",
         "colors": 7,
         "description": "select dropdown revealed between folded playhouse curtains",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-5-16-m-2.ansi": {
@@ -3260,7 +3286,7 @@
         "depth": "16",
         "colors": 6,
         "description": "password vault door with three digit dials and validator checklist",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-16-s-1.ansi": {
@@ -3272,7 +3298,7 @@
         "depth": "16",
         "colors": 5,
         "description": "checkbox garden harvest rows with ripe crate meter",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-16-s-2.ansi": {
@@ -3284,7 +3310,7 @@
         "depth": "16",
         "colors": 6,
         "description": "radio mast with waves and ON AIR card over a tuned band",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-256-l-1.ansi": {
@@ -3296,7 +3322,7 @@
         "depth": "256",
         "colors": 22,
         "description": "grand theatre marquee, spotlights and six-option dropdown premiere",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-5-256-l-2.ansi": {
@@ -3308,7 +3334,7 @@
         "depth": "256",
         "colors": 25,
         "description": "multiselect harvest panorama with sun, soil bands, crates and progress",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-5-256-m-1.ansi": {
@@ -3368,7 +3394,7 @@
         "depth": "truecolor",
         "colors": 66,
         "description": "twenty-eight-tile rainbow wizard board with pawn, die and traps",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-tc-l-2.ansi": {
@@ -3380,7 +3406,7 @@
         "depth": "truecolor",
         "colors": 264,
         "description": "dawn radio band with gradient beams, station cards and rainbow spectrum bars",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-5-tc-m-1.ansi": {
@@ -3392,7 +3418,7 @@
         "depth": "truecolor",
         "colors": 47,
         "description": "dusk rice paddy with gradient sky, sun disc and heron-silhouette cursor",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-5-tc-m-2.ansi": {
@@ -3404,7 +3430,7 @@
         "depth": "truecolor",
         "colors": 17,
         "description": "nine-mood checkbox lifecycle arrayed along a hue timeline",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-5-tc-s-1.ansi": {
@@ -3416,7 +3442,7 @@
         "depth": "truecolor",
         "colors": 18,
         "description": "glowing brass combination dials ringed by hue-lit ticks",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-5-tc-s-2.ansi": {
@@ -3428,7 +3454,7 @@
         "depth": "truecolor",
         "colors": 22,
         "description": "ghost autocomplete caret fading into three lantern suggestion chips",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-l-1.ansi": {
@@ -3440,7 +3466,7 @@
         "depth": "16",
         "colors": 7,
         "description": "marionette workshop: puppet rig holding field banners on validator strings",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-l-2.ansi": {
@@ -3452,7 +3478,7 @@
         "depth": "16",
         "colors": 7,
         "description": "harvest grading line: checkbox apple crates, one-notch grade dial, barn gate",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-m-1.ansi": {
@@ -3464,7 +3490,7 @@
         "depth": "16",
         "colors": 7,
         "description": "railway signal box: lever-bank toggles, route-dial radio, interlock table",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-m-2.ansi": {
@@ -3476,7 +3502,7 @@
         "depth": "16",
         "colors": 6,
         "description": "beekeeper apiary: comb frames of token stems, swarm suggestion chips",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-s-1.ansi": {
@@ -3488,7 +3514,7 @@
         "depth": "16",
         "colors": 6,
         "description": "bakery display case: donut radios, tart checkbox, jam slider, flavor picker",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-16-s-2.ansi": {
@@ -3500,7 +3526,7 @@
         "depth": "16",
         "colors": 7,
         "description": "tailor's mask atelier: measuring-tape ruler with fitted ##/ZZZ patterns",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-6-256-l-1.ansi": {
@@ -3584,7 +3610,7 @@
         "depth": "truecolor",
         "colors": 49,
         "description": "aquarium select tanks: gradient water, labeled fish options, glowing cursor band",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-6-tc-l-2.ansi": {
@@ -3596,7 +3622,7 @@
         "depth": "truecolor",
         "colors": 58,
         "description": "abyssal anglerfish: lure as top suggestion, school of masked-dot fields",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-6-tc-m-1.ansi": {
@@ -3608,7 +3634,7 @@
         "depth": "truecolor",
         "colors": 102,
         "description": "lighthouse validators: gradient beam sweeping email wrecks off the reef",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-tc-m-2.ansi": {
@@ -3620,7 +3646,7 @@
         "depth": "truecolor",
         "colors": 249,
         "description": "aurora observatory: gradient curtains over dome and radio tuner arc",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-tc-s-1.ansi": {
@@ -3632,7 +3658,7 @@
         "depth": "truecolor",
         "colors": 45,
         "description": "wax seal stamp: radial crimson disc, CandyForms embossed, ribbon tails",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-6-tc-s-2.ansi": {
@@ -3644,7 +3670,7 @@
         "depth": "truecolor",
         "colors": 43,
         "description": "autocomplete ribbons: ghost caret and hue-spooled suggestion chips",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-l-1.ansi": {
@@ -3656,7 +3682,7 @@
         "depth": "16",
         "colors": 7,
         "description": "grand intake hall: sorting wall, four bays, clerks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-l-2.ansi": {
@@ -3668,7 +3694,7 @@
         "depth": "16",
         "colors": 6,
         "description": "customs hall: six lamp-lit lanes and stamp archive",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-m-1.ansi": {
@@ -3680,7 +3706,7 @@
         "depth": "16",
         "colors": 7,
         "description": "post office counter: sorting wall, scale, stamp jar",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-m-2.ansi": {
@@ -3692,7 +3718,7 @@
         "depth": "16",
         "colors": 6,
         "description": "customs checkpoint lanes with verdict stamps",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-s-1.ansi": {
@@ -3704,7 +3730,7 @@
         "depth": "16",
         "colors": 6,
         "description": "post office brass intake slot with queued forms",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-7-16-s-2.ansi": {
@@ -3716,7 +3742,7 @@
         "depth": "16",
         "colors": 6,
         "description": "customs booth inspecting a declaration form",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-256-l-1.ansi": {
@@ -3800,7 +3826,7 @@
         "depth": "truecolor",
         "colors": 582,
         "description": "greenhouse benches with hanging field-tags under lamps",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-7-tc-l-2.ansi": {
@@ -3812,7 +3838,7 @@
         "depth": "truecolor",
         "colors": 404,
         "description": "box office facade, marquee bulbs and seat form",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-tc-m-1.ansi": {
@@ -3824,7 +3850,7 @@
         "depth": "truecolor",
         "colors": 111,
         "description": "playhouse seat chart, three seats glowing",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-7-tc-m-2.ansi": {
@@ -3836,7 +3862,7 @@
         "depth": "truecolor",
         "colors": 60,
         "description": "ward clipboard with gradient vitals meters",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-7-tc-s-1.ansi": {
@@ -3848,8 +3874,10 @@
         "depth": "truecolor",
         "colors": 31,
         "description": "theater marquee stub with seat B12 aglow",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-forms/candy-forms-7-tc-s-2.ansi": {
         "name": "candy-forms-7-tc-s-2.ansi",
@@ -3861,7 +3889,9 @@
         "colors": 24,
         "description": "greenhouse tag with water and light meters",
         "rating": null,
-        "tags": []
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-forms/candy-forms-8-16-l-1.ansi": {
         "name": "candy-forms-8-16-l-1.ansi",
@@ -3872,7 +3902,7 @@
         "depth": "16",
         "colors": 7,
         "description": "board-game store wall: shelves of boxed form widgets, clerk, register and cart",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-8-16-l-2.ansi": {
@@ -3884,7 +3914,7 @@
         "depth": "16",
         "colors": 7,
         "description": "model-train layout of field wiring: X-crossing, relays and fuse taps under the board",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-8-16-m-1.ansi": {
@@ -3896,7 +3926,7 @@
         "depth": "16",
         "colors": 7,
         "description": "bird feeder station: seed hopper and five finches numbered on queue perches",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-8-16-m-2.ansi": {
@@ -3908,7 +3938,7 @@
         "depth": "16",
         "colors": 7,
         "description": "cheese-grading triage table: wheels stamped, score cards and a reject bin",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-8-16-s-1.ansi": {
@@ -3920,7 +3950,7 @@
         "depth": "16",
         "colors": 7,
         "description": "hamster-wheel power plant sending volts down the field wires",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-8-16-s-2.ansi": {
@@ -3932,7 +3962,7 @@
         "depth": "16",
         "colors": 7,
         "description": "barber's candy-stripe queue pole with ticket stubs and a trim chair",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-8-256-l-1.ansi": {
@@ -4017,7 +4047,9 @@
         "colors": 11,
         "description": "tall-ship rigging inspection: ratline rungs as bindings, bulwark manifest, signal flags",
         "rating": null,
-        "tags": []
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-forms/candy-forms-8-tc-l-2.ansi": {
         "name": "candy-forms-8-tc-l-2.ansi",
@@ -4028,7 +4060,7 @@
         "depth": "truecolor",
         "colors": 12,
         "description": "pottery kiln firing ceramic form-tiles: checkbox, radio and slider shelves glowing",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-8-tc-m-1.ansi": {
@@ -4040,7 +4072,7 @@
         "depth": "truecolor",
         "colors": 7,
         "description": "clockmaker bench: dial, meshed gears, loupe and a 12 ms escapement timing chart",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-8-tc-m-2.ansi": {
@@ -4052,7 +4084,7 @@
         "depth": "truecolor",
         "colors": 14,
         "description": "vineyard trellis rows: grape clusters as radio groups, one filled berry per cluster",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-8-tc-s-1.ansi": {
@@ -4064,7 +4096,7 @@
         "depth": "truecolor",
         "colors": 11,
         "description": "candy shop wall of flavour jars, each label ticked as its recipe passes",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-8-tc-s-2.ansi": {
@@ -4076,7 +4108,7 @@
         "depth": "truecolor",
         "colors": 7,
         "description": "submarine porthole onto a teal reef: payload fish and a bubble regex stream",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-9-16-l-1.ansi": {
@@ -4088,7 +4120,7 @@
         "depth": "16",
         "colors": 7,
         "description": "seismograph station: 14 trace rows of keystroke tremors, magnitude scale, readings board",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-9-16-l-2.ansi": {
@@ -4100,7 +4132,7 @@
         "depth": "16",
         "colors": 6,
         "description": "confessional queue: penitent fields at the grille, absolution ledger, hail-keystroke rail",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-9-16-m-1.ansi": {
@@ -4112,7 +4144,7 @@
         "depth": "16",
         "colors": 7,
         "description": "keystroke toll plaza: four booths enforcing rules, barrier arms, coin-per-character receipts",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-9-16-m-2.ansi": {
@@ -4124,7 +4156,7 @@
         "depth": "16",
         "colors": 6,
         "description": "validation locksmith bench: pin-tumbler password cylinder, key-blank rack verdicts, pick guard",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-9-16-s-1.ansi": {
@@ -4136,7 +4168,7 @@
         "depth": "16",
         "colors": 6,
         "description": "loom of text: warp threads for email/agree fields, shuttle autocomplete, shed = tab order",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-9-16-s-2.ansi": {
@@ -4148,7 +4180,7 @@
         "depth": "16",
         "colors": 7,
         "description": "focus elevator shaft: floors F1-F5 as fields, car at name floor, TAB travel cable",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-9-256-l-1.ansi": {
@@ -4232,7 +4264,7 @@
         "depth": "truecolor",
         "colors": 227,
         "description": "airport scanner arch terminal C: walking silhouette through green beam, tray belt, contraband bin",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-9-tc-l-2.ansi": {
@@ -4244,7 +4276,7 @@
         "depth": "truecolor",
         "colors": 64,
         "description": "bindery: five field signatures stitched on gold-and-red thread, nipping press, gilded spine",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-9-tc-m-1.ansi": {
@@ -4256,7 +4288,7 @@
         "depth": "truecolor",
         "colors": 67,
         "description": "dyed warp loom: seven hues for seven fields over a woven CANDY FORMS cloth bolt",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-9-tc-m-2.ansi": {
@@ -4268,7 +4300,7 @@
         "depth": "truecolor",
         "colors": 94,
         "description": "glassblower hot shop: molten gather rolled to a fielded pane on the marver, annealer debounce",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-forms/candy-forms-9-tc-s-1.ansi": {
@@ -4280,7 +4312,7 @@
         "depth": "truecolor",
         "colors": 18,
         "description": "glowing seismograph close-up: phosphor trace of accepted keys over dark drum paper",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-9-tc-s-2.ansi": {
@@ -4292,7 +4324,7 @@
         "depth": "truecolor",
         "colors": 17,
         "description": "confessional grille by candlelight: whispered email sin and absolution, wax-sealed docket",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-10-16-l-1.ansi": {
@@ -4304,7 +4336,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Election hall panorama: block CANDY FORMS banner over six lever booths, ballot box, tally",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-16-l-2.ansi": {
@@ -4316,7 +4348,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Chairlift line of committed fields over regex switchbacks with gate-arm validator row",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-16-m-1.ansi": {
@@ -4328,7 +4360,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Top-down field-focus maze: cursor threads name/email/passwd/city corridors to SUBMIT",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-16-m-2.ansi": {
@@ -4340,7 +4372,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Night-shift security desk: six CCTV field-feeds, two flagged, REC counter running",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-16-s-1.ansi": {
@@ -4352,7 +4384,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Voting booth trio with brass ballot levers, one mid-pull and counted",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-16-s-2.ansi": {
@@ -4364,7 +4396,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Ski-lift turnstile gate scanning a pass, green arm lifted for the skier",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-256-l-1.ansi": {
@@ -4376,7 +4408,7 @@
         "depth": "256",
         "colors": 26,
         "description": "Café hall: espresso machine radio group, order wheel, menu board of every widget",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-forms/candy-forms-10-256-l-2.ansi": {
@@ -4388,7 +4420,7 @@
         "depth": "256",
         "colors": 35,
         "description": "Dawn ski panorama: gradient sky bands, chairlift of fields, LED pass/scanner gates",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-256-m-1.ansi": {
@@ -4400,7 +4432,7 @@
         "depth": "256",
         "colors": 25,
         "description": "Apothecary counter: seven tincture bottles per field type, Rx ticket and brass scale",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-256-m-2.ansi": {
@@ -4412,8 +4444,10 @@
         "depth": "256",
         "colors": 23,
         "description": "Validation quilt in an embroidery hoop: 8 stitched patches, needle follows tab order",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-forms/candy-forms-10-256-s-1.ansi": {
         "name": "candy-forms-10-256-s-1.ansi",
@@ -4424,7 +4458,7 @@
         "depth": "256",
         "colors": 23,
         "description": "Barista order ticket on the rail: size/milk/shots fields clipped under steam",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-256-s-2.ansi": {
@@ -4436,7 +4470,7 @@
         "depth": "256",
         "colors": 21,
         "description": "Farrier's horseshoe nailboard: bronze shoe with ☑/☐ nails, forge-heat ramp below",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-l-1.ansi": {
@@ -4448,7 +4482,7 @@
         "depth": "truecolor",
         "colors": 654,
         "description": "Security ops room: 8-feed gradient video wall, ticker, desk and floor glow",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-l-2.ansi": {
@@ -4460,7 +4494,7 @@
         "depth": "truecolor",
         "colors": 406,
         "description": "Midnight apothecary: glowing bottle shelves under moon-window gradient, cat on ledgers",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-m-1.ansi": {
@@ -4472,7 +4506,7 @@
         "depth": "truecolor",
         "colors": 569,
         "description": "Ballot booth close-up: gradient curtain folds, brass lever mid-throw, one ☑ card",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-m-2.ansi": {
@@ -4484,7 +4518,7 @@
         "depth": "truecolor",
         "colors": 238,
         "description": "Latte-art autocomplete: foam-heart cup, ghost-text steam, suggestion chips",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-s-1.ansi": {
@@ -4496,7 +4530,7 @@
         "depth": "truecolor",
         "colors": 245,
         "description": "Locksmith key cabinet: five brass keyed fields, one turned key glows in its ward",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-forms/candy-forms-10-tc-s-2.ansi": {
@@ -4508,7 +4542,7 @@
         "depth": "truecolor",
         "colors": 153,
         "description": "CCTV tube close-up: phosphor scan of a validated email feed, REC dot lit",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-1-16-l-1.ansi": {
@@ -4532,7 +4566,7 @@
         "depth": "16",
         "colors": 10,
         "description": "tessellated candy-tile mosaic wall studded with bright quarter-blocks, black plaque with two-line block logo",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-1-16-m-1.ansi": {
@@ -4544,7 +4578,7 @@
         "depth": "16",
         "colors": 9,
         "description": "constraint web: five region nodes joined by dashed edges labeled a.w ≥ 2b under a block title",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-1-16-m-2.ansi": {
@@ -4556,7 +4590,7 @@
         "depth": "16",
         "colors": 9,
         "description": "blueprint floor plan of an 80x24 layout: rulers, header/sidebar/content/footer boxes with constraint callouts",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-1-16-s-1.ansi": {
@@ -4568,7 +4602,7 @@
         "depth": "16",
         "colors": 9,
         "description": "snap grid: nested hbox/panel boxes clicking onto a shared edge with ◆ snap markers",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-1-16-s-2.ansi": {
@@ -4580,7 +4614,7 @@
         "depth": "16",
         "colors": 12,
         "description": "candy-wrapper foil: striped pastel wrap folded around a black CANDY LAYOUT plaque",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-1-256-l-1.ansi": {
@@ -4604,7 +4638,7 @@
         "depth": "256",
         "colors": 26,
         "description": "constraint atlas: labeled region map-grid joined by edge annotations, with percentage/ratio/min-max gauge rails",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-1-256-m-1.ansi": {
@@ -4616,7 +4650,7 @@
         "depth": "256",
         "colors": 13,
         "description": "site crane hoisting a CandyLayout banner box onto a scaffold of stacked vbox regions",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-1-256-m-2.ansi": {
@@ -4628,7 +4662,7 @@
         "depth": "256",
         "colors": 11,
         "description": "TUI solve-trace window: GreedySolver pass log, deprecation warning, region rendered as a 256-color bar",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-1-256-s-1.ansi": {
@@ -4640,7 +4674,7 @@
         "depth": "256",
         "colors": 11,
         "description": "greedy fill bars: one colored bar per constraint type (length/min/fill/pct/ratio/max) with slack shading",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-1-256-s-2.ansi": {
@@ -4652,7 +4686,7 @@
         "depth": "256",
         "colors": 14,
         "description": "a Region quartered by ┼ splits, each shaded pane labeled with its constraint call",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-1-tc-l-1.ansi": {
@@ -4736,7 +4770,7 @@
         "depth": "16",
         "colors": 7,
         "description": "layout inspector pane with region table and constraint stack",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-16-l-2.ansi": {
@@ -4748,7 +4782,7 @@
         "depth": "16",
         "colors": 6,
         "description": "snap-grid workbench with guide rails and magnet markers",
-        "rating": null,
+        "rating": 5,
         "tags": []
     },
     "candy-layout/candy-layout-2-16-m-1.ansi": {
@@ -4760,7 +4794,7 @@
         "depth": "16",
         "colors": 6,
         "description": "split tree beside its solved region geometry",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-16-m-2.ansi": {
@@ -4772,7 +4806,7 @@
         "depth": "16",
         "colors": 7,
         "description": "six-tile mosaic of header, sidebar, main and footer bands",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-16-m-3.ansi": {
@@ -4784,7 +4818,7 @@
         "depth": "16",
         "colors": 8,
         "description": "satisfiability ledger matrix of constraint kinds per region",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-16-s-1.ansi": {
@@ -4796,8 +4830,10 @@
         "depth": "16",
         "colors": 10,
         "description": "constraint chip card with weight strip and satisfied checkmark",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-2-16-s-2.ansi": {
         "name": "candy-layout-2-16-s-2.ansi",
@@ -4808,7 +4844,7 @@
         "depth": "16",
         "colors": 6,
         "description": "matryoshka of four nested layout frames around the wordmark",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-2-256-l-1.ansi": {
@@ -4820,7 +4856,7 @@
         "depth": "256",
         "colors": 31,
         "description": "squarified treemap heat mosaic of solved weights",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-256-l-2.ansi": {
@@ -4832,7 +4868,7 @@
         "depth": "256",
         "colors": 19,
         "description": "five-pass solver waterfall table with width evolution",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-256-m-1.ansi": {
@@ -4844,7 +4880,7 @@
         "depth": "256",
         "colors": 15,
         "description": "blueprint frame with dimension arrows and corner crosses",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-256-m-2.ansi": {
@@ -4856,7 +4892,7 @@
         "depth": "256",
         "colors": 15,
         "description": "constraint web graph, six regions claim on a greedy hub",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-256-s-1.ansi": {
@@ -4868,7 +4904,7 @@
         "depth": "256",
         "colors": 7,
         "description": "golden-ratio rectangle subdivision in warm shades",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-2-256-s-2.ansi": {
@@ -4880,7 +4916,7 @@
         "depth": "256",
         "colors": 12,
         "description": "flex weight distribution bars with percentage readout",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-2-tc-l-1.ansi": {
@@ -4976,7 +5012,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Reflow storyboard: phone/tablet/desktop panels from one spec",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-16-l-2.ansi": {
@@ -4988,7 +5024,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Snap grid: drifting dashed boxes before, welded guides after",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-16-m-1.ansi": {
@@ -5000,7 +5036,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Box anatomy: margin/border/padding layers with budget equation",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-16-m-2.ansi": {
@@ -5012,7 +5048,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Z-order stack: four stair-stepped cards, modal traps keys",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-16-m-3.ansi": {
@@ -5024,7 +5060,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Exact-cover packing: tetromino candies poured into a solved box",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-16-s-1.ansi": {
@@ -5036,7 +5072,7 @@
         "depth": "16",
         "colors": 11,
         "description": "Confection box: 18 gradient-shaded bonbons in an exact-cover grid",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-3-16-s-2.ansi": {
@@ -5048,7 +5084,7 @@
         "depth": "16",
         "colors": 10,
         "description": "Conflict drama: two boxes overlap, CLASH cell flares, solver shift note",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-256-l-1.ansi": {
@@ -5060,7 +5096,7 @@
         "depth": "256",
         "colors": 33,
         "description": "Bin packing tray: 16 named sweets fill a 94.7% manifest",
-        "rating": null,
+        "rating": 4,
         "tags": []
     },
     "candy-layout/candy-layout-3-256-l-2.ansi": {
@@ -5072,7 +5108,7 @@
         "depth": "256",
         "colors": 8,
         "description": "Solve tree: Window to Card nodes with leaf rect table",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-256-m-1.ansi": {
@@ -5084,7 +5120,7 @@
         "depth": "256",
         "colors": 9,
         "description": "Split panes: three handle drags with ratio chips",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-256-m-2.ansi": {
@@ -5096,7 +5132,7 @@
         "depth": "256",
         "colors": 7,
         "description": "Constraint graph: total/sidebar/content/gap node diagram",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-256-s-1.ansi": {
@@ -5108,7 +5144,7 @@
         "depth": "256",
         "colors": 9,
         "description": "Golden split: φ-paned rectangles in warm 256 tints",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-256-s-2.ansi": {
@@ -5120,7 +5156,7 @@
         "depth": "256",
         "colors": 6,
         "description": "Magnetic guides: ghost panel snaps to center line",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-3-tc-l-1.ansi": {
@@ -5216,7 +5252,7 @@
         "depth": "16",
         "colors": 9,
         "description": "architectural section of a screen: slabs, walls, zones, dimension strings",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-4-16-l-2.ansi": {
@@ -5228,7 +5264,7 @@
         "depth": "16",
         "colors": 14,
         "description": "stained-glass lancet window as solved layout: eight bays and a rose",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-4-16-m-1.ansi": {
@@ -5240,7 +5276,7 @@
         "depth": "16",
         "colors": 7,
         "description": "isometric candy-city zoning plan: 60/40 districts, candy tower, legend rail",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-4-16-m-2.ansi": {
@@ -5252,7 +5288,7 @@
         "depth": "16",
         "colors": 6,
         "description": "origami viewport: open hbox folding through quarter into a pocket pane",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-4-16-s-1.ansi": {
@@ -5264,7 +5300,7 @@
         "depth": "16",
         "colors": 9,
         "description": "tangram fox head: diamond face + ear/snout region chips with constraint labels",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-4-16-s-2.ansi": {
@@ -5276,7 +5312,7 @@
         "depth": "16",
         "colors": 6,
         "description": "jigsaw assembly table: 2x2 interlocking shaded pieces with keyed seams",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-4-256-l-1.ansi": {
@@ -5288,7 +5324,7 @@
         "depth": "256",
         "colors": 9,
         "description": "color-coded structural section: header/footer slabs over glowing content floors",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-4-256-l-2.ansi": {
@@ -5300,7 +5336,7 @@
         "depth": "256",
         "colors": 16,
         "description": "jewel-tone rose window: leaded bays solved edge-to-edge in GreedySolver",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-4-256-m-1.ansi": {
@@ -5312,7 +5348,7 @@
         "depth": "256",
         "colors": 19,
         "description": "candy city lots: four neon towers claim a 12x12 isometric grid",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-4-256-m-2.ansi": {
@@ -5336,7 +5372,7 @@
         "depth": "256",
         "colors": 6,
         "description": "tangram crane built from five constraint regions with per-piece labels",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-4-256-s-2.ansi": {
@@ -5432,7 +5468,7 @@
         "depth": "16",
         "colors": 11,
         "description": "full mise-en-place station: three zones of pans plus live solver tape",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-5-16-l-2.ansi": {
@@ -5444,7 +5480,7 @@
         "depth": "16",
         "colors": 8,
         "description": "six-lift braced scaffold with inspection log and safety stamp",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-5-16-m-1.ansi": {
@@ -5456,7 +5492,7 @@
         "depth": "16",
         "colors": 7,
         "description": "five-level scaffold tower with braced decks beside a checklist pane",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-5-16-m-2.ansi": {
@@ -5468,7 +5504,7 @@
         "depth": "16",
         "colors": 9,
         "description": "three-zone kitchen plan with pans on a percentage-divided counter",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-5-16-s-1.ansi": {
@@ -5480,8 +5516,10 @@
         "depth": "16",
         "colors": 8,
         "description": "mise-en-place skillet/board/pot panes with constraint tags",
-        "rating": null,
-        "tags": []
+        "rating": 1,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-5-16-s-2.ansi": {
         "name": "candy-layout-5-16-s-2.ansi",
@@ -5492,8 +5530,10 @@
         "depth": "16",
         "colors": 8,
         "description": "leaning book spines packed greedily onto a two-rail shelf pane",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-5-256-l-1.ansi": {
         "name": "candy-layout-5-256-l-1.ansi",
@@ -5648,8 +5688,10 @@
         "depth": "16",
         "colors": 7,
         "description": "Crag panorama: six interleaved routes on one wall with crux histogram inset",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-6-16-l-2.ansi": {
         "name": "candy-layout-6-16-l-2.ansi",
@@ -5660,8 +5702,10 @@
         "depth": "16",
         "colors": 7,
         "description": "Four-act fly system: battens at varied heights, region permutations per bay",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-6-16-m-1.ansi": {
         "name": "candy-layout-6-16-m-1.ansi",
@@ -5672,7 +5716,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Route-setter's wall: four graded dashed routes, crux-spread box, hold scatter",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-6-16-m-2.ansi": {
@@ -5684,8 +5728,10 @@
         "depth": "16",
         "colors": 7,
         "description": "Theatre fly plan: proscenium, side tabs, two sets mid-swap, stall seat rows",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-6-16-s-1.ansi": {
         "name": "candy-layout-6-16-s-1.ansi",
@@ -5696,7 +5742,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Bouldering wall plate: solver-placed holds with route lines and grade legend",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-6-16-s-2.ansi": {
@@ -5708,8 +5754,10 @@
         "depth": "16",
         "colors": 6,
         "description": "Stage-change cue strip: red valance and tabs framing ACT I to ACT II region swap",
-        "rating": null,
-        "tags": []
+        "rating": 3,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-6-256-l-1.ansi": {
         "name": "candy-layout-6-256-l-1.ansi",
@@ -5888,7 +5936,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Zoning envelope board: four districts, stepped permitted volumes against a height ladder and cap plane",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-7-16-l-2.ansi": {
@@ -5900,8 +5948,10 @@
         "depth": "16",
         "colors": 8,
         "description": "Breakbulk hold stow plan: bays and tiers of crates, drums and bales under hatch cranes at the waterline",
-        "rating": null,
-        "tags": []
+        "rating": 2,
+        "tags": [
+            "alignment-fix"
+        ]
     },
     "candy-layout/candy-layout-7-16-m-1.ansi": {
         "name": "candy-layout-7-16-m-1.ansi",
@@ -5912,7 +5962,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Masonry guild coursing plan: running bond, alternating quoins, stepped voussoir arch, toothed lift end",
-        "rating": null,
+        "rating": 0,
         "tags": []
     },
     "candy-layout/candy-layout-7-16-m-2.ansi": {
@@ -5924,7 +5974,7 @@
         "depth": "16",
         "colors": 10,
         "description": "Campground loop layout: ellipse road, tent pads on spurs, fire ring datum, lake frontage",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-7-16-s-1.ansi": {
@@ -5936,7 +5986,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Print-shop composing stick: sorts, caps, leads and furniture set to the measure",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-7-16-s-2.ansi": {
@@ -5948,7 +5998,7 @@
         "depth": "16",
         "colors": 5,
         "description": "Hive stack stamp: supers capped over a brood arc constrained to the frame centre",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-7-256-l-1.ansi": {
@@ -6116,7 +6166,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Parking structure section: six stacked levels, hatched stalls, drive aisle and helical ramp",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-8-16-l-2.ansi": {
@@ -6128,7 +6178,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Container stowage bay plan: weight-banded cells on a tier/bay grid, lashing rods over waterline",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-8-16-m-1.ansi": {
@@ -6140,7 +6190,7 @@
         "depth": "16",
         "colors": 12,
         "description": "Box-model layers: nested margin/border/padding/content with dimension ticks",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-8-16-m-2.ansi": {
@@ -6152,7 +6202,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Chain packing: a spread chain with equal gaps set over a flush packed chain",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-8-16-s-1.ansi": {
@@ -6164,7 +6214,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Anchor pad 3x3: nine TL..BR pins on a bordered container, centre highlighted",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-8-16-s-2.ansi": {
@@ -6176,7 +6226,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Bias tracks: identical boxes set at 0.30 and 0.70 bias with a measured gap split",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-8-256-l-1.ansi": {
@@ -6344,7 +6394,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Sail-maker's cutting loft: battened mainsail and jib on the numbered board with cloth bolt, try-square and chalk crosses",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-9-16-l-2.ansi": {
@@ -6356,7 +6406,7 @@
         "depth": "16",
         "colors": 8,
         "description": "Slater's roof: gauged slate courses with lead valley, brick chimney, ridge, gutter brackets and a side lap ruler",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-9-16-m-1.ansi": {
@@ -6368,7 +6418,7 @@
         "depth": "16",
         "colors": 9,
         "description": "Stage carpenter's flat rack: six painted flats of varied height stowed in numbered slots with access ladder",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-9-16-m-2.ansi": {
@@ -6380,7 +6430,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Sign-writer's spacing stick: gilt sign board with cap rule, pinstripes and letter-position ticks over an inverted scale bar",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-9-16-s-1.ansi": {
@@ -6392,7 +6442,7 @@
         "depth": "16",
         "colors": 6,
         "description": "Gardener's crop-rotation plot: nine raised beds on pebble paths with water butt and rotation legend",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-9-16-s-2.ansi": {
@@ -6404,7 +6454,7 @@
         "depth": "16",
         "colors": 7,
         "description": "Chandler's dip bench: eight tallow tapers thickening from 2 to 9 dips on the dipping bar over the molten bath",
-        "rating": null,
+        "rating": 1,
         "tags": []
     },
     "candy-layout/candy-layout-9-256-l-1.ansi": {
@@ -6560,7 +6610,7 @@
         "depth": "16",
         "colors": 7,
         "description": "shipyard panorama: gantry lowering block B7 onto a seamed hull with station rail and fit log",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-16-l-2.ansi": {
@@ -6572,7 +6622,7 @@
         "depth": "16",
         "colors": 6,
         "description": "tram city map: one-way loop, two spurs, depot and bridged river over a street grid with segment table",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-16-m-1.ansi": {
@@ -6584,7 +6634,7 @@
         "depth": "16",
         "colors": 7,
         "description": "dry-dock elevation: hull on eleven keel blocks over the 500 mm datum grid, WL ladder",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-10-16-m-2.ansi": {
@@ -6596,7 +6646,7 @@
         "depth": "16",
         "colors": 7,
         "description": "lumber cut-list: nine parts segmented on three stocks beside a demand-fit ledger",
-        "rating": null,
+        "rating": 2,
         "tags": []
     },
     "candy-layout/candy-layout-10-16-s-1.ansi": {
@@ -6608,7 +6658,7 @@
         "depth": "16",
         "colors": 7,
         "description": "terraced hill farm: five crop bands stepping wider as grade climbs to the 15% budget",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-16-s-2.ansi": {
@@ -6620,7 +6670,7 @@
         "depth": "16",
         "colors": 7,
         "description": "labyrinth sigil: five concentric ring walls with staggered gaps around a rose, stats rail",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-256-l-1.ansi": {
@@ -6632,7 +6682,7 @@
         "depth": "256",
         "colors": 20,
         "description": "labyrinth estate: seven staggered hedge rings, four gates, pavilion centre, ring radius table",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-256-l-2.ansi": {
@@ -6644,7 +6694,7 @@
         "depth": "256",
         "colors": 29,
         "description": "lumber yard: board racks A-D, four-board cut plan with kerfs, demand ledger, yield gauge ramp",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-256-m-1.ansi": {
@@ -6656,7 +6706,7 @@
         "depth": "256",
         "colors": 11,
         "description": "hill farm plan: contour bands as crop-colored rings, irrigation main with drop ticks, band table",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-256-m-2.ansi": {
@@ -6668,7 +6718,7 @@
         "depth": "256",
         "colors": 8,
         "description": "gear bench: three meshing wheels on a plate datum rail beside a teeth/diameter table",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-256-s-1.ansi": {
@@ -6680,7 +6730,7 @@
         "depth": "256",
         "colors": 8,
         "description": "gear train: 12T-36T-18T wheels with cardinal teeth and ratio readout, flush mesh",
-        "rating": null,
+        "rating": 3,
         "tags": []
     },
     "candy-layout/candy-layout-10-256-s-2.ansi": {
