@@ -25,7 +25,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors icon display concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Icon implements \SugarCraft\Dash\Foundation\Sizer
+final class Icon implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

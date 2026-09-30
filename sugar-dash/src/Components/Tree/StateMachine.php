@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 
 /**
  * A state machine diagram component for visualizing system states and transitions.
@@ -22,7 +23,7 @@ use SugarCraft\Dash\Foundation\Sizer;
  * Mirrors UML state machine diagram patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class StateMachine implements Sizer
+final class StateMachine implements SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

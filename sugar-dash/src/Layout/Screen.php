@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\Ansi;
  * Mirrors screen management from bubble-screen but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Screen implements \SugarCraft\Dash\Foundation\Sizer
+final class Screen implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

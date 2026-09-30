@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors UML class diagram patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class ClassDiagram implements \SugarCraft\Dash\Foundation\Sizer
+final class ClassDiagram implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

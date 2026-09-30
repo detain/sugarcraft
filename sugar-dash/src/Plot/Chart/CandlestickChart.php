@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors candlestick chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
+final class CandlestickChart implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartBorderStyle;
     use PriceAxisProjection;

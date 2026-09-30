@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors charmbracelet/bubbletea border text patterns adapted to PHP.
  */
-final class BorderText implements \SugarCraft\Dash\Foundation\Sizer
+final class BorderText implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -242,7 +242,7 @@ final class BorderText implements \SugarCraft\Dash\Foundation\Sizer
         $contentWidth = 0;
 
         if ($this->content instanceof \SugarCraft\Dash\Foundation\Item) {
-            if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, ] = $this->content->getInnerSize();
                 $contentWidth = $w + 2;
             }
@@ -265,7 +265,7 @@ final class BorderText implements \SugarCraft\Dash\Foundation\Sizer
 
         $contentHeight = 1;
         if ($this->content instanceof \SugarCraft\Dash\Foundation\Item) {
-            if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [, $h] = $this->content->getInnerSize();
                 $contentHeight = max(1, $h);
             }

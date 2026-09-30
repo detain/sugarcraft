@@ -11,6 +11,7 @@ use SugarCraft\Dash\Layout\FlexWrap;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Layout\JustifyContent;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use PHPUnit\Framework\TestCase;
 
 final class FlexLayoutTest extends TestCase
@@ -25,7 +26,7 @@ final class FlexLayoutTest extends TestCase
 
     private function sizedItem(): Item
     {
-        return new class implements Item, Sizer {
+        return new class implements Item, SizedItem {
             public int $capturedW = 0;
             public int $capturedH = 0;
             private int $w = 0;

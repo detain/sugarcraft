@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors pagination concept adapted to PHP with wither-style immutable setters.
  * Simpler alternative to the full-featured Pagination component.
  */
-final class PaginationSimple implements \SugarCraft\Dash\Foundation\Sizer
+final class PaginationSimple implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

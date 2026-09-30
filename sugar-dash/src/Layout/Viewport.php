@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the viewport concept from bubble-viewport but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Viewport implements \SugarCraft\Dash\Foundation\Sizer
+final class Viewport implements \SugarCraft\Dash\Foundation\SizedItem
 {
     public function __construct(
         private readonly \SugarCraft\Dash\Foundation\Item $content,
@@ -76,8 +76,13 @@ final class Viewport implements \SugarCraft\Dash\Foundation\Sizer
             return '';
         }
 
-        // Get content dimensions
-        [$contentWidth, $contentHeight] = $this->content->getInnerSize();
+        // Get content dimensions — content that cannot report an intrinsic
+        // size is treated as exactly filling the viewport (nothing to scroll).
+        if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
+            [$contentWidth, $contentHeight] = $this->content->getInnerSize();
+        } else {
+            [$contentWidth, $contentHeight] = [$width, $height];
+        }
 
         // Clamp scroll position
         $maxScrollX = max(0, $contentWidth - $width);
@@ -306,6 +311,9 @@ final class Viewport implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function canScroll(): bool
     {
+        if (! $this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
+            return false;
+        }
         [$contentWidth, $contentHeight] = $this->content->getInnerSize();
         $viewportWidth = $this->getWidth();
         $viewportHeight = $this->getHeight();

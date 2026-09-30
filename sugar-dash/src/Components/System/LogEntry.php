@@ -18,7 +18,7 @@ final readonly class LogEntry
     /**
      * Create a new log entry.
      */
-    public static function create(
+    public static function new(
         string $message,
         LogLevel $level = LogLevel::Info,
         ?string $timestamp = null,

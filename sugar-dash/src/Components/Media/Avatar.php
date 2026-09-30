@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors avatar UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Avatar implements \SugarCraft\Dash\Foundation\Sizer
+final class Avatar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors area chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Area implements \SugarCraft\Dash\Foundation\Sizer
+final class Area implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartGridGeometry;
 

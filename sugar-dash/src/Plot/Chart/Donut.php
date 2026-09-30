@@ -24,7 +24,7 @@ use SugarCraft\Dash\Plot\Braille\Bresenham;
  * Mirrors donut/pie chart patterns adapted to PHP with wither-style
  * immutable setters.
  */
-final class Donut implements \SugarCraft\Dash\Foundation\Sizer
+final class Donut implements \SugarCraft\Dash\Foundation\SizedItem
 {
     /**
      * Terminal cells are roughly twice as wide as they are tall, so distances
@@ -258,12 +258,15 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 
     /**
      * Render the donut chart using Unicode block characters.
+     *
+     * A non-finite total (NaN or ±INF segment values) cannot map to any
+     * sweep, so it renders the empty ring instead of dividing by it.
      */
     public function render(): string
     {
         $total = array_sum(array_column($this->segments, 'value'));
 
-        if ($total <= 0 || $this->segments === []) {
+        if (!is_finite($total) || $total <= 0 || $this->segments === []) {
             return $this->renderEmpty();
         }
 
@@ -481,9 +484,8 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
      * The primary line is centerValue; with showPercentage on and no explicit
      * value it is the first segment's share of the total, formatted
      * number_format(share, 0) . '%'. centerLabel, when set, takes a second
-     * line directly below the primary. Each line is mb-truncated to the inner
-     * diameter minus a 2-cell breathing margin — further narrowed to whatever
-     * the hole actually spans on its row — so text never lands on ring cells.
+     * line directly below the primary. Each line is mb-truncated to whatever
+     * the hole actually spans on its row, so text never lands on ring cells.
      * A line whose row the hole cannot fit is omitted. With every knob at its
      * default (or centerLabel alone, which has no primary to hang under)
      * nothing is emitted and the render stays byte-identical.
@@ -519,7 +521,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             return $this->centerValue;
         }
 
-        if (!$this->showPercentage || $total <= 0.0 || $this->segments === []) {
+        if (!$this->showPercentage || !is_finite($total) || $total <= 0.0 || $this->segments === []) {
             return null;
         }
 
@@ -528,9 +530,13 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 
     /**
      * Paint one center-text line, horizontally centered on $centerX of row $y,
-     * truncated to min(inner diameter - 2, the hole span of this row). Cells
-     * outside the hole are never touched: the ring stays whole even if a
-     * future geometry change ever widened a line past the blank span.
+     * truncated to the hole span of this row — the exact number of blank hole
+     * columns the row offers. Cells outside the hole are never touched: the
+     * blank-cell write guard below keeps the ring whole even if a future
+     * geometry change ever widened a line past the blank span, so no extra
+     * safety margin is taken off the fit (the audit found the previous
+     * `inner diameter - 2` cap clipping a text that provably fit — "85%"
+     * rendered as "85" at size 12, forcing downstream to size 14).
      *
      * @param array<int, array<int, array{char: string, color: Color|null}>> $grid
      *
@@ -538,7 +544,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
      */
     private function paintCenterLine(array $grid, string $text, int $centerX, int $y, int $rowOffset, int $innerRadius, float $aspect): array
     {
-        $fit = min(2 * $innerRadius - 2, $this->holeRowWidth($rowOffset, $innerRadius, $aspect));
+        $fit = $this->holeRowWidth($rowOffset, $innerRadius, $aspect);
         if ($fit < 1) {
             return $grid;
         }

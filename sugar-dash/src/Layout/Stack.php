@@ -16,7 +16,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors stack layout concepts adapted to PHP with wither-style immutable setters.
  */
-final class Stack implements \SugarCraft\Dash\Foundation\Sizer
+final class Stack implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -112,7 +112,7 @@ final class Stack implements \SugarCraft\Dash\Foundation\Sizer
         $totalHeight = 0;
 
         foreach ($this->items as $index => $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, $h] = $item->getInnerSize();
                 $maxWidth = max($maxWidth, $w);
                 $totalHeight += $h;

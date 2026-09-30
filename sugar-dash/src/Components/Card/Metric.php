@@ -20,7 +20,7 @@ use SugarCraft\Dash\Layout\HAlign;
  * Mirrors metric display from homedash/metrics but adapted to PHP
  * with wither-style immutable setters.
  */
-final class Metric implements \SugarCraft\Dash\Foundation\Sizer
+final class Metric implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

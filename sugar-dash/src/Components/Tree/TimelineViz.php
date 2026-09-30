@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors timeline/gantt patterns adapted to PHP with wither-style immutable setters.
  */
-final class TimelineViz implements \SugarCraft\Dash\Foundation\Sizer
+final class TimelineViz implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

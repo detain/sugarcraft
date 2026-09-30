@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors audio player patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Audio implements \SugarCraft\Dash\Foundation\Sizer
+final class Audio implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors jumbotron/hero-section concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Jumbotron implements \SugarCraft\Dash\Foundation\Sizer
+final class Jumbotron implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

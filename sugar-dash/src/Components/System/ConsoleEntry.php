@@ -14,7 +14,7 @@ final readonly class ConsoleEntry
         public ?Color $color = null,
     ) {}
 
-    public static function create(
+    public static function new(
         string $message,
         ConsoleStream $stream = ConsoleStream::Stdout,
         ?Color $color = null,
@@ -28,31 +28,31 @@ final readonly class ConsoleEntry
 
     public static function info(string $message): self
     {
-        return self::create($message, ConsoleStream::Info);
+        return self::new($message, ConsoleStream::Info);
     }
 
     public static function success(string $message): self
     {
-        return self::create($message, ConsoleStream::Success);
+        return self::new($message, ConsoleStream::Success);
     }
 
     public static function warning(string $message): self
     {
-        return self::create($message, ConsoleStream::Warning);
+        return self::new($message, ConsoleStream::Warning);
     }
 
     public static function error(string $message): self
     {
-        return self::create($message, ConsoleStream::Error);
+        return self::new($message, ConsoleStream::Error);
     }
 
     public static function debug(string $message): self
     {
-        return self::create($message, ConsoleStream::Debug);
+        return self::new($message, ConsoleStream::Debug);
     }
 
     public static function raw(string $message): self
     {
-        return self::create($message, ConsoleStream::Raw);
+        return self::new($message, ConsoleStream::Raw);
     }
 }

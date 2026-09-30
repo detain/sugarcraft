@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Implements Sizer so it composes directly inside a Card: the card sets
  * the available inner width and the value column truncates to fit.
  */
-final class DefinitionList implements \SugarCraft\Dash\Foundation\Sizer
+final class DefinitionList implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

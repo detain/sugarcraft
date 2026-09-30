@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the pagination concept from typical UI toolkits but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Pagination implements \SugarCraft\Dash\Foundation\Sizer
+final class Pagination implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

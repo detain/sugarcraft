@@ -40,7 +40,7 @@ for ($i = 1; $i <= 25; $i++) {
     ]);
 }
 
-$table = GridTable::create($cols, $rows)
+$table = GridTable::new($cols, $rows)
     ->filter('a')   // Pre-apply a filter to demonstrate filtering
     ->page(1);
 

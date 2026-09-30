@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 
 /**
  * A 2D pixel drawing canvas.
@@ -22,7 +23,7 @@ use SugarCraft\Dash\Foundation\Sizer;
  * Mirrors canvas drawing concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Canvas implements Sizer
+final class Canvas implements SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

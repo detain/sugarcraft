@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors hint/caption UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class Hint implements \SugarCraft\Dash\Foundation\Sizer
+final class Hint implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

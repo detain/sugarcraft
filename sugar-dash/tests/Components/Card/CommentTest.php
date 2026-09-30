@@ -19,13 +19,13 @@ final class CommentTest extends TestCase
 
     public function testCommentImplementsSizer(): void
     {
-        $comment = Comment::create('Author', 'Body');
+        $comment = Comment::new('Author', 'Body');
         $this->assertInstanceOf(Sizer::class, $comment);
     }
 
     public function testCommentImplementsItem(): void
     {
-        $comment = Comment::create('Author', 'Body');
+        $comment = Comment::new('Author', 'Body');
         $this->assertInstanceOf(Item::class, $comment);
     }
 
@@ -35,7 +35,7 @@ final class CommentTest extends TestCase
 
     public function testRenderReturnsNonEmpty(): void
     {
-        $comment = Comment::create('Author', 'Body');
+        $comment = Comment::new('Author', 'Body');
         $rendered = $comment->render();
 
         $this->assertNotSame('', $rendered);
@@ -43,7 +43,7 @@ final class CommentTest extends TestCase
 
     public function testRenderContainsAuthor(): void
     {
-        $comment = Comment::create('John Doe', 'This is a comment');
+        $comment = Comment::new('John Doe', 'This is a comment');
         $rendered = $comment->render();
 
         $this->assertStringContainsString('John Doe', $rendered);
@@ -51,7 +51,7 @@ final class CommentTest extends TestCase
 
     public function testRenderContainsBody(): void
     {
-        $comment = Comment::create('Author', 'This is the comment body');
+        $comment = Comment::new('Author', 'This is the comment body');
         $rendered = $comment->render();
 
         $this->assertStringContainsString('This is the comment body', $rendered);
@@ -72,7 +72,7 @@ final class CommentTest extends TestCase
 
     public function testWithIsReply(): void
     {
-        $comment = Comment::create('Author', 'Body')->withIsReply(true);
+        $comment = Comment::new('Author', 'Body')->withIsReply(true);
         $rendered = $comment->render();
 
         $this->assertStringContainsString('Author', $rendered);
@@ -84,7 +84,7 @@ final class CommentTest extends TestCase
 
     public function testTimestamp(): void
     {
-        $comment = Comment::create('Author', 'Body')
+        $comment = Comment::new('Author', 'Body')
             ->withTimestamp('2 hours ago');
         $rendered = $comment->render();
 
@@ -93,7 +93,7 @@ final class CommentTest extends TestCase
 
     public function testNullTimestampNotShown(): void
     {
-        $comment = Comment::create('Author', 'Body');
+        $comment = Comment::new('Author', 'Body');
         $rendered = $comment->render();
 
         $this->assertStringNotContainsString('·', $rendered);
@@ -105,7 +105,7 @@ final class CommentTest extends TestCase
 
     public function testEditedIndicator(): void
     {
-        $comment = Comment::create('Author', 'Body')->withIsEdited(true);
+        $comment = Comment::new('Author', 'Body')->withIsEdited(true);
         $rendered = $comment->render();
 
         $this->assertStringContainsString('(edited)', $rendered);
@@ -113,7 +113,7 @@ final class CommentTest extends TestCase
 
     public function testNotEditedWithoutIndicator(): void
     {
-        $comment = Comment::create('Author', 'Body')->withIsEdited(false);
+        $comment = Comment::new('Author', 'Body')->withIsEdited(false);
         $rendered = $comment->render();
 
         $this->assertStringNotContainsString('(edited)', $rendered);
@@ -125,7 +125,7 @@ final class CommentTest extends TestCase
 
     public function testHeaderColorAddsAnsiCodes(): void
     {
-        $comment = Comment::create('Author', 'Body')
+        $comment = Comment::new('Author', 'Body')
             ->withHeaderColor(Color::ansi(9));
         $rendered = $comment->render();
 
@@ -139,7 +139,7 @@ final class CommentTest extends TestCase
     public function testWithAvatar(): void
     {
         $avatar = Avatar::small('John');
-        $comment = Comment::create('Author', 'Body')->withAvatar($avatar);
+        $comment = Comment::new('Author', 'Body')->withAvatar($avatar);
         $rendered = $comment->render();
 
         $this->assertStringContainsString('Author', $rendered);
@@ -148,7 +148,7 @@ final class CommentTest extends TestCase
 
     public function testWithNullAvatar(): void
     {
-        $comment = Comment::create('Author', 'Body')->withAvatar(null);
+        $comment = Comment::new('Author', 'Body')->withAvatar(null);
         $rendered = $comment->render();
 
         $this->assertStringContainsString('Author', $rendered);
@@ -160,7 +160,7 @@ final class CommentTest extends TestCase
 
     public function testSetSizeReturnsNewInstance(): void
     {
-        $original = Comment::create('Author', 'Body');
+        $original = Comment::new('Author', 'Body');
         $resized = $original->setSize(80, 10);
 
         $this->assertNotSame($original, $resized);
@@ -168,9 +168,9 @@ final class CommentTest extends TestCase
 
     public function testWidthAllocationAffectsWordWrap(): void
     {
-        $narrow = Comment::create('Author', 'This is a very long comment body that should be wrapped')
+        $narrow = Comment::new('Author', 'This is a very long comment body that should be wrapped')
             ->setSize(30, 10);
-        $wide = Comment::create('Author', 'This is a very long comment body that should be wrapped')
+        $wide = Comment::new('Author', 'This is a very long comment body that should be wrapped')
             ->setSize(80, 10);
 
         $narrowRendered = $narrow->render();
@@ -188,7 +188,7 @@ final class CommentTest extends TestCase
 
     public function testWithAuthorReturnsNewInstance(): void
     {
-        $original = Comment::create('Original', 'Body');
+        $original = Comment::new('Original', 'Body');
         $updated = $original->withAuthor('Updated');
 
         $this->assertNotSame($original, $updated);
@@ -197,7 +197,7 @@ final class CommentTest extends TestCase
 
     public function testWithBodyReturnsNewInstance(): void
     {
-        $original = Comment::create('Author', 'Original');
+        $original = Comment::new('Author', 'Original');
         $updated = $original->withBody('Updated');
 
         $this->assertNotSame($original, $updated);
@@ -206,7 +206,7 @@ final class CommentTest extends TestCase
 
     public function testWithTimestampReturnsNewInstance(): void
     {
-        $original = Comment::create('Author', 'Body');
+        $original = Comment::new('Author', 'Body');
         $updated = $original->withTimestamp('1 hour ago');
 
         $this->assertNotSame($original, $updated);
@@ -214,7 +214,7 @@ final class CommentTest extends TestCase
 
     public function testOriginalUnchangedAfterWithAuthor(): void
     {
-        $original = Comment::create('Original', 'Body');
+        $original = Comment::new('Original', 'Body');
         $original->withAuthor('Changed');
         $rendered = $original->render();
 
@@ -228,7 +228,7 @@ final class CommentTest extends TestCase
 
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
-        $comment = Comment::create('Author', 'Short body');
+        $comment = Comment::new('Author', 'Short body');
         [$w, $h] = $comment->getInnerSize();
 
         $this->assertGreaterThan(0, $w);
@@ -238,7 +238,7 @@ final class CommentTest extends TestCase
     public function testGetInnerSizeWithLongBody(): void
     {
         $longBody = str_repeat('word ', 100);
-        $comment = Comment::create('Author', $longBody)->setSize(40, 50);
+        $comment = Comment::new('Author', $longBody)->setSize(40, 50);
         [$w, $h] = $comment->getInnerSize();
 
         $this->assertSame(40, $w);
@@ -251,7 +251,7 @@ final class CommentTest extends TestCase
 
     public function testEmptyBody(): void
     {
-        $comment = Comment::create('Author', '');
+        $comment = Comment::new('Author', '');
         $rendered = $comment->render();
 
         $this->assertNotSame('', $rendered);
@@ -260,7 +260,7 @@ final class CommentTest extends TestCase
 
     public function testEmptyAuthor(): void
     {
-        $comment = Comment::create('', 'Body');
+        $comment = Comment::new('', 'Body');
         $rendered = $comment->render();
 
         $this->assertStringContainsString('Body', $rendered);
@@ -268,7 +268,7 @@ final class CommentTest extends TestCase
 
     public function testUnicodeInAuthor(): void
     {
-        $comment = Comment::create('日本語作者', 'Body');
+        $comment = Comment::new('日本語作者', 'Body');
         $rendered = $comment->render();
 
         $this->assertStringContainsString('日本語作者', $rendered);
@@ -276,7 +276,7 @@ final class CommentTest extends TestCase
 
     public function testUnicodeInBody(): void
     {
-        $comment = Comment::create('Author', 'これはテストコメントです');
+        $comment = Comment::new('Author', 'これはテストコメントです');
         $rendered = $comment->render();
 
         $this->assertStringContainsString('これはテストコメントです', $rendered);
@@ -284,7 +284,7 @@ final class CommentTest extends TestCase
 
     public function testSpecialCharsInBody(): void
     {
-        $comment = Comment::create('Author', 'Test & <special> "chars"');
+        $comment = Comment::new('Author', 'Test & <special> "chars"');
         $rendered = $comment->render();
 
         $this->assertStringContainsString('Test & <special> "chars"', $rendered);

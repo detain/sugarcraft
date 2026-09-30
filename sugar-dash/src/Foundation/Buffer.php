@@ -15,7 +15,7 @@ use SugarCraft\Core\Util\Ansi;
  *
  * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-buffer-roles].
  */
-final class Buffer implements Drawable, Sizer
+final class Buffer implements Drawable, SizedItem
 {
     /**
      * @var list<list<Cell|null>>

@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors footer UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class Footer implements \SugarCraft\Dash\Foundation\Sizer
+final class Footer implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

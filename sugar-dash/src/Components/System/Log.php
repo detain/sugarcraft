@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors log viewer patterns from termui/logview but adapted to PHP
  * with wither-style immutable setters.
  */
-final class Log implements \SugarCraft\Dash\Foundation\Sizer
+final class Log implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

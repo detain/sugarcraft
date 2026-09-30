@@ -136,8 +136,8 @@ final class SrcExitCensusTest extends TestCase
         // Kernel exit ordering: the child's stdio fds close BEFORE exit_notify()
         // makes the task waitable, so a single-shot proc_get_status() here races
         // and can read running=true on a child that already died. Poll in 10 ms
-        // ticks to a 2 s deadline — the ExternalModule::hasExited idiom in this
-        // very lib — before judging the door hung.
+        // ticks to a 2 s deadline — the BoundedShutdown::hasExited idiom now
+        // folded into ExternalModule's teardown — before judging the door hung.
         $deadline = \microtime(true) + 2.0;
         do {
             $closedWhileDraining = (bool) (\proc_get_status($process)['running'] ?? false);

@@ -18,7 +18,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors the nprogress concept adapted to PHP with wither-style immutable setters.
  */
-final class NProgress implements \SugarCraft\Dash\Foundation\Sizer
+final class NProgress implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

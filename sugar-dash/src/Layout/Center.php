@@ -15,7 +15,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors center layout concepts adapted to PHP with wither-style immutable setters.
  */
-final class Center implements \SugarCraft\Dash\Foundation\Sizer
+final class Center implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -131,7 +131,7 @@ final class Center implements \SugarCraft\Dash\Foundation\Sizer
      */
     private function measureContent(): array
     {
-        if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+        if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
             [$w, $h] = $this->content->getInnerSize();
             if ($w > 0 && $h > 0) {
                 return ['width' => $w, 'height' => $h];

@@ -6,11 +6,12 @@ namespace SugarCraft\Dash\Layout\Tile;
 
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 
 /**
  * Base tile implementation.
  */
-class BaseTile implements Item, Sizer
+class BaseTile implements Item, SizedItem
 {
     protected ?int $width = null;
     protected ?int $height = null;

@@ -18,21 +18,21 @@ final class BorderConfig
     ) {
         // Ensure chars is never null
         if ($this->chars === null) {
-            $this->chars = BorderChars::default();
+            $this->chars = BorderChars::new();
         }
     }
 
     /**
      * Create default heavy border configuration.
      */
-    public static function default(): self
+    public static function new(): self
     {
         return new self(
             showOuter: true,
             showHeader: true,
             showInner: true,
             showFooter: true,
-            chars: BorderChars::default(),
+            chars: BorderChars::new(),
         );
     }
 

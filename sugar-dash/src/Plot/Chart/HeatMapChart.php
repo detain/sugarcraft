@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors heatmap patterns adapted to PHP with wither-style immutable setters.
  */
-final class HeatMapChart implements \SugarCraft\Dash\Foundation\Sizer
+final class HeatMapChart implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use HeatmapColorScale;
 

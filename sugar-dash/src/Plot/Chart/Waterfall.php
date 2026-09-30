@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors waterfall chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Waterfall implements \SugarCraft\Dash\Foundation\Sizer
+final class Waterfall implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartBorderStyle;
 

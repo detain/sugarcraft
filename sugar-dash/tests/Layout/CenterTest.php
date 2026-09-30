@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Tests\Layout;
 use SugarCraft\Dash\Layout\Center;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use PHPUnit\Framework\TestCase;
 
 final class CenterTest extends TestCase
@@ -21,7 +22,7 @@ final class CenterTest extends TestCase
 
     private function sizedItem(): Item
     {
-        return new class implements Item, Sizer {
+        return new class implements Item, SizedItem {
             public int $capturedW = 0;
             public int $capturedH = 0;
             private int $w = 0;

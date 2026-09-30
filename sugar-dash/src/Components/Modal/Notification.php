@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors the notification/alert concept adapted to PHP with wither-style immutable setters.
  */
-final class Notification implements \SugarCraft\Dash\Foundation\Sizer
+final class Notification implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

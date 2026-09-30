@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors divider/separator patterns adapted to PHP with wither-style
  * immutable setters.
  */
-final class Divider implements \SugarCraft\Dash\Foundation\Sizer
+final class Divider implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

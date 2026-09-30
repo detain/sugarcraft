@@ -83,7 +83,7 @@ $grid->addItem(
 // ============================================
 // ROW 4: Comment + Testimonial (2 columns)
 // ============================================
-$comment = Comment::create('John Doe', 'Great work on this feature!');
+$comment = Comment::new('John Doe', 'Great work on this feature!');
 $commentFrame = Card::titled($comment, 'Comment');
 
 $testimonial = Testimonial::single(['text' => 'SugarDash is amazing!', 'author' => 'Jane Smith', 'role' => 'CEO at TechCorp']);

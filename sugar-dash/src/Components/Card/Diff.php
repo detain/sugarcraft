@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors diff display concepts adapted to PHP with wither-style immutable setters.
  */
-final class Diff implements \SugarCraft\Dash\Foundation\Sizer
+final class Diff implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;

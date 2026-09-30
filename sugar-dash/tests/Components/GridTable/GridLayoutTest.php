@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Components\GridTable;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Layout\GridItem;
 use SugarCraft\Dash\Layout\GridLayout;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use PHPUnit\Framework\TestCase;
 
 final class GridLayoutTest extends TestCase
@@ -22,7 +24,7 @@ final class GridLayoutTest extends TestCase
 
     private function sizedItem(): Item
     {
-        return new class implements Item, Sizer {
+        return new class implements Item, SizedItem {
             public int $capturedW = 0;
             public int $capturedH = 0;
             private int $w = 0;
@@ -267,5 +269,79 @@ final class GridLayoutTest extends TestCase
         $rendered = $layout->render();
         $this->assertStringContainsString('A', $rendered);
         $this->assertStringContainsString('B', $rendered);
+    }
+
+    public function testConstructorClampsZeroColumnsToOne(): void
+    {
+        $items = [$this->strItem('A'), $this->strItem('B'), $this->strItem('C')];
+
+        // Pre-fix this was a DivisionByZeroError inside the row/col math.
+        $hostile = (new GridLayout($items, 0))->setSize(12, 6)->render();
+
+        $this->assertSame(
+            GridLayout::columns(1, $items)->setSize(12, 6)->render(),
+            $hostile,
+        );
+    }
+
+    public function testConstructorClampsNegativeColumnsToOne(): void
+    {
+        $items = [$this->strItem('A'), $this->strItem('B')];
+
+        $this->assertSame(
+            GridLayout::columns(1, $items)->render(),
+            (new GridLayout($items, -4))->render(),
+        );
+    }
+
+    public function testConstructorClampsNegativeGapsToZero(): void
+    {
+        $items = [$this->strItem('A'), $this->strItem('B')];
+
+        // A negative columnGap used to inflate cellWidth at :143/:320.
+        $this->assertSame(
+            (new GridLayout($items, 2, 0, 0, 0))->setSize(20, 6)->render(),
+            (new GridLayout($items, 2, 0, -10, -10))->setSize(20, 6)->render(),
+        );
+    }
+
+    public function testConstructorClampsNegativeRowsToAuto(): void
+    {
+        $items = [$this->strItem('A'), $this->strItem('B')];
+
+        // rows:0 means "auto from item count" — a negative must fold there.
+        $this->assertSame(
+            (new GridLayout($items, 1, 0))->render(),
+            (new GridLayout($items, 1, -3))->render(),
+        );
+    }
+
+    public function testWideCellContentKeepsLaterCellsOnDisplayColumns(): void
+    {
+        $layout = GridLayout::columns(2, [$this->strItem('日本語'), $this->strItem('ab')])
+            ->withColumnGap(1);
+
+        $lines = explode("\n", $layout->render());
+
+        // '日本語' occupies 6 display columns in cell 0, so with a 1-col
+        // gap 'ab' starts at column 7 (cell padded to 6 follows). The
+        // character-offset splice started it at column 10 because it
+        // sliced the composed line by mb_substr characters, not columns.
+        $this->assertSame('日本語 ab    ', $lines[0]);
+        $this->assertSame(13, Width::string($lines[0]));
+    }
+
+    public function testWideCellsAcrossThreeColumnsStayColumnAligned(): void
+    {
+        $layout = GridLayout::columns(3, [
+            $this->strItem('日本'),
+            $this->strItem('x'),
+            $this->strItem('y'),
+        ]);
+
+        $lines = explode("\n", $layout->render());
+
+        // cellWidth = 4 ('日本'); zero gap → starts at columns 0, 4, 8.
+        $this->assertSame('日本x   y   ', $lines[0]);
     }
 }

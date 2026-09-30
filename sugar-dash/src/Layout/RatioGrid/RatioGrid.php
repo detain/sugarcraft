@@ -6,6 +6,7 @@ namespace SugarCraft\Dash\Layout\RatioGrid;
 
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -13,7 +14,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Based on the termui grid layout pattern.
  */
-final class RatioGrid implements Item, Sizer
+final class RatioGrid implements Item, SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -29,7 +30,7 @@ final class RatioGrid implements Item, Sizer
         private readonly array $rowDefinitions = [],
     ) {}
 
-    public static function create(int $columns, int $rows): self
+    public static function new(int $columns, int $rows): self
     {
         $colDefs = [];
         for ($i = 0; $i < $columns; $i++) {

@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors treemap visualization patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Treemap implements \SugarCraft\Dash\Foundation\Sizer
+final class Treemap implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;

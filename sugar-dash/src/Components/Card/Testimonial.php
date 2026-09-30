@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors testimonial/quote-card concepts adapted to PHP with wither-style immutable setters.
  */
-final class Testimonial implements \SugarCraft\Dash\Foundation\Sizer
+final class Testimonial implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

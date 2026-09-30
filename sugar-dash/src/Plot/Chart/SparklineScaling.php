@@ -15,9 +15,10 @@ namespace SugarCraft\Dash\Plot\Chart;
  * ChartGridGeometry (r7 `79abe8461`).
  *
  * NOT here on purpose: getWidth() fallbacks DIVERGE across the wider
- * family — Sparkline falls back to `$this->widthConstraint ?? 40`
- * (Sparkline.php:201) and Gauge to `$this->widthConstraint ?? 0`
- * (Gauge.php:138), each after the same `$this->width` setSize check;
+ * family — Sparkline's `$widthConstraint` is a non-nullable int defaulted
+ * to 40, so it returns it outright, while Gauge's is `?int` and falls back
+ * to `$this->widthConstraint ?? 0` (Gauge.php:138), each after the same
+ * `$this->width` setSize check;
  * Progress returns the literal 40, Bar derives its
  * width from rendered content — only the sparkline pair shares the
  * `widthConstraint ?? count(data)` leg. normalizeData() intentionally

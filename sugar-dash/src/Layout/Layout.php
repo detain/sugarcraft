@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors layout from bubble-layout/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Layout implements \SugarCraft\Dash\Foundation\Sizer
+final class Layout implements \SugarCraft\Dash\Foundation\SizedItem
 {
     /**
      * @param list<LayoutItem> $children
@@ -265,7 +265,7 @@ final class Layout implements \SugarCraft\Dash\Foundation\Sizer
         // First pass: calculate fixed sizes and minimums
         $usedWidth = 0;
         foreach ($this->children as $index => $child) {
-            if ($child->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($child->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$childWidth, $childHeight] = $child->content->getInnerSize();
             } else {
                 // Non-Sizer: render to measure natural size
@@ -342,7 +342,7 @@ final class Layout implements \SugarCraft\Dash\Foundation\Sizer
         // First pass: calculate fixed sizes
         $usedHeight = 0;
         foreach ($this->children as $index => $child) {
-            if ($child->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($child->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$childWidth, $childHeight] = $child->content->getInnerSize();
             } else {
                 // Non-Sizer: render to measure natural size

@@ -22,7 +22,7 @@ use SugarCraft\Dash\Foundation\Theme;
  * Mirrors split-pane/container patterns adapted to PHP with wither-style
  * immutable setters.
  */
-final class Split implements \SugarCraft\Dash\Foundation\Sizer
+final class Split implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -110,7 +110,11 @@ final class Split implements \SugarCraft\Dash\Foundation\Sizer
         foreach ($this->panes as $index => $pane) {
             [$pW, $pH] = $paneSizes[$index] ?? [$useWidth, $useHeight];
             $pane = $pane->setSize($pW, $pH);
-            [$pW2, $pH2] = $pane->getInnerSize();
+            // A plain Sizer without an intrinsic-size contract keeps the
+            // exact box it was just allocated (third-party-safe, E-audit #2).
+            [$pW2, $pH2] = $pane instanceof \SugarCraft\Dash\Foundation\SizedItem
+                ? $pane->getInnerSize()
+                : [$pW, $pH];
             $maxWidth = max($maxWidth, $pW2);
             $maxHeight = max($maxHeight, $pH2);
         }

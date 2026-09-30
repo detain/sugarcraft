@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors spacer concepts adapted to PHP with wither-style immutable setters.
  */
-final class Spacer implements \SugarCraft\Dash\Foundation\Sizer
+final class Spacer implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $allocatedWidth = null;
     private ?int $allocatedHeight = null;

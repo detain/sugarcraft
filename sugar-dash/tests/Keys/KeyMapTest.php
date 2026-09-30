@@ -16,7 +16,7 @@ final class KeyMapTest extends TestCase
 {
     private function makeContent(): \SugarCraft\Dash\Foundation\Item
     {
-        return new class implements \SugarCraft\Dash\Foundation\Item, \SugarCraft\Dash\Foundation\Sizer {
+        return new class implements \SugarCraft\Dash\Foundation\Item, \SugarCraft\Dash\Foundation\SizedItem {
             public function render(): string { return 'content'; }
             public function getInnerSize(): array { return [10, 1]; }
             public function setSize(int $w, int $h): \SugarCraft\Dash\Foundation\Sizer { return $this; }

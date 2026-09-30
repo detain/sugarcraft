@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Layout\Tile;
 use SugarCraft\Dash\Foundation\Drawable;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use SugarCraft\Dash\Foundation\Theme;
 
 /**
@@ -14,7 +15,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Based on the bubbletea tilelayout pattern.
  */
-final class TileLayout implements Item, Sizer
+final class TileLayout implements Item, SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

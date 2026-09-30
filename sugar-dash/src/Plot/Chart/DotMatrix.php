@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors dot matrix/LED display concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class DotMatrix implements \SugarCraft\Dash\Foundation\Sizer
+final class DotMatrix implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;

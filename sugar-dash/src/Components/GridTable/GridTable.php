@@ -40,7 +40,7 @@ final class GridTable implements Item, Sizer
         $this->columns = $columns;
         $this->rows = $rows;
         $this->sortState = $sortState ?? new SortState();
-        $this->borderConfig = $borderConfig ?? BorderConfig::default();
+        $this->borderConfig = $borderConfig ?? BorderConfig::new();
         $this->pagination = new Pagination(page: 1, perPage: 20, totalRows: count($rows));
     }
 
@@ -50,7 +50,7 @@ final class GridTable implements Item, Sizer
      * @param list<Column> $columns
      * @param list<Row> $rows
      */
-    public static function create(array $columns, array $rows = []): self
+    public static function new(array $columns, array $rows = []): self
     {
         return new self($columns, $rows);
     }

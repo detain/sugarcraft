@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the gauge concept from bubble-gauge/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Gauge implements \SugarCraft\Dash\Foundation\Sizer
+final class Gauge implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

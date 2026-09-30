@@ -241,10 +241,14 @@ final class GoldenSnapshotTest extends TestCase
     {
         $goldenPath = self::GOLDEN_ROOT . "/{$dimLabel}/{$slug}.golden";
 
-        // Skip if no golden file exists yet
+        // Audit finding #7: a missing golden is a FAILURE, not a skip — an
+        // example added without regenerating goldens must go red instead of
+        // silently passing as "skipped". Every shipped pair has a golden.
         if (!file_exists($goldenPath)) {
-            $this->markTestSkipped("No golden file found: {$dimLabel}/{$slug}.golden");
-            return;
+            $this->fail(
+                "Missing golden file: {$dimLabel}/{$slug}.golden — "
+                . "regenerate with: php tools/generate-goldens.php"
+            );
         }
 
         $goldenContent = file_get_contents($goldenPath);

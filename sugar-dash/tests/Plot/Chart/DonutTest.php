@@ -703,6 +703,46 @@ final class DonutTest extends TestCase
         Donut::mocha(self::ORACLE_DATA)->withAspect(NAN);
     }
 
+    public function testNonFiniteSegmentTotalRendersEmptyRing(): void
+    {
+        // Audit finding #9: a NaN segment sum is NOT <= 0, so it used to slip
+        // past the empty-render guard and get divided into every sweep angle.
+        // Reached through the raw constructor — the ::new() factory already
+        // clamps each value (max(0.0, NAN) === 0.0 by PHP's NaN comparison).
+        $ring = static fn(array $segments): Donut => new Donut($segments, 14);
+        $seg = static fn(string $label, float $value): array => ['label' => $label, 'value' => $value, 'color' => null];
+        $empty = $ring([$seg('A', 0.0)])->render();
+
+        foreach ([NAN, INF, -INF] as $poison) {
+            $this->assertSame(
+                $empty,
+                $ring([$seg('A', $poison)])->render(),
+                sprintf('Segment total %s must take the empty-ring path.', var_export($poison, true))
+            );
+        }
+
+        // NaN + finite pair sums to NaN — same door.
+        $this->assertSame(
+            $empty,
+            $ring([$seg('A', NAN), $seg('B', 40.0)])->render(),
+            'A NaN among finite values poisons the sum and must render empty.'
+        );
+
+        // showPercentage derives from the sum too — no sweep text either.
+        $this->assertSame(
+            $empty,
+            $ring([$seg('A', NAN)])->withShowPercentage(true)->render(),
+            'NaN total must not emit a percentage center line.'
+        );
+
+        // The factory door stays clamped: a NaN segment becomes 0 there.
+        $this->assertSame(
+            $empty,
+            Donut::new([['label' => 'A', 'value' => NAN]])->withSize(14)->render(),
+            '::new() keeps max(0.0, NAN) === 0.0 sanitisation.'
+        );
+    }
+
     public function testWithAspectRejectsPositiveInfinity(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -798,20 +838,62 @@ final class DonutTest extends TestCase
         );
     }
 
-    public function testCenterValueIsTruncatedToInnerDiameterMinusTwoCodepoints(): void
+    public function testCenterValueIsTruncatedToTheHoleRowSpan(): void
     {
         $rendered = Donut::new([['label' => 'A', 'value' => 1]])
             ->withSize(21)
-            ->withCenterValue('日本語テキストです')
+            ->withCenterValue('日本語テキストデス')
             ->render();
         $line = explode("\n", $rendered)[10];
 
-        // inner diameter 2*4 minus the 2-cell breathing margin = 6 CELLS, not
-        // 6 bytes: the first six codepoints land on hole columns 7-12 and a
-        // single byte-slicing implementation would mangle or misplace them.
-        $this->assertSame(' ██████日本語テキス ██████ ', $line);
+        // The center row's hole spans 7 CELLS (innerRadius 4 → strict-hole
+        // columns ±3), not 6: the audit found the previous `diameter - 2`
+        // breathing-margin cap clipping a glyph that provably fit. Codepoint
+        // math, not byte math — a byte slicer would mangle these.
+        $this->assertSame(' ██████日本語テキスト██████ ', $line);
         $this->assertSame(21, mb_strlen($line), 'Row must hold exactly 21 cells — no partial codepoints.');
-        $this->assertStringNotContainsString('で', $rendered, 'The 7th codepoint must be cut.');
+        $this->assertStringNotContainsString('デ', $line, 'The 8th codepoint must be cut.');
+    }
+
+    public function testDownstreamReportedThreeCharReadoutSurvivesSizeTwelve(): void
+    {
+        // candy-query MeterCell::viewRound documented workaround: "Donut
+        // truncates center text to the hole span, and at the former size 12
+        // the live page clipped '85%' to '85'". Size 12 → radius 5 →
+        // innerRadius 2 → the center hole row spans exactly 3 columns, which
+        // is where '85%' belongs.
+        $centerRow = static function (Donut $donut, int $size): string {
+            $lines = explode("\n", $donut->render());
+
+            return $lines[intdiv($size, 2)];
+        };
+        $ring = static fn(): Donut => Donut::new([
+            ['label' => 'used', 'value' => 85.0],
+            ['label' => 'free', 'value' => 15.0],
+        ])->withSize(12);
+
+        $this->assertStringContainsString(
+            '85%',
+            $centerRow($ring()->withCenterValue('85%'), 12),
+            'A three-column hole must keep a three-codepoint readout whole (downstream Q7 defect).'
+        );
+
+        // Honest geometry still clips: a 4-codepoint readout cannot fit the
+        // size-12 center row's 3 blank cells, and it must cut clean at the
+        // hole edge — never smear into a ring cell.
+        $clipped = $centerRow($ring()->withCenterValue('100%'), 12);
+        $this->assertStringContainsString('100', $clipped);
+        $this->assertStringNotContainsString('%', $clipped, 'The 4th codepoint belongs to the ring column.');
+
+        // One size up the hole row spans 5 columns and the four-char readout
+        // the downstream shipped (size 14 "100%") keeps rendering whole.
+        $this->assertStringContainsString(
+            '100%',
+            $centerRow(Donut::new([
+                ['label' => 'used', 'value' => 100.0],
+                ['label' => 'free', 'value' => 0.0001],
+            ])->withSize(14)->withCenterValue('100%'), 14),
+        );
     }
 
     public function testCenterLabelRendersOnSecondLineBelowPrimary(): void
@@ -830,12 +912,18 @@ final class DonutTest extends TestCase
 
     public function testCenterTextOmittedWhenHoleTooNarrow(): void
     {
-        // Size 8: radius 3 → innerRadius 1 → budget 2*1-2 = 0 cells: no line fits.
+        // Size 8: radius 3 → innerRadius 1 → the center row's hole is a
+        // single blank cell: only the first codepoint fits (post-audit the
+        // old `diameter - 2` cap emitted nothing here at all).
         $tiny = Donut::new([['label' => 'A', 'value' => 1]])->withSize(8);
+        $tinyTexted = $tiny->withCenterValue('AB')->withCenterLabel('CD')->render();
+        $this->assertSame($tiny->render(), $tiny->withCenterValue('')->render(), 'Empty value stays invisible.');
+        $this->assertSame(1, substr_count($tinyTexted, 'A'), 'The single hole cell takes exactly one glyph.');
+        $this->assertSame(0, substr_count($tinyTexted, 'B'), 'The 2nd codepoint cannot fit a 1-cell row.');
         $this->assertSame(
-            $tiny->render(),
-            $tiny->withCenterValue('AB')->withCenterLabel('CD')->render(),
-            'A one-cell hole must emit no center text at all.'
+            substr_count($tiny->render(), '█'),
+            substr_count($tinyTexted, '█'),
+            'The size-8 ring stays whole under the 1-cell center text.'
         );
 
         // Size 10: innerRadius 2 → primary fits (2 cells) but the row below is
@@ -898,7 +986,7 @@ final class DonutTest extends TestCase
             }
         }
 
-        $this->assertSame(12, $checked, 'Both lines must contribute exactly their 6-cell truncation.');
+        $this->assertSame(14, $checked, 'Both lines must contribute exactly their 7-cell hole-row truncation.');
     }
 
     public function testWireframeAndEmptyDonutEmitNoCenterText(): void

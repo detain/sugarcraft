@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Plugin;
 
+use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Dash\Module\LegacyModule;
 use SugarCraft\Dash\Output\Sanitize;
-use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
  * Wraps an external binary as a Module.
@@ -23,21 +23,24 @@ final class ExternalModule implements LegacyModule
     /** Maximum line length read from plugin stdout (1 MiB). Prevents a runaway plugin from exhausting memory. */
     private const MAX_LINE_BYTES = 1048576;
 
-    /** Read timeout in seconds for each fgets() call. */
+    /** Read timeout in seconds for each response (stdin/stdout round-trip). */
     private const READ_TIMEOUT_SECS = 5;
 
-    /** Seconds a plugin is given to exit on its own after the pipes close. */
+    /** Seconds a plugin is given to exit on its own after the pipes close, before the ladder signals. */
     private const SHUTDOWN_GRACE_SECONDS = 2.0;
 
-    /** Seconds a SIGTERM'd plugin gets before the ladder escalates to 9. */
-    private const SHUTDOWN_TERM_SECONDS = 1.0;
+    /**
+     * stderr is drained-and-discarded while we wait on stdout: the child
+     * blocks once its 64 KiB pipe buffer fills, and a blocked child never
+     * reaches the response it owes us (the old shape timed out after
+     * READ_TIMEOUT_SECS and silently disabled the plugin). One select round
+     * consumes at most this many stderr bytes, so a continuous spammer
+     * cannot starve the stdout half of the same loop.
+     */
+    private const STDERR_DRAIN_BYTES_PER_ROUND = 1048576;
 
-    /** Seconds to confirm the post-SIGKILL reap (9 is uncatchable; this is formality with a leash). */
-    private const SHUTDOWN_KILL_SECONDS = 1.0;
-
-    /** SIGTERM / SIGKILL as numbers: sugar-dash does not require ext-pcntl. */
-    private const TERM_SIGNAL = 15;
-    private const KILL_SIGNAL = 9;
+    /** fread() granularity inside a {@see self::STDERR_DRAIN_BYTES_PER_ROUND} round. */
+    private const STDERR_DRAIN_CHUNK_BYTES = 8192;
 
     private array $state = [];
     private int $interval = 0;
@@ -180,6 +183,11 @@ final class ExternalModule implements LegacyModule
         $this->stdout = $pipes[1];
         $this->stderr = $pipes[2];
 
+        // Drain discipline (see STDERR_DRAIN_BYTES_PER_ROUND): stderr is read
+        // opportunistically whenever the loop waits, and non-blocking is what
+        // makes "opportunistic" cheap.
+        stream_set_blocking($this->stderr, false);
+
         $this->running = true;
     }
 
@@ -206,27 +214,85 @@ final class ExternalModule implements LegacyModule
         }
 
         // Set per-read timeout so a hung plugin cannot freeze the loop forever.
+        // select() bounds the wait; this is the backstop for a partial line
+        // (bytes arrive but no newline).
         stream_set_timeout($this->stdout, self::READ_TIMEOUT_SECS);
 
-        $line = fgets($this->stdout, self::MAX_LINE_BYTES);
+        $deadline = hrtime(true) / 1_000_000_000 + self::READ_TIMEOUT_SECS;
 
-        if ($line === false) {
-            $meta = stream_get_meta_data($this->stdout);
-            $this->running = false;
-            if ($meta['timed_out'] ?? false) {
+        // Multiplex stdout (the response we owe the caller) against stderr
+        // (the pipe whose fullness would wedge the child). Draining stderr
+        // here is the whole fix: previously nothing ever read it, so a plugin
+        // logging more than the 64 KiB pipe buffer blocked mid-write and this
+        // read timed out — disabling a plugin that was merely talkative.
+        while (true) {
+            $this->drainStderr();
+
+            $remaining = $deadline - hrtime(true) / 1_000_000_000;
+            if ($remaining <= 0) {
+                $this->running = false;
                 return Response::error('read timeout');
             }
-            return Response::error('EOF from process');
+
+            $read = [$this->stdout];
+            if ($this->stderr !== null && is_resource($this->stderr)) {
+                $read[] = $this->stderr;
+            }
+            $write = null;
+            $except = null;
+            $ready = @stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
+
+            if ($ready === false) {
+                $this->running = false;
+                return Response::error('read timeout');
+            }
+
+            if (!in_array($this->stdout, $read, true)) {
+                continue; // only stderr moved this round
+            }
+
+            $line = fgets($this->stdout, self::MAX_LINE_BYTES);
+
+            if ($line === false) {
+                $meta = stream_get_meta_data($this->stdout);
+                $this->running = false;
+                if ($meta['timed_out'] ?? false) {
+                    return Response::error('read timeout');
+                }
+                return Response::error('EOF from process');
+            }
+
+            // Enforce the line length cap. A line exceeding MAX_LINE_BYTES without
+            // a newline is a protocol violation (runaway plugin); treat as error.
+            if (strlen($line) >= self::MAX_LINE_BYTES && strpos($line, "\n") === false) {
+                $this->running = false;
+                return Response::error('protocol error: line exceeds maximum length');
+            }
+
+            return Response::fromJson(trim($line));
+        }
+    }
+
+    /**
+     * Consume everything currently pending on stderr, up to one bounded
+     * round, and discard it. Non-blocking reads make this cheap when the
+     * child is quiet; the per-round cap keeps a chatty one from starving
+     * the stdout side of {@see readResponse()}.
+     */
+    private function drainStderr(): void
+    {
+        if ($this->stderr === null || !is_resource($this->stderr)) {
+            return;
         }
 
-        // Enforce the line length cap. A line exceeding MAX_LINE_BYTES without
-        // a newline is a protocol violation (runaway plugin); treat as error.
-        if (strlen($line) >= self::MAX_LINE_BYTES && strpos($line, "\n") === false) {
-            $this->running = false;
-            return Response::error('protocol error: line exceeds maximum length');
+        $consumed = 0;
+        while ($consumed < self::STDERR_DRAIN_BYTES_PER_ROUND) {
+            $chunk = fread($this->stderr, self::STDERR_DRAIN_CHUNK_BYTES);
+            if ($chunk === false || $chunk === '') {
+                return; // EAGAIN (non-blocking) or EOF
+            }
+            $consumed += strlen($chunk);
         }
-
-        return Response::fromJson(trim($line));
     }
 
     /**
@@ -240,65 +306,16 @@ final class ExternalModule implements LegacyModule
 
         if ($this->process !== null && is_resource($this->process)) {
             $this->running = false;
-            self::terminateBounded($this->process);
-            proc_close($this->process);
+            // The ladder now lives once, upstream, in candy-core's
+            // BoundedShutdown (f7a579e5b); terminateBounded also performs the
+            // reap (proc_close), so do NOT close again here. The polite EOF
+            // grace rung is caller-side by design there ("budgets stay with
+            // the callers"), so the plugin's own 2 s head-start on exiting
+            // is kept as the pre-rung poll this lib always granted.
+            BoundedShutdown::hasExited($this->process, self::SHUTDOWN_GRACE_SECONDS);
+            BoundedShutdown::terminateBounded($this->process);
             $this->process = null;
         }
-    }
-
-    /**
-     * Make sure the plugin child is DEAD before {@see proc_close()} inherits
-     * the wait — and bound how long "dead" may take to arrange.
-     *
-     * WHAT THIS USED TO BE: nothing. The destructor closed the three pipes
-     * and walked straight into a bare `proc_close()`, and E366 measured what
-     * each half of that pair actually does. `proc_close()` WAITS — so a
-     * plugin that ignores stdin EOF and never exits hands its shutdown
-     * deadline to the dashboard process, forever, in a destructor that has
-     * no way to explain itself. And the other shape, a handle dropped
-     * without any close at all, ABANDONS: PHP's resource destructor reaps an
-     * already-exited child but never waits for a live one, which is how a
-     * plugin daemon ends up reparented to init holding every descriptor this
-     * process owned. The sugar-crush pair of that finding is
-     * `LspConnection::stopProcess()` and the same reasoning applies here
-     * verbatim; it is not reusable because sugar-dash does not — and must
-     * not — depend on sugar-crush for one helper.
-     *
-     * THE LADDER: closing fd 0 above is the polite EOF, so the child gets a
-     * bounded grace to exit on its own first; then SIGTERM and a bounded
-     * poll; then signal 9, which nothing can catch or ignore. Signal numbers
-     * are literals rather than pcntl constants because sugar-dash does not
-     * require ext-pcntl, and `proc_terminate()` takes the number directly.
-     * After the final poll every path leaves the child exited, so the
-     * `proc_close()` that follows reaps without ever blocking unboundedly.
-     */
-    private static function terminateBounded($process): void
-    {
-        if (!self::hasExited($process, self::SHUTDOWN_GRACE_SECONDS)) {
-            @proc_terminate($process, self::TERM_SIGNAL);
-            if (!self::hasExited($process, self::SHUTDOWN_TERM_SECONDS)) {
-                @proc_terminate($process, self::KILL_SIGNAL);
-                self::hasExited($process, self::SHUTDOWN_KILL_SECONDS);
-            }
-        }
-    }
-
-    /**
-     * Poll the child up to $seconds for a natural exit, in 10 ms ticks.
-     *
-     * @param resource $process
-     */
-    private static function hasExited($process, float $seconds): bool
-    {
-        $deadline = microtime(true) + $seconds;
-        do {
-            if (!(bool) (proc_get_status($process)['running'] ?? false)) {
-                return true;
-            }
-            usleep(10_000);
-        } while (microtime(true) < $deadline);
-
-        return !(bool) (proc_get_status($process)['running'] ?? false);
     }
 
     private function closeStdin(): void

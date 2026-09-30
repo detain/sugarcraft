@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors terminal emulator patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Terminal implements \SugarCraft\Dash\Foundation\Sizer
+final class Terminal implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

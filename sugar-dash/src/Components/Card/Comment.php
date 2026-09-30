@@ -23,7 +23,7 @@ use SugarCraft\Dash\Components\Media\Avatar;
  * Mirrors comment UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Comment implements \SugarCraft\Dash\Foundation\Sizer
+final class Comment implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -41,7 +41,7 @@ final class Comment implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Create a new comment.
      */
-    public static function create(string $author, string $body): self
+    public static function new(string $author, string $body): self
     {
         return new self(
             author: $author,

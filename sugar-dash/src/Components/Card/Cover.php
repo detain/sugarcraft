@@ -21,7 +21,7 @@ use SugarCraft\Dash\Layout\VAlign;
  *
  * Mirrors cover layout concepts adapted to PHP with wither-style immutable setters.
  */
-final class Cover implements \SugarCraft\Dash\Foundation\Sizer
+final class Cover implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -210,7 +210,7 @@ final class Cover implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Return content's natural size
-        if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+        if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
             return $this->content->getInnerSize();
         }
 

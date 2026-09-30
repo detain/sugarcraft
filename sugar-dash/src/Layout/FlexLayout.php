@@ -21,7 +21,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors flexbox layout concepts adapted to PHP with wither-style immutable setters.
  */
-final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
+final class FlexLayout implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -329,7 +329,7 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
     {
         $sizes = [];
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, $h] = $item->getInnerSize();
                 if ($w === 0 || $h === 0) {
                     $rendered = $item->render();

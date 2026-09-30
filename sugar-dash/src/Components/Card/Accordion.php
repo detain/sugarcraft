@@ -6,6 +6,7 @@ namespace SugarCraft\Dash\Components\Card;
 
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
@@ -20,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors the accordion pattern from common TUI libraries.
  */
-final class Accordion implements Sizer, Item
+final class Accordion implements SizedItem, Item
 {
     /** @var list<array{title: string, content: string, isOpen: bool}> */
     private array $sections;

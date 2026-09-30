@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors funnel chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Funnel implements \SugarCraft\Dash\Foundation\Sizer
+final class Funnel implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartBorderStyle;
     use AxisLabelFormatter;

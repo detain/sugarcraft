@@ -77,7 +77,7 @@ final class LogTest extends TestCase
 
     public function testLogEntryCreateFactory(): void
     {
-        $entry = LogEntry::create('Test message', LogLevel::Error, '2024-01-15 10:30:00');
+        $entry = LogEntry::new('Test message', LogLevel::Error, '2024-01-15 10:30:00');
 
         $this->assertSame('2024-01-15 10:30:00', $entry->timestamp);
         $this->assertSame(LogLevel::Error, $entry->level);
@@ -86,7 +86,7 @@ final class LogTest extends TestCase
 
     public function testLogEntryCreateWithDefaultLevel(): void
     {
-        $entry = LogEntry::create('Test message');
+        $entry = LogEntry::new('Test message');
 
         $this->assertSame(LogLevel::Info, $entry->level);
     }
@@ -94,7 +94,7 @@ final class LogTest extends TestCase
     public function testLogEntryCreateWithAutoTimestamp(): void
     {
         $before = date('Y-m-d H:i:s');
-        $entry = LogEntry::create('Test message');
+        $entry = LogEntry::new('Test message');
         $after = date('Y-m-d H:i:s');
 
         $this->assertGreaterThanOrEqual($before, $entry->timestamp);
@@ -114,7 +114,7 @@ final class LogTest extends TestCase
     public function testRenderWithEntryReturnsNonEmpty(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Test message', LogLevel::Info, '2024-01-15 10:30:00')
+            LogEntry::new('Test message', LogLevel::Info, '2024-01-15 10:30:00')
         )->setSize(80, 10);
         $rendered = $log->render();
 
@@ -124,7 +124,7 @@ final class LogTest extends TestCase
     public function testRenderContainsTimestamp(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Test message', LogLevel::Info, '2024-01-15 10:30:00')
+            LogEntry::new('Test message', LogLevel::Info, '2024-01-15 10:30:00')
         )->setSize(80, 10);
         $rendered = $log->render();
 
@@ -134,7 +134,7 @@ final class LogTest extends TestCase
     public function testRenderContainsLevel(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Test message', LogLevel::Error, '2024-01-15 10:30:00')
+            LogEntry::new('Test message', LogLevel::Error, '2024-01-15 10:30:00')
         )->setSize(80, 10);
         $rendered = $log->render();
 
@@ -144,7 +144,7 @@ final class LogTest extends TestCase
     public function testRenderContainsMessage(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Hello World', LogLevel::Info, '2024-01-15 10:30:00')
+            LogEntry::new('Hello World', LogLevel::Info, '2024-01-15 10:30:00')
         )->setSize(80, 10);
         $rendered = $log->render();
 
@@ -154,7 +154,7 @@ final class LogTest extends TestCase
     public function testRenderAddsAnsiColorCodes(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Test message', LogLevel::Error, '2024-01-15 10:30:00')
+            LogEntry::new('Test message', LogLevel::Error, '2024-01-15 10:30:00')
         )->setSize(80, 10);
         $rendered = $log->render();
 
@@ -165,9 +165,9 @@ final class LogTest extends TestCase
     public function testRenderMultipleEntries(): void
     {
         $log = Log::new()->withEntries([
-            LogEntry::create('First', LogLevel::Debug, '2024-01-15 10:00:00'),
-            LogEntry::create('Second', LogLevel::Info, '2024-01-15 10:01:00'),
-            LogEntry::create('Third', LogLevel::Warn, '2024-01-15 10:02:00'),
+            LogEntry::new('First', LogLevel::Debug, '2024-01-15 10:00:00'),
+            LogEntry::new('Second', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Third', LogLevel::Warn, '2024-01-15 10:02:00'),
         ])->setSize(80, 10);
         $rendered = $log->render();
 
@@ -184,10 +184,10 @@ final class LogTest extends TestCase
     public function testMinLevelFilterExcludesLowerLevels(): void
     {
         $log = Log::new()->withEntries([
-            LogEntry::create('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
-            LogEntry::create('Info msg', LogLevel::Info, '2024-01-15 10:01:00'),
-            LogEntry::create('Warn msg', LogLevel::Warn, '2024-01-15 10:02:00'),
-            LogEntry::create('Error msg', LogLevel::Error, '2024-01-15 10:03:00'),
+            LogEntry::new('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
+            LogEntry::new('Info msg', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Warn msg', LogLevel::Warn, '2024-01-15 10:02:00'),
+            LogEntry::new('Error msg', LogLevel::Error, '2024-01-15 10:03:00'),
         ])->withMinLevel(LogLevel::Warn)->setSize(80, 10);
 
         $rendered = $log->render();
@@ -203,9 +203,9 @@ final class LogTest extends TestCase
     public function testMinLevelInfoShowsInfoAndAbove(): void
     {
         $log = Log::new()->withEntries([
-            LogEntry::create('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
-            LogEntry::create('Info msg', LogLevel::Info, '2024-01-15 10:01:00'),
-            LogEntry::create('Warn msg', LogLevel::Warn, '2024-01-15 10:02:00'),
+            LogEntry::new('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
+            LogEntry::new('Info msg', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Warn msg', LogLevel::Warn, '2024-01-15 10:02:00'),
         ])->withMinLevel(LogLevel::Info)->setSize(80, 10);
 
         $rendered = $log->render();
@@ -218,8 +218,8 @@ final class LogTest extends TestCase
     public function testMinLevelNullShowsAll(): void
     {
         $log = Log::new()->withEntries([
-            LogEntry::create('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
-            LogEntry::create('Info msg', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
+            LogEntry::new('Info msg', LogLevel::Info, '2024-01-15 10:01:00'),
         ])->withMinLevel(null)->setSize(80, 10);
 
         $rendered = $log->render();
@@ -232,8 +232,8 @@ final class LogTest extends TestCase
     {
         $log = (new Log(
             entries: [
-                LogEntry::create('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
-                LogEntry::create('Error msg', LogLevel::Error, '2024-01-15 10:01:00'),
+                LogEntry::new('Debug msg', LogLevel::Debug, '2024-01-15 10:00:00'),
+                LogEntry::new('Error msg', LogLevel::Error, '2024-01-15 10:01:00'),
             ],
             minLevel: LogLevel::Error
         ))->setSize(80, 10);
@@ -252,7 +252,7 @@ final class LogTest extends TestCase
     {
         $entries = [];
         for ($i = 0; $i < 10; $i++) {
-            $entries[] = LogEntry::create("Message $i", LogLevel::Info, "2024-01-15 10:$i:00");
+            $entries[] = LogEntry::new("Message $i", LogLevel::Info, "2024-01-15 10:$i:00");
         }
 
         $log = Log::new()->withEntries($entries)->withMaxEntries(3)->setSize(80, 10);
@@ -265,7 +265,7 @@ final class LogTest extends TestCase
     {
         $entries = [];
         for ($i = 0; $i < 5; $i++) {
-            $entries[] = LogEntry::create("Message $i", LogLevel::Info, "2024-01-15 10:0$i:00");
+            $entries[] = LogEntry::new("Message $i", LogLevel::Info, "2024-01-15 10:0$i:00");
         }
 
         $log = (new Log(entries: $entries, maxEntries: 2))->setSize(80, 10);
@@ -277,9 +277,9 @@ final class LogTest extends TestCase
     public function testMaxEntriesNullShowsAll(): void
     {
         $entries = [
-            LogEntry::create('One', LogLevel::Info, '2024-01-15 10:00:00'),
-            LogEntry::create('Two', LogLevel::Info, '2024-01-15 10:01:00'),
-            LogEntry::create('Three', LogLevel::Info, '2024-01-15 10:02:00'),
+            LogEntry::new('One', LogLevel::Info, '2024-01-15 10:00:00'),
+            LogEntry::new('Two', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Three', LogLevel::Info, '2024-01-15 10:02:00'),
         ];
 
         $log = Log::new()->withEntries($entries)->withMaxEntries(null)->setSize(80, 10);
@@ -297,7 +297,7 @@ final class LogTest extends TestCase
     public function testTimestampsShownByDefault(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:30:00')
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:30:00')
         )->setSize(80, 10);
 
         $this->assertStringContainsString('2024-01-15 10:30:00', $log->render());
@@ -306,7 +306,7 @@ final class LogTest extends TestCase
     public function testHideTimestamps(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:30:00')
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:30:00')
         )->withTimestamps(false)->setSize(80, 10);
 
         $rendered = $log->render();
@@ -318,7 +318,7 @@ final class LogTest extends TestCase
     public function testTimestampsConstructorParameter(): void
     {
         $log = (new Log(
-            entries: [LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:30:00')],
+            entries: [LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:30:00')],
             showTimestamps: false
         ))->setSize(80, 10);
 
@@ -328,7 +328,7 @@ final class LogTest extends TestCase
     public function testTimestampColorAddsAnsiCodes(): void
     {
         $log = Log::new()
-            ->withEntry(LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:30:00'))
+            ->withEntry(LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:30:00'))
             ->withTimestampColor(Color::ansi(13))
             ->setSize(80, 10);
 
@@ -341,7 +341,7 @@ final class LogTest extends TestCase
     public function testCustomTimestampWidth(): void
     {
         $log = Log::new()
-            ->withEntry(LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:30:00'))
+            ->withEntry(LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:30:00'))
             ->withTimestampWidth(25)
             ->setSize(80, 10);
 
@@ -359,7 +359,7 @@ final class LogTest extends TestCase
     {
         $longMessage = str_repeat('a ', 50); // 100 chars with spaces
         $log = Log::new()
-            ->withEntry(LogEntry::create($longMessage, LogLevel::Info, '2024-01-15 10:30:00'))
+            ->withEntry(LogEntry::new($longMessage, LogLevel::Info, '2024-01-15 10:30:00'))
             ->setSize(30, 10);
 
         $rendered = $log->render();
@@ -372,7 +372,7 @@ final class LogTest extends TestCase
     {
         $longMessage = str_repeat('a ', 50);
         $log = Log::new()
-            ->withEntry(LogEntry::create($longMessage, LogLevel::Info, '2024-01-15 10:30:00'))
+            ->withEntry(LogEntry::new($longMessage, LogLevel::Info, '2024-01-15 10:30:00'))
             ->withWordWrap(false)
             ->setSize(30, 10);
 
@@ -388,7 +388,7 @@ final class LogTest extends TestCase
     {
         $shortMessage = 'Short message';
         $log = Log::new()
-            ->withEntry(LogEntry::create($shortMessage, LogLevel::Info, '2024-01-15 10:30:00'))
+            ->withEntry(LogEntry::new($shortMessage, LogLevel::Info, '2024-01-15 10:30:00'))
             ->setSize(80, 10);
 
         $rendered = $log->render();
@@ -402,7 +402,7 @@ final class LogTest extends TestCase
     {
         $message = 'Hello world this is a test';
         $log = Log::new()
-            ->withEntry(LogEntry::create($message, LogLevel::Info, '2024-01-15 10:30:00'))
+            ->withEntry(LogEntry::new($message, LogLevel::Info, '2024-01-15 10:30:00'))
             ->withWordWrap(true)
             ->setSize(40, 10);
 
@@ -424,9 +424,9 @@ final class LogTest extends TestCase
     public function testEntriesSortedNewestFirst(): void
     {
         $log = Log::new()->withEntries([
-            LogEntry::create('Older', LogLevel::Info, '2024-01-15 10:00:00'),
-            LogEntry::create('Newer', LogLevel::Info, '2024-01-15 12:00:00'),
-            LogEntry::create('Middle', LogLevel::Info, '2024-01-15 11:00:00'),
+            LogEntry::new('Older', LogLevel::Info, '2024-01-15 10:00:00'),
+            LogEntry::new('Newer', LogLevel::Info, '2024-01-15 12:00:00'),
+            LogEntry::new('Middle', LogLevel::Info, '2024-01-15 11:00:00'),
         ])->setSize(80, 10);
 
         $rendered = $log->render();
@@ -449,7 +449,7 @@ final class LogTest extends TestCase
     public function testWithEntryReturnsNewInstance(): void
     {
         $original = Log::new();
-        $updated = $original->withEntry(LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00'));
+        $updated = $original->withEntry(LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00'));
 
         $this->assertNotSame($original, $updated);
         $this->assertSame('', $original->render());
@@ -460,7 +460,7 @@ final class LogTest extends TestCase
     {
         $original = Log::new();
         $updated = $original->withEntries([
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00'),
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00'),
         ]);
 
         $this->assertNotSame($original, $updated);
@@ -469,8 +469,8 @@ final class LogTest extends TestCase
     public function testWithMaxEntriesReturnsNewInstance(): void
     {
         $original = Log::new()->withEntries([
-            LogEntry::create('A', LogLevel::Info, '2024-01-15 10:00:00'),
-            LogEntry::create('B', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('A', LogLevel::Info, '2024-01-15 10:00:00'),
+            LogEntry::new('B', LogLevel::Info, '2024-01-15 10:01:00'),
         ]);
         $updated = $original->withMaxEntries(1);
 
@@ -480,7 +480,7 @@ final class LogTest extends TestCase
     public function testWithMinLevelReturnsNewInstance(): void
     {
         $original = Log::new()->withEntries([
-            LogEntry::create('Test', LogLevel::Debug, '2024-01-15 10:00:00'),
+            LogEntry::new('Test', LogLevel::Debug, '2024-01-15 10:00:00'),
         ]);
         $updated = $original->withMinLevel(LogLevel::Error);
 
@@ -490,7 +490,7 @@ final class LogTest extends TestCase
     public function testWithTimestampsReturnsNewInstance(): void
     {
         $original = Log::new()->withEntry(
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00')
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00')
         );
         $updated = $original->withTimestamps(false);
 
@@ -544,9 +544,9 @@ final class LogTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $log = Log::new()->withEntries([
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00'),
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:01:00'),
-            LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:02:00'),
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00'),
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:02:00'),
         ]);
 
         [$w, $h] = $log->getInnerSize();
@@ -558,7 +558,7 @@ final class LogTest extends TestCase
     public function testGetInnerSizeWithSizeSet(): void
     {
         $log = Log::new()
-            ->withEntries([LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00')])
+            ->withEntries([LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00')])
             ->setSize(60, 5);
 
         [$w, $h] = $log->getInnerSize();
@@ -574,7 +574,7 @@ final class LogTest extends TestCase
     public function testRenderWithZeroWidthReturnsEmpty(): void
     {
         $log = Log::new()
-            ->withEntry(LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00'))
+            ->withEntry(LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00'))
             ->setSize(0, 10);
 
         $this->assertSame('', $log->render());
@@ -583,7 +583,7 @@ final class LogTest extends TestCase
     public function testRenderWithZeroHeightReturnsEmpty(): void
     {
         $log = Log::new()
-            ->withEntry(LogEntry::create('Test', LogLevel::Info, '2024-01-15 10:00:00'))
+            ->withEntry(LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00'))
             ->setSize(80, 0);
 
         $this->assertSame('', $log->render());
@@ -592,11 +592,11 @@ final class LogTest extends TestCase
     public function testAllLogLevelsRender(): void
     {
         $entries = [
-            LogEntry::create('Debug', LogLevel::Debug, '2024-01-15 10:00:00'),
-            LogEntry::create('Info', LogLevel::Info, '2024-01-15 10:01:00'),
-            LogEntry::create('Warn', LogLevel::Warn, '2024-01-15 10:02:00'),
-            LogEntry::create('Error', LogLevel::Error, '2024-01-15 10:03:00'),
-            LogEntry::create('Fatal', LogLevel::Fatal, '2024-01-15 10:04:00'),
+            LogEntry::new('Debug', LogLevel::Debug, '2024-01-15 10:00:00'),
+            LogEntry::new('Info', LogLevel::Info, '2024-01-15 10:01:00'),
+            LogEntry::new('Warn', LogLevel::Warn, '2024-01-15 10:02:00'),
+            LogEntry::new('Error', LogLevel::Error, '2024-01-15 10:03:00'),
+            LogEntry::new('Fatal', LogLevel::Fatal, '2024-01-15 10:04:00'),
         ];
 
         $log = Log::new()->withEntries($entries)->setSize(80, 10);
@@ -612,7 +612,7 @@ final class LogTest extends TestCase
     public function testEmptyMessageRender(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('', LogLevel::Info, '2024-01-15 10:00:00')
+            LogEntry::new('', LogLevel::Info, '2024-01-15 10:00:00')
         )->setSize(80, 10);
         $rendered = $log->render();
 
@@ -622,7 +622,7 @@ final class LogTest extends TestCase
     public function testSpecialCharactersInMessage(): void
     {
         $log = Log::new()->withEntry(
-            LogEntry::create('Special: <>&"\'αβγδ', LogLevel::Info, '2024-01-15 10:00:00')
+            LogEntry::new('Special: <>&"\'αβγδ', LogLevel::Info, '2024-01-15 10:00:00')
         )->setSize(80, 10);
 
         $rendered = $log->render();
@@ -642,7 +642,7 @@ final class LogTest extends TestCase
     {
         $entries = [];
         for ($i = 0; $i < 5; $i++) {
-            $entries[] = LogEntry::create("Message $i", LogLevel::Info, "2024-01-15 10:0$i:00");
+            $entries[] = LogEntry::new("Message $i", LogLevel::Info, "2024-01-15 10:0$i:00");
         }
 
         $log = Log::new()->withEntries($entries)->setSize(80, 2);

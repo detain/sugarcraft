@@ -17,7 +17,7 @@ final readonly class WizardStep
     /**
      * Create a new wizard step.
      */
-    public static function create(string $title, ?string $description = null): self
+    public static function new(string $title, ?string $description = null): self
     {
         return new self(
             title: $title,

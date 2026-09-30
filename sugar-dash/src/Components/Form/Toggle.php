@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors toggle UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Toggle implements \SugarCraft\Dash\Foundation\Sizer
+final class Toggle implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

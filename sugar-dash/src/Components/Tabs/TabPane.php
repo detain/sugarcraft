@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors pane/container UI patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class TabPane implements \SugarCraft\Dash\Foundation\Sizer
+final class TabPane implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -87,7 +87,7 @@ final class TabPane implements \SugarCraft\Dash\Foundation\Sizer
     {
         $content = $this->content;
 
-        if ($content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+        if ($content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
             return $content->getInnerSize();
         }
 

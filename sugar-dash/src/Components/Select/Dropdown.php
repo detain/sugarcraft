@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors dropdown UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Dropdown implements \SugarCraft\Dash\Foundation\Sizer
+final class Dropdown implements \SugarCraft\Dash\Foundation\SizedItem
 {
     /**
      * @param array<int, array{label: string, icon?: string}> $items

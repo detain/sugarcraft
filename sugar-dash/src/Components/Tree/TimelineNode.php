@@ -20,7 +20,7 @@ final readonly class TimelineNode
     /**
      * Create a new timeline node.
      */
-    public static function create(string $label, ?string $description = null): self
+    public static function new(string $label, ?string $description = null): self
     {
         return new self(
             label: $label,

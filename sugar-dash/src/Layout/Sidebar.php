@@ -24,7 +24,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors sidebar navigation UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class Sidebar implements \SugarCraft\Dash\Foundation\Sizer
+final class Sidebar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

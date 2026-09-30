@@ -47,13 +47,13 @@ final class GridTableTest extends TestCase
 
     public function testGridTableImplementsSizer(): void
     {
-        $grid = GridTable::create([]);
+        $grid = GridTable::new([]);
         $this->assertInstanceOf(Sizer::class, $grid);
     }
 
     public function testGridTableImplementsItem(): void
     {
-        $grid = GridTable::create([]);
+        $grid = GridTable::new([]);
         $this->assertInstanceOf(Item::class, $grid);
     }
 
@@ -64,7 +64,7 @@ final class GridTableTest extends TestCase
     public function testSortTogglesDirection(): void
     {
         $nameCol = new Column('name', 'Name', sortable: true);
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [
                 new Row(['name' => 'Charlie']),
@@ -91,7 +91,7 @@ final class GridTableTest extends TestCase
         $nameCol = new Column('name', 'Name', sortable: true);
         $ageCol = new Column('age', 'Age', sortable: true);
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol, $ageCol],
             [
                 new Row(['name' => 'Alice', 'age' => 30]),
@@ -113,7 +113,7 @@ final class GridTableTest extends TestCase
     public function testSortNonSortableColumnDoesNothing(): void
     {
         $nameCol = new Column('name', 'Name', sortable: false);
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'Alice'])],
         );
@@ -130,7 +130,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name', filterable: true);
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [
                 new Row(['name' => 'abc']),
@@ -151,7 +151,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name', filterable: true);
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [
                 new Row(['name' => 'Alice']),
@@ -172,7 +172,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name', filterable: true);
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [
                 new Row(['name' => 'Alice']),
@@ -200,7 +200,7 @@ final class GridTableTest extends TestCase
             range(1, 50),
         );
 
-        $grid = GridTable::create([$nameCol], $rows);
+        $grid = GridTable::new([$nameCol], $rows);
 
         // With height of 10 and perPage of 20, we'd have ~3 pages visible
         // Page 1 should work
@@ -236,7 +236,7 @@ final class GridTableTest extends TestCase
             new Row(['name' => 'User2']),
         ];
 
-        $grid = GridTable::create([$nameCol], $rows);
+        $grid = GridTable::new([$nameCol], $rows);
 
         // Valid scroll index
         $scrolled = $grid->scrollTo(1);
@@ -257,7 +257,7 @@ final class GridTableTest extends TestCase
         $ageCol = new Column('age', 'Age');
         $cityCol = new Column('city', 'City');
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol, $ageCol, $cityCol],
             [
                 new Row(['name' => 'Alice', 'age' => '30', 'city' => 'NYC']),
@@ -277,7 +277,7 @@ final class GridTableTest extends TestCase
         $nameCol = new Column('name', 'Name');
         $ageCol = new Column('age', 'Age');
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol, $ageCol],
             [new Row(['name' => 'Alice', 'age' => '30'])],
         );
@@ -299,7 +299,7 @@ final class GridTableTest extends TestCase
         $nameCol = new Column('name', 'Name', sortable: true);
         $ageCol = new Column('age', 'Age');
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol, $ageCol],
             [
                 new Row(['name' => 'Alice', 'age' => '30']),
@@ -320,7 +320,7 @@ final class GridTableTest extends TestCase
         $ageCol = new Column('age', 'Age');
         $cityCol = new Column('city', 'City');
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol, $ageCol, $cityCol],
             [
                 new Row(['name' => 'Alice', 'age' => '30', 'city' => 'New York']),
@@ -336,7 +336,7 @@ final class GridTableTest extends TestCase
 
     public function testEmptyTableRendersWithoutError(): void
     {
-        $grid = GridTable::create([]);
+        $grid = GridTable::new([]);
         $rendered = $grid->render();
 
         $this->assertSame('', $rendered);
@@ -345,7 +345,7 @@ final class GridTableTest extends TestCase
     public function testColumnMinWidthRespected(): void
     {
         $nameCol = new Column('name', 'Name', minWidth: 30);
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'X'])],
         );
@@ -359,7 +359,7 @@ final class GridTableTest extends TestCase
     public function testColumnMaxWidthRespected(): void
     {
         $longTextCol = new Column('desc', 'Description', maxWidth: 10);
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$longTextCol],
             [new Row(['desc' => 'This is a very long description that should be truncated'])],
         );
@@ -375,7 +375,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name');
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'Alice'])],
         );
@@ -395,7 +395,7 @@ final class GridTableTest extends TestCase
     {
         $ageCol = new Column('age', 'Age', sortable: true);
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$ageCol],
             [
                 new Row(['age' => 30]),
@@ -425,7 +425,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name', filterable: true);
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [
                 new Row(['name' => 'Alice']),
@@ -446,7 +446,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name');
 
-        $grid = GridTable::create(
+        $grid = GridTable::new(
             [$nameCol],
             [new Row(['name' => 'Alice'])],
         )->withRows([new Row(['name' => 'Alice'])]);
@@ -466,7 +466,7 @@ final class GridTableTest extends TestCase
         $nameCol = new Column('name', 'Name');
         $ageCol = new Column('age', 'Age');
 
-        $grid1 = GridTable::create([$nameCol], [new Row(['name' => 'Alice'])]);
+        $grid1 = GridTable::new([$nameCol], [new Row(['name' => 'Alice'])]);
         $grid2 = $grid1->withColumns([$ageCol]);
 
         $this->assertNotSame($grid1, $grid2);
@@ -477,7 +477,7 @@ final class GridTableTest extends TestCase
     {
         $nameCol = new Column('name', 'Name');
 
-        $grid1 = GridTable::create([$nameCol], [new Row(['name' => 'Alice'])]);
+        $grid1 = GridTable::new([$nameCol], [new Row(['name' => 'Alice'])]);
         $grid2 = $grid1->withRows([new Row(['name' => 'Bob'])]);
 
         $this->assertNotSame($grid1, $grid2);
@@ -601,13 +601,13 @@ final class GridTableTest extends TestCase
 
     public function testBorderConfigDefaults(): void
     {
-        $config = BorderConfig::default();
+        $config = BorderConfig::new();
 
         $this->assertTrue($config->showOuter);
         $this->assertTrue($config->showHeader);
         $this->assertTrue($config->showInner);
         $this->assertTrue($config->showFooter);
-        $this->assertEquals(BorderChars::default(), $config->chars);
+        $this->assertEquals(BorderChars::new(), $config->chars);
     }
 
     public function testBorderConfigRounded(): void
@@ -628,7 +628,7 @@ final class GridTableTest extends TestCase
 
     public function testBorderConfigFluentSetters(): void
     {
-        $config = BorderConfig::default();
+        $config = BorderConfig::new();
 
         $config = $config->withOuter(false);
         $this->assertFalse($config->showOuter);

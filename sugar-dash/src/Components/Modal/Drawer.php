@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors drawer/sidebar UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class Drawer implements \SugarCraft\Dash\Foundation\Sizer
+final class Drawer implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

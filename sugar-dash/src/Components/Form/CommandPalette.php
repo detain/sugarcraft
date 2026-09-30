@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors command palette UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class CommandPalette implements \SugarCraft\Dash\Foundation\Sizer
+final class CommandPalette implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

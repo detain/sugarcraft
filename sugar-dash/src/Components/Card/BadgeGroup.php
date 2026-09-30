@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors badge-group UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class BadgeGroup implements \SugarCraft\Dash\Foundation\Sizer
+final class BadgeGroup implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

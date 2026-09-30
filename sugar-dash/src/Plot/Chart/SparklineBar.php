@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors bar sparkline rendering from bubbletea/sparkline but adapted
  * to PHP with wither-style immutable setters.
  */
-final class SparklineBar implements \SugarCraft\Dash\Foundation\Sizer
+final class SparklineBar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use SparklineScaling;
 

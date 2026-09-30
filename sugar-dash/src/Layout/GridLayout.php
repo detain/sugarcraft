@@ -19,21 +19,36 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors CSS Grid layout concepts adapted to PHP with wither-style immutable setters.
  */
-final class GridLayout implements \SugarCraft\Dash\Foundation\Sizer
+final class GridLayout implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
+
+    private readonly int $columns;
+    private readonly int $rows;
+    private readonly int $columnGap;
+    private readonly int $rowGap;
 
     /**
      * @param list<GridItem> $items
      */
     public function __construct(
         private readonly array $items = [],
-        private readonly int $columns = 1,
-        private readonly int $rows = 0,
-        private readonly int $columnGap = 0,
-        private readonly int $rowGap = 0,
-    ) {}
+        int $columns = 1,
+        int $rows = 0,
+        int $columnGap = 0,
+        int $rowGap = 0,
+    ) {
+        // Mirrors the clamps every factory and wither already applies
+        // (columns >= 1, rows >= 0 with 0 = auto, gaps >= 0) so the
+        // promoted constructor cannot smuggle render-fatal values past
+        // them — columns:0 divided by zero in the row/col math and
+        // negative gaps inflated cellWidth.
+        $this->columns = max(1, $columns);
+        $this->rows = max(0, $rows);
+        $this->columnGap = max(0, $columnGap);
+        $this->rowGap = max(0, $rowGap);
+    }
 
     /**
      * Create a new grid layout with the specified columns.
@@ -195,27 +210,24 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\Sizer
                     break;
                 }
 
-                $lineContent = $itemLines[$dy] ?? '';
-                $lineWidth = Width::string($lineContent);
+                // Normalise the cell to exactly $cellWidth display columns.
+                // truncateToWidth may land a column short when a wide
+                // grapheme straddles the cut, so pad unconditionally after.
+                $lineContent = Width::padRight(
+                    $this->truncateToWidth($itemLines[$dy] ?? '', $cellWidth),
+                    $cellWidth,
+                );
 
-                if ($lineWidth < $cellWidth) {
-                    $lineContent .= str_repeat(' ', $cellWidth - $lineWidth);
-                } elseif ($lineWidth > $cellWidth) {
-                    $lineContent = $this->truncateToWidth($lineContent, $cellWidth);
-                }
-
-                // Add to existing line content at correct position
-                $existingLine = $lines[$lineIndex];
-                $beforeCell = mb_substr($existingLine, 0, $x, 'UTF-8');
+                // Compose at DISPLAY-COLUMN boundaries. $existingLine can
+                // carry wide (CJK) content from earlier cells, so its
+                // character offsets drift from its column offsets — the old
+                // mb_substr/str_pad splice misplaced every cell after a
+                // wide one. Width's cell-aware take/drop slice at columns.
                 $afterStart = $x + $cellWidth;
+                $before = Width::padRight(Width::takeAnsi($lines[$lineIndex], $x), $x);
+                $after = Width::dropAnsi($lines[$lineIndex], $afterStart);
 
-                if (mb_strlen($existingLine, 'UTF-8') < $afterStart) {
-                    $existingLine = str_pad($existingLine, $afterStart, ' ', STR_PAD_RIGHT);
-                }
-
-                $lines[$lineIndex] = mb_substr($existingLine, 0, $x, 'UTF-8')
-                    . $lineContent
-                    . mb_substr($existingLine, $afterStart, null, 'UTF-8');
+                $lines[$lineIndex] = $before . $lineContent . $after;
             }
         }
 
@@ -231,7 +243,7 @@ final class GridLayout implements \SugarCraft\Dash\Foundation\Sizer
     {
         $sizes = [];
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, $h] = $item->getInnerSize();
                 if ($w === 0 || $h === 0) {
                     $rendered = $item->render();

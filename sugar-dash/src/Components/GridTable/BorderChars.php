@@ -74,7 +74,7 @@ final class BorderChars
     /**
      * Get default heavy border characters.
      */
-    public static function default(): self
+    public static function new(): self
     {
         static $instance = null;
         return $instance ??= new self(

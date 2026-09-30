@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors progress bar concepts adapted to PHP with wither-style immutable setters.
  * Distinct from Gauge which is more feature-rich with label formatting.
  */
-final class ProgressBar implements \SugarCraft\Dash\Foundation\Sizer
+final class ProgressBar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

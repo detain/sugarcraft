@@ -15,7 +15,7 @@ use SugarCraft\Dash\Plot\RingBuffer;
  * Mirrors Homedash internal_ui_components_sparkline.go (8-block scaling).
  * Mirrors Homedash ring buffer but with O(1) push instead of O(n) slice-shift.
  */
-final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
+final class Sparkline implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -40,7 +40,7 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
         private bool $fill = false,
         private bool $dimEdge = false,
     ) {
-        $this->buffer = new RingBuffer($this->widthConstraint ?? 40);
+        $this->buffer = new RingBuffer($this->widthConstraint);
     }
 
     /**
@@ -198,7 +198,7 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
         if ($this->width !== null && $this->width > 0) {
             return $this->width;
         }
-        return $this->widthConstraint ?? 40;
+        return $this->widthConstraint;
     }
 
     /**
@@ -280,7 +280,7 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
     private function mutate(): self
     {
         $clone = clone $this;
-        $clone->buffer = new RingBuffer($this->widthConstraint ?? 40);
+        $clone->buffer = new RingBuffer($this->widthConstraint);
         foreach ($this->buffer->toArray() as $value) {
             $clone->buffer->push($value);
         }

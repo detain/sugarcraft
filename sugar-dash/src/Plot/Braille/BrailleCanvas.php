@@ -6,6 +6,7 @@ namespace SugarCraft\Dash\Plot\Braille;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
@@ -17,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors termui/drawille_drawille.go:7-83
  */
-final class BrailleCanvas implements Sizer
+final class BrailleCanvas implements SizedItem
 {
     /** @var list<list<int>> accumulated dot bits per cell */
     private array $cells = [];

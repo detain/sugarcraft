@@ -31,7 +31,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-dash/issues",
-        "source": "https://github.com/sugarcraft/sugar-dash"
+        "source": "https://github.com/sugarcraft/sugar-dash",
+        "docs": "https://sugarcraft.github.io/lib/sugar-dash.html"
     },
     "require": {
         "php": "^8.3",

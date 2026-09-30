@@ -14,7 +14,7 @@ use SugarCraft\Core\Util\Ansi;
  *
  * Mirrors Homedash internal_ui_components_gauge.go:36-89
  */
-final class GaugeWithDetail implements \SugarCraft\Dash\Foundation\Sizer
+final class GaugeWithDetail implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

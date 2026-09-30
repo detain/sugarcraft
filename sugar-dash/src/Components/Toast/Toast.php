@@ -32,7 +32,7 @@ use SugarCraft\Toast\ToastType;
  * Adapter: `fromNotification()` / `fromQueue()` bridge Notification DTOs
  * into styled toast output.
  */
-final class Toast implements \SugarCraft\Dash\Foundation\Sizer
+final class Toast implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

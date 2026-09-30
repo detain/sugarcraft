@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Dash\Foundation\Buffer;
 use SugarCraft\Dash\Foundation\Rect;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use SugarCraft\Dash\Foundation\Drawable;
 use SugarCraft\Dash\Foundation\Theme;
 use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
@@ -23,7 +24,7 @@ use SugarCraft\Dash\Plot\Braille\BrailleMatrix;
  *
  * Mirrors termui widgets/plot.go
  */
-final class Plot implements Sizer, Drawable
+final class Plot implements SizedItem, Drawable
 {
     public const MODE_LINE = 'line';
     public const MODE_SCATTER = 'scatter';

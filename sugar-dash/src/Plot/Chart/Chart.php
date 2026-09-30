@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors chart rendering from bubbletea/spinner but adapted to PHP
  * with wither-style immutable setters.
  */
-final class Chart implements \SugarCraft\Dash\Foundation\Sizer
+final class Chart implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartGridGeometry;
 

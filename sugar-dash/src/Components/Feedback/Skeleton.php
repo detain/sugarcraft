@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors skeleton/placeholder UI patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Skeleton implements \SugarCraft\Dash\Foundation\Sizer
+final class Skeleton implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

@@ -24,7 +24,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors panel UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class Panel implements \SugarCraft\Dash\Foundation\Sizer
+final class Panel implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -276,7 +276,7 @@ final class Panel implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         if ($this->content instanceof \SugarCraft\Dash\Foundation\Item) {
-            if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, ] = $this->content->getInnerSize();
                 $contentWidth = max($contentWidth, $w + 2);
             }
@@ -285,7 +285,7 @@ final class Panel implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         if ($this->footer !== null) {
-            if ($this->footer instanceof \SugarCraft\Dash\Foundation\Item && $this->footer instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($this->footer instanceof \SugarCraft\Dash\Foundation\Item && $this->footer instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$fw, ] = $this->footer->getInnerSize();
                 $contentWidth = max($contentWidth, $fw + 2);
             } else {
@@ -317,7 +317,7 @@ final class Panel implements \SugarCraft\Dash\Foundation\Sizer
         // Content lines
         $contentHeight = 1;
         if ($this->content instanceof \SugarCraft\Dash\Foundation\Item) {
-            if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [, $h] = $this->content->getInnerSize();
                 $contentHeight = max(1, $h);
             }
@@ -330,7 +330,7 @@ final class Panel implements \SugarCraft\Dash\Foundation\Sizer
         if ($this->footer !== null) {
             $rows++; // Footer separator
             $footerHeight = 1;
-            if ($this->footer instanceof \SugarCraft\Dash\Foundation\Item && $this->footer instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($this->footer instanceof \SugarCraft\Dash\Foundation\Item && $this->footer instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [, $h] = $this->footer->getInnerSize();
                 $footerHeight = max(1, $h);
             }

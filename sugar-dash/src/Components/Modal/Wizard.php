@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors wizard/stepper UI patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Wizard implements \SugarCraft\Dash\Foundation\Sizer
+final class Wizard implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -53,7 +53,7 @@ final class Wizard implements \SugarCraft\Dash\Foundation\Sizer
     public static function fromSteps(array $stepTitles): self
     {
         $steps = array_map(
-            fn(string $title) => WizardStep::create($title),
+            fn(string $title) => WizardStep::new($title),
             $stepTitles
         );
 

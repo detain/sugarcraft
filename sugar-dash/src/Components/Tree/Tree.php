@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the tree concept from bubble-tea/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Tree implements \SugarCraft\Dash\Foundation\Sizer
+final class Tree implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

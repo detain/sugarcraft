@@ -8,6 +8,6 @@ use SugarCraft\Dash\Layout\Grid\Options;
 use SugarCraft\Dash\Layout\Grid\ItemOptions;
 
 // Comment display
-$component = Comment::create("John Doe", "Great work on this project!");
+$component = Comment::new("John Doe", "Great work on this project!");
 $component->setSize(60, 15);
 echo $component->render();

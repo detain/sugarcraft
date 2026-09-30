@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors status indicator concepts adapted to PHP with wither-style immutable setters.
  */
-final class StatusIndicator implements \SugarCraft\Dash\Foundation\Sizer
+final class StatusIndicator implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

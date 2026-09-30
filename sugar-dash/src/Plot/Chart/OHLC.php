@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors OHLC chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
+final class OHLC implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartBorderStyle;
     use PriceAxisProjection;

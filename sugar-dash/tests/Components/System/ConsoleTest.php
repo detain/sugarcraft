@@ -85,7 +85,7 @@ final class ConsoleTest extends TestCase
 
     public function testConsoleEntryCreateFactory(): void
     {
-        $entry = ConsoleEntry::create('Test', ConsoleStream::Error);
+        $entry = ConsoleEntry::new('Test', ConsoleStream::Error);
 
         $this->assertSame('Test', $entry->message);
         $this->assertSame(ConsoleStream::Error, $entry->stream);

@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors profile-card concepts adapted to PHP with wither-style immutable setters.
  */
-final class Profile implements \SugarCraft\Dash\Foundation\Sizer
+final class Profile implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

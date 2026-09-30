@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors marquee patterns adapted to PHP with wither-style immutable setters.
  */
-final class Marquee implements \SugarCraft\Dash\Foundation\Sizer
+final class Marquee implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

@@ -25,7 +25,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors badge/tag patterns adapted to PHP with wither-style immutable setters.
  */
-final class Badge implements \SugarCraft\Dash\Foundation\Sizer, Drawable
+final class Badge implements \SugarCraft\Dash\Foundation\SizedItem, Drawable
 {
     private ?int $width = null;
     private ?int $height = null;

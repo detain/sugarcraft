@@ -5,98 +5,35 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Examples;
 
 use PHPUnit\Framework\TestCase;
-use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\QuitMsg;
-use SugarCraft\Core\Msg\WindowSizeMsg;
-use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Dash\Layout\FocusManager;
-use SugarCraft\Vcr\Format\JsonlFormat;
-use SugarCraft\Vcr\Player;
-use SugarCraft\Vcr\Recorder;
 
 /**
- * End-to-end test for the dashboard-live.php interactive demo.
- *
- * This test boots the dashboard against a candy-vcr-recorded cassette,
- * replays a scripted sequence of inputs (keyboard navigation + quit),
- * and asserts the program exits cleanly (exit 0).
- *
- * ## Recording a new cassette
- *
- * To re-record the cassette after changes to the dashboard:
- *   cd sugar-dash && php examples/dashboard-live.php
- *   # interact with the demo, then press q
- *   # copy the recorded .cas file to tests/Fixtures/dashboard-live.cas
+ * Model-level tests for the dashboard-live.php interactive demo.
  *
  * ## What the test verifies
  *
- *   1. The program boots and renders without crashing.
+ *   1. The model boots and renders without crashing.
  *   2. Keyboard input (Tab, arrow keys, q) is processed correctly.
- *   3. The program exits with status 0 on QuitMsg.
+ *   3. QuitMsg produces a quit Cmd.
  *
- * @see \SugarCraft\Vcr\Player
- * @see \SugarCraft\Vcr\Recorder
+ * ## Why there is no VCR cassette replay
+ *
+ * An earlier version shipped a `testReplayDashboardLiveFromCassette` that
+ * played back `Fixtures/dashboard-live.cas`. That fixture was NEVER committed
+ * (`git log --all` shows no trace), so the test skipped silently in every run
+ * since birth — a vacuous green. Rebuilding it headlessly is impossible: the
+ * live demo records wall-clock-dependent module output through an interactive
+ * TTY, so no deterministic cassette exists. Removed per the audit (finding #7,
+ * round: sugar-dash) rather than kept as a permanent skip.
  */
 final class DashboardLiveTest extends TestCase
 {
-    private const FIXTURE_CASSETTE = __DIR__ . '/Fixtures/dashboard-live.cas';
-    private const TIMEOUT_SECONDS = 30.0;
-
-    /**
-     * Test that dashboard-live.php replays correctly from the VCR fixture.
-     *
-     * The cassette records:
-     *   1. Program startup + initial resize
-     *   2. A Tab keypress (focus rotation)
-     *   3. Arrow key presses (focus movement)
-     *   4. A 'q' keypress (quit)
-     *
-     * The Player drives the Program through these events and asserts
-     * the output bytes match what was recorded.
-     */
-    public function testReplayDashboardLiveFromCassette(): void
-    {
-        // Skip if the fixture doesn't exist yet (first-time setup).
-        // Once the cassette is recorded this file should exist.
-        if (!file_exists(self::FIXTURE_CASSETTE)) {
-            $this->markTestSkipped(
-                'Cassette fixture not found: ' . self::FIXTURE_CASSETTE
-                . "\nTo create it, run: cd sugar-dash && php examples/dashboard-live.php"
-                . "\nthen press q to quit, and copy the .cas file to tests/Examples/Fixtures/"
-            );
-        }
-
-        $player = Player::open(self::FIXTURE_CASSETTE);
-        $result = $player->play(
-            fn ($input, $output, $loop) => new Program(
-                new DashboardModelForTest(),
-                new ProgramOptions(
-                    useAltScreen: false,
-                    catchInterrupts: false,
-                    hideCursor: false,
-                    input: $input,
-                    output: $output,
-                    loop: $loop,
-                    windowSize: ['cols' => 120, 'rows' => 30],
-                ),
-            ),
-            assertion: null, // Use default ByteAssertion
-            speed: Player::SPEED_INSTANT,
-            timeoutSeconds: self::TIMEOUT_SECONDS,
-        );
-
-        $this->assertTrue(
-            $result->ok,
-            'Dashboard replay failed: ' . ($result->diff !== '' ? $result->diff : 'unknown error')
-        );
-        $this->assertEquals(1, $result->quitCount, 'Expected exactly one quit event');
-    }
 
     /**
      * Smoke test: verify DashboardModel initializes and renders without error.

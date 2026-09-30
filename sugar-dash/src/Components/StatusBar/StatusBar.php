@@ -28,7 +28,7 @@ use SugarCraft\Sprinkles\Bar\StatusBar as SprinklesStatusBar;
  * wrapper that adds fg/bg colours, {@see \SugarCraft\Dash\Foundation\Sizer}
  * sizing and the plain-string withers on top.
  */
-final class StatusBar implements \SugarCraft\Dash\Foundation\Sizer
+final class StatusBar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

@@ -6,12 +6,13 @@ namespace SugarCraft\Dash\Layout;
 
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\SizedItem;
 use SugarCraft\Core\Util\Width;
 
 /**
  * A stack layout that arranges items in a stack (vertical by default).
  */
-final class StackLayout implements Item, Sizer
+final class StackLayout implements Item, SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -74,7 +75,7 @@ final class StackLayout implements Item, Sizer
         $currentY = 0;
 
         foreach ($this->items as $item) {
-            if ($item instanceof Sizer) {
+            if ($item instanceof SizedItem) {
                 $itemHeight = $item->getInnerSize()[1] ?? 0;
                 $sized = $item->setSize($width, $itemHeight);
                 $rendered = $sized->render();

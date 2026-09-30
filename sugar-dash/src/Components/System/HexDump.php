@@ -25,7 +25,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors hexdump/xxd style output adapted to PHP with
  * wither-style immutable setters.
  */
-final class HexDump implements \SugarCraft\Dash\Foundation\Sizer
+final class HexDump implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

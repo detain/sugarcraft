@@ -17,7 +17,7 @@ use SugarCraft\Dash\Foundation\Theme;
  *
  * Mirrors ZStack layout concepts adapted to PHP with wither-style immutable setters.
  */
-final class ZStack implements \SugarCraft\Dash\Foundation\Sizer
+final class ZStack implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -140,7 +140,7 @@ final class ZStack implements \SugarCraft\Dash\Foundation\Sizer
         // Calculate natural width as max of all items
         $maxWidth = 0;
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, ] = $item->getInnerSize();
                 $maxWidth = max($maxWidth, $w);
             } else {
@@ -167,7 +167,7 @@ final class ZStack implements \SugarCraft\Dash\Foundation\Sizer
         // Calculate natural height as max of all items
         $maxHeight = 0;
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [, $h] = $item->getInnerSize();
                 $maxHeight = max($maxHeight, $h);
             } else {
@@ -194,7 +194,7 @@ final class ZStack implements \SugarCraft\Dash\Foundation\Sizer
         $maxHeight = 0;
 
         foreach ($this->items as $item) {
-            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [$w, $h] = $item->getInnerSize();
                 $maxWidth = max($maxWidth, $w);
                 $maxHeight = max($maxHeight, $h);

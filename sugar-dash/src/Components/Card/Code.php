@@ -20,7 +20,7 @@ use SugarCraft\Dash\Layout\HAlign;
  * Mirrors code block rendering from bubble-tea/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Code implements \SugarCraft\Dash\Foundation\Sizer
+final class Code implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

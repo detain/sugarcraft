@@ -26,7 +26,7 @@ use SugarCraft\Dash\Foundation\Theme;
  * Mirrors the frame concept from bubble-grid but adapted to PHP with
  * wither-style immutable setters.
  */
-final class Frame implements \SugarCraft\Dash\Foundation\Sizer
+final class Frame implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

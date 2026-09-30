@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors feature-grid concepts adapted to PHP with wither-style immutable setters.
  */
-final class Features implements \SugarCraft\Dash\Foundation\Sizer
+final class Features implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

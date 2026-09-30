@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the tab concept from bubble-tea but adapted to PHP with
  * wither-style immutable setters.
  */
-final class Tabs implements \SugarCraft\Dash\Foundation\Sizer
+final class Tabs implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -210,7 +210,7 @@ final class Tabs implements \SugarCraft\Dash\Foundation\Sizer
         if (isset($this->tabs[$safeIndex])) {
             $tab = $this->tabs[$safeIndex];
             $content = $tab['content'];
-            if ($content instanceof \SugarCraft\Dash\Foundation\Sizer) {
+            if ($content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
                 [, $h] = $content->getInnerSize();
                 $contentHeight += $h;
             } else {

@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors scrollbar concepts adapted to PHP with wither-style immutable setters.
  */
-final class Scrollbar implements \SugarCraft\Dash\Foundation\Sizer
+final class Scrollbar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

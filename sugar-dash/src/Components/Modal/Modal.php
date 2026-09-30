@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors modal dialog UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class Modal implements \SugarCraft\Dash\Foundation\Sizer
+final class Modal implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

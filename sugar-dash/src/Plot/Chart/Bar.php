@@ -22,7 +22,7 @@ use SugarCraft\Dash\Layout\HAlign;
  * Mirrors the bar concept from bubble-termbox/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Bar implements \SugarCraft\Dash\Foundation\Sizer
+final class Bar implements \SugarCraft\Dash\Foundation\SizedItem
 {
     private ?int $width = null;
     private ?int $height = null;

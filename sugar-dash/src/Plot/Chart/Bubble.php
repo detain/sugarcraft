@@ -25,7 +25,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors bubble chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
+final class Bubble implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use AxisLabelFormatter;
 

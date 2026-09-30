@@ -136,7 +136,7 @@ final class WizardTest extends TestCase
     {
         $wizard = Wizard::fromSteps(['Step 1'])
             ->withSteps([
-                WizardStep::create('Step 1', 'This is a description'),
+                WizardStep::new('Step 1', 'This is a description'),
             ]);
         $rendered = $wizard->render();
 
@@ -147,7 +147,7 @@ final class WizardTest extends TestCase
     {
         $wizard = Wizard::fromSteps(['Step 1'])
             ->withSteps([
-                WizardStep::create('Step 1', null),
+                WizardStep::new('Step 1', null),
             ]);
         $rendered = $wizard->render();
 
@@ -264,7 +264,7 @@ final class WizardTest extends TestCase
     {
         $original = Wizard::fromSteps(['Step 1']);
         $updated = $original->withSteps([
-            WizardStep::create('New Step'),
+            WizardStep::new('New Step'),
         ]);
 
         $this->assertNotSame($original, $updated);
@@ -273,7 +273,7 @@ final class WizardTest extends TestCase
     public function testAddStepReturnsNewInstance(): void
     {
         $original = Wizard::fromSteps(['Step 1']);
-        $updated = $original->addStep(WizardStep::create('Step 2'));
+        $updated = $original->addStep(WizardStep::new('Step 2'));
 
         $this->assertNotSame($original, $updated);
         $this->assertStringContainsString('Step 2', $updated->render());
@@ -332,8 +332,8 @@ final class WizardTest extends TestCase
     {
         $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withSteps([
-                WizardStep::create('Step 1', 'Description 1'),
-                WizardStep::create('Step 2', 'Description 2'),
+                WizardStep::new('Step 1', 'Description 1'),
+                WizardStep::new('Step 2', 'Description 2'),
             ]);
         [, $h] = $wizard->getInnerSize();
 
@@ -354,7 +354,7 @@ final class WizardTest extends TestCase
 
     public function testWizardStepCreate(): void
     {
-        $step = WizardStep::create('Title', 'Description');
+        $step = WizardStep::new('Title', 'Description');
 
         $this->assertSame('Title', $step->title);
         $this->assertSame('Description', $step->description);
@@ -362,7 +362,7 @@ final class WizardTest extends TestCase
 
     public function testWizardStepCreateWithNullDescription(): void
     {
-        $step = WizardStep::create('Title');
+        $step = WizardStep::new('Title');
 
         $this->assertSame('Title', $step->title);
         $this->assertNull($step->description);

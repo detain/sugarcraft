@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Keys;
 
+
 /**
  * Keyboard shortcut handler.
  *
@@ -16,7 +17,7 @@ namespace SugarCraft\Dash\Keys;
  * Mirrors keymap handling from bubble-keymap but adapted
  * to PHP with wither-style immutable setters.
  */
-final class KeyMap implements \SugarCraft\Dash\Foundation\Sizer
+final class KeyMap implements \SugarCraft\Dash\Foundation\SizedItem
 {
     /** @var array<string, list<KeyAction>> */
     private array $actions = [];
@@ -72,6 +73,9 @@ final class KeyMap implements \SugarCraft\Dash\Foundation\Sizer
     {
         if ($this->size['width'] !== null && $this->size['height'] !== null) {
             return [$this->size['width'], $this->size['height']];
+        }
+        if (! $this->content instanceof \SugarCraft\Dash\Foundation\SizedItem) {
+            return [0, 0];
         }
         return $this->content->getInnerSize();
     }

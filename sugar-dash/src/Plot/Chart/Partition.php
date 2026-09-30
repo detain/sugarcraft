@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors partition/icicle chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Partition implements \SugarCraft\Dash\Foundation\Sizer
+final class Partition implements \SugarCraft\Dash\Foundation\SizedItem
 {
     use ChartBorderStyle;
 
