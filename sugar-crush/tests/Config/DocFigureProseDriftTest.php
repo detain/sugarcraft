@@ -3854,16 +3854,18 @@ final class DocFigureProseDriftTest extends TestCase
      * EngineBackend::encodeEvent()'s parameter union (which the page itself
      * names as the authority) and decodeEvent()'s return union — each short
      * name resolved through EngineBackend's use-imports and checked to exist.
-     * encodeEvent admits the ToolStarted/ToolFinished pair AND SpendCapBreached,
-     * so the FULL trio is bound here; the narrower tool-pair unions in
-     * Runtime::emit()/Chat::enqueueToolEvent() are emission sites, not the
-     * channel authority, and are deliberately NOT what this arm compares.
+     * encodeEvent admits the ToolStarted/ToolFinished pair PLUS SpendCapBreached
+     * and the SubAgentActivity beat channel, so the FULL quartet is bound here;
+     * the narrower tool-pair unions in Runtime::emit()/Chat::enqueueToolEvent()
+     * are emission sites, not the channel authority, and are deliberately NOT
+     * what this arm compares. (Widened in-step when the subagent frame kind
+     * landed — the quartet is what the forked child can now actually send.)
      */
     public function testOnEventRosterIsTheWireEncodersOwnUnion(): void
     {
         $backendSource = self::sourceOf('Backend.php');
         $engineSource = self::sourceOf('Backend/EngineBackend.php');
-        $wordNumbers = ['three' => 3];
+        $wordNumbers = ['four' => 4];
 
         self::assertSame(
             1,
@@ -3873,11 +3875,11 @@ final class DocFigureProseDriftTest extends TestCase
         $section = (string) preg_replace('/^.*\*\*Turn-lifecycle events:\*\*/s', '', $backendSource);
         $section = explode(\chr(42) . \chr(42) . 'Reasoning:' . \chr(42) . \chr(42), $section)[0];
         preg_match_all('/\{\@see Events\\\\([A-Za-z]+)\}/', $section, $cited);
-        self::assertCount(3, $cited[1], 'the doc-block section stopped naming exactly three event classes');
+        self::assertCount(4, $cited[1], 'the doc-block section stopped naming exactly four event classes');
         self::assertSame(
-            ['ToolStarted', 'ToolFinished', 'SpendCapBreached'],
+            ['ToolStarted', 'ToolFinished', 'SpendCapBreached', 'SubAgentActivity'],
             array_values(array_unique($cited[1])),
-            'the prose trio in the class doc-block drifted — the encoder union below is the authority the page itself names',
+            'the prose quartet in the class doc-block drifted — the encoder union below is the authority the page itself names',
         );
         self::assertStringContainsString('not a prose list, is the authority', self::markdownProse($section), 'the sentence naming the encoder as authority left — this arm exists to make it true');
 
@@ -3885,12 +3887,12 @@ final class DocFigureProseDriftTest extends TestCase
         $param = (string) explode('public function complete(', $param)[0];
         self::assertSame(
             1,
-            preg_match('/`function\(Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+) \$event\): void`/', $param, $union),
-            'complete()\'s @param no longer states a three-class union inline — the page promise this arm guards is that union',
+            preg_match('/`function\(Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+)\|Events\\\\([A-Za-z]+) \$event\): void`/', $param, $union),
+            'complete()\'s @param no longer states a four-class union inline — the page promise this arm guards is that union',
         );
-        $documentedUnion = [$union[1], $union[2], $union[3]];
-        self::assertStringContainsString('type-matches these three covers the channel', self::markdownProse($section), 'the "these three" count word left the section — flip it with the roster, census-trio law');
-        self::assertCount($wordNumbers['three'], $documentedUnion);
+        $documentedUnion = [$union[1], $union[2], $union[3], $union[4]];
+        self::assertStringContainsString('type-matches these four covers the channel', self::markdownProse($section), 'the "these four" count word left the section — flip it with the roster, census-trio law');
+        self::assertCount($wordNumbers['four'], $documentedUnion);
 
         $encode = null;
         $decode = null;

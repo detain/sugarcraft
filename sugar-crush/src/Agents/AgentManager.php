@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\MCP\McpRouter;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
@@ -35,6 +36,20 @@ final class AgentManager
 
     /** @var array<string, SubAgent> */
     private array $subAgents = [];
+
+    /**
+     * Ids inside {@see $subAgents} that are OBSERVED mirrors of a run living
+     * in another process (the EngineBackend child running a TaskTool), written
+     * only by {@see projectRemoteSubAgent()} and removed wholesale by
+     * {@see clearProjectedSubAgents()}. Kept separate from the rows themselves
+     * because a mirror is display state with no local lifecycle to drive:
+     * stopping or re-timing it locally would LIE about a process this manager
+     * does not own, and the next turn's clear must never touch rows this
+     * process genuinely spawned.
+     *
+     * @var array<string, true>
+     */
+    private array $projectedSubAgentIds = [];
 
     private ?TeamManager $teamManager = null;
 
@@ -332,6 +347,98 @@ final class AgentManager
         $this->subAgents[$subAgent->id] = $subAgent;
 
         return $subAgent;
+    }
+
+    /**
+     * Materialise or advance the mirror row for one {@see SubAgentActivity}
+     * frame — the display-side half of the fix for delegations that run
+     * inside {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+     * forked child, whose own AgentManager writes die with that child.
+     *
+     * THE FRAMES ARE OBSERVED TRUTH, NOT A LIFECYCLE TO ENFORCE. Every guard
+     * below drops a beat rather than throwing: a mirror's whole contract is to
+     * show what the child last said, and a red parent over a display frame
+     * would cost a working turn for a stale row. Concretely —
+     *  - a started frame for a name this roster does not know cannot build a
+     *    row (no Agent to hang it on) and is dropped;
+     *  - a progress/finished frame for an id never started here is an orphan
+     *    (frames from before the current turn's clear, or a child ahead of a
+     *    dropped started frame) and is dropped;
+     *  - any beat arriving after the row went terminal is ignored: terminal
+     *    means the finished frame already landed, and sockets keep no promise
+     *    about what a late reader sees.
+     *
+     * Projection bypasses the {@see createSubAgent()} permission-mode seal on
+     * purpose: the seal guards LAUNCHES — a mirror launches nothing, it
+     * reports a run the session's own engine child already governed. The row
+     * carries no PermissionGate for the same reason.
+     */
+    public function projectRemoteSubAgent(SubAgentActivity $activity): void
+    {
+        if ($activity->op === SubAgentActivity::OP_STARTED) {
+            $agent = $this->get($activity->name);
+            if ($agent === null) {
+                return;
+            }
+
+            $row = new SubAgent(id: $activity->id, agent: $agent, task: $activity->task);
+            $row->status = SubAgent::STATUS_RUNNING;
+            $row->startedAt = new \DateTimeImmutable();
+            $row->output = $activity->tail;
+
+            $this->subAgents[$row->id] = $row;
+            $this->projectedSubAgentIds[$row->id] = true;
+
+            return;
+        }
+
+        $row = $this->subAgents[$activity->id] ?? null;
+        if ($row === null || !isset($this->projectedSubAgentIds[$activity->id]) || !$row->isRunning()) {
+            return;
+        }
+
+        if ($activity->op === SubAgentActivity::OP_PROGRESS) {
+            $row->output = $activity->tail;
+            $row->status = SubAgent::STATUS_STREAMING;
+
+            return;
+        }
+
+        // OP_FINISHED. The frame says the run ended; what its tail carries is
+        // the report or, when there was none, the trail the child kept. The
+        // mirror settles COMPLETE for either — the child's internal FAILED
+        // distinction reaches the user through the outer ToolFinished row,
+        // which carries the refusal text verbatim.
+        $row->output = $activity->tail;
+        $row->status = SubAgent::STATUS_COMPLETE;
+        $row->completedAt = new \DateTimeImmutable();
+    }
+
+    /**
+     * Drop every mirror row, keeping the rows this process spawned itself.
+     *
+     * Called at the parent's turn dispatch so a turn never opens with ghosts:
+     * a child killed by a cancelled turn stops sending mid-run, and its
+     * half-worked RUNNING row would otherwise claim to still be delegating
+     * for the rest of the session. Rows of the turn that JUST settled
+     * deliberately survive until the NEXT dispatch — the dashboard between
+     * turns is exactly where a finished report gets read.
+     */
+    public function clearProjectedSubAgents(): void
+    {
+        foreach (array_keys($this->projectedSubAgentIds) as $id) {
+            unset($this->subAgents[$id]);
+        }
+
+        $this->projectedSubAgentIds = [];
+    }
+
+    /**
+     * How many mirror rows this manager is currently showing.
+     */
+    public function projectedSubAgentCount(): int
+    {
+        return count($this->projectedSubAgentIds);
     }
 
     /**

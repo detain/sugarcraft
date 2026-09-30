@@ -14,6 +14,7 @@ use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Context\RulesState;
 use SugarCraft\Crush\Events\SpendCapBreached;
+use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\BuiltIn\BashEscapeDenyHook;
@@ -781,7 +782,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
         );
 
         $app = App::new($this->provider, $this->model)
-            ->withTools($this->turnTools($onReasoning, $onHeartbeat))
+            ->withTools($this->turnTools($onReasoning, $onHeartbeat, $onEvent))
             ->withEnabledSkills($this->skills)
             // The P6.S3 rulebook toggle set, on the same per-turn carry the enabled
             // skills ride. Read here rather than cached into the App at
@@ -1008,9 +1009,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * write onto a socket its parent is also writing to (the parent beats for
      * its forked group itself — {@see Runtime}'s concurrent wait loop).
      *
+     * The sub-agent emitter gets the same pid binding for the same socket-
+     * corruption reason, but NO rate limit: TaskTool throttles its own beats
+     * (tool-boundary frames always, reasoning frames at most one a second),
+     * and the events it is rare enough to be worth every one. It exists
+     * because the delegated run happens inside THIS process when the turn
+     * itself was forked — without a wire back, the parent's AgentManager never
+     * learns a sub-agent exists ({@see SubAgentActivity}).
+     *
      * @return list<Tool>
      */
-    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat): array
+    private function turnTools(?callable $onReasoning, ?callable $onHeartbeat, ?callable $onEvent): array
     {
         $heartbeat = null;
         if ($onHeartbeat !== null || $onReasoning !== null) {
@@ -1029,9 +1038,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             };
         }
 
+        $subAgentEmitter = null;
+        if ($onEvent !== null) {
+            $pid = getmypid();
+            $subAgentEmitter = static function (SubAgentActivity $activity) use ($pid, $onEvent): void {
+                if (getmypid() !== $pid) {
+                    return;
+                }
+                $onEvent($activity);
+            };
+        }
+
         $tools = [];
         foreach ($this->tools as $tool) {
-            $tools[] = $tool instanceof DelegatesToEngine ? $tool->withEngine($this, $heartbeat) : $tool;
+            $tools[] = $tool instanceof DelegatesToEngine
+                ? $tool->withEngine($this, $heartbeat, $subAgentEmitter)
+                : $tool;
         }
 
         return $tools;
@@ -1601,7 +1623,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 static function (string $delta) use ($childSocket): void {
                     self::writeFrame($childSocket, ['kind' => 'token', 'text' => $delta]);
                 },
-                static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($childSocket): void {
+                static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity $event) use ($childSocket): void {
                     self::writeFrame($childSocket, self::encodeEvent($event));
                 },
                 // E456. The child's third sink, and the one that exists for the
@@ -1812,7 +1834,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *
      * @return array<string, mixed>
      */
-    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached $event): array
+    private static function encodeEvent(ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity $event): array
     {
         if ($event instanceof SpendCapBreached) {
             return [
@@ -1820,6 +1842,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 'calls' => $event->completedCalls,
                 'spent' => $event->spentUsd,
                 'cap' => $event->capUsd,
+            ];
+        }
+
+        if ($event instanceof SubAgentActivity) {
+            return [
+                'kind' => 'subagent',
+                'op' => $event->op,
+                'id' => $event->id,
+                'name' => $event->name,
+                'task' => $event->task,
+                'seq' => $event->seq,
+                'tail' => $event->tail,
             ];
         }
 
@@ -1854,7 +1888,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      *
      * @param array<string, mixed> $encoded
      */
-    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|null
+    private static function decodeEvent(array $encoded): ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|null
     {
         // THE KIND IS READ BEFORE THE IDENTITY, and the order is the fix, not
         // a style choice: a spend_cap frame carries no toolCallId/name pair at
@@ -1872,6 +1906,29 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
             }
 
             return new SpendCapBreached($calls, (float) $spent, (float) $cap);
+        }
+
+        if ($kind === 'subagent') {
+            // A delegation beat is complete or it is dropped, one frame at a
+            // time, on the same partial-write tolerance as every other arm:
+            // an out-of-shape beat costs the dashboard one row-update, not
+            // the turn. `task` rides only on started but is validated as a
+            // string always — encodeEvent writes it on every op (empty after
+            // started), so a frame missing it predates this build.
+            $op = $encoded['op'] ?? null;
+            $id = $encoded['id'] ?? null;
+            $name = $encoded['name'] ?? null;
+            $task = $encoded['task'] ?? null;
+            $seq = $encoded['seq'] ?? null;
+            $tail = $encoded['tail'] ?? null;
+            if (!is_string($op) || !in_array($op, SubAgentActivity::OPS, true)
+                || !is_string($id) || $id === ''
+                || !is_string($name) || $name === ''
+                || !is_string($task) || !is_int($seq) || !is_string($tail)) {
+                return null;
+            }
+
+            return new SubAgentActivity($op, $id, $name, $task, $seq, $tail);
         }
 
         $id = is_string($encoded['id'] ?? null) ? $encoded['id'] : null;

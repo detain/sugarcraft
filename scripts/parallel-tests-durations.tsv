@@ -226,6 +226,7 @@ sugar-crush/tests/Workflows/WorkflowFailureReportingTest.php	0.104	2
 sugar-crush/tests/App/MenuBarPaneTabClickTest.php	0.104	7
 sugar-crush/tests/Providers/ClaudeCodeInvocationThrowTest.php	0.103	2
 sugar-crush/tests/Skills/CompiledPatternCacheBoundTest.php	0.102	6
+sugar-crush/tests/Tools/TaskToolProgressFramesTest.php	0.099	6
 sugar-crush/tests/App/AppBuilderTest.php	0.098	40
 sugar-crush/tests/ClaudeCodeMcpClientTest.php	0.097	21
 sugar-crush/tests/Tools/WorktreeJailRoutingTest.php	0.096	40
@@ -270,6 +271,7 @@ sugar-crush/tests/Context/RulebookPromptRenderTest.php	0.059	12
 sugar-crush/tests/PageScrollTest.php	0.058	3
 sugar-crush/tests/Tui/StallDetectorTest.php	0.057	21
 sugar-crush/tests/Cli/ConsolePermissionApproverWiringTest.php	0.056	13
+sugar-crush/tests/Tui/Components/AgentsPaneLiveRowsTest.php	0.056	4
 sugar-crush/tests/App/KittyKeyboardNegotiationTest.php	0.056	4
 sugar-crush/tests/Cli/NonInteractiveProviderFailureTest.php	0.055	21
 sugar-crush/tests/Agents/ForeignAgentPresetRegistryTest.php	0.055	39
@@ -374,6 +376,7 @@ sugar-crush/tests/Providers/ToolCallParser/MarkupScannerTest.php	0.015	30
 sugar-crush/tests/Context/RuleLoaderContainmentTest.php	0.015	13
 sugar-crush/tests/RuntimeInitialDispatchOrderTest.php	0.015	3
 sugar-crush/tests/Renderer/PasteIngestTest.php	0.015	13
+sugar-crush/tests/Agents/AgentManagerProjectionTest.php	0.015	7
 sugar-crush/tests/MCP/McpAuthStoreTest.php	0.015	19
 sugar-crush/tests/Agents/ForeignAgentPresetDirContainmentTest.php	0.015	9
 sugar-crush/tests/Support/FrontmatterCallSitesTest.php	0.014	8
@@ -384,6 +387,7 @@ sugar-crush/tests/Workflows/WorkflowIdentifierTest.php	0.014	10
 sugar-crush/tests/Config/ThemePersistenceFramingTest.php	0.014	9
 sugar-crush/tests/Tui/SessionPickerTest.php	0.014	34
 sugar-crush/tests/Providers/ClaudeCodeProviderTest.php	0.014	37
+sugar-crush/tests/Backend/SubAgentFrameCodecTest.php	0.014	12
 sugar-crush/tests/Support/FrontmatterTest.php	0.014	23
 sugar-crush/tests/Chat/WebSearchCommandTest.php	0.014	28
 sugar-crush/tests/Agents/SubAgentTest.php	0.014	30

@@ -39,6 +39,7 @@ use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Events\ReasoningDelta;
 use SugarCraft\Crush\Events\SpendCapBreached;
+use SugarCraft\Crush\Events\SubAgentActivity;
 use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -198,7 +199,7 @@ final class Chat implements Model
      * this", "the model said this" and "the model called that tool" is the
      * story of an agentic turn and three queues could not preserve it.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|TokenDelta|ReasoningDelta}>
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -908,7 +909,7 @@ final class Chat implements Model
          * allocating here) keeps every existing embedder/test constructor
          * call working unchanged.
          *
-         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|TokenDelta|ReasoningDelta}>|null
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
         /**
@@ -3553,6 +3554,19 @@ final class Chat implements Model
             return [$next, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
         }
 
+        if ($event instanceof SubAgentActivity) {
+            // A delegation beat updates the PARENT's AgentManager mirror —
+            // the manager is a service this model deliberately mutates, like
+            // the inbox itself, so the Chat state is returned unchanged and
+            // the chain continues in order. No transcript row: the ToolStarted
+            // for the Task call is the transcript-visible story of this run;
+            // the mirror's audience is the dashboard, and it reads the
+            // manager, not the transcript.
+            $this->agentManager?->projectRemoteSubAgent($event);
+
+            return [$this, Cmd::send(new BackendToolEventsMsg($remaining, $msg->message, $msg->generation))];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event)
             : $this->replaceToolRunningPlaceholder($event);
@@ -3598,8 +3612,12 @@ final class Chat implements Model
             // accessor's contract is. SpendCapBreached is the same exclusion
             // with a third reason: it is not even per-call — it is one
             // verdict about the turn — and a consumer pairing starts with
-            // finishes would never close it.
-            if ($event instanceof TokenDelta || $event instanceof ReasoningDelta || $event instanceof SpendCapBreached) {
+            // finishes would never close it. SubAgentActivity is excluded on
+            // the per-call ground: a delegation beat belongs to a run
+            // BEHIND a Task call, not to the pairing of any tool row itself,
+            // and consumers of this accessor pair starts with finishes.
+            if ($event instanceof TokenDelta || $event instanceof ReasoningDelta
+                || $event instanceof SpendCapBreached || $event instanceof SubAgentActivity) {
                 continue;
             }
             $events[] = $event;
@@ -3810,6 +3828,17 @@ final class Chat implements Model
 
         if ($event instanceof SpendCapBreached) {
             return [$this->appendSpendCapNotice($event), $more];
+        }
+
+        if ($event instanceof SubAgentActivity) {
+            // Same projection as the settled-queue arm, on the live edge:
+            // generation-stale beats were dropped by the guard above, so what
+            // lands here belongs to the turn on screen. The pump consumes ONE
+            // entry per tick and re-arms itself via $more; the mirror update
+            // costs the transcript nothing.
+            $this->agentManager?->projectRemoteSubAgent($event);
+
+            return [$this, $more];
         }
 
         $next = $event instanceof ToolStarted
@@ -9206,6 +9235,16 @@ final class Chat implements Model
             RuntimeNoticeSink::beginTurn();
         }
 
+        // ONE DISPATCH, ONE PROJECTION WINDOW. The mirror rows a delegated
+        // run leaves in the parent's AgentManager describe beats of whatever
+        // turn is about to run; rows from before it are ghosts by
+        // construction — a child killed at the end of the last turn stopped
+        // sending mid-run, and its RUNNING row would claim a delegation that
+        // no longer exists for the rest of the session. Rows of the turn that
+        // just settled SURVIVE until this next dispatch, which is the point:
+        // between turns is where the finished report gets read.
+        $next->agentManager?->clearProjectedSubAgents();
+
         $backend = $next->backend;
         // E20: thread the session's dollar ceiling DOWN into the engine that
         // will spend it. instanceof rather than a Backend-interface method
@@ -9291,7 +9330,7 @@ final class Chat implements Model
         };
 
         return Cmd::promise(static function () use ($backend, $history, $onToken, $cancellation, $generation, $inbox): PromiseInterface {
-            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached $event) use ($inbox, $generation): void {
+            $onEvent = static function (ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity $event) use ($inbox, $generation): void {
                 $inbox[] = [$generation, $event];
             };
 
@@ -9377,8 +9416,8 @@ final class Chat implements Model
      * Applying them here would in any case be too late to be streaming — the
      * turn is over.
      *
-     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|TokenDelta|ReasoningDelta}> $inbox
-     * @return list<ToolStarted|ToolFinished|SpendCapBreached>
+     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity|TokenDelta|ReasoningDelta}> $inbox
+     * @return list<ToolStarted|ToolFinished|SpendCapBreached|SubAgentActivity>
      */
     private static function drainToolEventInbox(\ArrayObject $inbox, int $generation): array
     {

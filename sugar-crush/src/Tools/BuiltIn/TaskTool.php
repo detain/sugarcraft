@@ -11,6 +11,9 @@ use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Agents\SuspendedDelegations;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Backend\TurnInterrupted;
+use SugarCraft\Crush\Events\SubAgentActivity;
+use SugarCraft\Crush\Events\ToolFinished;
+use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Support\ParentProcessGuard;
@@ -58,13 +61,18 @@ use SugarCraft\Crush\Tools\ToolResult;
  *  - unknown agent → the roster is named in full, so the model can correct
  *    itself on the next turn instead of hallucinating one.
  *
- * COARSE BY DECISION: the tool surfaces as one ordinary ToolStarted/ToolFinished
- * pair; the sub-agent's own tool events and streamed partials stay inside the
- * delegated run (they feed only its liveness heartbeat). Upstream's
- * Task tool behaves the same way from the parent model's point of view — one
- * call, one final report — and the live-progress surfaces (pane, status strip)
- * keep their own feed through Chat/WorkflowEngine, which this path does not
- * duplicate.
+ * THE DELEGATED RUN IS VISIBLE, NOT COARSE. To the PARENT MODEL the tool still
+ * surfaces as one ordinary ToolStarted/ToolFinished pair — upstream's Task tool
+ * behaves the same way from the caller's point of view, one call, one final
+ * report — but the run's own beats (tool calls, thinking bursts) are recorded
+ * onto the sub-agent row as they happen and cross the wire as
+ * {@see SubAgentActivity} frames, which the parent projects into its own
+ * AgentManager ({@see AgentManager::projectRemoteSubAgent()}). They must: the
+ * engine path runs the whole delegation INSIDE
+ * {@see EngineBackend::completeAsync()}'s forked child, so without the frames
+ * the child's row — and every chunk streamed into it — died with the child and
+ * the Agents dashboard showed nothing for a delegation that was visibly,
+ * expensively running.
  *
  * THE SUB-AGENT IS A WHOLE AGENTIC RUN, NOT ONE COMPLETION. The pool path
  * below is a single provider call in a `php -r` worker that advertises the
@@ -129,7 +137,30 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
 
     /**
+     * Byte ceiling on a run's rolling activity tail — the same buffer that is
+     * recorded onto the row, sent as progress-frame tails, and left as the
+     * finished row's output when there is no report. Frame size stays bounded
+     * no matter how chatty the delegation gets.
+     */
+    public const ACTIVITY_TAIL_BYTES = 4096;
+
+    /** Byte ceiling on the task snippet a started frame carries for display. */
+    public const TASK_SNIPPET_BYTES = 200;
+
+    /** Reasoning bytes accumulated before a "thinking" line is folded into the trail. */
+    public const THINK_LINE_BYTES = 160;
+
+    /**
+     * UTF-8 cost of the '…' marker the clippers prepend/append. The clip
+     * budgets reserve this much, so a clipped string stays WITHIN its byte
+     * cap instead of overshooting it by two — the off-by-two a "1 byte for
+     * the dots" reservation silently ships for every non-ASCII ellipsis.
+     */
+    public const ELLIPSIS_BYTES = 3;
+
+    /**
      * @param \Closure(): void|null $heartbeat see {@see DelegatesToEngine}
+     * @param \Closure(SubAgentActivity): void|null $subAgentEmitter see {@see DelegatesToEngine}
      * @param SuspendedDelegations|null $suspended where resumable runs are kept;
      *        null uses {@see SuspendedDelegations::new()}
      */
@@ -139,11 +170,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         private ?EngineBackend $engine = null,
         private ?\Closure $heartbeat = null,
         private ?SuspendedDelegations $suspended = null,
+        private ?\Closure $subAgentEmitter = null,
     ) {}
 
-    public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null): self
-    {
-        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat, $this->suspended);
+    public function withEngine(
+        EngineBackend $engine,
+        ?\Closure $heartbeat = null,
+        ?\Closure $subAgentEmitter = null,
+    ): self {
+        return new self($this->agentManager, $this->workerPool, $engine, $heartbeat, $this->suspended, $subAgentEmitter);
     }
 
     /**
@@ -394,8 +429,89 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             }
         };
 
+        $emit = $this->subAgentEmitter;
         $subAgent->status = SubAgent::STATUS_RUNNING;
         $subAgent->startedAt = new \DateTimeImmutable();
+
+        // Frame ordering within one run: strictly increasing, minted here (the
+        // run's own stack), never derived from wall clock — a reader that sees
+        // seq 7 then 5 knows 5 is stale, whatever the sockets did to the order.
+        $seq = 0;
+        $lastBeat = 0.0;
+        $think = '';
+
+        // The run's visible trail. Every line lands on the row's rolling
+        // output; $immediate lines (tool boundaries) also go out as a progress
+        // frame at once, while reasoning-driven beats share the heartbeat's
+        // one-a-second budget — the dashboard is a monitor, not a tape deck.
+        $record = static function (string $line, bool $immediate) use (
+            $subAgent, $agentName, $emit, &$seq, &$lastBeat,
+        ): void {
+            $subAgent->output = self::appendActivity($subAgent->output, $line);
+            if ($emit === null) {
+                return;
+            }
+            $now = microtime(true);
+            if (!$immediate && $now - $lastBeat < 1.0) {
+                return;
+            }
+            $lastBeat = $now;
+            $emit(new SubAgentActivity(
+                SubAgentActivity::OP_PROGRESS,
+                $subAgent->id,
+                $agentName,
+                '',
+                ++$seq,
+                self::tailClip($subAgent->output, self::ACTIVITY_TAIL_BYTES),
+            ));
+        };
+
+        // A reasoning burst becomes ONE trail line, folded at
+        // THINK_LINE_BYTES so a long thought streams as a sequence of lines
+        // instead of never appearing until the burst ends.
+        $foldThink = static function () use (&$think, $record): void {
+            if ($think === '') {
+                return;
+            }
+            $line = $think;
+            $think = '';
+            $record('thinking: '.self::tailClip($line, self::THINK_LINE_BYTES), false);
+        };
+
+        if ($emit !== null) {
+            $emit(new SubAgentActivity(
+                SubAgentActivity::OP_STARTED,
+                $subAgent->id,
+                $agentName,
+                self::snippet($subAgent->task, self::TASK_SNIPPET_BYTES),
+                ++$seq,
+                '',
+            ));
+        }
+
+        // Terminal beat: settle the row, then say so once. The report wins
+        // when there is one; a run that ends without one keeps its activity
+        // trail as the row's output — the story of what it got through —
+        // rather than going blank on the dashboard at exactly the moment a
+        // human looks.
+        $finish = function (string $status, string $report, ?string $error) use (
+            $subAgent, $agentName, $emit, &$seq, $foldThink,
+        ): void {
+            $foldThink();
+            // Report wins; without one the trail IS the row's story.
+            $this->settle($subAgent, $status, $report !== '' ? $report : $subAgent->output, $error);
+            if ($emit === null) {
+                return;
+            }
+            $emit(new SubAgentActivity(
+                SubAgentActivity::OP_FINISHED,
+                $subAgent->id,
+                $agentName,
+                '',
+                ++$seq,
+                self::tailClip($subAgent->output, self::ACTIVITY_TAIL_BYTES),
+            ));
+        };
 
         try {
             $turn = $engine
@@ -403,17 +519,39 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 ->withMaxSteps($maxTurns)
                 ->completeTranscript(
                     $messages,
-                    onEvent: static function () use ($onProgress): void {
+                    // SubAgentActivity is deliberately NOT in this signature:
+                    // the grant filter strips every DelegatesToEngine tool from
+                    // the sub-agent's list, delegation is one level deep, and a
+                    // nested emitter therefore never exists on this channel.
+                    onEvent: static function (ToolStarted|ToolFinished $event) use ($onProgress, $record, $foldThink): void {
                         $onProgress();
+                        if ($event instanceof ToolStarted) {
+                            $foldThink();
+                            $record('-> '.$event->toolName, true);
+
+                            return;
+                        }
+                        $foldThink();
+                        $record('<- '.$event->toolName.($event->result->isError() ? ' (error)' : ''), true);
                     },
-                    onReasoning: static function () use ($onProgress): void {
+                    onReasoning: static function (string $delta) use ($onProgress, &$think, $foldThink): void {
                         $onProgress();
+                        // The heartbeat's "alive, nothing to show" frame is an
+                        // empty delta ({@see EngineBackend::turnTools()}) — it
+                        // carries no thought to fold.
+                        if ($delta === '') {
+                            return;
+                        }
+                        $think .= $delta;
+                        if (strlen($think) >= self::THINK_LINE_BYTES) {
+                            $foldThink();
+                        }
                     },
                     onHeartbeat: $heartbeat,
                 );
         } catch (TurnInterrupted $failure) {
             $why = sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage());
-            $this->settle($subAgent, SubAgent::STATUS_FAILED, '', $why);
+            $finish(SubAgent::STATUS_FAILED, '', $why);
 
             return $this->refusal(
                 $toolCallId,
@@ -424,7 +562,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
 
         $reply = $turn->reply;
         $content = trim($reply->content);
-        $this->settle($subAgent, SubAgent::STATUS_COMPLETE, $content, null);
+        $finish(SubAgent::STATUS_COMPLETE, $content, null);
         $subAgent->tokensUsed += $reply->usage?->totalTokens ?? 0;
         $subAgent->costUsd += $reply->usage?->costUsd ?? 0.0;
 
@@ -483,6 +621,74 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $subAgent->output = $output;
         $subAgent->error = $error;
         $subAgent->completedAt = new \DateTimeImmutable();
+    }
+
+    /**
+     * Append one trail line to the rolling activity buffer, oldest lines
+     * evicting from the head once the buffer passes {@see ACTIVITY_TAIL_BYTES}.
+     * Whole-line eviction, never a byte slice: a cut mid-codepoint is exactly
+     * the invalid UTF-8 the width-computing renderers trip over.
+     */
+    private static function appendActivity(string $current, string $line): string
+    {
+        $lines = $current === '' ? [] : explode("\n", $current);
+        $lines[] = $line;
+
+        $grown = implode("\n", $lines);
+        while (strlen($grown) > self::ACTIVITY_TAIL_BYTES && count($lines) > 1) {
+            $lines = array_slice($lines, 1);
+            $grown = implode("\n", $lines);
+        }
+
+        return $grown;
+    }
+
+    /**
+     * Keep the last $bytes of $text, byte-bounded for the wire, prepending the
+     * ellipsis and dropping any leading fragment of a split codepoint (the
+     * empty-pattern /u probe is the established validity oracle).
+     */
+    private static function tailClip(string $text, int $bytes): string
+    {
+        if (strlen($text) <= $bytes) {
+            return $text;
+        }
+
+        if ($bytes <= self::ELLIPSIS_BYTES) {
+            return ''; // the cap fits the marker alone or less — nothing displayable survives
+        }
+
+        $cut = substr($text, -($bytes - self::ELLIPSIS_BYTES));
+        while ($cut !== '' && preg_match('//u', $cut) !== 1) {
+            $cut = substr($cut, 1);
+        }
+
+        return '…' . $cut;
+    }
+
+    /**
+     * The task's first line, byte-bounded, for the started frame's display
+     * snippet — the delegated prompt can be pages, and a dashboard row shows
+     * one.
+     */
+    private static function snippet(string $text, int $bytes): string
+    {
+        $first = strtok($text, "\r\n");
+        $first = $first === false ? '' : trim($first);
+        if (strlen($first) <= $bytes) {
+            return $first;
+        }
+
+        if ($bytes < self::ELLIPSIS_BYTES) {
+            return ''; // a cap below the marker cannot carry even the dots
+        }
+
+        $cut = substr($first, 0, $bytes - self::ELLIPSIS_BYTES);
+        while ($cut !== '' && preg_match('//u', $cut) !== 1) {
+            $cut = substr($cut, 0, -1);
+        }
+
+        return $cut . '…';
     }
 
     private static function elapsedMs(float $startedAt): int

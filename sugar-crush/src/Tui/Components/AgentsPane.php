@@ -4,17 +4,64 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Components;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Tui\AgentStatusBar;
 
+/**
+ * The shell's agents sidebar — the docked Agents slot's widget.
+ *
+ * Rows come from {@see AgentDashboardPane::entries()}, the single ordering
+ * authority every agents surface shares: registered and projected agents
+ * first, then background sessions, so a Task-tool delegation (mirrored into
+ * the parent's AgentManager by the SubAgentActivity frame channel) and a
+ * `/bg` session both appear here without this class knowing which is which.
+ * Each row is the dashboard's own {@see AgentStatusBar::renderAgentLine()},
+ * truncated to the sidebar's content width — the two widgets disagree only
+ * in budget, never in data or vocabulary.
+ *
+ * This REPLACED the original hardcoded "(no active agents)" stub, which
+ * could not be told apart from an empty dashboard on a session with three
+ * delegations running: an always-false box on a live surface is worse than
+ * no box, because it teaches the user to ignore the pane. The literal
+ * survives as the honest EMPTY state, shared with AgentViewPane.
+ */
 final class AgentsPane
 {
+    /** Rows the rounded border's own top and bottom edges cost. */
+    private const CHROME_ROWS = 2;
+
+    /** Cells the border (2) plus the horizontal padding (2) cost per row. */
+    private const CHROME_COLS = 4;
+
     public static function render(App $a, int $width, int $rows): string
     {
         $theme = $a->theme();
-        $body = Style::new()->foreground($theme->shellMuted)
-            ->render('(no active agents)');
+        $entries = AgentDashboardPane::entries($a);
+
+        if ($entries === []) {
+            $body = Style::new()->foreground($theme->shellMuted)
+                ->render('(no active agents)');
+        } else {
+            // Same row-truncation idiom the dashboard applies at its own
+            // width: measure the finished ANSI line, cut only when it
+            // overflows, so the dot/name/status survive a 34-column side.
+            $budget = max(1, $rows - self::CHROME_ROWS);
+            $inner = max(1, $width - self::CHROME_COLS);
+            $lines = [];
+            foreach (array_slice($entries, 0, $budget) as $entry) {
+                $line = AgentStatusBar::renderAgentLine($entry, $theme);
+                $lines[] = Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
+            }
+            $hidden = count($entries) - $budget;
+            if ($hidden > 0) {
+                $lines[] = Style::new()->foreground($theme->shellMuted)
+                    ->render('… +' . $hidden . ' more');
+            }
+            $body = implode("\n", $lines);
+        }
 
         $st = Style::new()
             ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Crush\Tui\Pane::Agents->icon() . ' agents '))

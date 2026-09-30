@@ -41,9 +41,9 @@ use SugarCraft\Veil\Veil;
  *    {@see AgentViewPane::render()}, and the Space peek overlay by
  *    {@see AgentOutputPane::render()} composited through {@see Veil} — the
  *    same overlay mechanism the Ctrl+P palette and the permission modal use.
- *    The older `Tui\Components\AgentsPane` stub (a hardcoded
- *    "(no active agents)" box) is left alone rather than extended: it is the
- *    sidebar-sized widget, this is the full-pane one.
+ *    `Tui\Components\AgentsPane`, the sidebar-sized widget, reads THIS class's
+ *    {@see entries()} as its row source rather than maintaining a second one:
+ *    one ordering authority, two budgets.
  *
  * 2. **Stable indices.** {@see entries()} is the single ordering authority.
  *    Position N in that list is slot N+1 on screen and the target of
