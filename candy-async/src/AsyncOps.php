@@ -41,32 +41,31 @@ final class AsyncOps
         }
 
         $deferred = new Deferred();
-        $timer = null;
 
-        // Settle the outer promise when the inner settles.
-        $promise->then(
-            function ($value) use ($deferred, &$timer, $loop): void {
-                if ($timer !== null) {
-                    $loop->cancelTimer($timer);
-                    $timer = null;
-                }
-                $deferred->resolve($value);
-            },
-            function (\Throwable $reason) use ($deferred, &$timer, $loop): void {
-                if ($timer !== null) {
-                    $loop->cancelTimer($timer);
-                    $timer = null;
-                }
-                $deferred->reject($reason);
-            },
-        );
-
-        // Schedule the timeout.
+        // Arm the timeout BEFORE attaching the settle handlers. react/promise
+        // v3 settles an already-settled inner synchronously inside then(), so
+        // a handler attached first would see a not-yet-assigned timer, skip
+        // the cancel, and leak the armed timer onto the (shared) loop for its
+        // full duration. Armed first, the timer is always in hand when the
+        // handler runs — pre-settled inners cancel it in the same synchronous
+        // pass, and cancelTimer on an already-fired one-shot is a no-op.
         $timer = $loop->addTimer($seconds, static function () use ($deferred, $seconds): void {
             $deferred->reject(new TimeoutException(
                 'Operation timed out after ' . $seconds . ' second(s)',
             ));
         });
+
+        // Settle the outer promise when the inner settles.
+        $promise->then(
+            function ($value) use ($deferred, $timer, $loop): void {
+                $loop->cancelTimer($timer);
+                $deferred->resolve($value);
+            },
+            function (\Throwable $reason) use ($deferred, $timer, $loop): void {
+                $loop->cancelTimer($timer);
+                $deferred->reject($reason);
+            },
+        );
 
         return $deferred->promise();
     }
@@ -177,9 +176,39 @@ final class AsyncOps
                 // still doubles un-jittered to keep the exponential schedule.
                 $delay = self::jitteredBackoff($backoff, $jitter);
                 $deferred = new Deferred();
-                $loop->addTimer(
+
+                // Cancellation must be prompt. Without this wiring a cancel
+                // landing mid-backoff left the promise pending and the shared
+                // loop held for the remaining (doubling) delay. $settled makes
+                // the abort and the timer callback mutually exclusive; it also
+                // disarms a stale registration, because the token offers no
+                // unregister — an abort queued by a stage that already ran
+                // must never fire on a later cancel().
+                $pending = null;
+                $settled = false;
+
+                $token->onCancel(static function () use (&$pending, &$settled, $deferred, $loop, $attempt): void {
+                    if ($settled === true) {
+                        return;
+                    }
+                    $settled = true;
+                    if ($pending !== null) {
+                        $loop->cancelTimer($pending);
+                        $pending = null;
+                    }
+                    $deferred->reject(new OperationCancelledException(
+                        'Retry cancelled during backoff after attempt ' . $attempt,
+                    ));
+                });
+
+                $pending = $loop->addTimer(
                     $delay,
-                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline): void {
+                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline, &$settled, &$pending): void {
+                        if ($settled === true) {
+                            return; // cancelled during backoff; abort already rejected
+                        }
+                        $settled = true;
+                        $pending = null;
                         try {
                             $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline);
                             $next->then(

@@ -101,6 +101,59 @@ final class AsyncOpsTest extends TestCase
         AsyncOps::withTimeout($loop, $deferred->promise(), 0.0);
     }
 
+    public function testWithTimeoutOverAlreadyResolvedInnerDoesNotLeakTimer(): void
+    {
+        // react/promise v3 settles an already-resolved inner synchronously
+        // inside then(). Pre-fix the settle handler ran while $timer was still
+        // unassigned, skipped the cancel, and the 0.5s timeout kept the shared
+        // loop alive for its full duration after the work had completed
+        // (audit probe: drain 0.500s). Idle-drain method: run() returns only
+        // when the loop holds zero armed timers, so the drain measures the
+        // leak directly. Private StreamSelectLoop, not Loop::get(): sibling
+        // tests here stop() their run() early and leave armed timers on the
+        // shared loop, and a stale one truncating this drain would mask the
+        // leak (proven by bisect: 0.461s foreign drain). StreamSelectLoop
+        // refreshes its clock at arm time, so no LoopPin help is needed for a
+        // loop created this late in the process.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+
+        $wrapped = AsyncOps::withTimeout($loop, \React\Promise\resolve('done'), 0.5);
+
+        $resolved = null;
+        $wrapped->then(function ($v) use (&$resolved): void {
+            $resolved = $v;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertSame('done', $resolved);
+        $this->assertLessThan(0.2, $drain, 'timeout timer leaked past settlement of a pre-resolved inner');
+    }
+
+    public function testWithTimeoutOverAlreadyRejectedInnerDoesNotLeakTimer(): void
+    {
+        // Same synchronous-settle defect on the rejection limb; private loop
+        // for the same residue-isolation reason as the resolved-limb test.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+
+        $wrapped = AsyncOps::withTimeout($loop, \React\Promise\reject(new \RuntimeException('fail')), 0.5);
+
+        $rejected = null;
+        $wrapped->otherwise(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertInstanceOf(\RuntimeException::class, $rejected);
+        $this->assertSame('fail', $rejected->getMessage());
+        $this->assertLessThan(0.2, $drain, 'timeout timer leaked past rejection of a pre-rejected inner');
+    }
+
     public function testDebounceOnlyLastCallFires(): void
     {
         $loop = Loop::get();
@@ -385,6 +438,92 @@ final class AsyncOpsTest extends TestCase
         // BC guarantee: still catchable as a plain RuntimeException.
         $this->assertInstanceOf(\RuntimeException::class, $rejected);
         $this->assertStringContainsString('cancelled', $rejected->getMessage());
+    }
+
+    public function testRetryCancelDuringBackoffCancelsPendingTimerAndSettlesPromptly(): void
+    {
+        // Mock loop that arms but NEVER fires the backoff timer: the abort
+        // wiring must be observable synchronously, with zero reliance on wall
+        // clock. Pre-fix there was no onCancel hook at all — the promise could
+        // only settle when the (30s) backoff fired, so it stayed pending here
+        // and the timer was never cancelled.
+        $timer = $this->createStub(\React\EventLoop\TimerInterface::class);
+        $cancelled = [];
+        $loop = $this->createMock(\React\EventLoop\LoopInterface::class);
+        $loop->method('addTimer')->willReturn($timer);
+        $loop->method('cancelTimer')->willReturnCallback(
+            function (\React\EventLoop\TimerInterface $t) use (&$cancelled): void {
+                $cancelled[] = $t;
+            },
+        );
+
+        $source = CancellationSource::new();
+        $promise = AsyncOps::retry(
+            static fn(): PromiseInterface => \React\Promise\reject(new \RuntimeException('fail')),
+            attempts: 3,
+            baseBackoffSeconds: 30.0,
+            token: $source->token(),
+            loop: $loop,
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        // Backoff #1 is pending; nothing has settled yet.
+        $this->assertNull($rejected);
+
+        $source->cancel();
+
+        $this->assertInstanceOf(OperationCancelledException::class, $rejected);
+        $this->assertStringContainsString('backoff', $rejected->getMessage());
+        $this->assertSame([$timer], $cancelled, 'pending backoff timer was not cancelled on cancel()');
+    }
+
+    public function testRetryCancelDuringBackoffSettlesPromptlyOnLiveLoop(): void
+    {
+        // Timing half of the same fix on a real (non-mock) loop: cancel lands
+        // 10ms into a 0.5s backoff. Pre-fix the promise settled only when the
+        // backoff fired (audit probe: drain 0.501s) and carried the
+        // pre-attempt-guard wording instead of the mid-backoff abort message.
+        // Private StreamSelectLoop rather than the shared Loop::get(): sibling
+        // tests leave early-stopped armed timers on the shared loop, and a
+        // stale one truncating this drain would mask the delay; the private
+        // loop also refreshes its clock at arm time (see LoopPin), matching
+        // testRetryAbortsOnceMaxTotalSecondsExceeded's established shape.
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $source = CancellationSource::new();
+        $attempts = 0;
+
+        $promise = AsyncOps::retry(
+            function () use (&$attempts, $source, $loop): PromiseInterface {
+                $attempts++;
+                if ($attempts === 1) {
+                    $loop->addTimer(0.01, static function () use ($source): void {
+                        $source->cancel();
+                    });
+                }
+                return \React\Promise\reject(new \RuntimeException("fail $attempts"));
+            },
+            attempts: 5,
+            baseBackoffSeconds: 0.5,
+            token: $source->token(),
+        );
+
+        $rejected = null;
+        $promise->otherwise(function (\Throwable $e) use (&$rejected): void {
+            $rejected = $e;
+        });
+
+        $start = microtime(true);
+        $loop->run();
+        $drain = microtime(true) - $start;
+
+        $this->assertSame(1, $attempts);
+        $this->assertInstanceOf(OperationCancelledException::class, $rejected);
+        $this->assertStringContainsString('backoff', $rejected->getMessage());
+        $this->assertLessThan(0.2, $drain, 'cancel did not abort the pending backoff timer');
     }
 
     public function testOperationCancelledExceptionIsRuntimeException(): void
