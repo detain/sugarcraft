@@ -851,9 +851,22 @@ final class GameTest extends TestCase
         // MAJ(4): the old delta-compare detector credited the AI's
         // un-synced rotation on an empty floor/wall corner as +400. The flag
         // is cleared before every AI lock, so the phantom is dead.
-        $g = $this->deterministicGame()->mutate(['score' => new Score()]);
-        $after = $g->applyAiMove(1, 0);
-        $this->assertSame(0, $after->score->points - $g->score->points,
+        // Review follow-up (round r90): the original shape armed nothing —
+        // on a fresh game the flag is already false, so deleting the
+        // applyAiMove clear went undetected. Same real-key arm as the human
+        // pin (rotate at (5,12) succeeds and sets the flag), then the AI
+        // lock must disarm it: without the clear this earns the +400.
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($this->tspinSlotGrid()),
+            'piece' => new Piece(Tetromino::T, 0, 5, 12),
+            'score' => new Score(),
+        ]);
+        [$armed] = $g->update($this->key('up'));
+        $this->assertTrue($armed->lastActionWasRotation, 'real rotation arms the flag');
+
+        $after = $armed->applyAiMove(0, 0);
+        $this->assertFalse($after->lastActionWasRotation, 'applyAiMove clears the flag');
+        $this->assertSame(0, $after->score->points - $armed->score->points,
             'AI placement can never claim a T-Spin through applyAiMove');
     }
 
